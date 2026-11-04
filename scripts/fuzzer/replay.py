@@ -10,9 +10,10 @@ no installed one reaches it; the fuzzer's PR batch runs them on the merge
 commit, with the parent built beside it for the experiments that compare the
 two, beside a random baseline; and the run waits for the batch and writes
 ``replay.json``, which names the batch's run and the change for the fuzzer
-monitor (``--pr-batch-run``, ``--change``) and counts, among the proposed
-experiments' runs, those that reached the change, those that did not, and
-those that showed an unexplained difference. Only the replay is made up: the
+monitor (``--pr-batch-run``, ``--change``), beside the merge's diff
+(``change.diff``, for ``--change-diff``). The monitor's result for the
+batch counts the runs that reached the change, did not, or showed an
+unexplained difference (``change_runs``). Only the replay is made up: the
 proposals, the batch and the monitor are the live ones.
 
 valkey-io/valkey#4749 changed how a full sync picks its codec and transport,
@@ -43,17 +44,7 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from scripts.common.logging_utils import configure_logging, log_outcome
-from scripts.fuzzer.batch import BatchFolder, read_batch
-from scripts.fuzzer.pr_batch import (
-    BUILDS,
-    PR_BATCH_WORKFLOW,
-    PROPOSED_PREFIX,
-    batch_dispatch_inputs,
-    dispatch_batch,
-    download_batch,
-    scenario_name,
-    wait_for_run,
-)
+from scripts.fuzzer.pr_batch import BUILDS, PR_BATCH_WORKFLOW, batch_dispatch_inputs, dispatch_batch, wait_for_run
 from scripts.fuzzer.propose import (
     MAX_COUNT,
     REPO_RE,
@@ -70,10 +61,7 @@ from scripts.fuzzer.propose import (
 logger = logging.getLogger(__name__)
 
 REPLAY_FILE = "replay.json"
-# How valkey.action.commands reports, in a component result's diagnostics, a
-# compared sequence that never saw the change, or saw one it was not told of.
-UNREACHED = "unreached-change"
-UNEXPLAINED = "unexplained-difference"
+CHANGE_DIFF_FILE = "change.diff"
 # GitHub runs at most this many jobs from one matrix, and the workflow replays one merge per job.
 MAX_MERGES = 256
 # A squash merge's subject ends with its pull request: "Fix the thing (#1234)".
@@ -151,28 +139,6 @@ def _experiment(text: str) -> str | None:
     return str(experiment.get("id")) if isinstance(experiment, dict) else None
 
 
-def proposed_run_counts(batch: BatchFolder, scenarios: dict[str, str]) -> dict[str, int]:
-    """Among the batch's runs of the scenarios that use a proposed experiment: how many reached the change
-    (a verdict), did not (``unreached-change``), or showed an unexplained difference."""
-    proposed = {name for name, text in scenarios.items() if (_experiment(text) or "").startswith(PROPOSED_PREFIX)}
-    counts = {"reached": 0, "unreached": 0, "unexplained": 0}
-    for run in batch.main_runs:
-        if scenario_name(run.id) not in proposed:
-            continue
-        outcome = (run.report or {}).get("outcome") or {}
-        reasons = {
-            (result.get("diagnostics") or {}).get("reason")
-            for result in [outcome, *(outcome.get("component_results") or [])] if isinstance(result, dict)
-        }
-        if UNREACHED in reasons:
-            counts["unreached"] += 1
-        elif UNEXPLAINED in reasons:
-            counts["unexplained"] += 1
-        elif run.status in ("PASS", "FAIL"):
-            counts["reached"] += 1
-    return counts
-
-
 def describe(merge: dict[str, Any], repo: str) -> str:
     """How an issue names the merge: its pull request and commit."""
     where = f"{repo}#{merge['pr']}" if merge.get("pr") else repo
@@ -189,7 +155,7 @@ def run(
     build: str = "default",
 ) -> dict[str, Any]:
     """Replay one merge: propose scenarios for it, run them with a random baseline on ``build`` of the merge
-    commit and its parent, wait for the batch, and count the proposed experiments' runs."""
+    commit and its parent, and wait for the batch."""
     for key in ("sha", "parent"):
         if not _SHA_RE.fullmatch(str(merge[key])):
             raise ValueError(f"merge {key} must be a full commit SHA, got {merge[key]!r}")
@@ -197,6 +163,9 @@ def run(
                               "build": build}
     change = fetch_change(gh, token, ChangeRequest(repo=repo, base=merge["parent"], head=merge["sha"]))
     change.title = merge["subject"]
+    # The monitor's triage judges an unexplained difference against it (--change-diff).
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / CHANGE_DIFF_FILE).write_text(change.diff, encoding="utf-8")
     proposals_dir = out_dir / "proposals"
     experiments: dict[str, str] = {}
     try:
@@ -233,7 +202,6 @@ def run(
     dispatch_batch(gh, inputs, fuzzer_repo=fuzzer_repo, workflow=PR_BATCH_WORKFLOW, ref=fuzzer_ref)
     logger.info("Dispatched %s with %d scenario(s), %d experiment(s) and %d random seed(s) per experiment, "
                 "build %s", result["request_id"], len(scenarios), len(experiments), random_seeds, build)
-    out_dir.mkdir(parents=True, exist_ok=True)
 
     def record(**fields: Any) -> None:
         """Write replay.json now: a wait that fails later still leaves the batch's run for the triage."""
@@ -251,14 +219,6 @@ def run(
         record(wait_error=" ".join(str(exc).split())[:500])
         raise
     record(run_id=batch.id, run_url=batch.html_url, conclusion=batch.conclusion)
-    if experiments:
-        try:
-            folder = read_batch(download_batch(gh, token, fuzzer_repo, batch.id))
-            record(proposed_runs=proposed_run_counts(folder, scenarios))
-        except Exception as exc:
-            # The triage reads the batch again; a count that failed is recorded, not fatal.
-            logger.warning("Counting the proposed experiments' runs of %s failed: %s", result["request_id"], exc)
-            record(count_error=" ".join(str(exc).split())[:500])
     return result
 
 

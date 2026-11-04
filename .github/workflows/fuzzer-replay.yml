@@ -343,9 +343,12 @@ jobs:
             if [[ "$(jq -r '.conclusion // empty' "${replay}")" == "" ]]; then
               echo "::warning::merge ${index}: the replay stopped waiting for PR batch ${run_id}; triaging it as it is"
             fi
+            # The merge's diff, against which the triage judges a difference between the two builds.
+            diff_args=()
+            [[ -f "replays/replay-${index}/change.diff" ]] && diff_args=(--change-diff "replays/replay-${index}/change.diff")
             echo "::group::Merge ${index}: ${change}"
             python -m scripts.fuzzer.main --fuzzer-repo "${FUZZER_REPOSITORY}" --pr-batch-run "${run_id}" \
-              --change "${change}" --output "triage/merge-${index}.json" || failed=1
+              --change "${change}" "${diff_args[@]}" --output "triage/merge-${index}.json" || failed=1
             echo "::endgroup::"
           done
           exit "${failed}"

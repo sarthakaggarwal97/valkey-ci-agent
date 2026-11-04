@@ -68,13 +68,15 @@ so `fuzzer-pr-batch.yml` must be on valkey-fuzzer's default branch and
 
 The `replay-<index>` artifact holds `replay.json` (the merge, its pull
 request, the build, how many scenarios and experiments were proposed and
-dropped, the PR batch's run, and `proposed_runs`: among the runs of the
-scenarios that use a proposed experiment, how many reached the change, how
-many did not (the fuzzer's `unreached-change`: a marked command replied the
-same on both builds) and how many showed an `unexplained-difference`) and
-`proposals/` (the proposals as [fuzzer proposals](fuzzer-proposals.md)
-write them). `replay-triage-<chunk>` holds the monitor's result for each
-merge it triaged. The batch folders are the PR batch runs' own
+dropped, Claude's `reason` when the change needs no test, and the PR
+batch's run), `change.diff` (the merge's diff, which the triage hands the
+monitor as `--change-diff`, so it can judge whether the change accounts for
+a difference between the two builds), and `proposals/` (the proposals as
+[fuzzer proposals](fuzzer-proposals.md) write them).
+`replay-triage-<chunk>` holds the monitor's result for each
+merge it triaged, with `change_runs`: the runs that reached the change, did
+not (`unreached-change`: a marked command replied the same on both builds),
+showed an unexplained difference, or failed without a vetted cause. The batch folders are the PR batch runs' own
 `fuzzer-batch-<run id>` artifacts on valkey-fuzzer.
 
 ## Tokens

@@ -83,6 +83,9 @@ def test_the_batches_run_in_parallel_and_the_triage_in_merge_order() -> None:
     assert jobs["triage"]["strategy"]["max-parallel"] == "1"
     triage = _step("triage", "Triage each merge's batch, in merge order")["run"]
     assert "python -m scripts.fuzzer.main" in triage and '--pr-batch-run "${run_id}"' in triage
+    # Each merge's diff, which the replay writes beside replay.json, so the triage can judge a difference.
+    assert 'diff_args=(--change-diff "replays/replay-${index}/change.diff")' in triage
+    assert '"${diff_args[@]}"' in triage
 
 
 def test_the_plan_takes_a_range_or_the_merges_given() -> None:

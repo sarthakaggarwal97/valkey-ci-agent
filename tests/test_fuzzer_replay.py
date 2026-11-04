@@ -9,7 +9,6 @@ from unittest.mock import MagicMock
 import pytest
 
 import scripts.fuzzer.replay as replay_mod
-from scripts.fuzzer.batch import read_batch
 from scripts.fuzzer.propose import (
     Change,
     ExperimentProposal,
@@ -18,8 +17,7 @@ from scripts.fuzzer.propose import (
     _render_scenario,
     check_scenario,
 )
-from scripts.fuzzer.replay import describe, plan, proposed_run_counts, request_id
-from tests.fuzzer_batch_fixture import batch_files, batch_summary, with_summary
+from scripts.fuzzer.replay import describe, plan, request_id
 
 SCENARIO = "seed: 7\nexperiment: {id: valkey.forkless-save}\ndeployment: {mode: standalone}\n"
 PROPOSED_SCENARIO = "seed: 8\nexperiment: {id: proposed.lset}\ndeployment: {mode: standalone}\n"
@@ -121,7 +119,7 @@ def _change() -> Change:
                   head_sha="b" * 40, diff="diff --git a/x b/x\n")
 
 
-def _replay(monkeypatch, tmp_path, *, propose, merge=None, random_seeds=2, build="default", download=None):
+def _replay(monkeypatch, tmp_path, *, propose, merge=None, random_seeds=2, build="default"):
     fetched, dispatched, waited = [], [], []
     monkeypatch.setattr(replay_mod, "fetch_change", lambda gh, token, request: fetched.append(request) or _change())
     monkeypatch.setattr(replay_mod, "load_catalog", lambda fuzzer_bin: {"experiments": [], "components": []})
@@ -130,7 +128,6 @@ def _replay(monkeypatch, tmp_path, *, propose, merge=None, random_seeds=2, build
     monkeypatch.setattr(replay_mod, "dispatch_batch", lambda gh, inputs, **kw: dispatched.append((inputs, kw)))
     batch = MagicMock(id=99, html_url="https://x/runs/99", conclusion="failure")
     monkeypatch.setattr(replay_mod, "wait_for_run", lambda gh, **kw: waited.append(kw) or batch)
-    monkeypatch.setattr(replay_mod, "download_batch", download or _no_download)
     result = replay_mod.run(
         merge or _merge(), gh=MagicMock(), token="t", repo="valkey-io/valkey", fuzzer_repo="owner/valkey-fuzzer",
         fuzzer_ref="generic-fuzzer", fuzzer_dir=tmp_path, fuzzer_bin="valkey-fuzzer", count=5,
@@ -138,10 +135,6 @@ def _replay(monkeypatch, tmp_path, *, propose, merge=None, random_seeds=2, build
         out_dir=tmp_path / "out", timeout_s=60,
     )
     return result, fetched, dispatched, waited
-
-
-def _no_download(gh, token, repo, run_id):
-    raise AssertionError("the replay downloaded a batch it had no proposed experiments in")
 
 
 def _write(out_dir: Path, change: Change, *docs: dict) -> ProposalRun:
@@ -193,90 +186,29 @@ def test_a_merge_runs_its_proposals_beside_a_random_baseline_on_the_merge_commit
     assert waited[0]["request_id"] == "replay-003-bbbbbbbbb"
     assert (result["proposed"], result["dropped"], result["run_id"], result["conclusion"]) == (1, 1, 99, "failure")
     assert (result["experiments"], result["dropped_experiments"], result["build"]) == (0, 0, "default")
-    assert "reason" not in result and "proposed_runs" not in result
+    assert "reason" not in result
     written = json.loads((tmp_path / "out" / "replay.json").read_text())
     assert written["change"] == "valkey-io/valkey#4716, merged as bbbbbbbbbbbb: Fix the forkless save (#4716)"
+    # The merge's diff, for the monitor's --change-diff.
+    assert (tmp_path / "out" / "change.diff").read_text() == _change().diff
 
 
-def _report(reason: str | None, status: str | None = None, **outcome) -> dict:
-    """A run report as the batch reader takes it, its one component erroring for ``reason``."""
-    status = status or ("ERROR" if reason else "PASS")
-    components = [{"component_id": "lset", "status": "ERROR" if reason else "PASS", "summary": "s",
-                   "diagnostics": {"reason": reason} if reason else {}}]
-    return {"generated_at": "t", "status": status, "summary": "s", "scenario": {}, "coverage": {}, "reproducer": {},
-            "provenance": {}, "outcome": {"status": status, "component_results": components, **outcome}}
-
-
-def _batch_with(runs: dict[str, dict]) -> dict[str, bytes]:
-    """The fixture batch with these scenario runs, named scenario-<name>, instead of its own."""
-    summary = batch_summary()
-    summary["runs"] = [
-        {"id": f"scenario-{name}", "source": "scenario", "status": report["status"], "summary": "s",
-         "report": f"runs/scenario-{name}/report.json"}
-        for name, report in runs.items()
-    ]
-    summary.update(signatures=[], jobs=len(runs), finished=len(runs), complete=True)
-    files = with_summary(batch_files(prefix=""), summary, prefix="")
-    for name, report in runs.items():
-        files[f"runs/scenario-{name}/report.json"] = json.dumps(report).encode()
-    return files
-
-
-def test_a_merge_with_proposed_experiments_sends_them_and_counts_their_runs(monkeypatch, tmp_path, caplog):
+def test_a_merge_with_proposed_experiments_sends_them_on_the_chosen_build(monkeypatch, tmp_path):
     docs = [check_scenario(text)[0] for text in (SCENARIO, PROPOSED_SCENARIO)]
     installed, proposed = (doc["scenario_id"] for doc in docs)
-    downloads = []
 
     def propose(change, *, out_dir, **kw):
-        run = _write(out_dir, change, *docs)
-        run.reason = ""
-        return run
+        return _write(out_dir, change, *docs)
 
-    def download(gh, token, repo, run_id):
-        downloads.append((token, repo, run_id))
-        return _batch_with({
-            installed: _report(None), proposed: _report("unreached-change"),
-        })
-
-    result, _, dispatched, _ = _replay(monkeypatch, tmp_path, propose=propose, build="asan", download=download)
+    result, _, dispatched, _ = _replay(monkeypatch, tmp_path, propose=propose, build="asan")
 
     ((inputs, _),) = dispatched
     assert sorted(json.loads(inputs["scenarios"])) == sorted([installed, proposed])
     assert json.loads(inputs["experiments"]) == {"proposed.lset.yaml": EXPERIMENT}
     assert (inputs["valkey_parent_sha"], inputs["build"]) == ("a" * 40, "asan")
-    assert downloads == [("t", "owner/valkey-fuzzer", 99)]
     assert (result["experiments"], result["build"]) == (1, "asan")
-    # Only the proposed experiment's runs are counted: the installed one's PASS is not "reached".
-    assert result["proposed_runs"] == {"reached": 0, "unreached": 1, "unexplained": 0}
     written = json.loads((tmp_path / "out" / "replay.json").read_text())
-    assert written["proposed_runs"] == result["proposed_runs"]
-
-
-def test_a_count_that_fails_is_recorded_not_fatal(monkeypatch, tmp_path):
-    docs = [check_scenario(PROPOSED_SCENARIO)[0]]
-
-    def download(gh, token, repo, run_id):
-        raise ValueError("PR batch run 99 on owner/valkey-fuzzer has no fuzzer-batch-99 artifact")
-
-    result, _, _, _ = _replay(monkeypatch, tmp_path, propose=lambda change, *, out_dir, **kw: _write(out_dir, change, *docs),
-                              download=download)
-    assert result["count_error"].startswith("PR batch run 99")
-    assert "proposed_runs" not in result and result["run_id"] == 99
-
-
-def test_proposed_run_counts_classify_the_proposed_scenarios_runs():
-    scenarios = {"p1": PROPOSED_SCENARIO, "p2": PROPOSED_SCENARIO, "p3": PROPOSED_SCENARIO, "p4": PROPOSED_SCENARIO,
-                 "p5": PROPOSED_SCENARIO, "i1": SCENARIO}
-    batch = read_batch(_batch_with({
-        "p1": _report(None),
-        "p2": _report(None, status="FAIL"),
-        "p3": _report("unreached-change"),
-        # The reason may sit on the run's own diagnostics as well as a component's.
-        "p4": _report(None, status="ERROR", diagnostics={"reason": "unexplained-difference"}),
-        "p5": _report(None, status="ERROR"),
-        "i1": _report("unreached-change"),
-    }))
-    assert proposed_run_counts(batch, scenarios) == {"reached": 2, "unreached": 1, "unexplained": 1}
+    assert (written["experiments"], written["build"]) == (1, "asan")
 
 
 def test_a_change_that_needs_no_test_is_recorded(monkeypatch, tmp_path):
@@ -357,7 +289,6 @@ def test_replay_json_names_the_batch_as_soon_as_it_is_found(monkeypatch, tmp_pat
     monkeypatch.setattr(replay_mod, "propose", lambda change, **kw: ProposalRun(change=change))
     monkeypatch.setattr(replay_mod, "dispatch_batch", lambda gh, inputs, **kw: None)
     monkeypatch.setattr(replay_mod, "wait_for_run", wait)
-    monkeypatch.setattr(replay_mod, "download_batch", _no_download)
     with pytest.raises(TimeoutError):
         replay_mod.run(_merge(), gh=MagicMock(), token="t", repo="valkey-io/valkey", fuzzer_repo="o/f",
                        fuzzer_ref="r", fuzzer_dir=tmp_path, fuzzer_bin="f", count=5, random_seeds=2,
