@@ -1,0 +1,21 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "f428f3e318f3d5465674e95761ee18efdc5ab0b0",
+  "parent": "c340f0ec2447bfdc080325aa9ff27bc6fe4988f8",
+  "pr": 104,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "`BF.INFO`: documentation and reabability nits (#104)",
+  "date": "2026-06-10",
+  "unstable": "71a43e9dd13afe376eea748fb501058c48901265",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "cost_usd": 0.765,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely cosmetic: it reorders two mutually exclusive string-literal match arms (EXPANSION/TIGHTENING) inside bloom_filter_info, which cannot alter which arm matches or any BF.INFO reply, and edits src/commands/bf.info.json, a documentation-only metadata file that no code loads (no build.rs, no include_str!; the command table comes from the valkey_module! macro in src/lib.rs). No observable behaviour \u2014 replies, errors, persistence, or replication \u2014 differs between the parent and the change, so a compared sequence could only produce 'difference expected but not found' errors, not fi"
+}
