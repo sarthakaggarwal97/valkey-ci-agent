@@ -466,6 +466,23 @@ def _text_field(item: dict[str, Any], key: str) -> str:
     return value if isinstance(value, str) else ""
 
 
+_YAML_MODULE_FILE_RE = re.compile(r"^[ \t]*module_file:[ \t]*[\"']?([^\s\"']*)[\"']?[ \t]*\r?\n?", re.MULTILINE)
+
+
+def _module_file_from_yaml(answer: dict[str, Any]) -> str:
+    """The module_file Claude wrote into an experiment's or scenario's YAML instead of the answer, removed there."""
+    found = ""
+    for key, field_name in (("experiments", "experiment"), ("scenarios", "scenario")):
+        items = answer.get(key)
+        for item in items if isinstance(items, list) else []:
+            text = _text_field(item, field_name) if isinstance(item, dict) else ""
+            match = _YAML_MODULE_FILE_RE.search(text)
+            if match:
+                found = found or match.group(1)
+                item[field_name] = _YAML_MODULE_FILE_RE.sub("", text)
+    return found
+
+
 def touches_module_api(diff: str) -> bool:
     """Whether a Valkey diff changes the module API: src/module.c, src/valkeymodule.h or tests/modules/."""
     return any(path in _MODULE_API_FILES or path.startswith(_TEST_MODULES_DIR)
@@ -972,8 +989,9 @@ not count. The module's source is in {checkout}/.
 """
 
 _REPAIR_MODULE_NOTE = """
-To load one of Valkey's test modules, add "module_file" to the object, one
-of {names}: {{$ref: artifacts.module.path}} and
+To load one of Valkey's test modules, add "module_file" to the JSON object
+you answer with, beside "experiments" and "scenarios" and never inside their
+YAML, one of {names}: {{$ref: artifacts.module.path}} and
 {{$ref: artifacts.module_parent.path}} are then allowed too, and an
 experiment or scenario that failed only for referencing them passes as it
 is."""
@@ -982,7 +1000,8 @@ _TEST_MODULES_SECTION = """
 ### Valkey's test modules
 The change reaches the module API. The runner can build Valkey's own test
 modules (valkey/tests/modules/, `make -C tests/modules`) at the change and
-at its parent: to load one, add "module_file" to your JSON answer, one of
+at its parent: to load one, add "module_file" to your JSON answer, beside
+"experiments" and "scenarios" and never inside their YAML, one of
 {names}, as in {{"module_file": "tests/modules/datatype.so", "experiments":
 [...], "scenarios": [...]}}. Without it the runner builds no module, and a
 scenario that references artifacts.module.path is dropped. A compared
@@ -1167,7 +1186,9 @@ def propose(
 
     def take_module_file(answer: dict[str, Any]) -> None:
         nonlocal declared
-        module_file = answer.get("module_file")
+        # Claude sometimes writes it into the YAML, where the fuzzer would refuse it.
+        in_yaml = _module_file_from_yaml(answer)
+        module_file = answer.get("module_file") or in_yaml
         if not test_modules or run.module is not None or not module_file:
             return
         if module_file in test_modules:

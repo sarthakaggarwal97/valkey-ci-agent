@@ -347,8 +347,9 @@ def main(argv: list[str] | None = None) -> int:
         build=args.build,
     )
     log_outcome(logger, logging.INFO,
-                f"{result['change']}: {result.get('proposed', 0)} scenario(s), {result.get('experiments', 0)} "
-                f"experiment(s); PR batch {result['conclusion']}: {result['run_url']}")
+                f"{result['change']}: {result.get('proposed', 0)} scenario(s), {result.get('experiments', 0)} experiment(s)"
+                + (f"; skipped: {result['skipped']}" if result.get("skipped")
+                   else f"; PR batch {result['conclusion']}: {result['run_url']}"))
     return 0
 
 

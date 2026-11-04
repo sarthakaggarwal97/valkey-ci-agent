@@ -1088,7 +1088,8 @@ def test_a_change_to_the_module_api_may_load_one_of_the_test_modules(tmp_path, f
 
     prompt = runner.prompts[0]
     assert propose_mod._TEST_MODULES_RULE in prompt
-    assert '"module_file" to your JSON answer, one of\ntests/modules/commandfilter.so, tests/modules/datatype.so, as in' in prompt
+    assert ('"module_file" to your JSON answer, beside\n"experiments" and "scenarios" and never inside their YAML, one of\n'
+            'tests/modules/commandfilter.so, tests/modules/datatype.so, as in') in prompt
     assert result["module"] == {"repository": "valkey-io/valkey", "sha": HEAD, "parent_sha": BASE,
                                 "file": "tests/modules/datatype.so"}
     assert result["valkey_sha"] is None and result["module_file_error"] is None
@@ -1113,13 +1114,27 @@ def test_the_repair_round_may_name_the_test_module_the_first_answer_left_out(tmp
                         _answer([], [], module_file="tests/modules/datatype.so"))
     run, result, out = _propose(runner, tmp_path, fuzzer_dir, change=_change(diff=MODULE_API_DIFF))
 
-    assert '"module_file" to the object, one\nof tests/modules/commandfilter.so, tests/modules/datatype.so' in (
-        runner.prompts[1])
+    assert ('"module_file" to the JSON object\nyou answer with, beside "experiments" and "scenarios" and never '
+            'inside their\nYAML, one of tests/modules/commandfilter.so, tests/modules/datatype.so') in runner.prompts[1]
     assert result["module"] == {"repository": "valkey-io/valkey", "sha": HEAD, "parent_sha": BASE,
                                 "file": "tests/modules/datatype.so"}
     assert [e["experiment_id"] for e in result["experiments"]] == ["proposed.datatype"]
     assert len(result["scenarios"]) == 1 and result["dropped"] == []
     assert batch_inputs(out)["module_file"] == "tests/modules/datatype.so"
+
+
+def test_a_module_file_written_into_the_yaml_is_taken_from_there(tmp_path, fuzzer_dir, valkey_checkout):
+    # The nine-merge rerun lost #4424's and #3645's tests this way, in the first answer and the repair.
+    experiment = MODULE_PROPOSED.replace("proposed.json-get", "proposed.datatype").replace(
+        "      modules:", "      module_file: tests/modules/datatype.so\n      modules:")
+    loads = USES_MODULE.replace("proposed.json-get", "proposed.datatype")
+    runner = StubRunner(_answer([{"rationale": "datatype on both builds", "scenario": loads}],
+                                [{"experiment": experiment}]))
+    run, result, out = _propose(runner, tmp_path, fuzzer_dir, change=_change(diff=MODULE_API_DIFF))
+    assert result["module"]["file"] == "tests/modules/datatype.so"
+    assert len(result["scenarios"]) == 1 and result["dropped"] == [] and len(runner.prompts) == 1
+    assert run.compiled[0].text == experiment.replace("      module_file: tests/modules/datatype.so\n", "")
+
 
 def test_a_module_file_tests_modules_does_not_build_loads_nothing(tmp_path, fuzzer_dir, valkey_checkout):
     runner = StubRunner(_answer([{"rationale": "r", "scenario": USES_MODULE}], [{"experiment": MODULE_PROPOSED}],

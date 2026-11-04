@@ -310,6 +310,14 @@ def test_with_nothing_to_run_the_merge_is_recorded_not_dispatched(monkeypatch, t
     assert json.loads((tmp_path / "out" / "replay.json").read_text())["skipped"] == result["skipped"]
 
 
+def test_main_reports_a_skipped_merge(monkeypatch, tmp_path):
+    # A merge with nothing to run has no PR batch, so no conclusion to report.
+    monkeypatch.setenv("TARGET_TOKEN", "t")
+    monkeypatch.setattr(replay_mod, "run", lambda merge, **kw: {"change": "c", "skipped": "nothing"})
+    assert replay_mod.main(["run", "--merge", json.dumps(_merge()), "--fuzzer-repo", "o/f", "--fuzzer-ref", "r",
+                            "--fuzzer-dir", str(tmp_path), "--fuzzer-bin", "f", "--out", str(tmp_path)]) == 0
+
+
 def test_a_failed_proposal_still_runs_the_random_baseline(monkeypatch, tmp_path):
     def propose(change, **kw):
         raise RuntimeError("Claude Code failed (rc=1)")
