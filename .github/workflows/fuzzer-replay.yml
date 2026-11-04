@@ -8,6 +8,9 @@ name: Replay Merged PRs Through the Fuzzer
 # batches run in parallel; the triage runs in merge order, so a failure's
 # issue opens on the first merge that showed it. Only the replay is made up:
 # the proposals, the batch and the monitor are the ones a live run uses.
+# With repository set to a module the PR batch builds (valkey-json), the
+# merges are the module's: each batch builds the module at the merge and its
+# parent and loads both into one Valkey build, valkey_ref resolved once.
 
 on:
   workflow_dispatch:
@@ -53,12 +56,22 @@ on:
         default: default
         type: choice
         options: [default, asan, ubsan]
+      repository:
+        description: "The repository whose merges are replayed: valkey-io/valkey, or a module the PR batch builds (OWNER/valkey-json)"
+        required: false
+        default: valkey-io/valkey
+        type: string
+      valkey_ref:
+        description: "For a module repository: the valkey-io/valkey branch, tag or full commit every merge loads into"
+        required: false
+        default: unstable
+        type: string
 
 permissions: {}
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  VALKEY_REPOSITORY: valkey-io/valkey
+  REPOSITORY: ${{ inputs.repository }}
   FUZZER_REPOSITORY: ${{ github.repository_owner }}/valkey-fuzzer
   # Merges per triage job: the jobs run one at a time, in merge order.
   TRIAGE_CHUNK: "16"
@@ -83,6 +96,7 @@ jobs:
       MAX_PARALLEL: ${{ inputs.max_parallel }}
       FUZZER_REF: ${{ inputs.fuzzer_ref }}
       BUILD: ${{ inputs.build }}
+      VALKEY_REF: ${{ inputs.valkey_ref }}
     steps:
       - name: Check inputs
         shell: bash
@@ -102,6 +116,8 @@ jobs:
           [[ "${MAX_PARALLEL}" =~ ^([1-9]|10)$ ]] || { echo "::error::max_parallel must be 1 to 10"; exit 1; }
           [[ "${FUZZER_REF}" =~ ^${ref}$ ]] || { echo "::error::fuzzer_ref must be a branch name"; exit 1; }
           [[ "${BUILD}" =~ ^(default|asan|ubsan)$ ]] || { echo "::error::build must be default, asan or ubsan"; exit 1; }
+          [[ "${REPOSITORY}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "::error::repository must be OWNER/NAME"; exit 1; }
+          [[ "${VALKEY_REF}" =~ ^${ref}$ && "${VALKEY_REF}" != *..* ]] || { echo "::error::valkey_ref must be a branch, tag or commit"; exit 1; }
 
       - name: Check out agent repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -112,11 +128,11 @@ jobs:
       - name: Set up agent dependencies
         uses: ./.github/actions/setup-agent
 
-      - name: Check out Valkey
+      - name: Check out the repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          repository: ${{ env.VALKEY_REPOSITORY }}
-          path: valkey
+          repository: ${{ env.REPOSITORY }}
+          path: repo
           fetch-depth: 0
           persist-credentials: false
 
@@ -125,8 +141,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m scripts.fuzzer.replay plan --valkey-dir valkey --range "${RANGE}" --merges "${MERGES}" \
-            --first "${FIRST}" --out merges.json
+          # For a module repository, plan resolves valkey_ref once: every merge loads into that Valkey commit.
+          python -m scripts.fuzzer.replay plan --repo-dir repo --repository "${REPOSITORY}" \
+            --valkey-ref "${VALKEY_REF}" --range "${RANGE}" --merges "${MERGES}" --first "${FIRST}" --out merges.json
           python - <<'PY' >> "${GITHUB_OUTPUT}"
           import json, os
           merges = json.load(open("merges.json"))
@@ -187,7 +204,7 @@ jobs:
           "${RUNNER_TEMP}/fuzzer-venv/bin/python" -m pip install --quiet "${GITHUB_WORKSPACE}/valkey-fuzzer"
           echo "FUZZER_BIN=${RUNNER_TEMP}/fuzzer-venv/bin/valkey-fuzzer" >> "${GITHUB_ENV}"
 
-      # Reads the public Valkey repository and starts the PR batch on valkey-fuzzer, nothing else.
+      # Reads the public repository replayed and starts the PR batch on valkey-fuzzer, nothing else.
       - name: Generate GitHub App token
         id: app-token
         if: env.HAS_APP == 'true'
@@ -225,7 +242,7 @@ jobs:
           TARGET_TOKEN: ${{ steps.app-token.outputs.token || steps.pat.outputs.token }}
         run: |
           set -euo pipefail
-          python -m scripts.fuzzer.replay run --merge "${MERGE}" --repo "${VALKEY_REPOSITORY}" \
+          python -m scripts.fuzzer.replay run --merge "${MERGE}" --repo "${REPOSITORY}" \
             --fuzzer-repo "${FUZZER_REPOSITORY}" --fuzzer-ref "${FUZZER_REF}" \
             --fuzzer-dir valkey-fuzzer --fuzzer-bin "${FUZZER_BIN}" \
             --count "${COUNT}" --random-seeds "${RANDOM_SEEDS}" --build "${BUILD}" --out replay

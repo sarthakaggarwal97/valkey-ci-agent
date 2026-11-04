@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import scripts.fuzzer.replay as replay_mod
+from scripts.fuzzer.pr_batch import ModuleBuild
 from scripts.fuzzer.propose import (
     Change,
     ExperimentProposal,
@@ -17,11 +18,12 @@ from scripts.fuzzer.propose import (
     _render_scenario,
     check_scenario,
 )
-from scripts.fuzzer.replay import describe, plan, request_id
+from scripts.fuzzer.replay import describe, plan, request_id, resolve_commit
 
 SCENARIO = "seed: 7\nexperiment: {id: valkey.forkless-save}\ndeployment: {mode: standalone}\n"
 PROPOSED_SCENARIO = "seed: 8\nexperiment: {id: proposed.lset}\ndeployment: {mode: standalone}\n"
 EXPERIMENT = "id: proposed.lset\ndeployment: {modes: [standalone]}\ncomponents: []\n"
+PINNED = "e" * 40
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -93,12 +95,12 @@ def test_plan_command_takes_merges_separated_by_commas_or_spaces(valkey, monkeyp
     shas = _git(valkey, "log", "--first-parent", "--format=%H", "unstable").splitlines()[::-1]
     monkeypatch.setattr(replay_mod, "REPL_COMPRESSION_RULES", shas[0])
     out = tmp_path / "merges.json"
-    assert replay_mod.main(["plan", "--valkey-dir", str(valkey), "--merges", f"{shas[2]}, {shas[1]} {shas[3]}",
+    assert replay_mod.main(["plan", "--repo-dir", str(valkey), "--merges", f"{shas[2]}, {shas[1]} {shas[3]}",
                             "--out", str(out)]) == 0
     assert [m["sha"] for m in json.loads(out.read_text())] == [shas[2], shas[1], shas[3]]
     for args in (["--merges", shas[1], "--range", f"{shas[0]}..unstable"], []):
         with pytest.raises(SystemExit):
-            replay_mod.main(["plan", "--valkey-dir", str(valkey), "--out", str(out), *args])
+            replay_mod.main(["plan", "--repo-dir", str(valkey), "--out", str(out), *args])
 
 
 def test_a_merge_is_named_by_its_pull_request_and_commit():
@@ -120,7 +122,7 @@ def _change() -> Change:
                   head_sha="b" * 40, diff="diff --git a/x b/x\n")
 
 
-def _replay(monkeypatch, tmp_path, *, propose, merge=None, random_seeds=2, build="default"):
+def _replay(monkeypatch, tmp_path, *, propose, merge=None, random_seeds=2, build="default", repo="valkey-io/valkey"):
     # The request ID names the replay run in CI; a test does not run in one.
     monkeypatch.delenv("GITHUB_RUN_ID", raising=False)
     fetched, dispatched, waited = [], [], []
@@ -132,7 +134,7 @@ def _replay(monkeypatch, tmp_path, *, propose, merge=None, random_seeds=2, build
     batch = MagicMock(id=99, html_url="https://x/runs/99", conclusion="failure")
     monkeypatch.setattr(replay_mod, "wait_for_run", lambda gh, **kw: waited.append(kw) or batch)
     result = replay_mod.run(
-        merge or _merge(), gh=MagicMock(), token="t", repo="valkey-io/valkey", fuzzer_repo="owner/valkey-fuzzer",
+        merge or _merge(), gh=MagicMock(), token="t", repo=repo, fuzzer_repo="owner/valkey-fuzzer",
         fuzzer_ref="generic-fuzzer", fuzzer_dir=tmp_path, fuzzer_bin="valkey-fuzzer", count=5,
         random_seeds=random_seeds, build=build,
         out_dir=tmp_path / "out", timeout_s=60,
@@ -319,3 +321,112 @@ def test_a_merge_needs_full_commits(monkeypatch, tmp_path):
         replay_mod.run({**_merge(), "sha": "bbbb"}, gh=MagicMock(), token="t", repo="valkey-io/valkey",
                        fuzzer_repo="o/f", fuzzer_ref="r", fuzzer_dir=tmp_path, fuzzer_bin="f", count=5,
                        random_seeds=2, out_dir=tmp_path, timeout_s=1)
+
+
+# --- Modules -------------------------------------------------------------------
+
+
+def test_a_module_repository_plans_its_merges_onto_one_valkey_and_leaves_nothing_out(valkey, monkeypatch):
+    # Not a commit of the module: a Valkey merge would fail to tell whether it has the rules.
+    monkeypatch.setattr(replay_mod, "REPL_COMPRESSION_RULES", "f" * 40)
+    shas = _git(valkey, "log", "--first-parent", "--format=%H", "unstable").splitlines()[::-1]
+    merges = plan(valkey, f"{shas[0]}..unstable", repository="valkey-io/valkey-json", valkey_sha=PINNED)
+    assert [(m["sha"], m["parent"], m["pr"]) for m in merges] == [
+        (shas[1], shas[0], 4716), (shas[2], shas[1], 5071), (shas[3], shas[2], None),
+    ]
+    assert [(m["exclude_experiments"], m["valkey_sha"]) for m in merges] == [([], PINNED)] * 3
+    assert plan(valkey, merges=[shas[2]], repository="someone/valkey-json", valkey_sha=PINNED)[0]["sha"] == shas[2]
+    with pytest.raises(ValueError, match="needs the full Valkey commit its merges load into"):
+        plan(valkey, f"{shas[0]}..unstable", repository="valkey-io/valkey-json", valkey_sha="unstable")
+    with pytest.raises(ValueError, match="valkey-io/valkey-search is neither Valkey nor a module the PR batch builds"):
+        plan(valkey, f"{shas[0]}..unstable", repository="valkey-io/valkey-search")
+    # A Valkey merge carries no pinned Valkey: it is the build.
+    monkeypatch.setattr(replay_mod, "REPL_COMPRESSION_RULES", shas[0])
+    assert "valkey_sha" not in plan(valkey, f"{shas[0]}..unstable", repository="someone/valkey")[0]
+
+
+def test_the_valkey_a_module_loads_into_is_resolved_to_a_commit(valkey):
+    url = valkey.as_uri()
+    _git(valkey, "tag", "-a", "9.1.0", "-m", "9.1.0", "HEAD~1")
+    assert resolve_commit("unstable", url) == _git(valkey, "rev-parse", "unstable")
+    assert resolve_commit("9.1.0", url) == _git(valkey, "rev-parse", "HEAD~1")
+    full = _git(valkey, "rev-parse", "HEAD~2")
+    assert resolve_commit(full, url) == full
+    with pytest.raises(ValueError, match="cannot fetch nope from"):
+        resolve_commit("nope", url)
+    for ref in ("--upload-pack=x", "a..b", ""):
+        with pytest.raises(ValueError, match="not a branch, tag or commit"):
+            resolve_commit(ref, url)
+
+
+def test_plan_command_pins_a_module_replay_once(valkey, monkeypatch, tmp_path):
+    shas = _git(valkey, "log", "--first-parent", "--format=%H", "unstable").splitlines()[::-1]
+    monkeypatch.setattr(replay_mod, "VALKEY_URL", valkey.as_uri())
+    out = tmp_path / "merges.json"
+    assert replay_mod.main(["plan", "--repo-dir", str(valkey), "--repository", "valkey-io/valkey-json",
+                            "--valkey-ref", "unstable", "--range", f"{shas[1]}..unstable", "--out", str(out)]) == 0
+    assert {m["valkey_sha"] for m in json.loads(out.read_text())} == {shas[3]}
+    with pytest.raises(SystemExit):
+        replay_mod.main(["plan", "--repo-dir", str(valkey), "--repository", "valkey-json", "--range", "a..b",
+                         "--out", str(out)])
+
+
+def test_a_module_merge_runs_on_the_pinned_valkey_with_the_module_built_at_the_merge_and_its_parent(
+    monkeypatch, tmp_path,
+):
+    docs = [check_scenario(text)[0] for text in (SCENARIO, PROPOSED_SCENARIO)]
+    seen = {}
+
+    def propose(change, *, out_dir, valkey_sha, **kw):
+        seen["valkey_sha"] = valkey_sha
+        return _write(out_dir, change, *docs)
+
+    merge = {**_merge(), "valkey_sha": PINNED, "exclude_experiments": []}
+    result, fetched, dispatched, _ = _replay(monkeypatch, tmp_path, propose=propose, merge=merge,
+                                             repo="valkey-io/valkey-json")
+
+    assert fetched[0].repo == "valkey-io/valkey-json" and seen["valkey_sha"] == PINNED
+    ((inputs, _),) = dispatched
+    assert (inputs["valkey_repository"], inputs["valkey_sha"], inputs["valkey_ref"]) == ("valkey-io/valkey", PINNED,
+                                                                                         PINNED)
+    assert (inputs["module_repository"], inputs["module_sha"], inputs["module_parent_sha"]) == (
+        "valkey-io/valkey-json", "b" * 40, "a" * 40,
+    )
+    # One Valkey build: no Valkey parent, even with a proposed experiment; the module's own file.
+    assert "experiments" in inputs and not {"valkey_parent_sha", "module_file", "exclude_experiments"} & set(inputs)
+    assert result["change"].startswith("valkey-io/valkey-json#4716, merged as bbbbbbbbbbbb")
+    assert json.loads((tmp_path / "out" / "replay.json").read_text())["valkey_sha"] == PINNED
+
+
+def test_a_module_merge_whose_proposal_failed_still_loads_the_module(monkeypatch, tmp_path):
+    def propose(change, **kw):
+        raise RuntimeError("Claude Code failed (rc=1)")
+
+    merge = {**_merge(), "valkey_sha": PINNED, "exclude_experiments": []}
+    _, _, dispatched, _ = _replay(monkeypatch, tmp_path, propose=propose, merge=merge, repo="valkey-io/valkey-json")
+    ((inputs, _),) = dispatched
+    assert (inputs["scenarios"], inputs["valkey_sha"], inputs["module_sha"]) == ("{}", PINNED, "b" * 40)
+    assert "valkey_parent_sha" not in inputs
+
+
+def test_a_module_merge_needs_its_pinned_valkey(monkeypatch, tmp_path):
+    with pytest.raises(ValueError, match="merge valkey_sha must be a full commit SHA, got None"):
+        replay_mod.run(_merge(), gh=MagicMock(), token="t", repo="valkey-io/valkey-json", fuzzer_repo="o/f",
+                       fuzzer_ref="r", fuzzer_dir=tmp_path, fuzzer_bin="f", count=5, random_seeds=2,
+                       out_dir=tmp_path, timeout_s=1)
+
+
+def test_a_valkey_merge_that_loads_a_test_module_sends_it(monkeypatch, tmp_path):
+    doc = check_scenario(SCENARIO)[0]
+
+    def propose(change, *, out_dir, **kw):
+        run = _write(out_dir, change, doc)
+        run.module = ModuleBuild("valkey-io/valkey", change.head_sha, change.base_sha, "tests/modules/datatype.so")
+        return run
+
+    _, _, dispatched, _ = _replay(monkeypatch, tmp_path, propose=propose)
+    ((inputs, _),) = dispatched
+    assert (inputs["valkey_sha"], inputs["valkey_parent_sha"]) == ("b" * 40, "a" * 40)
+    assert (inputs["module_repository"], inputs["module_sha"], inputs["module_parent_sha"], inputs["module_file"]) == (
+        "valkey-io/valkey", "b" * 40, "a" * 40, "tests/modules/datatype.so",
+    )

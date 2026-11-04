@@ -21,6 +21,12 @@ and what the primary logs of it. The fuzzer's ``valkey.oracle.repl-compression``
 knows only the new rules, and nothing a build reports tells the two apart, so
 a merge before #4749 leaves the experiments it judges out of its batch, both
 the random draws and the proposals. A live batch never tests a build that old.
+
+The merges of a module repository the PR batch builds (valkey-json) replay
+the same way, on one pinned Valkey build: ``plan`` resolves a valkey-io/valkey
+ref once and gives every merge that commit (``valkey_sha``), and each merge's
+batch builds the module at the merge and its parent and loads both builds
+into it, without a Valkey parent. The #4749 exclusion is for Valkey merges.
 """
 
 from __future__ import annotations
@@ -44,10 +50,20 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from scripts.common.logging_utils import configure_logging, log_outcome
-from scripts.fuzzer.pr_batch import BUILDS, PR_BATCH_WORKFLOW, batch_dispatch_inputs, dispatch_batch, wait_for_run
+from scripts.fuzzer.pr_batch import (
+    BUILDS,
+    MODULE_FILES,
+    PR_BATCH_WORKFLOW,
+    ModuleBuild,
+    batch_dispatch_inputs,
+    dispatch_batch,
+    module_repository,
+    wait_for_run,
+)
 from scripts.fuzzer.propose import (
     MAX_COUNT,
     REPO_RE,
+    VALKEY_REPO,
     ChangeRequest,
     fetch_change,
     fuzzer_lister,
@@ -69,6 +85,9 @@ _PR_SUBJECT_RE = re.compile(r"\(#([1-9][0-9]*)\)\s*$")
 _SHA_RE = re.compile(r"[0-9a-f]{40}")
 # A merge given to plan by hand may be abbreviated; the clone resolves it.
 _MERGE_SHA_RE = re.compile(r"[0-9a-f]{7,40}")
+# The Valkey a module's merges load into: a branch, a tag or a full commit, fetched from here.
+_REF_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,99}")
+VALKEY_URL = f"https://github.com/{VALKEY_REPO}.git"
 # valkey-io/valkey#4749, and the experiments whose oracle models its rules.
 REPL_COMPRESSION_RULES = "7fe7ca45ffc7bb0ba009a952a2f64395e45e432a"
 REPL_COMPRESSION_EXPERIMENTS = (
@@ -78,12 +97,20 @@ REPL_COMPRESSION_EXPERIMENTS = (
 
 
 def plan(
-    valkey_dir: Path, commit_range: str = "", *, first: int = 0, merges: Sequence[str] = (),
+    repo_dir: Path, commit_range: str = "", *, first: int = 0, merges: Sequence[str] = (),
+    repository: str = VALKEY_REPO, valkey_sha: str = "",
 ) -> list[dict[str, Any]]:
     """The merges to replay, each with the experiments its batch leaves out: the commits in ``commit_range``
     (BASE..TIP) on TIP's first-parent history, oldest first, or the given ``merges`` (commit SHAs, resolved in
-    the clone) in the order given."""
-    git = ["git", "-C", str(valkey_dir)]
+    the clone) in the order given. ``repo_dir`` is a clone of ``repository``: Valkey, or a module repository,
+    whose merges each load into ``valkey_sha`` and leave nothing out."""
+    name = repository.split("/")[-1]
+    if name not in MODULE_FILES:
+        raise ValueError(f"{repository} is neither Valkey nor a module the PR batch builds ({', '.join(MODULE_FILES)})")
+    is_module = module_repository(repository)
+    if is_module and not _SHA_RE.fullmatch(valkey_sha):
+        raise ValueError(f"a replay of {repository} needs the full Valkey commit its merges load into")
+    git = ["git", "-C", str(repo_dir)]
     if merges:
         lines = []
         for sha in merges:
@@ -92,7 +119,7 @@ def plan(
             resolved = subprocess.run([*git, "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}"],
                                       capture_output=True, text=True)
             if resolved.returncode != 0:
-                raise ValueError(f"{sha} is not a commit in {valkey_dir}")
+                raise ValueError(f"{sha} is not a commit in {repo_dir}")
             lines += subprocess.run([*git, "log", "-1", "--format=%H %P%x09%s", resolved.stdout.strip()],
                                     check=True, capture_output=True, text=True).stdout.splitlines()
         what = f"the {len(merges)} merge(s) given"
@@ -110,9 +137,9 @@ def plan(
         shas, _, subject = line.partition("\t")
         sha, parent = shas.split()[:2]
         match = _PR_SUBJECT_RE.search(subject)
-        planned.append({"index": index, "sha": sha, "parent": parent,
-                        "pr": int(match.group(1)) if match else None, "subject": subject[:200],
-                        "exclude_experiments": excluded_experiments(valkey_dir, sha)})
+        entry = {"index": index, "sha": sha, "parent": parent, "pr": int(match.group(1)) if match else None,
+                 "subject": subject[:200], "exclude_experiments": [] if is_module else excluded_experiments(repo_dir, sha)}
+        planned.append({**entry, "valkey_sha": valkey_sha} if is_module else entry)
     planned = planned[:first] if first else planned
     if len(planned) > MAX_MERGES:
         raise ValueError(
@@ -120,6 +147,20 @@ def plan(
             "limit). Replay a shorter range, or set first."
         )
     return planned
+
+
+def resolve_commit(ref: str, url: str) -> str:
+    """The commit ``ref`` (a branch, a tag or a full commit SHA) names in the repository at ``url``."""
+    if not _REF_RE.fullmatch(ref) or ".." in ref:
+        raise ValueError(f"not a branch, tag or commit: {ref!r}")
+    with tempfile.TemporaryDirectory(prefix="fuzzer-replay-valkey-") as td:
+        subprocess.run(["git", "init", "-q", td], check=True, capture_output=True)
+        fetched = subprocess.run(["git", "-C", td, "fetch", "-q", "--depth", "1", url, ref],
+                                 capture_output=True, text=True)
+        if fetched.returncode != 0:
+            raise ValueError(f"cannot fetch {ref} from {url}: {fetched.stderr.strip()[:300]}")
+        return subprocess.run(["git", "-C", td, "rev-parse", "FETCH_HEAD^{commit}"], check=True,
+                              capture_output=True, text=True).stdout.strip()
 
 
 def excluded_experiments(valkey_dir: Path, sha: str) -> list[str]:
@@ -158,10 +199,12 @@ def run(
     build: str = "default",
 ) -> dict[str, Any]:
     """Replay one merge: propose scenarios for it, run them with a random baseline on ``build`` of the merge
-    commit and its parent, and wait for the batch."""
-    for key in ("sha", "parent"):
-        if not _SHA_RE.fullmatch(str(merge[key])):
-            raise ValueError(f"merge {key} must be a full commit SHA, got {merge[key]!r}")
+    commit and its parent, and wait for the batch. A merge of a module repository runs on its pinned Valkey
+    build, which loads the module built at the merge and at its parent."""
+    is_module = module_repository(repo)
+    for key in ("sha", "parent", "valkey_sha") if is_module else ("sha", "parent"):
+        if not _SHA_RE.fullmatch(str(merge.get(key))):
+            raise ValueError(f"merge {key} must be a full commit SHA, got {merge.get(key)!r}")
     result: dict[str, Any] = {**merge, "change": describe(merge, repo), "request_id": request_id(merge, os.environ.get("GITHUB_RUN_ID", "")),
                               "build": build}
     change = fetch_change(gh, token, ChangeRequest(repo=repo, base=merge["parent"], head=merge["sha"]))
@@ -171,13 +214,17 @@ def run(
     (out_dir / CHANGE_DIFF_FILE).write_text(change.diff, encoding="utf-8")
     proposals_dir = out_dir / "proposals"
     experiments: dict[str, str] = {}
+    module: ModuleBuild | None = None
     try:
         with tempfile.TemporaryDirectory(prefix="fuzzer-replay-") as td:
             proposal_run = propose(
                 change, count=count, workdir=Path(td), out_dir=proposals_dir, catalog=load_catalog(fuzzer_bin),
                 fuzzer_dir=fuzzer_dir, validator=fuzzer_validator(fuzzer_bin), lister=fuzzer_lister(fuzzer_bin),
+                valkey_sha=str(merge.get("valkey_sha") or ""),
             )
         write_results(proposal_run, proposals_dir)
+        # The tests/modules build a Valkey merge's proposals load, if any.
+        module = proposal_run.module
         summary, scenarios, experiments = validated_scenarios(proposals_dir)
         result["proposed"] = len(scenarios)
         result["dropped"] = len(proposal_run.dropped)
@@ -196,10 +243,16 @@ def run(
         kept = {name: text for name, text in scenarios.items() if _experiment(text) not in excluded}
         result["excluded_proposals"] = len(scenarios) - len(kept)
         scenarios = kept
+    parent_sha: str | None = merge["parent"]
+    if is_module:
+        # One pinned Valkey build, and the module built at the merge and at its parent, whatever was proposed.
+        module = ModuleBuild(repo, merge["sha"], merge["parent"])
+        summary, parent_sha = {"repo": VALKEY_REPO, "pr_number": None, "head_sha": merge["valkey_sha"]}, None
     # The exclusion only applies to the random baseline; without one the workflow refuses it.
     inputs = batch_dispatch_inputs(summary, scenarios, random_seeds=random_seeds, request_id=result["request_id"],
                                    exclude_experiments=excluded if random_seeds else (),
-                                   parent_sha=merge["parent"], build=build, experiments=experiments or None)
+                                   parent_sha=parent_sha, build=build, experiments=experiments or None,
+                                   module=module)
     # GitHub's clock and ours may differ a little.
     since = datetime.now(timezone.utc) - timedelta(minutes=2)
     dispatch_batch(gh, inputs, fuzzer_repo=fuzzer_repo, workflow=PR_BATCH_WORKFLOW, ref=fuzzer_ref)
@@ -229,7 +282,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     p = commands.add_parser("plan", help="list the merges to replay as a JSON array")
-    p.add_argument("--valkey-dir", required=True, help="a Valkey clone holding the whole range")
+    p.add_argument("--repo-dir", required=True, help="a clone of --repository holding the whole range")
+    p.add_argument("--repository", default=VALKEY_REPO, help="Valkey, or a module repository the PR batch builds")
+    p.add_argument("--valkey-ref", default="unstable",
+                   help="for a module repository: the valkey-io/valkey branch, tag or commit its merges load into")
     p.add_argument("--range", default="", help="BASE..TIP")
     p.add_argument("--merges", default="", help="instead of a range: commit SHAs, separated by commas or spaces")
     p.add_argument("--first", type=int, default=0, help="replay only the first N merges (0: all)")
@@ -254,9 +310,16 @@ def main(argv: list[str] | None = None) -> int:
         given = args.merges.replace(",", " ").split()
         if bool(given) == bool(args.range):
             parser.error("give exactly one of --range and --merges")
-        merges = plan(Path(args.valkey_dir), args.range, first=args.first, merges=given)
+        if not REPO_RE.fullmatch(args.repository):
+            parser.error(f"not an owner/name repository: {args.repository!r}")
+        # Resolved once, so every merge of the replay loads into the same Valkey build.
+        valkey_sha = resolve_commit(args.valkey_ref, VALKEY_URL) if module_repository(args.repository) else ""
+        merges = plan(Path(args.repo_dir), args.range, first=args.first, merges=given, repository=args.repository,
+                      valkey_sha=valkey_sha)
         Path(args.out).write_text(json.dumps(merges), encoding="utf-8")
-        log_outcome(logger, logging.INFO, f"{len(merges)} merge(s) to replay in {args.range or 'the merges given'}")
+        log_outcome(logger, logging.INFO, f"{len(merges)} merge(s) of {args.repository} to replay in "
+                                          f"{args.range or 'the merges given'}"
+                                          + (f", loaded into Valkey {valkey_sha}" if valkey_sha else ""))
         return 0
 
     for name in ("repo", "fuzzer_repo"):

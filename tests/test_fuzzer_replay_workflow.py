@@ -24,13 +24,30 @@ def test_dispatch_only_with_its_inputs() -> None:
     assert list(on) == ["workflow_dispatch"]
     inputs = on["workflow_dispatch"]["inputs"]
     assert list(inputs) == ["range", "merges", "first", "count", "random_seeds", "max_parallel", "fuzzer_ref",
-                            "build"]
+                            "build", "repository", "valkey_ref"]
     # A range or the merges given by SHA: neither is required on its own, the plan step wants one of them.
     assert [name for name, spec in inputs.items() if spec.get("required") == "true"] == []
     assert (inputs["range"]["default"], inputs["merges"]["default"]) == ("", "")
     assert (inputs["build"]["type"], inputs["build"]["options"], inputs["build"]["default"]) == (
         "choice", ["default", "asan", "ubsan"], "default",
     )
+    assert (inputs["repository"]["default"], inputs["valkey_ref"]["default"]) == ("valkey-io/valkey", "unstable")
+
+
+def test_the_repository_is_checked_cloned_planned_and_replayed() -> None:
+    assert _workflow()["env"]["REPOSITORY"] == "${{ inputs.repository }}"
+    assert _workflow()["jobs"]["plan"]["env"]["VALKEY_REF"] == "${{ inputs.valkey_ref }}"
+    check = _step("plan", "Check inputs")["run"]
+    assert '"${REPOSITORY}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' in check
+    assert '"${VALKEY_REF}" =~ ^${ref}$ && "${VALKEY_REF}" != *..*' in check
+    # Checked before anything clones it.
+    names = [step.get("name") for step in _workflow()["jobs"]["plan"]["steps"]]
+    assert names.index("Check inputs") < names.index("Check out the repository")
+    checkout = _step("plan", "Check out the repository")["with"]
+    assert (checkout["repository"], checkout["path"], checkout["fetch-depth"]) == ("${{ env.REPOSITORY }}", "repo", "0")
+    listing = _step("plan", "List the merges")["run"]
+    assert '--repo-dir repo --repository "${REPOSITORY}"' in listing and '--valkey-ref "${VALKEY_REF}"' in listing
+    assert '--repo "${REPOSITORY}"' in _step("replay", "Replay the merge")["run"]
 
 
 def test_the_build_is_checked_and_handed_to_the_replay() -> None:
