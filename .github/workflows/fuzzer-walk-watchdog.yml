@@ -1,0 +1,56 @@
+# Keeps the fuzzer walk going: when a run of it ends, starts the next for the
+# same repository unless one is already queued or running. Each run starts its
+# next one itself; this covers a chain that broke (a failed final step, a
+# cancelled run, a run from before the chain). The repository variable
+# WALK_PAUSED=true stops it. Do not merge: it lives on the fork's main, where
+# workflow_run events fire.
+name: Fuzzer Walk Watchdog
+
+on:
+  workflow_run:
+    workflows: ["Walk Every Merge Through the Fuzzer"]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: fuzzer-walk-watchdog
+  cancel-in-progress: false
+
+jobs:
+  next:
+    # A cancelled run was stopped on purpose: it stays stopped.
+    if: >-
+      github.repository_owner != 'valkey-io' && vars.WALK_PAUSED != 'true' &&
+      github.event.workflow_run.conclusion != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+    steps:
+      - name: Start the next run of the repository that one walked
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          # A run's repository, from its jobs' names: "walk (valkey-io/<name>, ...)"; a run with nothing to walk
+          # has only "heads (<name>, ...)" jobs, Valkey's among them for a module; a run still planning, none.
+          repository_of() {
+            gh run view "$1" -R "${GITHUB_REPOSITORY}" --json jobs -q '
+              [.jobs[].name | capture("^walk \\(valkey-io/(?<n>[a-z-]+),").n] as $walked
+              | [.jobs[].name | capture("^heads \\((?<n>[a-z-]+),").n] as $heads
+              | ($walked[0] // ([$heads[] | select(. != "valkey")][0]) // $heads[0] // empty)'
+          }
+          name=$(repository_of "${RUN_ID}")
+          if [[ -z "${name}" ]]; then echo "no repository found for run ${RUN_ID}"; exit 0; fi
+          # Give the run's own next one a moment to appear.
+          sleep 60
+          for id in $(gh run list -R "${GITHUB_REPOSITORY}" -w fuzzer-walk.yml -L 50 --json databaseId,status \
+                        -q '.[] | select(.status != "completed") | .databaseId'); do
+            other=$(repository_of "${id}")
+            if [[ -z "${other}" ]]; then echo "run ${id} is still planning; leaving it be"; exit 0; fi
+            if [[ "${other}" == "${name}" ]]; then echo "a run of ${name} is already active: ${id}"; exit 0; fi
+          done
+          gh workflow run fuzzer-walk.yml -R "${GITHUB_REPOSITORY}" --ref fuzzer-replay -f repository="${name}"
+          echo "started the next run of ${name}"
