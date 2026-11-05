@@ -1,0 +1,16 @@
+# Registers the walk's maintenance for dispatch. The workflow itself is the one
+# of the same name on the fuzzer-replay branch; a dispatch with --ref
+# fuzzer-replay runs that version. Do not merge.
+name: Fuzzer Walk Maintenance
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  registered:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo registered
