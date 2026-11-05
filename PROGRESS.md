@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-05T20:29+00:00.
+Updated 2026-11-05T20:30+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -38,9 +38,8 @@ Updated 2026-11-05T20:29+00:00.
 
 ### valkey-io/valkey-bloom
 
-[2026-11-05T20:29:25+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42086303278): 1 merge(s) tested, 0 without a code change.
+[2026-11-05T20:30:02+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42103858652): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-bloom#110](https://github.com/valkey-io/valkey-bloom/pull/110) ([tests](tests/valkey-bloom/110-9ab369980/)): Match bloom memory tracking by small over count of bytes after a defrag operation (#110): 0 of 2 test(s) reached the change
 
 ### valkey-io/valkey-json
 
