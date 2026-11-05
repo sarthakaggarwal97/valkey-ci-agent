@@ -1,12 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-05T00:41+00:00.
+Updated 2026-11-05T01:54+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 2 | 2480 | #5138 (2026-11-04) | 2 | 0.3 |
 | valkey-io/valkey-bloom | 5 | 104 | #93 (2026-04-26) | 5 | 0.7 |
 | valkey-io/valkey-json | 6 | 56 | #115 (2026-06-24) | 6 | 0.9 |
+| valkey-io/valkey-search | 0 | 667 | #1634 (2026-11-03) | 0 | 0.0 |
 
 ## Last runs
 
@@ -33,10 +34,16 @@ Updated 2026-11-05T00:41+00:00.
 - [valkey-io/valkey-json#117](https://github.com/valkey-io/valkey-json/pull/117) ([tests](tests/valkey-json/117-7d0acb4c9/)): Making PR's run unstable and latest only, adding a daily job for all versions (#117): declined: The change only modifies the GitHub Actions CI workflow (which server-version matrix runs on PRs versus the daily schedule) and adds a SERVER_VERSION validation check to build.sh. No module source code, command behaviour, reply format, or data path is touched, so there is no runtime behavi
 - [valkey-io/valkey-json#95](https://github.com/valkey-io/valkey-json/pull/95) ([tests](tests/valkey-json/95-dcaa82c2e/)): feat: JSON.MERGE plus unit and integration tests (#95): 6 of 6 test(s) reached the change; [crash, predates #95](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42)
 
+### valkey-io/valkey-search
+
+[2026-11-05T01:54:48+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41928158333): 2 merge(s) tested, 0 without a code change.
+
+- [valkey-io/valkey-search#1576](https://github.com/valkey-io/valkey-search/pull/1576): to retry, 'reached'
+- [valkey-io/valkey-search#1542](https://github.com/valkey-io/valkey-search/pull/1542): to retry, Claude Code failed (rc=1): timeout after 3000s
+
 ## Totals
 
 - Merges whose tests reached the change: 6 of 7 tested (86%)
-- Changed-line coverage: none measured
 - Recall: 2 parents flagged of 2 fix merges
 - Claude: $49.91 in the last 24 hours, $49.91 in the last 7 days, $49.91 in all
 - Issues filed: 3
@@ -46,4 +53,5 @@ Updated 2026-11-05T00:41+00:00.
 
 ## Retries
 
-None.
+- [valkey-io/valkey-search#1576](https://github.com/valkey-io/valkey-search/pull/1576): attempt 1 of 3, 'reached'
+- [valkey-io/valkey-search#1542](https://github.com/valkey-io/valkey-search/pull/1542): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s

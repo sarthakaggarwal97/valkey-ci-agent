@@ -1,0 +1,11 @@
+{
+"repo": "valkey-io/valkey-search",
+"pointer": {"cursor": "7e7adf25ef79b7603047680b08bbbf20e1a29487", "cursor_date": "2026-11-03", "cursor_pr": 1634, "end": "f8106e72e984983b3f534a5873ec65949da6f3e2", "head": "7750ee8faf672b095a282e73bf5d340d3cb9a518", "remaining": 665},
+"done": {
+},
+"failed": {
+  "7750ee8faf672b095a282e73bf5d340d3cb9a518": {"attempts": 1, "cost_usd": 10.7945, "date": "2026-11-04", "error": "'reached'", "misses": 0, "parent": "eda3508f7f5315e4b071ccfd51bb363e399d411d", "pr": 1576, "pr_repo": "valkey-io/valkey-search", "repo": "valkey-io/valkey-search", "sha": "7750ee8faf672b095a282e73bf5d340d3cb9a518", "subject": "Add Record whether SEPARATOR was given for TAG fields (#1576)"},
+  "eda3508f7f5315e4b071ccfd51bb363e399d411d": {"attempts": 1, "cost_usd": 0.0, "date": "2026-11-03", "error": "Claude Code failed (rc=1): timeout after 3000s", "misses": 0, "parent": "7e7adf25ef79b7603047680b08bbbf20e1a29487", "pr": 1542, "pr_repo": "valkey-io/valkey-search", "repo": "valkey-io/valkey-search", "sha": "eda3508f7f5315e4b071ccfd51bb363e399d411d", "subject": "Stability wedge detection and NaN fix for vectors (#1542)"}
+},
+"last_run": {"at": "2026-11-05T01:54:48+00:00", "cost_usd": 10.7945, "merges": ["7750ee8faf672b095a282e73bf5d340d3cb9a518", "eda3508f7f5315e4b071ccfd51bb363e399d411d"], "skipped": 0, "url": "https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41928158333"}
+}
