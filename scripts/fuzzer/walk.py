@@ -144,6 +144,7 @@ _SANITIZER_RE = re.compile(r"SUMMARY: \w*Sanitizer: [^\n]*")
 _ASSERTION_RE = re.compile(r"ASSERTION FAILED[^\n]*\n([^\n]*)")
 _SIGNAL_RE = re.compile(r"crashed by signal[^\n]*")
 _FRAME_RE = re.compile(r"#\d+ 0x[0-9a-f]+ in (\S+)")
+_LIBRARY_FRAME_RE = re.compile(r"alloc|Alloc|operator new|^rapidjson::|^std::|^__|^_Z")
 _EIP_RE = re.compile(r"EIP:\s*\n[^\n(]*\((\w+)")
 _FIX_RE = re.compile(r"\bfix", re.IGNORECASE)
 _HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
@@ -529,8 +530,12 @@ def log_cause(text: str) -> str | None:
     if summary:
         cause = summary.group(0)
         if "leaked" in cause:
-            frame = next((m.group(1) for m in _FRAME_RE.finditer(text) if "alloc" not in m.group(1)), None)
-            cause += f" from {frame}" if frame else ""
+            # The first frame of the project's own code: a library's (rapidjson's, the allocator's) is shared by
+            # every leak through it, and the byte counts change with the data, not with the bug.
+            frame = next((m.group(1) for m in _FRAME_RE.finditer(text) if not _LIBRARY_FRAME_RE.search(m.group(1))),
+                         None)
+            cause = re.sub(r"\d+ byte\(s\) leaked in \d+ allocation\(s\)\.", "leak", cause)
+            cause += f" from {frame.split('(')[0]}" if frame else ""
         return cause
     assertion = _ASSERTION_RE.search(text)
     if assertion:

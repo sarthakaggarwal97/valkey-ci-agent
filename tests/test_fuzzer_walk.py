@@ -387,7 +387,13 @@ def test_without_a_named_crash_the_candidates_logs_are_scanned(tmp_path):
 def test_a_log_names_its_crash_by_summary_assertion_or_signal():
     leak = ("SUMMARY: AddressSanitizer: 64 byte(s) leaked in 1 allocation(s).\n"
             "Direct leak of 64 byte(s)\n    #0 0x1 in malloc\n    #1 0x2 in ztrymalloc_usable\n    #2 0x3 in sdsnew\n")
-    assert log_cause(leak) == "SUMMARY: AddressSanitizer: 64 byte(s) leaked in 1 allocation(s). from sdsnew"
+    assert log_cause(leak) == "SUMMARY: AddressSanitizer: leak from sdsnew"
+    # As in valkey-json's: past the library frames to the module's own, and the same however much leaked.
+    json = ("SUMMARY: AddressSanitizer: 4797 byte(s) leaked in 36 allocation(s).\n    #0 0x1 in malloc\n"
+            "    #1 0x2 in dom_alloc(unsigned long)\n    #2 0x3 in rapidjson::GenericMember<X>* rapidjson::Realloc<Y>\n"
+            "    #3 0x4 in merge_values(rapidjson::GenericValue<X> const&)\n")
+    assert log_cause(json) == "SUMMARY: AddressSanitizer: leak from merge_values"
+    assert log_cause(json.replace("4797", "404")) == log_cause(json)
     assert log_cause("=== ASSERTION FAILED ===\n==> t_list.c:10 'x' is not true\n") == \
         "assertion failed: ==> t_list.c:10 'x' is not true"
     assert log_cause("valkey crashed by signal: 11, si_code: 1\nEIP:\n./valkey-server *:7000(lsetCommand+0x1a)[0x5]\n") \
