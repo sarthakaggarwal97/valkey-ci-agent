@@ -700,6 +700,20 @@ def test_the_workflow_walks_each_merge_in_its_own_job_and_records_the_run():
     assert 'walk update --remote "https://github.com/${GITHUB_REPOSITORY}.git"' in recording
 
 
+
+def test_each_walk_run_starts_the_walks_maintenance():
+    record = _workflow()["jobs"]["record"]
+    names = [s.get("name") for s in record["steps"]]
+    # Before the next run's dispatch, which may wait half an hour.
+    assert names.index("Start the walk's maintenance") < names.index("Start the next run")
+    step = record["steps"][names.index("Start the walk's maintenance")]
+    following = record["steps"][names.index("Start the next run")]
+    assert step["if"] == following["if"] == "${{ !cancelled() && vars.WALK_PAUSED != 'true' }}"
+    # A dispatch that fails does not fail the walk.
+    assert step["continue-on-error"] == "true" and step["env"] == {"GH_TOKEN": "${{ github.token }}"}
+    assert '"${GITHUB_REPOSITORY}" != valkey-io/*' in step["run"]
+    assert 'gh workflow run fuzzer-walk-maintain.yml -R "${GITHUB_REPOSITORY}" --ref "${GITHUB_REF_NAME}"' in step["run"]
+
 def test_merges_before_the_fork_name_their_redis_pull_requests(tmp_path):
     repo = _repo(tmp_path, "valkey", [("Base (#12477)", "src/a.c"), ("Redis fix (#13154)", "src/b.c")])
     _commit(repo, "A single commit to get stuff building", "src/c.c", 2)

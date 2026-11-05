@@ -389,6 +389,19 @@ jobs:
           python -m scripts.fuzzer.walk update --remote "https://github.com/${GITHUB_REPOSITORY}.git" \
             --work "${RUNNER_TEMP}/walk-state" --plan plan/plan.json --results results --run-url "${RUN_URL}"
 
+      # Claude vets what the walk found and fixes the pipeline; the maintenance run skips itself when one ran in
+      # the last 6 hours. Its dispatch failing does not fail the walk.
+      - name: Start the walk's maintenance
+        if: ${{ !cancelled() && vars.WALK_PAUSED != 'true' }}
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "${GITHUB_REPOSITORY}" != valkey-io/* ]] || exit 0
+          gh workflow run fuzzer-walk-maintain.yml -R "${GITHUB_REPOSITORY}" --ref "${GITHUB_REF_NAME}"
+
       # The walk goes on by itself: each run starts the next for its repository (a fork runs no schedule unless
       # someone enables it), after half an hour when this one found nothing to walk. A cancelled run starts
       # none; the repository variable WALK_PAUSED=true stops the walk.
