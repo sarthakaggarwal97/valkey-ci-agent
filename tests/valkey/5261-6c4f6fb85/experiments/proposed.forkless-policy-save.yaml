@@ -1,0 +1,61 @@
+extends: [valkey.base]
+id: proposed.forkless-policy-save
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Forkless BGSAVE selected by the new forkless-policy config under concurrent
+    writes, with INFO and log evidence and RDB reload
+inputs:
+  properties:
+    key_save_delay_us: {type: integer, minimum: 0, maximum: 100000, default: 500}
+startup_overlays:
+- overlay_id: forkless-policy-enabled
+  server_config:
+    forkless-infrastructure-enabled: "yes"
+    forkless-policy: prefer-forkless
+    rdb-key-save-delay: {$ref: inputs.key_save_delay_us}
+components:
+- use: valkey.capability.build-probe
+  id: build
+  config:
+    startup_config:
+      forkless-infrastructure-enabled: "yes"
+      forkless-policy: prefer-forkless
+    config_get:
+      forkless-policy: [prefer-forkless]
+    info_fields:
+      persistence: [rdb_current_bgsave_type, rdb_last_bgsave_type]
+- use: valkey.observer.info
+  id: info
+  config:
+    instances: primaries
+    interval_s: 0.02
+    sections: [persistence]
+    on_events: [bgsave.save-started, bgsave.save-completed]
+    expectations:
+    - {field: rdb_current_bgsave_type, equals: forkless, when: during, instances: all,
+      required: true, evidence_id: valkey.forkless.in-progress}
+    - {field: rdb_last_bgsave_type, equals: forkless, when: final, instances: all,
+      evidence_id: valkey.forkless.last-type}
+    - {field: rdb_last_bgsave_status, equals: ok, when: final, instances: all, evidence_id: valkey.persistence.last-status-ok}
+    - {field: rdb_bgsave_in_progress, equals: 0, when: final, instances: all, evidence_id: valkey.persistence.idle-after}
+- use: valkey.observer.log
+  id: logs
+  config:
+    instances: primaries
+    expect:
+    - {pattern: "Beginning forklessSaveToDisk", required: true, instances: all, evidence_id: valkey.forkless.log-started}
+    forbidden:
+    - {pattern: "forkless-save: (forkless )?save failed"}
+    - {pattern: "Falling back to fork-based save"}
+- use: valkey.action.bgsave
+  id: bgsave
+  depends_on: [writes, info, logs]
+  config: {instances: primaries, expect: ok, expect_type: forkless}
+- use: valkey.oracle.rdb-snapshot
+  id: snapshot
+  depends_on: [bgsave]
+  config: {bgsave: bgsave, workload: writes}
+required_events: [writes.seeded, bgsave.save-started, bgsave.save-completed]
+required_evidence:
+- {evidence_id: valkey.rdb.reload-verified, source: snapshot}

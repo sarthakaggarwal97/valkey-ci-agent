@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0d089ef9b9c4..d800336542f8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-600fda264ece
+seed: 520801
+experiment:
+  id: proposed.sentinel-simulate-failure-hint
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

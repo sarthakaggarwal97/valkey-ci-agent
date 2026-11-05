@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b3b5ab983fec5511b1248fed39c566ae65b3ef0d",
+  "parent": "14f16537d4f87a763a9b024d10d2254a21cac020",
+  "pr": 5070,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Feature pathhash prefixes (#5070)",
+  "date": "2026-11-02",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 5,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 15,
+    "executed": 15,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.2061,
+  "findings": [],
+  "recorded": []
+}

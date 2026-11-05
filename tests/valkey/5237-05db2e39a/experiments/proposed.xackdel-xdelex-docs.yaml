@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.xackdel-xdelex-docs
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS for XACKDEL/XDELEX reports the IDS numids/id arguments
+    grouped in a block; runtime parsing of both commands is unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [COMMAND, DOCS, XACKDEL], expect_difference: true, expect: {error: false}}
+    - {command: [COMMAND, DOCS, XDELEX], expect_difference: true, expect: {error: false}}
+    - {command: [COMMAND, INFO, XACKDEL]}
+    - {command: [COMMAND, INFO, XDELEX]}
+    - {command: [COMMAND, GETKEYS, XACKDEL, s, g, IDS, 1, "1-1"], expect: {equals: [
+          s]}}
+    - {command: [COMMAND, GETKEYS, XDELEX, s, IDS, 1, "1-1"], expect: {equals: [s]}}
+    - {command: [XADD, s, "1-1", f, v], expect: {equals: "1-1"}}
+    - {command: [XADD, s, "2-2", f, v], expect: {equals: "2-2"}}
+    - {command: [XADD, s, "3-3", f, v], expect: {equals: "3-3"}}
+    - {command: [XGROUP, CREATE, s, g, 0], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g, c1, COUNT, 10, STREAMS, s, ">"], expect: {
+        error: false}}
+    - {command: [XACKDEL, s, g, ACKED, IDS, 2, "1-1", "9-9"], expect: {error: false}}
+    - {command: [XDELEX, s, DELREF, IDS, 1, "2-2"], expect: {error: false}}
+    - {command: [XACKDEL, s, g, KEEPREF, IDS, 1, "3-3"], expect: {error: false}}
+    - {command: [XACKDEL, s, g, IDS, 0], expect: {error: true}}
+    - {command: [XACKDEL, s, g, IDS, 2, "3-3"], expect: {error: true}}
+    - {command: [XDELEX, s, IDS, 3, "1-1", "2-2"], expect: {error: true}}
+    - {command: [XDELEX, s, IDS, s, "1-1"], expect: {error: true}}
+    - {command: [XLEN, s], expect: {min: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

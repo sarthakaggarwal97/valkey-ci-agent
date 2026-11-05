@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.phpathdel-notify-watch
+deployment:
+  modes: [standalone]
+metadata:
+  description: PHPATHDEL fires the renamed phpathdel keyspace event plus del, and
+    invalidates WATCH via signalModifiedKey
+components:
+- use: valkey.action.commands
+  id: notify
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {notify-keyspace-events: KEA}
+    timeout_s: 30
+    commands:
+    - {command: [SUBSCRIBE, '__keyspace@0__:nt'], connection: sub, expect: {exists: true}}
+    - {command: [PHSET, nt, a, fields, 1, f, one], expect: {equals: OK}}
+    - {command: [PHSET, nt, ab, fields, 1, f, two], expect: {equals: OK}}
+    - {command: [PHPATHDEL, nt, a], expect_difference: true, expect: {equals: 1}}
+    - {command: [PHPATHDEL, nt, ab, WITHSUBPATHS], expect_difference: true, expect: {
+        equals: 1}}
+    - {connection: sub, read: true, expect_difference: true, expect: {exists: true}}
+    - {command: [PHSET, wk, p, fields, 1, f, v], expect: {equals: OK}}
+    - {command: [WATCH, wk], expect: {equals: OK}}
+    - {command: [PHPATHDEL, wk, p], connection: other, expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [notify.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: notify}

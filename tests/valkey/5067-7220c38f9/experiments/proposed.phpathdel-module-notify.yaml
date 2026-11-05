@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.phpathdel-module-notify
+deployment:
+  modes: [standalone]
+metadata:
+  description: PHPATHDEL delivers the renamed event to module keyspace subscribers
+    and survives a module write recreating the key from the del notification
+components:
+- use: valkey.action.commands
+  id: modnotify
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 30
+    commands:
+    - {command: [pathhash.notify.configure, observe], expect: {equals: OK}}
+    - {command: [PHSET, ph-notify, p, fields, 1, f, v], expect: {equals: OK}}
+    - {command: [PHPATHDEL, ph-notify, p], expect_difference: true, expect: {equals: 1}}
+    - {command: [pathhash.notify.stats], expect_difference: true, expect: {equals: [
+          1, 1, 0]}}
+    - {command: [pathhash.notify.configure, recreate], expect: {equals: OK}}
+    - {command: [PHSET, ph-notify, p, fields, 2, f, v, g, w], expect: {equals: OK}}
+    - {command: [PHPATHDEL, ph-notify, '', WITHSUBPATHS], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [EXISTS, ph-notify], expect: {equals: 1}}
+    - {command: [PHGET, ph-notify, p, f], expect_difference: true, expect: {equals: [
+          restored]}}
+    - {command: [pathhash.notify.stats], expect_difference: true, expect: {equals: [
+          1, 1, 0]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [modnotify.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modnotify}

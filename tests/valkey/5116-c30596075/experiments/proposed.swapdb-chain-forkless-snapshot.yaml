@@ -1,0 +1,80 @@
+extends: [valkey.liveness]
+id: proposed.swapdb-chain-forkless-snapshot
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Three unreplicated script SWAPDBs during one forkless BGSAVE, 0<->1 then 1<->2
+    then 0<->5 (db5 never created, exercising the new bgIteration_swapdb call placed
+    before createDatabaseIfNeeded). The fixed build composes the mapping swaps and
+    snapshots every DB's own pre-swap keys; the parent's stale identity mapping puts
+    db2's keys in snapshot db1, db0's keys twice, and db1's keys into db5.
+inputs:
+  properties:
+    repl: {type: string, enum: [REPL_NONE, REPL_AOF], default: REPL_NONE}
+components:
+- use: valkey.action.commands
+  id: chain
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      forkless-infrastructure-enabled: "yes"
+      bgsave-default-method: forkless
+      save: ""
+    timeout_s: 120
+    commands:
+    - {command: [EVAL, "for i=0,399 do server.call('set','db0:'..i,'x') end return\
+          \ server.call('dbsize')", "0"], expect: {equals: 400}}
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [EVAL, "for i=0,399 do server.call('set','db1:'..i,'x') end return\
+          \ server.call('dbsize')", "0"], expect: {equals: 400}}
+    - {command: [SELECT, "2"], expect: {equals: OK}}
+    - {command: [EVAL, "for i=0,399 do server.call('set','db2:'..i,'x') end return\
+          \ server.call('dbsize')", "0"], expect: {equals: 400}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, "10000"], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: "Background saving started"}}
+    - {command: [INFO, persistence], wait_s: 10, compare: skip, expect: {contains: "rdb_bgsave_in_progress:1"}}
+    - command:
+      - EVAL
+      - "server.set_repl(server[ARGV[1]]); return server.call('swapdb','0','1')"
+      - "0"
+      - {$ref: inputs.repl}
+      expect: {equals: OK}
+    - command:
+      - EVAL
+      - "server.set_repl(server[ARGV[1]]); return server.call('swapdb','1','2')"
+      - "0"
+      - {$ref: inputs.repl}
+      expect: {equals: OK}
+    - command:
+      - EVAL
+      - "server.set_repl(server[ARGV[1]]); return server.call('swapdb','0','5')"
+      - "0"
+      - {$ref: inputs.repl}
+      expect: {equals: OK}
+    - {command: [CONFIG, SET, rdb-key-save-delay, "0"], expect: {equals: OK}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "rdb_bgsave_in_progress:0"}}
+    - {command: [INFO, persistence], compare: skip, expect: {contains: "rdb_last_bgsave_status:ok"}}
+    - {command: [SELECT, "5"], expect: {equals: OK}}
+    - {command: [EXISTS, "db1:0"], expect: {equals: 1}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 400}}
+    - {command: [EXISTS, "db0:0", "db0:399"], expect: {equals: 2}}
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [EXISTS, "db1:0", "db1:399"], expect_difference: true, expect: {equals: 2}}
+    - {command: [EXISTS, "db2:0"], expect_difference: true, expect: {equals: 0}}
+    - {command: [SELECT, "2"], expect: {equals: OK}}
+    - {command: [EXISTS, "db2:0", "db2:399"], expect_difference: true, expect: {equals: 2}}
+    - {command: [SELECT, "5"], expect: {equals: OK}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [chain.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: chain}

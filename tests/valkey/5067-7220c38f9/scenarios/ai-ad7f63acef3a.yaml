@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 15b45dd9f3cf..7220c38f908d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ad7f63acef3a
+seed: 106
+experiment:
+  id: proposed.phpathdel-notify-watch
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7500

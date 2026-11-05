@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9ff39f353cac..f9262571d74f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-536badb77044
+seed: 7001
+experiment:
+  id: proposed.register-function-repeated-args-leak
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

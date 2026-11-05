@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.phpathcount-replica
+deployment:
+  modes: [standalone]
+metadata:
+  description: PHPATHCOUNT keeps CMD_READONLY - a read-only replica must serve prefix
+    counts over a replicated path hash, while PHCARD is gone
+components:
+- use: valkey.action.commands
+  id: replica-count
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 2
+    timeout_s: 90
+    commands:
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 1, compare: skip, wait_s: 30, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [PHSET, tree, a, FIELDS, 1, f, one], node: 0, expect: {equals: OK}}
+    - {command: [PHSET, tree, ab, FIELDS, 1, f, two], node: 0, expect: {equals: OK}}
+    - {command: [PHSET, empty-tree, path, FIELDS, 1, f, v], node: 0, expect: {equals: OK}}
+    - {command: [PHDEL, empty-tree, path], node: 0, expect: {equals: 1}}
+    - {command: [WAIT, 1, 10000], node: 0, expect: {equals: 1}}
+    - {command: [PHPATHCOUNT, tree], node: 1, expect_difference: true, expect: {equals: 2}}
+    - {command: [PHPATHCOUNT, tree, PREFIX, a], node: 1, expect_difference: true,
+      expect: {equals: 2}}
+    - {command: [PHPATHCOUNT, tree, PREFIX, ab], node: 1, expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [PHPATHCOUNT, empty-tree], node: 1, expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [PHPATHCOUNT, nosuchkey], node: 1, expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [PHCARD, tree], node: 1, expect_difference: true, expect: {error: "unknown\
+          \ command"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [replica-count.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: replica-count}

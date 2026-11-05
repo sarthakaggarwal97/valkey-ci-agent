@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "05db2e39a37ad1dd3da6f3920b1769ce26a0dde5",
+  "parent": "40fb246f5abbefae4e9fc1b15fe810176840ea4a",
+  "pr": 5237,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Group XACKDEL, XDELEX ids array in command JSON files (#5237)",
+  "date": "2026-11-02",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.7618,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

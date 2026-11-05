@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c30596075ce09532daf81161d62a1fc6fe9b678f",
+  "parent": "0bfc99f5869d95936ba2f56bfc8ed80717e34513",
+  "pr": 5116,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Notify forkless iteration of SWAPDB from the swap itself (#5116)",
+  "date": "2026-11-02",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 11.0015,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"0d6a871187df192ec966f97eb1783672f316082d\"},\"offset\":\"157714\"}, replica {\"digest\":{\"reply\":\"418a4acd955d6ca748fe259553f0433534fff4d7\"},\"offset\":\"157714\"}, link up",
+      "scenario": "ai-ea1a590e2b6c",
+      "seed": 51163,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #5116",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/49"
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"b855682f460c66f4a9bb47272587fba5f1554e01\"},\"offset\":\"157668\"}, replica {\"digest\":{\"reply\":\"418a4acd955d6ca748fe259553f0433534fff4d7\"},\"offset\":\"157668\"}, link up",
+      "scenario": "ai-7b599465d8bb",
+      "seed": 51164,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

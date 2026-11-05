@@ -1,0 +1,25 @@
+extends: [valkey.liveness]
+id: proposed.restore-hint-cli
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli hint for RESTORE renders IDLETIME and FREQ as mutually exclusive
+    alternatives, from COMMAND DOCS of a server of its own build
+components:
+- use: valkey.action.tools
+  id: hint
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    files:
+      hints.txt: |
+        # RESTORE eviction options are mutually exclusive
+        "RESTORE key 0 serialized-value " "[REPLACE] [ABSTTL] [IDLETIME seconds|FREQ frequency]"
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, --test_hint, "RESTORE key 0 serialized-value "],
+      expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: "IDLETIME\
+            \ seconds|FREQ frequency"}}}
+    - {tool: valkey-cli, args: [-p, $port, --test_hint_file, hints.txt], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "1/1 passed"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: hint}

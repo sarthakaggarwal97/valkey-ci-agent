@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.phpathcount-persistence
+deployment:
+  modes: [standalone]
+metadata:
+  description: PHPATHCOUNT counts stay correct after an AOF rewrite (rewritePathHashObject)
+    and a restart, including binary paths and an empty tree
+components:
+- use: valkey.action.commands
+  id: aof-count
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes"}
+    timeout_s: 90
+    commands:
+    - {command: [PHSET, tree, '', FIELDS, 1, root, value], expect: {equals: OK}}
+    - {command: [PHSET, tree, abc, FIELDS, 2, f1, v1, f2, v2], expect: {equals: OK}}
+    - {command: [PHSET, tree, abcd, FIELDS, 1, child, v3], expect: {equals: OK}}
+    - {command: [PHSET, tree, !!binary 'AP8=', FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHSET, empty-tree, path, FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHDEL, empty-tree, path], expect: {equals: 1}}
+    - {command: [PHPATHCOUNT, tree], expect_difference: true, expect: {equals: 4}}
+    - {command: [BGREWRITEAOF], compare: skip}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [PHPATHCOUNT, tree], expect_difference: true, expect: {equals: 4}}
+    - {command: [PHPATHCOUNT, tree, PREFIX, a], expect_difference: true, expect: {
+        equals: 2}}
+    - {command: [PHPATHCOUNT, tree, PREFIX, !!binary 'AP8='], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [PHPATHCOUNT, tree, PREFIX, ''], expect_difference: true, expect: {
+        equals: 4}}
+    - {command: [PHPATHCOUNT, empty-tree], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHGET, tree, abc, f2], expect: {equals: [v2]}}
+    - {command: [TYPE, empty-tree], expect: {equals: pathhash}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [aof-count.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof-count}

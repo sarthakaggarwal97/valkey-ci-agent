@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.module-postponed-unmatched
+deployment:
+  modes: [standalone]
+metadata:
+  description: An unmatched POSTPONED_LEN array left by a module thread-safe context
+    no longer leaves a NULL reply node that crashes the server when the reply is written
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [postponed_unmatched_thread], expect_difference: true, expect: {equals: []}}
+    - {command: [postponed_unmatched_free], expect_difference: true, expect: {equals: OK}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7220c38f908dd63c87dffdcb1f75f8f2c23af2fc",
+  "parent": "15b45dd9f3cf4d8e5b2a7d02e126d0444c83441e",
+  "pr": 5067,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Feature pathhash pathdel (#5067)",
+  "date": "2026-11-03",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 8,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 41,
+    "executed": 41,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.5274,
+  "findings": [],
+  "recorded": []
+}

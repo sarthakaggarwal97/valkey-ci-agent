@@ -1,0 +1,94 @@
+extends: [valkey.liveness]
+id: proposed.pathhash-prefixes-semantics
+deployment:
+  modes: [standalone]
+metadata:
+  description: PHPREFIXES longest-to-shortest order, new EXCLUDESELF option with its
+    empty-query underflow guard and MAXPATHLEN clamp, and PHLONGEST removal, compared
+    against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: prefixes
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [PHSET, tree, "", FIELDS, 1, f, "v:root"], expect: {equals: OK}}
+    - {command: [PHSET, tree, a, FIELDS, 1, f, "v:a"], expect: {equals: OK}}
+    - {command: [PHSET, tree, ab, FIELDS, 1, f, "v:ab"], expect: {equals: OK}}
+    - {command: [PHSET, tree, abc, FIELDS, 1, f, "v:abc"], expect: {equals: OK}}
+    - {command: [PHSET, tree, abcd, FIELDS, 1, f, "v:abcd"], expect: {equals: OK}}
+    - {command: [PHPREFIXES, tree, abcde, LENGTHS], expect_difference: true, expect: {
+        equals: [4, 3, 2, 1, 0]}}
+    - {command: [PHPREFIXES, tree, abcde], expect_difference: true, expect: {equals: [
+          abcd, abc, ab, a, ""]}}
+    - {command: [PHPREFIXES, tree, abcde, LENGTHS, COUNT, 2, MAXPATHLEN, 3], expect_difference: true,
+      expect: {equals: [3, 2]}}
+    - {command: [PHPREFIXES, tree, abcde, FIELDS, 1, f, COUNT, 2], expect_difference: true,
+      expect: {equals: [[abcd, ["v:abcd"]], [abc, ["v:abc"]]]}}
+    - {command: [PHPREFIXES, tree, abcde, WITHVALUES, COUNT, 2], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [PHPREFIXES, tree, abcde, LENGTHS, COUNT, 1], expect: {equals: [4]}}
+    - {command: [PHPREFIXES, tree, abcde, LENGTHS, COUNT, 9223372036854775807], expect_difference: true,
+      expect: {equals: [4, 3, 2, 1, 0]}}
+    - {command: [PHPREFIXES, tree, abcde, LENGTHS, COUNT, 9223372036854775808], expect: {
+        error: true}}
+    - {command: [PHPREFIXES, tree, abcde, LENGTHS, COUNT, 0], expect: {error: true}}
+    - {command: [PHPREFIXES, tree, abcde, LENGTHS, MAXPATHLEN, -1], expect: {error: true}}
+    - {command: [PHPREFIXES, tree, abc, LENGTHS, EXCLUDESELF], expect_difference: true,
+      expect: {equals: [2, 1, 0]}}
+    - {command: [PHPREFIXES, tree, abc, EXCLUDESELF, COUNT, 2], expect_difference: true,
+      expect: {equals: [ab, a]}}
+    - {command: [PHPREFIXES, tree, a, EXCLUDESELF], expect_difference: true, expect: {
+        equals: [""]}}
+    - {command: [PHPREFIXES, tree, "", EXCLUDESELF], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [PHPREFIXES, tree, abc, LENGTHS, EXCLUDESELF, MAXPATHLEN, 9999], expect_difference: true,
+      expect: {equals: [2, 1, 0]}}
+    - {command: [PHPREFIXES, tree, abc, LENGTHS, EXCLUDESELF, MAXPATHLEN, 0], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [PHPREFIXES, tree, a, LENGTHS, EXCLUDESELF, MAXPATHLEN, 9223372036854775807],
+      expect_difference: true, expect: {equals: [0]}}
+    - {command: [PHPREFIXES, tree, abc, EXCLUDESELF, EXCLUDESELF], expect: {error: true}}
+    - {command: [PHPREFIXES, missing, abc, EXCLUDESELF, EXCLUDESELF], expect: {error: true}}
+    - {command: [PHPREFIXES, tree, abc, LENGTH], expect: {error: true}}
+    - {command: [PHPREFIXES, missing, abc, EXCLUDESELF], expect_difference: true,
+      expect: {equals: []}}
+    - {command: [PHDEL, tree, abc], expect: {exists: true}}
+    - {command: [PHPREFIXES, tree, abc, EXCLUDESELF, COUNT, 2], expect_difference: true,
+      expect: {equals: [ab, a]}}
+    - {command: [PHSET, tree, fields, FIELDS, 1, f, "v:fields"], expect: {equals: OK}}
+    - {command: [PHPREFIXES, tree, fields, LENGTHS], expect_difference: true, expect: {
+        equals: [6, 0]}}
+    - {command: [PHPREFIXES, tree, fields, LENGTHS, EXCLUDESELF], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [PHSET, tree2, !!binary "AP8=", FIELDS, 1, f, bin], expect: {equals: OK}}
+    - {command: [PHSET, tree2, !!binary "AP94", FIELDS, 1, f, child], expect: {equals: OK}}
+    - {command: [PHPREFIXES, tree2, !!binary "AP94", LENGTHS], expect_difference: true,
+      expect: {equals: [3, 2]}}
+    - {command: [PHPREFIXES, tree2, !!binary "AP94", LENGTHS, EXCLUDESELF], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [PHLONGEST, tree, abcde], expect_difference: true, expect: {error: "unknown\
+          \ command"}}
+    - {command: [PHLONGEST, tree, abcde, LENGTH], expect_difference: true, expect: {
+        error: "unknown command"}}
+    - {command: [COMMAND, INFO, phlongest], expect_difference: true, expect: {exists: true}}
+    - {command: [SET, str, v], expect: {equals: OK}}
+    - {command: [PHPREFIXES, str, abc], expect: {error: "WRONGTYPE"}}
+    - {command: [PHPREFIXES, str, abc, EXCLUDESELF], expect_difference: true, expect: {
+        error: "WRONGTYPE"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [prefixes.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: prefixes}

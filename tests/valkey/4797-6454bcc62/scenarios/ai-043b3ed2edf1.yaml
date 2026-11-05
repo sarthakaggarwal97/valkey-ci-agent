@@ -1,0 +1,22 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f9262571d74f..6454bcc62855.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-043b3ed2edf1
+seed: 71003
+experiment:
+  id: valkey.replication-partial-resync
+  inputs:
+    value_size: 256
+    mutation_rate: 1500
+    mutable_keys: 600
+    stable_keys: 500
+    disconnect_after_s: 1.5
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7200
+  server_config:
+    forkless-infrastructure-enabled: 'yes'
+    bgsave-default-method: forkless
+    repl-diskless-sync: 'yes'
+    repl-diskless-sync-delay: 0
+    repl-diskless-load: on-empty-db

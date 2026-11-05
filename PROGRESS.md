@@ -1,40 +1,40 @@
 # Fuzzer walk
 
-Updated 2026-11-05T05:25+00:00.
+Updated 2026-11-05T05:58+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 26 | 2462 | #5244 (2026-11-03) | 26 | 3.7 |
+| valkey-io/valkey | 45 | 2443 | #5213 (2026-11-02) | 45 | 6.4 |
 | valkey-io/valkey-bloom | 29 | 80 | #45 (2025-03-11) | 29 | 4.1 |
-| valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 62 | 8.9 |
+| valkey-io/valkey-json | 34 | 28 | c1423d7e4b38 (2024-11-25) | 34 | 4.9 |
 | valkey-io/valkey-search | 0 | 667 | #1634 (2026-11-03) | 0 | 0.0 |
 
 ## Last runs
 
 ### valkey-io/valkey
 
-[2026-11-05T03:48:58+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41956206467): 20 merge(s) tested, 0 without a code change.
+[2026-11-05T05:58:54+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41964118901): 20 merge(s) tested, 1 without a code change.
 
-- [valkey-io/valkey#4711](https://github.com/valkey-io/valkey/pull/4711) ([tests](tests/valkey/4711-d2466b90a/)): Fix UAF in streams when XADD creates a new node (#4711): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#5138](https://github.com/valkey-io/valkey/pull/5138) ([tests](tests/valkey/5138-4500d5824/)): Fix hllSparseSet aborting on SDS_TYPE_5 strings when deltalen is zero (#5138): 2 of 2 test(s) reached the change, coverage 100%; crash, fixed by #5138 (recorded)
-- [valkey-io/valkey#5124](https://github.com/valkey-io/valkey/pull/5124) ([tests](tests/valkey/5124-99f5a75f4/)): Reject sparse HLLs that end in a truncated XZERO opcode (#5124): 2 of 2 test(s) reached the change, coverage 88%
-- [valkey-io/valkey#5105](https://github.com/valkey-io/valkey/pull/5105) ([tests](tests/valkey/5105-d0f45c110/)): Free functions ctx synchronously when its engine state is not handed over (#5105): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#5164](https://github.com/valkey-io/valkey/pull/5164) ([tests](tests/valkey/5164-d142467e9/)): Only resume a hash defrag scan from the hash scanner's own cursor (#5164): 0 of 3 test(s) reached the change, coverage 100%; crash, fixed by #5164 (recorded)
-- [valkey-io/valkey#5184](https://github.com/valkey-io/valkey/pull/5184) ([tests](tests/valkey/5184-e59ba66ec/)): Treat a replica with no known primary as owning no slots (#5184): declined: The change is a NULL-pointer guard in clusterUpdateSlotsConfigWith() (cluster_legacy.c:3530), reached only via the cluster gossip bus and only when a LIVE replica's primary has been deleted from the nodes table (replicaof == NULL) while another primary claims a previously-unassigned slot. 
-- [valkey-io/valkey#5115](https://github.com/valkey-io/valkey/pull/5115) ([tests](tests/valkey/5115-3cdf86c0b/)): functions: key per-engine stats by registered name, not shebang text (#5115): 1 of 1 test(s) reached the change, coverage 100%; crash, fixed by #5115 (recorded)
-- [valkey-io/valkey#5169](https://github.com/valkey-io/valkey/pull/5169) ([tests](tests/valkey/5169-ff117b00a/)): Dirty every client WATCHing a key that was expired at WATCH time (#5169): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#5162](https://github.com/valkey-io/valkey/pull/5162) ([tests](tests/valkey/5162-c921c0a3d/)): Free the ACL log object when the ACL log is disabled (#5162): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#5158](https://github.com/valkey-io/valkey/pull/5158) ([tests](tests/valkey/5158-94c716abb/)): Fail CONFIG REWRITE when the old config file reads short (#5158): declined: The change only alters behaviour when fread of the old config file returns fewer bytes than fstat reported (src/config.c rewriteConfigReadOldFile): previously a partial read proceeded with an uninitialized SDS_NOINIT buffer tail, now CONFIG REWRITE fails with errno set to EIO on a quiet sh
-- [valkey-io/valkey#5155](https://github.com/valkey-io/valkey/pull/5155) ([tests](tests/valkey/5155-439d297a6/)): Reject ValkeyModule_Calloc requests whose nmemb * size overflows (#5155): 3 of 4 test(s) reached the change, coverage 75%; [crash, introduced by #5155](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/43)
-- [valkey-io/valkey#5157](https://github.com/valkey-io/valkey/pull/5157) ([tests](tests/valkey/5157-88c77ea81/)): Check for an attribute reply in RM_CallReplyAttributeElement (#5157): 2 of 2 test(s) reached the change, coverage 100%; [check, introduced by #5157](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/44); [check, introduced by #5157](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/45)
-- [valkey-io/valkey#5160](https://github.com/valkey-io/valkey/pull/5160) ([tests](tests/valkey/5160-2b1fc8c1f/)): Skip throttled clients in processPendingCommandAndInputBuffer (#5160): 0 of 5 test(s) reached the change, coverage 50%
-- [valkey-io/valkey#5146](https://github.com/valkey-io/valkey/pull/5146): to retry, Claude Code failed (rc=1): timeout after 3000s
-- [valkey-io/valkey#5088](https://github.com/valkey-io/valkey/pull/5088) ([tests](tests/valkey/5088-7035f412c/)): Drop repeated EX/PX/EXAT when propagating HSETEX and MSETEX (#5088): 3 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#5108](https://github.com/valkey-io/valkey/pull/5108) ([tests](tests/valkey/5108-67bf7c3d8/)): Share the Lua hook between coroutines so SCRIPT KILL reaches them all (#5108): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#5087](https://github.com/valkey-io/valkey/pull/5087) ([tests](tests/valkey/5087-b47c9632e/)): Treat key specs that start past the last argument as matching no keys (#5087): 4 of 4 test(s) reached the change, coverage 100%; crash, fixed by #5087 (recorded)
-- [valkey-io/valkey#4929](https://github.com/valkey-io/valkey/pull/4929) ([tests](tests/valkey/4929-0a9fe22af/)): Guard NULL replica_primary_host in Sentinel INFO handling (#4929): declined: The change is a NULL guard in sentinel.c's sentinelRefreshInstanceInfo, code that executes only inside a valkey-server process running in Sentinel mode (--sentinel / valkey-sentinel) while it polls INFO from a monitored replica whose reported master_host is unset (freed by sentinelResetPri
-- [valkey-io/valkey#5167](https://github.com/valkey-io/valkey/pull/5167) ([tests](tests/valkey/5167-094dcd660/)): Hash HRANDFIELD and SRANDMEMBER temporary tables case-sensitively (#5167): declined: This is a pure performance fix with no observable behaviour change. It switches the temporary SRANDMEMBER/HRANDFIELD reply hashtable (sdsReplyHashtableType) from a case-insensitive hash function (dictSdsCaseHash) to a case-sensitive one (dictSdsHash), while keeping the case-sensitive compa
-- [valkey-io/valkey#5129](https://github.com/valkey-io/valkey/pull/5129) ([tests](tests/valkey/5129-557777cf7/)): Clear the script debugger input buffer when it hits the size limit (#5129): declined: The fix changes behaviour only at the Lua script debugger's buffer boundary: when the debugger input buffer ds.cbuf exceeds 1<<20 bytes it is now cleared (sdsfree + sdsempty) before the 'max client buffer reached' error returns, instead of returning with the oversized buffer still populate
+- [valkey-io/valkey#5146](https://github.com/valkey-io/valkey/pull/5146) ([tests](tests/valkey/5146-fb22585dc/)): Fix integer overflow in SORT BY/GET pattern key substitution (#5146): declined: The fix only changes behaviour when prefixlen+sublen+postfixlen of the SORT BY/GET substituted key reaches 2^31: as int it overflowed to a negative value that sign-extended to ~2^64 as size_t and caused an OOM crash, while below 2^31 the int and size_t arithmetic are identical, so parent a
+- [valkey-io/valkey#5244](https://github.com/valkey-io/valkey/pull/5244) ([tests](tests/valkey/5244-67e84ec77/)): Mark mutually exclusive ZADD and LCS options (#5244): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#5245](https://github.com/valkey-io/valkey/pull/5245) ([tests](tests/valkey/5245-e6c24adda/)): Mark HEXPIREAT and HPEXPIREAT timestamps as unix-time (#5245): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#4797](https://github.com/valkey-io/valkey/pull/4797) ([tests](tests/valkey/4797-6454bcc62/)): Forkless Full-Sync (#4797): 0 of 8 test(s) reached the change, coverage 74%
+- [valkey-io/valkey#5120](https://github.com/valkey-io/valkey/pull/5120) ([tests](tests/valkey/5120-f9262571d/)): Free repeated register_function named arguments (#5120): 0 of 2 test(s) reached the change
+- [valkey-io/valkey#5242](https://github.com/valkey-io/valkey/pull/5242) ([tests](tests/valkey/5242-9ff39f353/)): Rebuild the Lua module when its sources change (#5242): declined: The change only touches Makefiles: it adds a FORCE phony target so the Lua module sub-make always runs, and -MMD dependency-file generation in src/modules/lua/Makefile so incremental builds rebuild objects when their sources change. It is a build/CI correctness fix with no change to any co
+- [valkey-io/valkey#5261](https://github.com/valkey-io/valkey/pull/5261) ([tests](tests/valkey/5261-6c4f6fb85/)): Rename bgsave-default-method to forkless-policy (#5261): 2 of 4 test(s) reached the change, coverage 83%; crash, introduced and since fixed (recorded)
+- [valkey-io/valkey#5067](https://github.com/valkey-io/valkey/pull/5067) ([tests](tests/valkey/5067-7220c38f9/)): Feature pathhash pathdel (#5067): 8 of 8 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#5068](https://github.com/valkey-io/valkey/pull/5068): to retry, 4 of 4 run(s) could not start: the run could not start: environment acquisition failed
+- [valkey-io/valkey#5071](https://github.com/valkey-io/valkey/pull/5071) ([tests](tests/valkey/5071-1b84c1365/)): Replace PHCARD with prefix-aware PHPATHCOUNT (#5071): 5 of 5 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#5070](https://github.com/valkey-io/valkey/pull/5070) ([tests](tests/valkey/5070-b3b5ab983/)): Feature pathhash prefixes (#5070): 5 of 5 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#5066](https://github.com/valkey-io/valkey/pull/5066) ([tests](tests/valkey/5066-14f16537d/)): Feature pathhash scan (#5066): 6 of 6 test(s) reached the change, coverage 100%; check, not reproduced (recorded); check, introduced and since fixed (recorded); check, not reproduced (recorded); check, introduced and since fixed (recorded); check, not reproduced (recorded); check, introduced and since fixed (recorded)
+- [valkey-io/valkey#5069](https://github.com/valkey-io/valkey/pull/5069) ([tests](tests/valkey/5069-f986f56b5/)): Rename PHEXISTS to PHPATHEXISTS (#5069): 3 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#5208](https://github.com/valkey-io/valkey/pull/5208) ([tests](tests/valkey/5208-d80033654/)): Fix SENTINEL SIMULATE-FAILURE argument metadata (#5208): 1 of 1 test(s) reached the change
+- [valkey-io/valkey#5212](https://github.com/valkey-io/valkey/pull/5212) ([tests](tests/valkey/5212-0d089ef9b/)): Mark RESTORE IDLETIME and FREQ as mutually exclusive (#5212): 3 of 3 test(s) reached the change; [check, introduced by #5212](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/49)
+- [valkey-io/valkey#5159](https://github.com/valkey-io/valkey/pull/5159) ([tests](tests/valkey/5159-8519d0c27/)): Fill unmatched postponed reply lengths left by a module (#5159): 2 of 2 test(s) reached the change, coverage 66%; [crash, introduced by #5159](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/50)
+- [valkey-io/valkey#5121](https://github.com/valkey-io/valkey/pull/5121): to retry, Claude Code failed (rc=1): timeout after 3000s
+- [valkey-io/valkey#5116](https://github.com/valkey-io/valkey/pull/5116) ([tests](tests/valkey/5116-c30596075/)): Notify forkless iteration of SWAPDB from the swap itself (#5116): 4 of 4 test(s) reached the change, coverage 100%; [check, introduced by #5116](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/49)
+- [valkey-io/valkey#5118](https://github.com/valkey-io/valkey/pull/5118) ([tests](tests/valkey/5118-0bfc99f58/)): Read Lua error table fields without invoking metamethods (#5118): 2 of 2 test(s) reached the change; crash, fixed by #5118 (recorded)
+- [valkey-io/valkey#5237](https://github.com/valkey-io/valkey/pull/5237) ([tests](tests/valkey/5237-05db2e39a/)): Group XACKDEL, XDELEX ids array in command JSON files (#5237): 2 of 2 test(s) reached the change
 
 ### valkey-io/valkey-bloom
 
@@ -75,11 +75,11 @@ Updated 2026-11-05T05:25+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 30 of 38 tested (79%)
-- Changed-line coverage: median 100% of 13 merge(s) measured, 1 under 50%
-- Recall: 9 parents flagged of 11 fix merges
-- Claude: $239.18 in the last 24 hours, $239.18 in the last 7 days, $239.18 in all
-- Issues filed: 8
+- Merges whose tests reached the change: 44 of 54 tested (81%)
+- Changed-line coverage: median 100% of 22 merge(s) measured, 1 under 50%
+- Recall: 10 parents flagged of 12 fix merges
+- Claude: $317.14 in the last 24 hours, $317.14 in the last 7 days, $317.14 in all
+- Issues filed: 10
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -88,10 +88,41 @@ Updated 2026-11-05T05:25+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/45
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/47
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/48
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/49
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/50
 
 ## Retries
 
 - [valkey-io/valkey-bloom#92](https://github.com/valkey-io/valkey-bloom/pull/92): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
+- [valkey-io/valkey-json#93](https://github.com/valkey-io/valkey-json/pull/93): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in parent (exit 2): In file included from /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent/src/json/dom.h:34, from /home/runne
+- [valkey-io/valkey-json#73](https://github.com/valkey-io/valkey-json/pull/73): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 2): | ^~~~~~~~~~~~~~~~~~~~~~~~~~ compilation terminated. make[2]: *** [src/CMakeFiles/json-objects.dir/build.make:177: src/CMakeF
+- [valkey-io/valkey-json#67](https://github.com/valkey-io/valkey-json/pull/67): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in parent (exit 2): | ^~~~~~ [32mARCHIVE[0m [35mliblua.a[0m [32mARCHIVE[0m [35mliblua.a[0m [36;1mLINK[0m [35mlua[0m [36;1mLINK[0m 
+- [valkey-io/valkey-json#66](https://github.com/valkey-io/valkey-json/pull/66): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 2): | ^~~~~~ [32mARCHIVE[0m [35mliblua.a[0m [32mARCHIVE[0m [35mliblua.a[0m [36;1mLINK[0m [35mlua[0m [36;1mLINK[0m 
+- [valkey-io/valkey-json#58](https://github.com/valkey-io/valkey-json/pull/58): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 2): | ^~~~~~ [32mARCHIVE[0m [35mliblua.a[0m [32mARCHIVE[0m [35mliblua.a[0m [36;1mLINK[0m [35mlua[0m [36;1mLINK[0m 
+- [valkey-io/valkey-json#56](https://github.com/valkey-io/valkey-json/pull/56): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkey-json... Building valkey-j
+- [valkey-io/valkey-json#42](https://github.com/valkey-io/valkey-json/pull/42): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json#54](https://github.com/valkey-io/valkey-json/pull/54): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json#52](https://github.com/valkey-io/valkey-json/pull/52): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json#50](https://github.com/valkey-io/valkey-json/pull/50): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json#48](https://github.com/valkey-io/valkey-json/pull/48): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json#47](https://github.com/valkey-io/valkey-json/pull/47): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json#31](https://github.com/valkey-io/valkey-json/pull/31): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json#45](https://github.com/valkey-io/valkey-json/pull/45): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json#41](https://github.com/valkey-io/valkey-json/pull/41): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json#39](https://github.com/valkey-io/valkey-json/pull/39): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json#35](https://github.com/valkey-io/valkey-json/pull/35): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json@ac4f334af7a6](https://github.com/valkey-io/valkey-json/commit/ac4f334af7a6cd028b2f2ab898d52ea61f501c70): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json@d3ce5afb6dd3](https://github.com/valkey-io/valkey-json/commit/d3ce5afb6dd3fb88086aa9218cfef3197b75b388): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json#27](https://github.com/valkey-io/valkey-json/pull/27): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json#21](https://github.com/valkey-io/valkey-json/pull/21): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json#23](https://github.com/valkey-io/valkey-json/pull/23): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json#18](https://github.com/valkey-io/valkey-json/pull/18): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json#22](https://github.com/valkey-io/valkey-json/pull/22): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
+- [valkey-io/valkey-json@1e33774dd28b](https://github.com/valkey-io/valkey-json/commit/1e33774dd28bdba94bc7f807a4e453f01e1f8f7c): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JS
+- [valkey-io/valkey-json#14](https://github.com/valkey-io/valkey-json/pull/14): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JS
+- [valkey-io/valkey-json#13](https://github.com/valkey-io/valkey-json/pull/13): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JS
+- [valkey-io/valkey-json#1](https://github.com/valkey-io/valkey-json/pull/1): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JS
 - [valkey-io/valkey-search#1576](https://github.com/valkey-io/valkey-search/pull/1576): attempt 1 of 3, 'reached'
 - [valkey-io/valkey-search#1542](https://github.com/valkey-io/valkey-search/pull/1542): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
-- [valkey-io/valkey#5146](https://github.com/valkey-io/valkey/pull/5146): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
+- [valkey-io/valkey#5068](https://github.com/valkey-io/valkey/pull/5068): attempt 1 of 3, 4 of 4 run(s) could not start: the run could not start: environment acquisition failed
+- [valkey-io/valkey#5121](https://github.com/valkey-io/valkey/pull/5121): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s

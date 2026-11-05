@@ -1,0 +1,109 @@
+extends: [valkey.liveness]
+id: proposed.phpathscan-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    PHPATHSCAN is the new command carrying the old path-walking semantics: opaque
+    hex cursor, PREFIX filter, lexicographic order, COUNT lookahead. The sequence
+    drives cursor resume (including the empty path's "1:" cursor and a cursor pointing
+    at a deleted boundary path), the prefix/cursor mismatch error, binary prefixes,
+    option validation before key lookup, INT64 COUNT boundaries, GETKEYS and ACL registration.
+    The parent has no PHPATHSCAN at all, so every marked call must differ.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: pathscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 20
+    commands:
+    - {command: [PHSET, tree, b, FIELDS, "1", f, vb], expect: {equals: OK}}
+    - {command: [PHSET, tree, aa, FIELDS, "1", f, vaa], expect: {equals: OK}}
+    - {command: [PHSET, tree, a, FIELDS, "1", f, va], expect: {equals: OK}}
+    - {command: [PHSET, tree, ab, FIELDS, "1", f, vab], expect: {equals: OK}}
+    - {command: [PHSET, tree, c, FIELDS, "1", f, vc], expect: {equals: OK}}
+    - {command: [PHSET, tree, "", FIELDS, "1", f, vroot], expect: {equals: OK}}
+    - {command: [PHPATHSCAN, tree, "0", COUNT, "100"], expect_difference: true, expect: {
+        equals: ["0", ["", a, aa, ab, b, c]]}}
+    - {command: [PHPATHSCAN, tree, "0", COUNT, "1"], expect_difference: true, expect: {
+        equals: ["1:", [""]]}}
+    - {command: [PHPATHSCAN, tree, "1:", COUNT, "1"], expect_difference: true, expect: {
+        equals: ["1:61", [a]]}}
+    - {command: [PHPATHSCAN, tree, "1:61", COUNT, "2"], expect_difference: true, expect: {
+        equals: ["1:6162", [aa, ab]]}}
+    - {command: [PHPATHSCAN, tree, "0", PREFIX, a, COUNT, "2"], expect_difference: true,
+      expect: {equals: ["1:6161", [a, aa]]}}
+    - {command: [PHPATHSCAN, tree, "1:6161", PREFIX, a, COUNT, "10"], expect_difference: true,
+      expect: {equals: ["0", [ab]]}}
+    - {command: [PHPATHSCAN, tree, "0", PREFIX, "", COUNT, "3"], expect_difference: true,
+      expect: {equals: ["1:6161", ["", a, aa]]}}
+    - {command: [PHPATHSCAN, tree, "1:61", PREFIX, b], expect_difference: true, expect: {
+        error: "does not belong"}}
+    - {command: [PHDEL, tree, ab], expect: {equals: 1}}
+    - {command: [PHPATHSCAN, tree, "1:6162", COUNT, "10"], expect_difference: true,
+      expect: {equals: ["0", [b, c]]}}
+    - {command: [PHPATHSCAN, tree, "0", PREFIX, a, COUNT, "100"], expect_difference: true,
+      expect: {equals: ["0", [a, aa]]}}
+    - {command: [PHPATHSCAN, tree], expect_difference: true, expect: {error: "wrong\
+          \ number"}}
+    - {command: [PHPATHSCAN, tree, invalid], expect_difference: true, expect: {error: "invalid\
+          \ cursor"}}
+    - {command: [PHPATHSCAN, tree, "1:6"], expect_difference: true, expect: {error: "invalid\
+          \ cursor"}}
+    - {command: [PHPATHSCAN, tree, "1:zz"], expect_difference: true, expect: {error: "invalid\
+          \ cursor"}}
+    - {command: [PHPATHSCAN, tree, "2:61"], expect_difference: true, expect: {error: "invalid\
+          \ cursor"}}
+    - {command: [PHPATHSCAN, tree, "0", COUNT, "0"], expect_difference: true, expect: {
+        error: "out of range"}}
+    - {command: [PHPATHSCAN, tree, "0", COUNT, notanumber], expect_difference: true,
+      expect: {error: "not an integer"}}
+    - {command: [PHPATHSCAN, tree, "0", COUNT, "1", COUNT, "2"], expect_difference: true,
+      expect: {error: "syntax"}}
+    - {command: [PHPATHSCAN, tree, "0", MATCH, "*"], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [PHPATHSCAN, tree, "0", WITHVALUES], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [PHPATHSCAN, tree, "0", PREFIX], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [PHPATHSCAN, missing, "0"], expect_difference: true, expect: {equals: [
+          "0", []]}}
+    - {command: [PHPATHSCAN, missing, "0", PREFIX, a], expect_difference: true, expect: {
+        equals: ["0", []]}}
+    - {command: [PHPATHSCAN, missing, "0", COUNT, "0"], expect_difference: true, expect: {
+        error: "out of range"}}
+    - {command: [PHPATHSCAN, missing, "1:61", PREFIX, b], expect_difference: true,
+      expect: {error: "does not belong"}}
+    - {command: [SET, str, v], expect: {equals: OK}}
+    - {command: [PHPATHSCAN, str, "0"], expect_difference: true, expect: {error: "WRONGTYPE"}}
+    - {command: [COMMAND, GETKEYS, PHPATHSCAN, tree, "0", PREFIX, a], expect_difference: true,
+      expect: {equals: [tree]}}
+    - {command: [ACL, SETUSER, phuser, on, nopass, "~*", "+@pathhash"], expect: {
+        equals: OK}}
+    - {command: [ACL, DRYRUN, phuser, PHPATHSCAN, tree, "0"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [PHSET, tree, !!binary "AP9h", FIELDS, "1", f, x], expect: {equals: OK}}
+    - {command: [PHSET, tree, !!binary "AP9i", FIELDS, "1", f, y], expect: {equals: OK}}
+    - {command: [PHPATHSCAN, tree, "0", PREFIX, !!binary "AP8=", COUNT, "1"], expect_difference: true,
+      expect: {equals: ["1:00ff61", [!!binary "AP9h"]]}}
+    - {command: [PHPATHSCAN, tree, "1:00ff61", PREFIX, !!binary "AP8=", COUNT, "5"],
+      expect_difference: true, expect: {equals: ["0", [!!binary "AP9i"]]}}
+    - {command: [PHPATHSCAN, tree, "0", COUNT, "9223372036854775807"], expect_difference: true,
+      expect: {equals: ["0", ["", !!binary "AP9h", !!binary "AP9i", a, aa, b, c]]}}
+    - {command: [PHPATHSCAN, tree, "0", COUNT, "9223372036854775808"], expect_difference: true,
+      expect: {error: "not an integer"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [pathscan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pathscan}

@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.phpathexists-rename
+deployment:
+  modes: [standalone]
+metadata:
+  description: PHPATHEXISTS replaces PHEXISTS - new name answers like the old one
+    did, old name is unknown, and the command table, keyspec, ACL category, MULTI
+    and scripting all follow the rename
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: rename
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [PHMSET, tree, ab, fields, 1, f, one, abcd, fields, 1, f, two], expect: {
+        equals: OK}}
+    - {command: [PHPATHEXISTS, tree, ab], expect_difference: true, expect: {equals: 1}}
+    - {command: [PHPATHEXISTS, tree, a], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHPATHEXISTS, tree, abc], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHPATHEXISTS, tree, abcd], expect_difference: true, expect: {equals: 1}}
+    - {command: [PHPATHEXISTS, missing, ab], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHEXISTS, tree, ab], expect_difference: true, expect: {error: "unknown\
+          \ command"}}
+    - {command: [PHSET, tree, "", fields, 1, f, root], expect: {equals: OK}}
+    - {command: [PHSET, tree, !!binary "AGH/", fields, 1, f, binary], expect: {equals: OK}}
+    - {command: [PHPATHEXISTS, tree, ""], expect_difference: true, expect: {equals: 1}}
+    - {command: [PHPATHEXISTS, tree, !!binary "AGH/"], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [PHPATHEXISTS, tree, !!binary "AGE="], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [SET, str, v], expect: {equals: OK}}
+    - {command: [PHPATHEXISTS, str, p], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [PHPATHEXISTS, tree], expect_difference: true, expect: {error: "wrong\
+          \ number of arguments"}}
+    - {command: [PHPATHEXISTS, tree, ab, extra], expect_difference: true, expect: {
+        error: "wrong number of arguments"}}
+    - {command: [COMMAND, GETKEYS, PHPATHEXISTS, tree, ab], expect_difference: true,
+      expect: {equals: [tree]}}
+    - {command: [COMMAND, INFO, phexists], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, INFO, phpathexists], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [COMMAND, LIST, FILTERBY, ACLCAT, pathhash], expect_difference: true,
+      compare: unordered, expect: {contains: phpathexists}}
+    - {command: [ACL, SETUSER, u1, on, nopass, "~*", +phpathexists], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [ACL, SETUSER, u2, on, nopass, "~*", +phexists], expect_difference: true,
+      expect: {error: true}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PHPATHEXISTS, tree, ab], expect_difference: true, expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [1]}}
+    - {command: [EVAL, "return redis.call('phpathexists', KEYS[1], ARGV[1])", 1, tree,
+        ab], expect_difference: true, expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [rename.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rename}

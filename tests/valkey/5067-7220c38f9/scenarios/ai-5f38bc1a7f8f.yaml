@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 15b45dd9f3cf..7220c38f908d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5f38bc1a7f8f
+seed: 101
+experiment:
+  id: proposed.phpathdel-semantics
+  inputs:
+    resp: 2
+    hash_listpack: 128
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.restore-eviction-docs
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS marks RESTORE and RESTORE-ASKING IDLETIME/FREQ as one
+    mutually exclusive eviction oneof argument; runtime RESTORE option parsing must
+    be unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, DOCS, restore], expect_difference: true, expect: {contains: eviction}}
+    - {command: [COMMAND, DOCS, restore-asking], expect_difference: true, expect: {
+        contains: eviction}}
+    - {command: [COMMAND, INFO, restore]}
+    - {command: [COMMAND, INFO, restore-asking]}
+    - {command: [COMMAND, GETKEYS, RESTORE, k, 0, v], expect: {equals: [k]}}
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, 1], expect: {equals: OK}}
+    - {command: [RESTORE, k1, 0, !!binary "AANiYXILAAAAAAAAAAAA", IDLETIME, 100],
+      expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: bar}}
+    - {command: [RESTORE, k2, 0, !!binary "AANiYXILAAAAAAAAAAAA", FREQ, 255], expect: {
+        equals: OK}}
+    - {command: [GET, k2], expect: {equals: bar}}
+    - {command: [RESTORE, k3, 0, !!binary "AANiYXILAAAAAAAAAAAA", IDLETIME, 1, FREQ,
+        1], expect: {error: "syntax error"}}
+    - {command: [RESTORE, k3, 0, !!binary "AANiYXILAAAAAAAAAAAA", FREQ, 1, IDLETIME,
+        1], expect: {error: "syntax error"}}
+    - {command: [RESTORE, k3, 0, !!binary "AANiYXILAAAAAAAAAAAA", IDLETIME], expect: {
+        error: "syntax error"}}
+    - {command: [RESTORE, k3, 0, !!binary "AANiYXILAAAAAAAAAAAA", IDLETIME, -1], expect: {
+        error: "Invalid IDLETIME"}}
+    - {command: [RESTORE, k3, 0, !!binary "AANiYXILAAAAAAAAAAAA", FREQ, 256], expect: {
+        error: "Invalid FREQ"}}
+    - {command: [RESTORE, k3, 0, !!binary "AANiYXILAAAAAAAAAAAA", REPLACE, ABSTTL,
+        IDLETIME, 9223372036854775807], expect: {equals: OK}}
+    - {command: [EXISTS, k3], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

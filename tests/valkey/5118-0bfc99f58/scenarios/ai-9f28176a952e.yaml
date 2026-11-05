@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 05db2e39a37a..0bfc99f5869d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9f28176a952e
+seed: 1051182
+experiment:
+  id: proposed.lua-error-table-metamethod
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

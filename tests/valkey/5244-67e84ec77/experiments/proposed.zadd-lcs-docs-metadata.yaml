@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.zadd-lcs-docs-metadata
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    COMMAND DOCS marks ZADD XX+GT/LT as one alternative block and LCS LEN|IDX as mutually
+    exclusive, while runtime parsing and replies of ZADD and LCS are unchanged.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, DOCS, zadd], expect_difference: true, expect: {contains: "xx-comparison"}}
+    - {command: [COMMAND, DOCS, lcs], expect_difference: true, expect: {contains: "output"}}
+    - {command: [COMMAND, INFO, zadd], expect: {contains: "zadd"}}
+    - {command: [COMMAND, INFO, lcs], expect: {contains: "lcs"}}
+    - {command: [ZADD, z, "1", a], expect: {equals: 1}}
+    - {command: [ZADD, z, XX, GT, CH, "2", a], expect: {equals: 1}}
+    - {command: [ZADD, z, XX, LT, CH, "1.5", a], expect: {equals: 1}}
+    - {command: [ZADD, z, GT, XX, CH, "5", a], expect: {equals: 1}}
+    - {command: [ZADD, z, NX, GT, "9", a], expect: {error: "not compatible"}}
+    - {command: [ZADD, z, NX, LT, "9", a], expect: {error: "not compatible"}}
+    - {command: [ZADD, z, GT, LT, "9", a], expect: {error: "not compatible"}}
+    - {command: [ZADD, z, NX, XX, "9", a], expect: {error: "not compatible"}}
+    - {command: [ZSCORE, z, a], expect: {equals: "5"}}
+    - {command: [SET, k1, ohmytext], expect: {equals: OK}}
+    - {command: [SET, k2, mynewtext], expect: {equals: OK}}
+    - {command: [LCS, k1, k2], expect: {equals: mytext}}
+    - {command: [LCS, k1, k2, LEN], expect: {equals: 6}}
+    - {command: [LCS, k1, k2, IDX, MINMATCHLEN, "4", WITHMATCHLEN], expect: {exists: true}}
+    - {command: [LCS, k1, k2, LEN, IDX], expect: {error: true}}
+    - {command: [LCS, k1, k2, IDX, LEN], expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b3b5ab983fec..1b84c13657d2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a7b6805d8563
+seed: 202
+experiment:
+  id: proposed.phpathcount-compare
+  inputs:
+    resp: 3
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,77 @@
+extends: [valkey.liveness]
+id: proposed.phpathdel-semantics
+deployment:
+  modes: [standalone]
+metadata:
+  description: PHPATHDEL exact and WITHSUBPATHS semantics, binary paths, syntax and
+    type errors, PHDELPREFIX removal, PHDEL regression
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_listpack: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: phpathdel
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: {$ref: inputs.hash_listpack}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [PHSET, t, '', fields, 1, f, root], expect: {equals: OK}}
+    - {command: [PHSET, t, ab, fields, 2, f, one, g, two], expect: {equals: OK}}
+    - {command: [PHSET, t, abc, fields, 1, f, child], expect: {equals: OK}}
+    - {command: [PHSET, t, abx, fields, 1, f, other], expect: {equals: OK}}
+    - {command: [PHSET, t, !!binary 'AGH/', fields, 1, f, bin], expect: {equals: OK}}
+    - {command: [PHSET, t, !!binary 'AGH/AA==', fields, 1, f, binchild], expect: {
+        equals: OK}}
+    - {command: [PHPATHDEL, t, ab], expect_difference: true, expect: {equals: 1}}
+    - {command: [PHPATHCOUNT, t], expect_difference: true, expect: {equals: 5}}
+    - {command: [PHGET, t, abc, f], expect: {equals: [child]}}
+    - {command: [PHPATHEXISTS, t, ab], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHPATHDEL, t, ab], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHPATHDEL, t, !!binary 'AGH/'], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [PHGET, t, !!binary 'AGH/AA==', f], expect: {equals: [binchild]}}
+    - {command: [PHPATHCOUNT, t], expect_difference: true, expect: {equals: 4}}
+    - {command: [PHPATHDEL, t, ''], expect_difference: true, expect: {equals: 1}}
+    - {command: [PHPATHCOUNT, t], expect_difference: true, expect: {equals: 3}}
+    - {command: [PHPATHDEL, t, ab, WITHSUBPATHS], expect_difference: true, expect: {
+        equals: 2}}
+    - {command: [PHPATHCOUNT, t], expect_difference: true, expect: {equals: 1}}
+    - {command: [PHPATHDEL, t, '', WITHSUBPATHS], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [EXISTS, t], expect_difference: true, expect: {equals: 0}}
+    - {command: [TYPE, t], expect_difference: true, expect: {equals: none}}
+    - {command: [PHPATHDEL, missing, p], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHPATHDEL, missing, p, WITHSUBPATHS], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [PHPATHDEL, missing, p, BOGUS], expect_difference: true, expect: {
+        error: syntax}}
+    - {command: [PHSET, t2, p, fields, 1, f, v], expect: {equals: OK}}
+    - {command: [PHPATHDEL, t2, p, WITHSUBPATHS, extra], expect_difference: true,
+      expect: {error: syntax}}
+    - {command: [PHPATHDEL, t2, p, withSubPaths], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [SET, s, str], expect: {equals: OK}}
+    - {command: [PHPATHDEL, s, p], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [PHPATHDEL, s, p, BOGUS], expect_difference: true, expect: {error: syntax}}
+    - {command: [PHDELPREFIX, t3, p], expect_difference: true, expect: {error: 'unknown
+          command'}}
+    - {command: [COMMAND, LIST, FILTERBY, ACLCAT, pathhash], compare: unordered, expect_difference: true,
+      expect: {contains: phpathdel}}
+    - {command: [PHSET, t4, p, fields, 2, f1, v1, f2, v2], expect: {equals: OK}}
+    - {command: [PHSET, t4, pq, fields, 1, f, v], expect: {equals: OK}}
+    - {command: [PHDEL, t4, p, f1, f2], expect: {equals: 2}}
+    - {command: [PHPATHCOUNT, t4], expect: {equals: 1}}
+    - {command: [PHDEL, t4, pq], expect: {equals: 1}}
+    - {command: [EXISTS, t4], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [phpathdel.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: phpathdel}

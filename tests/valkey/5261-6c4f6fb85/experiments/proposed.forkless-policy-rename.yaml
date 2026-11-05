@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.forkless-policy-rename
+deployment:
+  modes: [standalone]
+metadata:
+  description: bgsave-default-method is gone, forkless-policy replaces it, and prefer-forkless
+    is rejected without forkless-infrastructure-enabled
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rename
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {save: ""}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, GET, bgsave-default-method], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CONFIG, SET, bgsave-default-method, fork], expect_difference: true,
+      expect: {error: "Unknown option"}}
+    - {command: [CONFIG, SET, bgsave-default-method, forkless], expect_difference: true,
+      expect: {error: "Unknown option"}}
+    - {command: [CONFIG, GET, forkless-policy], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CONFIG, SET, forkless-policy, require-fork], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, forkless-policy, prefer-forkless], expect_difference: true,
+      expect: {error: "forkless-infrastructure-enabled yes"}}
+    - {command: [CONFIG, SET, forkless-policy, PREFER-FORKLESS], expect_difference: true,
+      expect: {error: "forkless-infrastructure-enabled yes"}}
+    - {command: [CONFIG, SET, forkless-policy, forkless], expect_difference: true,
+      expect: {error: "argument"}}
+    - {command: [CONFIG, SET, forkless-policy, ""], expect_difference: true, expect: {
+        error: true}}
+    - {command: [CONFIG, GET, forkless-policy], expect_difference: true, expect: {
+        error: false}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: "Background saving started"}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 20, expect: {contains: "rdb_bgsave_in_progress:0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [rename.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rename}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0bfc99f5869d..c30596075ce0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9ba5a19679af
+seed: 51162
+experiment:
+  id: proposed.swapdb-forkless-snapshot
+  inputs:
+    repl: REPL_AOF
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

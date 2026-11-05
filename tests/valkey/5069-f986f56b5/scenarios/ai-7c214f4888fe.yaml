@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d800336542f8..f986f56b51d2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7c214f4888fe
+seed: 103
+experiment:
+  id: proposed.phpathexists-rename
+  inputs:
+    resp: 2
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

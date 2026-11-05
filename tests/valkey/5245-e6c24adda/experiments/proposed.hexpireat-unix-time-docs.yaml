@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.hexpireat-unix-time-docs
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS reports the unix-time argument type for HEXPIREAT and
+    HPEXPIREAT while their expiry behaviour is unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, DOCS, HEXPIREAT], expect_difference: true, expect: {contains: "unix-time"}}
+    - {command: [COMMAND, DOCS, HPEXPIREAT], expect_difference: true, expect: {contains: "unix-time"}}
+    - {command: [COMMAND, DOCS, EXPIREAT], expect: {contains: "unix-time"}}
+    - {command: [COMMAND, DOCS, PEXPIREAT], expect: {contains: "unix-time"}}
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [HEXPIREAT, h, 1, FIELDS, 1, f1], expect: {equals: [2]}}
+    - {command: [HEXISTS, h, f1], expect: {equals: 0}}
+    - {command: [HPEXPIREAT, h, 33177702000000, FIELDS, 1, f2], expect: {equals: [
+          1]}}
+    - {command: [HPERSIST, h, FIELDS, 1, f2], expect: {equals: [1]}}
+    - {command: [HEXPIREAT, h, 9223372036854775807, FIELDS, 1, f3], expect: {error: "invalid\
+          \ expire"}}
+    - {command: [HPEXPIREAT, h, -1, FIELDS, 1, f3], expect: {equals: [2]}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 14f16537d4f8..b3b5ab983fec.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-541fd6a48c9f
+seed: 101
+experiment:
+  id: proposed.pathhash-prefixes-semantics
+  inputs:
+    resp: 2
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fb22585dc7f42102e7c9e8a9574b60faacd8e093",
+  "parent": "7035f412c0242774113b8a66e66f653ea68d9399",
+  "pr": 5146,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix integer overflow in SORT BY/GET pattern key substitution (#5146)",
+  "date": "2026-11-04",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.3105,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix only changes behaviour when prefixlen+sublen+postfixlen of the SORT BY/GET substituted key reaches 2^31: as int it overflowed to a negative value that sign-extended to ~2^64 as size_t and caused an OOM crash, while below 2^31 the int and size_t arithmetic are identical, so parent and fixed builds reply byte-for-byte the same. Triggering the overflow requires a ~2 GiB command argument (a set/list member or a BY/GET pattern around the '*'), exactly as the project's own large-memory test does with proto-max-bulk-len raised to 3 GB and write_big_bulk of INT_MAX+2 bytes. The fuzzer cannot c"
+}

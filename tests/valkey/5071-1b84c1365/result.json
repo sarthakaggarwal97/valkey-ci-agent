@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1b84c13657d2cdc89dbca4e54111c265b8eeaa9b",
+  "parent": "b3b5ab983fec5511b1248fed39c566ae65b3ef0d",
+  "pr": 5071,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replace PHCARD with prefix-aware PHPATHCOUNT (#5071)",
+  "date": "2026-11-03",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 5,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 19,
+    "executed": 19,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.723,
+  "findings": [],
+  "recorded": []
+}

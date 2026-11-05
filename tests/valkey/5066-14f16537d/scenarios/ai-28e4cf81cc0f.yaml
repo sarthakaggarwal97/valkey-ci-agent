@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f986f56b51d2..14f16537d4f8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-28e4cf81cc0f
+seed: 1102
+experiment:
+  id: proposed.phscan-exact-path-fields
+  inputs:
+    resp: 3
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

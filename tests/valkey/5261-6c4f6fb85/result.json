@@ -1,0 +1,44 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6c4f6fb856544665361d58a46134592f233d7b99",
+  "parent": "7220c38f908dd63c87dffdcb1f75f8f2c23af2fc",
+  "pr": 5261,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename bgsave-default-method to forkless-policy (#5261)",
+  "date": "2026-11-03",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 5,
+    "percent": 83,
+    "uncovered": [
+      "src/config.c:675"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 3.4524,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: bgiteration.c:2701 'wasAdded' is not true",
+      "scenario": "ai-357c3c24ba26",
+      "seed": 5261005,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "39773d5994ed5d4b9f00",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

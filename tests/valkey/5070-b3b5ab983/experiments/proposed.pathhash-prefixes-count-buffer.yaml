@@ -1,0 +1,83 @@
+extends: [valkey.liveness]
+id: proposed.pathhash-prefixes-count-buffer
+deployment:
+  modes: [standalone]
+metadata:
+  description: PHPREFIXES descending reply over wrapped and growing circular match
+    buffers, and EXCLUDESELF pagination including an unstored boundary
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: buffer
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [PHSET, buffer-tree, "", FIELDS, 1, f, "0"], expect: {equals: OK}}
+    - {command: [PHSET, buffer-tree, a, FIELDS, 1, f, "1"], expect: {equals: OK}}
+    - {command: [PHSET, buffer-tree, aa, FIELDS, 1, f, "2"], expect: {equals: OK}}
+    - {command: [PHSET, buffer-tree, aaa, FIELDS, 1, f, "3"], expect: {equals: OK}}
+    - {command: [PHSET, buffer-tree, aaaa, FIELDS, 1, f, "4"], expect: {equals: OK}}
+    - {command: [PHSET, buffer-tree, aaaaa, FIELDS, 1, f, "5"], expect: {equals: OK}}
+    - {command: [PHSET, buffer-tree, aaaaaa, FIELDS, 1, f, "6"], expect: {equals: OK}}
+    - {command: [PHSET, buffer-tree, aaaaaaa, FIELDS, 1, f, "7"], expect: {equals: OK}}
+    - {command: [PHSET, buffer-tree, aaaaaaaa, FIELDS, 1, f, "8"], expect: {equals: OK}}
+    - {command: [PHSET, buffer-tree, aaaaaaaaa, FIELDS, 1, f, "9"], expect: {equals: OK}}
+    - {command: [PHSET, buffer-tree, aaaaaaaaaa, FIELDS, 1, f, "10"], expect: {equals: OK}}
+    - {command: [PHSET, buffer-tree, aaaaaaaaaaa, FIELDS, 1, f, "11"], expect: {equals: OK}}
+    - {command: [PHPREFIXES, buffer-tree, aaaaaaaaaaaa, LENGTHS], expect_difference: true,
+      expect: {equals: [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]}}
+    - {command: [PHPREFIXES, buffer-tree, aaaaaaaaaaaa, LENGTHS, COUNT, 1], expect: {
+        equals: [11]}}
+    - {command: [PHPREFIXES, buffer-tree, aaaaaaaaaaaa, LENGTHS, COUNT, 2], expect_difference: true,
+      expect: {equals: [11, 10]}}
+    - {command: [PHPREFIXES, buffer-tree, aaaaaaaaaaaa, LENGTHS, COUNT, 7], expect_difference: true,
+      expect: {equals: [11, 10, 9, 8, 7, 6, 5]}}
+    - {command: [PHPREFIXES, buffer-tree, aaaaaaaaaaaa, LENGTHS, COUNT, 8], expect_difference: true,
+      expect: {equals: [11, 10, 9, 8, 7, 6, 5, 4]}}
+    - {command: [PHPREFIXES, buffer-tree, aaaaaaaaaaaa, LENGTHS, COUNT, 9], expect_difference: true,
+      expect: {equals: [11, 10, 9, 8, 7, 6, 5, 4, 3]}}
+    - {command: [PHPREFIXES, buffer-tree, aaaaaaaaaaaa, LENGTHS, COUNT, 12], expect_difference: true,
+      expect: {equals: [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]}}
+    - {command: [PHPREFIXES, buffer-tree, aaaaaaaaaaaa, LENGTHS, COUNT, 13], expect_difference: true,
+      expect: {equals: [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]}}
+    - {command: [PHPREFIXES, buffer-tree, aaaaaaaaaaaa, LENGTHS, MAXPATHLEN, 6, COUNT,
+        3], expect_difference: true, expect: {equals: [6, 5, 4]}}
+    - {command: [PHPREFIXES, buffer-tree, aaaaaaaaaaaa, LENGTHS, EXCLUDESELF, COUNT,
+        3], expect_difference: true, expect: {equals: [11, 10, 9]}}
+    - {command: [PHPREFIXES, buffer-tree, aaaaaaaaaaa, LENGTHS, COUNT, 3], expect_difference: true,
+      expect: {equals: [11, 10, 9]}}
+    - {command: [PHPREFIXES, buffer-tree, aaaaaaaaaaa, LENGTHS, EXCLUDESELF, COUNT,
+        3], expect_difference: true, expect: {equals: [10, 9, 8]}}
+    - {command: [PHSET, page-tree, "", FIELDS, 1, f, v0], expect: {equals: OK}}
+    - {command: [PHSET, page-tree, a, FIELDS, 1, f, v1], expect: {equals: OK}}
+    - {command: [PHSET, page-tree, ab, FIELDS, 1, f, v2], expect: {equals: OK}}
+    - {command: [PHSET, page-tree, abc, FIELDS, 1, f, v3], expect: {equals: OK}}
+    - {command: [PHSET, page-tree, abcd, FIELDS, 1, f, v4], expect: {equals: OK}}
+    - {command: [PHSET, page-tree, abcde, FIELDS, 1, f, v5], expect: {equals: OK}}
+    - {command: [PHSET, page-tree, abcdef, FIELDS, 1, f, v6], expect: {equals: OK}}
+    - {command: [PHPREFIXES, page-tree, abcdefgh, COUNT, 2], expect_difference: true,
+      expect: {equals: [abcdef, abcde]}}
+    - {command: [PHPREFIXES, page-tree, abcde, EXCLUDESELF, COUNT, 2], expect_difference: true,
+      expect: {equals: [abcd, abc]}}
+    - {command: [PHPREFIXES, page-tree, abc, EXCLUDESELF, COUNT, 2], expect_difference: true,
+      expect: {equals: [ab, a]}}
+    - {command: [PHPREFIXES, page-tree, a, EXCLUDESELF, COUNT, 2], expect_difference: true,
+      expect: {equals: [""]}}
+    - {command: [PHPREFIXES, page-tree, "", EXCLUDESELF, COUNT, 2], expect_difference: true,
+      expect: {equals: []}}
+    - {command: [PHDEL, page-tree, abc], expect: {exists: true}}
+    - {command: [PHPREFIXES, page-tree, abc, EXCLUDESELF, COUNT, 2], expect_difference: true,
+      expect: {equals: [ab, a]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [buffer.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: buffer}

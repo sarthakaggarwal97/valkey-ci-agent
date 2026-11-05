@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.sentinel-simulate-failure-hint
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    valkey-cli command-line hints for SENTINEL SIMULATE-FAILURE come from the static
+    cli_commands.c table (built from commands.def) when no server is reachable. The
+    change adds the CRASH-AFTER-ELECTION/CRASH-AFTER-PROMOTION/HELP tokens to the
+    mode pure-tokens and makes the mode mandatory; on the parent the tokenless pure-tokens
+    render an empty hint and match any input word. Each run forces the unconnected
+    legacy-help path with a dead unix socket and compares the printed hint across
+    builds.
+components:
+- use: valkey.action.tools
+  id: hint
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 20
+    runs:
+    - tool: valkey-cli
+      args: [-s, no-server-here.sock, --test_hint, "SENTINEL SIMULATE-FAILURE "]
+      expect_difference: true
+      expect:
+        exit: {equals: 0}
+        stdout: {equals: "CRASH-AFTER-ELECTION|CRASH-AFTER-PROMOTION|HELP [CRASH-AFTER-ELECTION|CRASH-AFTER-PROMOTION|HELP\
+            \ ...]\n"}
+    - tool: valkey-cli
+      args: [-s, no-server-here.sock, --test_hint, "SENTINEL SIMULATE-FAILURE CRASH-AFTER-ELECTION "]
+      expect_difference: true
+      expect:
+        exit: {equals: 0}
+        stdout: {contains: "CRASH-AFTER-ELECTION|CRASH-AFTER-PROMOTION|HELP ...]"}
+    - tool: valkey-cli
+      args: [-s, no-server-here.sock, --test_hint, "SENTINEL SIMULATE-FAILURE crash-after-promotion\
+          \ HELP "]
+      expect_difference: true
+      expect:
+        exit: {equals: 0}
+        stdout: {contains: "CRASH-AFTER-ELECTION|CRASH-AFTER-PROMOTION|HELP ...]"}
+    - tool: valkey-cli
+      args: [-s, no-server-here.sock, --test_hint, "SENTINEL SIMULATE-FAILURE NOT-A-MODE "]
+      expect_difference: true
+      expect:
+        exit: {equals: 0}
+        stdout: {equals: "\n"}
+required_events: [hint.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: hint}

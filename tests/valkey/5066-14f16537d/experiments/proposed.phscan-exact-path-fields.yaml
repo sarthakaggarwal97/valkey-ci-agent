@@ -1,0 +1,97 @@
+extends: [valkey.liveness]
+id: proposed.phscan-exact-path-fields
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    PHSCAN was repurposed from a path walker (opaque cursor, PREFIX, WITHVALUES) into
+    an HSCAN over the field map of one exact path (numeric cursor, MATCH, arity -4).
+    The sequence drives the new cursor-then-options parse order, the listpack and
+    hashtable scan branches, MATCH on field names only, empty and binary paths, missing
+    key/path, wrong type, and the removed old syntax, compared with the parent where
+    every repurposed call still parses the old way.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: phscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 8}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 20
+    commands:
+    - {command: [PHSET, s, a, FIELDS, "3", "user:1", Alice, "user:2", Bob, status,
+        "user:fake"], expect: {equals: OK}}
+    - {command: [PHSET, s, ab, FIELDS, "1", "user:3", child], expect: {equals: OK}}
+    - {command: [PHSCAN, s, a, "0"], expect_difference: true, expect: {equals: ["0",
+          ["user:1", Alice, "user:2", Bob, status, "user:fake"]]}}
+    - {command: [PHSCAN, s, a, "0", MATCH, "user:*"], expect_difference: true, expect: {
+        equals: ["0", ["user:1", Alice, "user:2", Bob]]}}
+    - {command: [PHSCAN, s, a, "0", MATCH, Alice], expect_difference: true, expect: {
+        equals: ["0", []]}}
+    - {command: [PHSCAN, s, missingpath, "0"], expect_difference: true, expect: {
+        equals: ["0", []]}}
+    - {command: [PHSCAN, nosuchkey, a, "0"], expect_difference: true, expect: {equals: [
+          "0", []]}}
+    - {command: [PHSCAN, s, ab, "0", MATCH, "*", COUNT, "10"], expect_difference: true,
+      expect: {equals: ["0", ["user:3", child]]}}
+    - {command: [PHSCAN, s, "0"], expect_difference: true, expect: {error: "wrong\
+          \ number"}}
+    - {command: [PHSCAN, s, "0", COUNT, "10"], expect_difference: true, expect: {
+        error: "invalid cursor"}}
+    - {command: [PHSCAN, s, "0", WITHVALUES], expect_difference: true, expect: {error: "invalid\
+          \ cursor"}}
+    - {command: [PHSCAN, s, a, "0", WITHVALUES], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [PHSCAN, s, a, "0", PREFIX, a], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [PHSCAN, s, a, "0", COUNT, "1", COUNT, "2"], expect_difference: true,
+      expect: {error: "syntax"}}
+    - {command: [PHSCAN, s, a, "0", COUNT, "0"], expect_difference: true, expect: {
+        error: "out of range"}}
+    - {command: [PHSCAN, s, a, "0", COUNT, notanumber], expect_difference: true, expect: {
+        error: "not an integer"}}
+    - {command: [PHSCAN, s, a, "0", COUNT, "9223372036854775807"], expect_difference: true,
+      expect: {equals: ["0", ["user:1", Alice, "user:2", Bob, status, "user:fake"]]}}
+    - {command: [PHSCAN, s, a, "18446744073709551615"], expect_difference: true, expect: {
+        equals: ["0", ["user:1", Alice, "user:2", Bob, status, "user:fake"]]}}
+    - {command: [PHSCAN, s, a, "18446744073709551616"], expect_difference: true, expect: {
+        error: "invalid cursor"}}
+    - {command: [SET, str, v], expect: {equals: OK}}
+    - {command: [PHSCAN, str, p, "0"], expect_difference: true, expect: {error: "WRONGTYPE"}}
+    - {command: [PHSCAN, str, p, badcursor], expect: {error: "invalid cursor"}}
+    - {command: [PHSET, s, !!binary "AGH/", FIELDS, "1", !!binary "ZgD/", !!binary "dgD/"],
+      expect: {equals: OK}}
+    - {command: [PHSCAN, s, !!binary "AGH/", "0"], expect_difference: true, expect: {
+        equals: ["0", [!!binary "ZgD/", !!binary "dgD/"]]}}
+    - {command: [PHSET, s, "", FIELDS, "1", root, rv], expect: {equals: OK}}
+    - {command: [PHSCAN, s, "", "0"], expect_difference: true, expect: {equals: [
+          "0", [root, rv]]}}
+    - {command: [PHSET, s, big, FIELDS, "9", f0, v0, f1, v1, f2, v2, f3, v3, f4, v4,
+        f5, v5, f6, v6, f7, v7, f8, v8], expect: {equals: OK}}
+    - {command: [PHSCAN, s, big, "0", COUNT, "100"], expect_difference: true, expect: {
+        error: false}}
+    - {command: [PHSCAN, s, big, "0", COUNT, "1"], expect_difference: true, expect: {
+        error: false}}
+    - {command: [PHSCAN, s, big, "0", MATCH, f1, COUNT, "100"], expect_difference: true,
+      expect: {equals: ["0", [f1, v1]]}}
+    - {command: [PHSET, s, bigx, FIELDS, "1", other, val], expect: {equals: OK}}
+    - {command: [PHSCAN, s, bigx, "0"], expect_difference: true, expect: {equals: [
+          "0", [other, val]]}}
+    - {command: [PHDEL, s, big], expect: {equals: 1}}
+    - {command: [PHSCAN, s, big, "0"], expect_difference: true, expect: {equals: [
+          "0", []]}}
+    - {command: [COMMAND, GETKEYS, PHSCAN, s, a, "0"], expect: {equals: [s]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [phscan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: phscan}

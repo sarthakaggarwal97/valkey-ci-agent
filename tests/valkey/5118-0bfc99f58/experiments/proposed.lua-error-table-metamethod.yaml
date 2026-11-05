@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.lua-error-table-metamethod
+deployment:
+  modes: [standalone]
+metadata:
+  description: Lua error-table fields read without invoking __index metamethods; a
+    raising metamethod must not crash the server
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lua_err
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [EVAL, "error(setmetatable({}, {__index=function() return 'INJECTED'\
+          \ end}))", "0"], expect_difference: true, expect: {error: "unknown error"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nerror(setmetatable({}, {__index=function()\
+          \ return 'FNINJ' end}))"], expect_difference: true, expect: {error: "unknown\
+          \ error"}}
+    - {command: [EVAL, "return setmetatable({err='boom-err'}, {__index=function()\
+          \ error('metaboom') end})", "0"], expect_difference: true, expect: {error: "boom-err"}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [lua_err.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lua_err}

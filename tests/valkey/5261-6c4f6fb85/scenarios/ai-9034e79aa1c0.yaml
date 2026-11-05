@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7220c38f908d..6c4f6fb85654.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9034e79aa1c0
+seed: 5261004
+experiment:
+  id: proposed.forkless-policy-save
+  inputs:
+    key_save_delay_us: 800
+    stable_keys: 2000
+    mutable_keys: 300
+    mutation_rate: 500
+    value_size: 64
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7300

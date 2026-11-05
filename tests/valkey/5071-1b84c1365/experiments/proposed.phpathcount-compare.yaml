@@ -1,0 +1,120 @@
+extends: [valkey.liveness]
+id: proposed.phpathcount-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: PHPATHCOUNT replaces PHCARD - prefix counting over compressed and binary
+    rax paths, syntax-error precedence, wrong-type precedence, ACL category move from
+    FAST to SLOW, and PHCARD removal, compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: phpathcount
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [PHSET, count-tree, '', FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHSET, count-tree, a, FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHSET, count-tree, ab, FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHSET, count-tree, abc, FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHSET, count-tree, abcd, FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHSET, count-tree, abx, FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHSET, count-tree, b, FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHPATHCOUNT, count-tree], expect_difference: true, expect: {equals: 7}}
+    - {command: [PHPATHCOUNT, count-tree, PREFIX, ''], expect_difference: true, expect: {
+        equals: 7}}
+    - {command: [PHPATHCOUNT, count-tree, PREFIX, a], expect_difference: true, expect: {
+        equals: 5}}
+    - {command: [PHPATHCOUNT, count-tree, PrEfIx, ab], expect_difference: true, expect: {
+        equals: 4}}
+    - {command: [PHPATHCOUNT, count-tree, PREFIX, abc], expect_difference: true, expect: {
+        equals: 2}}
+    - {command: [PHPATHCOUNT, count-tree, PREFIX, abcd], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [PHPATHCOUNT, count-tree, PREFIX, abcde], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [PHPATHCOUNT, count-tree, PREFIX, z], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [PHPATHCOUNT, nosuchkey], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHPATHCOUNT, nosuchkey, PREFIX, a], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [PHPATHCOUNT, count-tree, PREFIX], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [PHPATHCOUNT, count-tree, MATCH, a], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [PHPATHCOUNT, count-tree, PREFIX, a, PREFIX, b], expect_difference: true,
+      expect: {error: "syntax"}}
+    - {command: [PHPATHCOUNT, nosuchkey, PREFIX], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [SET, strkey, v], expect: {equals: OK}}
+    - {command: [PHPATHCOUNT, strkey], expect_difference: true, expect: {error: "WRONGTYPE"}}
+    - {command: [PHPATHCOUNT, strkey, PREFIX, a], expect_difference: true, expect: {
+        error: "WRONGTYPE"}}
+    - {command: [PHPATHCOUNT, strkey, PREFIX], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [PHSET, prefix, prefix, FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHPATHCOUNT, prefix, PREFIX, prefix], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [PHPATHCOUNT, prefix, PREFIX, pref], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [PHSET, count-tree, !!binary 'AP8=', FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHSET, count-tree, !!binary 'AP9jaGlsZA==', FIELDS, 1, f, v], expect: {
+        equals: OK}}
+    - {command: [PHPATHCOUNT, count-tree, PREFIX, !!binary 'AA=='], expect_difference: true,
+      expect: {equals: 2}}
+    - {command: [PHPATHCOUNT, count-tree, PREFIX, !!binary 'AP8='], expect_difference: true,
+      expect: {equals: 2}}
+    - {command: [PHDEL, count-tree, !!binary 'AP8='], expect: {equals: 1}}
+    - {command: [PHPATHCOUNT, count-tree, PREFIX, !!binary 'AP8='], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [PHPATHCOUNT, count-tree], expect_difference: true, expect: {equals: 8}}
+    - {command: [PHMSET, tree2, 'node:aaaaaaaaaa:0001', FIELDS, 1, f, v, 'node:aaaaaaaaaa:0002',
+        FIELDS, 1, f, v, 'node:aaaaaaaaaa', FIELDS, 1, f, v, 'node:aaaaaaaaab', FIELDS,
+        1, f, v, 'node:', FIELDS, 1, f, v, node, FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHPATHCOUNT, tree2], expect_difference: true, expect: {equals: 6}}
+    - {command: [PHPATHCOUNT, tree2, PREFIX, 'node:aaaaaaaaaa'], expect_difference: true,
+      expect: {equals: 3}}
+    - {command: [PHPATHCOUNT, tree2, PREFIX, 'node:aaaaaaaaaa:'], expect_difference: true,
+      expect: {equals: 2}}
+    - {command: [PHPATHCOUNT, tree2, PREFIX, 'node:'], expect_difference: true, expect: {
+        equals: 5}}
+    - {command: [PHPATHCOUNT, tree2, PREFIX, 'node:aaaaaaaaac'], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [PHPATHSCAN, tree2, 0, prefix, 'node:aaaaaaaaaa'], expect: {equals: [
+          "0", ['node:aaaaaaaaaa', 'node:aaaaaaaaaa:0001', 'node:aaaaaaaaaa:0002']]}}
+    - {command: [PHDELPREFIX, tree2, 'node:aaaaaaaaaa'], expect: {equals: 3}}
+    - {command: [PHPATHCOUNT, tree2], expect_difference: true, expect: {equals: 3}}
+    - {command: [PHPATHCOUNT, tree2, PREFIX, node], expect_difference: true, expect: {
+        equals: 3}}
+    - {command: [PHPATHCOUNT, tree2, PREFIX, 'node:'], expect_difference: true, expect: {
+        equals: 2}}
+    - {command: [PHCARD, count-tree], expect_difference: true, expect: {error: "unknown\
+          \ command"}}
+    - {command: [COMMAND, DOCS, phpathcount], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, LIST, FILTERBY, ACLCAT, pathhash], compare: unordered, expect_difference: true,
+      expect: {contains: phpathcount}}
+    - {command: [ACL, SETUSER, fastuser, on, ">pw", "~*", "+@fast"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, readuser, on, ">pw", "~*", "+@read"], expect: {equals: OK}}
+    - {command: [AUTH, fastuser, pw], connection: fast, expect: {equals: OK}}
+    - {command: [PHPATHCOUNT, count-tree], connection: fast, expect_difference: true,
+      expect: {error: "NOPERM"}}
+    - {command: [PHCARD, count-tree], connection: fast, expect_difference: true, expect: {
+        error: "unknown command"}}
+    - {command: [AUTH, readuser, pw], connection: reader, expect: {equals: OK}}
+    - {command: [PHPATHCOUNT, count-tree, PREFIX, a], connection: reader, expect_difference: true,
+      expect: {equals: 5}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [phpathcount.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: phpathcount}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b3b5ab983fec..1b84c13657d2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5b127a8f9dfc
+seed: 404
+experiment:
+  id: proposed.phpathcount-replica
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7300

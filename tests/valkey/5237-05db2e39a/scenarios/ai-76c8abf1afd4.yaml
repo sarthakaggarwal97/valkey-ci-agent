@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 40fb246f5abb..05db2e39a37a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-76c8abf1afd4
+seed: 523701
+experiment:
+  id: proposed.xackdel-xdelex-docs
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,149 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "14f16537d4f87a763a9b024d10d2254a21cac020",
+  "parent": "f986f56b51d231a5b1252601f8c9690b247a3e9a",
+  "pr": 5066,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Feature pathhash scan (#5066)",
+  "date": "2026-11-02",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 6,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 40,
+    "executed": 40,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 9.3212,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 28 (PHSCAN s big 0 COUNT 1) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[\"1\",[\"f7\",\"v7\",\"f1\",\"v1\",\"f3\",\"v3\",\"f4\",\"v4\",\"f6\",\"v6",
+      "scenario": "ai-afe7b8ff498b",
+      "seed": 1101,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "f7716d35778f1b8f475e",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 28 (PHSCAN s big 0 COUNT 1) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[\"1\",[\"f0\",\"v0\",\"f3\",\"v3\",\"f4\",\"v4\",\"f6\",\"v6\"]]}, not ",
+      "scenario": "ai-afe7b8ff498b",
+      "seed": 1101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "cd18901e3a44b520cb45",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 28 (PHSCAN s big 0 COUNT 1) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[\"1\",[\"f0\",\"v0\",\"f2\",\"v2\",\"f4\",\"v4\",\"f6\",\"v6\",\"f8\",\"v8",
+      "scenario": "ai-28e4cf81cc0f",
+      "seed": 1102,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "7ee2a860c1d370e5d863",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 28 (PHSCAN s big 0 COUNT 1) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[\"1\",[\"f7\",\"v7\",\"f1\",\"v1\",\"f5\",\"v5\",\"f6\",\"v6\"]]}, not ",
+      "scenario": "ai-28e4cf81cc0f",
+      "seed": 1102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "ed6202fe66a8b40776ec",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 28 (PHSCAN s big 0 COUNT 1) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[\"1\",[\"f2\",\"v2\",\"f3\",\"v3\",\"f6\",\"v6\"]]}, not {\"reply\":[",
+      "scenario": "ai-c539ac277d86",
+      "seed": 1103,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "f561605a37aa9321886f",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 28 (PHSCAN s big 0 COUNT 1) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[\"1\",[\"f7\",\"v7\",\"f1\",\"v1\",\"f3\",\"v3\",\"f4\",\"v4\"]]}, not ",
+      "scenario": "ai-c539ac277d86",
+      "seed": 1103,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "75020ac39604368a5323",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-afe7b8ff498b",
+      "build": "unstable",
+      "seed": 1102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-afe7b8ff498b",
+      "build": "unstable",
+      "seed": 1103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-28e4cf81cc0f",
+      "build": "unstable",
+      "seed": 1103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-28e4cf81cc0f",
+      "build": "unstable",
+      "seed": 1104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c539ac277d86",
+      "build": "unstable",
+      "seed": 1104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c539ac277d86",
+      "build": "unstable",
+      "seed": 1105,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

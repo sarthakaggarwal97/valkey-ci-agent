@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.phpathdel-bulk-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: PHPATHDEL WITHSUBPATHS chunked deletion of 600 paths, then persistence
+    round-trip across a restart
+inputs:
+  properties:
+    appendonly: {type: string, enum: ['no', 'yes'], default: 'no'}
+components:
+- use: valkey.action.commands
+  id: bulk
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: {$ref: inputs.appendonly}}
+    timeout_s: 60
+    commands:
+    - {command: [EVAL, "for i=1,600 do redis.call('PHSET', KEYS[1], 'delete:' .. i,\
+          \ 'fields', '1', 'f', 'v') end return redis.call('PHPATHCOUNT', KEYS[1])",
+        1, tree], expect: {equals: 600}}
+    - {command: [PHMSET, tree, 'keep:a', fields, 1, f, one, 'keep:b', fields, 1, f,
+        two, 'keep:c', fields, 1, f, three], expect: {equals: OK}}
+    - {command: [PHPATHCOUNT, tree], expect: {equals: 603}}
+    - {command: [PHPATHDEL, tree, 'delete:', WITHSUBPATHS], expect_difference: true,
+      expect: {equals: 600}}
+    - {command: [PHPATHCOUNT, tree], expect_difference: true, expect: {equals: 3}}
+    - {command: [PHPATHSCAN, tree, 0, count, 100], expect_difference: true, expect: {
+        equals: ['0', ['keep:a', 'keep:b', 'keep:c']]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [PHPATHCOUNT, tree], expect_difference: true, expect: {equals: 3}}
+    - {command: [PHGET, tree, 'keep:b', f], expect: {equals: [two]}}
+    - {command: [PHPATHDEL, tree, '', WITHSUBPATHS], expect_difference: true, expect: {
+        equals: 3}}
+    - {command: [EXISTS, tree], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHPATHDEL, tree, x, WITHSUBPATHS], expect_difference: true, expect: {
+        equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bulk.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bulk}

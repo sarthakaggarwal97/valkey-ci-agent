@@ -1,0 +1,24 @@
+extends: [valkey.liveness]
+id: proposed.register-function-repeated-args-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: Repeated case-variant named arguments to server.register_function must
+    not leak server memory
+components:
+- use: valkey.action.commands
+  id: regfunc
+  config:
+    resp: 2
+    timeout_s: 30
+    commands:
+    - command: [FUNCTION, LOAD, REPLACE, &id001 "#!lua name=leaklib\nlocal big = string.rep('x',\
+          \ 1000000)\nserver.register_function{function_name=big,Function_name=big,FUNCTION_NAME=big,FunctioN_name=big,description=big,Description=big,DESCRIPTION=big,callback=function(keys,\
+          \ args) return 1 end,Callback=function(keys, args) return 2 end}\n"]
+      expect: {equals: leaklib}
+    - {command: [FUNCTION, LOAD, REPLACE, *id001], expect: {equals: leaklib}}
+    - {command: [FUNCTION, LOAD, REPLACE, *id001], expect: {equals: leaklib}}
+    - {command: [FUNCTION, LOAD, REPLACE, *id001], expect: {equals: leaklib}}
+    - {command: [FUNCTION, FLUSH, SYNC], expect: {equals: OK}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: regfunc}
