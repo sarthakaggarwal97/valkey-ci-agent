@@ -1,12 +1,12 @@
 # Fuzzer walk
 
-Updated 2026-11-05T09:19+00:00.
+Updated 2026-11-05T09:22+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 65 | 2424 | #5151 (2026-10-29) | 65 | 9.3 |
 | valkey-io/valkey-bloom | 29 | 80 | #45 (2025-03-11) | 29 | 4.1 |
-| valkey-io/valkey-json | 61 | 1 | c1423d7e4b38 (2024-11-25) | 61 | 8.7 |
+| valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 62 | 8.9 |
 | valkey-io/valkey-search | 24 | 644 | #1481 (2026-10-14) | 24 | 3.4 |
 
 ## Last runs
@@ -63,9 +63,9 @@ Updated 2026-11-05T09:19+00:00.
 
 ### valkey-io/valkey-json
 
-[2026-11-05T09:19:17+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42001024764): 1 merge(s) tested, 0 without a code change.
+[2026-11-05T09:22:10+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42001413419): 1 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-json#1](https://github.com/valkey-io/valkey-json/pull/1): to retry, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in parent (exit 1): grep: src/json/memory.h: No such file or directory error: src/json/dom.cc: No such file or directory error: src/json/memory.h: No s
+- [valkey-io/valkey-json#1](https://github.com/valkey-io/valkey-json/pull/1): Contributing valkeyJSON module (#1): error: `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in parent (exit 1): grep: src/json/memory.h: No such file or directory error: src/json/dom.cc: No such file or directory error: src/json/memory.h: No such file or directory error: src/rapidjson/document.h: No such file or directory
 
 ### valkey-io/valkey-search
 
@@ -116,7 +116,6 @@ Updated 2026-11-05T09:19+00:00.
 ## Retries
 
 - [valkey-io/valkey-bloom#92](https://github.com/valkey-io/valkey-bloom/pull/92): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
-- [valkey-io/valkey-json#1](https://github.com/valkey-io/valkey-json/pull/1): attempt 2 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in parent (exit 1): grep: src/json/memory.h: No such file or directory error: src/json/dom.cc: No such file or directory error: src/json/memory.h: No s
 - [valkey-io/valkey-search#1650](https://github.com/valkey-io/valkey-search/pull/1650): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
 - [valkey-io/valkey-search#1634](https://github.com/valkey-io/valkey-search/pull/1634): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
 - [valkey-io/valkey-search#1381](https://github.com/valkey-io/valkey-search/pull/1381): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
