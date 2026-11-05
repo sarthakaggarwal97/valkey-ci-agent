@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom 8f5e3fc41134..5545680b5ef9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a10f560a0f52
+seed: 106
+experiment:
+  id: proposed.bloom-autoscale-rdb-roundtrip
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7500
+  replicas_per_primary: 0

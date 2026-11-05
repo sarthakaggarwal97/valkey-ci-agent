@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom 6ca68c5eef40..b7504e965e06.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-46909eedb981
+seed: 103
+experiment:
+  id: proposed.bloom-copy-persistence
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

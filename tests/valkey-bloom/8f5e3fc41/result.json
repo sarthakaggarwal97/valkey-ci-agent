@@ -1,0 +1,65 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "8f5e3fc411342ce5491c595b1e8db80b92383755",
+  "parent": "bdf5f0dc5471c87235fe77ccf196adf2d8028fa2",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Update error handling / messages and update expansion logic",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.8521,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"698d886046183fc850a798d65862318eeb9eeebd\"},\"offset\":\"108\"}, replica {\"digest\":{\"reply\":\"8f45cb408d8a66b1a5ffba22cfb818ae337f8a28\"},\"offset\":\"108\"}, link up",
+      "scenario": "ai-bda591ddcc0c",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"698d886046183fc850a798d65862318eeb9eeebd\"},\"offset\":\"108\"}, replica {\"digest\":{\"reply\":\"8f45cb408d8a66b1a5ffba22cfb818ae337f8a28\"},\"offset\":\"108\"}, link up",
+      "scenario": "ai-9af24d0936b7",
+      "seed": 102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"542f844d8b3a5c3bd8f89f39978f389b0733b5b3\"},\"offset\":\"56\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"56\"}, link up",
+      "scenario": "ai-ab3f9092370f",
+      "seed": 103,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

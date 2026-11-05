@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "481ecac436320f14bb91ad1fd4350c91f95f1557",
+  "parent": "42d015cd68c80565d5a605bc9d3739b26f8c5091",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Refactoring",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7154,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure refactor with no behaviour change: BloomFilterType2 and BloomFilter are moved verbatim from bloom_data_type.rs to bloom_util.rs; item parameters change from &RedisString to &[u8] but the identical byte slices were already what reached Bloom<[u8]>::set/check (new_with_item used item.as_slice(), the rest deref-coerced), so filter contents and replies are unchanged; add_item returns i64 instead of RedisValue with the caller wrapping it back into RedisValue::Integer, producing the same wire reply; BloomFilter::from_existing merely packages the inline struct construction the RDB-load path alre"
+}

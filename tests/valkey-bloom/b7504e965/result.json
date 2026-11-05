@@ -1,0 +1,72 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "b7504e965e06f4b87f024b12fa17da9d96f3fbf6",
+  "parent": "6ca68c5eef40deb0a6ccd2a88d62372bec428b01",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Add support for COPY commands on BloomFilter datatypes",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.8009,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"b787c4df2da08b2419e00fc3b7c3d3eabdeeb699\"},\"offset\":\"449\"}, replica {\"digest\":{\"reply\":\"8f45cb408d8a66b1a5ffba22cfb818ae337f8a28\"},\"offset\":\"449\"}, link up",
+      "scenario": "ai-3dede3183b24",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"b787c4df2da08b2419e00fc3b7c3d3eabdeeb699\"},\"offset\":\"449\"}, replica {\"digest\":{\"reply\":\"8f45cb408d8a66b1a5ffba22cfb818ae337f8a28\"},\"offset\":\"449\"}, link up",
+      "scenario": "ai-f59fb51804d3",
+      "seed": 102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"413486002e0668a8d9f745328ef877429481966b\"},\"offset\":\"144\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"144\"}, link up",
+      "scenario": "ai-46909eedb981",
+      "seed": 103,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-46909eedb981",
+      "build": "unstable",
+      "seed": 105,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

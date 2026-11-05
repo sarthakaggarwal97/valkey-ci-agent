@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "053d5e9ade3bd19b571834e2490bd290c86e44cb",
+  "parent": "d00fa993ba2471f4fdb0b3328c254e2c6c0aa431",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "minor refactoring",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.336,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure refactor: it renames BloomFilterType2 to BloomFilterType and BLOOM_FILTER_TYPE2 to BLOOM_FILTER_TYPE (Rust identifiers only \u2014 the RedisType name string \"bloomtype\" and encoding version 0 are unchanged, so RDB and TYPE behaviour are identical), replaces the string literal \"ERROR\" with the pre-existing constant ERROR whose value is the same \"ERROR\" string, and replaces Ok(RedisValue::SimpleStringStatic(\"OK\")) with REDIS_OK, which is defined as exactly that value. Every reply, error message, serialized byte and callback behaviour is byte-identical on both builds, so no comman"
+}

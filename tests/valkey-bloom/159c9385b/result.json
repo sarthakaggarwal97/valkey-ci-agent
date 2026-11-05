@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "159c9385b0acbcb142bbf156e065b54cfed48f6f",
+  "parent": "3f85cae12ceca4441475f189677208a49a17c7cf",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "fix clippy warnings",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2487,
+  "findings": [],
+  "recorded": [],
+  "reason": "Both hunks are mechanical clippy fixes with identical semantics. In bloom_filter_reserve, `num >= 0.0 && num < 1.0` is rewritten as `(0.0..1.0).contains(&num)`, and Range::contains is defined as `start <= item && item < end`, so the BF.RESERVE error-rate guard accepts and rejects exactly the same f32 values (including boundaries 0.0 and 1.0, negatives, and NaN, which fails both forms). In bloom_rdb_load, a `let data = ...; data` binding is collapsed into a direct return of the same Box::into_raw pointer (clippy let_and_return), changing no allocation, ownership, or control flow. No command rep"
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "bebf72ac79dfc8996dfbedad2a99ebcb008240c5",
+  "parent": "159c9385b0acbcb142bbf156e065b54cfed48f6f",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Update README and address all clippy warnings",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6811,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a README update, an optional clippy build-dependency in Cargo.toml, and mechanical clippy-lint refactors: &Vec<RedisString> parameters become &[RedisString], explicit index loops become equivalent iterator chains (take(len).skip(start) covers the same range in the same order), &RedisString deref coercion to &[u8] is replaced by the equivalent as_slice(), repeated Vec pushes become a vec! literal with the same elements in the same order, and an import is replaced by fully-qualified paths. Every command's arity checks, argument parsing, stored filter state, and replies are byte-for"
+}

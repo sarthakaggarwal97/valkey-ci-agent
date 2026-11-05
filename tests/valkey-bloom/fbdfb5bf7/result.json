@@ -1,0 +1,107 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "fbdfb5bf790644a1c2d49b664efccb953a17f3e6",
+  "parent": "053d5e9ade3bd19b571834e2490bd290c86e44cb",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Add support for BF.INSERT and fix multi add logic",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 6,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.8214,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"ad94674b499c8ccf9a272b1432d89d3c619c39af\"},\"offset\":\"56\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"56\"}, link up",
+      "scenario": "ai-cc1137e18f9e",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"ad94674b499c8ccf9a272b1432d89d3c619c39af\"},\"offset\":\"56\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"56\"}, link up",
+      "scenario": "ai-71a9bbe677b7",
+      "seed": 102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"d8c834a00c3a0c5ad3ee2e3e55a4d6f6e6d6e6ab\"},\"offset\":\"56\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"56\"}, link up",
+      "scenario": "ai-4dee6c27d025",
+      "seed": 201,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"d8c834a00c3a0c5ad3ee2e3e55a4d6f6e6d6e6ab\"},\"offset\":\"56\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"56\"}, link up",
+      "scenario": "ai-20a5eafdf89d",
+      "seed": 202,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-0bf8fb31ff44",
+      "seed": 301,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by fbdfb5bf7906",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-ea4a42e13933",
+      "seed": 302,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by fbdfb5bf7906",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

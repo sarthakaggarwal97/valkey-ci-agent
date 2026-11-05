@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.bf-insert-stub
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.INSERT is newly registered as a stub answering NOT YET SUPPORTED;
+    the parent answers unknown command, aborts transactions queueing it, and lacks
+    it in COMMAND introspection
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: insert
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [BF.INSERT, k1, ITEMS, a, b], expect_difference: true, expect: {error: "NOT\
+          \ YET SUPPORTED"}}
+    - {command: [BF.INSERT], expect_difference: true, expect: {error: true}}
+    - {command: [EXISTS, k1], expect: {equals: 0}}
+    - {command: [SET, s, v], expect: {equals: OK}}
+    - {command: [BF.INSERT, s, ITEMS, x], expect_difference: true, expect: {error: "NOT\
+          \ YET SUPPORTED"}}
+    - {command: [GET, s], expect: {equals: v}}
+    - {command: [COMMAND, COUNT], expect_difference: true, expect: {min: 1}}
+    - {command: [COMMAND, INFO, BF.INSERT], expect_difference: true, expect: {exists: true}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [BF.INSERT, k2, ITEMS, x], expect_difference: true, expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {error: false}}
+    - {command: [EXISTS, k2], expect: {equals: 0}}
+    - {command: [BF.ADD, f, item1], expect: {equals: 1}}
+    - {command: [BF.EXISTS, f, item1], expect: {equals: 1}}
+    - {command: [BF.CARD, f], expect: {equals: 1}}
+    - {command: [BF.INFO, f, CAPACITY], expect: {min: 1}}
+    - {command: [BF.INFO, f, SIZE], compare: skip, expect: {min: 1}}
+    - {command: [DEL, f], expect: {equals: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [insert.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: insert}

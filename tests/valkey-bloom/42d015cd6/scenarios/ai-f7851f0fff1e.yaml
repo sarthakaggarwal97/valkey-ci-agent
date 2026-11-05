@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom 5545680b5ef9..42d015cd68c8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f7851f0fff1e
+seed: 11004
+experiment:
+  id: proposed.bloom-scaled-rdb-sync
+  inputs:
+    resp: 3
+    repl_diskless_sync: 'yes'
+    repl_diskless_load: on-empty-db
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7300

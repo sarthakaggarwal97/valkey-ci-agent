@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom b11970ee2c0a..bdf5f0dc5471.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-902520427860
+seed: 102
+experiment:
+  id: proposed.bf-madd-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

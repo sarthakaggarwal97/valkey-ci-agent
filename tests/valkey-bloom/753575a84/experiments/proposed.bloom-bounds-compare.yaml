@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.bloom-bounds-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.RESERVE/BF.INSERT capacity, expansion and error-rate bounds tightened
+    to u32/f32, compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bounds
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [BF.RESERVE, fp-edge, "0.999999999", "100"], expect_difference: true,
+      expect: {error: "error rate"}}
+    - {command: [BF.RESERVE, cap-max, "0.99", "4294967295"], expect_difference: true,
+      expect: {error: "Bad capacity"}}
+    - {command: [BF.RESERVE, cap-over, "0.99", "4294967296"], expect_difference: true,
+      expect: {error: "Bad capacity"}}
+    - {command: [BF.RESERVE, cap-edge, "0.99", "4294967294"], expect: {equals: OK}}
+    - {command: [BF.INFO, cap-edge, CAPACITY], expect: {equals: 4294967294}}
+    - {command: [BF.RESERVE, exp-11, "0.001", "100", EXPANSION, "11"], expect_difference: true,
+      expect: {error: "bad expansion"}}
+    - {command: [BF.RESERVE, exp-i64, "0.001", "100", EXPANSION, "9223372036854775807"],
+      expect_difference: true, expect: {error: "bad expansion"}}
+    - {command: [BF.RESERVE, exp-10, "0.001", "100", EXPANSION, "10"], expect: {equals: OK}}
+    - {command: [BF.INFO, exp-10, EXPANSION], expect: {equals: 10}}
+    - {command: [BF.RESERVE, exp-0, "0.001", "100", EXPANSION, "0"], expect: {error: "bad\
+          \ expansion"}}
+    - {command: [BF.RESERVE, exp-neg, "0.001", "100", EXPANSION, "-1"], expect: {
+        error: "bad expansion"}}
+    - {command: [BF.RESERVE, ns, "0.001", "100", NONSCALING], expect: {equals: OK}}
+    - {command: [BF.INFO, ns, EXPANSION], expect: {equals: -1}}
+    - {command: [BF.INSERT, ins-cap, ERROR, "0.99", CAPACITY, "4294967295", ITEMS,
+        a], expect_difference: true, expect: {error: "Bad capacity"}}
+    - {command: [BF.INSERT, ins-exp, EXPANSION, "11", ITEMS, a], expect_difference: true,
+      expect: {error: "bad expansion"}}
+    - {command: [BF.INSERT, ins-fp, ERROR, "0.999999999", ITEMS, a], expect_difference: true,
+      expect: {error: "Bad error rate"}}
+    - {command: [BF.INSERT, ins-ok, ERROR, "0.01", CAPACITY, "100", EXPANSION, "10",
+        ITEMS, a, b], expect: {equals: [1, 1]}}
+    - {command: [BF.RESERVE, scale, "0.0001", "1", EXPANSION, "2"], expect: {equals: OK}}
+    - {command: [BF.ADD, scale, item1], expect: {equals: 1}}
+    - {command: [BF.ADD, scale, item2], expect: {equals: 1}}
+    - {command: [BF.ADD, scale, item3], expect: {equals: 1}}
+    - {command: [BF.ADD, scale, item4], expect: {equals: 1}}
+    - {command: [BF.INFO, scale, FILTERS], expect: {equals: 3}}
+    - {command: [BF.INFO, scale, CAPACITY], expect: {equals: 7}}
+    - {command: [BF.INFO, scale, ITEMS], expect: {equals: 4}}
+    - {command: [BF.CARD, scale], expect: {equals: 4}}
+    - {command: [BF.RESERVE, ns2, "0.0001", "1", NONSCALING], expect: {equals: OK}}
+    - {command: [BF.ADD, ns2, x1], expect: {equals: 1}}
+    - {command: [BF.ADD, ns2, x2], expect: {equals: 1}}
+    - {command: [BF.INFO, ns2, FILTERS], expect: {equals: 1}}
+    - {command: [BF.INFO, ns2, ITEMS], expect: {equals: 2}}
+    - {command: [BF.INFO, scale, SIZE], compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bounds.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bounds}

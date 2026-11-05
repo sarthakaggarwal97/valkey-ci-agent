@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom 8f5e3fc41134..5545680b5ef9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-61bcf1f154a3
+seed: 103
+experiment:
+  id: proposed.bloom-autoscale-expansion-overflow
+  inputs:
+    resp: 2
+    expansion: -5
+deployment:
+  mode: standalone
+  base_port: 7200
+  replicas_per_primary: 0

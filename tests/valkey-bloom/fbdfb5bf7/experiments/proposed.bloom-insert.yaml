@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.bloom-insert
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.INSERT is new in the change (the parent replied NOT YET SUPPORTED);
+    it creates filters, adds items, honours NOCREATE and NONSCALING
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: insert
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [BF.INSERT, bf, ITEMS, a, b, c], expect_difference: true, expect: {
+        equals: [1, 1, 1]}}
+    - {command: [BF.CARD, bf], expect_difference: true, expect: {equals: 3}}
+    - {command: [BF.INSERT, bf, ITEMS, a, d], expect_difference: true, expect: {equals: [
+          0, 1]}}
+    - {command: [BF.CARD, bf], expect_difference: true, expect: {equals: 4}}
+    - {command: [BF.INSERT, bf2, CAPACITY, 200, ERROR, "0.01", ITEMS, p, q], expect_difference: true,
+      expect: {equals: [1, 1]}}
+    - {command: [BF.INSERT, nope, NOCREATE, ITEMS, z], expect_difference: true, expect: {
+        error: "not found"}}
+    - {command: [BF.INSERT, bf3, NONSCALING, ITEMS, m], expect_difference: true, expect: {
+        equals: [1]}}
+    - {command: [BF.INFO, bf3, EXPANSION], expect_difference: true, expect: {equals: -1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: insert}

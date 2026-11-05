@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "bdf5f0dc5471c87235fe77ccf196adf2d8028fa2",
+  "parent": "b11970ee2c0a78cc2bf5e17a0ccb5af9a2888761",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Add support for BF.MADD",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 4.7622,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

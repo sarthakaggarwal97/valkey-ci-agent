@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.bloom-madd-multi
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.MADD on a new key keeps every item; the parent overwrote the filter
+    once per item and kept only the last
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: madd
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [BF.MADD, mf, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.CARD, mf], expect_difference: true, expect: {equals: 5}}
+    - {command: [BF.INFO, mf, ITEMS], expect_difference: true, expect: {equals: 5}}
+    - {command: [BF.MADD, mf2, x, x, y], expect_difference: true, expect: {equals: [
+          1, 0, 1]}}
+    - {command: [BF.CARD, mf2], expect_difference: true, expect: {equals: 2}}
+    - {command: [BF.INFO, mf2, ITEMS], expect_difference: true, expect: {equals: 2}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: madd}

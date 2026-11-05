@@ -1,0 +1,86 @@
+extends: [valkey.liveness]
+id: proposed.bloom-copy-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: COPY of bloom filter keys (plain, REPLACE, cross-DB, scaled, nonscaling,
+    empty) deep-copies the value on the change and errors on the parent, where copy
+    was unsupported
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: copy
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [BF.ADD, bf, one], expect: {equals: 1}}
+    - {command: [BF.ADD, bf, two], expect: {equals: 1}}
+    - {command: [BF.CARD, bf], expect: {equals: 2}}
+    - {command: [COPY, bf, bf], expect: {error: true}}
+    - {command: [COPY, bf, bf-copy], expect_difference: true, expect: {equals: 1}}
+    - {command: [EXISTS, bf-copy], expect_difference: true, expect: {equals: 1}}
+    - {command: [TYPE, bf-copy], expect_difference: true, expect: {equals: bloomtype}}
+    - {command: [BF.MEXISTS, bf-copy, one, two], expect_difference: true, expect: {
+        equals: [1, 1]}}
+    - {command: [BF.CARD, bf-copy], expect_difference: true, expect: {equals: 2}}
+    - {command: [BF.ADD, bf-copy, three], expect: {equals: 1}}
+    - {command: [BF.CARD, bf-copy], expect_difference: true, expect: {equals: 3}}
+    - {command: [BF.CARD, bf], expect: {equals: 2}}
+    - {command: [BF.ADD, bf, four], expect: {equals: 1}}
+    - {command: [BF.CARD, bf], expect: {equals: 3}}
+    - {command: [BF.CARD, bf-copy], expect_difference: true, expect: {equals: 3}}
+    - {command: [COPY, bf, bf-copy], expect: {equals: 0}}
+    - {command: [COPY, bf, bf-copy, REPLACE], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.CARD, bf-copy], expect_difference: true, expect: {equals: 3}}
+    - {command: [BF.MEXISTS, bf-copy, one, two, four], expect_difference: true, expect: {
+        equals: [1, 1, 1]}}
+    - {command: [SET, str, v], expect: {equals: OK}}
+    - {command: [COPY, bf, str], expect: {equals: 0}}
+    - {command: [COPY, bf, str, REPLACE], expect_difference: true, expect: {equals: 1}}
+    - {command: [TYPE, str], expect_difference: true, expect: {equals: bloomtype}}
+    - {command: [BF.CARD, str], expect_difference: true, expect: {equals: 3}}
+    - {command: [BF.RESERVE, scaled, "0.000001", 1, EXPANSION, 3], expect: {equals: OK}}
+    - {command: [BF.MADD, scaled, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.INFO, scaled, FILTERS], expect: {equals: 3}}
+    - {command: [COPY, scaled, scaled2], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.INFO, scaled2, FILTERS], expect_difference: true, expect: {equals: 3}}
+    - {command: [BF.INFO, scaled2, ITEMS], expect_difference: true, expect: {equals: 5}}
+    - {command: [BF.INFO, scaled2, CAPACITY], expect_difference: true, expect: {equals: 13}}
+    - {command: [BF.INFO, scaled2, EXPANSION], expect_difference: true, expect: {
+        equals: 3}}
+    - {command: [BF.MEXISTS, scaled2, a, b, c, d, e], expect_difference: true, expect: {
+        equals: [1, 1, 1, 1, 1]}}
+    - {command: [MEMORY, USAGE, scaled2], compare: skip}
+    - {command: [BF.RESERVE, ns, "0.001", 50, NONSCALING], expect: {equals: OK}}
+    - {command: [BF.ADD, ns, x], expect: {equals: 1}}
+    - {command: [COPY, ns, ns2], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.INFO, ns2, EXPANSION], expect_difference: true, expect: {equals: -1}}
+    - {command: [BF.EXISTS, ns2, x], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.RESERVE, empty, "0.01", 100], expect: {equals: OK}}
+    - {command: [COPY, empty, empty2], expect_difference: true, expect: {equals: 1}}
+    - {command: [EXISTS, empty2], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.INFO, empty2, ITEMS], expect_difference: true, expect: {equals: 0}}
+    - {command: [BF.ADD, empty2, z], expect: {equals: 1}}
+    - {command: [BF.CARD, empty], expect: {equals: 0}}
+    - {command: [COPY, bf, dbbf, DB, 1], expect_difference: true, expect: {equals: 1}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [TYPE, dbbf], expect_difference: true, expect: {equals: bloomtype}}
+    - {command: [BF.CARD, dbbf], expect_difference: true, expect: {equals: 3}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [DEL, bf-copy, scaled2, ns2, empty2], expect_difference: true, expect: {
+        equals: 4}}
+    - {command: [BF.CARD, bf], expect: {equals: 3}}
+    - {command: [BF.INFO, scaled, FILTERS], expect: {equals: 3}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [copy.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: copy}

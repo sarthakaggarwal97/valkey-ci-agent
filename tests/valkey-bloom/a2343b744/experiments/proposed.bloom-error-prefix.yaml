@@ -1,0 +1,100 @@
+extends: [valkey.liveness]
+id: proposed.bloom-error-prefix
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-bloom adds an ERR prefix to the custom error replies of BF.RESERVE,
+    BF.INSERT and BF.INFO; drive every changed error path and compare replies across
+    the two module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bloomerr
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [BF.RESERVE, f, abc, '100'], expect_difference: true, expect: {error: 'ERR
+          (0 < error rate range < 1)'}}
+    - {command: [BF.RESERVE, f, '1', '100'], expect_difference: true, expect: {error: 'ERR
+          (0 < error rate range < 1)'}}
+    - {command: [BF.RESERVE, f, '-0.5', '100'], expect_difference: true, expect: {
+        error: 'ERR (0 < error rate range < 1)'}}
+    - {command: [BF.RESERVE, f, nan, '100'], expect_difference: true, expect: {error: 'ERR
+          (0 < error rate range < 1)'}}
+    - {command: [BF.RESERVE, f, '', '100'], expect_difference: true, expect: {error: 'ERR
+          (0 < error rate range < 1)'}}
+    - {command: [BF.RESERVE, f, '0.001', '0'], expect_difference: true, expect: {
+        error: 'ERR Bad capacity'}}
+    - {command: [BF.RESERVE, f, '0.001', '-1'], expect_difference: true, expect: {
+        error: 'ERR Bad capacity'}}
+    - {command: [BF.RESERVE, f, '0.001', '18446744073709551616'], expect_difference: true,
+      expect: {error: 'ERR Bad capacity'}}
+    - {command: [BF.RESERVE, f, '0.001', ''], expect_difference: true, expect: {error: 'ERR
+          Bad capacity'}}
+    - {command: [BF.RESERVE, f, '0.001', '100', EXPANSION, '0'], expect_difference: true,
+      expect: {error: 'ERR bad expansion'}}
+    - {command: [BF.RESERVE, f, '0.001', '100', EXPANSION, '-1'], expect_difference: true,
+      expect: {error: 'ERR bad expansion'}}
+    - {command: [BF.RESERVE, f, '0.001', '100', EXPANSION, '9223372036854775808'],
+      expect_difference: true, expect: {error: 'ERR bad expansion'}}
+    - {command: [BF.RESERVE, f, '0.001', '100', EXPANSION, abc], expect_difference: true,
+      expect: {error: 'ERR bad expansion'}}
+    - {command: [BF.RESERVE, f, '0.001', '100', BADOPT], expect: {error: ERROR}}
+    - {command: [BF.RESERVE, f, '0.001', '100'], expect: {equals: OK}}
+    - {command: [BF.RESERVE, f, '0.01', '200'], expect_difference: true, expect: {
+        error: 'ERR item exists'}}
+    - {command: [BF.RESERVE, f, '0.001', '100', NONSCALING], expect_difference: true,
+      expect: {error: 'ERR item exists'}}
+    - {command: [BF.ADD, f, item1], expect: {equals: 1}}
+    - {command: [BF.ADD, f, ''], expect: {equals: 1}}
+    - {command: [BF.MADD, f, x, x, x], expect: {equals: [1, 0, 0]}}
+    - {command: [BF.EXISTS, f, item1], expect: {equals: 1}}
+    - {command: [BF.CARD, f], expect: {equals: 4}}
+    - {command: [BF.INFO, f, CAPACITYX], expect_difference: true, expect: {error: 'ERR
+          Invalid information value'}}
+    - {command: [BF.INFO, f, ''], expect_difference: true, expect: {error: 'ERR Invalid
+          information value'}}
+    - {command: [BF.INFO, f, CAPACITY], expect: {equals: 100}}
+    - {command: [BF.INFO, f, FILTERS], expect: {equals: 1}}
+    - {command: [BF.INFO, f, ITEMS], expect: {equals: 4}}
+    - {command: [BF.INFO, f, EXPANSION], expect: {equals: 2}}
+    - {command: [BF.INFO, f, SIZE], compare: skip}
+    - {command: [BF.INFO, f], compare: skip}
+    - {command: [BF.INFO, missing], expect_difference: true, expect: {error: 'ERR
+          not found'}}
+    - {command: [BF.INFO, missing, CAPACITY], expect_difference: true, expect: {error: 'ERR
+          not found'}}
+    - {command: [BF.INSERT, g, ERROR, abc, ITEMS, a], expect_difference: true, expect: {
+        error: 'ERR Bad error rate'}}
+    - {command: [BF.INSERT, g, ERROR, '1.5', ITEMS, a], expect_difference: true, expect: {
+        error: 'ERR Bad error rate'}}
+    - {command: [BF.INSERT, g, ERROR, '', ITEMS, a], expect_difference: true, expect: {
+        error: 'ERR Bad error rate'}}
+    - {command: [BF.INSERT, g, CAPACITY, '0', ITEMS, a], expect_difference: true,
+      expect: {error: 'ERR Bad capacity'}}
+    - {command: [BF.INSERT, g, CAPACITY, '-1', ITEMS, a], expect_difference: true,
+      expect: {error: 'ERR Bad capacity'}}
+    - {command: [BF.INSERT, g, EXPANSION, '0', ITEMS, a], expect_difference: true,
+      expect: {error: 'ERR bad expansion'}}
+    - {command: [BF.INSERT, g, EXPANSION, '-2', ITEMS, a], expect_difference: true,
+      expect: {error: 'ERR bad expansion'}}
+    - {command: [BF.INSERT, g, NOCREATE, ITEMS, a], expect_difference: true, expect: {
+        error: 'ERR not found'}}
+    - {command: [BF.INSERT, g, CAPACITY, '50', ERROR, '0.01', ITEMS, a, b, c], expect: {
+        equals: [1, 1, 1]}}
+    - {command: [BF.MEXISTS, g, a, b, c], expect: {equals: [1, 1, 1]}}
+    - {command: [BF.INFO, g, CAPACITY], expect: {equals: 50}}
+    - {command: [BF.INFO, g, ITEMS], expect: {equals: 3}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bloomerr.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bloomerr}

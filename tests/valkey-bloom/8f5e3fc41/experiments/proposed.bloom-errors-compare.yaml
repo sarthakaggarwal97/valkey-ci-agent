@@ -1,0 +1,91 @@
+extends: [valkey.liveness]
+id: proposed.bloom-errors-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-bloom error replies (wrong arity, wrong type, bad BF.RESERVE
+    args, NONSCALING/EXPANSION i64 handling) compared between the change's module
+    build and its parent's
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bloomerr
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [BF.ADD, bf, item1], expect: {equals: 1}}
+    - {command: [BF.MADD, bf, item2, item3], expect: {equals: [1, 1]}}
+    - {command: [BF.EXISTS, bf, item1], expect: {equals: 1}}
+    - {command: [BF.MEXISTS, bf, item1, item2], expect: {equals: [1, 1]}}
+    - {command: [BF.CARD, bf], expect: {equals: 3}}
+    - {command: [BF.INFO, bf, EXPANSION], expect: {equals: 2}}
+    - {command: [BF.ADD, bf], expect_difference: true, expect: {error: "wrong number\
+          \ of arguments"}}
+    - {command: [BF.ADD, bf, a, b], expect_difference: true, expect: {error: "wrong\
+          \ number of arguments"}}
+    - {command: [BF.MADD, bf], expect_difference: true, expect: {error: "wrong number\
+          \ of arguments"}}
+    - {command: [BF.EXISTS, bf], expect_difference: true, expect: {error: "wrong number\
+          \ of arguments"}}
+    - {command: [BF.EXISTS, bf, a, b], expect_difference: true, expect: {error: "wrong\
+          \ number of arguments"}}
+    - {command: [BF.MEXISTS, bf], expect_difference: true, expect: {error: "wrong\
+          \ number of arguments"}}
+    - {command: [BF.CARD, bf, extra], expect_difference: true, expect: {error: "wrong\
+          \ number of arguments"}}
+    - {command: [BF.RESERVE, bf2, "0.01"], expect_difference: true, expect: {error: "wrong\
+          \ number of arguments"}}
+    - {command: [BF.INFO, bf, CAPACITY, extra], expect_difference: true, expect: {
+        error: "wrong number of arguments"}}
+    - {command: [SET, str, v], expect: {equals: OK}}
+    - {command: [BF.ADD, str, x], expect_difference: true, expect: {error: true}}
+    - {command: [BF.MADD, str, x, y], expect_difference: true, expect: {error: true}}
+    - {command: [BF.EXISTS, str, x], expect_difference: true, expect: {error: true}}
+    - {command: [BF.CARD, str], expect_difference: true, expect: {error: true}}
+    - {command: [BF.RESERVE, str, "0.01", 100], expect_difference: true, expect: {
+        error: true}}
+    - {command: [BF.INFO, str], expect_difference: true, expect: {error: true}}
+    - {command: [BF.RESERVE, bf2, "1.5", 100], expect_difference: true, expect: {
+        error: "error rate"}}
+    - {command: [BF.RESERVE, bf2, notafloat, 100], expect_difference: true, expect: {
+        error: "error rate"}}
+    - {command: [BF.RESERVE, bf2, "0.01", "-1"], expect_difference: true, expect: {
+        error: "capacity"}}
+    - {command: [BF.RESERVE, bf2, "0.01", 100, BOGUS], expect_difference: true, expect: {
+        error: true}}
+    - {command: [BF.RESERVE, bf2, "0.01", 100, EXPANSION], expect_difference: true,
+      expect: {error: true}}
+    - {command: [BF.RESERVE, bf2, "0.01", 100, NONSCALING, 3], expect_difference: true,
+      expect: {error: true}}
+    - {command: [BF.RESERVE, bfns, "0.001", 100, NONSCALING], expect: {equals: OK}}
+    - {command: [BF.INFO, bfns, EXPANSION], expect_difference: true, expect: {equals: -1}}
+    - {command: [BF.RESERVE, bfns, "0.01", 100], expect_difference: true, expect: {
+        error: "item exists"}}
+    - {command: [BF.RESERVE, bfneg, "0.01", 100, EXPANSION, "-7"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [BF.INFO, bfneg, EXPANSION], expect_difference: true, expect: {equals: -7}}
+    - {command: [BF.RESERVE, bfi64, "0.01", 100, EXPANSION, "9223372036854775807"],
+      expect: {equals: OK}}
+    - {command: [BF.RESERVE, bfbig, "0.01", 100, EXPANSION, "18446744073709551615"],
+      expect_difference: true, expect: {error: "bad expansion"}}
+    - {command: [BF.INFO, bfbig, EXPANSION], expect_difference: true, expect: {error: "not\
+          \ found"}}
+    - {command: [BF.INFO, missingkey], expect_difference: true, expect: {error: "not\
+          \ found"}}
+    - {command: [BF.INFO, missingkey, CAPACITY], expect_difference: true, expect: {
+        error: "not found"}}
+    - {command: [BF.INFO, bf, BOGUS], expect_difference: true, expect: {error: "Invalid\
+          \ information value"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bloomerr.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bloomerr}

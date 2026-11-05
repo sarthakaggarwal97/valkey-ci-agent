@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "6ca68c5eef40deb0a6ccd2a88d62372bec428b01",
+  "parent": "ef4e21538d29c02d506a2c708f65ce1f0ca08754",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Cargo fmt",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3045,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely cosmetic: cargo fmt re-wrapping, whitespace removal, and import reordering in the Rust sources, removal of an optional clippy build-dependency from Cargo.toml (lint tooling only, not compiled into the module), and README build-instruction edits. Every hunk preserves the exact expressions, conditions, error strings, and control flow, so the compiled module's behaviour is identical and there is no changed path for a scenario to reach."
+}

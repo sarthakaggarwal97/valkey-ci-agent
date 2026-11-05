@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.bloom-persistence-callbacks
+deployment:
+  modes: [standalone]
+metadata:
+  description: Bloom data-type callbacks (COPY, RDB save/load across a restart) compared
+    between the migrated build and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: persist
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [BF.ADD, bf, a], expect: {equals: 1}}
+    - {command: [BF.MADD, bf, a, b, c, d], expect: {equals: [0, 1, 1, 1]}}
+    - {command: [BF.CARD, bf], expect: {equals: 4}}
+    - {command: [TYPE, bf], expect: {equals: bloomtype}}
+    - {command: [COPY, bf, bf2], expect: {equals: 1}}
+    - {command: [BF.EXISTS, bf2, b], expect: {equals: 1}}
+    - {command: [BF.MEXISTS, bf2, a, b, c, d], expect: {equals: [1, 1, 1, 1]}}
+    - {command: [BF.CARD, bf2], expect: {equals: 4}}
+    - {command: [BF.INFO, bf2, CAPACITY], expect: {equals: 100000}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.EXISTS, bf, a], expect: {equals: 1}}
+    - {command: [BF.EXISTS, bf, d], expect: {equals: 1}}
+    - {command: [BF.MEXISTS, bf, a, b, c, d], expect: {equals: [1, 1, 1, 1]}}
+    - {command: [BF.CARD, bf], expect: {equals: 4}}
+    - {command: [BF.INFO, bf, ITEMS], expect: {equals: 4}}
+    - {command: [BF.INFO, bf, FILTERS], expect: {equals: 1}}
+    - {command: [TYPE, bf], expect: {equals: bloomtype}}
+    - {command: [BF.EXISTS, bf2, c], expect: {equals: 1}}
+    - {command: [BF.CARD, bf2], expect: {equals: 4}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [persist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: persist}

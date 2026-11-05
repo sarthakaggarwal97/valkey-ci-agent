@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "3ebb15b1df2d3d747d2c0de7ffd0bd1c8b5db08f",
+  "parent": "b7504e965e06f4b87f024b12fa17da9d96f3fbf6",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Add more documentation",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2593,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is documentation-only: it edits TODO comments in bloom_config.rs, removes stale comments in commands/bloom.rs and bloom_util.rs, adds Rust doc comments to the command handlers in lib.rs, and fixes a comment in wrapper/bloom_callback.rs. The sole non-comment edit is removing `pub` from the crate-internal `deinitialize` function in src/lib.rs, a visibility change with no runtime effect since the function is still used within the same crate. No command behaviour, reply, parsing, persistence, or config path changes, so no scenario can distinguish the change's build from its parent."
+}

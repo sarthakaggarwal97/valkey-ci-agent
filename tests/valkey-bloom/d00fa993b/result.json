@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "d00fa993ba2471f4fdb0b3328c254e2c6c0aa431",
+  "parent": "1c1b6abee7ca999874989ec2737693f7cfd82c33",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Update Cargo.toml",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2104,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds package metadata (authors, repository, readme, description, homepage) to Cargo.toml. It touches no source code, dependencies, features, or build configuration, so the compiled module's behaviour is identical on both builds and there is nothing to test."
+}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom ff608170b4c7..1c1b6abee7ca.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-62a7d70512c9
+seed: 404
+experiment:
+  id: proposed.bloom-mem-usage-scaling
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

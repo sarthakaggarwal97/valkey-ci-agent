@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "3f85cae12ceca4441475f189677208a49a17c7cf",
+  "parent": "753575a84166b399c691ffb7385d09f171ed4fc7",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "fixed few clippy warnings",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.4442,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"c04e89371f853af23a42019e8ead1f168f2d183e\"},\"offset\":\"56\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"56\"}, link up",
+      "scenario": "ai-fa7dc14f74c8",
+      "seed": 530101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"c04e89371f853af23a42019e8ead1f168f2d183e\"},\"offset\":\"56\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"56\"}, link up",
+      "scenario": "ai-2860ad4bd86c",
+      "seed": 530102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

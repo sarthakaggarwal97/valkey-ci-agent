@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.bloom-expansion-rdb-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: Negative expansion (NONSCALING -1, EXPANSION -7) round-trips through
+    SAVE and a restart via the new save_signed/load_signed RDB callbacks
+components:
+- use: valkey.action.commands
+  id: bloomrdb
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 60
+    commands:
+    - {command: [BF.RESERVE, bfns, "0.001", 1000, NONSCALING], expect: {equals: OK}}
+    - {command: [BF.RESERVE, bfneg, "0.01", 1000, EXPANSION, "-7"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [BF.ADD, bfns, hello], expect: {equals: 1}}
+    - {command: [BF.MADD, bfns, a, b, c], expect: {equals: [1, 1, 1]}}
+    - {command: [BF.CARD, bfns], expect: {equals: 4}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.INFO, bfns, EXPANSION], expect_difference: true, expect: {equals: -1}}
+    - {command: [BF.INFO, bfneg, EXPANSION], expect_difference: true, expect: {equals: -7}}
+    - {command: [BF.CARD, bfns], expect: {equals: 4}}
+    - {command: [BF.EXISTS, bfns, hello], expect: {equals: 1}}
+    - {command: [BF.MEXISTS, bfns, a, b, c], expect: {equals: [1, 1, 1]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bloomrdb.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bloomrdb}

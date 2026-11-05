@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.bloom-mem-usage-scaling
+deployment:
+  modes: [standalone]
+metadata:
+  description: A scaled bloom filter grows to several sub-filters so the changed per-filter
+    mem_usage accumulates, compared across the two bloom builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: meminfo
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [BF.RESERVE, sc, "0.001", "2", EXPANSION, "2"], expect: {equals: OK}}
+    - {command: [BF.MADD, sc, a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12,
+        a13, a14, a15, a16, a17, a18, a19], compare: skip}
+    - {command: [BF.INFO, sc, FILTERS], compare: skip, expect: {min: 1}}
+    - {command: [BF.INFO, sc, SIZE], expect_difference: true, expect: {min: 200}}
+    - {command: [BF.INFO, sc], expect_difference: true, expect: {contains: Size}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [meminfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: meminfo}

@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.bloom-copy-persistence
+deployment:
+  modes: [standalone]
+metadata:
+  description: Bloom filter values created by COPY survive SAVE and a server restart
+    intact (RDB save/load of the copied object), compared with the parent where COPY
+    was unsupported
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: copy-restart
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [BF.RESERVE, src, "0.000001", 1, EXPANSION, 2], expect: {equals: OK}}
+    - {command: [BF.MADD, src, a, b, c, d], expect: {equals: [1, 1, 1, 1]}}
+    - {command: [BF.INFO, src, FILTERS], expect: {equals: 3}}
+    - {command: [COPY, src, cpy], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.ADD, cpy, e], expect: {equals: 1}}
+    - {command: [BF.CARD, cpy], expect_difference: true, expect: {equals: 5}}
+    - {command: [COPY, src, cpy2], expect_difference: true, expect: {equals: 1}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.CARD, src], expect: {equals: 4}}
+    - {command: [BF.INFO, src, FILTERS], expect: {equals: 3}}
+    - {command: [BF.MEXISTS, src, a, b, c, d], expect: {equals: [1, 1, 1, 1]}}
+    - {command: [BF.CARD, cpy], expect_difference: true, expect: {equals: 5}}
+    - {command: [BF.MEXISTS, cpy, a, b, c, d, e], expect_difference: true, expect: {
+        equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.INFO, cpy2, FILTERS], expect_difference: true, expect: {equals: 3}}
+    - {command: [BF.INFO, cpy2, ITEMS], expect_difference: true, expect: {equals: 4}}
+    - {command: [BF.INFO, cpy2, CAPACITY], expect_difference: true, expect: {equals: 7}}
+    - {command: [BF.MEXISTS, cpy2, a, b, c, d], expect_difference: true, expect: {
+        equals: [1, 1, 1, 1]}}
+    - {command: [BF.ADD, cpy2, f], expect: {equals: 1}}
+    - {command: [BF.CARD, src], expect: {equals: 4}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [copy-restart.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: copy-restart}

@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.bloom-scaled-filter-info
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.INFO on a scaled bloom filter reports the real filter count and
+    per-filter memory; the parent hardcodes 1 filter and undercounts memory
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: scaled-info
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [BF.RESERVE, scaled, "0.00001", "5", EXPANSION, "2"], expect: {equals: OK}}
+    - {command: [BF.INFO, scaled, FILTERS], expect: {equals: 1}}
+    - {command: [BF.MADD, scaled, a01, a02, a03, a04, a05, a06, a07, a08, a09, a10,
+        a11, a12, a13, a14, a15, a16, a17, a18], expect: {equals: [1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [BF.INFO, scaled, FILTERS], expect_difference: true, expect: {min: 2}}
+    - {command: [BF.INFO, scaled, ITEMS], expect: {equals: 18}}
+    - {command: [BF.INFO, scaled, CAPACITY], expect: {equals: 35}}
+    - {command: [BF.INFO, scaled, SIZE], expect_difference: true, expect: {min: 1}}
+    - {command: [BF.INFO, scaled], expect_difference: true, expect: {exists: true}}
+    - {command: [BF.CARD, scaled], expect: {equals: 18}}
+    - {command: [BF.EXISTS, scaled, a01], expect: {equals: 1}}
+    - {command: [BF.EXISTS, scaled, a10], expect: {equals: 1}}
+    - {command: [BF.EXISTS, scaled, a17], expect: {equals: 1}}
+    - {command: [CONFIG, SET, bloom.bloom_max_item_size, "3"], expect: {equals: OK}}
+    - {command: [BF.MADD, grown, g1, g2, g3, g4, g5, g6, g7, g8], compare: skip, expect: {
+        exists: true}}
+    - {command: [BF.INFO, grown, FILTERS], expect_difference: true, expect: {min: 2}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [scaled-info.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scaled-info}

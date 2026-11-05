@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "ef4e21538d29c02d506a2c708f65ce1f0ca08754",
+  "parent": "bebf72ac79dfc8996dfbedad2a99ebcb008240c5",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Specify package license",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2105,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds a license field to Cargo.toml and a license mention to README.md. It is pure packaging/documentation metadata: no Rust source, command handling, data encoding, replication, or configuration behaviour changes, so no runtime behaviour can differ between the two builds and no scenario is needed."
+}

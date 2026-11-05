@@ -1,0 +1,79 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "1c1b6abee7ca999874989ec2737693f7cfd82c33",
+  "parent": "ff608170b4c794acd48335afc366ede7ffef6672",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Fix mem_usage calculation",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 6.5114,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"49268c6192a7993a17b6e3a7b17c15c95fb6f148\"},\"offset\":\"56\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"56\"}, link up",
+      "scenario": "ai-967998d7de00",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates 1c1b6abee7ca, since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"49268c6192a7993a17b6e3a7b17c15c95fb6f148\"},\"offset\":\"56\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"56\"}, link up",
+      "scenario": "ai-35b15c406efe",
+      "seed": 202,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates 1c1b6abee7ca, since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"fc50df65ab59161359ce11313aa1914a75f56d8c\"},\"offset\":\"56\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"56\"}, link up",
+      "scenario": "ai-fab3fb81c0a8",
+      "seed": 303,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates 1c1b6abee7ca, since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"fc50df65ab59161359ce11313aa1914a75f56d8c\"},\"offset\":\"56\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"56\"}, link up",
+      "scenario": "ai-62a7d70512c9",
+      "seed": 404,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates 1c1b6abee7ca, since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

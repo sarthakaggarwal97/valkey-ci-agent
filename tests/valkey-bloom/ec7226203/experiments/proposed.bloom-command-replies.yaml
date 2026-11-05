@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.bloom-command-replies
+deployment:
+  modes: [standalone]
+metadata:
+  description: Every valkey-bloom command reply and error, compared between the migrated
+    build and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cmds
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [BF.ADD, f, item1], expect: {equals: 1}}
+    - {command: [BF.ADD, f, item1], expect: {equals: 0}}
+    - {command: [BF.EXISTS, f, item1], expect: {equals: 1}}
+    - {command: [BF.CARD, f], expect: {equals: 1}}
+    - {command: [BF.MADD, f, item1, item2, item3], expect: {equals: [0, 1, 1]}}
+    - {command: [BF.MEXISTS, f, item1, item2, item3], expect: {equals: [1, 1, 1]}}
+    - {command: [BF.CARD, f], expect: {equals: 3}}
+    - {command: [BF.INFO, f, CAPACITY], expect: {equals: 100000}}
+    - {command: [BF.INFO, f, ITEMS], expect: {equals: 3}}
+    - {command: [BF.INFO, f, FILTERS], expect: {equals: 1}}
+    - {command: [BF.INFO, f, EXPANSION], expect: {equals: 2}}
+    - {command: [BF.INFO, f]}
+    - {command: [BF.RESERVE, r, "0.01", 50, EXPANSION, 3], expect: {equals: OK}}
+    - {command: [BF.INFO, r, CAPACITY], expect: {equals: 50}}
+    - {command: [BF.INFO, r, EXPANSION], expect: {equals: 3}}
+    - {command: [BF.ADD, r, z], expect: {equals: 1}}
+    - {command: [BF.EXISTS, r, z], expect: {equals: 1}}
+    - {command: [BF.RESERVE, n, "0.01", 50, NONSCALING], expect: {equals: OK}}
+    - {command: [BF.INFO, n, EXPANSION], expect: {equals: -1}}
+    - {command: [BF.INSERT, ins, CAPACITY, 80, EXPANSION, 2, ITEMS, a, b, a], expect: {
+        equals: [1, 1, 0]}}
+    - {command: [BF.CARD, ins], expect: {equals: 2}}
+    - {command: [BF.ADD, "", ""], expect: {equals: 1}}
+    - {command: [BF.EXISTS, "", ""], expect: {equals: 1}}
+    - {command: [BF.RESERVE, ITEMS, "0.01", 10], expect: {equals: OK}}
+    - {command: [BF.RESERVE, f, "0.01", 100], expect: {error: "item exists"}}
+    - {command: [BF.RESERVE, g, "1.5", 100], expect: {error: "error rate range"}}
+    - {command: [BF.RESERVE, g, "0.01", 0], expect: {error: "Bad capacity"}}
+    - {command: [BF.RESERVE, g, "0.01", 4294967295], expect: {error: "Bad capacity"}}
+    - {command: [BF.RESERVE, g, "0.01", 4294967296], expect: {error: "Bad capacity"}}
+    - {command: [BF.RESERVE, g, "0.01", 100, EXPANSION, 11], expect: {error: "bad\
+          \ expansion"}}
+    - {command: [BF.RESERVE, g, "0.01", 100, BOGUS], expect: {error: true}}
+    - {command: [BF.INFO, f, NOPE], expect: {error: "Invalid information value"}}
+    - {command: [BF.INFO, missing], expect: {error: "not found"}}
+    - {command: [BF.ADD, f], expect: {error: "wrong number of arguments"}}
+    - {command: [BF.INSERT, h, NOCREATE, ITEMS, x], expect: {error: "not found"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [cmds.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cmds}

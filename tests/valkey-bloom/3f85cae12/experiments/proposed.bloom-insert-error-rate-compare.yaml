@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.bloom-insert-error-rate-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.INSERT with an out-of-range ERROR value now answers the range error
+    instead of Bad error rate; BF.RESERVE and BF.INFO arity and reply paths rewritten
+    by the clippy fix are exercised on both builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bloom
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [BF.INSERT, filt, ERROR, 1.5, ITEMS, a], expect_difference: true,
+      expect: {error: "0 < error rate range < 1"}}
+    - {command: [BF.INSERT, filt, ERROR, -0.5, ITEMS, a], expect_difference: true,
+      expect: {error: "0 < error rate range < 1"}}
+    - {command: [BF.INSERT, filt, ERROR, 1, ITEMS, a], expect_difference: true, expect: {
+        error: "0 < error rate range < 1"}}
+    - {command: [BF.INSERT, filt, ERROR, nan, ITEMS, a], expect_difference: true,
+      expect: {error: "0 < error rate range < 1"}}
+    - {command: [BF.INSERT, filt, ERROR, inf, ITEMS, a], expect_difference: true,
+      expect: {error: "0 < error rate range < 1"}}
+    - {command: [BF.INSERT, filt, ERROR, oops, ITEMS, a], expect: {error: "Bad error\
+          \ rate"}}
+    - {command: [EXISTS, filt], expect: {equals: 0}}
+    - {command: [BF.INSERT, filt, ERROR, 0.0001, CAPACITY, 1000, ITEMS, a, b, c],
+      expect: {equals: [1, 1, 1]}}
+    - {command: [BF.MADD, filt, d, e, f], expect: {equals: [1, 1, 1]}}
+    - {command: [BF.MEXISTS, filt, a, b, c, d], expect: {equals: [1, 1, 1, 1]}}
+    - {command: [BF.EXISTS, filt, a], expect: {equals: 1}}
+    - {command: [BF.CARD, filt], expect: {equals: 6}}
+    - {command: [BF.RESERVE, r], expect: {error: true}}
+    - {command: [BF.RESERVE, r, 0.001, 100, EXPANSION, 5, extra], expect: {error: true}}
+    - {command: [BF.RESERVE, r, 0.001, 100, NONSCALING, extra], expect: {error: true}}
+    - {command: [BF.RESERVE, r, 0.000001, 2, EXPANSION, 2], expect: {equals: OK}}
+    - {command: [BF.RESERVE, r, 0.01, 50], expect: {error: "item exists"}}
+    - {command: [BF.ADD, r, i1], expect: {equals: 1}}
+    - {command: [BF.ADD, r, i2], expect: {equals: 1}}
+    - {command: [BF.ADD, r, i3], expect: {equals: 1}}
+    - {command: [BF.INFO, r, FILTERS], expect: {equals: 2}}
+    - {command: [BF.INFO, r, CAPACITY], expect: {equals: 6}}
+    - {command: [BF.INFO, r, ITEMS], expect: {equals: 3}}
+    - {command: [BF.INFO, r, EXPANSION], expect: {equals: 2}}
+    - {command: [BF.INFO, r, SIZE], compare: skip, expect: {min: 1}}
+    - {command: [BF.INFO, r], compare: skip}
+    - {command: [BF.INFO, r, BOGUS], expect: {error: "Invalid information value"}}
+    - {command: [BF.INFO, missing], expect: {error: "not found"}}
+    - {command: [BF.INFO], expect: {error: true}}
+    - {command: [BF.INFO, r, CAPACITY, extra], expect: {error: true}}
+    - {command: [BF.RESERVE, rn, 0.01, 50, NONSCALING], expect: {equals: OK}}
+    - {command: [BF.INFO, rn, EXPANSION], expect: {equals: -1}}
+    - {command: [BF.ADD, ITEMS, x], expect: {equals: 1}}
+    - {command: [BF.EXISTS, ITEMS, x], expect: {equals: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bloom.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bloom}
