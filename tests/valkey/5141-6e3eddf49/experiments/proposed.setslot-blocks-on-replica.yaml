@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.setslot-blocks-on-replica
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTER SETSLOT from an ordinary (blockable) client still force-replicates
+    and blocks on replica acks when the primary has eligible online replicas
+inputs: {}
+components:
+- use: valkey.action.commands
+  id: setslot
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 4
+    timeout_s: 40
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 2, expect: {equals: OK}}
+    - {command: [WAIT, 2, 5000], node: 0, wait_s: 30, expect: {equals: 2}}
+    - {command: [CLUSTER, SETSLOT, 609, MIGRATING, "<node.3.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 609, NODE, "<node.3.id>"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 609], node: 0, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [setslot.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: setslot}

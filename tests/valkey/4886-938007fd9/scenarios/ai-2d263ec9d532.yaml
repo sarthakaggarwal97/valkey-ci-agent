@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b4c125082ad2..938007fd9805.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2d263ec9d532
+seed: 4886
+experiment:
+  id: proposed.cli-auth-warning-env
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

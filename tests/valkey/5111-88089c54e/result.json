@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "88089c54e453f0d8e99a90968e953bba2a11a41b",
+  "parent": "20f6409302fa974d7225fb788f5dc64e622bcbe8",
+  "pr": 5111,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix clang-format in the VM_CallArgv doc comment (#5111)",
+  "date": "2026-10-29",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2149,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits a single line of a documentation comment above VM_CallArgv in src/module.c, correcting indentation for clang-format. No executable code, API behaviour, reply, or build configuration is altered, so there is nothing a scenario could exercise."
+}

@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.lua-function-desc-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: Freeing a Lua function with a long name/description must reclaim its
+    memory (FreeString, not Free), so freed functions do not leave the server over
+    maxmemory
+components:
+- use: valkey.action.commands
+  id: fnleak
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {maxmemory-policy: noeviction}
+    timeout_s: 60
+    commands:
+    - {command: [FUNCTION, FLUSH], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib1\nserver.register_function{function_name='f',callback=function()\
+          \ return 1 end,description=('x'):rep(10000000)}"], expect: {equals: lib1}}
+    - {command: [FUNCTION, DELETE, lib1], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib2\nserver.register_function{function_name='f',callback=function()\
+          \ return 1 end,description=('x'):rep(10000000)}"], expect: {equals: lib2}}
+    - {command: [FUNCTION, DELETE, lib2], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib3\nserver.register_function{function_name='f',callback=function()\
+          \ return 1 end,description=('x'):rep(10000000)}"], expect: {equals: lib3}}
+    - {command: [FUNCTION, DELETE, lib3], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=libr\nserver.register_function{function_name='f',callback=function()\
+          \ return 1 end,description=('x'):rep(10000000)}"], expect: {equals: libr}}
+    - {command: [FUNCTION, LOAD, REPLACE, "#!lua name=libr\nserver.register_function{function_name='f',callback=function()\
+          \ return 1 end,description=('x'):rep(10000000)}"], expect: {equals: libr}}
+    - {command: [FUNCTION, LOAD, REPLACE, "#!lua name=libr\nserver.register_function{function_name='f',callback=function()\
+          \ return 1 end,description=('x'):rep(10000000)}"], expect: {equals: libr}}
+    - {command: [FUNCTION, DELETE, libr], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=libf1\nserver.register_function{function_name='f',callback=function()\
+          \ return 1 end,description=('x'):rep(10000000)}"], expect: {equals: libf1}}
+    - {command: [FUNCTION, LOAD, "#!lua name=libf2\nserver.register_function{function_name='f',callback=function()\
+          \ return 1 end,description=('x'):rep(10000000)}"], expect: {equals: libf2}}
+    - {command: [FUNCTION, FLUSH], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, "40000000"], expect: {equals: OK}}
+    - {command: [SET, k, v], expect_difference: true, expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [fnleak.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fnleak}

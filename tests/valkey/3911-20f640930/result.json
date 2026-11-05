@@ -1,0 +1,92 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "20f6409302fa974d7225fb788f5dc64e622bcbe8",
+  "parent": "5a70cde9e7ad3524c7c460dea2e5653aaa2efdad",
+  "pr": 3911,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make VM_CallArgv() API public (#3911)",
+  "date": "2026-10-29",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 4,
+  "hunted": 6,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 27,
+    "executed": 20,
+    "percent": 74,
+    "uncovered": [
+      "src/module.c:7113",
+      "src/module.c:7291",
+      "src/module.c:7292",
+      "src/module.c:7293",
+      "src/module.c:7295",
+      "src/module.c:7296",
+      "src/module.c:7297"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 14.3966,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"f6cb39a292089e470f64b6ba15b8ae45d9a64b84\"},\"offset\":\"208\"}, replica {\"digest\":{\"reply\":\"511d4c62d61ca2bdbf2c6eaf23a17a56cb6294f3\"},\"offset\":\"208\"}, link up",
+      "scenario": "ai-8cf5170fdec9",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #3911",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/60"
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"f6cb39a292089e470f64b6ba15b8ae45d9a64b84\"},\"offset\":\"208\"}, replica {\"digest\":{\"reply\":\"511d4c62d61ca2bdbf2c6eaf23a17a56cb6294f3\"},\"offset\":\"208\"}, link up",
+      "scenario": "ai-ecf5a2ccd0ab",
+      "seed": 102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #3911",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/60"
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"046d7c8419a5b0271405f379af89fa9fa40270fb\"},\"offset\":\"1049031\"}, replica {\"digest\":{\"reply\":\"a1579de0a045c07bb347c3841fe0223efc1a5976\"},\"offset\":\"1049031\"}, link up",
+      "scenario": "ai-8665c99d578e",
+      "seed": 104,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #3911",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/60"
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"046d7c8419a5b0271405f379af89fa9fa40270fb\"},\"offset\":\"1049031\"}, replica {\"digest\":{\"reply\":\"a1579de0a045c07bb347c3841fe0223efc1a5976\"},\"offset\":\"1049031\"}, link up",
+      "scenario": "ai-0a1aae40769d",
+      "seed": 105,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #3911",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/60"
+    }
+  ],
+  "recorded": []
+}

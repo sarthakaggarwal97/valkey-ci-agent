@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5a70cde9e7ad..20f6409302fa.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b22a296d0115
+seed: 107
+experiment:
+  id: proposed.callargv-lua-forkless
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7600
+  server_config:
+    forkless-infrastructure-enabled: 'yes'
+    bgsave-default-method: forkless
+    save: ''
+    appendonly: 'no'

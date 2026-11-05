@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "45cd91459288fda89b37c9dc4c98db4717c846a9",
+  "parent": "8afe23865286bf87c6d0e5d0befa91542474641a",
+  "pr": 5098,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Skip QoS event draining when AE_FILE_EVENTS is not set (#5098)",
+  "date": "2026-10-30",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.0605,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change guards aeProcessQoSEvents in aeProcessEvents behind the AE_FILE_EVENTS flag, but every production caller already passes that flag: aeMain uses AE_ALL_EVENTS and processEventsWhileBlocked uses AE_FILE_EVENTS|AE_DONT_WAIT, and these are the only two call sites outside unit tests. The skipped-draining branch is reachable only when aeProcessEvents is called with AE_TIME_EVENTS alone, which no shipped binary (valkey-server, valkey-cli, valkey-benchmark) ever does. There is therefore no observable behaviour change in a running server for a scenario to exercise; the fix is a latent library"
+}

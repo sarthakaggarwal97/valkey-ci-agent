@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b14acea0abf6..9c4c8739da2e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-618f601ecb94
+seed: 1004
+experiment:
+  id: proposed.function-rdb-load-restart
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey faec379ecd35..3192cf694506.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1b82662632aa
+seed: 101
+experiment:
+  id: proposed.debug-loadaof-disk-loading
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

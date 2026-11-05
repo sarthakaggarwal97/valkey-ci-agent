@@ -1,0 +1,27 @@
+extends: [valkey.liveness]
+id: proposed.function-rdb-load-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: A saved function library is reloaded from the RDB on restart on both
+    builds
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 10
+    commands:
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nserver.register_function('myfunc',\
+          \ function(keys, args) return 1 end)"], expect: {equals: mylib}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FCALL, myfunc, "0"], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

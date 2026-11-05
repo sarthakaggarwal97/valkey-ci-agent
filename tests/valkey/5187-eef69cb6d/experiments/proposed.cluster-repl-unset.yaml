@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.cluster-repl-unset
+deployment:
+  modes: [standalone]
+metadata:
+  description: A cluster replica running CLUSTER REPLICATE NO ONE fed through its
+    primary link survives instead of crashing
+components:
+- use: valkey.action.commands
+  id: clusterunset
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {save: ""}
+    cluster: true
+    nodes: 2
+    timeout_s: 40
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, wait_s: 20, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 20, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [DEBUG, REPLICATE, CLUSTER, REPLICATE, NO, ONE], node: 0, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 20, compare: skip, expect: {
+        contains: "role:master"}}
+    - {command: [PING], node: 1, wait_s: 20, expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [clusterunset.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: clusterunset}

@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.vm-call-script-mode-crash
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_Call in script mode with a validation error and no error-reply flag
+    must not crash
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: calls
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [test.call_script_mode, nosuchcmd], expect_difference: true, expect: {
+        equals: ["ERR", "ENOENT"]}}
+    - {command: [test.call_script_mode, set], expect_difference: true, expect: {equals: [
+          "ERR", "EINVAL"]}}
+    - {command: [test.call_script_mode, shutdown], expect_difference: true, expect: {
+        equals: ["ERR", "ESPIPE"]}}
+    - {command: [test.call_script_mode, ping], expect_difference: true, expect: {
+        equals: ["OK", "0"]}}
+    - {command: [PING], expect_difference: true, expect: {equals: "PONG"}}
+    checks:
+      acl: true
+      compat: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: calls}

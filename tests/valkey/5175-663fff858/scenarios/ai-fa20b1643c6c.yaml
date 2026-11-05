@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9c4c8739da2e..663fff858f2c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fa20b1643c6c
+seed: 3
+experiment:
+  id: proposed.benchmark-function-script-overflow
+  inputs:
+    num_functions: 2000000000
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.zset-lex-mixed-replication
+deployment:
+  modes: [standalone]
+metadata:
+  description: ZREMRANGEBYLEX and ZRANGESTORE BYLEX are replicated verbatim, so a
+    btree primary and a listpack replica must compute the same result on mixed-score
+    zsets; on the parent they diverge.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: repl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 2
+    server_config: {zset-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, zset-max-listpack-entries, 128], node: 1, expect: {
+        equals: OK}}
+    - {command: [REPLICAOF, <node.0.host>, <node.0.port>], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: 'master_link_status:up'}}
+    - {command: [ZADD, z1, 1, a, 2, b, 0, c], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, z1], compare: skip, expect: {equals: btree}}
+    - {command: [OBJECT, ENCODING, z1], node: 1, wait_s: 10, compare: skip, expect: {
+        equals: listpack}}
+    - {command: [ZREMRANGEBYLEX, z1, '[b', '[c'], expect_difference: true, expect: {
+        equals: 3}}
+    - {command: [ZRANGE, z1, 0, -1], expect_difference: true, expect: {equals: []}}
+    - {command: [EXISTS, z1], expect_difference: true, expect: {equals: 0}}
+    - {command: [EXISTS, z1], node: 1, wait_s: 10, expect: {equals: 0}}
+    - {command: [ZADD, z2, 0, a, 1, b, 1, c], expect: {equals: 3}}
+    - {command: [ZRANGESTORE, d2, z2, '[c', '+', BYLEX], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [ZRANGE, d2, 0, -1], expect_difference: true, expect: {equals: [c]}}
+    - {command: [ZRANGE, d2, 0, -1], node: 1, wait_s: 10, expect: {equals: [c]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [repl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: repl}

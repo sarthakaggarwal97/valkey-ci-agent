@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6e3eddf4976d0d02c1ecf6dbf19fdd3eb0f2e84b",
+  "parent": "134e5bad81ebfba2549b14601106654cedf36c6b",
+  "pr": 5141,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Don't block CLUSTER SETSLOT on replica acks when the client cannot block (#5141)",
+  "date": "2026-10-29",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 9.0996,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: multi.c:405 'c->flag.blocked == 0' is not true",
+      "scenario": "ai-f88e8329ee4d",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5141",
+      "fingerprint": "f82c95f0781b4b604b10",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: multi.c:405 'c->flag.blocked == 0' is not true",
+      "scenario": "ai-7534ac7e7c45",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5141",
+      "fingerprint": "f82c95f0781b4b604b10",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

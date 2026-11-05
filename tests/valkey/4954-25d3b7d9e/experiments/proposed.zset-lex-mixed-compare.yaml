@@ -1,0 +1,104 @@
+extends: [valkey.liveness]
+id: proposed.zset-lex-mixed-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Lex range commands (ZLEXCOUNT, ZRANGEBYLEX, ZREVRANGEBYLEX, ZRANGE
+    BYLEX, ZRANGESTORE BYLEX, ZREMRANGEBYLEX) on mixed-score btree zsets must match
+    listpack semantics; the parent packs lex bounds with the first element's score
+    prefix and answers differently.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lex
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ZADD, z1, 1, a, 2, b, 0, c], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, z1], compare: skip, expect: {equals: btree}}
+    - {command: [ZLEXCOUNT, z1, '-', '+'], expect: {equals: 3}}
+    - {command: [ZLEXCOUNT, z1, '[a', '+'], expect_difference: true, expect: {equals: 3}}
+    - {command: [ZLEXCOUNT, z1, '[b', '[c'], expect_difference: true, expect: {equals: 3}}
+    - {command: [ZLEXCOUNT, z1, '(c', '+'], expect: {equals: 0}}
+    - {command: [ZRANGEBYLEX, z1, '(c', '+'], expect_difference: true, expect: {equals: []}}
+    - {command: [ZRANGEBYLEX, z1, '[d', '+'], expect_difference: true, expect: {equals: []}}
+    - {command: [ZRANGEBYLEX, z1, '[a', '+', LIMIT, 1, 1], expect: {equals: [a]}}
+    - {command: [ZREVRANGEBYLEX, z1, '[e', '-', LIMIT, 1, 5], expect_difference: true,
+      expect: {equals: [a, c]}}
+    - {command: [ZREVRANGEBYLEX, z1, '[c', '-'], expect_difference: true, expect: {
+        equals: [b, a, c]}}
+    - {command: [ZREMRANGEBYLEX, z1, '[b', '[c'], expect_difference: true, expect: {
+        equals: 3}}
+    - {command: [ZRANGE, z1, 0, -1], expect_difference: true, expect: {equals: []}}
+    - {command: [EXISTS, z1], expect_difference: true, expect: {equals: 0}}
+    - {command: [ZADD, z3, 0, b, 0, d, 1, a, 1, c, 2, e], expect: {equals: 5}}
+    - {command: [ZLEXCOUNT, z3, '[c', '+'], expect_difference: true, expect: {equals: 4}}
+    - {command: [ZLEXCOUNT, z3, '(b', '(e'], expect_difference: true, expect: {equals: 3}}
+    - {command: [ZLEXCOUNT, z3, '[a', '[c'], expect: {equals: 1}}
+    - {command: [ZLEXCOUNT, z3, '[e', '+'], expect_difference: true, expect: {equals: 1}}
+    - {command: [ZRANGEBYLEX, z3, '[e', '+'], expect_difference: true, expect: {equals: [
+          e]}}
+    - {command: [ZRANGEBYLEX, z3, '(b', '+', LIMIT, 2, 1], expect: {equals: [c]}}
+    - {command: [ZRANGE, z3, '[c', '-', BYLEX, REV], expect_difference: true, expect: {
+        equals: [c, a, d, b]}}
+    - {command: [ZREVRANGEBYLEX, z3, '(e', '(b'], expect_difference: true, expect: {
+        equals: [c]}}
+    - {command: [ZREVRANGEBYLEX, z3, '+', '[a', LIMIT, 1, 1], expect: {equals: [c]}}
+    - {command: [ZREVRANGEBYLEX, z3, '[a', '-'], expect: {equals: []}}
+    - {command: [ZRANGEBYSCORE, z3, 1, 2], expect: {equals: [a, c, e]}}
+    - {command: [ZADD, z2, 0, a, 1, b, 1, c], expect: {equals: 3}}
+    - {command: [ZRANGESTORE, d2, z2, '[c', '+', BYLEX], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [ZRANGE, d2, 0, -1], expect_difference: true, expect: {equals: [c]}}
+    - {command: [ZCARD, d2], expect_difference: true, expect: {equals: 1}}
+    - {command: [ZADD, z4, 1, '', 0, t], expect: {equals: 2}}
+    - {command: [ZLEXCOUNT, z4, '[', '+'], expect_difference: true, expect: {equals: 2}}
+    - {command: [ZRANGEBYLEX, z4, '[', '+'], expect: {equals: [t, '']}}
+    - {command: [ZADD, s1, 5, x, 5, y, 5, z], expect: {equals: 3}}
+    - {command: [ZLEXCOUNT, s1, '(x', '[z'], expect: {equals: 2}}
+    - {command: [ZRANGEBYLEX, s1, '-', '+'], expect: {equals: [x, y, z]}}
+    - {command: [ZADD, biglex, 0, m00, 0, m01, 0, m02, 0, m03, 0, m04, 0, m05, 0,
+        m06, 0, m07, 0, m08, 0, m09, 0, m10, 0, m11, 0, m12, 0, m13, 0, m14, 0, m15,
+        0, m16, 0, m17, 0, m18, 0, m19, 0, m20, 0, m21, 0, m22, 0, m23, 0, m24, 0,
+        m25, 0, m26, 0, m27, 0, m28, 0, m29], expect: {equals: 30}}
+    - {command: [ZADD, biglex, 1, n00, 1, n01, 1, n02, 1, n03, 1, n04, 1, n05, 1,
+        n06, 1, n07, 1, n08, 1, n09, 1, n10, 1, n11, 1, n12, 1, n13, 1, n14, 1, n15,
+        1, n16, 1, n17, 1, n18, 1, n19, 1, n20, 1, n21, 1, n22, 1, n23, 1, n24, 1,
+        n25, 1, n26, 1, n27, 1, n28, 1, n29], expect: {equals: 30}}
+    - {command: [ZADD, biglex, 2, p00, 2, p01, 2, p02, 2, p03, 2, p04, 2, p05, 2,
+        p06, 2, p07, 2, p08, 2, p09, 2, p10, 2, p11, 2, p12, 2, p13, 2, p14, 2, p15,
+        2, p16, 2, p17, 2, p18, 2, p19, 2, p20, 2, p21, 2, p22, 2, p23, 2, p24, 2,
+        p25, 2, p26, 2, p27, 2, p28, 2, p29], expect: {equals: 30}}
+    - {command: [OBJECT, ENCODING, biglex], compare: skip, expect: {equals: btree}}
+    - {command: [ZCARD, biglex], expect: {equals: 90}}
+    - {command: [ZLEXCOUNT, biglex, '[n10', '+'], expect_difference: true, expect: {
+        equals: 50}}
+    - {command: [ZLEXCOUNT, biglex, '[n10', '[p05'], expect_difference: true, expect: {
+        equals: 26}}
+    - {command: [ZRANGEBYLEX, biglex, '[n25', '[p02', LIMIT, 3, 4], expect_difference: true,
+      expect: {equals: [n28, n29, p00, p01]}}
+    - {command: [ZREVRANGEBYLEX, biglex, '[n05', '-', LIMIT, 0, 3], expect_difference: true,
+      expect: {equals: [n05, n04, n03]}}
+    - {command: [ZREMRANGEBYLEX, biglex, '[n10', '[n19'], expect_difference: true,
+      expect: {equals: 10}}
+    - {command: [ZCARD, biglex], expect_difference: true, expect: {equals: 80}}
+    - {command: [ZLEXCOUNT, biglex, '[n10', '[n25'], expect_difference: true, expect: {
+        equals: 6}}
+    - {command: [ZRANGEBYLEX, biglex, '[p00', '+', LIMIT, 25, 5], expect_difference: true,
+      expect: {equals: [p25, p26, p27, p28, p29]}}
+    - {command: [ZREVRANGEBYLEX, biglex, '+', '-', LIMIT, 85, 10], expect_difference: true,
+      expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [lex.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lex}

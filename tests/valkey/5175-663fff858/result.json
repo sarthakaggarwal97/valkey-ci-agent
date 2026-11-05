@@ -1,0 +1,70 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "663fff858f2c5e9d51ffb957c97fddfb6aad3f50",
+  "parent": "9c4c8739da2e4f9aa634fd31bcde4765c536a3da",
+  "pr": 5175,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Stop valkey-benchmark function script generation when the buffer is full (#5175)",
+  "date": "2026-10-30",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.2008,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: killed by signal 6",
+      "scenario": "ai-0d7c820c8cb9",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5175",
+      "fingerprint": "3c9b6d82c5da2b04c973",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: killed by signal 6",
+      "scenario": "ai-ea0ef42ac16d",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5175",
+      "fingerprint": "3c9b6d82c5da2b04c973",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: killed by signal 6",
+      "scenario": "ai-fa20b1643c6c",
+      "seed": 3,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5175",
+      "fingerprint": "3c9b6d82c5da2b04c973",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "938007fd98056a362f02fa4597b13b65ee5026e2",
+  "parent": "b4c125082ad285e10df7a87ef90528ed55802b89",
+  "pr": 4886,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Only warn about a command line password when -a or -u set it (#4886)",
+  "date": "2026-10-27",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.3422,
+  "findings": [],
+  "recorded": []
+}

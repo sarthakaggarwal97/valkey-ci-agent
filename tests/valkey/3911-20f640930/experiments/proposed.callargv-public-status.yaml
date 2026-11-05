@@ -1,0 +1,107 @@
+extends: [valkey.liveness]
+id: proposed.callargv-public-status
+deployment:
+  modes: [standalone]
+metadata:
+  description: Newly public VM_CallArgv validation - EBADF for ALLOW_BLOCK/unknown
+    flags/bad handler versions/NULL argv, EINVAL and ENOENT with ERRORS_AS_REPLIES,
+    DRY_RUN implies ERRORS_AS_REPLIES with no callbacks on success, errno preserved
+    across callbacks - via basics.so test.call_argv_status, compared against the parent
+    build and its basics.so
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: status
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 15
+    commands:
+    - {command: [test.call_argv_status, "", ping], expect_difference: true, expect: {
+        equals: [OK, "0", 1]}}
+    - {command: [test.call_argv_status, "", blpop, no-list, "0"], expect_difference: true,
+      expect: {equals: [OK, "0", 1]}}
+    - {command: [test.call_argv_status, K, set, not-executed, "1"], expect_difference: true,
+      expect: {equals: [ERR, EBADF, 0]}}
+    - {command: [test.call_argv_status, EK, set, not-executed, "1"], expect_difference: true,
+      expect: {equals: [ERR, EBADF, 0]}}
+    - {command: [test.call_argv_status, EKR, set, not-executed, "1"], expect_difference: true,
+      expect: {equals: [ERR, EBADF, 0]}}
+    - {command: [test.call_argv_status, DK, set, not-executed, "1"], expect_difference: true,
+      expect: {equals: [ERR, EBADF, 0]}}
+    - {command: [EXISTS, not-executed], expect: {equals: 0}}
+    - {command: [test.call_argv_status, "0", set, bad-ver, "1"], expect_difference: true,
+      expect: {equals: [ERR, EBADF, 0]}}
+    - {command: [test.call_argv_status, "2", set, bad-ver, "1"], expect_difference: true,
+      expect: {equals: [ERR, EBADF, 0]}}
+    - {command: [test.call_argv_status, E0, set, bad-ver, "1"], expect_difference: true,
+      expect: {equals: [ERR, EBADF, 0]}}
+    - {command: [test.call_argv_status, EK2, set, bad-ver, "1"], expect_difference: true,
+      expect: {equals: [ERR, EBADF, 0]}}
+    - {command: [EXISTS, bad-ver], expect: {equals: 0}}
+    - {command: [test.call_argv_status, U, set, malformed, "1"], expect_difference: true,
+      expect: {equals: [ERR, EBADF, 0]}}
+    - {command: [test.call_argv_status, H, set, malformed, "1"], expect_difference: true,
+      expect: {equals: [ERR, EBADF, 0]}}
+    - {command: [test.call_argv_status, J, set, malformed, "1"], expect_difference: true,
+      expect: {equals: [ERR, EBADF, 0]}}
+    - {command: [test.call_argv_status, Z, set, malformed, "1"], expect_difference: true,
+      expect: {equals: [ERR, EBADF, 0]}}
+    - {command: [test.call_argv_status, Q, set, malformed, "1"], expect_difference: true,
+      expect: {equals: [ERR, EBADF, 0]}}
+    - {command: [test.call_argv_status, EZ, set, malformed, "1"], expect_difference: true,
+      expect: {equals: [ERR, EBADF, 0]}}
+    - {command: [test.call_argv_status, DQ, set, malformed, "1"], expect_difference: true,
+      expect: {equals: [ERR, EBADF, 0]}}
+    - {command: [EXISTS, malformed], expect: {equals: 0}}
+    - {command: [test.call_argv_status, "", set], expect_difference: true, expect: {
+        equals: [ERR, EINVAL, 1]}}
+    - {command: [test.call_argv_status, E, set], expect_difference: true, expect: {
+        equals: [OK, EINVAL, 1]}}
+    - {command: [test.call_argv_status, ET, set], expect_difference: true, expect: {
+        equals: [OK, EINVAL, 1]}}
+    - {command: [test.call_argv_status, E, no-such-command], expect_difference: true,
+      expect: {equals: [OK, ENOENT, 1]}}
+    - {command: [test.call_argv_status, D, set], expect_difference: true, expect: {
+        equals: [OK, EINVAL, 1]}}
+    - {command: [test.call_argv_status, DN, set], expect_difference: true, expect: {
+        equals: [OK, EINVAL, 0]}}
+    - {command: [test.call_argv_status, DR, set], expect_difference: true, expect: {
+        contains: "wrong number"}}
+    - {command: [test.call_argv_status, D, set, dry-run-key, value], expect_difference: true,
+      expect: {equals: [OK, "0", 0]}}
+    - {command: [test.call_argv_status, DT, set, dry-run-key, value], expect_difference: true,
+      expect: {equals: [OK, "0", 0]}}
+    - {command: [EXISTS, dry-run-key], expect: {equals: 0}}
+    - {command: [test.call_argv_status, N, ping], expect_difference: true, expect: {
+        equals: [OK, "0", 0]}}
+    - {command: [test.call_argv_status, RN, ping], expect_difference: true, expect: {
+        equals: [OK, "0", 0]}}
+    - {command: [test.call_argv_status, RET, set], expect_difference: true, expect: {
+        equals: [OK, EINVAL, 1]}}
+    - {command: [test.call_argv_status, R0, ping], expect_difference: true, expect: {
+        equals: [ERR, EBADF, 0]}}
+    - {command: [test.call_argv_status, RK, ping], expect_difference: true, expect: {
+        equals: [ERR, EBADF, 0]}}
+    - {command: [test.call_argv_status, R, ping], expect_difference: true, expect: {
+        equals: "+PONG\r\n"}}
+    - {command: [test.call_argv, ping], expect: {equals: PONG}}
+    - {command: [test.call_argv, set, w, v], expect: {error: "Write command"}}
+    - {command: [test.call_argv_raw, ping, hello], expect: {equals: "$5\r\nhello\r\
+          \n"}}
+    - {command: [test.call_argv_s, set, sk, sv], expect: {equals: OK}}
+    - {command: [GET, sk], expect: {equals: sv}}
+    checks:
+      acl: true
+      compat: true
+      replica: true
+      variants: true
+required_events: [status.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: status}

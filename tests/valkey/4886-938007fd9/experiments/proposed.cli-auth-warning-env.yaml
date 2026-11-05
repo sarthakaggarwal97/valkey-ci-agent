@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.cli-auth-warning-env
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli warns about a command line password only when -a or -u set
+    it, never when VALKEYCLI_AUTH or REDISCLI_AUTH did
+components:
+- use: valkey.action.tools
+  id: cli-auth
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 30
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, requirepass, mypass], expect: {
+        exit: {equals: 0}, stdout: {equals: "OK\n"}, stderr: {equals: ""}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], env: {VALKEYCLI_AUTH: mypass}, expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "PONG\n"}, stderr: {equals: ""}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], env: {REDISCLI_AUTH: mypass}, expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "PONG\n"}, stderr: {equals: ""}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], env: {VALKEYCLI_AUTH: wrongpass},
+      expect_difference: true, expect: {stderr: {contains: "AUTH failed:"}}}
+    - {tool: valkey-cli, args: [-u, "valkey://127.0.0.1:$port", PING], env: {VALKEYCLI_AUTH: mypass},
+      expect_difference: true, expect: {exit: {equals: 0}, stdout: {equals: "PONG\n"},
+        stderr: {equals: ""}}}
+    - {tool: valkey-cli, args: [-p, $port, -a, mypass, PING], expect: {exit: {equals: 0},
+        stdout: {equals: "PONG\n"}, stderr: {contains: "may not be safe"}}}
+    - {tool: valkey-cli, args: [-p, $port, -a, mypass, PING], env: {VALKEYCLI_AUTH: wrongpass},
+      expect: {exit: {equals: 0}, stdout: {equals: "PONG\n"}, stderr: {contains: "may\
+            \ not be safe"}}}
+    - {tool: valkey-cli, args: [-u, "valkey://mypass@127.0.0.1:$port", PING], env: {
+        VALKEYCLI_AUTH: wrongpass}, expect: {exit: {equals: 0}, stdout: {equals: "PONG\n"},
+        stderr: {contains: "may not be safe"}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-auth-warning, -a, mypass, PING], expect: {
+        exit: {equals: 0}, stdout: {equals: "PONG\n"}, stderr: {equals: ""}}}
+required_events: [cli-auth.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-auth}

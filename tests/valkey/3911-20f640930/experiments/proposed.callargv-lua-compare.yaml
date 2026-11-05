@@ -1,0 +1,76 @@
+extends: [valkey.liveness]
+id: proposed.callargv-lua-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: The Lua engine now routes every redis.call through the public ValkeyModule_CallArgv
+    and asserts VALKEYMODULE_OK, so an EBADF misfire on the flags Lua always sets
+    (SCRIPT_MODE, REPLICATE, ERRORS_AS_REPLIES, RESPECT_DENY_OOM, REPLY_EXACT, NO_AOF/NO_REPLICAS,
+    RESP_3) crashes the server; this battery drives those flag combinations and compares
+    replies with the parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lua
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [test.call_argv_status, "", ping], expect_difference: true, expect: {
+        equals: [OK, "0", 1]}}
+    - {command: [EVAL, "return redis.call('SET', KEYS[1], ARGV[1])", "1", k1, v1],
+      expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [EVAL, "return redis.call('GET', KEYS[1])", "1", k1], expect: {equals: v1}}
+    - {command: [EVAL, "return {1,2,'three',{4,'five'}}", "0"], expect: {equals: [
+          1, 2, three, [4, five]]}}
+    - {command: [EVAL, "return redis.status_reply('FINE')", "0"], expect: {equals: FINE}}
+    - {command: [EVAL, "return redis.error_reply('my error')", "0"], expect: {error: "my\
+          \ error"}}
+    - {command: [EVAL, "local r = redis.pcall('INCR', KEYS[1]) if r.err then return\
+          \ r.err end return 'no-error'", "1", k1], expect: {contains: WRONGTYPE}}
+    - {command: [EVAL, "return redis.call('INCR', KEYS[1])", "1", k1], expect: {error: WRONGTYPE}}
+    - {command: [EVAL, "local r = redis.pcall('SET', KEYS[1]) if r.err then return\
+          \ 'arity-error' end return 'no-error'", "1", k1], expect: {equals: arity-error}}
+    - {command: [EVAL, "local r = redis.pcall('nosuchcmd123') if r.err then return\
+          \ 'unknown-error' end return 'no-error'", "0"], expect: {equals: unknown-error}}
+    - {command: [EVAL, "local r = redis.call('BLPOP', KEYS[1], '0') if r == false\
+          \ then return 'nil-reply' end return 'got'", "1", nolist], expect: {equals: nil-reply}}
+    - {command: [HSET, h, f, v], expect: {equals: 1}}
+    - {command: [EVAL, "redis.setresp(3) local r = redis.call('HGETALL', KEYS[1])\
+          \ redis.setresp(2) if r.map then return 'map' end return 'no-map'", "1",
+        h], expect: {equals: map}}
+    - {command: [EVAL, "redis.call('SELECT','1') redis.call('SET','dbkey','dbv') return\
+          \ redis.call('GET','dbkey')", "0"], expect: {equals: dbv}}
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [GET, dbkey], expect: {equals: dbv}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [EVAL, "redis.replicate_commands() redis.set_repl(redis.REPL_NONE)\
+          \ redis.call('SET','norepl','x') redis.set_repl(redis.REPL_ALL) return redis.call('GET','norepl')",
+        "0"], expect: {equals: x}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [EVAL, "return redis.call('INCR', KEYS[1])", "1", ctr], expect: {
+        equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [1]}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nredis.register_function('myfunc',\
+          \ function(keys, args) return redis.call('GET', keys[1]) end)"], expect: {
+        equals: mylib}}
+    - {command: [FCALL, myfunc, "1", k1], expect: {equals: v1}}
+    - {command: [EVAL, "return redis.call('SET', KEYS[1], string.rep('x', 1048576))",
+        "1", big], expect: {equals: OK}}
+    - {command: [STRLEN, big], expect: {equals: 1048576}}
+    - {command: [EVAL, "redis.call('SET', KEYS[1], '') return redis.call('STRLEN',\
+          \ KEYS[1])", "1", empty], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      replica: true
+      variants: true
+required_events: [lua.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lua}

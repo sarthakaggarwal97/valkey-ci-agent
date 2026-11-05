@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a4ffea9387a35b391208908071f300d4022b0549",
+  "parent": "663fff858f2c5e9d51ffb957c97fddfb6aad3f50",
+  "pr": 5186,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Skip RESP3 attributes when reading replies in valkey-cli (#5186)",
+  "date": "2026-10-30",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.8757,
+  "findings": [],
+  "recorded": []
+}

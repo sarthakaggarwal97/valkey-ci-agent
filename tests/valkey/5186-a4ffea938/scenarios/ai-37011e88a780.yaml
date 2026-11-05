@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 663fff858f2c..a4ffea9387a3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-37011e88a780
+seed: 51861
+experiment:
+  id: proposed.cli-resp3-attribute-skip
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

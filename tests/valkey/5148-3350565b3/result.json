@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3350565b366d0c38d8ce2054b045a0ec964a9474",
+  "parent": "13d7ed2aa3979520d14b3f8ae5c476ecba9974e4",
+  "pr": 5148,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Allow user to pass testing option via make file & use that to dump logs in coverage job (#5148)",
+  "date": "2026-10-29",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2038,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely build/CI plumbing: it adds a TEST_OPTIONS variable to the Makefile's test, test-modules, test-sentinel, test-cluster and lcov targets so extra flags can be passed to the runtest scripts, and uses it in the codecov workflow to pass --dump-logs. No Valkey server, command, replication, persistence or tool code changes, so there is no behaviour for a scenario to exercise."
+}

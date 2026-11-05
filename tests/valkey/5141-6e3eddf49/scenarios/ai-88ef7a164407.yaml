@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 134e5bad81eb..6e3eddf4976d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-88ef7a164407
+seed: 2583
+experiment:
+  id: proposed.setslot-blocks-on-replica
+  inputs: {}
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7100

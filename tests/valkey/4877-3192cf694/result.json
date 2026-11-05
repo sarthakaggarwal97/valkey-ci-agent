@@ -1,0 +1,58 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3192cf694506d8996f81e62a7895f47592dab321",
+  "parent": "faec379ecd35a9f9d333b2bf42667f5b4fa408c7",
+  "pr": 4877,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Block DEBUG RELOAD and DEBUG LOADAOF in loading and async-loading (#4877)",
+  "date": "2026-10-28",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 5,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 2
+  },
+  "cost_usd": 7.7719,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-db6c9de55508",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-887ed658c658",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-deaf4de7754b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-b3111968e691",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-b69c526de3b8",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ee247dbd4b4d8fe1247c9176e959270dae8c6f61",
+  "parent": "692e57e6f70989ab750a04bbc33520f62d96e667",
+  "pr": 4655,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "[Bug Fix] Fix fast-fail double-counting a NACK voter that later fails (#4655)",
+  "date": "2026-10-27",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 40,
+    "executed": 38,
+    "percent": 95,
+    "uncovered": [
+      "src/cluster_legacy.c:2872",
+      "src/cluster_legacy.c:2873"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 1.9741,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-c447147ac5ff",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'host' is unsupported"
+    }
+  ]
+}

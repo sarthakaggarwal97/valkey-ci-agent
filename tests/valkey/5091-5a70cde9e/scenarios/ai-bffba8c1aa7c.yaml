@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3aa4cbce47f4..5a70cde9e7ad.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-bffba8c1aa7c
+seed: 1
+experiment:
+  id: proposed.vm-call-script-mode-crash
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

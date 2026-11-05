@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 938007fd9805..25d3b7d9e79f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5ecaf0eee665
+seed: 495402
+experiment:
+  id: proposed.zset-lex-mixed-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

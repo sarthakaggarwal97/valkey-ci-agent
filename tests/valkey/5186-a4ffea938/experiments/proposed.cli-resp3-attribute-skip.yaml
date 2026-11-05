@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.cli-resp3-attribute-skip
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    valkey-cli under RESP3 skips attribute replies (DEBUG PROTOCOL attrib) instead
+    of treating the attribute as the command's reply; the parent build hits the formatters'
+    unknown-reply-type branch and exits 1 without printing the real reply. Covers
+    one-shot raw/CSV/JSON output, -r repeat, and a piped-stdin session where an attribute
+    mid-stream must not desync later replies, with RESP2 and attribute-free RESP3
+    controls.
+components:
+- use: valkey.action.tools
+  id: cli-attrib
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, -3, DEBUG, PROTOCOL, attrib], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "Some real reply following the\
+            \ attribute\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, -3, --csv, DEBUG, PROTOCOL, attrib], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "\"Some real reply following the\
+            \ attribute\"\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, -3, --json, DEBUG, PROTOCOL, attrib], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "\"Some real reply following the\
+            \ attribute\"\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, -3, --no-raw, DEBUG, PROTOCOL, attrib],
+      expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: "Some\
+            \ real reply following the attribute"}}}
+    - {tool: valkey-cli, args: [-p, $port, -3, -r, 3, DEBUG, PROTOCOL, attrib], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "Some real reply following the\
+            \ attribute\nSome real reply following the attribute\nSome real reply\
+            \ following the attribute\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, -3], stdin: "set k v1\ndebug protocol attrib\n\
+        get k\n", expect_difference: true, expect: {exit: {equals: 0}, stdout: {equals: "OK\n\
+            Some real reply following the attribute\nv1\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, DEBUG, PROTOCOL, attrib], expect: {exit: {
+          equals: 0}, stdout: {equals: "Some real reply following the attribute\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, -3, SET, k2, v2], expect: {exit: {equals: 0},
+        stdout: {equals: "OK\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-attrib}

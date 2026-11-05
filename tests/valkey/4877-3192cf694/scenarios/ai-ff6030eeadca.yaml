@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey faec379ecd35..3192cf694506.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ff6030eeadca
+seed: 7002
+experiment:
+  id: proposed.debug-reload-loadaof-blocked-during-sync-load
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

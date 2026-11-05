@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "255018c000bebdfbaf033a6c7031977ae20e9e5b",
+  "parent": "ee247dbd4b4d8fe1247c9176e959270dae8c6f61",
+  "pr": 4863,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix module blocking of RESP3 Pub/Sub clients (#4863)",
+  "date": "2026-10-27",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.2571,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 2 (do_fake_bg_true on connection sub) replies otherwise with resp 2: {\"error\":\"Can't execute 'do_fake_bg_true': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context\"}, not {\"reply\":true}",
+      "scenario": "ai-88465c937896",
+      "seed": 4863,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #4863",
+      "fingerprint": "d19ac5f3e48f1238d73d",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/58"
+    }
+  ],
+  "recorded": []
+}

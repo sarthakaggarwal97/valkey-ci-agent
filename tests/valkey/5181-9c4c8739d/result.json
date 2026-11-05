@@ -1,0 +1,88 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9c4c8739da2e4f9aa634fd31bcde4765c536a3da",
+  "parent": "b14acea0abf61071efcb54d407b02b35017abb06",
+  "pr": 5181,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Apply the library load timeout to FUNCTION RESTORE (#5181)",
+  "date": "2026-10-30",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 10,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 9,
+  "recall": false,
+  "coverage": {
+    "lines": 8,
+    "executed": 3,
+    "percent": 37,
+    "uncovered": [
+      "src/functions.c:801",
+      "src/functions.c:802",
+      "src/functions.c:803",
+      "src/functions.c:823",
+      "src/valkey-check-rdb.c:825"
+    ],
+    "rounds": 2
+  },
+  "cost_usd": 8.8532,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-7504b03aea9c",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-6c105548b555",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-7b9db0bb13b6",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'restore' returned ERROR: the parent did not answer command 1 (FUNCTION RESTORE <binary> REPLACE): TimeoutError: Timeout reading from /tmp/vfc-dpdsva5t/s.sock"
+    },
+    {
+      "scenario": "ai-47ceb9098a0b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'restore' returned ERROR: the parent did not answer command 1 (FUNCTION RESTORE <binary> REPLACE): TimeoutError: Timeout reading from /tmp/vfc-96_9pdy5/s.sock"
+    },
+    {
+      "scenario": "ai-046e295695ad",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2594f65b7bbb",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-a6e58d6a726a",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-f67ffeb73198",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-1c947f178057",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    }
+  ]
+}

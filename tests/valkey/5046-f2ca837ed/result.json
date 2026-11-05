@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f2ca837edc75e2238f880d89ade60babb6e6ed9e",
+  "parent": "b7ae45c74150f1d10135e779d911e7dfe03ee212",
+  "pr": 5046,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix memory leak in GetCommandKeysWithFlags (#5046)",
+  "date": "2026-10-28",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.4058,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix adds getKeysFreeResult() to VM_GetCommandKeysWithFlags, a module-only API that leaks the heap-allocated getKeysResult.keys array only when a command produces more than 256 keys (MAX_KEYS_BUFFER). It is reachable exclusively through RM_GetCommandKeys/WithFlags, which among all test modules is called only by tests/modules/getkeys.c. getkeys.so is not in the runner's buildable module set, so no loadable module exposes the API; no core command, valkey.action.commands sequence, or valkey.action.tools run reaches it either. With no installable component able to drive the leaky path, no scena"
+}

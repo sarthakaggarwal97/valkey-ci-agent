@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "13d7ed2aa3979520d14b3f8ae5c476ecba9974e4",
+  "parent": "f86d57e162419b1b7bbc7305820acde3427aae0d",
+  "pr": 5109,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Free Lua function name and description with ValkeyModule_FreeString (#5109)",
+  "date": "2026-10-29",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.683,
+  "findings": [],
+  "recorded": []
+}

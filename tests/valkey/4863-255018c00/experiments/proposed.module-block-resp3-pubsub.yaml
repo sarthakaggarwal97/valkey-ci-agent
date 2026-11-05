@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.module-block-resp3-pubsub
+deployment:
+  modes: [standalone]
+metadata:
+  description: A module BlockClient call can block a subscribed RESP3 Pub/Sub client;
+    on RESP2 or an unsubscribed client the behavior is unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 3}
+components:
+- use: valkey.action.commands
+  id: block
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [do_fake_bg_true], expect: {exists: true}}
+    - {command: [SUBSCRIBE, foo], connection: sub, expect: {contains: foo}}
+    - {command: [do_fake_bg_true], connection: sub, expect_difference: true, expect: {
+        exists: true}}
+    checks:
+      acl: true
+      compat: true
+      replica: true
+      variants: true
+required_events: [block.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: block}

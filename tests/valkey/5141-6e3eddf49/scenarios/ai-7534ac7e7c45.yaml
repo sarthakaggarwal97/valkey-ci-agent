@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 134e5bad81eb..6e3eddf4976d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7534ac7e7c45
+seed: 2
+experiment:
+  id: proposed.setslot-multi-no-block
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100
