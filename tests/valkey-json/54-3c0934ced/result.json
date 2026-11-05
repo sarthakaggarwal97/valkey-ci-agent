@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "3c0934ced163e9425a08be8362adcebd336c8d34",
+  "parent": "07d7a26fabfda6c2407f5518679dd023baa2d85f",
+  "pr": 54,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Adds exact sha for pytest frame work and adds 8.1 server version for test (#54)",
+  "date": "2025-03-29",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2241,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits CI configuration (.github/workflows/ci.yml adds an 8.1 server version to the test matrix) and the build's test-framework dependency pin (CMakeLists.txt switches valkey-test-framework from the 'unstable' branch to an exact commit). No module source code, command behaviour, replies, or data paths are touched, so there is no runtime behaviour to exercise and no scenario is needed."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "bd0cfcff9de042c70af46e6d42b988adacc22d92",
+  "parent": "7b4ae98b3f9e99616aeacbf1ba5f7144db8ea0df",
+  "pr": 56,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Rename from valkeyJSON to valkey-json (#56)",
+  "date": "2025-04-01",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.23,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames 'valkeyJSON' to 'valkey-json' in CMake message() strings, a build.sh comment/echo, and the integration-test README. It is a build/documentation-only change with no modification to the module's source code, registered module name, commands, replies, persistence, or replication behaviour, so there is nothing for a scenario to reach."
+}

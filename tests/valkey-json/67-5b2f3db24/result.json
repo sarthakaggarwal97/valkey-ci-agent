@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "5b2f3db24c0135a8d8b8e5cf434c7a3d42bd91f0",
+  "parent": "e4e29dedc1f0a2620f00884a8f06b3aaa0121d37",
+  "pr": 67,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Improve build script (#67)",
+  "date": "2025-06-19",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3764,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely a build and CI change: it rewrites build.sh argument handling, adds CMake options (BUILD_RELEASE, ENABLE_UNIT_TESTS, ENABLE_INTEGRATION_TESTS) to skip downloading Valkey and the test framework when not needed, splits the CI workflow into separate release/unit/integration/ASAN jobs, and updates the README. No module source file is touched; src/CMakeLists.txt only adds an include directory and a target dependency, and the build.sh switch to an explicit Release build type is a compile-configuration change with no behaviour change in the module's commands, replies, persistence"
+}

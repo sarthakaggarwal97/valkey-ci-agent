@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "7074fc84e89e4eb793b264cdb2335099979fd4a2",
+  "parent": "832f074a1c0f28af417275993944d211365193e1",
+  "pr": 31,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Bug fix: JSON.SET fails to update a member whose name contains slash (#31)",
+  "date": "2025-03-17",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.9187,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

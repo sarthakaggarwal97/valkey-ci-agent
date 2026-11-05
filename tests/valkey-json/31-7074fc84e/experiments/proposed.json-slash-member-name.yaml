@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.json-slash-member-name
+deployment:
+  modes: [standalone]
+metadata:
+  description: JSON.SET/JSON.DEL on object members whose names contain '/' update
+    or delete the member itself instead of creating or missing a nested path (valkey-json
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: json
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [JSON.SET, k1, ., '{"a":4.5,"b/c":85}'], expect: {equals: OK}}
+    - {command: [JSON.GET, k1, '$.b/c'], expect: {equals: "[85]"}, compare: json}
+    - {command: [JSON.SET, k1, '$.b/c', "0"], expect: {equals: OK}}
+    - {command: [JSON.GET, k1, '$.b/c'], expect_difference: true, expect: {equals: "[0]"},
+      compare: json}
+    - {command: [JSON.GET, k1], expect_difference: true, expect: {equals: '{"a":4.5,"b/c":0}'},
+      compare: json}
+    - {command: [JSON.SET, k1, '$.b~1c', "2"], expect: {equals: OK}}
+    - {command: [JSON.GET, k1, '$.b/c'], expect: {equals: "[2]"}, compare: json}
+    - {command: [JSON.NUMINCRBY, k1, '$.b/c', 1], expect: {equals: "[3]"}}
+    - {command: [JSON.NUMMULTBY, k1, '$.b/c', 2], expect: {equals: "[6]"}}
+    - {command: [JSON.GET, k1], expect_difference: true, expect: {equals: '{"a":4.5,"b/c":6}'},
+      compare: json}
+    - {command: [JSON.SET, k2, ., '{"a":1,"b/c":2,"d":{"b/c":3}}'], expect: {equals: OK}}
+    - {command: [JSON.DEL, k2, '$.b/c'], expect_difference: true, expect: {equals: 1}}
+    - {command: [JSON.GET, k2], expect_difference: true, expect: {equals: '{"a":1,"d":{"b/c":3}}'},
+      compare: json}
+    - {command: [JSON.DEL, k2, '$..b/c'], expect_difference: true, expect: {equals: 1}}
+    - {command: [JSON.GET, k2], expect_difference: true, expect: {equals: '{"a":1,"d":{}}'},
+      compare: json}
+    - {command: [JSON.SET, k3, ., '{"b/c":1,"x":{"b/c":2},"y":[{"b/c":3}]}'], expect: {
+        equals: OK}}
+    - {command: [JSON.SET, k3, '$..b/c', "7"], expect: {equals: OK}}
+    - {command: [JSON.GET, k3, '$..b/c'], expect_difference: true, expect: {equals: "[7,7,7]"},
+      compare: json}
+    - {command: [JSON.GET, k3], expect_difference: true, expect: {equals: '{"b/c":7,"x":{"b/c":7},"y":[{"b/c":7}]}'},
+      compare: json}
+    - {command: [JSON.SET, k4, ., '{"/":1,"a//b":2,"~":3}'], expect: {equals: OK}}
+    - {command: [JSON.SET, k4, '$["/"]', "10"], expect: {equals: OK}}
+    - {command: [JSON.GET, k4, '$["/"]'], expect_difference: true, expect: {equals: "[10]"},
+      compare: json}
+    - {command: [JSON.SET, k4, '$["a//b"]', "20"], expect: {equals: OK}}
+    - {command: [JSON.GET, k4], expect_difference: true, expect: {equals: '{"/":10,"a//b":20,"~":3}'},
+      compare: json}
+    - {command: [JSON.SET, k5, ., '{"b/c":85}'], expect: {equals: OK}}
+    - {command: [JSON.SET, k5, '.b/c', "42"], expect: {equals: OK}}
+    - {command: [JSON.GET, k5, '.b/c'], expect_difference: true, expect: {equals: "42"},
+      compare: json}
+    - {command: [JSON.GET, k5], expect_difference: true, expect: {equals: '{"b/c":42}'},
+      compare: json}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [json.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: json}

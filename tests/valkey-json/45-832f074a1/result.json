@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "832f074a1c0f28af417275993944d211365193e1",
+  "parent": "134a0f8defdd2425388b521bf1d80ef543a50272",
+  "pr": 45,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Enable tests to run with ASAN build. (#45)",
+  "date": "2025-03-14",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2819,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely build and CI infrastructure: it adds an opt-in ENABLE_ASAN CMake option and ASAN CI job, bumps pytest, adjusts the module's own integration-test teardown (FLUSHALL SYNC) and test-runner leak grep, and adds unit-test compile flags. No module source file (src/) changes, and the default build path emits the same compile/link flags as before, so the module binary at the change behaves identically to the parent's: there is no command, reply, persistence, replication or memory behaviour for a scenario to exercise."
+}

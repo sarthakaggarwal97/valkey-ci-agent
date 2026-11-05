@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "07d7a26fabfda6c2407f5518679dd023baa2d85f",
+  "parent": "f59906da1369c0f5aa377d620bc751b962b95b28",
+  "pr": 52,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Decoupling JSON python tests from Bloom. Now using valkey-test-framework (#52)",
+  "date": "2025-03-28",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2639,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a build/CI and test-infrastructure refactor only: CMakeLists.txt swaps the valkey-bloom test dependency for valkey-test-framework, and the Python integration tests (json_test_case.py, test_json_basic.py, test_rdb.py) are converted from setup methods to pytest fixtures. No module source code, command behaviour, replies, persistence or configuration handling is touched, so the loaded valkey-json module is behaviourally identical on both builds and there is nothing for a fuzzer scenario to reach."
+}

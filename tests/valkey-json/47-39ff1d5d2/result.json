@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "39ff1d5d24f87c6c9da03d505eb071c20460d04e",
+  "parent": "7074fc84e89e4eb793b264cdb2335099979fd4a2",
+  "pr": 47,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Create 00-RELEASENOTES (#47)",
+  "date": "2025-03-19",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.1975,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds a single new documentation file (00-RELEASENOTES, a placeholder release-notes text). No module code, command behaviour, build configuration, or runtime path is modified, so there is no behaviour to test and no scenario is needed."
+}

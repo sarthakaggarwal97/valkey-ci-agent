@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "7b4ae98b3f9e99616aeacbf1ba5f7144db8ea0df",
+  "parent": "3c0934ced163e9425a08be8362adcebd336c8d34",
+  "pr": 42,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Adding all JSON command definition (#42)",
+  "date": "2025-03-31",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7315,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds only documentation artifacts: a README wording edit and 21 new src/commands/*.json command-definition metadata files. Nothing in the build (src/CMakeLists.txt compiles a fixed list of .cc files) or in the module source references src/commands/, and the actual command registration, arity, key specs and ACL categories in json.cc's ValkeyModule_OnLoad are unchanged. The compiled module at the change is behaviorally identical to the parent, so there is no reachable behavior difference to test."
+}

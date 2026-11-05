@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "e4e29dedc1f0a2620f00884a8f06b3aaa0121d37",
+  "parent": "83f4a7e24c3aedfabb87ca56ed40c468b013b7d5",
+  "pr": 66,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Adding a clean option for build script (#66)",
+  "date": "2025-06-11",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.208,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds a 'clean' option to build.sh (rm -rf build/) and documents it in README.md. It is purely a build-script and documentation change: no module source, command handling, serialization, or runtime behaviour is touched, so the loaded valkey-json module is byte-for-byte identical in behaviour at the change and its parent. There is nothing a runtime scenario could exercise."
+}

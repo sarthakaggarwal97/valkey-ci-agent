@@ -1,0 +1,64 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "f584bae32e59418e52b2af9d597883b931beb33a",
+  "parent": "bd0cfcff9de042c70af46e6d42b988adacc22d92",
+  "pr": 58,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "update rapidjson and trim debug cmd summary (#58)",
+  "date": "2025-04-01",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 7.2393,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-34708fd90eae",
+      "seed": 58001,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #58, since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-486f939229a7",
+      "seed": 58002,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #58, since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-0a7fdad1126b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-588fdf0f1613",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

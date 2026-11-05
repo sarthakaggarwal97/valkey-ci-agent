@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-json 39ff1d5d24f8..3cb9550c6126.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5140e180ec7e
+seed: 2
+experiment:
+  id: proposed.json-module-version-stage
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

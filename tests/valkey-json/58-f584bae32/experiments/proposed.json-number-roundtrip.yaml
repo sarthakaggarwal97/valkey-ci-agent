@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.json-number-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: Boundary numbers parsed and serialized through the updated rapidjson
+    internals (strtod/dtoa/itoa), replies compared across the two module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: numbers
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [JSON.SET, n1, '.', '9223372036854775807'], expect: {equals: OK}}
+    - {command: [JSON.GET, n1, '.'], expect: {equals: '9223372036854775807'}}
+    - {command: [JSON.SET, n2, '.', '-9223372036854775808'], expect: {equals: OK}}
+    - {command: [JSON.GET, n2, '.']}
+    - {command: [JSON.SET, n3, '.', '9223372036854775808'], expect: {equals: OK}}
+    - {command: [JSON.GET, n3, '.']}
+    - {command: [JSON.SET, n4, '.', '18446744073709551615'], expect: {equals: OK}}
+    - {command: [JSON.GET, n4, '.']}
+    - {command: [JSON.SET, n5, '.', '18446744073709551616'], expect: {equals: OK}}
+    - {command: [JSON.GET, n5, '.']}
+    - {command: [JSON.SET, d1, '.', '5e-324'], expect: {equals: OK}}
+    - {command: [JSON.GET, d1, '.']}
+    - {command: [JSON.SET, d2, '.', '2.2250738585072011e-308'], expect: {equals: OK}}
+    - {command: [JSON.GET, d2, '.']}
+    - {command: [JSON.SET, d3, '.', '1.7976931348623157e308'], expect: {equals: OK}}
+    - {command: [JSON.GET, d3, '.']}
+    - {command: [JSON.SET, d4, '.', '1e309'], expect: {error: true}}
+    - {command: [JSON.SET, d5, '.', '1e-10000'], expect: {equals: OK}}
+    - {command: [JSON.GET, d5, '.']}
+    - {command: [JSON.SET, d6, '.', '-0.0'], expect: {equals: OK}}
+    - {command: [JSON.GET, d6, '.']}
+    - {command: [JSON.SET, d7, '.', '0.1000000000000000055511151231257827021181583404541015625'],
+      expect: {equals: OK}}
+    - {command: [JSON.GET, d7, '.']}
+    - {command: [JSON.SET, d8, '.', '1e-2147483648']}
+    - {command: [JSON.SET, d9, '.', '123.456e2147483647']}
+    - {command: [JSON.SET, acc, '.', '0'], expect: {equals: OK}}
+    - {command: [JSON.NUMINCRBY, acc, '.', '0.1']}
+    - {command: [JSON.NUMINCRBY, acc, '.', '0.1']}
+    - {command: [JSON.NUMINCRBY, acc, '.', '0.1']}
+    - {command: [JSON.NUMMULTBY, acc, '.', '1e308']}
+    - {command: [JSON.NUMINCRBY, acc, '.', '1.7976931348623157e308']}
+    - {command: [JSON.SET, arr, '.', '[0, 1.5, -2.25, 3e7, 123456789123456789123456789,
+          5e-324]'], expect: {equals: OK}}
+    - {command: [JSON.NUMINCRBY, arr, '$[*]', '0.125']}
+    - {command: [JSON.GET, arr], compare: json}
+    - {command: [JSON.GET, arr, '.']}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [numbers.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: numbers}

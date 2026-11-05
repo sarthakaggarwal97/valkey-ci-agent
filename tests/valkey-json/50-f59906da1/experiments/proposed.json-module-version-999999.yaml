@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.json-module-version-999999
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-json unstable version changes from octal 000000 (=0) to 999999;
+    MODULE LIST and INFO modules must report ver 999999 on the change and differ from
+    the parent, while JSON commands behave identically
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ver
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [MODULE, LIST], expect_difference: true, expect: {contains: "999999"}}
+    - {command: [INFO, modules], expect_difference: true, expect: {contains: "ver=999999"}}
+    - {command: [JSON.SET, doc, $, '{"a":1,"b":[1,2,3],"s":"x"}'], expect: {equals: OK}}
+    - {command: [JSON.GET, doc, $], compare: json, expect: {contains: '"b"'}}
+    - {command: [JSON.ARRLEN, doc, $.b], expect: {equals: [3]}}
+    - {command: [JSON.TYPE, doc, $.s], expect: {equals: [string]}}
+    - {command: [TYPE, doc], expect: {equals: ReJSON-RL}}
+    - {command: [JSON.DEL, doc], expect: {equals: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ver.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ver}

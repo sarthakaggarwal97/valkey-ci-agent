@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "3cb9550c61260f5276a7369eaa33c2c19029875c",
+  "parent": "39ff1d5d24f87c6c9da03d505eb071c20460d04e",
+  "pr": 48,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Add module release stage (#48)",
+  "date": "2025-03-20",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.9862,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

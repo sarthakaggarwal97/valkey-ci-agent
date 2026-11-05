@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "f59906da1369c0f5aa377d620bc751b962b95b28",
+  "parent": "3cb9550c61260f5276a7369eaa33c2c19029875c",
+  "pr": 50,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Change unstable version to six digit max.:999999 (#50)",
+  "date": "2025-03-24",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.2702,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}
