@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.bf-persistence-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: A bloom filter written through the new rdb_save/rdb_load and mem_usage/free
+    callbacks survives SAVE and a restart; the parent stub stores nothing
+components:
+- use: valkey.action.commands
+  id: bfpersist
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 60
+    commands:
+    - {command: [BF.ADD, f, i1], expect: {equals: 1}}
+    - {command: [BF.ADD, f, i2], expect: {equals: 1}}
+    - {command: [BF.ADD, f, !!binary "AAABAQ=="], expect: {equals: 1}}
+    - {command: [BF.ADD, f, ""], expect: {equals: 1}}
+    - {command: [BF.CARD, f], expect_difference: true, expect: {equals: 4}}
+    - {command: [MEMORY, USAGE, f], compare: skip}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.EXISTS, f, i1], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.EXISTS, f, i2], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.EXISTS, f, !!binary "AAABAQ=="], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [BF.EXISTS, f, ""], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.CARD, f], expect_difference: true, expect: {equals: 4}}
+    - {command: [BF.ADD, f, i1], expect_difference: true, expect: {equals: 0}}
+    - {command: [BF.ADD, f, i5], expect: {equals: 1}}
+    - {command: [BF.CARD, f], expect_difference: true, expect: {equals: 5}}
+    - {command: [TYPE, f], expect_difference: true, expect: {equals: bloomtype}}
+    - {command: [MEMORY, USAGE, f], compare: skip}
+    - {command: [DEL, f], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.CARD, f], expect: {equals: 0}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bfpersist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bfpersist}

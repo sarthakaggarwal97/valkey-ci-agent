@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom 17295202f3bd..be80d9d4bab8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ce02ba2688de
+seed: 51103
+experiment:
+  id: proposed.bloom-datatype-fullsync
+  inputs:
+    resp: 2
+    diskless: 'yes'
+deployment:
+  mode: standalone
+  base_port: 7200

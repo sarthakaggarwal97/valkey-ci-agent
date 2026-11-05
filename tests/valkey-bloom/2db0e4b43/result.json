@@ -1,0 +1,65 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "2db0e4b437e3914a114b2379708f273ef4a864bb",
+  "parent": "ed4d0f9755e06cd17e8812d4f2cf139974e5fc5a",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Add support for BF.RESERVE and expansion config",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 2,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.7326,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-96b1a6da1f33",
+      "seed": 1003,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-3c7797455830",
+      "seed": 1004,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"0a55a49178e5b6da70234de9afeef0707966817a\"},\"offset\":\"56\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"56\"}, link up",
+      "scenario": "ai-81c21946e651",
+      "seed": 1005,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates 2db0e4b437e3, since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

@@ -1,0 +1,140 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "a96c08acc6bfba9c95e7a7921d9e068472c05019",
+  "parent": "5237a10080413fc9f1082e7083f167c4aaadcb1f",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Add support for BF.ADD, BF.EXISTS, BF.CARD",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 4,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.3594,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-61afd55d3fc0",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-ea4755c2cb98",
+      "seed": 102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-cbb809c00d8e",
+      "seed": 103,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in moduleGetMemUsage",
+      "scenario": "ai-378dc4439e03",
+      "seed": 104,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "329791b20b386f58d4bf",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-378dc4439e03",
+      "seed": 104,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by a96c08acc6bf",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: stack-buffer-overflow /home/runner/work/_temp/head/valkey/src/debug.c:2298:29 in memtest_test_linux_anonymous_maps",
+      "scenario": "ai-28f87936c9f3",
+      "seed": 105,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "261f01e5003c57df9da2",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in rdbSaveObject",
+      "scenario": "ai-28f87936c9f3",
+      "seed": 105,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "ff32a6b43e643c08e3b9",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-28f87936c9f3",
+      "build": "unstable",
+      "seed": 105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-28f87936c9f3",
+      "build": "unstable",
+      "seed": 106,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-28f87936c9f3",
+      "build": "unstable",
+      "seed": 107,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

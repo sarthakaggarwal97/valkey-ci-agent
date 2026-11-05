@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "17295202f3bd26e1d1c7e0015a165ec76cb23952",
+  "parent": "8557b557c3936d49b061949265ac23cdcbceb7ee",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Add Dev Profile in Cargo.toml for debugging",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2164,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a [profile.dev] section to Cargo.toml (opt-level 0, debug 2, debug-assertions true), which merely restates Cargo's default dev-profile settings to aid debugging. No source code, command behaviour, data format, replication or persistence path of the valkey-bloom module changes, and release builds are unaffected entirely. It is a build/CI-only change with no runtime behaviour to exercise, so no scenario is needed."
+}

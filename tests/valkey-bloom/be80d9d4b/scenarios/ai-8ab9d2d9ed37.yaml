@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom 17295202f3bd..be80d9d4bab8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8ab9d2d9ed37
+seed: 51101
+experiment:
+  id: proposed.bloom-datatype-rdb-roundtrip
+  inputs:
+    resp: 2
+    rdbcompression: 'yes'
+deployment:
+  mode: standalone
+  base_port: 7000

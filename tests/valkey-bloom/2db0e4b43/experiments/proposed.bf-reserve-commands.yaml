@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.bf-reserve-commands
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.RESERVE replies, option parsing, the item-exists path, and the changed/added
+    configs, compared against the parent module which has neither
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bf
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [BF.RESERVE, k1, "0.01", "1000"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [BF.RESERVE, k1, "0.01", "1000"], expect_difference: true, expect: {
+        error: "item exists"}}
+    - {command: [BF.RESERVE, k2, "0.01", "1000", NONSCALING], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [BF.RESERVE, k3, "0.01", "1000", EXPANSION, "5"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [BF.RESERVE, k4, "0.01"], expect_difference: true, expect: {error: true}}
+    - {command: [BF.RESERVE, k4, "0.01", "1000", BOGUS], expect_difference: true,
+      expect: {error: true}}
+    - {command: [BF.RESERVE, k4, "0.01", "1000", EXPANSION], expect_difference: true,
+      expect: {error: true}}
+    - {command: [BF.RESERVE, k4, "1.5", "1000"], expect_difference: true, expect: {
+        error: true}}
+    - {command: [BF.RESERVE, k4, notanumber, "1000"], expect_difference: true, expect: {
+        error: true}}
+    - {command: [BF.RESERVE, k4, "0.01", notanumber], expect_difference: true, expect: {
+        error: true}}
+    - {command: [CONFIG, GET, bloom.bloom_max_item_size], expect_difference: true,
+      expect: {contains: "100000"}}
+    - {command: [CONFIG, SET, bloom.bloom_expansion_rate, "4"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [BF.ADD, k1, item], expect: {equals: 1}}
+    - {command: [BF.CARD, k1], expect: {equals: 1}}
+    - {command: [BF.EXISTS, k1, item], expect: {equals: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bf}

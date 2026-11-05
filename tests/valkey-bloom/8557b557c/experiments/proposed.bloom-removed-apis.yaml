@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.bloom-removed-apis
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.ADD2 and BF.EXISTS2 are removed while BF.ADD/BF.EXISTS/BF.CARD stay,
+    now backed by the bloomtype2 data type
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bloom
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [BF.ADD, f, a], expect: {equals: 1}}
+    - {command: [BF.ADD, f, a], expect: {equals: 0}}
+    - {command: [BF.ADD, f, b], expect: {equals: 1}}
+    - {command: [BF.EXISTS, f, a], expect: {equals: 1}}
+    - {command: [BF.CARD, f], expect: {equals: 2}}
+    - {command: [BF.ADD, "", ""], expect: {equals: 1}}
+    - {command: [BF.EXISTS, "", ""], expect: {equals: 1}}
+    - {command: [BF.ADD2, g, c], expect_difference: true, expect: {error: "unknown\
+          \ command"}}
+    - {command: [BF.EXISTS2, g, c], expect_difference: true, expect: {error: "unknown\
+          \ command"}}
+    - {command: [BF.CARD, f], expect: {equals: 2}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bloom}

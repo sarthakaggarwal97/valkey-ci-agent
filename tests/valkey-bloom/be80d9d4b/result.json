@@ -1,0 +1,79 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "be80d9d4bab85a82fbded5c455f0dd23e76e6079",
+  "parent": "17295202f3bd26e1d1c7e0015a165ec76cb23952",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Create Module Datatype and support RDB load, save, free",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 7.2527,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in rdbSaveObject",
+      "scenario": "ai-8ab9d2d9ed37",
+      "seed": 51101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by be80d9d4bab8",
+      "fingerprint": "df919fb1be74741cb342",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in rdbSaveObject",
+      "scenario": "ai-3501fa4d5000",
+      "seed": 51102,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by be80d9d4bab8",
+      "fingerprint": "df919fb1be74741cb342",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in rdbSaveObject",
+      "scenario": "ai-ce02ba2688de",
+      "seed": 51103,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by be80d9d4bab8",
+      "fingerprint": "df919fb1be74741cb342",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in rdbSaveObject",
+      "scenario": "ai-48e93c8157d7",
+      "seed": 51104,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by be80d9d4bab8",
+      "fingerprint": "df919fb1be74741cb342",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

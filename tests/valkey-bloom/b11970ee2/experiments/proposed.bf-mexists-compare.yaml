@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.bf-mexists-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.MEXISTS variadic replies, arity errors, wrong-type and MULTI/EXEC
+    behavior compared between the change's and the parent's valkey-bloom build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: mexists
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [BF.ADD, filter, hello], expect: {equals: 1}}
+    - {command: [BF.ADD, filter, world], expect: {equals: 1}}
+    - {command: [BF.ADD, filter, ""], expect: {equals: 1}}
+    - {command: [BF.MEXISTS, filter, hello, world], expect_difference: true, expect: {
+        equals: [1, 1]}}
+    - {command: [BF.MEXISTS, filter, hello], expect_difference: true, expect: {equals: [
+          1]}}
+    - {command: [BF.MEXISTS, filter, "", hello, ""], expect_difference: true, expect: {
+        equals: [1, 1, 1]}}
+    - {command: [BF.MEXISTS, filter, hello, hello, hello, hello, hello, hello, hello,
+        hello, hello, hello, hello, hello, hello, hello, hello, hello], expect_difference: true,
+      expect: {equals: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [BF.MEXISTS, nosuchfilter, a, b, c], expect_difference: true, expect: {
+        equals: [0, 0, 0]}}
+    - {command: [BF.MEXISTS, filter], expect_difference: true, expect: {error: true}}
+    - {command: [SET, str, v], expect: {equals: OK}}
+    - {command: [BF.MEXISTS, str, a], expect_difference: true, expect: {error: true}}
+    - {command: [BF.EXISTS, filter, hello], expect: {equals: 1}}
+    - {command: [BF.EXISTS, filter, hello, world], expect: {error: true}}
+    - {command: [BF.EXISTS, str, a], expect: {error: true}}
+    - {command: [BF.CARD, filter], expect: {equals: 3}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [BF.MEXISTS, filter, hello, world], expect_difference: true, expect: {
+        equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [[1, 1]]}}
+    - {command: [COMMAND, INFO, BF.MEXISTS], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [mexists.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mexists}

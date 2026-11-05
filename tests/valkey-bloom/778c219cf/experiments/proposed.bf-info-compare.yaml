@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.bf-info-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.INFO full reply and every section, missing key, wrong type, unknown
+    section, and capacity recording from BF.RESERVE, BF.ADD and the module configs,
+    compared against the parent module build which lacks the command
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: bfinfo
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [BF.INFO], expect_difference: true, expect: {error: true}}
+    - {command: [BF.INFO, missing], expect_difference: true, expect: {equals: []}}
+    - {command: [BF.INFO, missing, CAPACITY], expect_difference: true, expect: {equals: []}}
+    - {command: [BF.INFO, ""], expect_difference: true, expect: {equals: []}}
+    - {command: [BF.RESERVE, f1, "0.01", "10000"], expect: {equals: OK}}
+    - {command: [BF.INFO, f1], expect_difference: true, expect: {contains: Capacity}}
+    - {command: [BF.INFO, f1, CAPACITY], expect_difference: true, expect: {equals: 10000}}
+    - {command: [BF.INFO, f1, SIZE], expect_difference: true, expect: {min: 1}}
+    - {command: [BF.INFO, f1, FILTERS], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.INFO, f1, ITEMS], expect_difference: true, expect: {equals: 0}}
+    - {command: [BF.INFO, f1, EXPANSION], expect_difference: true, expect: {equals: 2}}
+    - {command: [BF.ADD, f1, item1], expect: {equals: 1}}
+    - {command: [BF.INFO, f1, items], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.INFO, f1, Bogus-Section], expect_difference: true, expect: {equals: []}}
+    - {command: [BF.INFO, f1, CAPACITY, EXTRA], expect_difference: true, expect: {
+        error: true}}
+    - {command: [BF.RESERVE, f2, "0.01", "2000", NONSCALING], expect: {equals: OK}}
+    - {command: [BF.INFO, f2, EXPANSION], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.RESERVE, f3, "0.01", "500", EXPANSION, "4"], expect: {equals: OK}}
+    - {command: [BF.INFO, f3, CAPACITY], expect_difference: true, expect: {equals: 500}}
+    - {command: [BF.INFO, f3, EXPANSION], expect_difference: true, expect: {equals: 4}}
+    - {command: [SET, strkey, hello], expect: {equals: OK}}
+    - {command: [BF.INFO, strkey], expect_difference: true, expect: {error: true}}
+    - {command: [BF.ADD, defaultf, x], expect: {equals: 1}}
+    - {command: [BF.INFO, defaultf, CAPACITY], expect_difference: true, expect: {
+        equals: 100000}}
+    - {command: [CONFIG, SET, bloom.bloom_max_item_size, "1000"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, bloom.bloom_expansion_rate, "5"], expect: {equals: OK}}
+    - {command: [BF.ADD, cfgf, y], expect: {equals: 1}}
+    - {command: [BF.INFO, cfgf, CAPACITY], expect_difference: true, expect: {equals: 1000}}
+    - {command: [BF.INFO, cfgf, EXPANSION], expect_difference: true, expect: {equals: 5}}
+    - {command: [BF.RESERVE, CAPACITY, "0.01", "123"], expect: {equals: OK}}
+    - {command: [BF.INFO, CAPACITY, CAPACITY], expect_difference: true, expect: {
+        equals: 123}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bfinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bfinfo}

@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.bloom-rdb-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: A bloom filter survives an RDB save and restart under the now-active
+    bloomtype2 serialization, and BF.ADD2/BF.EXISTS2 are gone
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bloom
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [BF.ADD, f, a], expect: {equals: 1}}
+    - {command: [BF.ADD, f, b], expect: {equals: 1}}
+    - {command: [BF.ADD, f, c], expect: {equals: 1}}
+    - {command: [BF.CARD, f], expect: {equals: 3}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.EXISTS, f, a], expect: {equals: 1}}
+    - {command: [BF.EXISTS, f, b], expect: {equals: 1}}
+    - {command: [BF.EXISTS, f, c], expect: {equals: 1}}
+    - {command: [BF.CARD, f], expect: {equals: 3}}
+    - {command: [BF.ADD2, g, c], expect_difference: true, expect: {error: "unknown\
+          \ command"}}
+    - {command: [BF.EXISTS2, g, c], expect_difference: true, expect: {error: "unknown\
+          \ command"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bloom}

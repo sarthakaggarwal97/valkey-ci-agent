@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.bloom-datatype-rdb-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Bloom module datatype registered by the change survives SAVE and a restart (rdb_save,
+    rdb_load and the NOOP aux callbacks), TYPE and MEMORY USAGE see the registered
+    type, and DEL/FLUSHALL free it via the free callback. The parent never registers
+    the type: SAVE and FLUSHALL crash on the NULL moduleType and nothing survives
+    the restart.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    rdbcompression: {type: string, enum: ["yes", "no"], default: "yes"}
+components:
+- use: valkey.action.commands
+  id: roundtrip
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {rdbcompression: {$ref: inputs.rdbcompression}}
+    timeout_s: 60
+    commands:
+    - {command: [BF.ADD, filter, item-one], expect: {equals: 1}}
+    - {command: [BF.ADD, filter, item-one], expect: {equals: 0}}
+    - {command: [BF.ADD, filter, ""], expect: {in: [0, 1]}}
+    - {command: [BF.ADD, filter, item-two], expect: {in: [0, 1]}}
+    - {command: [BF.EXISTS, filter, item-one], expect: {equals: 1}}
+    - {command: [BF.CARD, filter], expect: {min: 1, max: 3}}
+    - {command: [SAVE], expect_difference: true, expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.EXISTS, filter, item-one], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [BF.EXISTS, filter, item-two], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [BF.EXISTS, filter, ""], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.CARD, filter], expect_difference: true, expect: {min: 1, max: 3}}
+    - {command: [TYPE, filter], expect_difference: true, expect: {equals: bloomtype}}
+    - {command: [MEMORY, USAGE, filter], expect_difference: true, expect: {min: 1}}
+    - {command: [DEL, filter], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.ADD, filter2, alpha], expect: {equals: 1}}
+    - {command: [FLUSHALL], expect_difference: true, expect: {equals: OK}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [roundtrip.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: roundtrip}

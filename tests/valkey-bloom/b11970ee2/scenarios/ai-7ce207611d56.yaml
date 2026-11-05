@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom 778c219cf655..b11970ee2c0a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7ce207611d56
+seed: 7003
+experiment:
+  id: proposed.bf-mexists-compare
+  inputs:
+    resp: 2
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200
