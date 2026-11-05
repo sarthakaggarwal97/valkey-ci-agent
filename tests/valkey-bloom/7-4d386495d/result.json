@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "4d386495d146d41c821a0487df1435b188b18c57",
+  "parent": "f299216c59e4d3e681e19cfc017205bec8d9690f",
+  "pr": 7,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Integration tests for commands, delete operations, expiry, compatibility (#7)",
+  "date": "2024-10-09",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.1394,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

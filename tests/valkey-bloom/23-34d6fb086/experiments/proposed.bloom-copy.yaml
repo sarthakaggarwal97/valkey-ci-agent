@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.bloom-copy
+deployment:
+  modes: [standalone]
+metadata:
+  description: COPY of a bloom key reproduces it through the rewritten create_copy_from/from_existing
+    path; copied items still read present and BF.INFO SIZE shrinks on the change build
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "parent module build, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: copy
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [BF.RESERVE, src, "0.001", "1000"], expect: {equals: OK}}
+    - {command: [BF.MADD, src, x, y, z], compare: skip}
+    - {command: [BF.ADD, src, ""], compare: skip}
+    - {command: [COPY, src, dst], expect: {equals: 1}}
+    - {command: [BF.EXISTS, dst, x], expect: {equals: 1}}
+    - {command: [BF.EXISTS, dst, y], expect: {equals: 1}}
+    - {command: [BF.EXISTS, dst, ""], expect: {equals: 1}}
+    - {command: [BF.CARD, dst], compare: skip}
+    - {command: [BF.INFO, dst, SIZE], expect_difference: true, expect: {min: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [copy.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: copy}

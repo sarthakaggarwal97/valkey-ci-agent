@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "31d21c0ab9a73d6d06515d28806eacbf6a049b6f",
+  "parent": "12031b237435722eb6b47826e3e76653a05e8dc7",
+  "pr": 19,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Adding info handler, that contains three fields, num_objects, num_filters and memory_bytes. Additionally updated drop and created tests around this new info handler (#19)",
+  "date": "2024-11-05",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 7,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.0041,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-53894278cd10",
+      "build": "unstable",
+      "seed": 1108,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

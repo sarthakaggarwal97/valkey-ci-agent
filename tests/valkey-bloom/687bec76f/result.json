@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "687bec76fa70cecb8f2c4916f4cffc68b20c81e5",
+  "parent": "282599d21f7bf08d4a957bf40ac0949d132d3654",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Update build.sh and fix import in save/restore pytest",
+  "date": "2024-09-19",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2169,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only build.sh (build-script environment-variable handling, defaulting SERVER_VERSION to 'unstable' instead of failing) and adds a missing test-fixture import to tests/test_save_and_restore.py. No module source code, command behaviour, data format, or replication path changes; both builds produce identical module binaries at runtime. This is a build/CI and test-infrastructure change with no behaviour to exercise, so no scenario is needed."
+}

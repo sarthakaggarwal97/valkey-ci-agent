@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.bloom-tightening-ratio-size
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: BF.INFO SIZE of a scaled-out bloom filter differs after the tightening
+    ratio change
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bloom
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [BF.INSERT, bfa, CAPACITY, 10, EXPANSION, 2, ITEMS, a0, a1, a2, a3,
+        a4, a5, a6, a7, a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19],
+      compare: skip}
+    - {command: [BF.INFO, bfa, FILTERS], expect: {equals: 2}}
+    - {command: [BF.INFO, bfa, SIZE], expect_difference: true, expect: {min: 1}}
+    - {command: [BF.INSERT, bfb, CAPACITY, 10, EXPANSION, 2, ITEMS, b0, b1, b2, b3,
+        b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15, b16, b17, b18, b19,
+        b20, b21, b22, b23, b24, b25, b26, b27, b28, b29, b30, b31, b32, b33, b34,
+        b35, b36, b37, b38, b39], compare: skip}
+    - {command: [BF.INFO, bfb, FILTERS], expect: {equals: 3}}
+    - {command: [BF.INFO, bfb, SIZE], expect_difference: true, expect: {min: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bloom}

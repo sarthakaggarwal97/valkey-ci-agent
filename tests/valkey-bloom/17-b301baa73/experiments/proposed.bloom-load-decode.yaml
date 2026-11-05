@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.bloom-load-decode
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.LOAD rejects malformed, boundary and out-of-contract payloads with
+    an error and never crashes the decode path
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: load
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [BF.ADD, existing, item], expect: {equals: 1}}
+    - {command: [BF.LOAD, existing, !!binary 'AQ=='], expect_difference: true, expect: {
+        error: "BUSYKEY"}}
+    - {command: [BF.LOAD, newkey1, ""], expect_difference: true, expect: {error: true}}
+    - {command: [BF.LOAD, newkey2, !!binary 'AQ=='], expect_difference: true, expect: {
+        error: true}}
+    - {command: [BF.LOAD, newkey3, !!binary 'CmhlbGxv'], expect_difference: true,
+      expect: {error: "Unsupported version"}}
+    - {command: [BF.LOAD, newkey4, !!binary 'AAAAAA=='], expect_difference: true,
+      expect: {error: "Unsupported version"}}
+    - {command: [BF.LOAD, newkey5, !!binary "AQIAAAB7FK5H4XqEP///////fw=="], expect_difference: true,
+      expect: {error: true}}
+    - {command: [BF.LOAD, onlyone], expect_difference: true, expect: {error: true}}
+    - {command: [BF.LOAD, k, a, b], expect_difference: true, expect: {error: true}}
+    - {command: [BF.EXISTS, existing, item], expect: {equals: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: load}

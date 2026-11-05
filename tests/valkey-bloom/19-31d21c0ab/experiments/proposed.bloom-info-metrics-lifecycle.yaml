@@ -1,0 +1,65 @@
+extends: [valkey.liveness]
+id: proposed.bloom-info-metrics-lifecycle
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO bf bloom_core_metrics counters track create, copy, scale-out,
+    rejected create, expiry, delete and flush; parent build has no such section
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: metrics
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_objects:0"}}
+    - {command: [INFO, modules], expect_difference: true, expect: {contains: "bf_bloom_num_filters_across_objects:0"}}
+    - {command: [BF.ADD, "k{t}default", item1], expect: {equals: 1}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_objects:1"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_filters_across_objects:1"}}
+    - {command: [BF.RESERVE, "k{t}reserved", "0.001", "1000", NONSCALING], expect: {
+        equals: OK}}
+    - {command: [BF.INSERT, "k{t}insert", CAPACITY, "1", ITEMS, alpha], expect: {
+        equals: [1]}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_objects:3"}}
+    - {command: [COPY, "k{t}default", "k{t}copy"], expect: {equals: 1}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_objects:4"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_filters_across_objects:4"}}
+    - {command: [BF.RESERVE, "k{t}toobig", "0.001", "999999999"], expect: {error: "exceeding\
+          \ size limit"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_objects:4"}}
+    - {command: [BF.ADD, "k{t}insert", beta], expect: {in: [0, 1]}}
+    - {command: [BF.ADD, "k{t}insert", gamma], expect: {in: [0, 1]}}
+    - {command: [BF.INFO, "k{t}insert", FILTERS], expect: {equals: 2}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_filters_across_objects:5"}}
+    - {command: [DEL, "k{t}reserved"], expect: {equals: 1}}
+    - {command: [UNLINK, "k{t}insert"], expect: {equals: 1}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_objects:2"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_filters_across_objects:2"}}
+    - {command: [BF.ADD, "k{t}exp", tmp], expect: {equals: 1}}
+    - {command: [PEXPIRE, "k{t}exp", "150"], expect: {equals: 1}}
+    - {command: [BF.EXISTS, "k{t}exp", tmp], wait_s: 15, expect: {equals: 0}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_objects:2"}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_objects:0"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_filters_across_objects:0"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_total_memory_bytes:0"}}
+    - {command: [BF.ADD, "", ""], expect: {equals: 1}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_objects:1"}}
+    - {command: [DEL, ""], expect: {equals: 1}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_total_memory_bytes:0"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [metrics.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: metrics}

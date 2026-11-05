@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "a180f42678d48a479582de5c5b703f9bfe8646b0",
+  "parent": "0b9a90dccef5b55651cd5333f132299e8212cc67",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Add unit testing support using the valkeymodule-rs enable-system-alloc feature",
+  "date": "2024-09-17",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2529,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a build/CI-only change: it edits Cargo.toml metadata, bumps the valkey-module SDK from 0.1.1 to 0.1.2, adds an optional enable-system-alloc cargo feature, and re-enables `cargo test --features enable-system-alloc` in build.sh. The enable-system-alloc feature exists solely so unit tests can run outside a Valkey server (swapping the ValkeyModule allocator for the system allocator) and is not enabled in the release build that the server loads. No module source code (commands, encodings, replies, persistence) is touched, so there is no runtime behaviour change for a fuzzer scenario to reac"
+}

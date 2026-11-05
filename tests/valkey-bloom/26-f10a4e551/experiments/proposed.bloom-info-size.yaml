@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.bloom-info-size
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: BF.INFO SIZE grows by 8 bytes per bloom object after tightening_ratio
+    is added to BloomFilterType
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: size
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [BF.RESERVE, res, '0.001', '100000'], expect: {equals: OK}}
+    - {command: [BF.INFO, res, SIZE], expect_difference: true, expect: {equals: 179960}}
+    - {command: [BF.ADD, add, item1], expect: {equals: 1}}
+    - {command: [BF.INFO, add, SIZE], expect_difference: true, expect: {equals: 179960}}
+    - {command: [BF.INSERT, ins, ITEMS, a, b, c], expect: {equals: [1, 1, 1]}}
+    - {command: [BF.INFO, ins, SIZE], expect_difference: true, expect: {equals: 179960}}
+    - {command: [BF.CARD, ins], expect: {equals: 3}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [size.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: size}

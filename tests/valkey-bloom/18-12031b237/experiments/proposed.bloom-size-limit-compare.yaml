@@ -1,0 +1,89 @@
+extends: [valkey.liveness]
+id: proposed.bloom-size-limit-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Bloom per-filter size limit enforcement, renamed module configs, and
+    f64 fp-rate parsing compared across module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bloom
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [CONFIG, SET, bf.bloom-memory-limit-per-filter, "67108864"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, bf.bloom-capacity, "100000"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, bf.bloom-expansion, "2"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, bf.bloom-max-item-size, "100000"], expect_difference: true,
+      expect: {error: "Unknown option"}}
+    - {command: [CONFIG, SET, bf.bloom-expansion-rate, "2"], expect_difference: true,
+      expect: {error: "Unknown option"}}
+    - {command: [BF.RESERVE, big, "0.001", "50000000"], expect_difference: true, expect: {
+        error: "exceeding size limit"}}
+    - {command: [DEL, big], expect_difference: true, expect: {equals: 0}}
+    - {command: [CONFIG, SET, bf.bloom-memory-limit-per-filter, "1000"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [BF.RESERVE, f, "0.001", "100000"], expect_difference: true, expect: {
+        error: "exceeding size limit"}}
+    - {command: [BF.ADD, f, item1], expect_difference: true, expect: {error: "exceeding\
+          \ size limit"}}
+    - {command: [BF.MADD, f, i1, i2], expect_difference: true, expect: {error: "exceeding\
+          \ size limit"}}
+    - {command: [BF.INSERT, f, ITEMS, j1], expect_difference: true, expect: {error: "exceeding\
+          \ size limit"}}
+    - {command: [BF.INSERT, f2, ERROR, "0.00001", CAPACITY, "10000", ITEMS, k1], expect_difference: true,
+      expect: {error: "exceeding size limit"}}
+    - {command: [BF.INSERT, f3, NONSCALING, ITEMS, n1], expect_difference: true, expect: {
+        error: "exceeding size limit"}}
+    - {command: [DEL, f, f2, f3], expect_difference: true, expect: {equals: 0}}
+    - {command: [BF.RESERVE, sf, "0.001", "50", EXPANSION, "10"], expect: {equals: OK}}
+    - {command: [BF.MADD, sf, s01, s02, s03, s04, s05, s06, s07, s08, s09, s10, s11,
+        s12, s13, s14, s15, s16, s17, s18, s19, s20, s21, s22, s23, s24, s25, s26,
+        s27, s28, s29, s30, s31, s32, s33, s34, s35, s36, s37, s38, s39, s40, s41,
+        s42, s43, s44, s45, s46, s47, s48, s49, s50]}
+    - {command: [BF.INSERT, sf, ITEMS, ov1, ov2, ov3], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [BF.ADD, sf, ov4], expect_difference: true, expect: {error: "exceeding\
+          \ size limit"}}
+    - {command: [BF.INFO, sf, FILTERS], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.INFO, sf, CAPACITY], expect_difference: true, expect: {equals: 50}}
+    - {command: [CONFIG, SET, bf.bloom-memory-limit-per-filter, "67108864"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [BF.ADD, sf, ov5], expect: {equals: 1}}
+    - {command: [BF.INFO, sf, FILTERS], expect: {equals: 2}}
+    - {command: [BF.INFO, sf, CAPACITY], expect: {equals: 550}}
+    - {command: [CONFIG, SET, bf.bloom-memory-limit-per-filter, "0"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [BF.ADD, zf, x], expect_difference: true, expect: {error: "exceeding\
+          \ size limit"}}
+    - {command: [CONFIG, SET, bf.bloom-memory-limit-per-filter, "67108864"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [BF.RESERVE, fr1, "0.99999999999999999", "100"], expect: {error: "error\
+          \ rate range"}}
+    - {command: [BF.RESERVE, fr2, "0.999999999", "100"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [BF.INFO, fr2, CAPACITY], expect_difference: true, expect: {equals: 100}}
+    - {command: [BF.RESERVE, fr3, "1e-50", "10"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [BF.INFO, fr3, SIZE], expect_difference: true, expect: {min: 1}}
+    - {command: [BF.INSERT, fr4, ERROR, "0.999999999", ITEMS, a], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [BF.ADD, estr, ""], expect: {equals: 1}}
+    - {command: [BF.EXISTS, estr, ""], expect: {equals: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bloom.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bloom}

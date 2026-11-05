@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "145f9b285eb3e61284872fbf30b4dd3cb290072e",
+  "parent": "6d0a4b60c284922db0633b7efe5c8006c07b9cee",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Merge pull request #5 from zackcam/unstable",
+  "date": "2024-09-18",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2818,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is entirely build/CI/test infrastructure: it adds a GitHub Actions workflow, reworks build.sh and the README to use SERVER_VERSION (dropping 7.2.x for 8.0.0), and refactors the Python integration-test harness to pass a server path instead of a version enum (plus a typo fix). No module source code (src/*.rs) is touched, so the module's runtime behaviour \u2014 commands, replies, data, persistence \u2014 is unchanged between parent and change, and there is nothing a server-side scenario could reach or compare."
+}

@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.bloom-capacity-max
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.RESERVE/BF.INSERT accept capacity u32::MAX on the change; the parent
+    rejected it as bad capacity
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: capacity
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [BF.RESERVE, base, "0.01", "100"], expect: {equals: OK}}
+    - {command: [BF.ADD, base, hello], expect: {equals: 1}}
+    - {command: [BF.RESERVE, capmax, "0.99", "4294967295"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [BF.INSERT, capmaxins, ERROR, "0.99", CAPACITY, "4294967295", ITEMS,
+        x], expect_difference: true, expect: {equals: [1]}}
+    - {command: [BF.RESERVE, caphi, "0.99", "4294967294"], expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: capacity}

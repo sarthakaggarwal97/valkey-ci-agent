@@ -1,0 +1,94 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "7c254680374a22794a7676da5797a9f84b2e9087",
+  "parent": "a33e0e3d6b47eb0b52cfa6227d97330eb67fc58b",
+  "pr": 21,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Support for DEBUG DIGEST module data type callback (#21)",
+  "date": "2024-11-30",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 4.2284,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 0",
+      "scenario": "ai-0485942da619",
+      "seed": 100101,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #21, since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 0",
+      "scenario": "ai-08bafd902f34",
+      "seed": 100102,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #21, since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-0485942da619",
+      "build": "unstable",
+      "seed": 100101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0485942da619",
+      "build": "unstable",
+      "seed": 100102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0485942da619",
+      "build": "unstable",
+      "seed": 100103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-08bafd902f34",
+      "build": "unstable",
+      "seed": 100102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-08bafd902f34",
+      "build": "unstable",
+      "seed": 100103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-08bafd902f34",
+      "build": "unstable",
+      "seed": 100104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5bb7d6028be9",
+      "build": "unstable",
+      "seed": 100104,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

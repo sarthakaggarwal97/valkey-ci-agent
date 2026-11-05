@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "57a79012fce127d10adef61399dec9a323a827c6",
+  "parent": "f5aa39e60d9f7bf63786dcf1c175c8a044ce1659",
+  "pr": 16,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Add integration tests for maxmemory scenarios and replication correctness. Fixed others tests and updated the build.sh script for running single integration tests (#16)",
+  "date": "2024-10-17",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.382,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is tests and build tooling only. The sole source modification (src/bloom/command_handler.rs) rewrites three match arms from Ok(_)/Ok(_v) to Ok(()), a semantically identical pattern-match style change on a Result<(), E> with no behavioral effect. Everything else adds pytest integration tests (maxmemory, replication), fixes test helpers that previously swallowed assertions, and adds a TEST_PATTERN option to build.sh. Nothing in the module's runtime behavior changed, so there is no changed path for a scenario to reach."
+}

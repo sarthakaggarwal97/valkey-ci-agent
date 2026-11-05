@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.bloom-rdb-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: A scaled bloom object survives SAVE and restart on each build via the
+    rewritten RDB save/load path; BF.INFO SIZE shrinks on the change build
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "parent module build, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rdb
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [BF.RESERVE, bf, "0.01", "2", EXPANSION, "2"], expect: {equals: OK}}
+    - {command: [BF.MADD, bf, a, b, c, d, e, f, g, h], compare: skip}
+    - {command: [BF.ADD, bf, ""], compare: skip}
+    - {command: [BF.EXISTS, bf, a], expect: {equals: 1}}
+    - {command: [BF.EXISTS, bf, ""], expect: {equals: 1}}
+    - {command: [BF.INFO, bf, FILTERS], compare: skip}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.EXISTS, bf, a], expect: {equals: 1}}
+    - {command: [BF.EXISTS, bf, h], expect: {equals: 1}}
+    - {command: [BF.EXISTS, bf, ""], expect: {equals: 1}}
+    - {command: [BF.INFO, bf, FILTERS], compare: skip}
+    - {command: [BF.INFO, bf, ITEMS], compare: skip}
+    - {command: [BF.INFO, bf, SIZE], expect_difference: true, expect: {min: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [rdb.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rdb}

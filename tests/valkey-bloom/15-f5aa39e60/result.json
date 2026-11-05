@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "f5aa39e60d9f7bf63786dcf1c175c8a044ce1659",
+  "parent": "fde4d372612310a25a23dd1aa359f13cb1a3e42d",
+  "pr": 15,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Add Integration Testing for correctness of scaling and non scaling filters and other core functionality validation (#15)",
+  "date": "2024-10-15",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.368,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is entirely test code: the only src/ edit is inside the #[cfg-style] `mod tests` block of src/bloom/utils.rs (refactoring unit-test helpers like item_exists_test -> check_items_exist and fixing index bookkeeping in them), and the rest of the diff adds or renames Python integration tests and test-harness helpers (test_basic.py, new test_correctness.py, test_replication.py, valkey_bloom_test_case.py, valkey_test_case.py). No production module code \u2014 command handlers, bloom filter data structures, scaling logic, or persistence/replication hooks \u2014 changes, so the module built at the cha"
+}

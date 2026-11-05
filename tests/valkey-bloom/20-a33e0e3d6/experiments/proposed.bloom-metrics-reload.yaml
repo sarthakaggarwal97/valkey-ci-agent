@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.bloom-metrics-reload
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO bf item and capacity metrics are rebuilt correctly after an RDB
+    reload across a restart
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [BF.MADD, k1, a, b, c, d, e, f], expect: {equals: [1, 1, 1, 1, 1,
+          1]}}
+    - {command: [BF.RESERVE, k2, "0.001", "555"], expect: {equals: OK}}
+    - {command: [BF.INSERT, k3, CAPACITY, "300", ITEMS, x, y], expect: {equals: [
+          1, 1]}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_items_across_objects:8"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_capacity_across_objects:100855"}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [INFO, bf], wait_s: 10, expect_difference: true, expect: {contains: "bf_bloom_num_items_across_objects:8"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_capacity_across_objects:100855"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

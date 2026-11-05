@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.bloom-aofrewrite-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.LOAD-based AOF rewrite persists bloom filters (incl. scaled, multi-filter)
+    across a restart; the parent (no aof_rewrite callback) loses them
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aof
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {appendonly: "yes", aof-use-rdb-preamble: "no"}
+    timeout_s: 90
+    commands:
+    - {command: [BF.ADD, testSave, item], expect: {equals: 1}}
+    - {command: [BF.EXISTS, testSave, item], expect: {equals: 1}}
+    - {command: [BF.RESERVE, testScale, "0.01", "50", EXPANSION, "2"], expect: {equals: OK}}
+    - {command: [BF.MADD, testScale, i1, i2, i3, i4, i5, i6, i7, i8, i9, i10, i11,
+        i12, i13, i14, i15, i16, i17, i18, i19, i20, i21, i22, i23, i24, i25, i26,
+        i27, i28, i29, i30, i31, i32, i33, i34, i35, i36, i37, i38, i39, i40, i41,
+        i42, i43, i44, i45, i46, i47, i48, i49, i50, i51, i52, i53, i54, i55, i56,
+        i57, i58, i59, i60], expect: {exists: true}}
+    - {command: [BF.INFO, testScale, FILTERS], expect: {min: 2}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {error: false}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.EXISTS, testSave, item], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.EXISTS, testScale, i1], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.INFO, testScale, FILTERS], expect_difference: true, expect: {
+        min: 2}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof}

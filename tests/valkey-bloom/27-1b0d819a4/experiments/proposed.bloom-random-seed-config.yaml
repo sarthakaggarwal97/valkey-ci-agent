@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.bloom-random-seed-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: New bf.bloom-use-random-seed config, random seed by default, fixed-seed
+    mode stays byte-compatible with the parent, judged by compared DEBUG DIGEST-VALUE
+    replies
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, GET, bf.bloom-use-random-seed], expect_difference: true,
+      expect: {contains: "yes"}}
+    - {command: [BF.ADD, defaultkey, item1], expect: {equals: 1}}
+    - {command: [BF.EXISTS, defaultkey, item1], expect: {equals: 1}}
+    - {command: [DEBUG, DIGEST-VALUE, defaultkey], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, no], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [BF.RESERVE, fixedkey, "0.001", "1000"], expect: {equals: OK}}
+    - {command: [BF.MADD, fixedkey, a, b, c], expect: {equals: [1, 1, 1]}}
+    - {command: [DEBUG, DIGEST-VALUE, fixedkey]}
+    - {command: [BF.INSERT, fixedins, CAPACITY, "50", ERROR, "0.001", ITEMS, x1, x2],
+      expect: {equals: [1, 1]}}
+    - {command: [DEBUG, DIGEST-VALUE, fixedins]}
+    - {command: [BF.INFO, fixedkey, CAPACITY], expect: {equals: 1000}}
+    - {command: [BF.INFO, fixedkey, ITEMS], expect: {equals: 3}}
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, yes], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [BF.RESERVE, randkey, "0.001", "1000"], expect: {equals: OK}}
+    - {command: [BF.MADD, randkey, a, b, c], expect: {equals: [1, 1, 1]}}
+    - {command: [DEBUG, DIGEST-VALUE, randkey], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [BF.INSERT, randins, CAPACITY, "50", ERROR, "0.001", ITEMS, x1, x2],
+      expect: {equals: [1, 1]}}
+    - {command: [DEBUG, DIGEST-VALUE, randins], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [BF.CARD, randkey], expect: {equals: 3}}
+    - {command: [BF.RESERVE, hugecap, "0.001", "4294967295"], expect: {error: true}}
+    - {command: [BF.RESERVE, zerocap, "0.001", "0"], expect: {error: true}}
+    - {command: [SET, strkey, v], expect: {equals: OK}}
+    - {command: [BF.ADD, strkey, x], expect: {error: true}}
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, bogus], expect_difference: true,
+      expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

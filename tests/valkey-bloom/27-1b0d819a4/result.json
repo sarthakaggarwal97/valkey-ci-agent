@@ -1,0 +1,88 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "1b0d819a40bba877c18acd75a7ff78cd9fda38ec",
+  "parent": "34d6fb086c60c08063fa6c988b26080d700c3bfc",
+  "pr": 27,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Support random seed per bloom object by default (configurable) (#27)",
+  "date": "2024-12-05",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 3,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 4.4893,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"dcdb9f6da6e22c4ab640c3c82b9fbf093d3ee4f2\"},\"offset\":\"576\"}, replica {\"digest\":{\"reply\":\"55934f45f029875a67e56ed0f5eb5b8f3076bb72\"},\"offset\":\"576\"}, link up",
+      "scenario": "ai-4f44fed2d427",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"c9d7e3c4a75e616c55c55196981e7409497514ea\"},\"offset\":\"576\"}, replica {\"digest\":{\"reply\":\"f6249ca62ccd81f248d06063fb04c1abf5823b4a\"},\"offset\":\"576\"}, link up",
+      "scenario": "ai-a646bed41e70",
+      "seed": 102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-4f44fed2d427",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-4f44fed2d427",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-4f44fed2d427",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a646bed41e70",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a646bed41e70",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a646bed41e70",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

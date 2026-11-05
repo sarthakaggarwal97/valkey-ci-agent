@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.bloom-info-metrics-persistence
+deployment:
+  modes: [standalone]
+metadata:
+  description: bloom metrics are rebuilt by the RDB or AOF load path across a restart
+    and return to zero after a flush and an empty reload
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    appendonly: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {appendonly: {$ref: inputs.appendonly}}
+    timeout_s: 120
+    commands:
+    - {command: [BF.ADD, pkey, item1], expect: {equals: 1}}
+    - {command: [BF.INSERT, skey, CAPACITY, "1", ITEMS, a], expect: {equals: [1]}}
+    - {command: [BF.ADD, skey, b], expect: {in: [0, 1]}}
+    - {command: [BF.ADD, skey, c], expect: {in: [0, 1]}}
+    - {command: [BF.INFO, skey, FILTERS], expect: {equals: 2}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_objects:2"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_filters_across_objects:3"}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.EXISTS, pkey, item1], expect: {equals: 1}}
+    - {command: [BF.INFO, skey, FILTERS], expect: {equals: 2}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_objects:2"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_filters_across_objects:3"}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_objects:0"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_total_memory_bytes:0"}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_objects:0"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_total_memory_bytes:0"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

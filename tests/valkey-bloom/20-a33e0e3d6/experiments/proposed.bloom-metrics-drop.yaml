@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.bloom-metrics-drop
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO bf item and capacity metrics track adds, COPY and deletes without
+    underflow or residue
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: metrics
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    server_config: {lazyfree-lazy-user-del: "no", lazyfree-lazy-expire: "no"}
+    commands:
+    - {command: [BF.ADD, src, a], expect: {equals: 1}}
+    - {command: [BF.MADD, src, a, b, c, d, e], expect: {equals: [0, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, big, "0.001", "2000"], expect: {equals: OK}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_items_across_objects:5"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_capacity_across_objects:102000"}}
+    - {command: [COPY, src, dup], expect: {equals: 1}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_num_items_across_objects:10"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_capacity_across_objects:202000"}}
+    - {command: [DEL, dup], expect: {equals: 1}}
+    - {command: [INFO, bf], wait_s: 5, expect_difference: true, expect: {contains: "bf_bloom_num_items_across_objects:5"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_capacity_across_objects:102000"}}
+    - {command: [DEL, src], expect: {equals: 1}}
+    - {command: [INFO, bf], wait_s: 5, expect_difference: true, expect: {contains: "bf_bloom_num_items_across_objects:0"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_capacity_across_objects:2000"}}
+    - {command: [DEL, big], expect: {equals: 1}}
+    - {command: [INFO, bf], wait_s: 5, expect_difference: true, expect: {contains: "bf_bloom_num_items_across_objects:0"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_capacity_across_objects:0"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: metrics}

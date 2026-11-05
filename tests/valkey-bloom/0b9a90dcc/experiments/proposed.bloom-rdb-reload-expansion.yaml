@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.bloom-rdb-reload-expansion
+deployment:
+  modes: [standalone]
+metadata:
+  description: A bloom filter survives SAVE plus restart on the change; the parent
+    saved expansion as unsigned but loaded it as signed, so the reload fails
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [BF.INSERT, rk, EXPANSION, "4", ITEMS, a, b, c], expect: {equals: [
+          1, 1, 1]}}
+    - {command: [BF.CARD, rk], expect: {equals: 3}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.CARD, rk], expect_difference: true, expect: {equals: 3}}
+    - {command: [BF.INFO, rk, EXPANSION], expect_difference: true, expect: {equals: 4}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

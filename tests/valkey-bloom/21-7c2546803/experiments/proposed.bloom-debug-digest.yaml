@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.bloom-debug-digest
+deployment:
+  modes: [standalone]
+metadata:
+  description: DEBUG DIGEST and DIGEST-VALUE on bloom objects of every shape (empty,
+    scaled, nonscaling, copied, large, RDB-reloaded); the parent has no digest callback
+    and answers the all-zero digest, the change a real one
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: digest
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [BF.RESERVE, empty, "0.01", "100"], expect: {equals: OK}}
+    - {command: [DEBUG, DIGEST-VALUE, empty], expect_difference: true, expect: {error: false}}
+    - {command: [BF.RESERVE, scale, "0.01", "20", EXPANSION, "2"], expect: {equals: OK}}
+    - {command: [BF.MADD, scale, i1, i2, i3, i4, i5, i6, i7, i8, i9, i10, i11, i12,
+        i13, i14, i15, i16, i17, i18, i19, i20, i21, i22, i23, i24, i25, i26, i27,
+        i28, i29, i30]}
+    - {command: [BF.MADD, scale, j1, j2, j3, j4, j5, j6, j7, j8, j9, j10, j11, j12,
+        j13, j14, j15, j16, j17, j18, j19, j20, j21, j22, j23, j24, j25, j26, j27,
+        j28, j29, j30]}
+    - {command: [BF.INFO, scale, FILTERS], expect: {min: 2}}
+    - {command: [DEBUG, DIGEST-VALUE, scale], expect_difference: true, expect: {error: false}}
+    - {command: [BF.RESERVE, nonscale, "0.001", "1000", NONSCALING], expect: {equals: OK}}
+    - {command: [BF.ADD, nonscale, a], expect: {equals: 1}}
+    - {command: [BF.INSERT, ins, ERROR, "0.002", CAPACITY, "1000", EXPANSION, "3",
+        ITEMS, x, y, z]}
+    - {command: [COPY, scale, scalecopy], expect: {equals: 1}}
+    - {command: [DEBUG, DIGEST-VALUE, scale, scalecopy], expect_difference: true,
+      expect: {error: false}}
+    - {command: [BF.RESERVE, big, "0.0001", "5000000"], expect: {equals: OK}}
+    - {command: [BF.ADD, big, item], expect: {equals: 1}}
+    - {command: [DEBUG, DIGEST-VALUE, big], expect_difference: true, expect: {error: false}}
+    - {command: [SET, plain, hello], expect: {equals: OK}}
+    - {command: [EXPIRE, scale, 100000], expect: {equals: 1}}
+    - {command: [DEBUG, DIGEST], expect_difference: true, expect: {error: false}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.EXISTS, scale, i1], expect: {equals: 1}}
+    - {command: [BF.INFO, scale, FILTERS], expect: {min: 2}}
+    - {command: [DEBUG, DIGEST-VALUE, empty, scale, scalecopy, nonscale, ins, big],
+      expect_difference: true, expect: {error: false}}
+    - {command: [DEBUG, DIGEST], expect_difference: true, expect: {error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [digest.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: digest}

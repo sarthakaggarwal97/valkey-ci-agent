@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.bloom-rdb-f64-restart-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Bloom objects (f64 fp rate, encoding version 1) survive SAVE and a
+    restart on each module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [CONFIG, SET, bf.bloom-memory-limit-per-filter, "67108864"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [BF.RESERVE, f1, "0.001", "1000", EXPANSION, "2"], expect: {equals: OK}}
+    - {command: [BF.MADD, f1, a, b, c], expect: {equals: [1, 1, 1]}}
+    - {command: [BF.RESERVE, f2, "0.9", "10", NONSCALING], expect: {equals: OK}}
+    - {command: [BF.ADD, f2, x], expect: {equals: 1}}
+    - {command: [BF.RESERVE, f3, "0.001", "10", EXPANSION, "2"], expect: {equals: OK}}
+    - {command: [BF.MADD, f3, i01, i02, i03, i04, i05, i06, i07, i08, i09, i10, i11,
+        i12, i13]}
+    - {command: [BF.INFO, f3, FILTERS], expect: {equals: 2}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.EXISTS, f1, a], expect: {equals: 1}}
+    - {command: [BF.EXISTS, f1, b], expect: {equals: 1}}
+    - {command: [BF.EXISTS, f1, c], expect: {equals: 1}}
+    - {command: [BF.CARD, f1], expect: {equals: 3}}
+    - {command: [BF.INFO, f1, CAPACITY], expect: {equals: 1000}}
+    - {command: [BF.INFO, f1, EXPANSION], expect: {equals: 2}}
+    - {command: [BF.EXISTS, f2, x], expect: {equals: 1}}
+    - {command: [BF.INFO, f2, EXPANSION]}
+    - {command: [BF.INFO, f3, FILTERS], expect: {equals: 2}}
+    - {command: [BF.INFO, f3, CAPACITY], expect: {equals: 30}}
+    - {command: [BF.INFO, f1], compare: skip}
+    - {command: [BF.MADD, f3, j01, j02, j03, j04, j05, j06, j07, j08, j09, j10, j11,
+        j12, j13, j14, j15, j16, j17, j18, j19, j20]}
+    - {command: [BF.INFO, f3, FILTERS], expect: {equals: 3}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

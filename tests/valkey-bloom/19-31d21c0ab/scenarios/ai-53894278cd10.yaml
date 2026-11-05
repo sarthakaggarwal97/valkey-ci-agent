@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom 12031b237435..31d21c0ab9a7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-53894278cd10
+seed: 1107
+experiment:
+  id: proposed.bloom-info-metrics-replication
+  inputs:
+    repl_diskless_sync: 'yes'
+    repl_diskless_load: swapdb
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7600

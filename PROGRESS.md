@@ -1,11 +1,11 @@
 # Fuzzer walk
 
-Updated 2026-11-05T10:24+00:00.
+Updated 2026-11-05T10:29+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 85 | 2405 | #5186 (2026-10-30) | 85 | 12.1 |
-| valkey-io/valkey-bloom | 50 | 59 | #26 (2024-12-06) | 50 | 7.1 |
+| valkey-io/valkey-bloom | 69 | 40 | 85e20fd38641 (2024-09-10) | 69 | 9.9 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 62 | 8.9 |
 | valkey-io/valkey-search | 52 | 616 | #1464 (2026-10-01) | 52 | 7.4 |
 
@@ -38,28 +38,28 @@ Updated 2026-11-05T10:24+00:00.
 
 ### valkey-io/valkey-bloom
 
-[2026-11-05T09:55:42+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41994064121): 20 merge(s) tested, 3 without a code change.
+[2026-11-05T10:29:17+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42006438529): 20 merge(s) tested, 1 without a code change.
 
-- [valkey-io/valkey-bloom#92](https://github.com/valkey-io/valkey-bloom/pull/92) ([tests](tests/valkey-bloom/92-8a897673d/)): Fixing bug in bloom defrag, adding digest checks to integration test, create new unit test that catches before mentioned bug (#92): 0 of 2 test(s) reached the change
-- [valkey-io/valkey-bloom#45](https://github.com/valkey-io/valkey-bloom/pull/45) ([tests](tests/valkey-bloom/45-12fa9358a/)): Adding usage of must_obey_client in wrapper to improve performace (#45): 0 of 1 test(s) reached the change
-- [valkey-io/valkey-bloom#49](https://github.com/valkey-io/valkey-bloom/pull/49): to retry, `cargo build --release` failed in parent (exit 101): Compiling heck v0.5.0 Compiling rustc-demangle v0.1.28 Compiling nix v0.26.4 Compiling strum_macros v0.26.4 Compiling backtrace v0.3.77 Compiling v
-- [valkey-io/valkey-bloom#48](https://github.com/valkey-io/valkey-bloom/pull/48): to retry, `cargo build --release` failed in merge (exit 101): Compiling lazy_static v1.5.1 Compiling rustc-demangle v0.1.28 Compiling valkey-module-macros-internals v0.1.15 Compiling strum_macros v0.26.4 Compil
-- [valkey-io/valkey-bloom#46](https://github.com/valkey-io/valkey-bloom/pull/46) ([tests](tests/valkey-bloom/46-8f1c9f42f/)): Add License file following Valkey (#46): declined: The change only adds a LICENSE file containing the BSD 3-Clause license text. It touches no module source, build configuration, or runtime behaviour, so there is no code path to exercise and no scenario is needed.
-- [valkey-io/valkey-bloom#44](https://github.com/valkey-io/valkey-bloom/pull/44) ([tests](tests/valkey-bloom/44-8077d5874/)): Code cleanup: removing unused dependencies in tests, removing digest (#44): 2 of 2 test(s) reached the change; crash, introduced and since fixed (recorded); crash, fixed by #44 (recorded); crash, fixed by #44 (recorded)
-- [valkey-io/valkey-bloom#43](https://github.com/valkey-io/valkey-bloom/pull/43) ([tests](tests/valkey-bloom/43-56f631f74/)): Fixing capacity calcualtion and adding a unit test to make sure capacity caluclation matches actual capacity (#43): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-bloom#41](https://github.com/valkey-io/valkey-bloom/pull/41) ([tests](tests/valkey-bloom/41-14ad3d053/)): Adding optional arg to BF.INSERT to allow users to check if their bloom filter can reach the desired size (#41): 4 of 4 test(s) reached the change
-- [valkey-io/valkey-bloom#39](https://github.com/valkey-io/valkey-bloom/pull/39) ([tests](tests/valkey-bloom/39-1bb7d2520/)): Update README.md (#39): declined: The change only rewrites README.md and replaces a code comment in src/bloom/command_handler.rs (the lines changed are all `//` comments; the WrongArity return and all surrounding logic are untouched). No command behaviour, reply, persistence, or replication path differs between the change 
-- [valkey-io/valkey-bloom#38](https://github.com/valkey-io/valkey-bloom/pull/38) ([tests](tests/valkey-bloom/38-a9b578eff/)): ACL Updates, BF.INSERT updates, other misc updates (#38): 6 of 6 test(s) reached the change
-- [valkey-io/valkey-bloom#37](https://github.com/valkey-io/valkey-bloom/pull/37) ([tests](tests/valkey-bloom/37-ab158bb6c/)): Large bloom object handling + Rename to BloomFilterType to BloomObject (#37): declined: no proposed test validated
-- [valkey-io/valkey-bloom@6a514bfbe8bf](https://github.com/valkey-io/valkey-bloom/commit/6a514bfbe8bf873967c470b694b17bf7e5f10dd3) ([tests](tests/valkey-bloom/6a514bfbe/)): Fix size check and update build script to fail on warnings: 2 of 2 test(s) reached the change
-- [valkey-io/valkey-bloom#31](https://github.com/valkey-io/valkey-bloom/pull/31) ([tests](tests/valkey-bloom/31-9baf6fcb8/)): Add TIGHTENING Ratio and FP_Rate configs support (#31): 4 of 4 test(s) reached the change; crash, introduced and since fixed (recorded)
-- [valkey-io/valkey-bloom#34](https://github.com/valkey-io/valkey-bloom/pull/34) ([tests](tests/valkey-bloom/34-98ccdc6b4/)): Deflaking tests to remove chance of false positives causing tests to fail (#34): declined: The change modifies only test code: the Rust unit-test helper inside `mod tests` in src/bloom/utils.rs and the Python integration tests under tests/, relaxing assertions so probabilistic bloom-filter false positives don't fail CI. No shipped module code (command handling, replies, persiste
-- [valkey-io/valkey-bloom#33](https://github.com/valkey-io/valkey-bloom/pull/33) ([tests](tests/valkey-bloom/33-3589d3075/)): Adding bloom defrag hits and misses to info, added check these metrics get incremented in defrag test (#33): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-bloom#32](https://github.com/valkey-io/valkey-bloom/pull/32) ([tests](tests/valkey-bloom/32-8b94c177b/)): Deterministic replication - bloom object creation should have the same properties on replica nodes to match the object on the primary (#32): 5 of 5 test(s) reached the change
-- [valkey-io/valkey-bloom#28](https://github.com/valkey-io/valkey-bloom/pull/28) ([tests](tests/valkey-bloom/28-4a8af8002/)): Update default configuration and related test (#28): 2 of 2 test(s) reached the change; check, introduced and since fixed (recorded)
-- [valkey-io/valkey-bloom#29](https://github.com/valkey-io/valkey-bloom/pull/29) ([tests](tests/valkey-bloom/29-a5ec8dea6/)): Adding bloom acl category to commands. Added tests to check that the commands contain the correct acl categories (#29): 3 of 3 test(s) reached the change; check, introduced and since fixed (recorded)
-- [valkey-io/valkey-bloom#24](https://github.com/valkey-io/valkey-bloom/pull/24) ([tests](tests/valkey-bloom/24-d8a05083c/)): Updating defragmentation to defrag both bloomfiltertype and bloomfiler structs (#24): 8 of 8 test(s) reached the change; check, introduced and since fixed (recorded)
-- [valkey-io/valkey-bloom#30](https://github.com/valkey-io/valkey-bloom/pull/30) ([tests](tests/valkey-bloom/30-eaa218fda/)): Adding a wrong type error message when performing a bloom operation on a non bloom key (#30): 2 of 2 test(s) reached the change; check, introduced and since fixed (recorded)
+- [valkey-io/valkey-bloom#49](https://github.com/valkey-io/valkey-bloom/pull/49): to retry, `cargo build --release` failed in parent (exit 101): Compiling heck v0.5.0 Compiling rustc-demangle v0.1.28 Compiling strum_macros v0.26.4 Compiling valkey-module-macros-internals v0.1.15 Compiling ni
+- [valkey-io/valkey-bloom#48](https://github.com/valkey-io/valkey-bloom/pull/48): to retry, `cargo build --release` failed in merge (exit 101): Compiling lazy_static v1.5.1 Compiling pin-utils v0.1.1 Compiling nix v0.26.4 Compiling valkey-module-macros-internals v0.1.15 Compiling serde_syn v
+- [valkey-io/valkey-bloom#26](https://github.com/valkey-io/valkey-bloom/pull/26) ([tests](tests/valkey-bloom/26-f10a4e551/)): Add tightening_ratio support in BloomFilterType structure (#26): 4 of 4 test(s) reached the change; check, introduced and since fixed (recorded)
+- [valkey-io/valkey-bloom#27](https://github.com/valkey-io/valkey-bloom/pull/27) ([tests](tests/valkey-bloom/27-1b0d819a4/)): Support random seed per bloom object by default (configurable) (#27): 3 of 3 test(s) reached the change; check, introduced and since fixed (recorded)
+- [valkey-io/valkey-bloom#23](https://github.com/valkey-io/valkey-bloom/pull/23) ([tests](tests/valkey-bloom/23-34d6fb086/)): Updating how we create BloomFilter from rdb loads and upgrading bloomfilter dependency to version 3.0 (#23): 6 of 6 test(s) reached the change
+- [valkey-io/valkey-bloom#21](https://github.com/valkey-io/valkey-bloom/pull/21) ([tests](tests/valkey-bloom/21-7c2546803/)): Support for DEBUG DIGEST module data type callback (#21): 4 of 4 test(s) reached the change; crash, predates #21, since fixed (recorded)
+- [valkey-io/valkey-bloom#20](https://github.com/valkey-io/valkey-bloom/pull/20) ([tests](tests/valkey-bloom/20-a33e0e3d6/)): Add new metrics to show capacity and items across objects (#20): 3 of 3 test(s) reached the change
+- [valkey-io/valkey-bloom#17](https://github.com/valkey-io/valkey-bloom/pull/17) ([tests](tests/valkey-bloom/17-b301baa73/)): add bf.load to support bloom filter aofrewrite. (#17): 2 of 4 test(s) reached the change; crash, fixed by #17 (recorded); crash, fixed by #17 (recorded)
+- [valkey-io/valkey-bloom#19](https://github.com/valkey-io/valkey-bloom/pull/19) ([tests](tests/valkey-bloom/19-31d21c0ab/)): Adding info handler, that contains three fields, num_objects, num_filters and memory_bytes. Additionally updated drop and created tests around this new info handler (#19): 7 of 7 test(s) reached the change
+- [valkey-io/valkey-bloom#18](https://github.com/valkey-io/valkey-bloom/pull/18) ([tests](tests/valkey-bloom/18-12031b237/)): Handle bloom object max allowed size limit, switch fp rate to f64 (#18): 5 of 5 test(s) reached the change
+- [valkey-io/valkey-bloom#16](https://github.com/valkey-io/valkey-bloom/pull/16) ([tests](tests/valkey-bloom/16-57a79012f/)): Add integration tests for maxmemory scenarios and replication correctness. Fixed others tests and updated the build.sh script for running single integration tests (#16): declined: The change is tests and build tooling only. The sole source modification (src/bloom/command_handler.rs) rewrites three match arms from Ok(_)/Ok(_v) to Ok(()), a semantically identical pattern-match style change on a Result<(), E> with no behavioral effect. Everything else adds pytest integ
+- [valkey-io/valkey-bloom#15](https://github.com/valkey-io/valkey-bloom/pull/15) ([tests](tests/valkey-bloom/15-f5aa39e60/)): Add Integration Testing for correctness of scaling and non scaling filters and other core functionality validation (#15): declined: The change is entirely test code: the only src/ edit is inside the #[cfg-style] `mod tests` block of src/bloom/utils.rs (refactoring unit-test helpers like item_exists_test -> check_items_exist and fixing index bookkeeping in them), and the rest of the diff adds or renames Python integrati
+- [valkey-io/valkey-bloom#14](https://github.com/valkey-io/valkey-bloom/pull/14) ([tests](tests/valkey-bloom/14-fde4d3726/)): Updating _ to -in lib.rs. Also updating loading from rdb to use a trait instead (#14): declined: no proposed test validated
+- [valkey-io/valkey-bloom#7](https://github.com/valkey-io/valkey-bloom/pull/7) ([tests](tests/valkey-bloom/7-4d386495d/)): Integration tests for commands, delete operations, expiry, compatibility (#7): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-bloom@687bec76fa70](https://github.com/valkey-io/valkey-bloom/commit/687bec76fa70cecb8f2c4916f4cffc68b20c81e5) ([tests](tests/valkey-bloom/687bec76f/)): Update build.sh and fix import in save/restore pytest: declined: The change modifies only build.sh (build-script environment-variable handling, defaulting SERVER_VERSION to 'unstable' instead of failing) and adds a missing test-fixture import to tests/test_save_and_restore.py. No module source code, command behaviour, data format, or replication path ch
+- [valkey-io/valkey-bloom#2](https://github.com/valkey-io/valkey-bloom/pull/2) ([tests](tests/valkey-bloom/2-282599d21/)): RDB format optimization: Using a fixed seed for bloom filters (#2): 4 of 4 test(s) reached the change; check, fixed by #2 (recorded); check, not reproduced (recorded); check, not reproduced (recorded)
+- [valkey-io/valkey-bloom@145f9b285eb3](https://github.com/valkey-io/valkey-bloom/commit/145f9b285eb3e61284872fbf30b4dd3cb290072e) ([tests](tests/valkey-bloom/145f9b285/)): Merge pull request #5 from zackcam/unstable: declined: The change is entirely build/CI/test infrastructure: it adds a GitHub Actions workflow, reworks build.sh and the README to use SERVER_VERSION (dropping 7.2.x for 8.0.0), and refactors the Python integration-test harness to pass a server path instead of a version enum (plus a typo fix). No 
+- [valkey-io/valkey-bloom@6d0a4b60c284](https://github.com/valkey-io/valkey-bloom/commit/6d0a4b60c284922db0633b7efe5c8006c07b9cee) ([tests](tests/valkey-bloom/6d0a4b60c/)): Merge pull request #3 from KarthikSubbarao/unstable: 2 of 2 test(s) reached the change
+- [valkey-io/valkey-bloom@a180f42678d4](https://github.com/valkey-io/valkey-bloom/commit/a180f42678d48a479582de5c5b703f9bfe8646b0) ([tests](tests/valkey-bloom/a180f4267/)): Add unit testing support using the valkeymodule-rs enable-system-alloc feature: declined: This is a build/CI-only change: it edits Cargo.toml metadata, bumps the valkey-module SDK from 0.1.1 to 0.1.2, adds an optional enable-system-alloc cargo feature, and re-enables `cargo test --features enable-system-alloc` in build.sh. The enable-system-alloc feature exists solely so unit t
+- [valkey-io/valkey-bloom@0b9a90dccef5](https://github.com/valkey-io/valkey-bloom/commit/0b9a90dccef5b55651cd5333f132299e8212cc67) ([tests](tests/valkey-bloom/0b9a90dcc/)): Types, Ranges, limit updates and overflow handling: 3 of 4 test(s) reached the change; crash, fixed by 0b9a90dccef5 (recorded)
 
 ### valkey-io/valkey-json
 
@@ -93,10 +93,10 @@ Updated 2026-11-05T10:24+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 103 of 131 tested (79%)
+- Merges whose tests reached the change: 115 of 143 tested (80%)
 - Changed-line coverage: median 100% of 47 merge(s) measured, 3 under 50%
-- Recall: 27 parents flagged of 34 fix merges
-- Claude: $806.98 in the last 24 hours, $806.98 in the last 7 days, $806.98 in all
+- Recall: 28 parents flagged of 35 fix merges
+- Claude: $857.06 in the last 24 hours, $857.06 in the last 7 days, $857.06 in all
 - Issues filed: 15
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
@@ -116,5 +116,5 @@ Updated 2026-11-05T10:24+00:00.
 
 ## Retries
 
-- [valkey-io/valkey-bloom#49](https://github.com/valkey-io/valkey-bloom/pull/49): attempt 1 of 3, `cargo build --release` failed in parent (exit 101): Compiling heck v0.5.0 Compiling rustc-demangle v0.1.28 Compiling nix v0.26.4 Compiling strum_macros v0.26.4 Compiling backtrace v0.3.77 Compiling v
-- [valkey-io/valkey-bloom#48](https://github.com/valkey-io/valkey-bloom/pull/48): attempt 1 of 3, `cargo build --release` failed in merge (exit 101): Compiling lazy_static v1.5.1 Compiling rustc-demangle v0.1.28 Compiling valkey-module-macros-internals v0.1.15 Compiling strum_macros v0.26.4 Compil
+- [valkey-io/valkey-bloom#49](https://github.com/valkey-io/valkey-bloom/pull/49): attempt 2 of 3, `cargo build --release` failed in parent (exit 101): Compiling heck v0.5.0 Compiling rustc-demangle v0.1.28 Compiling strum_macros v0.26.4 Compiling valkey-module-macros-internals v0.1.15 Compiling ni
+- [valkey-io/valkey-bloom#48](https://github.com/valkey-io/valkey-bloom/pull/48): attempt 2 of 3, `cargo build --release` failed in merge (exit 101): Compiling lazy_static v1.5.1 Compiling pin-utils v0.1.1 Compiling nix v0.26.4 Compiling valkey-module-macros-internals v0.1.15 Compiling serde_syn v

@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.bloom-fp-rate-zero
+deployment:
+  modes: [standalone]
+metadata:
+  description: An fp-rate of exactly 0.0 is now rejected; the parent accepted it and
+    created a filter with an invalid error rate
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fprate
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [BF.RESERVE, ok, "0.5", "100"], expect: {equals: OK}}
+    - {command: [BF.RESERVE, fp0, "0", "100"], expect_difference: true, expect: {
+        error: "error rate range"}}
+    - {command: [BF.INSERT, fp0i, ERROR, "0", ITEMS, a], expect_difference: true,
+      expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fprate}

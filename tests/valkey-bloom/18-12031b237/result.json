@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "12031b237435722eb6b47826e3e76653a05e8dc7",
+  "parent": "57a79012fce127d10adef61399dec9a323a827c6",
+  "pr": 18,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Handle bloom object max allowed size limit, switch fp rate to f64 (#18)",
+  "date": "2024-10-29",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 5,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.9167,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

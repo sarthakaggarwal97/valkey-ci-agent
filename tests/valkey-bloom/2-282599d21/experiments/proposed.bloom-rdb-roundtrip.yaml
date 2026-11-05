@@ -1,0 +1,66 @@
+extends: [valkey.liveness]
+id: proposed.bloom-rdb-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: Bloom objects (scaled, non-scaling full, empty, large bitmap) survive
+    SAVE and restart under the fixed-seed RDB format; DUMP payload differs from the
+    parent's format
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    rdbcompression: {type: string, enum: ["yes", "no"], default: "yes"}
+components:
+- use: valkey.action.commands
+  id: roundtrip
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {rdbcompression: {$ref: inputs.rdbcompression}}
+    timeout_s: 60
+    commands:
+    - {command: [BF.RESERVE, bf, "0.000001", "2", EXPANSION, "2"], expect: {equals: OK}}
+    - {command: [BF.INSERT, bf, ITEMS, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11,
+        x12, x13, x14, x15, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26,
+        x27, x28, x29, x30, x31, x32, x33, x34, x35], expect: {equals: [1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [BF.INFO, bf, FILTERS], expect: {equals: 5}}
+    - {command: [BF.INFO, bf, CAPACITY], expect: {equals: 62}}
+    - {command: [BF.RESERVE, ns, "0.001", "5", NONSCALING], expect: {equals: OK}}
+    - {command: [BF.MADD, ns, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.ADD, ns, f], expect: {error: "non scaling filter is full"}}
+    - {command: [BF.RESERVE, empty, "0.01", "1000"], expect: {equals: OK}}
+    - {command: [BF.RESERVE, big, "0.001", "1000000"], expect: {equals: OK}}
+    - {command: [BF.ADD, big, lonely], expect: {equals: 1}}
+    - {command: [DUMP, bf], expect_difference: true, expect: {exists: true}}
+    - {command: [DUMP, ns], expect_difference: true, expect: {exists: true}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.CARD, bf], expect: {equals: 35}}
+    - {command: [BF.INFO, bf, FILTERS], expect: {equals: 5}}
+    - {command: [BF.INFO, bf, CAPACITY], expect: {equals: 62}}
+    - {command: [BF.INFO, bf, EXPANSION], expect: {equals: 2}}
+    - {command: [BF.EXISTS, bf, x1], expect: {equals: 1}}
+    - {command: [BF.EXISTS, bf, x35], expect: {equals: 1}}
+    - {command: [BF.MEXISTS, bf, x2, x3, x4], expect: {equals: [1, 1, 1]}}
+    - {command: [BF.MADD, bf, y1, y2, y3], expect: {equals: [1, 1, 1]}}
+    - {command: [BF.INFO, bf, ITEMS], expect: {equals: 38}}
+    - {command: [BF.INFO, bf, FILTERS], expect: {equals: 5}}
+    - {command: [BF.ADD, ns, g], expect: {error: "non scaling filter is full"}}
+    - {command: [BF.CARD, ns], expect: {equals: 5}}
+    - {command: [BF.INFO, ns, EXPANSION], expect: {equals: -1}}
+    - {command: [BF.CARD, empty], expect: {equals: 0}}
+    - {command: [BF.ADD, empty, first], expect: {equals: 1}}
+    - {command: [BF.EXISTS, big, lonely], expect: {equals: 1}}
+    - {command: [BF.CARD, big], expect: {equals: 1}}
+    - {command: [DUMP, bf], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [roundtrip.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: roundtrip}

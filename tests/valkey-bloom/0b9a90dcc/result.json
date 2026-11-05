@@ -1,0 +1,37 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "0b9a90dccef5b55651cd5333f132299e8212cc67",
+  "parent": "85e20fd3864140ad8f46c9ed3be37ca56e4c62f6",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Types, Ranges, limit updates and overflow handling",
+  "date": "2024-09-14",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 3,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.4305,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-9e5cbd5b09bb",
+      "seed": 103,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by 0b9a90dccef5",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}
