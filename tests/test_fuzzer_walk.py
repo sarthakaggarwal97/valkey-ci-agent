@@ -688,8 +688,12 @@ def test_the_workflow_walks_each_merge_in_its_own_job_and_records_the_run():
     assert "walk-test-${{ matrix.merge.sha }}" in uploads
     download = next(s for s in jobs["record"]["steps"] if s.get("name") == "Download the merges' tests and results")
     assert (download["with"]["pattern"], download["with"]["merge-multiple"]) == ("walk-test-*", "true")
-    # Only the record job writes, and only to this repository's walk-state branch.
-    assert jobs["record"]["permissions"] == {"contents": "write"}
+    # Only the record job writes: this repository's walk-state branch, and the next run's dispatch.
+    assert jobs["record"]["permissions"] == {"contents": "write", "actions": "write"}
+    following = next(s for s in jobs["record"]["steps"] if s.get("name") == "Start the next run")
+    assert "!cancelled()" in following["if"] and "vars.WALK_PAUSED != 'true'" in following["if"]
+    assert 'gh workflow run fuzzer-walk.yml -R "${GITHUB_REPOSITORY}"' in following["run"]
+    assert '"${GITHUB_REPOSITORY}" != valkey-io/*' in following["run"]
     assert all(job["permissions"].get("contents") == "read" for name, job in jobs.items() if name != "record")
     recording = next(s for s in jobs["record"]["steps"] if s.get("name") == "Record the run")["run"]
     assert '"${GITHUB_REPOSITORY}" != valkey-io/*' in recording
