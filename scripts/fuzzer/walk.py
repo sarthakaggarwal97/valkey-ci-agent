@@ -615,6 +615,10 @@ def reached_commands(report: dict[str, Any]) -> set[tuple[str, int]]:
     return reached
 
 
+# What LeakSanitizer does not report in the servers a run starts.
+LSAN_SUPPRESSIONS = Path(__file__).with_name("lsan.supp")
+
+
 def fuzz(fuzzer_bin: str, doc: dict[str, Any], seed: int, *, candidate: dict[str, Any], compare: dict[str, Any],
          core: bool, experiment_dir: Path, run_dir: Path) -> dict[str, Any]:
     """Run one test with ``candidate`` as the build under test and ``compare`` as what it compares with: each a
@@ -639,7 +643,8 @@ def fuzz(fuzzer_bin: str, doc: dict[str, Any], seed: int, *, candidate: dict[str
     try:
         with (run_dir / "console.out").open("w") as out:
             subprocess.run(command, stdout=out, stderr=subprocess.STDOUT, timeout=RUN_TIMEOUT_S + 300,
-                           env=filter_env((*PROCESS_BASICS, "ASAN_OPTIONS")))
+                           env={**filter_env((*PROCESS_BASICS, "ASAN_OPTIONS")),
+                                "LSAN_OPTIONS": f"suppressions={LSAN_SUPPRESSIONS}"})
     except subprocess.TimeoutExpired:
         return {"status": None, "error": "the run timed out", "found": {}}
     try:

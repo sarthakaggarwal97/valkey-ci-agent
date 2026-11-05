@@ -798,6 +798,22 @@ def test_a_run_that_could_not_start_tested_nothing(monkeypatch, tmp_path):
     assert done["error"] == f"the run could not start: {summary}"
 
 
+def test_a_run_suppresses_the_leaks_leaksanitizer_cannot_follow_in_valkey_json(monkeypatch, tmp_path):
+    envs = []
+
+    def run(command, **kw):
+        envs.append(kw["env"])
+        raise walk.subprocess.TimeoutExpired(command, 1)
+
+    monkeypatch.setattr(walk.subprocess, "run", run)
+    doc = {"scenario_id": "s", "experiment": {"id": "proposed.x"}, "deployment": {"mode": "standalone"}}
+    walk.fuzz("valkey-fuzzer", doc, 1, candidate={"server": "/m"}, compare={"server": "/p"}, core=True,
+              experiment_dir=tmp_path / "e", run_dir=tmp_path / "r")
+    (env,) = envs
+    path = env["LSAN_OPTIONS"].removeprefix("suppressions=")
+    assert "leak:libjson.so" in Path(path).read_text().splitlines()
+
+
 def test_the_commands_that_reached_the_change_are_read_from_the_sequence_and_tool_evidence():
     report = _report(
         {"component_id": "seq", "evidence": [{"evidence_id": "valkey.command.sequence", "value": {"reached": [3, 5]}}]},
