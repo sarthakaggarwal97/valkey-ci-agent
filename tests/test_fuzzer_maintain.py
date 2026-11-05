@@ -414,7 +414,9 @@ def test_the_workflow_runs_claude_without_github_writes_and_applies_its_results_
     # The gate: never under valkey-io, and a run maintained in the last 3 hours skips this one.
     assert jobs["gate"]["if"] == "github.repository_owner != 'valkey-io'"
     gate = _step(jobs["gate"], "Skip when the walk was maintained in the last 3 hours")
-    assert gate["env"] == {"GH_TOKEN": "${{ github.token }}"}
+    assert gate["env"] == {"GH_TOKEN": "${{ github.token }}", "FORCE": "${{ inputs.force }}"}
+    # A dispatch with force skips the gate: a run that timed out still counts as maintained.
+    assert 'if [[ "${FORCE}" == "true" ]]; then echo "go=true"' in gate["run"]
     assert "gh run list" in gate["run"] and "3 hours ago" in gate["run"] and '.name == "claude"' in gate["run"]
     assert (jobs["gather"]["needs"], jobs["gather"]["if"]) == ("gate", "needs.gate.outputs.go == 'true'")
     assert jobs["claude"]["needs"] == "gather" and jobs["verify"]["needs"] == "claude"

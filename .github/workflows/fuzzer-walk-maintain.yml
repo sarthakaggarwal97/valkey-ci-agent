@@ -3,7 +3,8 @@ name: Fuzzer Walk Maintenance
 # Maintains the fuzzer walk (fuzzer-walk.yml): Claude vets the open
 # [fuzzer-walk] issues and fixes what makes the walk noisy or blind, and
 # deterministic steps apply the results. Each walk run dispatches it; a run
-# skips when one maintained the walk in the last 3 hours.
+# skips when one maintained the walk in the last 3 hours, unless dispatched
+# with force.
 #
 # What Claude reads (issue bodies, logs, diffs) is untrusted, so Claude runs in
 # a job of its own with no GitHub token beyond contents:read and no secret but
@@ -16,6 +17,12 @@ name: Fuzzer Walk Maintenance
 
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Run even if the walk was maintained in the last 3 hours"
+        required: false
+        default: false
+        type: boolean
 
 permissions: {}
 
@@ -48,8 +55,10 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ inputs.force }}
         run: |
           set -euo pipefail
+          if [[ "${FORCE}" == "true" ]]; then echo "go=true" >> "${GITHUB_OUTPUT}"; exit 0; fi
           since=$(date -u -d '3 hours ago' +%s)
           go=true
           for id in $(gh run list -R "${GITHUB_REPOSITORY}" --workflow fuzzer-walk-maintain.yml --status success \
