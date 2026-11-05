@@ -128,8 +128,11 @@ MODULES = {
         branch="unstable", file="build/src/libjson.so",
         setup="command -v cmake > /dev/null || sudo apt-get install -y cmake",
         # build.sh takes the Valkey build's valkeymodule.h since 2026; before, it fetched the header of
-        # SERVER_VERSION itself.
-        build="""if grep -q VALKEY_MODULE_H_PATH build.sh; then
+        # SERVER_VERSION itself, and a parallel build could compile before the header landed, so it is put in
+        # place first. Older RapidJSON asks for a CMake older than CMake 4 accepts.
+        build="""export CMAKE_POLICY_VERSION_MINIMUM=3.5
+mkdir -p src/include && cp "${VALKEY_SRC}/src/valkeymodule.h" src/include/
+if grep -q VALKEY_MODULE_H_PATH build.sh; then
   SERVER_VERSION=unstable VALKEY_MODULE_H_PATH="${VALKEY_SRC}/src/valkeymodule.h" ./build.sh
 else
   SERVER_VERSION=unstable ./build.sh
