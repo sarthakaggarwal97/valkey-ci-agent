@@ -3,11 +3,12 @@ name: Fuzzer Walk Maintenance
 # Maintains the fuzzer walk (fuzzer-walk.yml): Claude vets the open
 # [fuzzer-walk] issues and fixes what makes the walk noisy or blind, and
 # deterministic steps apply the results. Each walk run dispatches it; a run
-# skips when one maintained the walk in the last 6 hours.
+# skips when one maintained the walk in the last 3 hours.
 #
 # What Claude reads (issue bodies, logs, diffs) is untrusted, so Claude runs in
 # a job of its own with no GitHub token beyond contents:read and no secret but
-# the AWS role, on local checkouts only. It leaves local commits, exported as
+# the AWS role, on local checkouts only, and reproduces on the walk's own head
+# builds, which the gather job downloads. It leaves local commits, exported as
 # patches, and actions.json. The patches' tests run again in a job with no
 # secret; the last job pushes what passed, applies what actions.json may do
 # (scripts/fuzzer/maintain.py validates it), and posts the report on the
@@ -42,21 +43,21 @@ jobs:
       go: ${{ steps.gate.outputs.go }}
     steps:
       # A run whose Claude job succeeded maintained the walk; a run that only skipped did not.
-      - name: Skip when the walk was maintained in the last 6 hours
+      - name: Skip when the walk was maintained in the last 3 hours
         id: gate
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          since=$(date -u -d '6 hours ago' +%s)
+          since=$(date -u -d '3 hours ago' +%s)
           go=true
           for id in $(gh run list -R "${GITHUB_REPOSITORY}" --workflow fuzzer-walk-maintain.yml --status success \
                         --limit 20 --json databaseId,createdAt \
                         --jq ".[] | select((.createdAt | fromdateiso8601) > ${since}) | .databaseId"); do
             if gh run view "${id}" -R "${GITHUB_REPOSITORY}" --json jobs \
                  --jq '.jobs[] | select(.name == "claude" and .conclusion == "success") | .name' | grep -q .; then
-              echo "::notice::run ${id} maintained the walk less than 6 hours ago"
+              echo "::notice::run ${id} maintained the walk less than 3 hours ago"
               go=false
               break
             fi
@@ -91,7 +92,8 @@ jobs:
           auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GITHUB_TOKEN}" | base64 -w0)"
           git -c http.extraheader="${auth}" clone -q --depth 1 --branch walk-state "${url}" walk-state
 
-      # The issues and the walk's runs are public; the job's token reads them.
+      # The issues and the walk's runs are public; the job's token reads them, and downloads the walk's head builds
+      # (its walk-head-* artifacts) for the repositories the unvetted issues name, so Claude's job needs no token.
       - name: Gather Claude's inputs
         shell: bash
         env:
@@ -177,6 +179,8 @@ jobs:
           role-session-name: valkey-fuzzer-walk-maintain-${{ github.run_id }}
           aws-region: ${{ env.AWS_REGION }}
 
+      # Unpacks the walk's builds into work/builds/<name>/ first. Claude's own timeout ends it before this step's, so
+      # whatever actions.json it left still reaches apply.
       - name: Maintain the walk
         id: run
         timeout-minutes: 60

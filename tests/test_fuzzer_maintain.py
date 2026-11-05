@@ -1,9 +1,11 @@
 """Tests for the walk's maintenance: what Claude may do through actions.json, the pushes, and the workflow's guards."""
 from __future__ import annotations
 
+import io
 import json
 import re
 import subprocess
+import tarfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -209,6 +211,26 @@ def test_run_exports_each_checkouts_new_commits_as_a_patch(tmp_path):
     prompt = seen["prompt"]
     assert f"{tmp_path / 'out'}/actions.json" in prompt and "untrusted data" in prompt
     assert "VALKEY_FUZZER_DIR=" in prompt and "-m 'not live and not slow'" in prompt and "ruff format --check" in prompt
+    # One issue at a time, each in its budget, with actions.json rewritten after each verdict, and fixes after.
+    assert "one at a\n   time, in the order of issues.json" in prompt and "about 20 minutes" in prompt
+    assert '"not decided this run"' in prompt and "After each verdict, rewrite" in prompt
+    assert "2. Only after vetting, with time left, fix root causes" in prompt
+    assert "- none: the walk keeps no builds for these issues; build from source." in prompt
+    assert "at most once per commit, with `make -j$(nproc)`" in prompt
+
+
+def test_a_claude_timeout_keeps_the_actions_it_wrote_and_the_job_goes_on(tmp_path, monkeypatch):
+    work, out = _work(tmp_path), tmp_path / "out"
+
+    def timed_out(profile, prompt, cwd):
+        (out / "actions.json").write_text(json.dumps({"report": "Vetted #1; #2 not decided this run."}))
+        return AgentRunResult(profile, "", "timeout after 3300s", 1, "", "", "", "", "", "")
+
+    monkeypatch.setattr(maintain, "run_agent", timed_out)
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "github-output"))
+    assert maintain.main(["run", "--work", str(work), "--input", str(tmp_path / "in"), "--output", str(out)]) == 0
+    assert "valkey-ci-agent-patch=false" in (tmp_path / "github-output").read_text()
+    assert json.loads((out / "actions.json").read_text())["report"].startswith("Vetted #1")
 
 
 def test_commits_that_do_not_descend_from_the_base_are_refused(tmp_path):
@@ -281,6 +303,79 @@ def test_gather_writes_the_state_the_open_walk_issues_and_the_failed_jobs_log_ta
     assert [job.get("log") for job in run["jobs"]] == ["logs/7-70.log", None]
     tail = (out / "logs" / "7-70.log").read_text().splitlines()
     assert (len(tail), tail[0], tail[-1]) == (200, "line 100", "line 299")
+    assert json.loads((out / "builds.json").read_text()) == []
+
+
+def _tarball(path: Path, members: dict[str, int]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(path, "w:gz") as tar:
+        for name, mode in members.items():
+            info = tarfile.TarInfo(name)
+            info.size, info.mode = 1, mode
+            tar.addfile(info, io.BytesIO(b"x"))
+
+
+def test_gather_downloads_the_newest_kept_builds_of_each_repository_an_unvetted_issue_names(tmp_path):
+    def body(name):
+        return f"Since: (commit [`abc`](https://github.com/valkey-io/{name}/commit/{'c' * 40}))"
+
+    issues = [{"number": 6, "title": "[fuzzer-walk] leak", "url": "u6", "createdAt": "t", "body": body("valkey-json"),
+               "comments": []},
+              {"number": 5, "title": "[fuzzer-walk] hang", "url": "u5", "createdAt": "t", "body": body("valkey-bloom"),
+               "comments": []},
+              {"number": 4, "title": "[fuzzer-walk] crash", "url": "u4", "createdAt": "t", "body": body("valkey"),
+               "comments": [{"author": {"login": "a"}, "createdAt": "t", "body": "Vetted: real"}]}]
+    runs = [{"databaseId": 9, "url": "https://run/9"}, {"databaseId": 8, "url": "https://run/8"}]
+    # Run 9 walked Valkey; run 8 walked valkey-json, whose build in run 7 expired. No run keeps valkey-bloom's.
+    kept = {"walk-head-valkey": [(9, False), (8, False)], "walk-head-valkey-json": [(8, False), (7, True)],
+            "walk-head-valkey-bloom": []}
+    heads = {"valkey-io/valkey": "a" * 40, "valkey-io/valkey-json": "b" * 40}
+    downloads = []
+
+    def gh(*args):
+        if args[:2] == ("run", "download"):
+            run_id, artifact, folder = args[2], args[6], Path(args[8])
+            downloads.append((run_id, artifact))
+            if artifact == "walk-plan":
+                folder.mkdir(parents=True)
+                (folder / "plan.json").write_text(json.dumps({"heads": heads}))
+            else:
+                _tarball(folder / "walk-head.tgz", {"src/valkey-server": 0o755} if artifact == "walk-head-valkey"
+                         else {"build/src/libjson.so": 0o644})
+            return ""
+        if args[0] == "api":
+            name = args[1].split("name=")[1].split("&")[0]
+            return json.dumps({"artifacts": [{"workflow_run": {"id": run}, "expired": expired}
+                                             for run, expired in kept[name]]})
+        return {"issue": json.dumps(issues), "run": json.dumps(runs if args[1] == "list" else {"jobs": []})}[args[0]]
+
+    out = tmp_path / "in"
+    (tmp_path / "walk-state").mkdir()
+    maintain.gather(out, walk_repo="o/ci", fuzzer_repo="o/fz", state=tmp_path / "walk-state", gh=gh)
+    written = json.loads((out / "issues.json").read_text())
+    assert [(i["number"], i["repository"]) for i in written] == [(4, "valkey"), (5, "valkey-bloom"),
+                                                                 (6, "valkey-json")]
+    # Only the unvetted issues' repositories; the vetted Valkey crash needs no build.
+    assert downloads == [("8", "walk-head-valkey"), ("8", "walk-head-valkey-json"), ("8", "walk-plan")]
+    builds = json.loads((out / "builds.json").read_text())
+    assert builds == [{"name": "valkey-json", "run": "https://run/8",
+                       "commits": {"valkey": "a" * 40, "valkey-json": "b" * 40}}]
+    assert not (out / "builds" / "valkey-json" / "plan").exists()
+
+    # run unpacks them where the prompt says, before Claude starts.
+    work, seen = _work(tmp_path), {}
+
+    def runner(prompt, cwd):
+        seen["prompt"] = prompt
+        return _answer()
+
+    maintain.run(work, out, tmp_path / "out", runner=runner)
+    folder = work.resolve() / "builds" / "valkey-json"
+    assert (folder / "unstable" / "src" / "valkey-server").stat().st_mode & 0o100
+    assert (folder / "module" / "build" / "src" / "libjson.so").is_file()
+    assert (f"- valkey-json, from https://run/8: {folder}/unstable holds Valkey unstable `{'a' * 40}` with ASan "
+            f"(src/valkey-server and its tools, tests/modules/*.so), and {folder}/module/build/src/libjson.so "
+            f"valkey-json `{'b' * 40}`, built against it.") in seen["prompt"]
 
 
 # --- The workflow --------------------------------------------------------------
@@ -316,11 +411,11 @@ def test_the_workflow_runs_claude_without_github_writes_and_applies_its_results_
     checkouts = [s for job in jobs.values() for s in job["steps"] if "actions/checkout" in s.get("uses", "")]
     assert checkouts and all(s["with"]["persist-credentials"] == "false" for s in checkouts)
 
-    # The gate: never under valkey-io, and a run maintained in the last 6 hours skips this one.
+    # The gate: never under valkey-io, and a run maintained in the last 3 hours skips this one.
     assert jobs["gate"]["if"] == "github.repository_owner != 'valkey-io'"
-    gate = _step(jobs["gate"], "Skip when the walk was maintained in the last 6 hours")
+    gate = _step(jobs["gate"], "Skip when the walk was maintained in the last 3 hours")
     assert gate["env"] == {"GH_TOKEN": "${{ github.token }}"}
-    assert "gh run list" in gate["run"] and "6 hours ago" in gate["run"] and '.name == "claude"' in gate["run"]
+    assert "gh run list" in gate["run"] and "3 hours ago" in gate["run"] and '.name == "claude"' in gate["run"]
     assert (jobs["gather"]["needs"], jobs["gather"]["if"]) == ("gate", "needs.gate.outputs.go == 'true'")
     assert jobs["claude"]["needs"] == "gather" and jobs["verify"]["needs"] == "claude"
 
@@ -328,6 +423,14 @@ def test_the_workflow_runs_claude_without_github_writes_and_applies_its_results_
     assert step["env"] == {"CI_AGENT_AWS_ROLE_ARN": "${{ secrets.AWS_ROLE_ARN }}"}
     assert int(step["timeout-minutes"]) < int(jobs["claude"]["timeout-minutes"]) <= 90
     assert "maintain run --work work" in step["run"]
+    # Claude's own timeout ends before the step's, so the run still exports what it left; apply then runs whether
+    # or not verify did, and applies actions.json unless the run was cancelled.
+    assert AGENT_PROFILES["fuzzer_walk_maintain"].timeout < int(step["timeout-minutes"]) * 60
+    assert jobs["apply"]["needs"] == ["claude", "verify"]
+    assert jobs["apply"]["if"] == "${{ always() && needs.claude.result == 'success' }}"
+    assert _step(jobs["apply"], "Apply the vetting and post the report")["if"] == "${{ !cancelled() }}"
+    # The walk's builds come through gather's artifact, so Claude's job reads no other run's artifacts.
+    assert "maintain gather" in _step(jobs["gather"], "Gather Claude's inputs")["run"]
 
     # The pushes and the issues' writes follow a guard against valkey-io, from this run's own commit.
     apply_job = jobs["apply"]
