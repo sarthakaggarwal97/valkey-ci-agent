@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.acl-digest-roles-aclfile
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL DIGEST over roles loaded from an ACL file, across ACL SAVE, a restart,
+    and ACL LOAD swapping the Roles table
+components:
+- use: valkey.action.commands
+  id: aclfile
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {aclfile: users.acl}
+    timeout_s: 60
+    files:
+      users.acl: "role filerole ~file:* +get\nrole zrole ~z:* +set\nuser default on\
+        \ nopass ~* &* +@all\nuser filemember on nopass ~u:* +get role=filerole,zrole\n"
+    commands:
+    - {command: [ACL, LIST], expect: {exists: true}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, SETROLE, filerole, resetkeys, "~file2:*"], expect: {equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, SETROLE, extra, "~x:*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, LOAD], expect: {equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, LIST], expect: {exists: true}}
+    - {command: [ACL, GETROLE, filerole], expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [aclfile.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aclfile}

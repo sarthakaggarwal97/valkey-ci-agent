@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d87001320d7e..070440826261.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9ae58efc97e0
+seed: 34961
+experiment:
+  id: proposed.aof-feed-direct-buf
+  inputs:
+    appendfsync: everysec
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

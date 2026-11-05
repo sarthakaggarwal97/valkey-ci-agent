@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8f67ab13683d6d31cde5925948df68dab0835651",
+  "parent": "e4d62b2a379203747473358b2c0a4b355c317580",
+  "pr": 4694,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Include roles in ACL DIGEST (#4694)",
+  "date": "2026-10-14",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 10,
+    "executed": 10,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.5931,
+  "findings": [],
+  "recorded": []
+}

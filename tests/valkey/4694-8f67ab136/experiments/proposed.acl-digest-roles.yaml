@@ -1,0 +1,73 @@
+extends: [valkey.liveness]
+id: proposed.acl-digest-roles
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL DIGEST over roles - create, edit, same-name twin, weird and long
+    role names, many roles, delete - every digest compared against the parent that
+    ignores roles
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: digest
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, DIGEST, extra], expect: {error: "wrong number of arguments"}}
+    - {command: [ACL, SETROLE, digestrole, "~role:a*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, SETUSER, digestmember, on, ">digestpass", "role=digestrole"],
+      expect: {equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, SETROLE, digestrole, resetkeys, "~role:b*"], expect: {equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, SETROLE, digestrole, resetkeys, "~role:a*"], expect: {equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, DELROLE, digestrole], expect: {error: "assigned to one or more\
+          \ users"}}
+    - {command: [ACL, SETROLE, digesttwin, "~twin:*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, digesttwin, on, nopass, "~twin:*", "+get"], expect: {
+        equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, SETROLE, default, "~d:*", "+ping"], expect: {equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, SETROLE, "w3ird!role@#$%^()_+<>;=.", allkeys, "+get"], expect: {
+        equals: OK}}
+    - {command: [ACL, SETROLE, "raaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "~long:*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, LIST], expect: {exists: true}}
+    - {command: [ACL, SETROLE, role00, "~k00:*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, SETROLE, role01, "~k01:*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, SETROLE, role02, "~k02:*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, SETROLE, role03, "~k03:*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, SETROLE, role04, "~k04:*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, SETROLE, role05, "~k05:*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, SETROLE, role06, "~k06:*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, SETROLE, role07, "~k07:*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, SETROLE, role08, "~k08:*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, SETROLE, role09, "~k09:*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, DELUSER, digestmember, digesttwin], expect: {equals: 2}}
+    - {command: [ACL, DELROLE, digestrole, digesttwin, default, "w3ird!role@#$%^()_+<>;=.",
+        "raaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"], expect: {
+        equals: 5}}
+    - {command: [ACL, DELROLE, role00, role01, role02, role03, role04, role05, role06,
+        role07, role08, role09], expect: {equals: 10}}
+    - {command: [ACL, DELROLE, nosuchrole], expect: {equals: 0}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [digest.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: digest}

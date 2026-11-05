@@ -1,0 +1,111 @@
+extends: [valkey.liveness]
+id: proposed.vset-bucket-transitions
+deployment:
+  modes: [standalone]
+metadata:
+  description: Hash field TTL volatile-set size tracking across SINGLE/VECTOR/RAX+HT
+    bucket transitions, same-expiry entry updates, untracking, bounded expiry reaping
+    and MEMORY USAGE per encoding, compared against the parent; enable-debug-assert
+    makes vsetSize cross-check the tracked size against a bucket walk during BGREWRITEAOF
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: vset
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 0, enable-debug-assert: 'yes'}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [HSETEX, h, PXAT, 33177117600000, FIELDS, 1, f1, 10], expect: {equals: 1}}
+    - {command: [MEMORY, USAGE, h], compare: skip, expect: {min: 1}}
+    - {command: [HINCRBYFLOAT, h, f1, 0.5], expect: {equals: '10.5'}}
+    - {command: [HSETEX, h, KEEPTTL, FIELDS, 1, f1, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      expect: {equals: 1}}
+    - {command: [HPEXPIRETIME, h, FIELDS, 1, f1], expect: {equals: [33177117600000]}}
+    - {command: [HSETEX, h, PXAT, 33177117600000, FIELDS, 1, f2, 20], expect: {equals: 1}}
+    - {command: [MEMORY, USAGE, h], compare: skip, expect: {min: 1}}
+    - {command: [HINCRBYFLOAT, h, f2, 0.25], expect: {equals: '20.25'}}
+    - {command: [HSETEX, h, KEEPTTL, FIELDS, 2, f1, yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy,
+        f2, zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz], expect: {
+        equals: 1}}
+    - {command: [HSETEX, h, PXAT, 33177127600000, FIELDS, 1, f2, 20], expect: {equals: 1}}
+    - {command: [HPERSIST, h, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HSET, h, f2, plain], expect: {equals: 0}}
+    - {command: [HTTL, h, FIELDS, 1, f2], expect: {equals: [-1]}}
+    - {command: [HSETEX, h, PXAT, 33177117600000, FIELDS, 140, a1, 1, a2, 1, a3, 1,
+        a4, 1, a5, 1, a6, 1, a7, 1, a8, 1, a9, 1, a10, 1, a11, 1, a12, 1, a13, 1,
+        a14, 1, a15, 1, a16, 1, a17, 1, a18, 1, a19, 1, a20, 1, a21, 1, a22, 1, a23,
+        1, a24, 1, a25, 1, a26, 1, a27, 1, a28, 1, a29, 1, a30, 1, a31, 1, a32, 1,
+        a33, 1, a34, 1, a35, 1, a36, 1, a37, 1, a38, 1, a39, 1, a40, 1, a41, 1, a42,
+        1, a43, 1, a44, 1, a45, 1, a46, 1, a47, 1, a48, 1, a49, 1, a50, 1, a51, 1,
+        a52, 1, a53, 1, a54, 1, a55, 1, a56, 1, a57, 1, a58, 1, a59, 1, a60, 1, a61,
+        1, a62, 1, a63, 1, a64, 1, a65, 1, a66, 1, a67, 1, a68, 1, a69, 1, a70, 1,
+        a71, 1, a72, 1, a73, 1, a74, 1, a75, 1, a76, 1, a77, 1, a78, 1, a79, 1, a80,
+        1, a81, 1, a82, 1, a83, 1, a84, 1, a85, 1, a86, 1, a87, 1, a88, 1, a89, 1,
+        a90, 1, a91, 1, a92, 1, a93, 1, a94, 1, a95, 1, a96, 1, a97, 1, a98, 1, a99,
+        1, a100, 1, a101, 1, a102, 1, a103, 1, a104, 1, a105, 1, a106, 1, a107, 1,
+        a108, 1, a109, 1, a110, 1, a111, 1, a112, 1, a113, 1, a114, 1, a115, 1, a116,
+        1, a117, 1, a118, 1, a119, 1, a120, 1, a121, 1, a122, 1, a123, 1, a124, 1,
+        a125, 1, a126, 1, a127, 1, a128, 1, a129, 1, a130, 1, a131, 1, a132, 1, a133,
+        1, a134, 1, a135, 1, a136, 1, a137, 1, a138, 1, a139, 1, a140, 1], expect: {
+        equals: 1}}
+    - {command: [HLEN, h], expect: {equals: 142}}
+    - {command: [MEMORY, USAGE, h], compare: skip, expect: {min: 1}}
+    - {command: [HINCRBYFLOAT, h, a1, 1], expect: {equals: '2'}}
+    - {command: [BGREWRITEAOF], expect: {contains: started}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 60, expect: {contains: 'aof_rewrites:1'}}
+    - {command: [HDEL, h, a2, a3], expect: {equals: 2}}
+    - {command: [HPEXPIRE, h, 150, FIELDS, 3, a4, a5, a6], expect: {equals: [1, 1,
+          1]}}
+    - {command: [HLEN, h], wait_s: 60, expect: {equals: 137}}
+    - {command: [HSETEX, k, PXAT, 33177117600000, FIELDS, 8, k1a, 1, k1b, 1, k1c,
+        1, k1d, 1, k1e, 1, k1f, 1, k1g, 1, k1h, 1], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33177127600000, FIELDS, 8, k2a, 1, k2b, 1, k2c,
+        1, k2d, 1, k2e, 1, k2f, 1, k2g, 1, k2h, 1], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33177137600000, FIELDS, 8, k3a, 1, k3b, 1, k3c,
+        1, k3d, 1, k3e, 1, k3f, 1, k3g, 1, k3h, 1], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33177147600000, FIELDS, 8, k4a, 1, k4b, 1, k4c,
+        1, k4d, 1, k4e, 1, k4f, 1, k4g, 1, k4h, 1], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33177157600000, FIELDS, 8, k5a, 1, k5b, 1, k5c,
+        1, k5d, 1, k5e, 1, k5f, 1, k5g, 1, k5h, 1], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33177167600000, FIELDS, 8, k6a, 1, k6b, 1, k6c,
+        1, k6d, 1, k6e, 1, k6f, 1, k6g, 1, k6h, 1], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33177177600000, FIELDS, 8, k7a, 1, k7b, 1, k7c,
+        1, k7d, 1, k7e, 1, k7f, 1, k7g, 1, k7h, 1], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33177187600000, FIELDS, 8, k8a, 1, k8b, 1, k8c,
+        1, k8d, 1, k8e, 1, k8f, 1, k8g, 1, k8h, 1], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33177197600000, FIELDS, 8, k9a, 1, k9b, 1, k9c,
+        1, k9d, 1, k9e, 1, k9f, 1, k9g, 1, k9h, 1], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33177207600000, FIELDS, 8, k10a, 1, k10b, 1, k10c,
+        1, k10d, 1, k10e, 1, k10f, 1, k10g, 1, k10h, 1], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33177217600000, FIELDS, 8, k11a, 1, k11b, 1, k11c,
+        1, k11d, 1, k11e, 1, k11f, 1, k11g, 1, k11h, 1], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33177227600000, FIELDS, 8, k12a, 1, k12b, 1, k12c,
+        1, k12d, 1, k12e, 1, k12f, 1, k12g, 1, k12h, 1], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33177237600000, FIELDS, 8, k13a, 1, k13b, 1, k13c,
+        1, k13d, 1, k13e, 1, k13f, 1, k13g, 1, k13h, 1], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33177247600000, FIELDS, 8, k14a, 1, k14b, 1, k14c,
+        1, k14d, 1, k14e, 1, k14f, 1, k14g, 1, k14h, 1], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33177257600000, FIELDS, 8, k15a, 1, k15b, 1, k15c,
+        1, k15d, 1, k15e, 1, k15f, 1, k15g, 1, k15h, 1], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33177267600000, FIELDS, 8, k16a, 1, k16b, 1, k16c,
+        1, k16d, 1, k16e, 1, k16f, 1, k16g, 1, k16h, 1], expect: {equals: 1}}
+    - {command: [HLEN, k], expect: {equals: 128}}
+    - {command: [MEMORY, USAGE, k], compare: skip, expect: {min: 1}}
+    - {command: [BGREWRITEAOF], expect: {contains: started}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 60, expect: {contains: 'aof_rewrites:2'}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HGETALL, k], compare: unordered-pairs}
+    - {command: [DEL, h, k], expect: {equals: 2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [vset.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: vset}

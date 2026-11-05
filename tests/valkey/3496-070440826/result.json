@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "070440826261994f8133a2914010f16f821e2e09",
+  "parent": "d87001320d7e53d633e823ebb614c091059d6167",
+  "pr": 3496,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "aof: write directly to server.aof_buf in feedAppendOnlyFile (#3496)",
+  "date": "2026-10-16",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 7,
+    "executed": 7,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.5102,
+  "findings": [],
+  "recorded": []
+}

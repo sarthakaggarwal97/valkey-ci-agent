@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.hash-expired-field-aof-replay
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    HPERSIST, HEXPIRE and HEXPIREAT on a hash with a stored-but-expired field must
+    not write the expired field to the AOF; the parent replays it at load and the
+    field is persisted or resurrected after restart.
+inputs:
+  properties:
+    listpack_entries:
+      type: string
+      enum: ["128", "0"]
+      default: "128"
+      description: hash-max-listpack-entries on both private servers; "0" forces hashtable
+        encoding
+components:
+- use: valkey.action.commands
+  id: aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 60
+    server_config:
+      appendonly: "yes"
+      appendfsync: always
+      enable-debug-command: "yes"
+      hash-max-listpack-entries: {$ref: inputs.listpack_entries}
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [HSETEX, h3, PX, 100000, FIELDS, 1, live, v], expect: {equals: 1}}
+    - {command: [HSETEX, h3, PX, 1, FIELDS, 1, expired, v], expect: {equals: 1}}
+    - {command: [HEXISTS, h3, expired], wait_s: 10, expect: {equals: 0}}
+    - {command: [HSETEX, h4, PX, 100000, FIELDS, 1, live, v], expect: {equals: 1}}
+    - {command: [HSETEX, h4, PX, 1, FIELDS, 1, expired, v], expect: {equals: 1}}
+    - {command: [HEXISTS, h4, expired], wait_s: 10, expect: {equals: 0}}
+    - {command: [HSET, h10, nottl, v], expect: {equals: 1}}
+    - {command: [HSETEX, h10, PX, 100000, FIELDS, 1, live, v], expect: {equals: 1}}
+    - {command: [HSETEX, h10, PX, 1, FIELDS, 1, expired, v], expect: {equals: 1}}
+    - {command: [HEXISTS, h10, expired], wait_s: 10, expect: {equals: 0}}
+    - {command: [HPERSIST, h3, FIELDS, 2, expired, live], expect: {equals: [-2, 1]}}
+    - {command: [HEXPIRE, h4, 100000, FIELDS, 2, expired, live], expect: {equals: [
+          -2, 1]}}
+    - {command: [HEXPIREAT, h10, 9999999999, XX, FIELDS, 4, nottl, expired, missing,
+        live], expect: {equals: [0, -2, -2, 1]}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HEXISTS, h3, expired], expect_difference: true, expect: {equals: 0}}
+    - {command: [HPTTL, h3, FIELDS, 1, expired], expect_difference: true, expect: {
+        equals: [-2]}}
+    - {command: [HEXISTS, h4, expired], expect_difference: true, expect: {equals: 0}}
+    - {command: [HEXISTS, h10, expired], expect_difference: true, expect: {equals: 0}}
+    - {command: [HEXISTS, h3, live], expect: {equals: 1}}
+    - {command: [HPTTL, h3, FIELDS, 1, live], expect: {equals: [-1]}}
+    - {command: [HEXISTS, h4, live], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [aof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof}

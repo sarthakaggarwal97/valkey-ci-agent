@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e4d62b2a379203747473358b2c0a4b355c317580",
+  "parent": "4319738e6a5aec3682c4fb397363c494d98ba6fe",
+  "pr": 4772,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Avoid propagating expired hash fields from HDEL, HGETDEL, HPERSIST, and HEXPIRE (#4772)",
+  "date": "2026-10-14",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 70,
+    "executed": 66,
+    "percent": 94,
+    "uncovered": [
+      "src/t_hash.c:1573",
+      "src/t_hash.c:1574",
+      "src/t_hash.c:1575",
+      "src/t_hash.c:2365"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 8.0657,
+  "findings": [],
+  "recorded": []
+}

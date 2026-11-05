@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.listpack-backlen-boundary
+deployment:
+  modes: [standalone]
+metadata:
+  description: A listpack element whose encoded length is exactly 16383 (the ambiguous
+    backlen boundary) round-trips through DUMP, forward/reverse reads, in-place replace
+    and an RDB save+reload, compared across the change and its parent
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+    rdbcompression: {type: string, enum: ["yes", "no"], default: "yes"}
+components:
+- use: valkey.action.commands
+  id: backlen
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config:
+      hash-max-listpack-value: 20000
+      hash-max-listpack-entries: 128
+      zset-max-listpack-value: 20000
+      zset-max-listpack-entries: 128
+      rdbcompression: {$ref: inputs.rdbcompression}
+    commands:
+    - {command: [EVAL, "local v=string.rep('x',16378) redis.call('del','s','h','z')\
+          \ redis.call('xadd','s','1-1','f',v) redis.call('xadd','s','1-2','f','tail')\
+          \ redis.call('hset','h','f',v,'g','tail') redis.call('zadd','z',1,v,2,'tail')\
+          \ return 'ok'", 0], expect: {equals: ok}}
+    - {command: [EVAL, "local e=redis.call('xrange','s','-','+') return {#e, #e[1][2][2],\
+          \ e[2][2][2]}", 0], expect: {equals: [2, 16378, tail]}}
+    - {command: [EVAL, "local e=redis.call('xrevrange','s','+','-') return {#e, e[1][2][2],\
+          \ #e[2][2][2]}", 0], expect: {equals: [2, tail, 16378]}}
+    - {command: [EVAL, "return {redis.call('hstrlen','h','f'), redis.call('hget','h','g')}",
+        0], expect: {equals: [16378, tail]}}
+    - {command: [EVAL, "local m=redis.call('zrange','z',0,-1) return {#m, #m[1], m[2]}",
+        0], expect: {equals: [2, 16378, tail]}}
+    - {command: [DUMP, s], expect_difference: true, expect: {exists: true}}
+    - {command: [DUMP, h], expect_difference: true, expect: {exists: true}}
+    - {command: [DUMP, z], expect_difference: true, expect: {exists: true}}
+    - {command: [HSET, h, f, small], expect: {equals: 0}}
+    - {command: [HGET, h, f], expect: {equals: small}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [EVAL, "local e=redis.call('xrange','s','-','+') return {#e, #e[1][2][2],\
+          \ e[2][2][2]}", 0], expect: {equals: [2, 16378, tail]}}
+    - {command: [EVAL, "local e=redis.call('xrevrange','s','+','-') return {#e, e[1][2][2],\
+          \ #e[2][2][2]}", 0], expect: {equals: [2, tail, 16378]}}
+    - {command: [EVAL, "local m=redis.call('zrange','z',0,-1) return {#m, #m[1], m[2]}",
+        0], expect: {equals: [2, 16378, tail]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: backlen}

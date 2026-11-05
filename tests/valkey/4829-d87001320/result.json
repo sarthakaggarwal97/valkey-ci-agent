@@ -1,0 +1,37 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d87001320d7e53d633e823ebb614c091059d6167",
+  "parent": "035b8d61d0e8fc3558e566ec76088c07562b080c",
+  "pr": 4829,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Allow `vset` to track size pre-emptively (#4829)",
+  "date": "2026-10-16",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 9,
+  "proven": 4,
+  "hunted": 9,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 59,
+    "executed": 50,
+    "percent": 84,
+    "uncovered": [
+      "src/vset.c:2073",
+      "src/vset.c:2085",
+      "src/vset.c:2118",
+      "src/vset.c:2126",
+      "src/vset.c:2142",
+      "src/vset.c:2147",
+      "src/vset.c:2209",
+      "src/vset.c:2279",
+      "src/vset.c:2289"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 23.1355,
+  "findings": [],
+  "recorded": []
+}

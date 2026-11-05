@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "035b8d61d0e8fc3558e566ec76088c07562b080c",
+  "parent": "d379883ae8d7573a7f2b364f7d787643c3414731",
+  "pr": 4644,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix btree zset lex seek, NaN score bounds and a root prefix leak (#4644)",
+  "date": "2026-10-15",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 64,
+    "executed": 57,
+    "percent": 89,
+    "uncovered": [
+      "src/fbtree.c:1317",
+      "src/fbtree.c:1318",
+      "src/fbtree.c:1320",
+      "src/fbtree.c:1331",
+      "src/fbtree.c:1332",
+      "src/fbtree.c:1334",
+      "src/ordered_index.c:373"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 6.0385,
+  "findings": [],
+  "recorded": []
+}

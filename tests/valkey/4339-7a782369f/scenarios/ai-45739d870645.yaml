@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3db525ec4076..7a782369f77f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-45739d870645
+seed: 433903
+experiment:
+  id: proposed.acl-genpass-burnin
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

@@ -1,0 +1,144 @@
+extends: [valkey.liveness]
+id: proposed.hash-field-ttl-vset-size
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Hash field TTL churn across every vset bucket encoding (SINGLE, VECTOR, RAX, and
+    a >127 same-expiry HT time bucket), with removals, persists, cross-bucket TTL
+    updates, bounded active-expiry reaping down to empty, AOF rewrite (which feeds
+    hashTypeVolatileCount/vsetSize into the HMSET batch count), a restart reload,
+    and a replica fed from the replication stream. enable-debug-assert makes vsetSize
+    cross-check the tracked size against a full bucket walk. The MEMORY USAGE probe
+    shows the hashtable metadata grew from 8 to 16 bytes, proving the run reached
+    the change.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    appendonly: {type: string, enum: ["yes", "no"], default: "yes"}
+    appendfsync: {type: string, enum: [always, everysec, "no"], default: everysec}
+    listpack_entries: {type: integer, minimum: 0, maximum: 512, default: 0}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    nodes: 2
+    timeout_s: 300
+    server_config:
+      enable-debug-assert: "yes"
+      aof-use-rdb-preamble: "no"
+      hash-max-listpack-entries: {$ref: inputs.listpack_entries}
+      appendonly: {$ref: inputs.appendonly}
+      appendfsync: {$ref: inputs.appendfsync}
+    commands:
+    - {command: [REPLICAOF, <node.0.host>, <node.0.port>], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, compare: skip, wait_s: 30, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [HSET, m, f1, LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,
+        f2, v, f3, v, f4, v, f5, v], expect: {equals: 5}}
+    - {command: [OBJECT, ENCODING, m], compare: skip, expect: {equals: hashtable}}
+    - {command: [MEMORY, USAGE, m, SAMPLES, 0], expect_difference: true, expect: {
+        min: 200}}
+    - {command: [HSET, h, s1, v], expect: {equals: 1}}
+    - {command: [HPEXPIREAT, h, 9999999999000, FIELDS, 1, s1], expect: {equals: [
+          1]}}
+    - {command: [HPEXPIRETIME, h, FIELDS, 1, s1], expect: {equals: [9999999999000]}}
+    - {command: [HPERSIST, h, FIELDS, 1, s1], expect: {equals: [1]}}
+    - {command: [HTTL, h, FIELDS, 1, s1], expect: {equals: [-1]}}
+    - {command: [HSET, h, b01, v, b02, v, b03, v, b04, v, b05, v, b06, v, b07, v,
+        b08, v, b09, v, b10, v, b11, v, b12, v, b13, v, b14, v, b15, v, b16, v, b17,
+        v, b18, v, b19, v, b20, v], expect: {equals: 20}}
+    - {command: [HPEXPIREAT, h, 9999999991000, FIELDS, 5, b01, b02, b03, b04, b05],
+      expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [HPEXPIREAT, h, 9999999992000, FIELDS, 5, b06, b07, b08, b09, b10],
+      expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [HPEXPIREAT, h, 9999999993000, FIELDS, 5, b11, b12, b13, b14, b15],
+      expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [HPEXPIREAT, h, 9999999994000, FIELDS, 5, b16, b17, b18, b19, b20],
+      expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [HPEXPIREAT, h, 9999999992000, FIELDS, 1, b01], expect: {equals: [
+          1]}}
+    - {command: [HDEL, h, b02, b03], expect: {equals: 2}}
+    - {command: [HSETEX, h, KEEPTTL, FIELDS, 1, b04, w], expect: {equals: 1}}
+    - {command: [HPEXPIRETIME, h, FIELDS, 4, b01, b04, b06, b16], expect: {equals: [
+          9999999992000, 9999999991000, 9999999992000, 9999999994000]}}
+    - command: [HSETEX, h, PXAT, 9999999995000, FIELDS, 130, a001, x, a002, x, a003,
+        x, a004, x, a005, x, a006, x, a007, x, a008, x, a009, x, a010, x, a011, x,
+        a012, x, a013, x, a014, x, a015, x, a016, x, a017, x, a018, x, a019, x, a020,
+        x, a021, x, a022, x, a023, x, a024, x, a025, x, a026, x, a027, x, a028, x,
+        a029, x, a030, x, a031, x, a032, x, a033, x, a034, x, a035, x, a036, x, a037,
+        x, a038, x, a039, x, a040, x, a041, x, a042, x, a043, x, a044, x, a045, x,
+        a046, x, a047, x, a048, x, a049, x, a050, x, a051, x, a052, x, a053, x, a054,
+        x, a055, x, a056, x, a057, x, a058, x, a059, x, a060, x, a061, x, a062, x,
+        a063, x, a064, x, a065, x, a066, x, a067, x, a068, x, a069, x, a070, x, a071,
+        x, a072, x, a073, x, a074, x, a075, x, a076, x, a077, x, a078, x, a079, x,
+        a080, x, a081, x, a082, x, a083, x, a084, x, a085, x, a086, x, a087, x, a088,
+        x, a089, x, a090, x, a091, x, a092, x, a093, x, a094, x, a095, x, a096, x,
+        a097, x, a098, x, a099, x, a100, x, a101, x, a102, x, a103, x, a104, x, a105,
+        x, a106, x, a107, x, a108, x, a109, x, a110, x, a111, x, a112, x, a113, x,
+        a114, x, a115, x, a116, x, a117, x, a118, x, a119, x, a120, x, a121, x, a122,
+        x, a123, x, a124, x, a125, x, a126, x, a127, x, a128, x, a129, x, a130, x]
+      expect: {equals: 1}
+    - {command: [HLEN, h], expect: {equals: 149}}
+    - {command: [HDEL, h, a001, a002, a003, a004, a005], expect: {equals: 5}}
+    - {command: [HPERSIST, h, FIELDS, 3, a006, a007, a008], expect: {equals: [1, 1,
+          1]}}
+    - {command: [HPEXPIREAT, h, 9999999991000, FIELDS, 2, a009, a010], expect: {equals: [
+          1, 1]}}
+    - {command: [HPEXPIRETIME, h, FIELDS, 3, a009, a011, b05], expect: {equals: [
+          9999999991000, 9999999995000, 9999999991000]}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {contains: rewriting}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - command: [HEXPIRE, h, 1, FIELDS, 140, a009, a010, a011, a012, a013, a014, a015,
+        a016, a017, a018, a019, a020, a021, a022, a023, a024, a025, a026, a027, a028,
+        a029, a030, a031, a032, a033, a034, a035, a036, a037, a038, a039, a040, a041,
+        a042, a043, a044, a045, a046, a047, a048, a049, a050, a051, a052, a053, a054,
+        a055, a056, a057, a058, a059, a060, a061, a062, a063, a064, a065, a066, a067,
+        a068, a069, a070, a071, a072, a073, a074, a075, a076, a077, a078, a079, a080,
+        a081, a082, a083, a084, a085, a086, a087, a088, a089, a090, a091, a092, a093,
+        a094, a095, a096, a097, a098, a099, a100, a101, a102, a103, a104, a105, a106,
+        a107, a108, a109, a110, a111, a112, a113, a114, a115, a116, a117, a118, a119,
+        a120, a121, a122, a123, a124, a125, a126, a127, a128, a129, a130, b01, b04,
+        b05, b06, b07, b08, b09, b10, b11, b12, b13, b14, b15, b16, b17, b18, b19,
+        b20]
+    - {command: [HLEN, h], wait_s: 30, expect: {equals: 4}}
+    - {command: [HLEN, h], node: 1, wait_s: 30, expect: {equals: 4}}
+    - {command: [HDEL, h, s1, a006, a007, a008], expect: {equals: 4}}
+    - {command: [EXISTS, h], expect: {equals: 0}}
+    - {command: [HSET, p, k1, LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,
+        k2, v, k3, v, k4, v, k5, v], expect: {equals: 5}}
+    - {command: [HSETEX, p, PXAT, 9999999996000, FIELDS, 3, t1, x, t2, x, t3, x],
+      expect: {equals: 1}}
+    - {command: [HPEXPIREAT, p, 9999999997000, FIELDS, 1, k5], expect: {equals: [
+          1]}}
+    - {command: [HLEN, p], expect: {equals: 8}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {contains: rewriting}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HLEN, p], expect: {equals: 8}}
+    - {command: [HPEXPIRETIME, p, FIELDS, 4, t1, t2, t3, k5], expect: {equals: [9999999996000,
+          9999999996000, 9999999996000, 9999999997000]}}
+    - {command: [HMGET, p, k2, k3, t1], expect: {equals: [v, v, x]}}
+    - {command: [INFO, replication], node: 1, compare: skip, wait_s: 60, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [HLEN, p], node: 1, wait_s: 30, expect: {equals: 8}}
+    - {command: [HPERSIST, p, FIELDS, 2, t1, t2], expect: {equals: [1, 1]}}
+    - {command: [HDEL, p, t3], expect: {equals: 1}}
+    - {command: [HTTL, p, FIELDS, 2, t1, t2], expect: {equals: [-1, -1]}}
+    - {command: [HPEXPIRETIME, p, FIELDS, 1, k5], expect: {equals: [9999999997000]}}
+    - {command: [HLEN, p], expect: {equals: 7}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {contains: rewriting}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [HLEN, p], node: 1, wait_s: 30, expect: {equals: 7}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

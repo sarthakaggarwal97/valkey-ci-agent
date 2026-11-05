@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7a782369f77f..4319738e6a5a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-655bcf9e2062
+seed: 1
+experiment:
+  id: proposed.restore-reltll-overflow
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

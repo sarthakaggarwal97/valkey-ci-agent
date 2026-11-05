@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.relative-expire-overflow
+deployment:
+  modes: [standalone]
+metadata:
+  description: SET and GETEX reject relative EX/PX expires that overflow when the
+    base time is added
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: expovf
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SET, k, val1], expect: {equals: OK}}
+    - {command: [SET, k, val2, PX, 9223372036854775807], expect_difference: true,
+      expect: {error: "invalid expire time"}}
+    - {command: [GET, k], expect_difference: true, expect: {equals: val1}}
+    - {command: [SET, k, val3, EX, 9223372036854775], expect_difference: true, expect: {
+        error: "invalid expire time"}}
+    - {command: [GET, k], expect_difference: true, expect: {equals: val1}}
+    - {command: [SET, k2, hello], expect: {equals: OK}}
+    - {command: [GETEX, k2, PX, 9223372036854775807], expect_difference: true, expect: {
+        error: "invalid expire time"}}
+    - {command: [GETEX, k2, PX, 9223372036854770000], expect_difference: true, expect: {
+        error: "invalid expire time"}}
+    - {command: [GETEX, k2, EX, 9223372036854775], expect_difference: true, expect: {
+        error: "invalid expire time"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: expovf}

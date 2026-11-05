@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.module-scankey-expired-listpack-fields
+deployment:
+  modes: [standalone]
+metadata:
+  description: ValkeyModule_ScanKey and ScanKeyRawBorrowed skip expired-but-unreaped
+    listpack hash fields, compared against the parent build where they are still returned
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: scankey
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, "0"], expect: {equals: OK}}
+    - {command: [HSET, hmix, f1, v1, f2, v2, f3, v3, f4, v4, f5, v5, f6, v6, f7, v7,
+        f8, v8], expect: {equals: 8}}
+    - {command: [HEXPIRE, hmix, "1000", FIELDS, "1", f2], expect: {equals: [1]}}
+    - {command: [HPEXPIRE, hmix, "1", FIELDS, "4", f1, f3, f5, f8], expect: {equals: [
+          1, 1, 1, 1]}}
+    - {command: [HEXISTS, hmix, f1], wait_s: 10, expect: {equals: 0}}
+    - {command: [HEXISTS, hmix, f8], wait_s: 10, expect: {equals: 0}}
+    - {command: [HLEN, hmix], expect: {equals: 8}}
+    - {command: [OBJECT, ENCODING, hmix], expect: {equals: listpack}}
+    - {command: [scan.scan_key, hmix], expect_difference: true, expect: {equals: [
+          [f2, v2], [f4, v4], [f6, v6], [f7, v7]]}}
+    - {command: [scan.scan_key_raw, hmix], expect_difference: true, expect: {equals: [
+          [f2, v2], [f4, v4], [f6, v6], [f7, v7]]}}
+    - {command: [HSET, hall, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HPEXPIRE, hall, "1", FIELDS, "2", f1, f2], expect: {equals: [1, 1]}}
+    - {command: [HEXISTS, hall, f2], wait_s: 10, expect: {equals: 0}}
+    - {command: [HLEN, hall], expect: {equals: 2}}
+    - {command: [scan.scan_key, hall], expect_difference: true, expect: {equals: []}}
+    - {command: [scan.scan_key_raw, hall], expect_difference: true, expect: {equals: []}}
+    - {command: [HSET, hint, "111", "222", "333", "444", "12345678901234", "555"],
+      expect: {equals: 3}}
+    - {command: [HPEXPIRE, hint, "1", FIELDS, "1", "333"], expect: {equals: [1]}}
+    - {command: [HEXISTS, hint, "333"], wait_s: 10, expect: {equals: 0}}
+    - {command: [scan.scan_key, hint], expect_difference: true, expect: {equals: [
+          ["111", "222"], ["12345678901234", "555"]]}}
+    - {command: [scan.scan_key_raw, hint], expect_difference: true, expect: {equals: [
+          ["111", "222"], ["12345678901234", "555"]]}}
+    - {command: [ZADD, zl, "1", a, "2", b], expect: {equals: 2}}
+    - {command: [scan.scan_key, zl], expect: {equals: [[a, "1"], [b, "2"]]}}
+    - {command: [scan.scan_key_raw, zl], expect: {equals: [[a, "1"], [b, "2"]]}}
+    - {command: [CONFIG, SET, hash-max-listpack-entries, "0"], expect: {equals: OK}}
+    - {command: [HSET, hht, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [OBJECT, ENCODING, hht], compare: skip}
+    - {command: [HPEXPIRE, hht, "1", FIELDS, "1", f1], expect: {equals: [1]}}
+    - {command: [HEXISTS, hht, f1], wait_s: 10, expect: {equals: 0}}
+    - {command: [scan.scan_key, hht], expect: {equals: [[f2, v2]]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [scankey.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scankey}

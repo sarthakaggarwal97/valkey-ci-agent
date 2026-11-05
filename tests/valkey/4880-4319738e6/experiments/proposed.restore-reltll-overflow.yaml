@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.restore-reltll-overflow
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE with a relative TTL that overflows when base time is added
+    is rejected; a valid relative SET/GETEX expire still stores
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: restore
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, set-skip-checksum-validation, 1], expect: {equals: OK}}
+    - {command: [RESTORE, k, 9223372036854775807, !!binary "AANiYXILAAAAAAAAAAAA"],
+      expect_difference: true, expect: {error: "invalid expire time"}}
+    - {command: [EXISTS, k], expect: {equals: 0}}
+    - {command: [SET, s, v, EX, 100], expect: {equals: OK}}
+    - {command: [GETEX, s, PX, 100000], expect: {equals: v}}
+    - {command: [TTL, s], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore}

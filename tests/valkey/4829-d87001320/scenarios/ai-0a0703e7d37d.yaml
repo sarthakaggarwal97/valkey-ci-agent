@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 035b8d61d0e8..d87001320d7e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0a0703e7d37d
+seed: 303
+experiment:
+  id: proposed.hash-field-ttl-vset-size
+  inputs:
+    resp: 2
+    appendonly: 'no'
+    appendfsync: everysec
+    listpack_entries: 128
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

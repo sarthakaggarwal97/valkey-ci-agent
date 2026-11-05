@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cf5efa70192f..b405ef898caf.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e838d71f81f5
+seed: 48851
+experiment:
+  id: proposed.module-scankey-expired-listpack-fields
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

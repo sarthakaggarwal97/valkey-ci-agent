@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.hash-stringref-api
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_HashHasStringRef wrong return value and NULL-deref crash via hash.stringref
+    module
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: stringref
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [HSET, hk, f, hello1], expect: {equals: 1}}
+    - {command: [hash.has_stringref, missingkey, f], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [LPUSH, lk, v], expect: {equals: 1}}
+    - {command: [hash.has_stringref, lk, f], expect_difference: true, expect: {equals: 0}}
+    - {command: [hash.has_stringref, hk, nofield], expect: {equals: 0}}
+    - {command: [hash.set_stringref, hk, f, hello1], expect: {equals: OK}}
+    - {command: [hash.has_stringref, hk, f], expect: {equals: 1}}
+    - {command: [hash.has_stringref, hk, nofield], expect_difference: true, expect: {
+        equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: stringref}

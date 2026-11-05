@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e4d62b2a3792..8f67ab13683d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-669108a4c61d
+seed: 1103
+experiment:
+  id: proposed.acl-digest-roles-aclfile
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

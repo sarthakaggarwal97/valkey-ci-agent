@@ -1,0 +1,146 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3db525ec40760c3c045eab597b141aa57de62983",
+  "parent": "01857eb359abaf2afdf5d8ffecfe79b6c991a361",
+  "pr": 4819,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix RDB and replication failures for certain listpack entry lengths (#4819)",
+  "date": "2026-10-13",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 26,
+    "executed": 21,
+    "percent": 80,
+    "uncovered": [
+      "src/listpack.c:308",
+      "src/listpack.c:366",
+      "src/listpack.c:367",
+      "src/listpack.c:650",
+      "src/listpack.c:1734"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 2.4721,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (DUMP h) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":{\"$base64\":\"BAIBZsNAwn/6AXh44P8A4P8A4P8A4P8A4P8A4P8A4P8A4P8A4P8A4P8A4P8",
+      "scenario": "ai-93df7c454c59",
+      "seed": 1,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #4819",
+      "fingerprint": "68e9eb62e103dcc0f3f3",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/65"
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (DUMP h) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":{\"$base64\":\"BAIBZsNAwn/6AXh44P8A4P8A4P8A4P8A4P8A4P8A4P8A4P8A4P8A4P8A4P8",
+      "scenario": "ai-93df7c454c59",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4819",
+      "fingerprint": "c9e99342f8cdf0b0bafe",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (DUMP h) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":{\"$base64\":\"BAIBZsNAwn/6AXh44P8A4P8A4P8A4P8A4P8A4P8A4P8A4P8A4P8A4P8A4P8",
+      "scenario": "ai-4340fd787965",
+      "seed": 2,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #4819",
+      "fingerprint": "68e9eb62e103dcc0f3f3",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/65"
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (DUMP h) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":{\"$base64\":\"BAIBZsNAwn/6AXh44P8A4P8A4P8A4P8A4P8A4P8A4P8A4P8A4P8A4P8A4P8",
+      "scenario": "ai-4340fd787965",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4819",
+      "fingerprint": "c9e99342f8cdf0b0bafe",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (DUMP h) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":{\"$base64\":\"BAIBZn/6eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh",
+      "scenario": "ai-cd90aae12dda",
+      "seed": 3,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #4819",
+      "fingerprint": "9f2e9a612d7a09399e06",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/66"
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (DUMP h) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":{\"$base64\":\"BAIBZn/6eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh",
+      "scenario": "ai-cd90aae12dda",
+      "seed": 3,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4819",
+      "fingerprint": "0895770dd3f72e289e7b",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (DUMP h) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":{\"$base64\":\"BAIBZn/6eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh",
+      "scenario": "ai-74109b45c098",
+      "seed": 4,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #4819",
+      "fingerprint": "9f2e9a612d7a09399e06",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/66"
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (DUMP h) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":{\"$base64\":\"BAIBZn/6eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh",
+      "scenario": "ai-74109b45c098",
+      "seed": 4,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4819",
+      "fingerprint": "0895770dd3f72e289e7b",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

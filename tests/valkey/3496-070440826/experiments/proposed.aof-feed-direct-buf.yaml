@@ -1,0 +1,78 @@
+extends: [valkey.liveness]
+id: proposed.aof-feed-direct-buf
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Drive feedAppendOnlyFile through AOF_WAIT_REWRITE without a rewrite child (writes
+    skipped), AOF_WAIT_REWRITE with the rewrite child (writes buffered into the temp
+    INCR file), and AOF_ON, with timestamp annotations and multi-database SELECT records,
+    then restart and verify the AOF replays every key into the right database; compared
+    against the parent build.
+inputs:
+  properties:
+    appendfsync: {type: string, enum: [always, everysec, "no"], default: everysec}
+components:
+- use: valkey.action.commands
+  id: feed
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      appendonly: "no"
+      aof-timestamp-enabled: "yes"
+      appendfsync: {$ref: inputs.appendfsync}
+    timeout_s: 240
+    commands:
+    - {command: [CONFIG, SET, rdb-key-save-delay, 300000], expect: {equals: OK}}
+    - {command: [MSET, b01, x, b02, x, b03, x, b04, x, b05, x, b06, x, b07, x, b08,
+        x, b09, x, b10, x, b11, x, b12, x, b13, x, b14, x, b15, x, b16, x], expect: {
+        equals: OK}}
+    - {command: [BGSAVE], expect: {contains: "Background saving started"}}
+    - {command: [CONFIG, SET, appendonly, yes], expect: {equals: OK}}
+    - {command: [INFO, persistence], compare: skip, expect: {contains: "aof_rewrite_scheduled:1"}}
+    - {command: [SELECT, 5], expect: {equals: OK}}
+    - {command: [SET, waitkey, during-scheduled], expect: {equals: OK}}
+    - {command: [SET, "", empty-key], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 90, expect: {contains: "aof_rewrite_scheduled:0"}}
+    - {command: [SET, during-rewrite, v-dr], expect: {equals: OK}}
+    - {command: [SELECT, 3], expect: {equals: OK}}
+    - {command: [SET, dr3, v3], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 90, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [SET, k-db2, v2], expect: {equals: OK}}
+    - {command: [RPUSH, biglist, a, a, a, a, a, a, a, a, a, a], expect: {equals: 10}}
+    - {command: [SET, SELECT, sneaky], expect: {equals: OK}}
+    - {command: [SET, emptyval, ""], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SET, after-on, v-after], expect: {equals: OK}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, 0], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 18}}
+    - {command: [GET, after-on], expect: {equals: v-after}}
+    - {command: [GET, during-rewrite], expect: {equals: v-dr}}
+    - {command: [GET, b01], expect: {equals: x}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 4}}
+    - {command: [GET, k-db2], expect: {equals: v2}}
+    - {command: [LRANGE, biglist, 0, -1], expect: {equals: [a, a, a, a, a, a, a, a,
+          a, a]}}
+    - {command: [GET, SELECT], expect: {equals: sneaky}}
+    - {command: [GET, emptyval], expect: {equals: ""}}
+    - {command: [SELECT, 3], expect: {equals: OK}}
+    - {command: [GET, dr3], expect: {equals: v3}}
+    - {command: [SELECT, 5], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 2}}
+    - {command: [GET, waitkey], expect: {equals: during-scheduled}}
+    - {command: [GET, ""], expect: {equals: empty-key}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [feed.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: feed}

@@ -1,0 +1,89 @@
+extends: [valkey.liveness]
+id: proposed.hash-expired-field-replica-propagation
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    HDEL, HGETDEL, HPERSIST, HEXPIRE and HEXPIREAT on a hash holding a stored-but-expired
+    field must not propagate the expired field; the parent build replicates it verbatim
+    and the replica deletes, persists or resurrects a field the primary never changed.
+inputs:
+  properties:
+    listpack_entries:
+      type: string
+      enum: ["128", "0"]
+      default: "128"
+      description: hash-max-listpack-entries on both private servers; "0" forces hashtable
+        encoding
+components:
+- use: valkey.action.commands
+  id: repl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 2
+    timeout_s: 60
+    server_config:
+      enable-debug-command: "yes"
+      hash-max-listpack-entries: {$ref: inputs.listpack_entries}
+    commands:
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], node: 1, expect: {equals: OK}}
+    - {command: [HSETEX, h1, PX, 100000, FIELDS, 1, live, v], expect: {equals: 1}}
+    - {command: [HSETEX, h1, PX, 1, FIELDS, 1, expired, v], expect: {equals: 1}}
+    - {command: [HEXISTS, h1, expired], wait_s: 10, expect: {equals: 0}}
+    - {command: [HSETEX, h2, PX, 100000, FIELDS, 1, live, v], expect: {equals: 1}}
+    - {command: [HSETEX, h2, PX, 1, FIELDS, 1, expired, v], expect: {equals: 1}}
+    - {command: [HEXISTS, h2, expired], wait_s: 10, expect: {equals: 0}}
+    - {command: [HSETEX, h3, PX, 100000, FIELDS, 1, live, v], expect: {equals: 1}}
+    - {command: [HSETEX, h3, PX, 1, FIELDS, 1, expired, v], expect: {equals: 1}}
+    - {command: [HEXISTS, h3, expired], wait_s: 10, expect: {equals: 0}}
+    - {command: [HSETEX, h4, PX, 100000, FIELDS, 1, live, v], expect: {equals: 1}}
+    - {command: [HSETEX, h4, PX, 1, FIELDS, 1, expired, v], expect: {equals: 1}}
+    - {command: [HEXISTS, h4, expired], wait_s: 10, expect: {equals: 0}}
+    - {command: [HSET, h5, f, v], expect: {equals: 1}}
+    - {command: [HSET, h8, nottl, v], expect: {equals: 1}}
+    - {command: [HSETEX, h8, PX, 100000, FIELDS, 2, live, v, live2, v], expect: {
+        equals: 1}}
+    - {command: [HSETEX, h8, PX, 1, FIELDS, 1, expired, v], expect: {equals: 1}}
+    - {command: [HEXISTS, h8, expired], wait_s: 10, expect: {equals: 0}}
+    - {command: [HSET, h10, nottl, v], expect: {equals: 1}}
+    - {command: [HSETEX, h10, PX, 100000, FIELDS, 1, live, v], expect: {equals: 1}}
+    - {command: [HSETEX, h10, PX, 1, FIELDS, 1, expired, v], expect: {equals: 1}}
+    - {command: [HEXISTS, h10, expired], wait_s: 10, expect: {equals: 0}}
+    - {command: [HDEL, h1, expired, live], expect: {equals: 1}}
+    - {command: [HGETDEL, h2, FIELDS, 4, live, expired, expired, missing]}
+    - {command: [HPERSIST, h3, FIELDS, 2, expired, live], expect: {equals: [-2, 1]}}
+    - {command: [HEXPIRE, h4, 100, FIELDS, 2, expired, live], expect: {equals: [-2,
+          1]}}
+    - {command: [HDEL, h5, f], expect: {equals: 1}}
+    - {command: [HDEL, h8, live, expired, live2], expect: {equals: 2}}
+    - {command: [HEXPIREAT, h10, 9999999999, XX, FIELDS, 4, nottl, expired, missing,
+        live], expect: {equals: [0, -2, -2, 1]}}
+    - {command: [SET, marker, done], expect: {equals: OK}}
+    - {command: [GET, marker], node: 1, wait_s: 30, expect: {equals: done}}
+    - {command: [EXISTS, h1], node: 1, expect_difference: true, expect: {equals: 1}}
+    - {command: [EXISTS, h2], node: 1, expect_difference: true, expect: {equals: 1}}
+    - {command: [HEXISTS, h3, expired], node: 1, expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [HPTTL, h3, FIELDS, 1, expired], node: 1, expect_difference: true,
+      expect: {equals: [-2]}}
+    - {command: [HEXISTS, h4, expired], node: 1, expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [HLEN, h8], node: 1, expect_difference: true, expect: {equals: 2}}
+    - {command: [HEXISTS, h10, expired], node: 1, expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [EXISTS, h5], node: 1, expect: {equals: 0}}
+    - {command: [HPTTL, h3, FIELDS, 1, live], node: 1, expect: {equals: [-1]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [repl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: repl}

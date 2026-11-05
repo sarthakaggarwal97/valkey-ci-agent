@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.acl-genpass-provider
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL GENPASS routed through the OpenSSL 3 provider must keep succeeding
+    on every valid bit count, including inside MULTI/EXEC, and reject invalid bit
+    counts exactly as the parent does; replies are random so they are recorded with
+    compare skip and judged by expect alone
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: genpass
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ACL, GENPASS], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 1], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 5], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 256], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4095], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 0], expect: {error: "positive number"}}
+    - {command: [ACL, GENPASS, -1], expect: {error: "positive number"}}
+    - {command: [ACL, GENPASS, 4097], expect: {error: "positive number"}}
+    - {command: [ACL, GENPASS, 2147483648], expect: {error: "positive number"}}
+    - {command: [ACL, GENPASS, 4294967296], expect: {error: "positive number"}}
+    - {command: [ACL, GENPASS, 9223372036854775807], expect: {error: "positive number"}}
+    - {command: [ACL, GENPASS, -9223372036854775808], expect: {error: "positive number"}}
+    - {command: [ACL, GENPASS, 9223372036854775808], expect: {error: true}}
+    - {command: [ACL, GENPASS, abc], expect: {error: true}}
+    - {command: [ACL, GENPASS, ""], expect: {error: true}}
+    - {command: [ACL, GENPASS, 256, 256], expect: {error: true}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [ACL, GENPASS, 128], expect: {equals: QUEUED}}
+    - {command: [ACL, GENPASS, 4096], expect: {equals: QUEUED}}
+    - {command: [EXEC], compare: skip, expect: {error: false}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [genpass.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: genpass}

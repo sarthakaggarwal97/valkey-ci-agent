@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ce5120736c02c7e8e820aea5d3b2b16c5cad40bc",
+  "parent": "b405ef898cafdf45032b65d0a215d62b279ec1cc",
+  "pr": 4251,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "deflake ccov: Use _exit() when a child is killed by SIGUSR1 (#4251)",
+  "date": "2026-10-15",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.403,
+  "findings": [],
+  "recorded": [],
+  "reason": "In non-coverage builds exitFromChild() is already _exit(), so replacing it with a direct _exit() in sigKillChildHandler is a no-op: a SIGUSR1-killed child exits with the same status and the parent's checkChildrenDone() path is untouched (only a comment changed there). The behaviour difference exists only in COVERAGE_TEST builds, where the killed child now skips the gcov atexit dump to deflake the coverage CI. The fuzzer tests normal builds, so the change is unreachable and needs no scenario."
+}

@@ -1,0 +1,29 @@
+extends: [valkey.liveness]
+id: proposed.restore-lzf-length-overflow
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE of an LZF-encoded string payload whose uncompressed length
+    is near SIZE_MAX returns an error instead of asserting in _sdsnewlen
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: restore
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [RESTORE, k, 0, !!binary "AMMBgf/////////wCABZ/xpWvNwbQw=="], expect_difference: true,
+      expect: {error: "Bad data format"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [restore.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore}

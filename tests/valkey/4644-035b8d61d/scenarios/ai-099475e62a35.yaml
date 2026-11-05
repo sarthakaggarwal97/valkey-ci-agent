@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d379883ae8d7..035b8d61d0e8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-099475e62a35
+seed: 460701
+experiment:
+  id: proposed.zset-btree-lex-seek
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4319738e6a5a..e4d62b2a3792.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f93009466d9c
+seed: 3
+experiment:
+  id: proposed.hash-expired-field-aof-replay
+  inputs:
+    listpack_entries: '128'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.acl-genpass-burnin
+deployment:
+  modes: [standalone]
+metadata:
+  description: Sustained maximum-size ACL GENPASS draws stress the RAND_priv_bytes
+    DRBG including reseeding, and a restart makes the very next draw the first one
+    of a fresh process, exercising DRBG instantiation at boot; every draw must succeed
+    on the build under test
+components:
+- use: valkey.action.commands
+  id: burnin
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 60
+    commands:
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 4096], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS, 1], compare: skip, expect: {error: false}}
+    - {command: [ACL, GENPASS], compare: skip, expect: {error: false}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [burnin.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: burnin}

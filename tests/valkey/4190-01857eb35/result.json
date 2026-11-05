@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "01857eb359abaf2afdf5d8ffecfe79b6c991a361",
+  "parent": "0eb4ba3236bc6256457ff3370060b2a6ec50aea3",
+  "pr": 4190,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reclaim dead client IDs from the tracking table (#4143) (#4190)",
+  "date": "2026-10-13",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 6,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 9.5505,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

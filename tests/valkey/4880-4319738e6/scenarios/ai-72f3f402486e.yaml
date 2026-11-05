@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7a782369f77f..4319738e6a5a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-72f3f402486e
+seed: 303
+experiment:
+  id: proposed.module-setexpire-overflow
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

@@ -1,0 +1,152 @@
+extends: [valkey.liveness]
+id: proposed.zset-btree-lex-seek
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Btree zset lex seek fix: inverted and empty lex ranges and NaN score bounds through
+    the zset module iterator API (where the parent returns out-of-range elements),
+    LIMIT offset rank arithmetic across btree leaves including INT64-boundary offsets,
+    and emptying multi-level trees through every delete path to exercise the changed
+    root-cleanup free code.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lexseek
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {zset-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [ZADD, lex, 0, a, 0, b, 0, c, 0, d, 0, e], expect: {equals: 5}}
+    - {command: [OBJECT, ENCODING, lex], compare: skip, expect: {equals: btree}}
+    - {command: [ZADD, k, 1, a, 2, b], expect: {equals: 2}}
+    - {command: [ZADD, es, 0, "", 0, a], expect: {equals: 2}}
+    - {command: [ZADD, zs, 1, e01, 2, e02, 3, e03, 4, e04, 5, e05, 6, e06, 7, e07,
+        8, e08, 9, e09, 10, e10], expect: {equals: 10}}
+    - {command: [zset.rangebylex, lex, "[c", "[b"], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [zset.revrangebylex, lex, "(e", "+"], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [zset.rangebylex, lex, "(", "("], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [zset.revrangebylex, lex, "[f", "+"], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [zset.revrangebylex, lex, "(b", "(b"], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [zset.rangebylex, es, "(", "("], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [zset.rangebylex, lex, "[b", "[d"], expect: {equals: [b, c, d]}}
+    - {command: [zset.revrangebylex, lex, "-", "+"], expect: {equals: [e, d, c, b,
+          a]}}
+    - {command: [zset.rangebylex, lex, "+", "-"], expect: {equals: []}}
+    - {command: [zset.walk, lex, lex, "[c", "[b", "n"], expect_difference: true, expect: {
+        contains: END}}
+    - {command: [zset.walk, lex, lex-last, "(e", "+", "p"], expect_difference: true,
+      expect: {contains: END}}
+    - {command: [zset.walk, lex, lex, "-", "+", "nnnnnn"], expect_difference: true,
+      expect: {equals: [a, b, c, d, e, END, END]}}
+    - {command: [zset.walk, lex, lex, "[b", "[d", "nnn"], expect_difference: true,
+      expect: {equals: [b, c, d, END]}}
+    - {command: [zset.walk, lex, lex-last, "[b", "[d", "ppp"], expect_difference: true,
+      expect: {equals: [d, c, b, END]}}
+    - {command: [zset.walk, lex, lex, "+", "-", "np"], expect_difference: true, expect: {
+        contains: END}}
+    - {command: [zset.walk, k, score, 0, "nan", "n"], expect_difference: true, expect: {
+        contains: END}}
+    - {command: [zset.walk, k, score, "nan", 5, "n"], expect_difference: true, expect: {
+        contains: END}}
+    - {command: [zset.walk, k, score-last, 0, "nan", "p"], expect_difference: true,
+      expect: {contains: END}}
+    - {command: [zset.walk, k, score-last, "nan", 5, "p"], expect_difference: true,
+      expect: {contains: END}}
+    - {command: [zset.walk, k, score, 0, 5, "nn"], expect_difference: true, expect: {
+        equals: [a, b, END]}}
+    - command: [ZADD, src, 0, m000, 0, m001, 0, m002, 0, m003, 0, m004, 0, m005, 0,
+        m006, 0, m007, 0, m008, 0, m009, 0, m010, 0, m011, 0, m012, 0, m013, 0, m014,
+        0, m015, 0, m016, 0, m017, 0, m018, 0, m019, 0, m020, 0, m021, 0, m022, 0,
+        m023, 0, m024, 0, m025, 0, m026, 0, m027, 0, m028, 0, m029, 0, m030, 0, m031,
+        0, m032, 0, m033, 0, m034, 0, m035, 0, m036, 0, m037, 0, m038, 0, m039, 0,
+        m040, 0, m041, 0, m042, 0, m043, 0, m044, 0, m045, 0, m046, 0, m047, 0, m048,
+        0, m049, 0, m050, 0, m051, 0, m052, 0, m053, 0, m054, 0, m055, 0, m056, 0,
+        m057, 0, m058, 0, m059, 0, m060, 0, m061, 0, m062, 0, m063, 0, m064, 0, m065,
+        0, m066, 0, m067, 0, m068, 0, m069, 0, m070, 0, m071, 0, m072, 0, m073, 0,
+        m074, 0, m075, 0, m076, 0, m077, 0, m078, 0, m079, 0, m080, 0, m081, 0, m082,
+        0, m083, 0, m084, 0, m085, 0, m086, 0, m087, 0, m088, 0, m089, 0, m090, 0,
+        m091, 0, m092, 0, m093, 0, m094, 0, m095, 0, m096, 0, m097, 0, m098, 0, m099,
+        0, m100, 0, m101, 0, m102, 0, m103, 0, m104, 0, m105, 0, m106, 0, m107, 0,
+        m108, 0, m109, 0, m110, 0, m111, 0, m112, 0, m113, 0, m114, 0, m115, 0, m116,
+        0, m117, 0, m118, 0, m119, 0, m120, 0, m121, 0, m122, 0, m123, 0, m124, 0,
+        m125, 0, m126, 0, m127, 0, m128, 0, m129]
+      expect: {equals: 130}
+    - {command: [ZRANGESTORE, z, src, 0, -1], expect: {equals: 130}}
+    - {command: [OBJECT, ENCODING, z], compare: skip, expect: {equals: btree}}
+    - {command: [ZRANGEBYLEX, z, "-", "+", LIMIT, 100, 3], expect: {equals: [m100,
+          m101, m102]}}
+    - {command: [ZRANGEBYLEX, z, "[m010", "(m120", LIMIT, 105, 10], expect: {equals: [
+          m115, m116, m117, m118, m119]}}
+    - {command: [ZRANGEBYLEX, z, "[m010", "(m120", LIMIT, 110, 10], expect: {equals: []}}
+    - {command: [ZRANGEBYLEX, z, "-", "+", LIMIT, 129, 5], expect: {equals: [m129]}}
+    - {command: [ZRANGEBYLEX, z, "-", "+", LIMIT, 130, 5], expect: {equals: []}}
+    - {command: [ZRANGEBYLEX, z, "[m001", "+", LIMIT, 9223372036854775807, 1], expect: {
+        equals: []}}
+    - {command: [ZRANGEBYLEX, z, "[m005", "[m004", LIMIT, 0, 10], expect: {equals: []}}
+    - {command: [ZREVRANGEBYLEX, z, "+", "-", LIMIT, 100, 3], expect: {equals: [m029,
+          m028, m027]}}
+    - {command: [ZREVRANGEBYLEX, z, "(m120", "[m010", LIMIT, 105, 10], expect: {equals: [
+          m014, m013, m012, m011, m010]}}
+    - {command: [ZREVRANGEBYLEX, z, "(m120", "[m010", LIMIT, 110, 10], expect: {equals: []}}
+    - {command: [ZREVRANGEBYLEX, z, "+", "-", LIMIT, 129, 5], expect: {equals: [m000]}}
+    - {command: [ZREVRANGEBYLEX, z, "+", "-", LIMIT, 130, 5], expect: {equals: []}}
+    - {command: [ZREVRANGEBYLEX, z, "(m120", "-", LIMIT, 9223372036854775807, 1],
+      expect: {equals: []}}
+    - {command: [ZRANGE, z, "(m120", "[m010", BYLEX, REV, LIMIT, 105, 10], expect: {
+        equals: [m014, m013, m012, m011, m010]}}
+    - {command: [ZRANGESTORE, dst, z, "[m010", "(m120", BYLEX, LIMIT, 105, 10], expect: {
+        equals: 5}}
+    - {command: [ZRANGE, dst, 0, -1], expect: {equals: [m115, m116, m117, m118, m119]}}
+    - {command: [ZLEXCOUNT, z, "[m010", "(m120"], expect: {equals: 110}}
+    - {command: [ZLEXCOUNT, z, "+", "-"], expect: {equals: 0}}
+    - {command: [zset.rangebylex, z, "[m100", "[m050"], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [zset.revrangebylex, z, "[zzz", "+"], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [zset.walk, z, lex, "[m120", "(m125", "nnnnnn"], expect_difference: true,
+      expect: {equals: [m120, m121, m122, m123, m124, END, END]}}
+    - {command: [ZCOUNT, zs, 7, 3], expect: {equals: 0}}
+    - {command: [ZCOUNT, zs, "(5", "(5"], expect: {equals: 0}}
+    - {command: [ZREMRANGEBYSCORE, zs, 7, 3], expect: {equals: 0}}
+    - {command: [ZREMRANGEBYSCORE, zs, "(5", "(5"], expect: {equals: 0}}
+    - {command: [ZCARD, zs], expect: {equals: 10}}
+    - {command: [ZPOPMIN, z, 130], expect: {exists: true}}
+    - {command: [EXISTS, z], expect: {equals: 0}}
+    - {command: [ZRANGESTORE, z, src, 0, -1], expect: {equals: 130}}
+    - {command: [ZPOPMAX, z, 130], expect: {exists: true}}
+    - {command: [EXISTS, z], expect: {equals: 0}}
+    - {command: [ZRANGESTORE, z, src, 0, -1], expect: {equals: 130}}
+    - {command: [ZREMRANGEBYRANK, z, 0, -1], expect: {equals: 130}}
+    - {command: [EXISTS, z], expect: {equals: 0}}
+    - {command: [ZRANGESTORE, z, src, 0, -1], expect: {equals: 130}}
+    - {command: [ZREMRANGEBYLEX, z, "-", "+"], expect: {equals: 130}}
+    - {command: [EXISTS, z], expect: {equals: 0}}
+    - {command: [ZRANGESTORE, z, src, 0, -1], expect: {equals: 130}}
+    - {command: [ZREMRANGEBYSCORE, z, "-inf", "+inf"], expect: {equals: 130}}
+    - {command: [EXISTS, z], expect: {equals: 0}}
+    - {command: [ZRANGESTORE, z, src, 0, -1], expect: {equals: 130}}
+    - {command: [ZREMRANGEBYRANK, z, 0, 125], expect: {equals: 126}}
+    - {command: [ZRANGE, z, 0, -1], expect: {equals: [m126, m127, m128, m129]}}
+    - {command: [ZRANGEBYLEX, z, "(m126", "[m129"], expect: {equals: [m127, m128,
+          m129]}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [lexseek.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lexseek}

@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e1b4ec84554a0eedb865487a0cc0be3443cfbc63",
+  "parent": "b5028fa72f858eec4f2ab6b7df60e6d10a11cee4",
+  "pr": 4890,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fail the RDB transcode on bytes after the source frame (#4890)",
+  "date": "2026-10-16",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 4,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 1,
+    "percent": 33,
+    "uncovered": [
+      "src/rdb_transcoder.c:146",
+      "src/rdb_transcoder.c:147"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 6.727,
+  "findings": [],
+  "recorded": []
+}

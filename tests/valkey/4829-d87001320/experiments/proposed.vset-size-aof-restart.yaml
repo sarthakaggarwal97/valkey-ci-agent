@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.vset-size-aof-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: AOF rewrite computes HMSET batch counts from hashTypeVolatileCount,
+    which the change turns into the tracked vset size; rewrite a mixed persistent/volatile
+    hash after partial field expiry, restart both builds from their AOF and compare
+    the reloaded hashes
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aofrw
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 0, enable-debug-assert: 'yes', appendonly: 'yes',
+      auto-aof-rewrite-percentage: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [HSET, big, p1, 1, p2, 1, p3, 1, p4, 1, p5, 1, p6, 1, p7, 1, p8, 1,
+        p9, 1, p10, 1, p11, 1, p12, 1, p13, 1, p14, 1, p15, 1, p16, 1, p17, 1, p18,
+        1, p19, 1, p20, 1, p21, 1, p22, 1, p23, 1, p24, 1, p25, 1, p26, 1, p27, 1,
+        p28, 1, p29, 1, p30, 1, p31, 1, p32, 1, p33, 1, p34, 1, p35, 1, p36, 1, p37,
+        1, p38, 1, p39, 1, p40, 1, p41, 1, p42, 1, p43, 1, p44, 1, p45, 1, p46, 1,
+        p47, 1, p48, 1, p49, 1, p50, 1, p51, 1, p52, 1, p53, 1, p54, 1, p55, 1, p56,
+        1, p57, 1, p58, 1, p59, 1, p60, 1, p61, 1, p62, 1, p63, 1, p64, 1, p65, 1,
+        p66, 1, p67, 1, p68, 1, p69, 1, p70, 1], expect: {equals: 70}}
+    - {command: [HSETEX, big, PXAT, 33177117600000, FIELDS, 140, q1, 1, q2, 1, q3,
+        1, q4, 1, q5, 1, q6, 1, q7, 1, q8, 1, q9, 1, q10, 1, q11, 1, q12, 1, q13,
+        1, q14, 1, q15, 1, q16, 1, q17, 1, q18, 1, q19, 1, q20, 1, q21, 1, q22, 1,
+        q23, 1, q24, 1, q25, 1, q26, 1, q27, 1, q28, 1, q29, 1, q30, 1, q31, 1, q32,
+        1, q33, 1, q34, 1, q35, 1, q36, 1, q37, 1, q38, 1, q39, 1, q40, 1, q41, 1,
+        q42, 1, q43, 1, q44, 1, q45, 1, q46, 1, q47, 1, q48, 1, q49, 1, q50, 1, q51,
+        1, q52, 1, q53, 1, q54, 1, q55, 1, q56, 1, q57, 1, q58, 1, q59, 1, q60, 1,
+        q61, 1, q62, 1, q63, 1, q64, 1, q65, 1, q66, 1, q67, 1, q68, 1, q69, 1, q70,
+        1, q71, 1, q72, 1, q73, 1, q74, 1, q75, 1, q76, 1, q77, 1, q78, 1, q79, 1,
+        q80, 1, q81, 1, q82, 1, q83, 1, q84, 1, q85, 1, q86, 1, q87, 1, q88, 1, q89,
+        1, q90, 1, q91, 1, q92, 1, q93, 1, q94, 1, q95, 1, q96, 1, q97, 1, q98, 1,
+        q99, 1, q100, 1, q101, 1, q102, 1, q103, 1, q104, 1, q105, 1, q106, 1, q107,
+        1, q108, 1, q109, 1, q110, 1, q111, 1, q112, 1, q113, 1, q114, 1, q115, 1,
+        q116, 1, q117, 1, q118, 1, q119, 1, q120, 1, q121, 1, q122, 1, q123, 1, q124,
+        1, q125, 1, q126, 1, q127, 1, q128, 1, q129, 1, q130, 1, q131, 1, q132, 1,
+        q133, 1, q134, 1, q135, 1, q136, 1, q137, 1, q138, 1, q139, 1, q140, 1], expect: {
+        equals: 1}}
+    - {command: [HSETEX, h, PXAT, 33177117600000, FIELDS, 2, v1, 1, v2, 2], expect: {
+        equals: 1}}
+    - {command: [HSET, h, p, 9], expect: {equals: 1}}
+    - {command: [HSETEX, h2, PXAT, 33177117600000, FIELDS, 1, x, 1], expect: {equals: 1}}
+    - {command: [HPEXPIRE, big, 150, FIELDS, 5, q1, q2, q3, q4, q5], expect: {equals: [
+          1, 1, 1, 1, 1]}}
+    - {command: [HLEN, big], wait_s: 60, expect: {equals: 205}}
+    - {command: [BGREWRITEAOF], expect: {contains: started}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 60, expect: {contains: 'aof_rewrites:1'}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HLEN, big], expect: {equals: 205}}
+    - {command: [HGETALL, big], compare: unordered-pairs}
+    - {command: [HPEXPIRETIME, big, FIELDS, 3, q6, q7, q8], expect: {equals: [33177117600000,
+          33177117600000, 33177117600000]}}
+    - {command: [HTTL, big, FIELDS, 1, p1], expect: {equals: [-1]}}
+    - {command: [HLEN, h], expect: {equals: 3}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HPEXPIRETIME, h2, FIELDS, 1, x], expect: {equals: [33177117600000]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [aofrw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofrw}

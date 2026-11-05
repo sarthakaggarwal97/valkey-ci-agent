@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 035b8d61d0e8..d87001320d7e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4181be634d93
+seed: 104
+experiment:
+  id: proposed.vset-size-aof-restart
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

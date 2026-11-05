@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0eb4ba3236bc6256457ff3370060b2a6ec50aea3",
+  "parent": "2c1e7d25b352fc18d5e858cfce45e3123dc10e12",
+  "pr": 4843,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix XACKDEL KEEPREF reply for acked entry whose stream item is gone (#4843)",
+  "date": "2026-10-13",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.8478,
+  "findings": [],
+  "recorded": []
+}
