@@ -1,0 +1,21 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey dca022fa11e8..7fe7ca45ffc7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8ed4ab3db5d9
+seed: 4703
+experiment:
+  id: valkey.repl-compression-full-sync
+  inputs:
+    rdbcompression: lz4
+    primary_repl_compression: lz4
+    replica_repl_compression: lz4
+    repl_diskless_sync: 'no'
+    repl_diskless_load: disabled
+    compressible: true
+    min_ratio: 1.2
+    value_size: 16384
+    stable_keys: 500
+    mutable_keys: 200
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7200

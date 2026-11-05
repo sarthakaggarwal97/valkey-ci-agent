@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "642196f63ca40ca7c55d36d9b43e5f3cee9fb8e2",
+  "parent": "f4cbd1c5ef06f0dd574799a0a6ab5f5bf57c82a5",
+  "pr": 4800,
+  "pr_repo": "valkey-io/valkey",
+  "subject": " bracketed IPv6 cluster CLI address parsing (#4800)",
+  "date": "2026-10-03",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 9,
+    "executed": 9,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.4441,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 686abfe751a7..7836c5afe155.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-39c1d157d5f5
+seed: 4985
+experiment:
+  id: proposed.xinfo-groups-lag-after-xtrim
+  inputs:
+    resp: 2
+    node_max: 1
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

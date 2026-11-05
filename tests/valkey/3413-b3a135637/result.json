@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b3a13563766cecbf9d859c7641d1ed00bf75108e",
+  "parent": "2fce936b3f934e879cd2dce20d263191eef07cb5",
+  "pr": 3413,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize infoCommand with SDS pre-allocation (#3413)",
+  "date": "2026-10-11",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2133,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds a single sdsMakeRoomFor(info, 4096) call to pre-allocate the SDS buffer used to build the INFO reply. sdsMakeRoomFor only grows allocated capacity and leaves the string length and contents untouched, so the INFO output and every reply are byte-identical to the parent build; this is a pure performance optimization with no behaviour change, no new config, and no reachable difference for a scenario's oracles to judge."
+}

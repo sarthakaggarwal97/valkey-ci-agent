@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b14acea0abf61071efcb54d407b02b35017abb06",
+  "parent": "eef69cb6dae0c6dba1269c38b93165a355033efc",
+  "pr": 5173,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reject a non-positive --hotkeys-count in valkey-cli (#5173)",
+  "date": "2026-10-30",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.1719,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: used more than 4 GiB of memory",
+      "scenario": "ai-219523cdb64e",
+      "seed": 51730,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5173",
+      "fingerprint": "6b4ccf3594465778b1a1",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

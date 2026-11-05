@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.hotkeys-count-nonpositive
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli --hotkeys-count rejects a zero or negative count instead
+    of scanning or allocating from a wrapped unsigned size
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: inputs.parent}
+    server: true
+    timeout_s: 30
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, --hotkeys-count, '0'], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "Invalid hotkeys count"}}}
+    - {tool: valkey-cli, args: [-p, $port, --hotkeys-count, '-1'], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "Invalid hotkeys count"}}}
+    - {tool: valkey-cli, args: [-p, $port, --hotkeys-count, '5', PING], expect: {
+        exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

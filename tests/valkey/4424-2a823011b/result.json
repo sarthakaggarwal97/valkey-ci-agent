@@ -1,0 +1,64 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2a823011bd69e067f652c34bc5939320923bb220",
+  "parent": "28ecc514244025719263730a06cb362020705c00",
+  "pr": 4424,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Resolve slot from key for module and arbitrary-key commands (#4424)",
+  "date": "2026-10-01",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.9324,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-9166f055b7b3",
+      "build": "unstable",
+      "seed": 1,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-9166f055b7b3",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-9166f055b7b3",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-963a5880edb7",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-963a5880edb7",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-963a5880edb7",
+      "build": "unstable",
+      "seed": 4,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

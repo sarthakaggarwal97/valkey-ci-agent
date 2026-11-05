@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f213a6750d117bcf457cf56475fc3d381c810a42",
+  "parent": "642196f63ca40ca7c55d36d9b43e5f3cee9fb8e2",
+  "pr": 4657,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Build: make the Make / CMake gtest build link on macOS (#4657)",
+  "date": "2026-10-05",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3594,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only modifies the gtest unit-test build machinery (src/unit CMakeLists.txt and Makefile, plus the symbol-wrapping Python scripts) so the unit-test binary links on macOS. It compiles no code into valkey-server or any shipped tool and changes no runtime behaviour, replies, persistence, or replication, so there is no server-visible path for a scenario to exercise."
+}

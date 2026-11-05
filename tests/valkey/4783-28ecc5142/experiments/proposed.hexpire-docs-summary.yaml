@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.hexpire-docs-summary
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS summaries of the HEXPIRE family show the corrected text,
+    and the commands themselves behave unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, DOCS, HEXPIRE], expect_difference: true, expect: {contains: "Sets\
+          \ the expiration time of one or more hash fields in seconds."}}
+    - {command: [COMMAND, DOCS, HEXPIREAT], expect_difference: true, expect: {contains: "Sets\
+          \ the expiration time of one or more hash fields to a Unix timestamp."}}
+    - {command: [COMMAND, DOCS, HPEXPIRE], expect_difference: true, expect: {contains: "Sets\
+          \ the expiration time of one or more hash fields in milliseconds."}}
+    - {command: [COMMAND, DOCS, HPEXPIREAT], expect_difference: true, expect: {contains: "Sets\
+          \ the expiration time of one or more hash fields to a Unix timestamp in\
+          \ milliseconds."}}
+    - {command: [COMMAND, DOCS, HEXPIRETIME], expect: {contains: "Returns Unix timestamps\
+          \ in seconds"}}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HEXPIRE, h, 100, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HEXPIREAT, h, 33177862246, FIELDS, 1, f2], expect: {equals: [1]}}
+    - {command: [HTTL, h, FIELDS, 2, f1, f2], compare: skip}
+    - {command: [HPEXPIREAT, h, 33177862246000, FIELDS, 1, f1], expect: {equals: [
+          1]}}
+    - {command: [HPEXPIRE, h, 0, FIELDS, 1, f2], expect: {equals: [2]}}
+    - {command: [HPERSIST, h, FIELDS, 2, f1, f2], expect: {equals: [1, -2]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

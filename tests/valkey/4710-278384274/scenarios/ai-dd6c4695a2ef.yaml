@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9b270b6d8b1a..2783842743ef.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-dd6c4695a2ef
+seed: 4711
+experiment:
+  id: proposed.io-thread-shutdown-churn
+  inputs:
+    io_threads: 9
+    mutation_rate: 300
+    value_size: 16384
+    stable_keys: 2000
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7100

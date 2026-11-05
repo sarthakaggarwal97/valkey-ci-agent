@@ -1,0 +1,60 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "026d291679e693ff9fb5e313a4b80b79348f4022",
+  "parent": "ae819a9419bb519f1cfbab04f2213899adf78e84",
+  "pr": 4759,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix inline protocol parser stalling on an embedded '\\0' (#4759)",
+  "date": "2026-09-29",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 4,
+  "recall": false,
+  "coverage": {
+    "lines": 7,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/networking.c:3639",
+      "src/networking.c:3640",
+      "src/networking.c:3641",
+      "src/networking.c:3916",
+      "src/networking.c:3934",
+      "src/networking.c:3935",
+      "src/networking.c:3936"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 3.9547,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-0c1f1a9248c8",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-cbb4ecb8f285",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-9800d4be0862",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-1ce326efd429",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    }
+  ]
+}

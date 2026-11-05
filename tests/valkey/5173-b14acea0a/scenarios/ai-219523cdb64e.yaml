@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey eef69cb6dae0..b14acea0abf6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-219523cdb64e
+seed: 51730
+experiment:
+  id: proposed.hotkeys-count-nonpositive
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 72230552513e..51b3f0c87942.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-269b3da08b27
+seed: 475401
+experiment:
+  id: proposed.aof-compressed-preamble
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

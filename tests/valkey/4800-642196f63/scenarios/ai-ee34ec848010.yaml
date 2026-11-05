@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f4cbd1c5ef06..642196f63ca4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ee34ec848010
+seed: 4800
+experiment:
+  id: proposed.cli-cluster-ipv6-address
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

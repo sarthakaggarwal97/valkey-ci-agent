@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.monotonic-tsc-clocksource
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    With the kernel clocksource set to tsc, the build under test must still select
+    the X86 TSC monotonic clock (the new sysfs check must not false-negative on the
+    trailing newline), and the clock must advance at the right rate so a 100ms PX
+    expiry fires, including after a restart that re-runs monotonicInit in a fresh
+    process.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: clock
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [INFO, server], compare: skip, expect: {contains: "monotonic_clock:X86\
+          \ TSC"}}
+    - {command: [SET, k1, v, PX, 100], expect: {equals: OK}}
+    - {command: [EXISTS, k1], wait_s: 15, expect: {equals: 0}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [INFO, server], compare: skip, expect: {contains: "monotonic_clock:X86\
+          \ TSC"}}
+    - {command: [SET, k2, v, PX, 100], expect: {equals: OK}}
+    - {command: [EXISTS, k2], wait_s: 15, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [clock.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: clock}

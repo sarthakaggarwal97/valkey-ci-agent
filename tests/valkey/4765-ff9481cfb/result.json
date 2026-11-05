@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ff9481cfbee0ebb3237404705e3e8fc6cf122f8c",
+  "parent": "8a5602623486b3e648d00847272ee43a840e17a4",
+  "pr": 4765,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Restore replica flow control with I/O threads enabled (#4765)",
+  "date": "2026-10-08",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.5558,
+  "findings": [],
+  "recorded": []
+}

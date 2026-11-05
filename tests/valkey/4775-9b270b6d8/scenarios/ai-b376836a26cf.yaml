@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3293091659be..9b270b6d8b1a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b376836a26cf
+seed: 477502
+experiment:
+  id: proposed.tracking-eviction-time-bound
+  inputs:
+    max_keys: 1
+    max_keys_line: "tracking_total_keys:1\r"
+    io_threads: 1
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

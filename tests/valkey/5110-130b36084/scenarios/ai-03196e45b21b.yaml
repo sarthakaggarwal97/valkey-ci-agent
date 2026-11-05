@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 71a43e9dd13a..130b36084a27.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-03196e45b21b
+seed: 3
+experiment:
+  id: proposed.zset-set-member-rewrite-forkless
+  inputs:
+    members: 15000
+    hammer_iters: 400
+    save_delay_us: 120
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

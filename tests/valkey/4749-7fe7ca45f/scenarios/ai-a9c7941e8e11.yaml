@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey dca022fa11e8..7fe7ca45ffc7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a9c7941e8e11
+seed: 102
+experiment:
+  id: proposed.fullsync-compression-policy
+  inputs:
+    rdbcompression: zstd
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

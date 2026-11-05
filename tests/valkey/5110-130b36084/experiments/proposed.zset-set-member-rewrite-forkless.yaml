@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.zset-set-member-rewrite-forkless
+deployment:
+  modes: [standalone]
+metadata:
+  description: A zset op over a hashtable set source must not rewrite keyspace set
+    members a concurrent forkless save is reading
+inputs:
+  properties:
+    members: {type: integer, default: 30000, minimum: 1000, maximum: 200000}
+    hammer_iters: {type: integer, default: 200, minimum: 1, maximum: 100000}
+    save_delay_us: {type: integer, default: 200, minimum: 0, maximum: 100000}
+components:
+- use: valkey.action.commands
+  id: race
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 120
+    server_config:
+      save: ""
+      bgsave-default-method: forkless
+      forkless-infrastructure-enabled: "yes"
+      forkless-policy: prefer-forkless
+      rdbcompression: "yes"
+      rdb-key-save-delay: {$ref: inputs.save_delay_us}
+      set-max-listpack-entries: 128
+      zset-max-listpack-entries: 128
+    commands:
+    - command: [EVAL, "local n=tonumber(ARGV[1]) for i=1,n do local m=string.format('member-padding-%012d',i)\
+          \ redis.call('sadd','s',m) redis.call('zadd','z',0,m) end redis.call('zadd','z',0,'member-padding-extrakeyxx')\
+          \ return redis.status_reply('OK')", 0, {$ref: inputs.members}]
+      expect: {equals: OK}
+    - {command: [DEBUG, DIGEST-VALUE, s], expect: {error: false}}
+    - {command: [BGSAVE], expect: {contains: "started"}}
+    - command: [EVAL, "local r=tonumber(ARGV[1]) for i=1,r do redis.call('zintercard',2,'s','z')\
+          \ end return 1", 0, {$ref: inputs.hammer_iters}]
+      expect: {equals: 1}
+    - command: [EVAL, "local r=tonumber(ARGV[1]) for i=1,r do redis.call('zintercard',2,'s','z')\
+          \ end return 1", 0, {$ref: inputs.hammer_iters}]
+      expect: {equals: 1}
+    - command: [EVAL, "local r=tonumber(ARGV[1]) for i=1,r do redis.call('zintercard',2,'s','z')\
+          \ end return 1", 0, {$ref: inputs.hammer_iters}]
+      expect: {equals: 1}
+    - command: [EVAL, "local r=tonumber(ARGV[1]) for i=1,r do redis.call('zintercard',2,'s','z')\
+          \ end return 1", 0, {$ref: inputs.hammer_iters}]
+      expect: {equals: 1}
+    - {command: [INFO, persistence], wait_s: 90, expect: {contains: "rdb_bgsave_in_progress:0"},
+      compare: skip}
+    - {command: [INFO, persistence], expect: {contains: "rdb_last_bgsave_status:ok"},
+      compare: skip}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [DEBUG, DIGEST-VALUE, s], expect_difference: true, expect: {error: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [race.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: race}

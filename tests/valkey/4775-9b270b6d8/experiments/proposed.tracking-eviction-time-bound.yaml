@@ -1,0 +1,122 @@
+extends: [valkey.liveness]
+id: proposed.tracking-eviction-time-bound
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Overflow the client-side caching invalidation table past tracking-table-max-keys
+    from six RESP3 tracking clients that all track the same 128 keys, so each evicted
+    key must notify many clients. The time-bounded eviction in trackingLimitUsedSlots()
+    (500us per call) must still converge the table to exactly the configured limit
+    across repeated calls, keep delivering invalidation pushes, and match the parent
+    build.
+inputs:
+  properties:
+    max_keys:
+      type: integer
+      minimum: 1
+      maximum: 1000
+      default: 16
+    max_keys_line:
+      type: string
+      default: "tracking_total_keys:16\r"
+      description: INFO stats line the table must converge to; keep equal to max_keys
+    io_threads:
+      type: integer
+      enum: [1, 4]
+      default: 1
+components:
+- use: valkey.action.commands
+  id: evict
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 3
+    timeout_s: 240
+    server_config:
+      tracking-table-max-keys: {$ref: inputs.max_keys}
+      io-threads: {$ref: inputs.io_threads}
+    commands:
+    - {command: [CLIENT, TRACKING, ON], connection: t1, expect: {equals: OK}}
+    - {command: [GET, foo], connection: t1}
+    - {command: [SET, foo, v1], expect: {equals: OK}}
+    - {command: [PING], connection: t1, expect: {equals: PONG}}
+    - {connection: t1, read: true, compare: skip, expect: {exists: true}}
+    - {command: [CLIENT, TRACKING, ON], connection: t2, expect: {equals: OK}}
+    - {command: [CLIENT, TRACKING, ON], connection: t3, expect: {equals: OK}}
+    - {command: [CLIENT, TRACKING, ON], connection: t4, expect: {equals: OK}}
+    - {command: [CLIENT, TRACKING, ON], connection: t5, expect: {equals: OK}}
+    - {command: [CLIENT, TRACKING, ON], connection: t6, expect: {equals: OK}}
+    - connection: t1
+      command: &id001 [MGET, trk-eviction-0000, trk-eviction-0001, trk-eviction-0002,
+        trk-eviction-0003, trk-eviction-0004, trk-eviction-0005, trk-eviction-0006,
+        trk-eviction-0007, trk-eviction-0008, trk-eviction-0009, trk-eviction-0010,
+        trk-eviction-0011, trk-eviction-0012, trk-eviction-0013, trk-eviction-0014,
+        trk-eviction-0015, trk-eviction-0016, trk-eviction-0017, trk-eviction-0018,
+        trk-eviction-0019, trk-eviction-0020, trk-eviction-0021, trk-eviction-0022,
+        trk-eviction-0023, trk-eviction-0024, trk-eviction-0025, trk-eviction-0026,
+        trk-eviction-0027, trk-eviction-0028, trk-eviction-0029, trk-eviction-0030,
+        trk-eviction-0031, trk-eviction-0032, trk-eviction-0033, trk-eviction-0034,
+        trk-eviction-0035, trk-eviction-0036, trk-eviction-0037, trk-eviction-0038,
+        trk-eviction-0039, trk-eviction-0040, trk-eviction-0041, trk-eviction-0042,
+        trk-eviction-0043, trk-eviction-0044, trk-eviction-0045, trk-eviction-0046,
+        trk-eviction-0047, trk-eviction-0048, trk-eviction-0049, trk-eviction-0050,
+        trk-eviction-0051, trk-eviction-0052, trk-eviction-0053, trk-eviction-0054,
+        trk-eviction-0055, trk-eviction-0056, trk-eviction-0057, trk-eviction-0058,
+        trk-eviction-0059, trk-eviction-0060, trk-eviction-0061, trk-eviction-0062,
+        trk-eviction-0063, trk-eviction-0064, trk-eviction-0065, trk-eviction-0066,
+        trk-eviction-0067, trk-eviction-0068, trk-eviction-0069, trk-eviction-0070,
+        trk-eviction-0071, trk-eviction-0072, trk-eviction-0073, trk-eviction-0074,
+        trk-eviction-0075, trk-eviction-0076, trk-eviction-0077, trk-eviction-0078,
+        trk-eviction-0079, trk-eviction-0080, trk-eviction-0081, trk-eviction-0082,
+        trk-eviction-0083, trk-eviction-0084, trk-eviction-0085, trk-eviction-0086,
+        trk-eviction-0087, trk-eviction-0088, trk-eviction-0089, trk-eviction-0090,
+        trk-eviction-0091, trk-eviction-0092, trk-eviction-0093, trk-eviction-0094,
+        trk-eviction-0095, trk-eviction-0096, trk-eviction-0097, trk-eviction-0098,
+        trk-eviction-0099, trk-eviction-0100, trk-eviction-0101, trk-eviction-0102,
+        trk-eviction-0103, trk-eviction-0104, trk-eviction-0105, trk-eviction-0106,
+        trk-eviction-0107, trk-eviction-0108, trk-eviction-0109, trk-eviction-0110,
+        trk-eviction-0111, trk-eviction-0112, trk-eviction-0113, trk-eviction-0114,
+        trk-eviction-0115, trk-eviction-0116, trk-eviction-0117, trk-eviction-0118,
+        trk-eviction-0119, trk-eviction-0120, trk-eviction-0121, trk-eviction-0122,
+        trk-eviction-0123, trk-eviction-0124, trk-eviction-0125, trk-eviction-0126,
+        trk-eviction-0127]
+    - {connection: t2, command: *id001}
+    - {connection: t3, command: *id001}
+    - {connection: t4, command: *id001}
+    - {connection: t5, command: *id001}
+    - {connection: t6, command: *id001}
+    - command: [INFO, stats]
+      wait_s: 60
+      compare: skip
+      expect: {contains: {$ref: inputs.max_keys_line}}
+    - {connection: t1, command: *id001}
+    - {connection: t2, command: *id001}
+    - {connection: t3, command: *id001}
+    - {connection: t4, command: *id001}
+    - {connection: t5, command: *id001}
+    - {connection: t6, command: *id001}
+    - command: [INFO, stats]
+      wait_s: 60
+      compare: skip
+      expect: {contains: {$ref: inputs.max_keys_line}}
+    - {command: [PING], connection: t1, expect: {equals: PONG}}
+    - {connection: t1, read: true, compare: skip, expect: {exists: true}}
+    - {command: [PING], connection: t2, expect: {equals: PONG}}
+    - {connection: t2, read: true, compare: skip, expect: {exists: true}}
+    - {command: [PING], connection: t3, expect: {equals: PONG}}
+    - {connection: t3, read: true, compare: skip, expect: {exists: true}}
+    - {command: [PING], connection: t4, expect: {equals: PONG}}
+    - {connection: t4, read: true, compare: skip, expect: {exists: true}}
+    - {command: [PING], connection: t5, expect: {equals: PONG}}
+    - {connection: t5, read: true, compare: skip, expect: {exists: true}}
+    - {command: [PING], connection: t6, expect: {equals: PONG}}
+    - {connection: t6, read: true, compare: skip, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [evict.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evict}

@@ -1,0 +1,35 @@
+extends: [valkey.base]
+id: proposed.io-thread-shutdown-cleanup
+deployment:
+  modes: [standalone]
+metadata:
+  description: A graceful SIGTERM restart under sustained IO-threaded write load drives
+    finishShutdown->killIOThreads, exercising the per-worker private-inbox drain and
+    the pending-response list release at process exit
+inputs:
+  properties:
+    warmup_s: {type: number, minimum: 0.5, maximum: 60, default: 4}
+components:
+- use: valkey.action.sleep
+  id: warmup
+  depends_on: [writes]
+  config:
+    seconds: {$ref: inputs.warmup_s}
+- use: valkey.action.restart-instance
+  id: graceful-restart
+  depends_on: [warmup]
+  config:
+    instance: primary
+    wait_ready: true
+- use: valkey.observer.log
+  id: shutdownlog
+  config:
+    instances: primary
+    expect:
+    - {evidence_id: valkey.shutdown.completed, pattern: "ready to exit, bye bye",
+      required: false}
+    forbidden:
+    - {pattern: "Invalid SPSC job type"}
+    - {pattern: "VALKEY BUG REPORT"}
+required_evidence:
+- {evidence_id: valkey.instance.restarted, source: graceful-restart}

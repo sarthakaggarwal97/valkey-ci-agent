@@ -1,0 +1,68 @@
+extends: [valkey.base]
+id: proposed.io-thread-shutdown-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Runtime io-threads scale-down/up churn (CONFIG SET io-threads, which runs shutdownIOThread's
+    new uncommitted-job drain outside exit) and a SIGTERM graceful shutdown-and-restart
+    of the primary under pipelined writes (finishShutdown -> killIOThreads), checking
+    for crashes, assertion or sanitizer reports, hangs, and lost acknowledged writes.
+inputs:
+  properties:
+    io_threads: {type: integer, minimum: 2, maximum: 16, default: 4}
+    run_before_churn_s: {type: number, minimum: 0, maximum: 30, default: 2}
+    run_after_restart_s: {type: number, minimum: 0, maximum: 30, default: 3}
+startup_overlays:
+- overlay_id: io-threads
+  server_config:
+    io-threads: {$ref: inputs.io_threads}
+    io-threads-always-active: "yes"
+components:
+- use: valkey.action.sleep
+  id: run-before-churn
+  depends_on: [writes]
+  config:
+    seconds: {$ref: inputs.run_before_churn_s}
+- use: valkey.action.commands
+  id: scale-churn
+  depends_on: [run-before-churn]
+  config:
+    instances: primaries
+    timeout_s: 10
+    commands:
+    - {command: [MSET, "io:a", a1, "io:b", b1, "io:c", c1, "io:a", a2, "io:b", b2],
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 2], expect: {equals: OK}, wait_s: 30}
+    - {command: [MSET, "io:d", d1, "io:e", e1, "io:d", d2, "io:e", e2], expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {equals: OK}, wait_s: 30}
+    - {command: [GET, "io:a"], expect: {equals: a2}}
+    - {command: [CONFIG, SET, io-threads, 8], expect: {equals: OK}, wait_s: 30}
+    - {command: [DEL, "io:a", "io:b", "io:c", "io:a"], expect: {min: 0}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {equals: OK}, wait_s: 30}
+    - {command: [CONFIG, SET, io-threads, {$ref: inputs.io_threads}], expect: {equals: OK},
+      wait_s: 30}
+    - {command: [PING], expect: {equals: PONG}}
+- use: valkey.fault.process-signal
+  id: term-primary
+  config:
+    instance: primary
+    signal: SIGTERM
+    restart: true
+    restart_mode: immediate
+    when_event: scale-churn.completed
+- use: valkey.action.sleep
+  id: run-after-restart
+  depends_on: [scale-churn]
+  config:
+    seconds: {$ref: inputs.run_after_restart_s}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    loss_window_faults: [term-primary]
+    loss_window_s: 2.5
+required_events: [scale-churn.completed, term-primary.recovered]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scale-churn}
+- {evidence_id: valkey.fault.injected, source: term-primary}

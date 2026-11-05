@@ -6,59 +6,54 @@
   "pr_repo": "valkey-io/valkey",
   "subject": "Stop zset ops from rewriting keyspace set members during lookups (#5110)",
   "date": "2026-11-04",
-  "unstable": "c86f6ee511e1a36488feb3b8e62093e69195d332",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
   "module_head": null,
   "outcome": "tested",
-  "proposed": 5,
-  "proven": 0,
-  "hunted": 0,
-  "dropped": 5,
-  "recall": false,
+  "proposed": 3,
+  "proven": 1,
+  "hunted": 3,
+  "dropped": 3,
+  "recall": true,
   "coverage": {
     "lines": 5,
-    "executed": 0,
-    "percent": 0,
+    "executed": 3,
+    "percent": 60,
     "uncovered": [
-      "src/t_zset.c:1705",
-      "src/t_zset.c:1706",
-      "src/t_zset.c:1707",
       "src/t_zset.c:1785",
       "src/t_zset.c:1786"
     ],
     "rounds": 1
   },
-  "cost_usd": 18.3919,
-  "findings": [],
-  "recorded": [
+  "cost_usd": 13.9645,
+  "findings": [
     {
-      "scenario": "ai-b5fa2844ad28",
-      "build": "merge",
-      "status": "ERROR",
-      "reason": "unreached-change"
+      "rule": "crash",
+      "detail": "crash: 15257:M 05 Nov 2026 19:47:42.718 # Terminating server after rdb file reading failure.",
+      "scenario": "ai-5c85bc7e44f4",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5110",
+      "fingerprint": "5f99e7ae11b196426ba3",
+      "issue": null
     },
     {
-      "scenario": "ai-553e16a9cff7",
-      "build": "merge",
-      "status": "ERROR",
-      "reason": "unreached-change"
-    },
-    {
-      "scenario": "ai-fe10f5212635",
-      "build": "merge",
-      "status": "SKIP_UNSUPPORTED",
-      "reason": null
-    },
-    {
-      "scenario": "ai-8efca7259d47",
-      "build": "merge",
-      "status": "SKIP_UNSUPPORTED",
-      "reason": null
-    },
-    {
-      "scenario": "ai-623b5d995dc8",
-      "build": "merge",
-      "status": "SKIP_UNSUPPORTED",
-      "reason": null
+      "rule": "regressed-fix",
+      "detail": "regressed fix: the change of valkey-io/valkey#5110 no longer shows on 7836c5afe155 (commands race 10)",
+      "scenario": "ai-0f6fce0fb120",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "c97b5df0af3ece8c9c7f",
+      "issue": null
     }
-  ]
+  ],
+  "recorded": []
 }

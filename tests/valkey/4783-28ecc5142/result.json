@@ -1,0 +1,59 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "28ecc514244025719263730a06cb362020705c00",
+  "parent": "2783842743ef76827347af8375ff9b5f0b39b704",
+  "pr": 4783,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix HEXPIRE family command summaries (#4783)",
+  "date": "2026-10-01",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.7086,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-392c97498947",
+      "build": "unstable",
+      "seed": 1101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-392c97498947",
+      "build": "unstable",
+      "seed": 1102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-392c97498947",
+      "build": "unstable",
+      "seed": 1103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a7189e636b40",
+      "build": "unstable",
+      "seed": 1102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a7189e636b40",
+      "build": "unstable",
+      "seed": 1103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a7189e636b40",
+      "build": "unstable",
+      "seed": 1104,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

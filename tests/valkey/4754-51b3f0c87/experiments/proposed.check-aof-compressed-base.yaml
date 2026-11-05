@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.check-aof-compressed-base
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    valkey-check-aof recognizes a streaming-compressed (VCS) RDB base as an RDB preamble,
+    validates a real lz4 VCS file the server SAVEd, refuses to repair a damaged VCS
+    file as a RESP truncation under --fix, and detects signatures in files shorter
+    than the old 8-byte minimum.
+components:
+- use: valkey.action.tools
+  id: check-aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    files:
+      vcs-garbage.aof: !!binary 'VkNTAQEAAd6tvu/erb6v'
+      vcs-tiny.aof: "VCS"
+      valkey-short.aof: "VALKEY"
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, rdbcompression, lz4], expect: {
+        exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, DEBUG, POPULATE, 500], expect: {exit: {
+          equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SAVE], expect: {exit: {equals: 0}, stdout: {
+          equals: "OK\n"}}}
+    - {tool: valkey-check-aof, args: [dump.rdb], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "RDB preamble is OK, proceeding with\
+            \ AOF tail"}}}
+    - {tool: valkey-check-aof, args: [--fix, vcs-garbage.aof], stdin: "y\n", expect_difference: true,
+      expect: {exit: {equals: 1}, stdout: {contains: "RDB preamble of AOF file is\
+            \ not sane"}}}
+    - {tool: valkey-check-aof, args: [vcs-tiny.aof], expect_difference: true, expect: {
+        exit: {equals: 1}, stdout: {contains: "RDB preamble of AOF file is not sane"}}}
+    - {tool: valkey-check-aof, args: [valkey-short.aof], expect_difference: true,
+      expect: {exit: {equals: 1}, stdout: {contains: "RDB preamble of AOF file is\
+            \ not sane"}}}
+required_events: [check-aof.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check-aof}

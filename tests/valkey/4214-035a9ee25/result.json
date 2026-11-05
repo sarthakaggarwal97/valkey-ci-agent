@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "035a9ee25f00ebe86a8aa78d4183b752db4973a3",
+  "parent": "236f94372302dfaf864de9138d64a504dedbb6ba",
+  "pr": 4214,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "fix(acl): prevent NULL pointer dereference on malformed selector in ACL file (#4214)",
+  "date": "2026-10-14",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.7565,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix (src/acl.c:3244) adds a missing `sdsfreesplitres(argv, argc); continue;` so that when ACLMergeSelectorArguments returns NULL on a user line with an unmatched parenthesis in a selector, the loader stops instead of falling through to `for (j=0; j<merged_argc; j++) acl_args[j]=...` with merged_argc uninitialized and acl_args NULL (a NULL-pointer dereference / SIGSEGV). It is a genuine crash fix, but no installed experiment nor one I can write reaches it as a scored finding, for reasons intrinsic to the change. The faulty code runs only while parsing a malformed ACL *file*, which is read s"
+}

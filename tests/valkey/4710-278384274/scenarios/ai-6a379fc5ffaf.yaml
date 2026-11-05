@@ -1,0 +1,21 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9b270b6d8b1a..2783842743ef.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6a379fc5ffaf
+seed: 202
+experiment:
+  id: proposed.io-thread-shutdown-cleanup
+  inputs:
+    warmup_s: 5
+    stable_keys: 500
+    mutable_keys: 300
+    mutation_rate: 6000
+    value_size: 16384
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
+  server_config:
+    io-threads: '16'
+    io-threads-always-active: 'yes'
+    appendonly: 'yes'
+    appendfsync: always

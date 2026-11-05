@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.module-openkey-cross-slot
+deployment:
+  modes: [cluster]
+metadata:
+  description: A module command opening an undeclared key in a different hash slot
+    reads, writes and expires the right key in cluster mode
+inputs:
+  required: [parent, module, module_parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: openkey
+  config:
+    compare_with: {$ref: inputs.parent}
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SET, '{baz}target_read', read_val], expect: {equals: OK}}
+    - {command: [test.openkey_cross_slot, '{bar}declared', '{baz}target_read', read],
+      expect_difference: true, expect: {equals: read_val}}
+    - {command: [test.openkey_cross_slot, '{bar}declared', '{alpha}target_write',
+        write, written_val], expect: {equals: OK}}
+    - {command: [GET, '{alpha}target_write'], expect_difference: true, expect: {equals: written_val}}
+    - {command: [SET, '{k2}target_expire', expiring_val], expect: {equals: OK}}
+    - {command: [test.openkey_cross_slot, '{bar}declared', '{k2}target_expire', expire,
+        100000], expect_difference: true, expect: {equals: OK}}
+    - {command: [PTTL, '{k2}target_expire'], compare: skip}
+    - {command: [LPUSH, '{k3}target_wrongtype', list_elem], expect: {equals: 1}}
+    - {command: [test.openkey_cross_slot, '{bar}declared', '{k3}target_wrongtype',
+        read], expect_difference: true, expect: {error: "WRONGTYPE"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: openkey}

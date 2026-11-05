@@ -1,0 +1,87 @@
+extends: [valkey.liveness]
+id: proposed.xinfo-groups-lag-after-xtrim
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    XINFO GROUPS lag after XTRIM removes unread entries: the fixed build caps lag
+    at the stream's current length (0 on an empty stream), the parent reports entries_added
+    - entries_read, which overcounts trimmed entries and goes negative with a crafted
+    XGROUP SETID ENTRIESREAD. Marked XINFO GROUPS replies use exists expects because
+    the reply shape differs between RESP 2 and 3; the differential against the parent
+    is the oracle. Unmarked XINFO GROUPS commands guard paths the fix must not change:
+    lag after the group catches up, and the last-delivered-id == first-entry boundary
+    where the old formula must still be used.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    node_max: {type: integer, minimum: 1, maximum: 4096, default: 128}
+components:
+- use: valkey.action.commands
+  id: xinfo-lag
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {stream-node-max-entries: {$ref: inputs.node_max}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [XADD, s, 1-0, f, v], expect: {equals: 1-0}}
+    - {command: [XADD, s, 2-0, f, v]}
+    - {command: [XADD, s, 3-0, f, v]}
+    - {command: [XADD, s, 4-0, f, v]}
+    - {command: [XADD, s, 5-0, f, v]}
+    - {command: [XADD, s, 6-0, f, v]}
+    - {command: [XGROUP, CREATE, s, g1, '0'], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g1, c1, COUNT, 1, STREAMS, s, '>']}
+    - {command: [XTRIM, s, MAXLEN, 2], expect: {equals: 4}}
+    - {command: [XINFO, GROUPS, s], expect_difference: true, expect: {exists: true}}
+    - {command: [XREADGROUP, GROUP, g1, c1, STREAMS, s, '>']}
+    - {command: [XINFO, GROUPS, s]}
+    - {command: [XADD, s, 7-0, f, v], expect: {equals: 7-0}}
+    - {command: [XINFO, GROUPS, s]}
+    - {command: [XADD, t, 1-0, f, v]}
+    - {command: [XADD, t, 2-0, f, v]}
+    - {command: [XADD, t, 3-0, f, v]}
+    - {command: [XADD, t, 4-0, f, v]}
+    - {command: [XGROUP, CREATE, t, g1, '0'], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g1, c1, COUNT, 2, STREAMS, t, '>']}
+    - {command: [XTRIM, t, MAXLEN, 0], expect: {equals: 4}}
+    - {command: [XINFO, GROUPS, t], expect_difference: true, expect: {exists: true}}
+    - {command: [XADD, u, 1-0, f, v]}
+    - {command: [XADD, u, 2-0, f, v]}
+    - {command: [XADD, u, 3-0, f, v]}
+    - {command: [XADD, u, 4-0, f, v]}
+    - {command: [XADD, u, 5-0, f, v]}
+    - {command: [XDEL, u, 3-0], expect: {equals: 1}}
+    - {command: [XGROUP, CREATE, u, g1, '0'], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g1, c1, STREAMS, u, '>']}
+    - {command: [XADD, u, 6-0, f, v]}
+    - {command: [XADD, u, 7-0, f, v]}
+    - {command: [XTRIM, u, MINID, 7-0], expect: {equals: 5}}
+    - {command: [XINFO, GROUPS, u], expect_difference: true, expect: {exists: true}}
+    - {command: [XREADGROUP, GROUP, g1, c1, STREAMS, u, '>']}
+    - {command: [XINFO, GROUPS, u]}
+    - {command: [XADD, w, 1-0, f, v]}
+    - {command: [XADD, w, 2-0, f, v]}
+    - {command: [XADD, w, 3-0, f, v]}
+    - {command: [XGROUP, CREATE, w, g1, '0'], expect: {equals: OK}}
+    - {command: [XTRIM, w, MAXLEN, 2], expect: {equals: 1}}
+    - {command: [XGROUP, SETID, w, g1, '0', ENTRIESREAD, 100], expect: {equals: OK}}
+    - {command: [XINFO, GROUPS, w], expect_difference: true, expect: {exists: true}}
+    - {command: [XADD, b, 1-0, f, v]}
+    - {command: [XADD, b, 2-0, f, v]}
+    - {command: [XADD, b, 3-0, f, v]}
+    - {command: [XADD, b, 4-0, f, v]}
+    - {command: [XGROUP, CREATE, b, g1, '0'], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g1, c1, COUNT, 2, STREAMS, b, '>']}
+    - {command: [XTRIM, b, MAXLEN, 3], expect: {equals: 1}}
+    - {command: [XINFO, GROUPS, b]}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [xinfo-lag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: xinfo-lag}

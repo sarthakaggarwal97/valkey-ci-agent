@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.cli-cluster-ipv6-address
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli --cluster parses bracketed [IPv6]:port addresses, rejects
+    malformed brackets, and keeps IPv4, unbracketed IPv6 and two-argument forms working
+components:
+- use: valkey.action.tools
+  id: cli-ipv6
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [--cluster, check, "[::1]:$port"], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "All 16384 slots covered"}}}
+    - {tool: valkey-cli, args: [--cluster, check, "[::1]:$port@1"], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "All 16384 slots covered"}}}
+    - {tool: valkey-cli, args: [--cluster, info, "[::1]:$port"], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "16384 slots"}}}
+    - {tool: valkey-cli, args: [--cluster, info, "[::1]$port"], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "Invalid arguments"}}}
+    - {tool: valkey-cli, args: [--cluster, check, "[::1:$port"], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "Invalid arguments"}}}
+    - {tool: valkey-cli, args: [--cluster, check, nocolonhere], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "[::1]:7000"}}}
+    - {tool: valkey-cli, args: [--cluster, create, "[::1]:$port", --cluster-yes],
+      expect_difference: true, expect: {exit: {equals: 1}}}
+    - {tool: valkey-cli, args: [--cluster, check, "127.0.0.1:$port"], expect: {exit: {
+          equals: 0}, stdout: {contains: "All 16384 slots covered"}}}
+    - {tool: valkey-cli, args: [--cluster, check, "::1:$port"], expect: {exit: {equals: 0},
+        stdout: {contains: "All 16384 slots covered"}}}
+    - {tool: valkey-cli, args: [--cluster, check, "::1", $port], expect: {exit: {
+          equals: 0}, stdout: {contains: "All 16384 slots covered"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-ipv6}
