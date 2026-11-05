@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.ft-english-emulate13-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: English index under search.emulate-release 1.3.0 - MINSTEMSIZE counted
+    in code points instead of bytes, and malformed-UTF-8 query expressions rejected;
+    then 1.2.0 restores acceptance
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: compat
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, search.emulate-release, 1.3.0], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", MINSTEMSIZE, 6, SCHEMA,
+        t, TEXT], expect: {equals: OK}}
+    - {command: [HSET, "d:1", t, "caf\xE9s gourmands"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, gourmands, LIMIT, 0, 0], wait_s: 20, expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idx, "caf\xE9", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, !!binary "Z291cm1hbmRz/w==", LIMIT, 0, 0], expect_difference: true,
+      expect: {error: "Invalid UTF-8"}}
+    - {command: [CONFIG, SET, search.emulate-release, 1.2.0], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, !!binary "Z291cm1hbmRz/w==", LIMIT, 0, 0], expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idx, "caf\xE9", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [compat.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: compat}

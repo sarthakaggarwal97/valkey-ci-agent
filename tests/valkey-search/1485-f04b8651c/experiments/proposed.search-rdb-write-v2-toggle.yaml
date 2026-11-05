@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.search-rdb-write-v2-toggle
+deployment:
+  modes: [standalone]
+metadata:
+  description: rdb-write-v2 turned off at runtime under the newly mutable debug-mode
+    makes SAVE write the legacy index format, and the data and index reload identically
+    after restart on both builds
+components:
+- use: valkey.action.commands
+  id: rdbv2
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: 2
+    timeout_s: 180
+    commands:
+    - {command: [CONFIG, SET, search.debug-mode, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.rdb-write-v2, "no"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.rdb-write-v2], expect_difference: true, expect: {
+        equals: [search.rdb-write-v2, "no"]}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, color, TAG, n,
+        NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "d:1", color, red, n, 1], expect: {equals: 2}}
+    - {command: [HSET, "d:2", color, blue, n, 2], expect: {equals: 2}}
+    - {command: [HSET, "d:3", color, red, n, 3], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          3]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 60, expect: {equals: [
+          3]}}
+    - {command: [FT.SEARCH, idx, "@color:{red}", NOCONTENT], compare: unordered, expect: {
+        contains: "d:1"}}
+    - {command: [FT.SEARCH, idx, "@n:[2 3]", NOCONTENT], compare: unordered, expect: {
+        contains: "d:3"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [rdbv2.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rdbv2}

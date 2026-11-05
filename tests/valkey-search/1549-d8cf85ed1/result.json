@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "d8cf85ed1a0c18ddd0ba19c9fb268468d74f3d93",
+  "parent": "8ab5f6bbd91f2e90f0176563157a31d66870f844",
+  "pr": 1549,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Sync command JSON files and docs with 1.3.0 behavior (#1549)",
+  "date": "2026-10-07",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2701,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only documentation markdown (docs/commands/*.md) and command-metadata JSON files (src/commands/*.json). Those JSON files are not compiled into the module, not read at runtime, and not consumed by any build rule, script, or test in the repository; command registration happens in src/module_loader.cc via vmsdk::module::Options (names, flags, ACLs), which is unchanged, and the module never calls ValkeyModule_SetCommandInfo. The parsers for the documented options (ADDSCORES, SCORER, LOAD ... AS, the FT.HYBRID KNN block) are untouched \u2014 the commit merely syncs docs/metadata to beha"
+}

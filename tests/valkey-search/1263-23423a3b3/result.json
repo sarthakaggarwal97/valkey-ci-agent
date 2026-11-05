@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "23423a3b3ac6208a2a7fff0017e311c6ad2e4938",
+  "parent": "9600ce527b9f8d11bf59e10d24e76d29aced947b",
+  "pr": 1263,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "feat: introduce multi-language support for 12 snowball stemmer languages  (#1263)",
+  "date": "2026-10-06",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 8,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 8.5296,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

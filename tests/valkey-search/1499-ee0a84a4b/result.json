@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ee0a84a4b2d93638155965381c65e28e64de1fdf",
+  "parent": "f04b8651ce5d6db87521709eafdd6136ef39a1eb",
+  "pr": 1499,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "chore: bump min engine version for 1.3.0 (#1499)",
+  "date": "2026-10-02",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4417,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only bumps the module's kMinimumServerVersion constant from 9.0.1 to 9.1.0 (plus a QUICK_START.md docs edit). That constant's sole use is the load-time gate in vmsdk/src/module.cc, which rejects module load on servers older than the minimum; it is not reflected in any command reply, FT.INFO, INFO, or MODULE LIST output. The fuzzer loads both module builds into one pinned Valkey engine build that cannot be varied: if the pinned engine is >= 9.1.0 both builds load and are byte-for-byte identical in behavior (no command could validly be marked expect_difference), and if it were older t"
+}

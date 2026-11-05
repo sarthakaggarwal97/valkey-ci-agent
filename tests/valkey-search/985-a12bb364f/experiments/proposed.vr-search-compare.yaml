@@ -1,0 +1,124 @@
+extends: [valkey.liveness]
+id: proposed.vr-search-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: VECTOR_RANGE parsing, replies, SORTBY/WITHSORTKEYS, compounds and FT.AGGREGATE
+    compared against the parent module build, which rejects the syntax
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: vr
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [HSET, p1, category, shoes, v, !!binary 'AACAPwAAAAA='], expect: {
+        equals: 2}}
+    - {command: [HSET, p2, category, shirts, v, !!binary 'AAAAAAAAAEA='], expect: {
+        equals: 2}}
+    - {command: [HSET, p3, category, shoes, v, !!binary 'AABAQAAAgEA='], expect: {
+        equals: 2}}
+    - {command: [FT.CREATE, idx, SCHEMA, category, TAG, v, VECTOR, HNSW, 6, TYPE,
+        FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, fidx, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM,
+        2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.INFO, fidx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, '@v:[VECTOR_RANGE 5 $vec]=>{$YIELD_DISTANCE_AS: dist}',
+        PARAMS, 2, vec, !!binary 'AAAAAAAAAAA=', SORTBY, dist, ASC, RETURN, 1, dist,
+        DIALECT, 2], expect_difference: true, expect: {equals: [2, p1, [dist, '1'],
+          p2, [dist, '4']]}}
+    - {command: [FT.SEARCH, fidx, '@v:[VECTOR_RANGE 5 $vec]=>{$yield_distance_as:
+          dist}', PARAMS, 2, vec, !!binary 'AAAAAAAAAAA=', SORTBY, dist, ASC, RETURN,
+        1, dist, DIALECT, 2], expect_difference: true, expect: {equals: [2, p1, [
+            dist, '1'], p2, [dist, '4']]}}
+    - {command: [FT.SEARCH, idx, '@v:[vector_range $r $vec EF_RUNTIME 10 AS dist]',
+        PARAMS, 4, r, 30, vec, !!binary 'AAAAAAAAAAA=', SORTBY, dist, ASC, NOCONTENT,
+        DIALECT, 2], expect_difference: true, expect: {equals: [3, p1, p2, p3]}}
+    - {command: [FT.SEARCH, idx, '@v:[VECTOR_RANGE $r $vec]=>{$yield_distance_as:
+          dist}', PARAMS, 4, r, inf, vec, !!binary 'AAAAAAAAAAA=', SORTBY, dist, ASC,
+        NOCONTENT, DIALECT, 2], expect_difference: true, expect: {equals: [3, p1,
+          p2, p3]}}
+    - {command: [FT.SEARCH, idx, '@v:[VECTOR_RANGE 5 $vec]', PARAMS, 2, vec, !!binary 'AAAAAAAAAAA=',
+        NOCONTENT, DIALECT, 2], expect_difference: true, compare: unordered, expect: {
+        equals: [2, p1, p2]}}
+    - {command: [FT.SEARCH, idx, '@v:[VECTOR_RANGE 5 $vec]=>{$yield_distance_as: dist}',
+        PARAMS, 2, vec, !!binary 'AAAAAAAAAAA=', SORTBY, dist, DESC, WITHSORTKEYS,
+        NOCONTENT, DIALECT, 2], expect_difference: true, expect: {equals: [2, p2,
+          '#4', p1, '#1']}}
+    - {command: [FT.SEARCH, idx, '@v:[VECTOR_RANGE 5 $vec]=>{$yield_distance_as: dist}',
+        PARAMS, 2, vec, !!binary 'AAAAAAAAAAA=', SORTBY, dist, ASC, WITHSCORES, NOCONTENT,
+        DIALECT, 2], expect_difference: true, expect: {contains: p1}}
+    - {command: [FT.SEARCH, idx, '@category:{shoes} @v:[VECTOR_RANGE 30 $vec]=>{$yield_distance_as:
+          dist}', PARAMS, 2, vec, !!binary 'AAAAAAAAAAA=', SORTBY, dist, ASC, NOCONTENT,
+        DIALECT, 2], expect_difference: true, expect: {equals: [2, p1, p3]}}
+    - {command: [FT.SEARCH, idx, '@category:{shirts} | @v:[VECTOR_RANGE 10 $vec]=>{$yield_distance_as:
+          dist}', PARAMS, 2, vec, !!binary 'AAAAAAAAAAA=', SORTBY, dist, ASC, RETURN,
+        1, dist, DIALECT, 2], expect_difference: true, expect: {equals: [2, p1, [
+            dist, '1'], p2, [dist, '4']]}}
+    - {command: [FT.SEARCH, idx, '@category:{shirts} | @v:[VECTOR_RANGE 2 $vec]=>{$yield_distance_as:
+          dist}', PARAMS, 2, vec, !!binary 'AAAAAAAAAAA=', SORTBY, dist, ASC, RETURN,
+        1, dist, DIALECT, 2], expect_difference: true, expect: {equals: [2, p1, [
+            dist, '1'], p2, []]}}
+    - {command: [FT.SEARCH, idx, '-@v:[VECTOR_RANGE 2 $vec] @category:{shoes}', PARAMS,
+        2, vec, !!binary 'AAAAAAAAAAA=', NOCONTENT, DIALECT, 2], expect_difference: true,
+      expect: {equals: [1, p3]}}
+    - {command: [FT.SEARCH, idx, '@v:[VECTOR_RANGE 5 $vec]=>{$yield_distance_as: dist;
+          $epsilon: 0.01}', PARAMS, 2, vec, !!binary 'AAAAAAAAAAA=', SORTBY, dist,
+        ASC, NOCONTENT, DIALECT, 2], expect_difference: true, expect: {equals: [2,
+          p1, p2]}}
+    - {command: [FT.AGGREGATE, idx, '@v:[VECTOR_RANGE 30 $vec]=>{$YIELD_DISTANCE_AS:
+          dist}', PARAMS, 2, vec, !!binary 'AAAAAAAAAAA=', GROUPBY, 1, '@category',
+        REDUCE, MIN, 1, '@dist', AS, closest, SORTBY, 2, '@closest', ASC, DIALECT,
+        2], expect_difference: true, expect: {equals: [2, [category, shoes, closest,
+            '1'], [category, shirts, closest, '4']]}}
+    - {command: [FT.AGGREGATE, idx, '@v:[VECTOR_RANGE 30 $vec]=>{$yield_distance_as:
+          category}', PARAMS, 2, vec, !!binary 'AAAAAAAAAAA=', SORTBY, 2, '@category',
+        DESC, DIALECT, 2], expect_difference: true, expect: {contains: '25'}}
+    - {command: [FT.SEARCH, idx, '@v:[VECTOR_RANGE -1 $vec]', PARAMS, 2, vec, !!binary 'AAAAAAAAAAA=',
+        DIALECT, 2], expect_difference: true, expect: {error: 'non-negative'}}
+    - {command: [FT.SEARCH, idx, '@v:[VECTOR_RANGE 5]', PARAMS, 2, vec, !!binary 'AAAAAAAAAAA=',
+        DIALECT, 2], expect_difference: true, expect: {error: 'blob parameter is missing'}}
+    - {command: [FT.SEARCH, idx, '@v:[VECTOR_RANGE 5 $vec] @v:[VECTOR_RANGE 5 $vec]',
+        PARAMS, 2, vec, !!binary 'AAAAAAAAAAA=', DIALECT, 2], expect_difference: true,
+      expect: {error: 'single VECTOR_RANGE'}}
+    - {command: [FT.SEARCH, idx, '(@v:[VECTOR_RANGE 5 $vec])=>[KNN 2 @v $vec]', PARAMS,
+        2, vec, !!binary 'AAAAAAAAAAA=', DIALECT, 2], expect_difference: true, expect: {
+        error: 'not supported in the filter'}}
+    - {command: [FT.SEARCH, idx, '@v:[VECTOR_RANGE 5 $vec]=>{$yield_distance_as: category}',
+        PARAMS, 2, vec, !!binary 'AAAAAAAAAAA=', DIALECT, 2], expect_difference: true,
+      expect: {error: 'already exists in schema'}}
+    - {command: [FT.SEARCH, fidx, '@v:[VECTOR_RANGE 5 $vec]=>{$yield_distance_as:
+          dist; $epsilon: 0.1}', PARAMS, 2, vec, !!binary 'AAAAAAAAAAA=', DIALECT,
+        2], expect_difference: true, expect: {error: 'Invalid option'}}
+    - {command: [FT.SEARCH, idx, '@v:[VECTOR_RANGE 5 $vec]=>{$yield_distance_as: dist;
+          $epsilon: 0}', PARAMS, 2, vec, !!binary 'AAAAAAAAAAA=', DIALECT, 2], expect_difference: true,
+      expect: {error: 'Invalid option'}}
+    - {command: [FT.SEARCH, idx, '@v:[VECTOR_RANGE 5 $vec]=>{$weight: 2}', PARAMS,
+        2, vec, !!binary 'AAAAAAAAAAA=', DIALECT, 2], expect_difference: true, expect: {
+        error: 'Unknown query attribute'}}
+    - {command: [FT.SEARCH, idx, '@category:[VECTOR_RANGE 5 $vec]', PARAMS, 2, vec,
+        !!binary 'AAAAAAAAAAA=', DIALECT, 2], expect_difference: true, expect: {error: 'not
+          indexed as a vector field'}}
+    - {command: [FT.SEARCH, idx, '@v:[VECTOR_RANGE 5 $vec]', PARAMS, 2, vec, !!binary 'AACAPw==',
+        DIALECT, 2], expect_difference: true, expect: {error: 'does not match index
+          dimensions'}}
+    - {command: [FT.SEARCH, idx, '@v:[VECTOR_RANGE $r $vec]', PARAMS, 4, r, notanumber,
+        vec, !!binary 'AAAAAAAAAAA=', DIALECT, 2], expect_difference: true, expect: {
+        error: 'not a valid number'}}
+    - {command: [FT.SEARCH, idx, '@v:[VECTOR_RANGE $r $vec]', PARAMS, 4, r, nan, vec,
+        !!binary 'AAAAAAAAAAA=', DIALECT, 2], expect_difference: true, expect: {error: 'not
+          a valid number'}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [vr.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: vr}

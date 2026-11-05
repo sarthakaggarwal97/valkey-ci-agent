@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.ft-unused-params
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH and FT.AGGREGATE tolerate unused PARAMS instead of erroring;
+    used params, duplicate detection and later queries still work
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftparams
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, tag, TAG, num, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', vec, !!binary 'AACAPwAAAAA=', tag, a, num, 1], expect: {
+        equals: 3}}
+    - {command: [HSET, 'doc:2', vec, !!binary 'AAAAAAAAgD8=', tag, b, num, 2], expect: {
+        equals: 3}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @vec $BLOB]', PARAMS, 2, BLOB, !!binary 'AACAPwAAAAA=',
+        NOCONTENT, DIALECT, 2], wait_s: 30, expect: {contains: 'doc:1'}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @vec $BLOB]', PARAMS, 4, BLOB, !!binary 'AACAPwAAAAA=',
+        EXTRABLOB, 123, NOCONTENT, DIALECT, 2], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT.SEARCH, idx, '@tag:{a}', PARAMS, 2, FOO, bar, NOCONTENT, DIALECT,
+        2], expect_difference: true, expect: {error: false}}
+    - {command: [FT.SEARCH, idx, '@num:[0 10]', PARAMS, 4, DIALECT, 5, LIMIT, 0, NOCONTENT,
+        DIALECT, 2], expect_difference: true, expect: {error: false}}
+    - {command: [FT.SEARCH, idx, '@tag:{b}', PARAMS, 2, '', v, NOCONTENT, DIALECT,
+        2], expect_difference: true, expect: {error: false}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @vec $BLOB]', PARAMS, 4, BLOB, !!binary 'AACAPwAAAAA=',
+        BLOB, !!binary 'AAAAAAAAgD8=', NOCONTENT, DIALECT, 2], expect: {error: 'already
+          defined'}}
+    - {command: [FT.AGGREGATE, idx, '*', LOAD, 1, '@num', PARAMS, 2, X, 1, DIALECT,
+        2], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, '*', LOAD, 1, '@num', DIALECT, 2], expect: {error: false},
+      compare: skip}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @vec $BLOB]', PARAMS, 2, BLOB, !!binary 'AACAPwAAAAA=',
+        NOCONTENT, DIALECT, 2], expect: {contains: 'doc:1'}, compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ftparams.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftparams}

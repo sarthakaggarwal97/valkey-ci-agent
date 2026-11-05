@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "53ed364990b11ebca0e63ee7c0635aaa5eb852b5",
+  "parent": "b9fe5063502de359eb21c288dd05874eec7923d0",
+  "pr": 1562,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Apply debug-mode before other module args (#1562)",
+  "date": "2026-10-13",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.8564,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change affects only ModuleConfigManager::ParseAndLoadArgv, which runs once at module load over the arguments written after the module's path on the loadmodule directive: it applies --debug-mode in a first pass so Dev() configs given before it on the command line no longer fail the load, and a repeated --debug-mode applies its last value to all arguments. The fuzzer cannot supply module load-time arguments: valkey.action.commands loads modules and modules_parent as bare paths (--loadmodule each), a deployment's server_config.loadmodule is likewise a bare path whose value is one argument, MO"
+}

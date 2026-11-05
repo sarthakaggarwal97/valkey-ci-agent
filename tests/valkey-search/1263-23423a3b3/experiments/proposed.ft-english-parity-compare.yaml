@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.ft-english-parity-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: English-path parity through the Lexer-to-Language rewrite (escapes,
+    phrases, NOSTOPWORDS, STOPWORDS 0, empty PUNCTUATION, alias validation) plus the
+    code-point PUNCTUATION change observable on an English index
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: parity
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idxp, ON, HASH, PREFIX, 1, "p:", PUNCTUATION, "\u2013",
+        SCHEMA, t, TEXT], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxd, ON, HASH, PREFIX, 1, "q:", SCHEMA, t, TEXT], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idxn, ON, HASH, PREFIX, 1, "n:", NOSTOPWORDS, SCHEMA,
+        t, TEXT], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxz, ON, HASH, PREFIX, 1, "z:", STOPWORDS, 0, SCHEMA,
+        t, TEXT], expect: {equals: OK}}
+    - {command: [FT.CREATE, bad1, ON, HASH, PREFIX, 1, "w:", PUNCTUATION, "", SCHEMA,
+        t, TEXT], expect: {error: true}}
+    - {command: [FT.CREATE, bad2, ON, HASH, PREFIX, 1, "y:", SCHEMA, t, AS, "a,b",
+        TEXT], expect: {error: true}}
+    - {command: [HSET, "p:1", t, "x\u2026y"], expect: {equals: 1}}
+    - {command: [HSET, "p:2", t, "a\u2013b"], expect: {equals: 1}}
+    - {command: [HSET, "q:1", t, "big apple pie"], expect: {equals: 1}}
+    - {command: [HSET, "q:2", t, "hello\\-world"], expect: {equals: 1}}
+    - {command: [HSET, "n:1", t, "the end"], expect: {equals: 1}}
+    - {command: [HSET, "z:1", t, "they stayed"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idxp, b, LIMIT, 0, 0], wait_s: 20, expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idxp, x, LIMIT, 0, 0], expect_difference: true, expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idxd, pie, LIMIT, 0, 0], wait_s: 20, expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idxd, "hello\\-world", LIMIT, 0, 0], expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idxd, "\"big apple\"", LIMIT, 0, 0], expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idxn, end, LIMIT, 0, 0], wait_s: 20, expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idxn, the, LIMIT, 0, 0], expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idxz, stayed, LIMIT, 0, 0], wait_s: 20, expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idxz, they, LIMIT, 0, 0], expect: {equals: [1]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [parity.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: parity}

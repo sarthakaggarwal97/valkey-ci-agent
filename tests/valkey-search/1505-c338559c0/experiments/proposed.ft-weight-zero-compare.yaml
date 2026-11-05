@@ -1,0 +1,65 @@
+extends: [valkey.liveness]
+id: proposed.ft-weight-zero-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH accepts $weight 0 and a zero summed relevance scores 0 even
+    against inf/-inf SCORE_FIELD document scores
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: weight0
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, '1', 'doc:', SCORE, '0.5', SCORE_FIELD,
+        boost, SCHEMA, body, TEXT, NOSTEM, rank, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', body, 'hello world', rank, '10', boost, '1'], expect: {
+        equals: 3}}
+    - {command: [HSET, 'doc:2', body, hello, rank, '20', boost, '2'], expect: {equals: 3}}
+    - {command: [HSET, 'doc:5', body, 'hello hello', rank, '50', boost, inf], expect: {
+        equals: 3}}
+    - {command: [HSET, 'doc:7', body, 'hello world one', rank, '60', boost, '-inf'],
+      expect: {equals: 3}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, hello, LIMIT, '0', '0'], wait_s: 30, expect: {equals: [
+          4]}}
+    - {command: [FT.SEARCH, idx, 'hello=>{$weight:0}', LIMIT, '0', '0'], expect_difference: true,
+      expect: {equals: [4]}}
+    - {command: [FT.SEARCH, idx, 'hello => { $weight: 0.0; }', LIMIT, '0', '0'], expect_difference: true,
+      expect: {equals: [4]}}
+    - {command: [FT.SEARCH, idx, 'hello=>{$weight:-0.0}', LIMIT, '0', '0'], expect_difference: true,
+      expect: {equals: [4]}}
+    - {command: [FT.SEARCH, idx, 'one=>{$weight:0}', NOCONTENT, WITHSCORES], expect_difference: true,
+      expect: {equals: [1, 'doc:7', '0']}}
+    - {command: [FT.SEARCH, idx, '(hello)=>{$weight:0} one', NOCONTENT, WITHSCORES],
+      expect_difference: true, expect: {equals: [1, 'doc:7', '-inf']}}
+    - {command: [FT.SEARCH, idx, '(hello)=>{$weight:0} @rank:[5 15]', NOCONTENT, WITHSCORES],
+      expect_difference: true, expect: {equals: [1, 'doc:1', '0']}}
+    - {command: [FT.SEARCH, idx, '@rank:[45 55]', NOCONTENT, WITHSCORES], expect_difference: true,
+      expect: {equals: [1, 'doc:5', '0']}}
+    - {command: [FT.SEARCH, idx, '@rank:[55 65]', NOCONTENT, WITHSCORES], expect_difference: true,
+      expect: {equals: [1, 'doc:7', '0']}}
+    - {command: [FT.SEARCH, idx, '@rank:[5 15]', NOCONTENT, WITHSCORES], expect: {
+        equals: [1, 'doc:1', '0']}}
+    - {command: [FT.SEARCH, idx, 'hello @rank:[45 55]', NOCONTENT, WITHSCORES], expect: {
+        equals: [1, 'doc:5', 'inf']}}
+    - {command: [FT.SEARCH, idx, 'hello=>{$weight:-1}', LIMIT, '0', '0'], expect_difference: true,
+      expect: {error: non-negative}}
+    - {command: [FT.SEARCH, idx, 'hello=>{$weight:x}', LIMIT, '0', '0'], expect_difference: true,
+      expect: {error: non-negative}}
+    - {command: [FT.SEARCH, idx, 'hello=>{$weight:340282356779733661637539395458142568448000}',
+        LIMIT, '0', '0'], expect: {error: finite}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [weight0.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: weight0}

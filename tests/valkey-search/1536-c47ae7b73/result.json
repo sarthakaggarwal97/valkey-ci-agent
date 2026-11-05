@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "c47ae7b734967b3db684a8deced8463cde841864",
+  "parent": "1ce64680f949d9e1da8bb1d7caae689e1321dbbc",
+  "pr": 1536,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix Gate non-UTF-8 TAG indexing behavior change behind search.emulate-release (#1536)",
+  "date": "2026-10-13",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 8.4322,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

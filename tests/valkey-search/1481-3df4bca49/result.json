@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "3df4bca4966874cb7df855ff51088272d7d113ee",
+  "parent": "c47ae7b734967b3db684a8deced8463cde841864",
+  "pr": 1481,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix flaky index consistency test from unbounded index update count (#1481)",
+  "date": "2026-10-14",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2299,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff changes only testing/index_schema_test.cc, a unit test in valkey-search's own test suite: it restructures the index-consistency test into two mutation waves and tightens its counter assertions to remove flakiness. No production code of the module changes, so the built module's behaviour is identical on both sides of the change and no scenario can exercise it."
+}

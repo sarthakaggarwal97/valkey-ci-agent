@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.vr-nonfinite-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: VECTOR_RANGE with NaN and infinite vector components, infinite radii
+    and IP -inf distances, on L2/IP HNSW and COSINE FLAT, compared against the parent
+    module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: nonfinite
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [HSET, 'l:a', t, ok, vec, !!binary 'AACAPwAAAAA='], expect: {equals: 2}}
+    - {command: [HSET, 'l:n', t, bad, vec, !!binary 'AADAfwAAAAA='], expect: {equals: 2}}
+    - {command: [HSET, 'l:p', vec, !!binary 'AACAfwAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'l:m', vec, !!binary 'AACA/wAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'i:a', vec, !!binary 'AACAPwAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'i:p', vec, !!binary 'AACAfwAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'i:m', vec, !!binary 'AACA/wAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'i:n', vec, !!binary 'AADAfwAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'c:a', vec, !!binary 'AACAPwAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'c:n', vec, !!binary 'AADAfwAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'c:p', vec, !!binary 'AACAfwAAAAA='], expect: {equals: 1}}
+    - {command: [FT.CREATE, l2, ON, HASH, PREFIX, 1, 'l:', SCHEMA, t, TAG, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, ip, ON, HASH, PREFIX, 1, 'i:', SCHEMA, vec, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, IP], expect: {equals: OK}}
+    - {command: [FT.CREATE, cs, ON, HASH, PREFIX, 1, 'c:', SCHEMA, vec, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, COSINE], expect: {equals: OK}}
+    - {command: [FT.INFO, l2], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.INFO, ip], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.INFO, cs], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, l2, '@vec:[VECTOR_RANGE inf $q]=>{$yield_distance_as:
+          d}', PARAMS, 2, q, !!binary 'AACAPwAAAAA=', RETURN, 1, d, DIALECT, 2], expect_difference: true,
+      expect: {equals: [1, 'l:a', [d, '0']]}}
+    - {command: [FT.SEARCH, l2, '@vec:[VECTOR_RANGE 1e30 $q]', PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        NOCONTENT, DIALECT, 2], expect_difference: true, expect: {equals: [1, 'l:a']}}
+    - {command: [FT.SEARCH, l2, '@vec:[VECTOR_RANGE inf $nq]', PARAMS, 2, nq, !!binary 'AACAPwAAwH8=',
+        NOCONTENT, DIALECT, 2], expect_difference: true, expect: {equals: [0]}}
+    - {command: [FT.SEARCH, l2, '-@vec:[VECTOR_RANGE inf $q] @t:{bad}', PARAMS, 2,
+        q, !!binary 'AACAPwAAAAA=', NOCONTENT, DIALECT, 2], expect_difference: true,
+      expect: {equals: [1, 'l:n']}}
+    - {command: [FT.SEARCH, l2, '-@vec:[VECTOR_RANGE inf $q]', PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        NOCONTENT, DIALECT, 2], expect_difference: true, compare: unordered, expect: {
+        equals: [3, 'l:m', 'l:n', 'l:p']}}
+    - {command: [FT.SEARCH, ip, '@vec:[VECTOR_RANGE 0 $q]=>{$yield_distance_as: d}',
+        PARAMS, 2, q, !!binary 'AACAPwAAAAA=', SORTBY, d, ASC, RETURN, 1, d, DIALECT,
+        2], expect_difference: true, expect: {equals: [2, 'i:p', [d, '-inf'], 'i:a',
+          [d, '0']]}}
+    - {command: [FT.SEARCH, ip, '@vec:[VECTOR_RANGE 1000 $pq]', PARAMS, 2, pq, !!binary 'AACAfwAAAAA=',
+        NOCONTENT, DIALECT, 2], expect_difference: true, compare: unordered, expect: {
+        equals: [2, 'i:a', 'i:p']}}
+    - {command: [FT.SEARCH, cs, '@vec:[VECTOR_RANGE 0.5 $q]', PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        NOCONTENT, DIALECT, 2], expect_difference: true, expect: {equals: [1, 'c:a']}}
+    - {command: [FT.SEARCH, cs, '@vec:[VECTOR_RANGE inf $q]', PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        NOCONTENT, DIALECT, 2], expect_difference: true, expect: {equals: [1, 'c:a']}}
+    - {command: [FT.AGGREGATE, l2, '@vec:[VECTOR_RANGE inf $q]=>{$yield_distance_as:
+          d}', PARAMS, 2, q, !!binary 'AACAPwAAAAA=', LOAD, 1, '@d', DIALECT, 2],
+      expect_difference: true, expect: {contains: '0'}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [nonfinite.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: nonfinite}

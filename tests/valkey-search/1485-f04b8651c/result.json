@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "f04b8651ce5d6db87521709eafdd6136ef39a1eb",
+  "parent": "0cbca0e6077efe1de91d428312f4e013943648b8",
+  "pr": 1485,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "make dev config mutable (#1485)",
+  "date": "2026-10-02",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 1,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 8.405,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-58905d7ac679",
+      "build": "unstable",
+      "seed": 1485,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-58905d7ac679",
+      "build": "unstable",
+      "seed": 1486,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-58905d7ac679",
+      "build": "unstable",
+      "seed": 1487,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

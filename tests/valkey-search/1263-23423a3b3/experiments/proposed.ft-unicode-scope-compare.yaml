@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.ft-unicode-scope-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Arabic and Turkish indexes - non-ASCII punctuation (U+060C), NFKC closure
+    (fullwidth comma), Unicode whitespace (U+3000), escaped multi-byte punctuation
+    in queries, Turkish case folding and stemmer edge cases
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: uni
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idxa, ON, HASH, PREFIX, 1, "a:", LANGUAGE, ARABIC, SCHEMA,
+        t, TEXT], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idxt, ON, HASH, PREFIX, 1, "t:", LANGUAGE, TURKISH, SCHEMA,
+        t, TEXT], expect_difference: true, expect: {equals: OK}}
+    - {command: [HSET, "a:1", t, "\u0633\u0644\u0627\u0645\u060C\u062F\u0646\u064A\
+          \u0627"], expect: {equals: 1}}
+    - {command: [HSET, "a:2", t, "foo\uFF0Cbar"], expect: {equals: 1}}
+    - {command: [HSET, "a:3", t, "one\u3000two"], expect: {equals: 1}}
+    - {command: [HSET, "a:4", t, "hello world"], expect: {equals: 1}}
+    - {command: [HSET, "t:1", t, "\u0130stanbul Ankara"], expect: {equals: 1}}
+    - {command: [HSET, "t:2", t, "\xE7ekoslovakyal\u0131la\u015Ft\u0131ramad\u0131\
+          klar\u0131m\u0131zdanm\u0131\u015Fs\u0131n\u0131z"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idxa, world, LIMIT, 0, 0], wait_s: 20, expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idxa, bar, LIMIT, 0, 0], expect_difference: true, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idxa, two, LIMIT, 0, 0], expect_difference: true, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idxa, "\u062F\u0646\u064A\u0627", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idxa, "\u0633\u0644\u0627\u0645\\\u060C\u062F\u0646\u064A\
+          \u0627", LIMIT, 0, 0], expect_difference: true, expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idxt, ankara, LIMIT, 0, 0], wait_s: 20, expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idxt, "\u0130stanbul", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idxt, "\xE7ekoslovakyal\u0131la\u015Ft\u0131ramad\u0131\
+          klar\u0131m\u0131zdanm\u0131\u015Fs\u0131n\u0131z", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.INFO, idxa], expect_difference: true, expect: {error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [uni.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: uni}

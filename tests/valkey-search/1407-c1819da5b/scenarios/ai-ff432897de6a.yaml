@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 1df065c0721b..c1819da5b21c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ff432897de6a
+seed: 202
+experiment:
+  id: proposed.ft-unused-params
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

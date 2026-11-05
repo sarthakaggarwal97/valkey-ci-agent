@@ -1,0 +1,106 @@
+extends: [valkey.liveness]
+id: proposed.ft-hybrid-filter-policy
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.HYBRID counted VSIM FILTER POLICY/BATCH_SIZE - active policy selection
+    with strategy counters, and the strict rejections (outside the count, uncounted
+    FILTER, ADHOC_BF spelling, duplicates, BATCH_SIZE rules, EF_RUNTIME with ADHOC)
+    that the parent silently accepted
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hybridpolicy
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, title, TEXT,
+        category, TAG, vec, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', title, 'hello world one', category, a, vec, !!binary "AACAPwAAgD8="],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:2', title, 'hello world two', category, b, vec, !!binary "AAAAQAAAAEA="],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:3', title, 'hello world three', category, a, vec, !!binary "AABAQAAAQEA="],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:4', title, 'hello world four', category, b, vec, !!binary "AACAQAAAgEA="],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:5', title, 'hello world five', category, a, vec, !!binary "AACgQAAAoEA="],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:6', title, 'hello world six', category, b, vec, !!binary "AADAQAAAwEA="],
+      expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, '@title:hello', NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [6]}}
+    - {command: [CONFIG, SET, search.info-developer-visible, yes], expect: {equals: OK}}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 3, FILTER, 3, '@category:{a}', POLICY, ADHOC, PARAMS, 2, q, !!binary "AAAAAAAAAAA="],
+      compare: skip, expect: {error: false}}
+    - {command: [INFO, search], compare: skip, expect: {contains: 'search_prefiltering_requests_count:1'}}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 3, FILTER, 3, '@category:{a}', POLICY, BATCHES, PARAMS, 2, q, !!binary "AAAAAAAAAAA="],
+      compare: skip, expect: {error: false}}
+    - {command: [INFO, search], compare: skip, expect: {contains: 'search_inline_filtering_requests_count:1'}}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 3, FILTER, 5, '@category:{a}', POLICY, BATCHES, BATCH_SIZE, 7, PARAMS,
+        2, q, !!binary "AAAAAAAAAAA="], compare: skip, expect: {error: false}}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        4, K, 3, EF_RUNTIME, 50, FILTER, 3, '@category:{a}', POLICY, BATCHES, PARAMS,
+        2, q, !!binary "AAAAAAAAAAA="], compare: skip, expect: {error: false}}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 3, FILTER, 3, '*', POLICY, ADHOC, PARAMS, 2, q, !!binary "AAAAAAAAAAA="],
+      compare: skip, expect: {error: false}}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 3, FILTER, 3, '*', POLICY, BATCHES, PARAMS, 2, q, !!binary "AAAAAAAAAAA="],
+      compare: skip, expect: {error: false}}
+    - {command: [INFO, search], compare: skip, expect: {contains: 'search_prefiltering_requests_count:1'}}
+    - {command: [INFO, search], compare: skip, expect: {contains: 'search_inline_filtering_requests_count:3'}}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 3, POLICY, BATCHES, PARAMS, 2, q, !!binary "AAAAAAAAAAA="], expect_difference: true,
+      expect: {error: 'only supported inside a counted VSIM FILTER'}}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 3, BATCH_SIZE, 10, PARAMS, 2, q, !!binary "AAAAAAAAAAA="], expect_difference: true,
+      expect: {error: 'only supported inside a counted VSIM FILTER'}}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 3, FILTER, '@category:{a}', POLICY, BATCHES, PARAMS, 2, q, !!binary "AAAAAAAAAAA="],
+      expect_difference: true, expect: {error: 'only supported inside a counted VSIM
+          FILTER'}}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 3, FILTER, 3, '@category:{a}', POLICY, ADHOC_BF, PARAMS, 2, q, !!binary "AAAAAAAAAAA="],
+      expect_difference: true, expect: {error: 'Invalid POLICY value'}}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 3, FILTER, 5, '@category:{a}', POLICY, ADHOC, POLICY, BATCHES, PARAMS,
+        2, q, !!binary "AAAAAAAAAAA="], expect_difference: true, expect: {error: 'POLICY
+          was specified more than once'}}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 3, FILTER, 3, '@category:{a}', BATCH_SIZE, 4, PARAMS, 2, q, !!binary "AAAAAAAAAAA="],
+      expect_difference: true, expect: {error: 'BATCH_SIZE requires POLICY BATCHES'}}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 3, FILTER, 5, '@category:{a}', POLICY, ADHOC, BATCH_SIZE, 4, PARAMS,
+        2, q, !!binary "AAAAAAAAAAA="], expect_difference: true, expect: {error: 'BATCH_SIZE
+          requires POLICY BATCHES'}}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 3, FILTER, 3, '@category:{a}', BOGUS, 7, PARAMS, 2, q, !!binary "AAAAAAAAAAA="],
+      expect_difference: true, expect: {error: 'Unknown VSIM FILTER sub-argument'}}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        4, K, 3, EF_RUNTIME, 50, FILTER, 3, '@category:{a}', POLICY, ADHOC, PARAMS,
+        2, q, !!binary "AAAAAAAAAAA="], expect_difference: true, expect: {error: 'EF_RUNTIME
+          is irrelevant for POLICY ADHOC'}}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 3, FILTER, 2, '@category:{a}', POLICY, PARAMS, 2, q, !!binary "AAAAAAAAAAA="],
+      expect_difference: true, expect: {error: 'POLICY requires a value'}}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 3, FILTER, 9, '@category:{a}', POLICY, ADHOC, PARAMS, 2, q, !!binary "AAAAAAAAAAA="],
+      expect_difference: true, expect: {error: 'Unknown VSIM FILTER sub-argument'}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [hybridpolicy.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hybridpolicy}

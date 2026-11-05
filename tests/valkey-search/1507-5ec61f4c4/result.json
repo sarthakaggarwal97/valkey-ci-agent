@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5ec61f4c47a8182bc50c53eac41a785c2e5e800c",
+  "parent": "c52efbe206a8714a125305aaa5fec92febd31eed",
+  "pr": 1507,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Sync INFO SEARCH metrics doc with current App metrics (#1507)",
+  "date": "2026-10-02",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.9949,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

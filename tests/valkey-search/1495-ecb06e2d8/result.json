@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ecb06e2d85191099fda63747d380d41d11ffacba",
+  "parent": "a12bb364f90de6ddc06cd521bd0e2db89e15936b",
+  "pr": 1495,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "FT.CREATE and FT.SEARCH documentation updated (#1495)",
+  "date": "2026-10-02",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.8197,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only src/commands/ft.create.json and ft.search.json, documentation metadata files describing command syntax (FILTER, FLOAT16/BFLOAT16, SCORER, WITHSCORES). These files are not referenced by the CMake build, build.sh, or any source file, so they are not compiled into or loaded by the module; command parsing and replies come from the untouched ft_create_parser/ft_search_parser C++ code. The built module is behaviorally identical at the change and its parent, so there is no runtime path to test and no scenario is needed."
+}

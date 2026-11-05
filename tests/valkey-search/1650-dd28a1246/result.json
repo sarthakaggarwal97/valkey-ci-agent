@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "parent": "7750ee8faf672b095a282e73bf5d340d3cb9a518",
+  "pr": 1650,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix: copy FT.AGGREGATE/FT.HYBRID params into owned storage (#1650)",
+  "date": "2026-11-04",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.6638,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-2bd0f4c48ac5",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-c574a12cd7bf",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

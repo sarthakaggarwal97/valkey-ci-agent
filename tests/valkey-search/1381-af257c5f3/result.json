@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "af257c5f3a52e03280fc31b4b9c7a570f951a26f",
+  "parent": "6d1eb2667d214c4841a8c5c59b249b02bbbdd7b8",
+  "pr": 1381,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "LOAD * plus autoloaded Aggregation fields generates incompatible JSON result. (#1381)",
+  "date": "2026-10-29",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.8702,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

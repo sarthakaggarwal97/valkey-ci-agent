@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a12bb364f90de6ddc06cd521bd0e2db89e15936b",
+  "parent": "ee0a84a4b2d93638155965381c65e28e64de1fdf",
+  "pr": 985,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "feat: add Vector Range query support to FT.SEARCH (#985)",
+  "date": "2026-10-02",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 5,
+  "hunted": 5,
+  "dropped": 1,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 17.1731,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 8fa0d7a7d400..b7f6135a2d0f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5732775b7508
+seed: 1529
+experiment:
+  id: proposed.ft-hybrid-multiarm-failure-controls
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

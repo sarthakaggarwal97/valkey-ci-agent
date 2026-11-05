@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "b7f6135a2d0f9d661729f22cb406611eb76f8390",
+  "parent": "8fa0d7a7d400f95db2fcb14dc902392a089de305",
+  "pr": 1529,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix: FT.HYBRID drops coordinator's local shard together when one arm fails (#1529)",
+  "date": "2026-10-07",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 16.0887,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

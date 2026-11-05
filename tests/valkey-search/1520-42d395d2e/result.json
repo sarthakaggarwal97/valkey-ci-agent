@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "42d395d2eae4d5e14fbca3f9140c2845e30331ab",
+  "parent": "9208e3862c7990804bd2c1fb7d275a0469c3b4d0",
+  "pr": 1520,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix GCC 12 build and 'local' outside function in CI script (#1520)",
+  "date": "2026-10-05",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2217,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a build/CI fix with no behaviour change: the CI script edit removes an invalid 'local' outside a function in ci/clang-format-tidy.sh (lint tooling only), and the src/index_schema.cc edit swaps std::format for absl::StrFormat in an error-message string to fix GCC 12 compilation, producing an identical message on a rarely reachable internal-error path during RDB load. No command reply, persistence, replication or stability behaviour differs between the builds, so a compared scenario could never show a difference."
+}

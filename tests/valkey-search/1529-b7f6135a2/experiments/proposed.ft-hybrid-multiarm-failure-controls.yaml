@@ -1,0 +1,87 @@
+extends: [valkey.liveness]
+id: proposed.ft-hybrid-multiarm-failure-controls
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    FT.HYBRID across the two module builds after the multi-arm local-shard-gate fix
+    (#1529). The coordinator fan-out itself needs the --use-coordinator module load
+    argument, which no deployment here can pass, so this pins what is reachable: the
+    new ForceMultiArmFailure control exists only on the fixed build (marked differences),
+    and the non-coordinator FT.HYBRID path must be unchanged by the refactor and unaffected
+    by the new force-failure hook, under either partial-results setting.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hybrid
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, hyb, ON, HASH, PREFIX, 1, 'd:', SCHEMA, title, TEXT, vec,
+        VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, 'd:1', title, 'hello', vec, !!binary 'AACAPwAAAAAAAAAAAAAAAA=='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'd:2', title, 'hello pad', vec, !!binary 'AAAAQAAAAAAAAAAAAAAAAA=='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'd:3', title, 'hello pad pad', vec, !!binary 'AABAQAAAAAAAAAAAAAAAAA=='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'd:4', title, 'hello pad pad pad', vec, !!binary 'AACAQAAAAAAAAAAAAAAAAA=='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'd:5', title, 'hello pad pad pad pad', vec, !!binary 'AACgQAAAAAAAAAAAAAAAAA=='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'd:6', title, 'hello pad pad pad pad pad', vec, !!binary 'AADAQAAAAAAAAAAAAAAAAA=='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'd:7', title, 'hello pad pad pad pad pad pad', vec, !!binary 'AADgQAAAAAAAAAAAAAAAAA=='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'd:8', title, 'hello pad pad pad pad pad pad pad', vec, !!binary 'AAAAQQAAAAAAAAAAAAAAAA=='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'd:9', title, 'hello pad pad pad pad pad pad pad pad', vec,
+        !!binary 'AAAQQQAAAAAAAAAAAAAAAA=='], expect: {equals: 2}}
+    - {command: [FT.SEARCH, hyb, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          9]}}
+    - {command: [FT.HYBRID, hyb, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 40, COMBINE, RRF, 4, WINDOW, 100, YIELD_SCORE_AS, h, LIMIT, 0, 100,
+        PARAMS, 2, q, !!binary 'AAAAAAAAAAAAAAAAAAAAAA=='], compare: unordered}
+    - {command: [FT._DEBUG, CONTROLLED_VARIABLE, LIST], expect_difference: true, expect: {
+        contains: 'ForceMultiArmFailure'}}
+    - {command: [FT._DEBUG, CONTROLLED_VARIABLE, GET, ForceMultiArmFailure], expect_difference: true,
+      expect: {equals: '-1'}}
+    - {command: [FT._DEBUG, CONTROLLED_VARIABLE, SET, ForceMultiArmFailure, 0], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.HYBRID, hyb, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 40, COMBINE, RRF, 4, WINDOW, 100, YIELD_SCORE_AS, h, LIMIT, 0, 100,
+        PARAMS, 2, q, !!binary 'AAAAAAAAAAAAAAAAAAAAAA=='], compare: unordered}
+    - {command: [FT._DEBUG, CONTROLLED_VARIABLE, SET, ForceMultiArmFailure, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.HYBRID, hyb, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 40, COMBINE, RRF, 4, WINDOW, 100, YIELD_SCORE_AS, h, LIMIT, 0, 100,
+        PARAMS, 2, q, !!binary 'AAAAAAAAAAAAAAAAAAAAAA=='], compare: unordered}
+    - {command: [CONFIG, SET, search.enable-partial-results, no], expect: {equals: OK}}
+    - {command: [FT.HYBRID, hyb, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 40, COMBINE, RRF, 4, WINDOW, 100, YIELD_SCORE_AS, h, LIMIT, 0, 100,
+        PARAMS, 2, q, !!binary 'AAAAAAAAAAAAAAAAAAAAAA=='], compare: unordered}
+    - {command: [CONFIG, SET, search.enable-partial-results, yes], expect: {equals: OK}}
+    - {command: [FT._DEBUG, CONTROLLED_VARIABLE, SET, ForceMultiArmFailure, -1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.HYBRID, hyb, SEARCH, '@title:zzz', VSIM, '@vec', '$q', KNN, 2,
+        K, 40, COMBINE, RRF, 4, WINDOW, 100, YIELD_SCORE_AS, h, LIMIT, 0, 100, PARAMS,
+        2, q, !!binary 'AAAAAAAAAAAAAAAAAAAAAA=='], compare: unordered}
+    - {command: [FT.HYBRID, hyb, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 1, COMBINE, RRF, 4, WINDOW, 100, YIELD_SCORE_AS, h, LIMIT, 0, 100, PARAMS,
+        2, q, !!binary 'AAAAAAAAAAAAAAAAAAAAAA=='], compare: unordered}
+    - {command: [FT.HYBRID, hyb, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 40, COMBINE, RRF, 4, WINDOW, 1, YIELD_SCORE_AS, h, LIMIT, 0, 100, PARAMS,
+        2, q, !!binary 'AAAAAAAAAAAAAAAAAAAAAA=='], compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [hybrid.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hybrid}

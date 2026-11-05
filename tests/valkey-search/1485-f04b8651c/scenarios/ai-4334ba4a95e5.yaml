@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 0cbca0e6077e..f04b8651ce5d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4334ba4a95e5
+seed: 1489
+experiment:
+  id: proposed.search-rdb-write-v2-toggle
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

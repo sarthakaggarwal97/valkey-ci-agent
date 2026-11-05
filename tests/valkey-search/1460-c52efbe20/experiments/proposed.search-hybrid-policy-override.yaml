@@ -1,0 +1,117 @@
+extends: [valkey.liveness]
+id: proposed.search-hybrid-policy-override
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH/FT.AGGREGATE HYBRID_POLICY runtime override - forced prefilter/inline
+    strategies (HNSW and FLAT, with INKEYS), PARAMS substitution, and the new validation
+    errors, compared against the parent module which rejects the token
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: knnpolicy
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, category, TAG,
+        vec, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idxf, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, category, TAG,
+        vec, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [HSET, 'doc:1', category, a, vec, !!binary "AACAPwAAgD8="], expect: {
+        equals: 2}}
+    - {command: [HSET, 'doc:2', category, b, vec, !!binary "AAAAQAAAAEA="], expect: {
+        equals: 2}}
+    - {command: [HSET, 'doc:3', category, a, vec, !!binary "AABAQAAAQEA="], expect: {
+        equals: 2}}
+    - {command: [HSET, 'doc:4', category, b, vec, !!binary "AACAQAAAgEA="], expect: {
+        equals: 2}}
+    - {command: [HSET, 'doc:5', category, a, vec, !!binary "AACgQAAAoEA="], expect: {
+        equals: 2}}
+    - {command: [HSET, 'doc:6', category, b, vec, !!binary "AADAQAAAwEA="], expect: {
+        equals: 2}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          6]}}
+    - {command: [FT.SEARCH, idxf, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          6]}}
+    - {command: [CONFIG, SET, search.info-developer-visible, yes], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@category:{a}=>[KNN 3 @vec $q HYBRID_POLICY ADHOC_BF]',
+        NOCONTENT, PARAMS, 2, q, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {equals: [3, 'doc:1', 'doc:3', 'doc:5']}}
+    - {command: [INFO, search], compare: skip, expect: {contains: 'search_prefiltering_requests_count:1'}}
+    - {command: [FT.SEARCH, idx, '@category:{a}=>[KNN 3 @vec $q HYBRID_POLICY BATCHES]',
+        NOCONTENT, PARAMS, 2, q, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {equals: [3, 'doc:1', 'doc:3', 'doc:5']}}
+    - {command: [INFO, search], compare: skip, expect: {contains: 'search_inline_filtering_requests_count:1'}}
+    - {command: [FT.SEARCH, idxf, '@category:{a}=>[KNN 3 @vec $q HYBRID_POLICY BATCHES]',
+        NOCONTENT, PARAMS, 2, q, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {equals: [3, 'doc:1', 'doc:3', 'doc:5']}}
+    - {command: [FT.SEARCH, idxf, '@category:{a}=>[KNN 3 @vec $q HYBRID_POLICY ADHOC_BF]',
+        NOCONTENT, PARAMS, 2, q, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {equals: [3, 'doc:1', 'doc:3', 'doc:5']}}
+    - {command: [FT.SEARCH, idx, '@category:{a}=>[KNN 3 @vec $q EF_RUNTIME 50 HYBRID_POLICY
+          BATCHES]', NOCONTENT, PARAMS, 2, q, !!binary "AAAAAAAAAAA=", DIALECT, 2],
+      expect_difference: true, expect: {equals: [3, 'doc:1', 'doc:3', 'doc:5']}}
+    - {command: [FT.SEARCH, idx, '@category:{a}=>[KNN 3 @vec $q hybrid_policy batches]',
+        NOCONTENT, PARAMS, 2, q, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {equals: [3, 'doc:1', 'doc:3', 'doc:5']}}
+    - {command: [FT.SEARCH, idx, '@category:{a}=>[KNN 3 @vec $q HYBRID_POLICY $pol]',
+        NOCONTENT, PARAMS, 4, q, !!binary "AAAAAAAAAAA=", pol, adhoc_bf, DIALECT,
+        2], expect_difference: true, expect: {equals: [3, 'doc:1', 'doc:3', 'doc:5']}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 6 @vec $q HYBRID_POLICY BATCHES]', NOCONTENT,
+        INKEYS, 2, 'doc:1', 'doc:2', PARAMS, 2, q, !!binary "AAAAAAAAAAA=", DIALECT,
+        2], expect_difference: true, expect: {equals: [2, 'doc:1', 'doc:2']}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 6 @vec $q HYBRID_POLICY ADHOC_BF]', NOCONTENT,
+        INKEYS, 2, 'doc:1', 'doc:2', PARAMS, 2, q, !!binary "AAAAAAAAAAA=", DIALECT,
+        2], expect_difference: true, expect: {equals: [2, 'doc:1', 'doc:2']}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 6 @vec $q]', NOCONTENT, INKEYS, 2, 'doc:1',
+        'doc:2', PARAMS, 2, q, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect: {equals: [
+          2, 'doc:1', 'doc:2']}}
+    - {command: [FT.SEARCH, idx, '@category:{a}=>[KNN 6 @vec $q HYBRID_POLICY BATCHES]',
+        NOCONTENT, INKEYS, 2, 'doc:1', 'doc:2', PARAMS, 2, q, !!binary "AAAAAAAAAAA=",
+        DIALECT, 2], expect_difference: true, expect: {equals: [1, 'doc:1']}}
+    - {command: [FT.SEARCH, idx, '@category:{a}=>[KNN 6 @vec $q]', NOCONTENT, INKEYS,
+        2, 'doc:1', 'doc:2', PARAMS, 2, q, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect: {
+        equals: [1, 'doc:1']}}
+    - {command: [INFO, search], compare: skip, expect: {contains: 'search_prefiltering_requests_count:6'}}
+    - {command: [INFO, search], compare: skip, expect: {contains: 'search_inline_filtering_requests_count:6'}}
+    - {command: [FT.AGGREGATE, idx, '@category:{a}=>[KNN 3 @vec $q HYBRID_POLICY ADHOC_BF]',
+        PARAMS, 2, q, !!binary "AAAAAAAAAAA=", DIALECT, 2], compare: skip, expect: {
+        error: false}}
+    - {command: [FT.AGGREGATE, idx, '@category:{a}=>[KNN 3 @vec $q HYBRID_POLICY BATCHES]',
+        PARAMS, 2, q, !!binary "AAAAAAAAAAA=", DIALECT, 2], compare: skip, expect: {
+        error: false}}
+    - {command: [INFO, search], compare: skip, expect: {contains: 'search_prefiltering_requests_count:7'}}
+    - {command: [INFO, search], compare: skip, expect: {contains: 'search_inline_filtering_requests_count:7'}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 3 @vec $q HYBRID_POLICY BATCHES]', NOCONTENT,
+        PARAMS, 2, q, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {error: 'non-hybrid'}}
+    - {command: [FT.SEARCH, idx, '@category:{a}=>[KNN 3 @vec $q HYBRID_POLICY NONSENSE]',
+        NOCONTENT, PARAMS, 2, q, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {error: 'invalid hybrid policy'}}
+    - {command: [FT.SEARCH, idx, '@category:{a}=>[KNN 3 @vec $q HYBRID_POLICY BATCHES
+          HYBRID_POLICY ADHOC_BF]', NOCONTENT, PARAMS, 2, q, !!binary "AAAAAAAAAAA=",
+        DIALECT, 2], expect_difference: true, expect: {error: 'more than once'}}
+    - {command: [FT.SEARCH, idx, '@category:{a}=>[KNN 3 @vec $q HYBRID_POLICY]', NOCONTENT,
+        PARAMS, 2, q, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {error: 'HYBRID_POLICY argument is missing'}}
+    - {command: [FT.SEARCH, idx, '@category:{a}=>[KNN 3 @vec $q EF_RUNTIME 50 HYBRID_POLICY
+          ADHOC_BF]', NOCONTENT, PARAMS, 2, q, !!binary "AAAAAAAAAAA=", DIALECT, 2],
+      expect_difference: true, expect: {error: 'EF_RUNTIME is irrelevant'}}
+    - {command: [FT.SEARCH, idx, '@category:{a}=>[KNN 3 @vec $q]=>{$HYBRID_POLICY:
+          ADHOC_BF}', NOCONTENT, PARAMS, 2, q, !!binary "AAAAAAAAAAA=", DIALECT, 2],
+      expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [knnpolicy.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: knnpolicy}

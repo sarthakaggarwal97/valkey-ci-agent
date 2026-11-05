@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.search-dev-config-runtime-gating
+deployment:
+  modes: [standalone]
+metadata:
+  description: search.debug-mode is now a registered hidden config toggleable via
+    CONFIG SET at runtime, gating Dev() configs; no-op sets of Dev configs are accepted;
+    Dev values set under debug-mode survive turning it off
+components:
+- use: valkey.action.commands
+  id: gating
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: 2
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.log-level, debug], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.scoring-disabled, "no"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.scoring-disabled, "yes"], expect: {error: "debug-mode"}}
+    - {command: [CONFIG, SET, search.debug-mode, maybe], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.debug-mode, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.scoring-disabled, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.scoring-disabled], expect_difference: true, expect: {
+        equals: [search.scoring-disabled, "yes"]}}
+    - {command: [CONFIG, SET, search.ft-info-timeout-ms, 5000], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.ft-info-timeout-ms, 99], expect: {error: true}}
+    - {command: [CONFIG, SET, search.ft-info-timeout-ms, 100], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.ft-info-timeout-ms], expect_difference: true,
+      expect: {equals: [search.ft-info-timeout-ms, "100"]}}
+    - {command: [CONFIG, SET, search.debug-mode, "no"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, search.scoring-disabled, "no"], expect: {error: "debug-mode"}}
+    - {command: [CONFIG, GET, search.scoring-disabled], expect_difference: true, expect: {
+        equals: [search.scoring-disabled, "yes"]}}
+    - {command: [CONFIG, SET, search.hnsw-validation-enable, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [gating.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: gating}

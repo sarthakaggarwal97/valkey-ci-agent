@@ -1,0 +1,79 @@
+extends: [valkey.liveness]
+id: proposed.ft-loadall-all-content
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    PR 1381 rewrites GetContent around a new all_content flag: a whole-record request
+    travels as its own flag instead of "return_attributes is empty", and every non-whole-hash
+    fetch is now projected, re-keying the SORTBY field under its alias. The JSON side
+    needs valkey-json, which the runner does not supply, but the rewrite is shared:
+    on a HASH index the parent returns the fetch unprojected whenever there are no
+    filter identifiers, so FT.SEARCH with a RETURN list (or NOCONTENT) plus a SORTBY
+    on an AS-aliased field sorts on the change and not on the parent. Those are the
+    marked commands. Unmarked guards pin that LOAD * still fetches the whole record
+    through FT.AGGREGATE and FT.HYBRID (the FusedResolver all_content copy the maintainers
+    flagged as easy to drop) and that the filtered FT.SEARCH path, which both builds
+    project, stays equal.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_listpack: {type: integer, minimum: 0, maximum: 1024, default: 128}
+components:
+- use: valkey.action.commands
+  id: ft
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {hash-max-listpack-entries: {$ref: inputs.hash_listpack}}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, realprice, AS,
+        price, NUMERIC, title, TEXT, color, TAG, vec, VECTOR, FLAT, 6, TYPE, FLOAT32,
+        DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", realprice, 30, title, alpha one, color, red, vec,
+        !!binary "AACAPwAAAAA="], expect: {equals: 4}}
+    - {command: [HSET, "doc:2", realprice, 9, title, alpha two, color, blue, vec,
+        !!binary "AAAAAAAAgD8="], expect: {equals: 4}}
+    - {command: [HSET, "doc:3", realprice, 40, title, alpha three, color, red, vec,
+        !!binary "AACAPwAAgD8="], expect: {equals: 4}}
+    - {command: [HSET, "doc:4", realprice, 100, title, alpha four, color, green, vec,
+        !!binary "AAAAQAAAAAA="], expect: {equals: 4}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          4]}}
+    - {command: [FT.SEARCH, idx, "*", RETURN, 1, title, SORTBY, price, ASC, WITHSORTKEYS,
+        LIMIT, 0, 10], expect_difference: true, expect: {equals: [4, "doc:2", "#9",
+          [title, alpha two], "doc:1", "#30", [title, alpha one], "doc:3", "#40",
+          [title, alpha three], "doc:4", "#100", [title, alpha four]]}}
+    - {command: [FT.SEARCH, idx, "*", RETURN, 1, price, SORTBY, price, DESC, WITHSORTKEYS],
+      expect_difference: true, expect: {equals: [4, "doc:4", "#100", [price, "100"],
+          "doc:3", "#40", [price, "40"], "doc:1", "#30", [price, "30"], "doc:2", "#9",
+          [price, "9"]]}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, SORTBY, price, ASC], expect_difference: true,
+      expect: {equals: [4, "doc:2", "doc:1", "doc:3", "doc:4"]}}
+    - {command: [FT.SEARCH, idx, "@price:[0 1000]", RETURN, 1, title, SORTBY, price,
+        ASC, WITHSORTKEYS], expect: {equals: [4, "doc:2", "#9", [title, alpha two],
+          "doc:1", "#30", [title, alpha one], "doc:3", "#40", [title, alpha three],
+          "doc:4", "#100", [title, alpha four]]}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "*", GROUPBY, 1, "@color", REDUCE,
+        COUNT, 0, AS, cnt, SORTBY, 2, "@color", ASC], expect: {equals: [3, [color,
+            blue, cnt, "1"], [color, green, cnt, "1"], [color, red, cnt, "2"]]}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "*", GROUPBY, 1, "@color", REDUCE,
+        SUM, 1, "@price", AS, total, APPLY, "1+@total", AS, bumped, SORTBY, 2, "@color",
+        ASC], expect: {equals: [3, [color, blue, total, "9", bumped, "10"], [color,
+            green, total, "100", bumped, "101"], [color, red, total, "70", bumped,
+            "71"]]}}
+    - {command: [FT.HYBRID, idx, SEARCH, "@title:alpha", VSIM, "@vec", "$q", KNN,
+        2, K, 4, LOAD, "*", GROUPBY, 1, "@color", REDUCE, SUM, 1, "@price", AS, total,
+        SORTBY, 2, "@color", ASC, PARAMS, 2, q, !!binary "AACAPwAAAAA="], expect: {
+        equals: [3, [color, blue, total, "9"], [color, green, total, "100"], [color,
+            red, total, "70"]]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ft.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ft}

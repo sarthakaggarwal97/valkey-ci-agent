@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.vr-cap-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: HNSW VECTOR_RANGE under a small search.max-nonvector-search-results-fetched
+    cap, exhaustive fallback, cap 0, LIMIT partial-sort and compound AND, compared
+    against the parent build
+components:
+- use: valkey.action.commands
+  id: cap
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 120
+    commands:
+    - {command: [HSET, 'd:1', t, y, vec, !!binary 'AACAPwAAAAA='], expect: {equals: 2}}
+    - {command: [HSET, 'd:2', t, x, vec, !!binary 'AAAAQAAAAAA='], expect: {equals: 2}}
+    - {command: [HSET, 'd:3', t, y, vec, !!binary 'AABAQAAAAAA='], expect: {equals: 2}}
+    - {command: [HSET, 'd:4', t, x, vec, !!binary 'AACAQAAAAAA='], expect: {equals: 2}}
+    - {command: [HSET, 'd:5', t, y, vec, !!binary 'AACgQAAAAAA='], expect: {equals: 2}}
+    - {command: [HSET, 'd:6', t, x, vec, !!binary 'AADAQAAAAAA='], expect: {equals: 2}}
+    - {command: [HSET, 'd:7', t, y, vec, !!binary 'AADgQAAAAAA='], expect: {equals: 2}}
+    - {command: [HSET, 'd:8', t, x, vec, !!binary 'AAAAQQAAAAA='], expect: {equals: 2}}
+    - {command: [HSET, 'd:9', t, y, vec, !!binary 'AAAQQQAAAAA='], expect: {equals: 2}}
+    - {command: [HSET, 'd:10', t, x, vec, !!binary 'AAAgQQAAAAA='], expect: {equals: 2}}
+    - {command: [HSET, 'd:11', t, y, vec, !!binary 'AAAwQQAAAAA='], expect: {equals: 2}}
+    - {command: [HSET, 'd:12', t, x, vec, !!binary 'AABAQQAAAAA='], expect: {equals: 2}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'd:', SCHEMA, t, TAG, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, fidx, ON, HASH, PREFIX, 1, 'd:', SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.INFO, fidx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [CONFIG, SET, search.max-nonvector-search-results-fetched, 3], expect: {
+        equals: OK}}
+    - {command: [FT.SEARCH, idx, '@vec:[VECTOR_RANGE 100.5 $b]=>{$yield_distance_as:
+          d}', PARAMS, 2, b, !!binary 'AAAAAAAAAAA=', SORTBY, d, ASC, NOCONTENT, LIMIT,
+        0, 20, DIALECT, 2], expect_difference: true, expect: {equals: [10, 'd:1',
+          'd:2', 'd:3', 'd:4', 'd:5', 'd:6', 'd:7', 'd:8', 'd:9', 'd:10']}}
+    - {command: [FT.SEARCH, idx, '@vec:[VECTOR_RANGE 100.5 $b]=>{$yield_distance_as:
+          d}', PARAMS, 2, b, !!binary 'AAAAAAAAAAA=', SORTBY, d, ASC, NOCONTENT, LIMIT,
+        0, 4, DIALECT, 2], expect_difference: true, expect: {equals: [10, 'd:1', 'd:2',
+          'd:3', 'd:4']}}
+    - {command: [FT.SEARCH, idx, '@vec:[VECTOR_RANGE 8.5 $b]=>{$yield_distance_as:
+          d}', PARAMS, 2, b, !!binary 'AAAAAAAAAAA=', SORTBY, d, ASC, NOCONTENT, DIALECT,
+        2], expect_difference: true, expect: {equals: [2, 'd:1', 'd:2']}}
+    - {command: [FT.SEARCH, fidx, '@vec:[VECTOR_RANGE 100.5 $b]=>{$yield_distance_as:
+          d}', PARAMS, 2, b, !!binary 'AAAAAAAAAAA=', SORTBY, d, ASC, NOCONTENT, LIMIT,
+        0, 20, DIALECT, 2], expect_difference: true, expect: {equals: [10, 'd:1',
+          'd:2', 'd:3', 'd:4', 'd:5', 'd:6', 'd:7', 'd:8', 'd:9', 'd:10']}}
+    - {command: [CONFIG, SET, search.max-nonvector-search-results-fetched, 0], expect: {
+        equals: OK}}
+    - {command: [FT.SEARCH, idx, '@vec:[VECTOR_RANGE 100.5 $b]=>{$yield_distance_as:
+          d}', PARAMS, 2, b, !!binary 'AAAAAAAAAAA=', SORTBY, d, ASC, NOCONTENT, LIMIT,
+        0, 20, DIALECT, 2], expect_difference: true, expect: {equals: [10, 'd:1',
+          'd:2', 'd:3', 'd:4', 'd:5', 'd:6', 'd:7', 'd:8', 'd:9', 'd:10']}}
+    - {command: [CONFIG, SET, search.max-nonvector-search-results-fetched, 100000],
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@vec:[VECTOR_RANGE 100.5 $b]=>{$yield_distance_as:
+          d} @t:{x}', PARAMS, 2, b, !!binary 'AAAAAAAAAAA=', SORTBY, d, ASC, NOCONTENT,
+        LIMIT, 0, 20, DIALECT, 2], expect_difference: true, expect: {equals: [5, 'd:2',
+          'd:4', 'd:6', 'd:8', 'd:10']}}
+    - {command: [FT.SEARCH, idx, '@t:{x} | @vec:[VECTOR_RANGE 2 $b]=>{$yield_distance_as:
+          d}', PARAMS, 2, b, !!binary 'AAAAAAAAAAA=', SORTBY, d, ASC, NOCONTENT, LIMIT,
+        0, 20, DIALECT, 2], expect_difference: true, expect: {equals: [7, 'd:1', 'd:2',
+          'd:10', 'd:12', 'd:4', 'd:6', 'd:8']}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [cap.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cap}

@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.search-scoring-disabled-effect
+deployment:
+  modes: [standalone]
+metadata:
+  description: The Dev config search.scoring-disabled, enabled at runtime through
+    the newly mutable search.debug-mode, actually zeroes FT.SEARCH WITHSCORES relevance
+    scores
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: scoring
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TEXT], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:1", t, "hello world"], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", t, "hello hello planet"], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", t, "goodbye world"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          3]}}
+    - {command: [FT.SEARCH, idx, hello, WITHSCORES, NOCONTENT], compare: unordered}
+    - {command: [CONFIG, SET, search.debug-mode, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.scoring-disabled, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, hello, WITHSCORES, NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: "0"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [scoring.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scoring}

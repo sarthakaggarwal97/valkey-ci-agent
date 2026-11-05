@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "7e7adf25ef79b7603047680b08bbbf20e1a29487",
+  "parent": "92b779bdd89d3f5ab15349f4ecfe24533d06df86",
+  "pr": 1634,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "FT.HYBRID: rescore mutated documents in a match-all SEARCH arm (#1634)",
+  "date": "2026-11-03",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.2978,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-e6fba4e6f8a3",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'hybrid' returned ERROR: command 10 (HSET p:1 title g0 g1 g2 g3 g4 g5 g6 g7 g8 g9 g10 g11 g12 g13 g14 g15 g16 g17 g18 g19 g20 g21 g22 g23 g24 g25 g26 g27 g28 g29) got no reply: TimeoutError: Timeout reading from /tmp/vfc-ig_r1zgg/s.sock"
+    },
+    {
+      "scenario": "ai-0d764325d68b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'hybrid' returned ERROR: command 10 (HSET p:1 title g0 g1 g2 g3 g4 g5 g6 g7 g8 g9 g10 g11 g12 g13 g14 g15 g16 g17 g18 g19 g20 g21 g22 g23 g24 g25 g26 g27 g28 g29) got no reply: TimeoutError: Timeout reading from /tmp/vfc-km4yffzc/s.sock"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}
