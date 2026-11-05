@@ -131,8 +131,15 @@ MODULES = {
         # SERVER_VERSION itself, and a parallel build could compile before the header landed, so it is put in
         # place first; and it also ran the module's own tests, from a test framework commit that is gone, so only
         # the module is built. Its flags end in -Werror, which fails on what newer GCC warns of: a build type of
-        # its own adds -Wno-error after them. Older RapidJSON asks for a CMake older than CMake 4 accepts.
+        # its own adds -Wno-error after them. Older RapidJSON asks for a CMake older than CMake 4 accepts. Before
+        # #41 (4fb72a9), its allocator failed to compile on GCC 12 and later: that fix is applied first, as a bisect
+        # carries a build fix.
         build="""export CMAKE_POLICY_VERSION_MINIMUM=3.5
+if ! grep -q "operator==(const stl_allocator" src/json/memory.h; then
+  git fetch -q --depth 2 https://github.com/valkey-io/valkey-json.git 4fb72a926987b941ebde88d5aab750dea7652b5e
+  git diff 4fb72a926987b941ebde88d5aab750dea7652b5e^ 4fb72a926987b941ebde88d5aab750dea7652b5e -- src \
+    | git apply --whitespace=nowarn
+fi
 mkdir -p src/include && cp "${VALKEY_SRC}/src/valkeymodule.h" src/include/
 if grep -q VALKEY_MODULE_H_PATH build.sh; then
   SERVER_VERSION=unstable VALKEY_MODULE_H_PATH="${VALKEY_SRC}/src/valkeymodule.h" ./build.sh
