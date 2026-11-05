@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-05T09:16+00:00.
+Updated 2026-11-05T09:19+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -63,22 +63,9 @@ Updated 2026-11-05T09:16+00:00.
 
 ### valkey-io/valkey-json
 
-[2026-11-05T09:16:23+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41992661260): 14 merge(s) tested, 0 without a code change.
+[2026-11-05T09:19:17+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42001024764): 1 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-json#18](https://github.com/valkey-io/valkey-json/pull/18) ([tests](tests/valkey-json/18-3daf1832e/)): Fix #2 - Replace the configs with constants (#18): 1 of 1 test(s) reached the change; [crash, predates #18](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/57)
-- [valkey-io/valkey-json#22](https://github.com/valkey-io/valkey-json/pull/22) ([tests](tests/valkey-json/22-00c740742/)): Fix #7 - Make SERVER_VERSION open to all versions (#22): declined: The change only edits build scripts and documentation: CMakeLists.txt gains a default for the VALKEY_VERSION cache variable, build.sh/run.sh stop rejecting SERVER_VERSION values other than 'unstable'/'8.0.0' and default it to 'unstable', and README/log messages are reworded. No module sour
-- [valkey-io/valkey-json@1e33774dd28b](https://github.com/valkey-io/valkey-json/commit/1e33774dd28bdba94bc7f807a4e453f01e1f8f7c) ([tests](tests/valkey-json/1e33774dd/)): Merge pull request #15 from joehu21/issue12: 2 of 2 test(s) reached the change
-- [valkey-io/valkey-json#14](https://github.com/valkey-io/valkey-json/pull/14) ([tests](tests/valkey-json/14-4e50a2d56/)): Fix #11 - Clean up existing module metrics (#14): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-json#13](https://github.com/valkey-io/valkey-json/pull/13) ([tests](tests/valkey-json/13-373a92e5d/)): Update integration test script (#13): declined: The change modifies only README.md (docs for running a single integration test) and tst/integration/run.sh (the integration test harness script: defaulting SERVER_VERSION to "unstable", a log-message tweak, and trailing newlines). Nothing in the module's compiled source (src/) changes, so 
 - [valkey-io/valkey-json#1](https://github.com/valkey-io/valkey-json/pull/1): to retry, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in parent (exit 1): grep: src/json/memory.h: No such file or directory error: src/json/dom.cc: No such file or directory error: src/json/memory.h: No s
-- [valkey-io/valkey-json#41](https://github.com/valkey-io/valkey-json/pull/41) ([tests](tests/valkey-json/41-4fb72a926/)): Resolved issues when using GCC >= 12 (#41): 0 of 3 test(s) reached the change; [crash, predates #41](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/56)
-- [valkey-io/valkey-json#39](https://github.com/valkey-io/valkey-json/pull/39) ([tests](tests/valkey-json/39-10d2793bb/)): Adds JSON.MSET command (#39): 4 of 6 test(s) reached the change; crash, introduced and since fixed (recorded); crash, introduced and since fixed (recorded)
-- [valkey-io/valkey-json#35](https://github.com/valkey-io/valkey-json/pull/35) ([tests](tests/valkey-json/35-4a7a08ba6/)): Change prelaunch version to 0.0.9 (#35): 2 of 2 test(s) reached the change; [crash, predates #35](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/54)
-- [valkey-io/valkey-json@ac4f334af7a6](https://github.com/valkey-io/valkey-json/commit/ac4f334af7a6cd028b2f2ab898d52ea61f501c70) ([tests](tests/valkey-json/ac4f334af/)): Bug fix: JSON document size reported by 'json.debug memory': 5 of 5 test(s) reached the change
-- [valkey-io/valkey-json@d3ce5afb6dd3](https://github.com/valkey-io/valkey-json/commit/d3ce5afb6dd3fb88086aa9218cfef3197b75b388) ([tests](tests/valkey-json/d3ce5afb6/)): Fix #19 - Remove aux type loading code not related to JSON: declined: The change only removes aux-type stubs (scdtype00, ft_index0, graphdata, GEARS_DT0, GEAR_REQ0) that let a JSON-only server skip foreign module aux blobs (RediSearch/RedisGraph/RedisGears) when loading an RDB produced elsewhere. These stubs have aux_load but no aux_save, and valkey-json's o
-- [valkey-io/valkey-json#27](https://github.com/valkey-io/valkey-json/pull/27) ([tests](tests/valkey-json/27-09612c9ba/)): Remove RDB compatibility test and data (#27): declined: The change only removes an integration test (test_import_rejson_rdbs), its RDB fixture files and README, and pins the CI runner image from ubuntu-latest to ubuntu-22.04. No module source code is modified, so the built module's behavior (commands, replies, RDB serialization/deserialization)
-- [valkey-io/valkey-json#21](https://github.com/valkey-io/valkey-json/pull/21) ([tests](tests/valkey-json/21-68dbc545a/)): Fix #19 - RDB compatibility with ReJSON and add compatibility test (#21): 0 of 3 test(s) reached the change
-- [valkey-io/valkey-json#23](https://github.com/valkey-io/valkey-json/pull/23) ([tests](tests/valkey-json/23-08e55ab62/)): Fix #6 - Make the compiler flags configurable (#23): declined: The change is build/CI-only: it makes compiler flags overridable in CMakeLists.txt and build.sh (defaulting to the same -g -O3 -fno-omit-frame-pointer -Wall -Werror -Wextra flags as before), fixes a CI typo, and updates README and the integration-test runner's shell quoting. No source file
 
 ### valkey-io/valkey-search
 
@@ -129,7 +116,7 @@ Updated 2026-11-05T09:16+00:00.
 ## Retries
 
 - [valkey-io/valkey-bloom#92](https://github.com/valkey-io/valkey-bloom/pull/92): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
-- [valkey-io/valkey-json#1](https://github.com/valkey-io/valkey-json/pull/1): attempt 1 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in parent (exit 1): grep: src/json/memory.h: No such file or directory error: src/json/dom.cc: No such file or directory error: src/json/memory.h: No s
+- [valkey-io/valkey-json#1](https://github.com/valkey-io/valkey-json/pull/1): attempt 2 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in parent (exit 1): grep: src/json/memory.h: No such file or directory error: src/json/dom.cc: No such file or directory error: src/json/memory.h: No s
 - [valkey-io/valkey-search#1650](https://github.com/valkey-io/valkey-search/pull/1650): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
 - [valkey-io/valkey-search#1634](https://github.com/valkey-io/valkey-search/pull/1634): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
 - [valkey-io/valkey-search#1381](https://github.com/valkey-io/valkey-search/pull/1381): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
