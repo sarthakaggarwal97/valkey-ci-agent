@@ -98,8 +98,8 @@ TEST_TIMEOUT_S = 30 * 60
 # The model's AWS session (ci-fix-run.yml's role-duration-seconds). The whole
 # preparation, review included, must end inside it, so rounds stop when the
 # budget runs low. Reproduction may use part of it.
-AWS_SESSION_S = 5 * 60 * 60
-PREPARE_BUDGET_S = 4 * 60 * 60 + 30 * 60
+AWS_SESSION_S = 50 * 60  # E2E harness: fork role
+PREPARE_BUDGET_S = 45 * 60  # E2E harness
 REPRO_BUDGET_S = 20 * 60
 _MIN_ROUND_S = 8 * 60
 # Of each round's time, what the agent may not use: the candidate's

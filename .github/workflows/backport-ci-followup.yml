@@ -29,7 +29,7 @@ permissions: {}
 jobs:
   preflight:
     name: Generate matrix
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: github.repository == 'sarthakaggarwal97/valkey-ci-agent'  # E2E harness
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -85,7 +85,4 @@ jobs:
       key: ${{ matrix.repo_slug }}-${{ matrix.branch }}
       target_owner: ${{ matrix.repo_owner }}
       target_repo: ${{ matrix.repo_name }}
-    secrets:
-      VALKEYRIE_BOT_APP_ID: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-      VALKEYRIE_BOT_PRIVATE_KEY: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+    secrets: inherit  # E2E harness
