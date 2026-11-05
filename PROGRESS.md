@@ -63,9 +63,8 @@ Updated 2026-11-05T09:22+00:00.
 
 ### valkey-io/valkey-json
 
-[2026-11-05T09:22:10+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42001413419): 1 merge(s) tested, 0 without a code change.
+[2026-11-05T09:22:53+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42001807909): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-json#1](https://github.com/valkey-io/valkey-json/pull/1): Contributing valkeyJSON module (#1): error: `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in parent (exit 1): grep: src/json/memory.h: No such file or directory error: src/json/dom.cc: No such file or directory error: src/json/memory.h: No such file or directory error: src/rapidjson/document.h: No such file or directory
 
 ### valkey-io/valkey-search
 
