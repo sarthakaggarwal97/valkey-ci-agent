@@ -27,6 +27,7 @@ AgentProfileName = Literal[
     "fuzzer_root_cause_text_only",
     "fuzzer_proposal_readonly",
     "fuzzer_spec_draft_readonly",
+    "fuzzer_walk_maintain",
     "ci_fix_diagnose_readonly",
     "release_notes_review_edit_only",
 ]
@@ -144,6 +145,20 @@ AGENT_PROFILES: dict[AgentProfileName, AgentProfile] = {
         writes_allowed=False,
         output_schema="text",
         disallowed_tools="Bash,Write,Edit,MultiEdit,NotebookEdit,WebFetch,WebSearch",
+    ),
+    # Maintains the fuzzer walk (scripts/fuzzer/maintain.py): fixes the walk and the fuzzer in local checkouts,
+    # running their tests and committing, and vets the walk's issues, building Valkey to reproduce them. It needs
+    # a shell and file writes; it gets no GitHub token or other secret, and code applies what it leaves.
+    "fuzzer_walk_maintain": AgentProfile(
+        name="fuzzer_walk_maintain",
+        allowed_tools="Read,Write,Edit,Glob,Grep,Bash",
+        # Inside the hour the role's credentials last: they are renewed before a run, not during one.
+        timeout=3300,
+        effort="high",
+        max_turns=400,
+        writes_allowed=True,
+        output_schema="edited-files",
+        disallowed_tools="WebFetch,WebSearch,NotebookEdit",
     ),
     "ci_fix_diagnose_readonly": AgentProfile(
         name="ci_fix_diagnose_readonly",

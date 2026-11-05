@@ -1,0 +1,351 @@
+name: Fuzzer Walk Maintenance
+
+# Maintains the fuzzer walk (fuzzer-walk.yml): Claude vets the open
+# [fuzzer-walk] issues and fixes what makes the walk noisy or blind, and
+# deterministic steps apply the results. Each walk run dispatches it; a run
+# skips when one maintained the walk in the last 6 hours.
+#
+# What Claude reads (issue bodies, logs, diffs) is untrusted, so Claude runs in
+# a job of its own with no GitHub token beyond contents:read and no secret but
+# the AWS role, on local checkouts only. It leaves local commits, exported as
+# patches, and actions.json. The patches' tests run again in a job with no
+# secret; the last job pushes what passed, applies what actions.json may do
+# (scripts/fuzzer/maintain.py validates it), and posts the report on the
+# fuzzer repository's "Walk maintenance log" issue. Nothing writes to valkey-io.
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: fuzzer-walk-maintain
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # The only repositories written: the walk's fork and the fuzzer's, where the walk files its issues.
+  CI_AGENT_REPOSITORY: sarthakaggarwal97/valkey-ci-agent
+  CI_AGENT_REF: fuzzer-replay
+  FUZZER_REPOSITORY: sarthakaggarwal97/valkey-fuzzer
+  FUZZER_REF: generic-fuzzer
+  BUILD_PACKAGES: build-essential clang pkg-config libssl-dev libzstd-dev tcl
+
+jobs:
+  gate:
+    if: github.repository_owner != 'valkey-io'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+    outputs:
+      go: ${{ steps.gate.outputs.go }}
+    steps:
+      # A run whose Claude job succeeded maintained the walk; a run that only skipped did not.
+      - name: Skip when the walk was maintained in the last 6 hours
+        id: gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          since=$(date -u -d '6 hours ago' +%s)
+          go=true
+          for id in $(gh run list -R "${GITHUB_REPOSITORY}" --workflow fuzzer-walk-maintain.yml --status success \
+                        --limit 20 --json databaseId,createdAt \
+                        --jq ".[] | select((.createdAt | fromdateiso8601) > ${since}) | .databaseId"); do
+            if gh run view "${id}" -R "${GITHUB_REPOSITORY}" --json jobs \
+                 --jq '.jobs[] | select(.name == "claude" and .conclusion == "success") | .name' | grep -q .; then
+              echo "::notice::run ${id} maintained the walk less than 6 hours ago"
+              go=false
+              break
+            fi
+          done
+          echo "go=${go}" >> "${GITHUB_OUTPUT}"
+
+  gather:
+    needs: gate
+    if: needs.gate.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Read the walk's state
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/${CI_AGENT_REPOSITORY}.git"
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${GITHUB_TOKEN}" | base64 -w0)"
+          git -c http.extraheader="${auth}" clone -q --depth 1 --branch walk-state "${url}" walk-state
+
+      # The issues and the walk's runs are public; the job's token reads them.
+      - name: Gather Claude's inputs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python -m scripts.fuzzer.maintain gather --out maintain-input --state walk-state \
+            --walk-repo "${CI_AGENT_REPOSITORY}" --fuzzer-repo "${FUZZER_REPOSITORY}"
+
+      - name: Upload Claude's inputs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: maintain-input
+          path: maintain-input
+          retention-days: 14
+
+  claude:
+    needs: gather
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # Claude runs here: no secret but the AWS role, and a token that reads only this public repository.
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      valkey-ci-agent-base: ${{ steps.run.outputs.valkey-ci-agent-base }}
+      valkey-ci-agent-patch: ${{ steps.run.outputs.valkey-ci-agent-patch }}
+      valkey-fuzzer-base: ${{ steps.run.outputs.valkey-fuzzer-base }}
+      valkey-fuzzer-patch: ${{ steps.run.outputs.valkey-fuzzer-patch }}
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+      CLAUDE_CODE_USE_BEDROCK: "1"
+      CI_AGENT_EVIDENCE_DIR: agent-evidence
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+        with:
+          install-claude: "true"
+
+      # Claude's copies, with history: it fixes and commits here.
+      - name: Check out valkey-ci-agent for Claude
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ env.CI_AGENT_REPOSITORY }}
+          ref: ${{ env.CI_AGENT_REF }}
+          path: work/valkey-ci-agent
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Check out valkey-fuzzer for Claude
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ env.FUZZER_REPOSITORY }}
+          ref: ${{ env.FUZZER_REF }}
+          path: work/valkey-fuzzer
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Install the build tools
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y ${BUILD_PACKAGES}
+
+      - name: Download Claude's inputs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: maintain-input
+          path: work/maintain-input
+
+      - name: Install the checkouts
+        shell: bash
+        run: python -m scripts.fuzzer.maintain prepare --work work
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: valkey-fuzzer-walk-maintain-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Maintain the walk
+        id: run
+        timeout-minutes: 60
+        shell: bash
+        env:
+          # The run starts by assuming the role again, for a full hour of credentials.
+          CI_AGENT_AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          python -m scripts.fuzzer.maintain run --work work --input work/maintain-input --output maintain-output
+
+      - name: Upload Claude's results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: maintain-output
+          path: maintain-output
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Upload agent evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: maintain-agent-evidence
+          path: agent-evidence
+          if-no-files-found: ignore
+          retention-days: 14
+
+  verify:
+    needs: claude
+    if: needs.claude.outputs.valkey-ci-agent-patch == 'true' || needs.claude.outputs.valkey-fuzzer-patch == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Runs the code Claude wrote: no secret here.
+    permissions:
+      contents: read
+    outputs:
+      valkey-ci-agent: ${{ steps.ci-agent.outcome }}
+      valkey-fuzzer: ${{ steps.fuzzer.outcome }}
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Check out valkey-ci-agent where Claude started
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ env.CI_AGENT_REPOSITORY }}
+          ref: ${{ needs.claude.outputs.valkey-ci-agent-base }}
+          path: work/valkey-ci-agent
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Check out valkey-fuzzer where Claude started
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ env.FUZZER_REPOSITORY }}
+          ref: ${{ needs.claude.outputs.valkey-fuzzer-base }}
+          path: work/valkey-fuzzer
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Download Claude's results
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: maintain-output
+          path: maintain-output
+
+      - name: Apply the patches
+        shell: bash
+        run: python -m scripts.fuzzer.maintain patch --work work --output maintain-output
+
+      - name: Verify valkey-fuzzer
+        id: fuzzer
+        if: needs.claude.outputs.valkey-fuzzer-patch == 'true'
+        continue-on-error: true
+        shell: bash
+        run: python -m scripts.fuzzer.maintain verify --work work --name valkey-fuzzer
+
+      # Against the patched fuzzer, when there is one: the two are pushed together.
+      - name: Verify valkey-ci-agent
+        id: ci-agent
+        if: needs.claude.outputs.valkey-ci-agent-patch == 'true'
+        continue-on-error: true
+        shell: bash
+        run: python -m scripts.fuzzer.maintain verify --work work --name valkey-ci-agent
+
+  apply:
+    needs: [claude, verify]
+    if: ${{ always() && needs.claude.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Pushes to this repository's fuzzer-replay; the fuzzer's branch and issues take REHEARSAL_PAT.
+    permissions:
+      contents: write
+    steps:
+      - name: Refuse any valkey-io target
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nocasematch
+          for target in "${GITHUB_REPOSITORY}" "${CI_AGENT_REPOSITORY}" "${FUZZER_REPOSITORY}"; do
+            [[ "${target}" != valkey-io/* ]] || { echo "::error::refusing to write to ${target}"; exit 1; }
+          done
+          [[ "${GITHUB_REPOSITORY}" == "${CI_AGENT_REPOSITORY}" ]] || { echo "::error::runs on ${CI_AGENT_REPOSITORY} only"; exit 1; }
+
+      # This run's own commit: the code that pushes and applies is not Claude's.
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download Claude's results
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: maintain-output
+          path: maintain-output
+
+      - name: Push valkey-ci-agent
+        if: needs.claude.outputs.valkey-ci-agent-patch == 'true'
+        shell: bash
+        env:
+          TOKEN: ${{ github.token }}
+          BASE: ${{ needs.claude.outputs.valkey-ci-agent-base }}
+          VERIFIED: ${{ needs.verify.outputs.valkey-ci-agent }}
+        run: |
+          set -euo pipefail
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${TOKEN}" | base64 -w0)"
+          export GIT_CONFIG_VALUE_0
+          python -m scripts.fuzzer.maintain push --name valkey-ci-agent --repo "${CI_AGENT_REPOSITORY}" \
+            --branch "${CI_AGENT_REF}" --base "${BASE}" --patch maintain-output/valkey-ci-agent.patch \
+            --verified "${VERIFIED}" --work "${RUNNER_TEMP}/push-ci-agent" --notes notes.md
+
+      # REHEARSAL_PAT may lack contents:write on the fuzzer: a refused push is noted, and the patch stays in
+      # the maintain-output artifact for the user to apply.
+      - name: Push valkey-fuzzer
+        if: needs.claude.outputs.valkey-fuzzer-patch == 'true'
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.REHEARSAL_PAT }}
+          BASE: ${{ needs.claude.outputs.valkey-fuzzer-base }}
+          VERIFIED: ${{ needs.verify.outputs.valkey-fuzzer }}
+        run: |
+          set -euo pipefail
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${TOKEN}" | base64 -w0)"
+          export GIT_CONFIG_VALUE_0
+          python -m scripts.fuzzer.maintain push --name valkey-fuzzer --repo "${FUZZER_REPOSITORY}" \
+            --branch "${FUZZER_REF}" --base "${BASE}" --patch maintain-output/valkey-fuzzer.patch \
+            --verified "${VERIFIED}" --work "${RUNNER_TEMP}/push-fuzzer" --notes notes.md
+
+      - name: Apply the vetting and post the report
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          TARGET_TOKEN: ${{ secrets.REHEARSAL_PAT }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          python -m scripts.fuzzer.maintain apply --repo "${FUZZER_REPOSITORY}" \
+            --actions maintain-output/actions.json --notes notes.md --run-url "${RUN_URL}"
