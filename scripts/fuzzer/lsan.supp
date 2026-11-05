@@ -1,6 +1,5 @@
 # LeakSanitizer suppressions for the walk's runs.
 # valkey-json keeps flags in the high bits of its pointers, which LeakSanitizer cannot follow, so every JSON value
-# still live when a server exits reads as leaked (valkey-fuzzer#48). Each pattern matches a frame's module or source
-# file: every such allocation goes through the module's memory.cc.
+# still live when a server exits reads as leaked (valkey-fuzzer#48). A leak with a frame in the module is not reported;
+# Valkey's own still are.
 leak:libjson.so
-leak:/src/json/memory.cc
