@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1f88b16b2063b98323512a5cd62b902ae5c96c86",
+  "parent": "8e0b7192523998b24f1d4f529a13a953967803cb",
+  "pr": 5210,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Mark sorted-set increments and weights as doubles (#5210)",
+  "date": "2026-10-31",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.8255,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

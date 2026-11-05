@@ -1,0 +1,79 @@
+extends: [valkey.liveness]
+id: proposed.expiry-condition-docs
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    COMMAND DOCS for the eight expiry commands reflects the new nested xx-comparison
+    condition block and serializes fully without crash, while runtime acceptance of
+    NX/XX/GT/LT combinations is unchanged.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [COMMAND, DOCS, EXPIRE], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, EXPIREAT], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, PEXPIRE], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, PEXPIREAT], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, HEXPIRE], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, HEXPIREAT], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, HPEXPIRE], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, HPEXPIREAT], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, INFO, EXPIRE], expect: {exists: true}}
+    - {command: [COMMAND, COUNT], expect: {exists: true}}
+    - {command: [COMMAND, GETKEYS, EXPIRE, k, '100', XX, GT], expect: {equals: [k]}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [EXPIREAT, k, '33177862400'], expect: {equals: 1}}
+    - {command: [EXPIRETIME, k], expect: {equals: 33177862400}}
+    - {command: [EXPIREAT, k, '33177862500', XX, GT], expect: {equals: 1}}
+    - {command: [EXPIRETIME, k], expect: {equals: 33177862500}}
+    - {command: [EXPIREAT, k, '33177862400', XX, GT], expect: {equals: 0}}
+    - {command: [EXPIREAT, k, '33177862400', XX, LT], expect: {equals: 1}}
+    - {command: [EXPIREAT, k, '33177862600', GT], expect: {equals: 1}}
+    - {command: [EXPIREAT, k, '33177862700', NX], expect: {equals: 0}}
+    - {command: [EXPIREAT, k, '33177862700', NX, XX], expect: {error: true}}
+    - {command: [EXPIREAT, k, '33177862700', GT, LT], expect: {error: true}}
+    - {command: [EXPIREAT, k, '33177862700', NX, GT], expect: {error: true}}
+    - {command: [EXPIREAT, k, '33177862700', XX, GT, LT], expect: {error: true}}
+    - {command: [PEXPIREAT, k, '33177862800000', XX, GT], expect: {equals: 1}}
+    - {command: [PEXPIRETIME, k], expect: {equals: 33177862800000}}
+    - {command: [PEXPIREAT, k, '1', NX], expect: {equals: 0}}
+    - {command: [EXPIRE, k, '9223372036854775807', XX, GT], expect: {error: true}}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HEXPIREAT, h, '33177862400', FIELDS, '1', f1], expect: {equals: [
+          1]}}
+    - {command: [HEXPIREAT, h, '33177862500', XX, GT, FIELDS, '1', f1], expect: {
+        equals: [1]}}
+    - {command: [HEXPIREAT, h, '33177862400', XX, GT, FIELDS, '1', f1], expect: {
+        equals: [0]}}
+    - {command: [HEXPIREAT, h, '33177862400', NX, FIELDS, '2', f1, f2], expect: {
+        equals: [0, 1]}}
+    - {command: [HEXPIREAT, h, '33177862900', NX, XX, FIELDS, '1', f1], expect: {
+        error: true}}
+    - {command: [HEXPIREAT, h, '33177862900', GT, LT, FIELDS, '1', f1], expect: {
+        error: true}}
+    - {command: [HEXPIREAT, h, '33177862900', NX, GT, FIELDS, '1', f1], expect: {
+        error: true}}
+    - {command: [HPEXPIREAT, h, '33177863000000', XX, LT, FIELDS, '1', f2], expect: {
+        equals: [1]}}
+    - {command: [HPEXPIRETIME, h, FIELDS, '2', f1, f2], expect: {equals: [33177862500000,
+          33177863000000]}}
+    - {command: [HPEXPIRE, h, '100000', NX, FIELDS, '1', f1], expect: {equals: [0]}}
+    - {command: [HEXPIRE, h, '100', FIELDS, 'fields'], expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

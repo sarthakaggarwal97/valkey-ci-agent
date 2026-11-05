@@ -1,0 +1,112 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "15b45dd9f3cf4d8e5b2a7d02e126d0444c83441e",
+  "parent": "1b84c13657d2cdc89dbca4e54111c265b8eeaa9b",
+  "pr": 5068,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Delete empty Path Hash keys using the Hash lifecycle (#5068)",
+  "date": "2026-11-03",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 8,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 14,
+    "executed": 14,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.9433,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "compat-load: the parent's RDB loads into the candidate with DEBUG DIGEST {\"reply\":\"0000000000000000000000000000000000000000\"}, not the parent's {\"reply\":\"6e122f46e8dc89c9f49011e8ad381a59c9e42ec6\"}",
+      "scenario": "ai-e8073eeae1cd",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "bc97829c569c8ddde196",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the parent's RDB loads into the candidate with DEBUG DIGEST {\"reply\":\"0000000000000000000000000000000000000000\"}, not the parent's {\"reply\":\"6e122f46e8dc89c9f49011e8ad381a59c9e42ec6\"}",
+      "scenario": "ai-1ca3deb639f4",
+      "seed": 102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "bc97829c569c8ddde196",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the parent's RDB loads into the candidate with DEBUG DIGEST {\"reply\":\"0000000000000000000000000000000000000000\"}, not the parent's {\"reply\":\"6e122f46e8dc89c9f49011e8ad381a59c9e42ec6\"}",
+      "scenario": "ai-6a3b7e4a7f1e",
+      "seed": 103,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "bc97829c569c8ddde196",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the parent's RDB loads into the candidate with DEBUG DIGEST {\"reply\":\"0000000000000000000000000000000000000000\"}, not the parent's {\"reply\":\"abcf0a1dbad6f766869b88dd7a40c874e1eee73a\"}",
+      "scenario": "ai-fecd17f0c164",
+      "seed": 104,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "bc97829c569c8ddde196",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the parent's RDB loads into the candidate with DEBUG DIGEST {\"reply\":\"0000000000000000000000000000000000000000\"}, not the parent's {\"reply\":\"abcf0a1dbad6f766869b88dd7a40c874e1eee73a\"}",
+      "scenario": "ai-88d7008b33e3",
+      "seed": 105,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "bc97829c569c8ddde196",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the parent's RDB loads into the candidate with DEBUG DIGEST {\"reply\":\"56e4c05d93932bc04d269e25d9055bf0324c50c2\"}, not the parent's {\"reply\":\"2f015e5db110638c08e7effd6d864a1e24e70fc3\"}",
+      "scenario": "ai-ad1bb79534a1",
+      "seed": 106,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #5068",
+      "fingerprint": "bc97829c569c8ddde196",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/52"
+    }
+  ],
+  "recorded": []
+}

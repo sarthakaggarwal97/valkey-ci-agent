@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "30a4df7b2ed9550c7025aae9547b06fcfd191a83",
+  "parent": "41578166d4890d098a37f541cf3606a8b51cd7b1",
+  "pr": 5156,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Keep the TLS connection postponed while an IO thread is writing (#5156)",
+  "date": "2026-10-29",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.9973,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: blocked.c:109 '!(isReplicatedClient(c) && btype != BLOCKED_MODULE && btype != BLOCKED_POSTPONE)' is not true",
+      "scenario": "ai-53b0ef7ecddd",
+      "seed": 51561,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #5156, since fixed",
+      "fingerprint": "dc96a69550eef06e216f",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

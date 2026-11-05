@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.hash-numfields-docs
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS no longer reports key_spec_index on the numfields argument
+    of the 11 hash field expiration commands, while key extraction and command execution
+    stay unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [COMMAND, DOCS, hexpireat], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, hexpiretime], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, hgetdel], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, hgetex], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, hpersist], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, hpexpire], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, hpexpireat], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, hpexpiretime], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [COMMAND, DOCS, hpttl], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, hsetex], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, httl], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, hexpire], expect: {exists: true}}
+    - {command: [COMMAND, DOCS, hrandfield], expect: {exists: true}}
+    - {command: [COMMAND, GETKEYS, HEXPIREAT, h, 99999999999, FIELDS, 1, f], expect: {
+        equals: [h]}}
+    - {command: [COMMAND, GETKEYS, HGETDEL, h, FIELDS, 2, f1, f2], expect: {equals: [
+          h]}}
+    - {command: [COMMAND, GETKEYS, HSETEX, h, 100, FIELDS, 1, f, v], expect: {equals: [
+          h]}}
+    - {command: [COMMAND, GETKEYS, HTTL, h, FIELDS, 1, f], expect: {equals: [h]}}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HSETEX, h, 0, KEEPTTL, FIELDS, 1, f3, v3], expect: {equals: 1}}
+    - {command: [HPEXPIREAT, h, 1, FIELDS, 1, f3], expect: {equals: [2]}}
+    - {command: [HGETDEL, h, FIELDS, 2, f1, f2], expect: {equals: [v1, v2]}}
+    - {command: [HTTL, h, FIELDS, 1, f1], expect: {equals: [-2]}}
+    - {command: [HSET, FIELDS, FIELDS, 1], expect: {equals: 1}}
+    - {command: [HPERSIST, FIELDS, FIELDS, 1, FIELDS], expect: {equals: [-1]}}
+    - {command: [HGETDEL, h, FIELDS, 0], expect: {error: true}}
+    - {command: [HGETDEL, h, FIELDS, 3, f1, f2], expect: {error: true}}
+    - {command: [HTTL, h, FIELDS, 9223372036854775807, f1], expect: {error: true}}
+    - {command: [HTTL, h, FIELDS, -1, f1], expect: {error: true}}
+    - {command: [HGETEX, h, EX, 100, FIELDS, 2147483648, f1], expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

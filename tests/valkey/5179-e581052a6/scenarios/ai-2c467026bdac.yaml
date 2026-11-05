@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey eaafdf0c7cb0..e581052a6007.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2c467026bdac
+seed: 51792
+experiment:
+  id: proposed.phdelprefix-chunk-bytes
+  inputs:
+    resp: 3
+    num_paths: 200
+    prefix_len: 131072
+    peak_max: 10000000
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

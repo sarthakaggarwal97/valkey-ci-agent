@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.phdelprefix-chunk-bytes
+deployment:
+  modes: [standalone]
+metadata:
+  description: PHDELPREFIX bounds temporary path copies in bytes; jemalloc thread
+    peak stays low and the chunked loop still deletes the complete matching subtree
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    num_paths: {type: integer, default: 128, description: paths per prefix group (groups
+        a and b)}
+    prefix_len: {type: integer, default: 524288, description: shared prefix length
+        in bytes inside each path}
+    peak_max: {type: integer, default: 20000000, description: upper bound on main-thread
+        peak allocated bytes across the first PHDELPREFIX on the fixed build}
+components:
+- use: valkey.action.commands
+  id: delprefix
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - command:
+      - EVAL
+      - |
+        local n = tonumber(ARGV[1])
+        local p = string.rep('x', tonumber(ARGV[2]))
+        for i = 0, n - 1 do
+          local s = string.format('%04d', i)
+          redis.call('PHSET', KEYS[1], 'a' .. p .. s, 'FIELDS', '1', 'f', 'v')
+          redis.call('PHSET', KEYS[1], 'b' .. p .. s, 'FIELDS', '1', 'f', 'v')
+        end
+        pcall(collectgarbage, 'collect')
+        return redis.status_reply('OK')
+      - 1
+      - tree
+      - {$ref: inputs.num_paths}
+      - {$ref: inputs.prefix_len}
+      expect: {equals: OK}
+    - {command: [DEBUG, MALLCTL-STR, thread.peak.reset, VOID], expect: {equals: OK}}
+    - {command: [DEBUG, MALLCTL, thread.peak.read], compare: skip}
+    - {command: [PHDELPREFIX, tree, a], expect: {equals: {$ref: inputs.num_paths}}}
+    - {command: [DEBUG, MALLCTL, thread.peak.read], expect_difference: true, expect: {
+        max: {$ref: inputs.peak_max}}}
+    - {command: [PHCARD, tree], expect: {equals: {$ref: inputs.num_paths}}}
+    - {command: [PHDELPREFIX, tree, a], expect: {equals: 0}}
+    - {command: [PHDELPREFIX, tree, b], expect: {equals: {$ref: inputs.num_paths}}}
+    - {command: [PHCARD, tree], expect: {equals: 0}}
+    - {command: [EXISTS, tree], expect: {equals: 1}}
+    - {command: [PHDELPREFIX, tree, ""], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [delprefix.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: delprefix}

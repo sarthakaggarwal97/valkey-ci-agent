@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1b84c13657d2..15b45dd9f3cf.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6a3b7e4a7f1e
+seed: 103
+experiment:
+  id: proposed.pathhash-empty-del-lifecycle
+  inputs:
+    resp: 2
+    hash_max_listpack_entries: 0
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.pathhash-empty-persistence
+deployment:
+  modes: [standalone]
+metadata:
+  description: AOF rewrite no longer reconstructs an empty path hash, RDB save/reload
+    loses it, and a legacy RDB with an empty path hash is skipped on load
+components:
+- use: valkey.action.commands
+  id: aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes", aof-use-rdb-preamble: "no"}
+    timeout_s: 60
+    commands:
+    - {command: [PHSET, keep, p, FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHSET, empty-tree, path, FIELDS, 1, field, value], expect: {equals: OK}}
+    - {command: [PHDEL, empty-tree, path], expect: {equals: 1}}
+    - {command: [EXISTS, empty-tree], expect_difference: true, expect: {equals: 0}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {error: false}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [EXISTS, empty-tree], expect_difference: true, expect: {equals: 0}}
+    - {command: [TYPE, empty-tree], expect_difference: true, expect: {equals: none}}
+    - {command: [PHGET, keep, p, f], expect: {equals: [v]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: rdb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 60
+    commands:
+    - {command: [PHSET, keep, p, FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHSET, empty-tree, path, FIELDS, 1, field, value], expect: {equals: OK}}
+    - {command: [PHDEL, empty-tree, path], expect: {equals: 1}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [EXISTS, empty-tree], expect_difference: true, expect: {equals: 0}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 1}}
+    - {command: [PHGET, keep, p, f], expect: {equals: [v]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: legacy
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files: {legacy-empty.rdb: !!binary 'VkFMS0VZMDgxFwdlbXB0aWVkAP8AAAAAAAAAAA=='}
+    server_config: {dbfilename: legacy-empty.rdb}
+    timeout_s: 30
+    commands:
+    - {command: [EXISTS, emptied], expect_difference: true, expect: {equals: 0}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 0}}
+    - {command: [TYPE, emptied], expect_difference: true, expect: {equals: none}}
+    - {command: [PHSET, emptied, p, FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHGET, emptied, p, f], expect: {equals: [v]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [aof.completed, rdb.completed, legacy.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof}
+- {evidence_id: valkey.command.sequence, source: rdb}
+- {evidence_id: valkey.command.sequence, source: legacy}

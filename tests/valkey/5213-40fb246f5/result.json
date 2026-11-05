@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "40fb246f5abbefae4e9fc1b15fe810176840ea4a",
+  "parent": "f8a102d57e13f8940bce73bf381ff2a27ed5727d",
+  "pr": 5213,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Represent valid expiry condition combinations in command metadata (#5213)",
+  "date": "2026-11-02",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.0799,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

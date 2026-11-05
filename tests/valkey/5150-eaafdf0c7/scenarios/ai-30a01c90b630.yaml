@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey eb29e2564332..eaafdf0c7cb0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-30a01c90b630
+seed: 5150
+experiment:
+  id: proposed.script-timeout-paused-primary
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4dc7b008b2e8..a230da1a3da0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-101d7ab4cae8
+seed: 50820
+experiment:
+  id: valkey.forkless-save-on-replica
+  inputs:
+    stable_keys: 20000
+    key_save_delay_us: 200
+    value_size: 256
+    mutation_rate: 800
+    diskless_load: swapdb
+    sync_delay_s: 0.3
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7200

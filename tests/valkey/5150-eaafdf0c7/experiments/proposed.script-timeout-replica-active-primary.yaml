@@ -1,0 +1,25 @@
+extends: [valkey.base]
+id: proposed.script-timeout-replica-active-primary
+mode: experiment
+deployment:
+  modes: [standalone]
+metadata:
+  description: A busy read-only script killed on a replica with an active, unpaused
+    primary resumes the buffered replication stream
+components:
+- use: valkey.action.commands
+  id: busy-script-on-replica
+  config:
+    instances: replica
+    resp: 2
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, busy-reply-threshold, 100], expect: {equals: OK}}
+    - {command: [INFO, replication], wait_s: 30, expect: {contains: "master_link_status:up"}}
+    - {raw: "EVAL_RO \"while true do end\" 0\r\n", connection: busy}
+    - {command: [SCRIPT, KILL], wait_s: 15, expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [INFO, replication], wait_s: 30, expect: {contains: "master_link_status:up"}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: busy-script-on-replica}
+- {evidence_id: valkey.data.ledger-verified, source: data}

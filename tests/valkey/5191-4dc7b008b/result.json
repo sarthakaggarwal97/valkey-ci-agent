@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4dc7b008b2e8546585ef95a6c58c18928186b227",
+  "parent": "e581052a6007a0e12cdd8808391b5c745c915037",
+  "pr": 5191,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Clear stale cross-slot flag before computing a command's slot (#5191)",
+  "date": "2026-10-30",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.2843,
+  "findings": [],
+  "recorded": []
+}

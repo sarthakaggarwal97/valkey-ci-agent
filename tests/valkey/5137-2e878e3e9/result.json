@@ -1,0 +1,59 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2e878e3e9c2961d0e42ce69fca86c9c4212ab336",
+  "parent": "3e04271dd487f41c8a12bed7f785ab4c4c8599c1",
+  "pr": 5137,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Ignore ping extension values that nodes.conf cannot load (#5137)",
+  "date": "2026-10-29",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 9,
+    "executed": 7,
+    "percent": 77,
+    "uncovered": [
+      "src/cluster_legacy.c:3789",
+      "src/cluster_legacy.c:3793"
+    ],
+    "rounds": 2
+  },
+  "cost_usd": 12.2348,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: Unrecoverable error: corrupted cluster config file \"45dc72aca7f2b2fb6fd09896a524b959ce20c665 127.0.0.1:48837@43419,,availability-zone=east",
+      "scenario": "ai-7dfe505e88b5",
+      "seed": 11,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5137",
+      "fingerprint": "0f4195230af099d0397f",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: Unrecoverable error: corrupted cluster config file \"0c937b0b973d35ad53d2f33c092c0c5f2810e233 127.0.0.1:37103@42721,,availability-zone=east,zone=evil,tls-port=0,shard-id=043cec64458dc80050911df93198eaf2d9fef672 master - 0 1793861503061 1 connected",
+      "scenario": "ai-2299fe3d7173",
+      "seed": 22,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5137",
+      "fingerprint": "aa9519223446a937edec",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

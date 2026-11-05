@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "eaafdf0c7cb03c2aafe0a03c35a002ccaaa39458",
+  "parent": "eb29e2564332734ce118241aa1180237755e065e",
+  "pr": 5150,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Don't queue a blocked primary when a timed-out script ends (#5150)",
+  "date": "2026-10-30",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 1,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.5677,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: blocked.c:168 'c->flag.module || !c->flag.blocked' is not true",
+      "scenario": "ai-30a01c90b630",
+      "seed": 5150,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5150",
+      "fingerprint": "92220d2f6efbd9b4a5f0",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

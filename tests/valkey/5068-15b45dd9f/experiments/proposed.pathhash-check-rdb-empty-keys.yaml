@@ -1,0 +1,25 @@
+extends: [valkey.liveness]
+id: proposed.pathhash-check-rdb-empty-keys
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-rdb now tolerates legacy empty containers (RDB_LOAD_ERR_EMPTY_KEY)
+    instead of failing; the parent errors out
+components:
+- use: valkey.action.tools
+  id: check-rdb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files:
+      empty-list.rdb: !!binary 'UkVESVMwMDA5AQFsAP8AAAAAAAAAAA=='
+      empty-pathhash.rdb: !!binary 'VkFMS0VZMDgxFwdlbXB0aWVkAP8AAAAAAAAAAA=='
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - {tool: valkey-check-rdb, args: [empty-list.rdb], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "RDB looks OK"}}}
+    - {tool: valkey-check-rdb, args: [empty-list.rdb, --stats, --format, info], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "RDB looks OK"}}}
+    - {tool: valkey-check-rdb, args: [empty-pathhash.rdb], expect: {exit: {equals: 0},
+        stdout: {contains: "RDB looks OK"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check-rdb}

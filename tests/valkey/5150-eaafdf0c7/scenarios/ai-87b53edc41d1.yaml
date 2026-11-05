@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey eb29e2564332..eaafdf0c7cb0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-87b53edc41d1
+seed: 5151
+experiment:
+  id: proposed.script-timeout-replica-active-primary
+  inputs:
+    mutable_keys: 1000
+    mutation_rate: 2000
+    value_size: 4096
+    stable_keys: 500
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7100

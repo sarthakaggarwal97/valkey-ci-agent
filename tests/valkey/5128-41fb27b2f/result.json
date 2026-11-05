@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "41fb27b2f47d09bf03f4cafbc4d706ef46f9fdd9",
+  "parent": "1f88b16b2063b98323512a5cd62b902ae5c96c86",
+  "pr": 5128,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Propagate PFADD elements applied before an INVALIDOBJ error (#5128)",
+  "date": "2026-10-31",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 1,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.1048,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "parent": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "pr": 5065,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Cap the length of inbound cluster bus packets (#5065)",
+  "date": "2026-11-04",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 1,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.5523,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

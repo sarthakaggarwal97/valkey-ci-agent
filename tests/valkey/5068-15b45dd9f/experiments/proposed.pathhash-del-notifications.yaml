@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.pathhash-del-notifications
+deployment:
+  modes: [standalone]
+metadata:
+  description: Final PHDEL/PHDELPREFIX emit a generic del keyspace notification after
+    the path event; partial deletions emit none
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: notify
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, notify-keyspace-events, Kgp], expect: {equals: OK}}
+    - {command: [PSUBSCRIBE, "__keyspace@0__:nt*"], connection: sub, expect: {exists: true}}
+    - {command: [PHSET, nt, p, FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHDEL, nt, p], expect: {equals: 1}}
+    - {read: true, connection: sub, expect_difference: true, expect: {equals: [[pmessage,
+            "__keyspace@0__:nt*", "__keyspace@0__:nt", phset], [pmessage, "__keyspace@0__:nt*",
+            "__keyspace@0__:nt", phdel], [pmessage, "__keyspace@0__:nt*", "__keyspace@0__:nt",
+            del]]}}
+    - {command: [PHSET, nt2, a, FIELDS, 2, f, one, g, two], expect: {equals: OK}}
+    - {command: [PHSET, nt2, b, FIELDS, 1, f, three], expect: {equals: OK}}
+    - {command: [PHDEL, nt2, a, f], expect: {equals: 1}}
+    - {command: [PHDEL, nt2, a], expect: {equals: 1}}
+    - {read: true, connection: sub, expect: {equals: [[pmessage, "__keyspace@0__:nt*",
+            "__keyspace@0__:nt2", phset], [pmessage, "__keyspace@0__:nt*", "__keyspace@0__:nt2",
+            phset], [pmessage, "__keyspace@0__:nt*", "__keyspace@0__:nt2", phdel],
+          [pmessage, "__keyspace@0__:nt*", "__keyspace@0__:nt2", phdel]]}}
+    - {command: [PHDELPREFIX, nt2, ""], expect: {equals: 1}}
+    - {read: true, connection: sub, expect_difference: true, expect: {equals: [[pmessage,
+            "__keyspace@0__:nt*", "__keyspace@0__:nt2", phdelprefix], [pmessage, "__keyspace@0__:nt*",
+            "__keyspace@0__:nt2", del]]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [notify.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: notify}

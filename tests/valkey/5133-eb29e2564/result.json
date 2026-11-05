@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "eb29e2564332734ce118241aa1180237755e065e",
+  "parent": "30a4df7b2ed9550c7025aae9547b06fcfd191a83",
+  "pr": 5133,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Keep sds lengths in size_t when comparing and caching keys (#5133)",
+  "date": "2026-10-30",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7537,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters behaviour when an sds object's byte length reaches 2^31 (2 GiB): dictSdsKeyCompare and evictionPoolPopulate held the length in a signed int that overflows to a negative value for a >=2GiB key/member, so memcmp/memcpy receive a sign-extended huge size_t and crash or mis-compare; keeping the length in size_t fixes it. For any length below 2^31 the int and size_t code are bit-for-bit identical, so nothing smaller can distinguish the two builds. Reaching the changed path requires literally sending a 2 GiB key name or set member (that is why the upstream tests are tagged larg"
+}

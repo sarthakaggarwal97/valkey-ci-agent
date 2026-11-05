@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f8a102d57e13f8940bce73bf381ff2a27ed5727d",
+  "parent": "7dfa61e04390990da64b9e982c3b0fc0da8c7c82",
+  "pr": 5211,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove key specs from hash NUMFIELDS arguments (#5211)",
+  "date": "2026-11-02",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.2314,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

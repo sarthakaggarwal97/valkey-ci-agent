@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.cluster-az-ext-newline
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: A gossiped availability-zone holding a newline is ignored, so the receiver's
+    nodes.conf still loads after a restart
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.commands
+  id: az
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 2
+    timeout_s: 120
+    commands:
+    - {command: [CONFIG, SET, availability-zone, "east\nzone"], node: 1, expect: {
+        equals: OK}}
+    - {command: [WAIT, 1, 8000], node: 0, expect: {equals: 0}}
+    - {command: [WAIT, 1, 8000], node: 0, expect: {equals: 0}}
+    - {restart: true, node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [PING], node: 0, expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [az.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: az}

@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7dfa61e04390990da64b9e982c3b0fc0da8c7c82",
+  "parent": "41fb27b2f47d09bf03f4cafbc4d706ef46f9fdd9",
+  "pr": 5127,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Script debugger: reset *argc on partial-read exit to fix server crash in SYNC mode (#5127)",
+  "date": "2026-10-31",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.6027,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: scripting_engine.c:749 'argc != NULL && *argc == 0' is not true",
+      "scenario": "ai-ac08855f0b16",
+      "seed": 51270,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5127",
+      "fingerprint": "1193c105b5a458f70d6d",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: scripting_engine.c:749 'argc != NULL && *argc == 0' is not true",
+      "scenario": "ai-1c9daa7580af",
+      "seed": 51271,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5127",
+      "fingerprint": "1193c105b5a458f70d6d",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

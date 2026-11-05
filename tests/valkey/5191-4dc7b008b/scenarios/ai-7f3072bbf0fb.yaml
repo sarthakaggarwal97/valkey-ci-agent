@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e581052a6007..4dc7b008b2e8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7f3072bbf0fb
+seed: 5192
+experiment:
+  id: proposed.script-stale-crossslot
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

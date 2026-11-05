@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8e0b7192523998b24f1d4f529a13a953967803cb",
+  "parent": "3ef5fef19fe4ca9da1841282205239705edc23e4",
+  "pr": 5154,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Keep module global defrag resume state valid across MODULE UNLOAD (#5154)",
+  "date": "2026-10-31",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.2845,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters behavior when MODULE UNLOAD removes a module during an in-progress active-defrag global pass, with at least two modules registering global-defrag callbacks (one being defragged and unloaded, a second later one to catch a stray cursor), exactly as the PR's defrag.tcl sets up with defragunload+defragtest. The fuzzer cannot build this: valkey.action.commands refuses MODULE LOAD/UNLOAD, authored experiments may not use valkey.action.command/fault.command, and no installed experiment touches modules or defrag; only one test module can be built and loaded per run and only as a"
+}

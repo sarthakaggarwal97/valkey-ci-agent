@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-05T07:19+00:00.
+Updated 2026-11-05T07:25+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 45 | 2443 | #5213 (2026-11-02) | 45 | 6.4 |
+| valkey-io/valkey | 65 | 2424 | #5151 (2026-10-29) | 65 | 9.3 |
 | valkey-io/valkey-bloom | 29 | 80 | #45 (2025-03-11) | 29 | 4.1 |
 | valkey-io/valkey-json | 48 | 14 | c1423d7e4b38 (2024-11-25) | 48 | 6.9 |
 | valkey-io/valkey-search | 24 | 644 | #1481 (2026-10-14) | 24 | 3.4 |
@@ -13,28 +13,28 @@ Updated 2026-11-05T07:19+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-05T05:58:54+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41964118901): 20 merge(s) tested, 1 without a code change.
+[2026-11-05T07:25:18+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41977390618): 20 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey#5146](https://github.com/valkey-io/valkey/pull/5146) ([tests](tests/valkey/5146-fb22585dc/)): Fix integer overflow in SORT BY/GET pattern key substitution (#5146): declined: The fix only changes behaviour when prefixlen+sublen+postfixlen of the SORT BY/GET substituted key reaches 2^31: as int it overflowed to a negative value that sign-extended to ~2^64 as size_t and caused an OOM crash, while below 2^31 the int and size_t arithmetic are identical, so parent a
-- [valkey-io/valkey#5244](https://github.com/valkey-io/valkey/pull/5244) ([tests](tests/valkey/5244-67e84ec77/)): Mark mutually exclusive ZADD and LCS options (#5244): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#5245](https://github.com/valkey-io/valkey/pull/5245) ([tests](tests/valkey/5245-e6c24adda/)): Mark HEXPIREAT and HPEXPIREAT timestamps as unix-time (#5245): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#4797](https://github.com/valkey-io/valkey/pull/4797) ([tests](tests/valkey/4797-6454bcc62/)): Forkless Full-Sync (#4797): 0 of 8 test(s) reached the change, coverage 74%
-- [valkey-io/valkey#5120](https://github.com/valkey-io/valkey/pull/5120) ([tests](tests/valkey/5120-f9262571d/)): Free repeated register_function named arguments (#5120): 0 of 2 test(s) reached the change
-- [valkey-io/valkey#5242](https://github.com/valkey-io/valkey/pull/5242) ([tests](tests/valkey/5242-9ff39f353/)): Rebuild the Lua module when its sources change (#5242): declined: The change only touches Makefiles: it adds a FORCE phony target so the Lua module sub-make always runs, and -MMD dependency-file generation in src/modules/lua/Makefile so incremental builds rebuild objects when their sources change. It is a build/CI correctness fix with no change to any co
-- [valkey-io/valkey#5261](https://github.com/valkey-io/valkey/pull/5261) ([tests](tests/valkey/5261-6c4f6fb85/)): Rename bgsave-default-method to forkless-policy (#5261): 2 of 4 test(s) reached the change, coverage 83%; crash, introduced and since fixed (recorded)
-- [valkey-io/valkey#5067](https://github.com/valkey-io/valkey/pull/5067) ([tests](tests/valkey/5067-7220c38f9/)): Feature pathhash pathdel (#5067): 8 of 8 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#5068](https://github.com/valkey-io/valkey/pull/5068): to retry, 4 of 4 run(s) could not start: the run could not start: environment acquisition failed
-- [valkey-io/valkey#5071](https://github.com/valkey-io/valkey/pull/5071) ([tests](tests/valkey/5071-1b84c1365/)): Replace PHCARD with prefix-aware PHPATHCOUNT (#5071): 5 of 5 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#5070](https://github.com/valkey-io/valkey/pull/5070) ([tests](tests/valkey/5070-b3b5ab983/)): Feature pathhash prefixes (#5070): 5 of 5 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#5066](https://github.com/valkey-io/valkey/pull/5066) ([tests](tests/valkey/5066-14f16537d/)): Feature pathhash scan (#5066): 6 of 6 test(s) reached the change, coverage 100%; check, not reproduced (recorded); check, introduced and since fixed (recorded); check, not reproduced (recorded); check, introduced and since fixed (recorded); check, not reproduced (recorded); check, introduced and since fixed (recorded)
-- [valkey-io/valkey#5069](https://github.com/valkey-io/valkey/pull/5069) ([tests](tests/valkey/5069-f986f56b5/)): Rename PHEXISTS to PHPATHEXISTS (#5069): 3 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#5208](https://github.com/valkey-io/valkey/pull/5208) ([tests](tests/valkey/5208-d80033654/)): Fix SENTINEL SIMULATE-FAILURE argument metadata (#5208): 1 of 1 test(s) reached the change
-- [valkey-io/valkey#5212](https://github.com/valkey-io/valkey/pull/5212) ([tests](tests/valkey/5212-0d089ef9b/)): Mark RESTORE IDLETIME and FREQ as mutually exclusive (#5212): 3 of 3 test(s) reached the change; [check, introduced by #5212](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/49)
-- [valkey-io/valkey#5159](https://github.com/valkey-io/valkey/pull/5159) ([tests](tests/valkey/5159-8519d0c27/)): Fill unmatched postponed reply lengths left by a module (#5159): 2 of 2 test(s) reached the change, coverage 66%; [crash, introduced by #5159](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/50)
-- [valkey-io/valkey#5121](https://github.com/valkey-io/valkey/pull/5121): to retry, Claude Code failed (rc=1): timeout after 3000s
-- [valkey-io/valkey#5116](https://github.com/valkey-io/valkey/pull/5116) ([tests](tests/valkey/5116-c30596075/)): Notify forkless iteration of SWAPDB from the swap itself (#5116): 4 of 4 test(s) reached the change, coverage 100%; [check, introduced by #5116](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/49)
-- [valkey-io/valkey#5118](https://github.com/valkey-io/valkey/pull/5118) ([tests](tests/valkey/5118-0bfc99f58/)): Read Lua error table fields without invoking metamethods (#5118): 2 of 2 test(s) reached the change; crash, fixed by #5118 (recorded)
-- [valkey-io/valkey#5237](https://github.com/valkey-io/valkey/pull/5237) ([tests](tests/valkey/5237-05db2e39a/)): Group XACKDEL, XDELEX ids array in command JSON files (#5237): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#5065](https://github.com/valkey-io/valkey/pull/5065) ([tests](tests/valkey/5065-9b4dcf617/)): Cap the length of inbound cluster bus packets (#5065): declined: no proposed test validated
+- [valkey-io/valkey#5068](https://github.com/valkey-io/valkey/pull/5068) ([tests](tests/valkey/5068-15b45dd9f/)): Delete empty Path Hash keys using the Hash lifecycle (#5068): 8 of 8 test(s) reached the change, coverage 100%; check, introduced and since fixed (recorded)
+- [valkey-io/valkey#5121](https://github.com/valkey-io/valkey/pull/5121) ([tests](tests/valkey/5121-19c3a82f2/)): Let FLUSHALL and SHUTDOWN cancel a forkless save that is closing its file (#5121): 0 of 5 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#5213](https://github.com/valkey-io/valkey/pull/5213) ([tests](tests/valkey/5213-40fb246f5/)): Represent valid expiry condition combinations in command metadata (#5213): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#5211](https://github.com/valkey-io/valkey/pull/5211) ([tests](tests/valkey/5211-f8a102d57/)): Remove key specs from hash NUMFIELDS arguments (#5211): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#5127](https://github.com/valkey-io/valkey/pull/5127) ([tests](tests/valkey/5127-7dfa61e04/)): Script debugger: reset *argc on partial-read exit to fix server crash in SYNC mode (#5127): 2 of 2 test(s) reached the change, coverage 100%; crash, fixed by #5127 (recorded)
+- [valkey-io/valkey#5128](https://github.com/valkey-io/valkey/pull/5128) ([tests](tests/valkey/5128-41fb27b2f/)): Propagate PFADD elements applied before an INVALIDOBJ error (#5128): declined: no proposed test validated
+- [valkey-io/valkey#5210](https://github.com/valkey-io/valkey/pull/5210) ([tests](tests/valkey/5210-1f88b16b2/)): Mark sorted-set increments and weights as doubles (#5210): declined: no proposed test validated
+- [valkey-io/valkey#5154](https://github.com/valkey-io/valkey/pull/5154) ([tests](tests/valkey/5154-8e0b71925/)): Keep module global defrag resume state valid across MODULE UNLOAD (#5154): declined: The change only alters behavior when MODULE UNLOAD removes a module during an in-progress active-defrag global pass, with at least two modules registering global-defrag callbacks (one being defragged and unloaded, a second later one to catch a stray cursor), exactly as the PR's defrag.tcl 
+- [valkey-io/valkey#5205](https://github.com/valkey-io/valkey/pull/5205) ([tests](tests/valkey/5205-3ef5fef19/)): bgiteration: avoid missing key check for multi/exec commands (#5205): declined: The fix prevents an assertion crash (serverAssert(wasAdded) in bgiteration.c) that can only be reached through a non-consistent background iterator: the buggy loop is gated by `if (!(it->iteration_flags & BGITERATOR_FLAG_CONSISTENT))`. In this build the only live-server code that creates a
+- [valkey-io/valkey#5206](https://github.com/valkey-io/valkey/pull/5206) ([tests](tests/valkey/5206-329ccfe1d/)): [Forkless] Allow primary client to be blocked with BLOCKED_INUSE (#5206): 0 of 3 test(s) reached the change, coverage 100%; crash, fixed by #5206 (recorded)
+- [valkey-io/valkey#5082](https://github.com/valkey-io/valkey/pull/5082) ([tests](tests/valkey/5082-a230da1a3/)): Replica: Tear down background iterators when swapping in a primary's RDB (#5082): 0 of 6 test(s) reached the change, coverage 0%; crash, fixed by #5082 (recorded)
+- [valkey-io/valkey#5191](https://github.com/valkey-io/valkey/pull/5191) ([tests](tests/valkey/5191-4dc7b008b/)): Clear stale cross-slot flag before computing a command's slot (#5191): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#5179](https://github.com/valkey-io/valkey/pull/5179) ([tests](tests/valkey/5179-e581052a6/)): Bound PHDELPREFIX temporary path copies in bytes (#5179): 3 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#5150](https://github.com/valkey-io/valkey/pull/5150) ([tests](tests/valkey/5150-eaafdf0c7/)): Don't queue a blocked primary when a timed-out script ends (#5150): 1 of 3 test(s) reached the change, coverage 100%; crash, fixed by #5150 (recorded)
+- [valkey-io/valkey#5133](https://github.com/valkey-io/valkey/pull/5133) ([tests](tests/valkey/5133-eb29e2564/)): Keep sds lengths in size_t when comparing and caching keys (#5133): declined: The change only alters behaviour when an sds object's byte length reaches 2^31 (2 GiB): dictSdsKeyCompare and evictionPoolPopulate held the length in a signed int that overflows to a negative value for a >=2GiB key/member, so memcmp/memcpy receive a sign-extended huge size_t and crash or m
+- [valkey-io/valkey#5156](https://github.com/valkey-io/valkey/pull/5156) ([tests](tests/valkey/5156-30a4df7b2/)): Keep the TLS connection postponed while an IO thread is writing (#5156): 0 of 4 test(s) reached the change, coverage 100%; crash, predates #5156, since fixed (recorded)
+- [valkey-io/valkey#5161](https://github.com/valkey-io/valkey/pull/5161) ([tests](tests/valkey/5161-41578166d/)): Bound the bytes clusterReadHandler() reads per event (#5161): 0 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#5131](https://github.com/valkey-io/valkey/pull/5131) ([tests](tests/valkey/5131-d30102951/)): Reply to CLUSTER SLOT-STATS ORDERBY with the slots it collected (#5131): declined: The change only alters the CLUSTER SLOT-STATS ORDERBY reply array length, sizing it from the number of slots actually collected (i) instead of getMyShardSlotCount(). These two values are equal for a primary and for a single-level replica, so in every stable topology both builds produce byt
+- [valkey-io/valkey#5137](https://github.com/valkey-io/valkey/pull/5137) ([tests](tests/valkey/5137-2e878e3e9/)): Ignore ping extension values that nodes.conf cannot load (#5137): 2 of 4 test(s) reached the change, coverage 77%; crash, fixed by #5137 (recorded); crash, fixed by #5137 (recorded)
 
 ### valkey-io/valkey-bloom
 
@@ -107,10 +107,10 @@ Updated 2026-11-05T07:19+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 55 of 68 tested (81%)
-- Changed-line coverage: median 100% of 22 merge(s) measured, 1 under 50%
-- Recall: 15 parents flagged of 19 fix merges
-- Claude: $426.40 in the last 24 hours, $426.40 in the last 7 days, $426.40 in all
+- Merges whose tests reached the change: 63 of 81 tested (78%)
+- Changed-line coverage: median 100% of 33 merge(s) measured, 2 under 50%
+- Recall: 16 parents flagged of 20 fix merges
+- Claude: $508.74 in the last 24 hours, $508.74 in the last 7 days, $508.74 in all
 - Issues filed: 10
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
@@ -144,5 +144,3 @@ Updated 2026-11-05T07:19+00:00.
 - [valkey-io/valkey-search#1634](https://github.com/valkey-io/valkey-search/pull/1634): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
 - [valkey-io/valkey-search#1381](https://github.com/valkey-io/valkey-search/pull/1381): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
 - [valkey-io/valkey-search#1472](https://github.com/valkey-io/valkey-search/pull/1472): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
-- [valkey-io/valkey#5068](https://github.com/valkey-io/valkey/pull/5068): attempt 1 of 3, 4 of 4 run(s) could not start: the run could not start: environment acquisition failed
-- [valkey-io/valkey#5121](https://github.com/valkey-io/valkey/pull/5121): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s

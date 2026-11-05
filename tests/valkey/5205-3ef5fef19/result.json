@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3ef5fef19fe4ca9da1841282205239705edc23e4",
+  "parent": "329ccfe1da8f1f4f1092a9c3b4a356c47e1b33a9",
+  "pr": 5205,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "bgiteration: avoid missing key check for multi/exec commands (#5205)",
+  "date": "2026-10-30",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.7626,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix prevents an assertion crash (serverAssert(wasAdded) in bgiteration.c) that can only be reached through a non-consistent background iterator: the buggy loop is gated by `if (!(it->iteration_flags & BGITERATOR_FLAG_CONSISTENT))`. In this build the only live-server code that creates a background iterator is forklessSaveToDisk(), which uses BGITERATOR_CONSISTENCY_START (a consistent iterator) and so skips that branch entirely; bgIteratorCreateSlotsIter (the eventual-consistency slot-migration iterator) has no production caller, replication full sync is always fork-based, and CONSISTENCY_EV"
+}

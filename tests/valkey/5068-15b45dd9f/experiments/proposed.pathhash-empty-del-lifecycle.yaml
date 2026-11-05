@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.pathhash-empty-del-lifecycle
+deployment:
+  modes: [standalone]
+metadata:
+  description: PHDEL/PHDELPREFIX removing the last path now delete the key (EXISTS,
+    TYPE, TTL, DUMP, COPY, EXEC), and RESTORE rejects a legacy empty path hash payload
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_max_listpack_entries: {type: integer, minimum: 0, maximum: 1024, default: 128}
+components:
+- use: valkey.action.commands
+  id: lifecycle
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    server_config:
+      sanitize-dump-payload: "no"
+      hash-max-listpack-entries: {$ref: inputs.hash_max_listpack_entries}
+    timeout_s: 15
+    commands:
+    - {command: [PHSET, tree, p, FIELDS, 2, f, v, g, w], expect: {equals: OK}}
+    - {command: [PEXPIRE, tree, 60000], expect: {equals: 1}}
+    - {command: [PHDEL, tree, p, f], expect: {equals: 1}}
+    - {command: [EXISTS, tree], expect: {equals: 1}}
+    - {command: [PHDEL, tree, p, g, missing, g], expect: {equals: 1}}
+    - {command: [EXISTS, tree], expect_difference: true, expect: {equals: 0}}
+    - {command: [TYPE, tree], expect_difference: true, expect: {equals: none}}
+    - {command: [PTTL, tree], expect_difference: true, expect: {equals: -2}}
+    - {command: [DUMP, tree], expect_difference: true, expect: {exists: false}}
+    - {command: [COPY, tree, tree-copy], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHDEL, tree, p], expect: {equals: 0}}
+    - {command: [PHPATHCOUNT, tree], expect: {equals: 0}}
+    - {command: [SET, tree, str], expect: {equals: OK}}
+    - {command: [PHDEL, tree, p], expect: {error: true}}
+    - {command: [DEL, tree], expect: {equals: 1}}
+    - {command: [PHSET, etree, "", FIELDS, 1, "", ""], expect: {equals: OK}}
+    - {command: [PHDEL, etree, ""], expect: {equals: 1}}
+    - {command: [EXISTS, etree], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHSET, tree3, a, FIELDS, 1, f, one], expect: {equals: OK}}
+    - {command: [PHSET, tree3, ab, FIELDS, 1, f, two], expect: {equals: OK}}
+    - {command: [PHSET, tree3, b, FIELDS, 1, f, three], expect: {equals: OK}}
+    - {command: [PEXPIRE, tree3, 60000], expect: {equals: 1}}
+    - {command: [PHDELPREFIX, tree3, a], expect: {equals: 2}}
+    - {command: [EXISTS, tree3], expect: {equals: 1}}
+    - {command: [PHDELPREFIX, tree3, ""], expect: {equals: 1}}
+    - {command: [EXISTS, tree3], expect_difference: true, expect: {equals: 0}}
+    - {command: [PTTL, tree3], expect_difference: true, expect: {equals: -2}}
+    - {command: [PHDELPREFIX, tree3, ""], expect: {equals: 0}}
+    - {command: [PHSET, tree4, abc, FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHDELPREFIX, tree4, ab], expect: {equals: 1}}
+    - {command: [EXISTS, tree4], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHSET, fields, p, FIELDS, 1, fields, fields], expect: {equals: OK}}
+    - {command: [PHDEL, fields, p, fields], expect: {equals: 1}}
+    - {command: [EXISTS, fields], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHSET, mtree, p, FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PHDEL, mtree, p], expect: {equals: QUEUED}}
+    - {command: [EXISTS, mtree], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [1, 0]}}
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, 1], expect: {equals: OK}}
+    - {command: [RESTORE, legacy-empty, 0, !!binary 'FwBRAAAAAAAAAAAA'], expect_difference: true,
+      expect: {error: "Bad data format"}}
+    - {command: [EXISTS, legacy-empty], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [lifecycle.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lifecycle}

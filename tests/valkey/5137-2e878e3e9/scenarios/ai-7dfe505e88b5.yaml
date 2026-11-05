@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3e04271dd487..2e878e3e9c29.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7dfe505e88b5
+seed: 11
+experiment:
+  id: proposed.cluster-az-ext-newline
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

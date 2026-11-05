@@ -1,0 +1,114 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a230da1a3da00747b423f5d9be3de3b0192692c3",
+  "parent": "4dc7b008b2e8546585ef95a6c58c18928186b227",
+  "pr": 5082,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replica: Tear down background iterators when swapping in a primary's RDB (#5082)",
+  "date": "2026-10-30",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/db.c:1879"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 1.4959,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: blocked.c:109 '!(isReplicatedClient(c) && btype != BLOCKED_MODULE && btype != BLOCKED_POSTPONE)' is not true",
+      "scenario": "ai-17019565ccee",
+      "seed": 5082,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5082",
+      "fingerprint": "dc96a69550eef06e216f",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: blocked.c:109 '!(isReplicatedClient(c) && btype != BLOCKED_MODULE && btype != BLOCKED_POSTPONE)' is not true",
+      "scenario": "ai-d179bb049df6",
+      "seed": 40604,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #5082, since fixed",
+      "fingerprint": "dc96a69550eef06e216f",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: blocked.c:109 '!(isReplicatedClient(c) && btype != BLOCKED_MODULE && btype != BLOCKED_POSTPONE)' is not true",
+      "scenario": "ai-101d7ab4cae8",
+      "seed": 50820,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "dc96a69550eef06e216f",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: blocked.c:109 '!(isReplicatedClient(c) && btype != BLOCKED_MODULE && btype != BLOCKED_POSTPONE)' is not true",
+      "scenario": "ai-aed8b7a16468",
+      "seed": 5082,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #5082, since fixed",
+      "fingerprint": "dc96a69550eef06e216f",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: blocked.c:109 '!(isReplicatedClient(c) && btype != BLOCKED_MODULE && btype != BLOCKED_POSTPONE)' is not true",
+      "scenario": "ai-1da9145b302e",
+      "seed": 50821,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #5082, since fixed",
+      "fingerprint": "dc96a69550eef06e216f",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: blocked.c:109 '!(isReplicatedClient(c) && btype != BLOCKED_MODULE && btype != BLOCKED_POSTPONE)' is not true",
+      "scenario": "ai-1f9439daed6b",
+      "seed": 50822,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #5082, since fixed",
+      "fingerprint": "dc96a69550eef06e216f",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "19c3a82f2fd7422e10f61626dd91468c9d46a517",
+  "parent": "c30596075ce09532daf81161d62a1fc6fe9b678f",
+  "pr": 5121,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Let FLUSHALL and SHUTDOWN cancel a forkless save that is closing its file (#5121)",
+  "date": "2026-11-02",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 3,
+  "recall": false,
+  "coverage": {
+    "lines": 8,
+    "executed": 8,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 10.7248,
+  "findings": [],
+  "recorded": []
+}

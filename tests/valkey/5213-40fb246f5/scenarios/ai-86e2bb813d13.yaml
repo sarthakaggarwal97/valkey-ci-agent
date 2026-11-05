@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f8a102d57e13..40fb246f5abb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-86e2bb813d13
+seed: 521301
+experiment:
+  id: proposed.expiry-condition-docs
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

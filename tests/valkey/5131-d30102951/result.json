@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d30102951d774c49732e5c90ad1e079f4c96390d",
+  "parent": "2e878e3e9c2961d0e42ce69fca86c9c4212ab336",
+  "pr": 5131,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reply to CLUSTER SLOT-STATS ORDERBY with the slots it collected (#5131)",
+  "date": "2026-10-29",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.757,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters the CLUSTER SLOT-STATS ORDERBY reply array length, sizing it from the number of slots actually collected (i) instead of getMyShardSlotCount(). These two values are equal for a primary and for a single-level replica, so in every stable topology both builds produce byte-identical replies. They diverge only when the querying node is a sub-replica (a replica whose own primary is itself a replica): getMyShardSlotCount() returns 0 while the collection loop walks the chain to the real slot owner and gathers its slots, so the parent build replies with an empty array and the chan"
+}

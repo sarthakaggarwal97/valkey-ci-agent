@@ -1,0 +1,79 @@
+extends: [valkey.liveness]
+id: proposed.script-stale-crossslot
+deployment:
+  modes: [standalone]
+metadata:
+  description: A cross-slot redis.call in a script must not leave a stale CROSSSLOT
+    flag that fails later script calls
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: evalseq
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - command: [EVAL, "pcall(function() redis.call('mget','foo','bar') end) return\
+          \ redis.call('ping')", "0"]
+      expect_difference: true
+      expect: {equals: PONG}
+    - command: [EVAL, "return redis.call('mget','foo','bar')", "0"]
+      expect: {error: "non local key"}
+    - command: [EVAL, "return redis.call('ping')", "0"]
+      expect_difference: true
+      expect: {equals: PONG}
+    - command: [EVAL, "return redis.call('set', KEYS[1], 'v1')", "1", k1]
+      expect_difference: true
+      expect: {equals: OK}
+    - command: [GET, k1]
+      expect_difference: true
+      expect: {equals: v1}
+    - command: [MGET, foo, bar]
+      expect: {error: "CROSSSLOT"}
+    - command: [PING]
+      expect: {equals: PONG}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: fcallseq
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - command: [FUNCTION, LOAD, "#!lua name=lib\nredis.register_function('xslot',\
+          \ function(keys, args) return redis.call('mget','foo','bar') end)\nredis.register_function('pingf',\
+          \ function(keys, args) return redis.call('ping') end)"]
+      expect: {equals: lib}
+    - command: [FCALL, xslot, "0"]
+      expect: {error: "non local key"}
+    - command: [FCALL, pingf, "0"]
+      expect_difference: true
+      expect: {equals: PONG}
+    - command: [FCALL, pingf, "0"]
+      expect_difference: true
+      expect: {equals: PONG}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [evalseq.completed, fcallseq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evalseq}
+- {evidence_id: valkey.command.sequence, source: fcallseq}
