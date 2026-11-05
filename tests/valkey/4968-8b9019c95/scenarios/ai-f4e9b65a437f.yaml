@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a4e5b695adaa..8b9019c955e6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f4e9b65a437f
+seed: 4970
+experiment:
+  id: proposed.defrag-keyspace-replaced
+  inputs:
+    resp: 2
+    replace:
+    - SWAPDB
+    - '0'
+    - '1'
+deployment:
+  mode: standalone
+  base_port: 7200

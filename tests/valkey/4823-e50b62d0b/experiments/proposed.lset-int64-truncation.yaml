@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.lset-int64-truncation
+deployment:
+  modes: [standalone]
+metadata:
+  description: LSET with out-of-range 64-bit indexes must error and leave the list
+    unchanged, on listpack and quicklist encodings
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    listpack_size: {type: integer, minimum: 1, maximum: 128, default: 4}
+components:
+- use: valkey.action.commands
+  id: lset
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {list-max-listpack-size: {$ref: inputs.listpack_size}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [RPUSH, lp, a, b, c], expect: {equals: 3}}
+    - {command: [RPUSH, ql, a, b, c, d, e, f], expect: {equals: 6}}
+    - {command: [LSET, lp, 0, a], expect: {equals: OK}}
+    - {command: [LSET, ql, -1, f], expect: {equals: OK}}
+    - {command: [LSET, lp, 4294967296, X1], expect_difference: true, expect: {error: "out\
+          \ of range"}}
+    - {command: [LSET, lp, 4294967295, X2], expect_difference: true, expect: {error: "out\
+          \ of range"}}
+    - {command: [LSET, lp, -4294967296, X3], expect_difference: true, expect: {error: "out\
+          \ of range"}}
+    - {command: [LSET, lp, -4294967297, X4], expect_difference: true, expect: {error: "out\
+          \ of range"}}
+    - {command: [LSET, lp, 9223372036854775807, X5], expect_difference: true, expect: {
+        error: "out of range"}}
+    - {command: [LSET, lp, -9223372036854775808, X6], expect_difference: true, expect: {
+        error: "out of range"}}
+    - {command: [LRANGE, lp, 0, -1], expect_difference: true, expect: {equals: [a,
+          b, c]}}
+    - {command: [LSET, ql, 4294967296, Y1], expect_difference: true, expect: {error: "out\
+          \ of range"}}
+    - {command: [LSET, ql, -4294967297, Y2], expect_difference: true, expect: {error: "out\
+          \ of range"}}
+    - {command: [LSET, ql, 8589934593, Y3], expect_difference: true, expect: {error: "out\
+          \ of range"}}
+    - {command: [LRANGE, ql, 0, -1], expect_difference: true, expect: {equals: [a,
+          b, c, d, e, f]}}
+    - {command: [LSET, lp, 10, z], expect: {error: "out of range"}}
+    - {command: [LSET, lp, 2147483648, z], expect: {error: "out of range"}}
+    - {command: [LSET, lp, -2147483649, z], expect: {error: "out of range"}}
+    - {command: [LSET, ql, 1, B], expect: {equals: OK}}
+    - {command: [LRANGE, ql, 0, 1], expect_difference: true, expect: {equals: [a,
+          B]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [lset.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lset}

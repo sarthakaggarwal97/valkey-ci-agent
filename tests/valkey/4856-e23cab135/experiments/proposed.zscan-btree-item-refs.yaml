@@ -1,0 +1,91 @@
+extends: [valkey.liveness]
+id: proposed.zscan-btree-item-refs
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    ZSCAN over btree-encoded sorted sets replies the same members and scores across
+    the item-reference optimization: full scans, MATCH filters, NOSCORES, binary and
+    empty members, inf and high-precision scores, huge and invalid cursors, and scans
+    after ZREM/ZINCRBY churn on a 5000-member zset; HSCAN and SSCAN sanity for the
+    shared callback the change edited.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      zset-max-listpack-entries: 0
+      hash-max-listpack-entries: 0
+      set-max-listpack-entries: 0
+      set-max-intset-entries: 0
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ZADD, z, '1', alpha, '2', beta, '3', gamma, inf, plus-inf, -inf,
+        minus-inf, '0.5', half, '1.0000000000000002', prec, '7', ''], expect: {equals: 8}}
+    - {command: [ZADD, z, '42', !!binary 'YmluAHRhaWw='], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, z], expect: {equals: btree}}
+    - {command: [ZSCAN, z, 0, COUNT, 1000], compare: skip, expect: {error: false}}
+    - {command: [ZSCAN, z, 0, COUNT, 1000, NOSCORES], compare: skip, expect: {error: false}}
+    - {command: [ZSCAN, z, 0, MATCH, alpha, COUNT, 1000], expect: {equals: ["0", [
+            alpha, "1"]]}}
+    - {command: [ZSCAN, z, 0, MATCH, alpha, COUNT, 1000, NOSCORES], expect: {equals: [
+          "0", [alpha]]}}
+    - {command: [ZSCAN, z, 0, MATCH, plus-inf, COUNT, 1000], expect: {equals: ["0",
+          [plus-inf, inf]]}}
+    - {command: [ZSCAN, z, 0, MATCH, minus-inf, COUNT, 1000], expect: {equals: ["0",
+          [minus-inf, "-inf"]]}}
+    - {command: [ZSCAN, z, 0, MATCH, half, COUNT, 1000], expect: {equals: ["0", [
+            half, "0.5"]]}}
+    - {command: [ZSCAN, z, 0, MATCH, prec, COUNT, 1000], expect: {error: false}}
+    - {command: [ZSCAN, z, 0, MATCH, !!binary 'YmluACo=', COUNT, 1000], expect: {
+        error: false}}
+    - {command: [ZSCAN, z, 0, MATCH, '', COUNT, 1000], expect: {equals: ["0", ["",
+            "7"]]}}
+    - {command: [ZSCAN, z, 0, MATCH, 'nomatch*', COUNT, 1000], expect: {equals: [
+          "0", []]}}
+    - {command: [ZSCAN, nosuchkey, 0], expect: {equals: ["0", []]}}
+    - {command: [SET, str, v], expect: {equals: OK}}
+    - {command: [ZSCAN, str, 0], expect: {error: WRONGTYPE}}
+    - {command: [ZSCAN, z, 0, COUNT, 0], expect: {error: true}}
+    - {command: [ZSCAN, z, abc], expect: {error: true}}
+    - {command: [ZSCAN, z, 18446744073709551615, COUNT, 100], compare: skip, expect: {
+        error: false}}
+    - {command: [EVAL, "for i=1,5000 do redis.call('ZADD', KEYS[1], i, 'm' .. i) end\
+          \ return redis.call('ZCARD', KEYS[1])", 1, big], expect: {equals: 5000}}
+    - {command: [OBJECT, ENCODING, big], expect: {equals: btree}}
+    - {command: [ZSCAN, big, 0, COUNT, 100000], compare: skip, expect: {error: false}}
+    - {command: [ZSCAN, big, 0, COUNT, 100000, NOSCORES], compare: skip, expect: {
+        error: false}}
+    - {command: [ZSCAN, big, 0, COUNT, 1], compare: skip, expect: {error: false}}
+    - {command: [ZSCAN, big, 0, COUNT, 10], compare: skip, expect: {error: false}}
+    - {command: [ZSCAN, big, 0, MATCH, m4999, COUNT, 100000], expect: {equals: ["0",
+          [m4999, "4999"]]}}
+    - {command: [ZSCAN, big, 0, MATCH, 'm49*', COUNT, 100000], compare: skip, expect: {
+        error: false}}
+    - {command: [ZINCRBY, big, 1000000, m100], expect: {equals: "1000100"}}
+    - {command: [ZSCAN, big, 0, MATCH, m100, COUNT, 100000], expect: {equals: ["0",
+          [m100, "1000100"]]}}
+    - {command: [ZREM, big, m4999], expect: {equals: 1}}
+    - {command: [ZSCAN, big, 0, MATCH, m4999, COUNT, 100000], expect: {equals: ["0",
+          []]}}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HSCAN, h, 0, MATCH, f1, COUNT, 100], expect: {equals: ["0", [f1,
+            v1]]}}
+    - {command: [HSCAN, h, 0, MATCH, f1, COUNT, 100, NOVALUES], expect: {equals: [
+          "0", [f1]]}}
+    - {command: [SADD, s, a, b, c], expect: {equals: 3}}
+    - {command: [SSCAN, s, 0, MATCH, a, COUNT, 100], expect: {equals: ["0", [a]]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [zscan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zscan}

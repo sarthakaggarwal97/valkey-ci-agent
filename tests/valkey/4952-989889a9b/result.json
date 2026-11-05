@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "989889a9b2e68ea974fb47046e120c858dfa429c",
+  "parent": "5c6a0cdcf3209e7a14c376fe01ac278675c43423",
+  "pr": 4952,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Send SELECT at the end of the slot migration snapshot (#4952)",
+  "date": "2026-10-24",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.5664,
+  "findings": [],
+  "recorded": []
+}

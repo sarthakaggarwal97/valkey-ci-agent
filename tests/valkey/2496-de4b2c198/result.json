@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "de4b2c198a73b3bdeda3e1b1ac18cc09aaaee49c",
+  "parent": "2c11a10f4915adfb26a7260ab28c7ea56edacc55",
+  "pr": 2496,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add static specifier to the internal functions of HLL (#2496)",
+  "date": "2026-10-26",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2489,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds the `static` specifier to internal functions in src/hyperloglog.c (MurmurHash64A, hllPatLen, hllDenseSet, hllCount, the merge/compress helpers, createHLLObject, isHLLObjectOrReply). It is a pure linkage/visibility refactor with no change to any function body, command reply, encoding, or data path; any remaining external reference to these symbols would break the build at link time, not at runtime. There is no behaviour change for a scenario to reach."
+}

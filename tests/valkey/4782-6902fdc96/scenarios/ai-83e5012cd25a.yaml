@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8b9019c955e6..6902fdc9655a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-83e5012cd25a
+seed: 103
+experiment:
+  id: proposed.quicklist-compressed-iteration
+  inputs:
+    resp: 2
+    fill: 2
+    depth: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

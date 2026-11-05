@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6b8dfd83c6917399b619f5ff5362414ed25ca45a",
+  "parent": "7c7436bfc909bd5cf2b3f52c8b4fb3e028265171",
+  "pr": 2242,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "spelling: cannot (#2242)",
+  "date": "2026-10-21",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.372,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a spelling fix ('can not' -> 'cannot') confined to code comments, serverLog message strings that are only written to the server log (bio.c, debug.c, io_threads.c, rdma.c), test module comments, and Tcl test names/comments. No client-visible reply, error message, config option, protocol output, or code path changes, so no behaviour exists to test and a compared command sequence could show no difference."
+}

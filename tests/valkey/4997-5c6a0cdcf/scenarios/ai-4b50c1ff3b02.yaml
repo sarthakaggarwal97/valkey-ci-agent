@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6902fdc9655a..5c6a0cdcf320.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4b50c1ff3b02
+seed: 499702
+experiment:
+  id: proposed.zinter-zero-weight-inf
+  inputs:
+    resp: 3
+    zset_max_listpack_entries: 0
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

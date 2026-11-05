@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.forkless-expire-del-propagation
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Keys expire lazily (inside a read command) and via the active expire cycle while
+    a forkless save holds them expedited in early_iterate_entries; the out-of-command
+    DEL/UNLINK replication decision in bgIteration_handleCommandReplication (hasPassedItem
+    || last_key_delete_was_early) must run without a crash and the save must complete.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    lazyfree: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: expire-during-save
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      forkless-infrastructure-enabled: "yes"
+      bgsave-default-method: forkless
+      save: ""
+      appendonly: "no"
+      lazyfree-lazy-expire: {$ref: inputs.lazyfree}
+    resp: {$ref: inputs.resp}
+    timeout_s: 150
+    commands:
+    - {command: [DEBUG, POPULATE, 100000], expect: {equals: OK}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, 10000], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: started}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 10, expect: {contains: "rdb_bgsave_in_progress:1"}}
+    - {command: [PEXPIRE, "key:500", 400], expect: {equals: 1}}
+    - {command: [PEXPIRE, "key:600", 400], expect: {equals: 1}}
+    - {command: [SET, volatile1, v1, PX, 400], expect: {equals: OK}}
+    - {command: [SET, volatile2, v2, PX, 400], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.5], expect: {equals: OK}}
+    - {command: [EXISTS, "key:500"], expect: {equals: 0}}
+    - {command: [EXISTS, volatile1], expect: {equals: 0}}
+    - {command: [DBSIZE], wait_s: 20, expect: {equals: 99998}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, 0], expect: {equals: OK}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 90, expect: {contains: "rdb_bgsave_in_progress:0"}}
+    - {command: [INFO, persistence], compare: skip, expect: {contains: "rdb_last_bgsave_status:ok"}}
+    - {command: [GET, "key:1"], expect: {equals: "value:1"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [expire-during-save.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: expire-during-save}

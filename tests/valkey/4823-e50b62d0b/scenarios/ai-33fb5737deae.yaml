@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e23cab13559a..e50b62d0bb33.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-33fb5737deae
+seed: 2
+experiment:
+  id: proposed.lset-int64-truncation
+  inputs:
+    resp: 3
+    listpack_size: 4
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

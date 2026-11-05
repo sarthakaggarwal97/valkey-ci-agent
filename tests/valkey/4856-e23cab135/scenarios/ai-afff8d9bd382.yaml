@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7c950b1ed7d1..e23cab13559a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-afff8d9bd382
+seed: 48561
+experiment:
+  id: proposed.zscan-btree-item-refs
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,126 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "aaeee8d5b17d490a9490a83407591d746d4d4051",
+  "parent": "668d875ca40dce5c6aff52a33112e0ef26a253fd",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "bgiteration: remove from early-iterate on key-delete",
+  "date": "2026-10-26",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 7.1059,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: bgiteration.c:2689 'wasAdded' is not true",
+      "scenario": "ai-16f4f66a6ac7",
+      "seed": 4604,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by aaeee8d5b17d",
+      "fingerprint": "39773d5994ed5d4b9f00",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: assertion failed: 15143:M 05 Nov 2026 12:34:48.078 # ==> bgiteration.c:2689 'wasAdded' is not true",
+      "scenario": "ai-53a86e6014d3",
+      "seed": 46041,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by aaeee8d5b17d",
+      "fingerprint": "6e51efbe36e6bd2926a9",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: blocked.c:109 '!(isReplicatedClient(c) && btype != BLOCKED_MODULE && btype != BLOCKED_POSTPONE)' is not true",
+      "scenario": "ai-1520d71b2f7b",
+      "seed": 46043,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "dc96a69550eef06e216f",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: bgiteration.c:2689 'wasAdded' is not true",
+      "scenario": "ai-1520d71b2f7b",
+      "seed": 46043,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by aaeee8d5b17d",
+      "fingerprint": "39773d5994ed5d4b9f00",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"1cdcd4b4e0785800abd9833945fb2e81e0e7c280\"},\"offset\":\"395\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"395\"}, link up",
+      "scenario": "ai-9fe28e9e7d8b",
+      "seed": 4604,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates aaeee8d5b17d",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/62"
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"1cdcd4b4e0785800abd9833945fb2e81e0e7c280\"},\"offset\":\"407\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"407\"}, link up",
+      "scenario": "ai-ef298621b1f2",
+      "seed": 4605,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates aaeee8d5b17d",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/62"
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"34ad17136262f24f0440420044e736f0fc011840\"},\"offset\":\"225\"}, replica {\"digest\":{\"reply\":\"b8c8e1d7105c5ff90af9943c2954cd9057430bca\"},\"offset\":\"225\"}, link up",
+      "scenario": "ai-0f5ae55827f4",
+      "seed": 4606,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates aaeee8d5b17d",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/62"
+    }
+  ],
+  "recorded": []
+}

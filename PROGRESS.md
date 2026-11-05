@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-05T14:07+00:00.
+Updated 2026-11-05T14:28+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 114 | 2377 | #5030 (2026-10-26) | 114 | 16.3 |
+| valkey-io/valkey | 135 | 2356 | #2250 (2026-10-21) | 135 | 19.3 |
 | valkey-io/valkey-bloom | 107 | 2 | ce516d0ef6e3 (2024-04-26) | 107 | 15.3 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 62 | 8.9 |
 | valkey-io/valkey-search | 77 | 591 | #1362 (2026-09-12) | 77 | 11.0 |
@@ -13,28 +13,28 @@ Updated 2026-11-05T14:07+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-05T12:16:47+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42003770568): 20 merge(s) tested, 10 without a code change.
+[2026-11-05T14:28:48+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42025798250): 20 merge(s) tested, 3 without a code change.
 
-- [valkey-io/valkey#5186](https://github.com/valkey-io/valkey/pull/5186) ([tests](tests/valkey/5186-a4ffea938/)): Skip RESP3 attributes when reading replies in valkey-cli (#5186): 1 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#5175](https://github.com/valkey-io/valkey/pull/5175) ([tests](tests/valkey/5175-663fff858/)): Stop valkey-benchmark function script generation when the buffer is full (#5175): 3 of 3 test(s) reached the change, coverage 100%; crash, fixed by #5175 (recorded)
-- [valkey-io/valkey#5181](https://github.com/valkey-io/valkey/pull/5181) ([tests](tests/valkey/5181-9c4c8739d/)): Apply the library load timeout to FUNCTION RESTORE (#5181): 0 of 10 test(s) reached the change, coverage 37%
 - [valkey-io/valkey#5173](https://github.com/valkey-io/valkey/pull/5173): to retry, the job left no result
-- [valkey-io/valkey#5187](https://github.com/valkey-io/valkey/pull/5187) ([tests](tests/valkey/5187-eef69cb6d/)): Defer freeing the client that runs a replication role change (#5187): 0 of 4 test(s) reached the change, coverage 81%; crash, fixed by #5187 (recorded); crash, fixed by #5187 (recorded); [check, introduced by #5187](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/59)
-- [valkey-io/valkey#5098](https://github.com/valkey-io/valkey/pull/5098) ([tests](tests/valkey/5098-45cd91459/)): Skip QoS event draining when AE_FILE_EVENTS is not set (#5098): declined: The change guards aeProcessQoSEvents in aeProcessEvents behind the AE_FILE_EVENTS flag, but every production caller already passes that flag: aeMain uses AE_ALL_EVENTS and processEventsWhileBlocked uses AE_FILE_EVENTS|AE_DONT_WAIT, and these are the only two call sites outside unit tests. 
-- [valkey-io/valkey#5141](https://github.com/valkey-io/valkey/pull/5141) ([tests](tests/valkey/5141-6e3eddf49/)): Don't block CLUSTER SETSLOT on replica acks when the client cannot block (#5141): 2 of 4 test(s) reached the change, coverage 100%; crash, fixed by #5141 (recorded)
-- [valkey-io/valkey#5148](https://github.com/valkey-io/valkey/pull/5148) ([tests](tests/valkey/5148-3350565b3/)): Allow user to pass testing option via make file & use that to dump logs in coverage job (#5148): declined: The change is purely build/CI plumbing: it adds a TEST_OPTIONS variable to the Makefile's test, test-modules, test-sentinel, test-cluster and lcov targets so extra flags can be passed to the runtest scripts, and uses it in the codecov workflow to pass --dump-logs. No Valkey server, command
-- [valkey-io/valkey#5109](https://github.com/valkey-io/valkey/pull/5109) ([tests](tests/valkey/5109-13d7ed2aa/)): Free Lua function name and description with ValkeyModule_FreeString (#5109): 1 of 1 test(s) reached the change
-- [valkey-io/valkey#5111](https://github.com/valkey-io/valkey/pull/5111) ([tests](tests/valkey/5111-88089c54e/)): Fix clang-format in the VM_CallArgv doc comment (#5111): declined: The change edits a single line of a documentation comment above VM_CallArgv in src/module.c, correcting indentation for clang-format. No executable code, API behaviour, reply, or build configuration is altered, so there is nothing a scenario could exercise.
-- [valkey-io/valkey#3911](https://github.com/valkey-io/valkey/pull/3911) ([tests](tests/valkey/3911-20f640930/)): Make VM_CallArgv() API public (#3911): 4 of 6 test(s) reached the change, coverage 74%; [check, introduced by #3911](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/60)
-- [valkey-io/valkey#5091](https://github.com/valkey-io/valkey/pull/5091) ([tests](tests/valkey/5091-5a70cde9e/)): Fix VM_Call crash on script-mode validation errors (#5091): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#5092](https://github.com/valkey-io/valkey/pull/5092) ([tests](tests/valkey/5092-3aa4cbce4/)): Count expired but unreaped hash fields in objectComputeSize (#5092): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#5046](https://github.com/valkey-io/valkey/pull/5046) ([tests](tests/valkey/5046-f2ca837ed/)): Fix memory leak in GetCommandKeysWithFlags (#5046): declined: The fix adds getKeysFreeResult() to VM_GetCommandKeysWithFlags, a module-only API that leaks the heap-allocated getKeysResult.keys array only when a command produces more than 256 keys (MAX_KEYS_BUFFER). It is reachable exclusively through RM_GetCommandKeys/WithFlags, which among all test 
-- [valkey-io/valkey#4877](https://github.com/valkey-io/valkey/pull/4877) ([tests](tests/valkey/4877-3192cf694/)): Block DEBUG RELOAD and DEBUG LOADAOF in loading and async-loading (#4877): 2 of 8 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4995](https://github.com/valkey-io/valkey/pull/4995) ([tests](tests/valkey/4995-faec379ec/)): Fix GEOSEARCH repeated BYPOLYGON memory leak (#4995): declined: Pure memory-leak fix: repeated GEOSEARCH/GEOSEARCHSTORE BYPOLYGON now frees the earlier polygon-vertex allocation before re-allocating. Both builds already accept repeated BYPOLYGON and use the last polygon, so all replies, errors, and stored data are identical before and after the fix; th
-- [valkey-io/valkey#4863](https://github.com/valkey-io/valkey/pull/4863) ([tests](tests/valkey/4863-255018c00/)): Fix module blocking of RESP3 Pub/Sub clients (#4863): 0 of 1 test(s) reached the change, coverage 100%; [check, introduced by #4863](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/58)
-- [valkey-io/valkey#4655](https://github.com/valkey-io/valkey/pull/4655) ([tests](tests/valkey/4655-ee247dbd4/)): [Bug Fix] Fix fast-fail double-counting a NACK voter that later fails (#4655): 0 of 5 test(s) reached the change, coverage 95%, 1 skipped (required capability 'host' is unsupported)
-- [valkey-io/valkey#4954](https://github.com/valkey-io/valkey/pull/4954) ([tests](tests/valkey/4954-25d3b7d9e/)): Match listpack for lex range commands on mixed-score btree zsets (#4954): 3 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4886](https://github.com/valkey-io/valkey/pull/4886) ([tests](tests/valkey/4886-938007fd9/)): Only warn about a command line password when -a or -u set it (#4886): 1 of 1 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#5030](https://github.com/valkey-io/valkey/pull/5030): to retry, the job left no result
+- [valkey-io/valkey#4823](https://github.com/valkey-io/valkey/pull/4823) ([tests](tests/valkey/4823-e50b62d0b/)): [correctness] Fix LSET modifying elements for out-of-range 64-bit indexes (#4823): 3 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#4856](https://github.com/valkey-io/valkey/pull/4856) ([tests](tests/valkey/4856-e23cab135/)): Optimize B+tree ZSCAN with item references and prefetch (#4856): 0 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2496](https://github.com/valkey-io/valkey/pull/2496) ([tests](tests/valkey/2496-de4b2c198/)): Add static specifier to the internal functions of HLL (#2496): declined: The change only adds the `static` specifier to internal functions in src/hyperloglog.c (MurmurHash64A, hllPatLen, hllDenseSet, hllCount, the merge/compress helpers, createHLLObject, isHLLObjectOrReply). It is a pure linkage/visibility refactor with no change to any function body, command r
+- [valkey-io/valkey#4976](https://github.com/valkey-io/valkey/pull/4976) ([tests](tests/valkey/4976-2c11a10f4/)): Fix false sharing in IO thread active-time and job-finished counters (#4976): declined: The change only adds cache-line padding (_Alignas wrappers) around the io_jobs_finished counter and the per-IO-thread used_active_time_io_thread slots to eliminate false sharing. Every read and write keeps the same atomic operation, value, and memory order; the only change is the counters'
+- [valkey-io/valkey@aaeee8d5b17d](https://github.com/valkey-io/valkey/commit/aaeee8d5b17d490a9490a83407591d746d4d4051) ([tests](tests/valkey/aaeee8d5b/)): bgiteration: remove from early-iterate on key-delete: 0 of 6 test(s) reached the change, coverage 100%; crash, fixed by aaeee8d5b17d (recorded); crash, fixed by aaeee8d5b17d (recorded); crash, introduced and since fixed (recorded); [check, predates aaeee8d5b17d](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/62)
+- [valkey-io/valkey#4927](https://github.com/valkey-io/valkey/pull/4927) ([tests](tests/valkey/4927-668d875ca/)): Link macOS modules with the compiler driver (#4927): declined: The change is purely a build-system fix: three Makefiles (src/modules, src/modules/lua, tests/modules) switch the macOS-only link step for modules from raw ld with a hardcoded SDK libSystem path to linking via the compiler driver ($(CC) $(CFLAGS)). It is guarded by uname_S == Darwin, so Li
+- [valkey-io/valkey#4952](https://github.com/valkey-io/valkey/pull/4952) ([tests](tests/valkey/4952-989889a9b/)): Send SELECT at the end of the slot migration snapshot (#4952): 3 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#4997](https://github.com/valkey-io/valkey/pull/4997) ([tests](tests/valkey/4997-5c6a0cdcf/)): Fix ZINTER/ZINTERSTORE score when a weighted term is 0*inf (#4997): 3 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#4782](https://github.com/valkey-io/valkey/pull/4782) ([tests](tests/valkey/4782-6902fdc96/)): Make quicklist read-only iteration non-mutating on compressed nodes (#4782): 0 of 6 test(s) reached the change, coverage 100%; crash, predates #4782, since fixed (recorded)
+- [valkey-io/valkey#4968](https://github.com/valkey-io/valkey/pull/4968) ([tests](tests/valkey/4968-8b9019c95/)): Fix crash when a database's keyspace is replaced mid-stage during defrag (#4968): 0 of 3 test(s) reached the change, coverage 100%; crash, fixed by #4968 (recorded)
+- [valkey-io/valkey#4911](https://github.com/valkey-io/valkey/pull/4911) ([tests](tests/valkey/4911-a4e5b695a/)): chore: update stale skiplist comments to the ordered index(#4911): declined: The diff only updates stale code comments (renaming 'skiplist' references to 'ordered index' in fbtree.c, module.c, rdb.c and t_zset.c). No executable code, data layout, config, reply, or RDB format changes; the compiled binary is behaviourally identical to the parent, so no scenario can d
+- [valkey-io/valkey#4489](https://github.com/valkey-io/valkey/pull/4489) ([tests](tests/valkey/4489-e283addef/)): Hold no descriptor on nodes.conf when rename() publishes it (#4489): 0 of 8 test(s) reached the change, coverage 64%
+- [valkey-io/valkey#2241](https://github.com/valkey-io/valkey/pull/2241) ([tests](tests/valkey/2241-5f38f9e89/)): Spelling 4 (#2241): declined: The change (Spelling 4, #2241) only fixes typos in comments across allocator_defrag.c, hyperloglog.c, lolwut5.c, rdb.c and sparkline.c, and renames a local variable binind to bin_index in allocatorShouldDefrag with identical expressions and control flow. No command behaviour, reply, persis
+- [valkey-io/valkey#2252](https://github.com/valkey-io/valkey/pull/2252) ([tests](tests/valkey/2252-9a029ba83/)): Fix typos in comments and rename TimedOut/Sparkline functions and tests (#2252): declined: The change only renames internal C functions (migrateCloseTimedoutSockets, latencyCommandGenSparkeline, scriptIsTimedout, sentinelKillTimedoutScripts) with all call sites updated, fixes typos in comments and TCL test names, and changes a reply string solely in the hello* example modules, w
+- [valkey-io/valkey#2242](https://github.com/valkey-io/valkey/pull/2242) ([tests](tests/valkey/2242-6b8dfd83c/)): spelling: cannot (#2242): declined: The change is a spelling fix ('can not' -> 'cannot') confined to code comments, serverLog message strings that are only written to the server log (bio.c, debug.c, io_threads.c, rdma.c), test module comments, and Tcl test names/comments. No client-visible reply, error message, config option
+- [valkey-io/valkey#4417](https://github.com/valkey-io/valkey/pull/4417) ([tests](tests/valkey/4417-32e3e81fa/)): Speed up HGETALL, HKEYS and HVALS with exact-length headers and fused bulk replies (#4417): 0 of 8 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#4107](https://github.com/valkey-io/valkey/pull/4107) ([tests](tests/valkey/4107-8b73b9734/)): Fix false sharing in per-thread memory usage counters (#4107): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3728](https://github.com/valkey-io/valkey/pull/3728) ([tests](tests/valkey/3728-bc7ceb79a/)): Fix grammatical typo "This functions" in code comments (#3728): declined: The change is purely cosmetic: it fixes the grammatical typo "This functions" in code comments across db.c, hashtable.c, kvstore.c, object.c and rand.c. No executable code, command behaviour, reply, replication, persistence or configuration path is modified, so no scenario can distinguish 
 
 ### valkey-io/valkey-bloom
 
@@ -82,11 +82,11 @@ Updated 2026-11-05T14:07+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 159 of 197 tested (81%)
-- Changed-line coverage: median 100% of 60 merge(s) measured, 4 under 50%
-- Recall: 38 parents flagged of 48 fix merges
-- Claude: $1167.74 in the last 24 hours, $1167.74 in the last 7 days, $1167.74 in all
-- Issues filed: 19
+- Merges whose tests reached the change: 162 of 207 tested (78%)
+- Changed-line coverage: median 100% of 70 merge(s) measured, 4 under 50%
+- Recall: 41 parents flagged of 52 fix merges
+- Claude: $1228.04 in the last 24 hours, $1228.04 in the last 7 days, $1228.04 in all
+- Issues filed: 20
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -106,6 +106,7 @@ Updated 2026-11-05T14:07+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/59
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/60
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/61
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/62
 
 ## Retries
 
@@ -113,3 +114,4 @@ Updated 2026-11-05T14:07+00:00.
 - [valkey-io/valkey-bloom@5237a1008041](https://github.com/valkey-io/valkey-bloom/commit/5237a10080413fc9f1082e7083f167c4aaadcb1f): attempt 1 of 3, `if [ ! -f Cargo.lock ]; then` failed in parent (exit 101): error: could not find `Cargo.toml` in `/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent` or any parent directory
 - [valkey-io/valkey-search#1083](https://github.com/valkey-io/valkey-search/pull/1083): attempt 0 of 3, the job left no result
 - [valkey-io/valkey#5173](https://github.com/valkey-io/valkey/pull/5173): attempt 0 of 3, the job left no result
+- [valkey-io/valkey#5030](https://github.com/valkey-io/valkey/pull/5030): attempt 0 of 3, the job left no result

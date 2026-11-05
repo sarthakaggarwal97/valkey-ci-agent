@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8b73b9734965..32e3e81faff7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0c757e187f1f
+seed: 8418
+experiment:
+  id: proposed.hgetall-exact-header-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.defrag-keyspace-replaced
+deployment:
+  modes: [standalone]
+metadata:
+  description: Replace a database's keyspace (FLUSHDB ASYNC / SWAPDB) while a large
+    deferred collection is being defragged; the next DbKeys stage must not reuse the
+    stale defrag_later key or cursor.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    replace:
+      type: array
+      default: [FLUSHDB, ASYNC]
+      description: keyspace-replacement command run on db 0 while defrag is mid-stage
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, hz, "500"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, hash-max-listpack-entries, "8"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, active-defrag-max-scan-fields, "8"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, active-defrag-ignore-bytes, "1"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, active-defrag-threshold-lower, "0"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, active-defrag-cycle-min, "1"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, active-defrag-cycle-max, "25"], expect: {equals: OK}}
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [EVAL, "for i=1,20 do redis.call('HSET', KEYS[1], tostring(i), tostring(i))\
+          \ end return 1", "1", bighash], expect: {equals: 1}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [EVAL, "for i=1,40000 do redis.call('HSET', KEYS[1], tostring(i),\
+          \ tostring(i)) end return 1", "1", bighash], expect: {equals: 1}}
+    - {command: [EVAL, "for i=1,40000 do redis.call('HSET', KEYS[1], tostring(i),\
+          \ tostring(i)) end return 1", "1", bighash2], expect: {equals: 1}}
+    - {command: [CONFIG, SET, activedefrag, yes], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: {$ref: inputs.replace}, expect: {equals: OK}}
+    - {command: [PING], wait_s: 10, expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

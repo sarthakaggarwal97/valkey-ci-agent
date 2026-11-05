@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a4e5b695adaa..8b9019c955e6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9b5d50db9ff5
+seed: 4968
+experiment:
+  id: proposed.defrag-keyspace-replaced
+  inputs:
+    resp: 2
+    replace:
+    - FLUSHDB
+    - ASYNC
+deployment:
+  mode: standalone
+  base_port: 7000

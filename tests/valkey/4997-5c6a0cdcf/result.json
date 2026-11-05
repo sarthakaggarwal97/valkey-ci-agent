@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5c6a0cdcf3209e7a14c376fe01ac278675c43423",
+  "parent": "6902fdc9655abe0f519bcf700c8e469dc6cc38d8",
+  "pr": 4997,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix ZINTER/ZINTERSTORE score when a weighted term is 0*inf (#4997)",
+  "date": "2026-10-23",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.5946,
+  "findings": [],
+  "recorded": []
+}

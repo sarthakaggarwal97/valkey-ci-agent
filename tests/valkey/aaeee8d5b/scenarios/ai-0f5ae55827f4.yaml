@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 668d875ca40d..aaeee8d5b17d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0f5ae55827f4
+seed: 4606
+experiment:
+  id: proposed.forkless-evict-del-propagation
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

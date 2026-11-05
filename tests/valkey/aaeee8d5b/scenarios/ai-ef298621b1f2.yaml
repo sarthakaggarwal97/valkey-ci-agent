@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 668d875ca40d..aaeee8d5b17d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ef298621b1f2
+seed: 4605
+experiment:
+  id: proposed.forkless-expire-del-propagation
+  inputs:
+    resp: 3
+    lazyfree: 'yes'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

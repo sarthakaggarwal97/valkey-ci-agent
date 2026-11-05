@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.forkless-evict-del-propagation
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Clamping maxmemory below usage during a forkless save forces eviction DELs, which
+    are propagated outside any write-command context and must take the hasPassedItem
+    || last_key_delete_was_early branch in bgIteration_handleCommandReplication without
+    crashing; the save must still complete cleanly after maxmemory is restored.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: evict-during-save
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      forkless-infrastructure-enabled: "yes"
+      bgsave-default-method: forkless
+      save: ""
+      appendonly: "no"
+      maxmemory-policy: allkeys-lru
+    resp: {$ref: inputs.resp}
+    timeout_s: 150
+    commands:
+    - {command: [DEBUG, POPULATE, 100000], expect: {equals: OK}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, 10000], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: started}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 10, expect: {contains: "rdb_bgsave_in_progress:1"}}
+    - {command: [SET, "key:100", x], expect: {equals: OK}}
+    - {command: [SET, "key:200", x], expect: {equals: OK}}
+    - {command: [SET, "key:300", x], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, 8mb], expect: {equals: OK}}
+    - {command: [SET, trigger, v], compare: skip, expect: {exists: true}}
+    - {command: [DBSIZE], compare: skip, wait_s: 30, expect: {max: 99000}}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, 0], expect: {equals: OK}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 90, expect: {contains: "rdb_bgsave_in_progress:0"}}
+    - {command: [INFO, persistence], compare: skip, expect: {contains: "rdb_last_bgsave_status:ok"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [evict-during-save.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evict-during-save}

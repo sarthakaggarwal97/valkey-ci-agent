@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.hgetall-exact-header-live
+deployment:
+  modes: [standalone]
+metadata:
+  description: Drive the HGETALL/HKEYS/HVALS exact-length header fast path on the
+    deployment's primary, including MULTI/EXEC, volatile-field transitions and a reply
+    crossing the 16 KB static buffer; the new serverAssert or a malformed fused reply
+    surfaces as a crash or failed expect
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: live
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, hash-max-listpack-entries, "0"], expect: {equals: OK}}
+    - {command: [HSET, bh, b00, &id001 "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==",
+        b01, *id001, b02, *id001, b03, *id001, b04, *id001, b05, *id001, b06, *id001,
+        b07, *id001, b08, *id001, b09, *id001, b10, *id001, b11, *id001, b12, *id001,
+        b13, *id001, b14, *id001, b15, *id001, b16, *id001, b17, *id001, b18, *id001,
+        b19, *id001, b20, *id001, b21, *id001, b22, *id001, b23, *id001, b24, *id001,
+        b25, *id001, b26, *id001, b27, *id001, b28, *id001, b29, *id001, b30, *id001,
+        b31, *id001, b32, *id001, b33, *id001], expect: {equals: 34}}
+    - {command: [OBJECT, ENCODING, bh], expect: {equals: hashtable}}
+    - {command: [HSTRLEN, bh, b00], expect: {equals: 512}}
+    - {command: [HGETALL, bh], expect: {error: false}}
+    - {command: [HGETALL, bh], expect: {error: false}}
+    - {command: [HKEYS, bh], expect: {error: false}}
+    - {command: [HVALS, bh], expect: {error: false}}
+    - {command: [HGET, bh, b21], expect: {equals: *id001}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HGETALL, bh], expect: {equals: QUEUED}}
+    - {command: [HKEYS, bh], expect: {equals: QUEUED}}
+    - {command: [HVALS, bh], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {error: false}}
+    - {command: [HEXPIRE, bh, 1000, FIELDS, 1, b00], expect: {equals: [1]}}
+    - {command: [HGETALL, bh], expect: {error: false}}
+    - {command: [HKEYS, bh], expect: {error: false}}
+    - {command: [HPERSIST, bh, FIELDS, 1, b00], expect: {equals: [1]}}
+    - {command: [HGETALL, bh], expect: {error: false}}
+    - {command: [HLEN, bh], expect: {equals: 34}}
+    - {command: [CONFIG, SET, hash-max-listpack-entries, "128"], expect: {equals: OK}}
+    - {command: [HSET, lp, f1, "", f2, v2], expect: {equals: 2}}
+    - {command: [OBJECT, ENCODING, lp], expect: {equals: listpack}}
+    - {command: [HKEYS, lp], expect: {equals: [f1, f2]}}
+    - {command: [HVALS, lp], expect: {equals: ["", v2]}}
+    - {command: [HGETALL, lp], expect: {error: false}}
+required_events: [live.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: live}

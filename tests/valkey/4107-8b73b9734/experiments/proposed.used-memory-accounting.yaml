@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.used-memory-accounting
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Cross-thread allocate/free churn must keep zmalloc_used_memory() consistent: data
+    allocated on the main thread and on IO-thread connections, then freed synchronously
+    (UNLINK) and on the lazyfree bio thread (FLUSHALL ASYNC), must bring used_memory
+    back under maxmemory so writes are accepted again. A drift in the per-thread counter
+    array (wrong stride, aliasing, lost updates) leaves the server stuck in OOM rejection
+    or never rejecting at all.
+components:
+- use: valkey.action.commands
+  id: oom-accounting
+  config:
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, maxmemory-policy, noeviction], expect: {equals: OK}}
+    - {command: [SETRANGE, "big:0", 2097152, x], connection: c1, expect: {equals: 2097153}}
+    - {command: [SETRANGE, "big:1", 2097152, x], connection: c2, expect: {equals: 2097153}}
+    - {command: [SETRANGE, "big:2", 2097152, x], connection: c3, expect: {equals: 2097153}}
+    - {command: [SETRANGE, "big:3", 2097152, x], connection: c4, expect: {equals: 2097153}}
+    - {command: [SETRANGE, "big:4", 2097152, x], connection: c1, expect: {equals: 2097153}}
+    - {command: [SETRANGE, "big:5", 2097152, x], connection: c2, expect: {equals: 2097153}}
+    - {command: [SETRANGE, "big:6", 2097152, x], connection: c3, expect: {equals: 2097153}}
+    - {command: [SETRANGE, "big:7", 2097152, x], connection: c4, expect: {equals: 2097153}}
+    - {command: [DEBUG, POPULATE, "300000", "mem:", "256"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, "67108864"], expect: {equals: OK}}
+    - {command: [SET, probe, v], expect: {error: OOM}}
+    - {command: [UNLINK, "big:0", "big:1", "big:2", "big:3", "big:4", "big:5", "big:6",
+        "big:7"], expect: {equals: 8}}
+    - {command: [SET, probe, v], expect: {error: OOM}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [SET, probe, v], wait_s: 30, expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 1}}
+    - {command: [CONFIG, SET, maxmemory, "0"], expect: {equals: OK}}
+required_events: [oom-accounting.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: oom-accounting}

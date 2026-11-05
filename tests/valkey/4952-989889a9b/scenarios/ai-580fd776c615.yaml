@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5c6a0cdcf320..989889a9b2e6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-580fd776c615
+seed: 3
+experiment:
+  id: proposed.migrateslots-snapshot-select-stream-resync
+  inputs:
+    resp: 2
+    databases: 16
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

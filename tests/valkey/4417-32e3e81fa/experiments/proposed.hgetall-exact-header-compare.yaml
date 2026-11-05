@@ -1,0 +1,87 @@
+extends: [valkey.liveness]
+id: proposed.hgetall-exact-header-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: HGETALL/HKEYS/HVALS exact-length headers and fused bulk replies compared
+    with the parent build across hashtable and listpack encodings, bulk lengths at
+    the 10/32/512 header boundaries, and volatile (hash-field TTL) state transitions
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hgetall
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, hash-max-listpack-entries, "0"], expect: {equals: OK}}
+    - {command: [HSET, h1, f, "", len9, xxxxxxxxx, len10, xxxxxxxxxx, len31, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,
+        len32, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, "", empty-name], expect: {equals: 6}}
+    - {command: [HSET, h1, len511, &id003 "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ=",
+        len512, &id001 "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==",
+        len513, &id002 "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ==0"],
+      expect: {equals: 3}}
+    - {command: [HSTRLEN, h1, len9], expect: {equals: 9}}
+    - {command: [HSTRLEN, h1, len10], expect: {equals: 10}}
+    - {command: [HSTRLEN, h1, len31], expect: {equals: 31}}
+    - {command: [HSTRLEN, h1, len32], expect: {equals: 32}}
+    - {command: [HSTRLEN, h1, len511], expect: {equals: 511}}
+    - {command: [HSTRLEN, h1, len512], expect: {equals: 512}}
+    - {command: [HSTRLEN, h1, len513], expect: {equals: 513}}
+    - {command: [OBJECT, ENCODING, h1], compare: skip, expect: {equals: hashtable}}
+    - {command: [HGETALL, h1], compare: unordered-pairs, expect: {error: false}}
+    - {command: [HKEYS, h1], compare: unordered, expect: {error: false}}
+    - {command: [HVALS, h1], compare: unordered, expect: {error: false}}
+    - {command: [HLEN, h1], expect: {equals: 9}}
+    - {command: [HGET, h1, f], expect: {equals: ""}}
+    - {command: [HGET, h1, ""], expect: {equals: empty-name}}
+    - {command: [HGET, h1, len512], expect: {equals: *id001}}
+    - {command: [HGET, h1, len513], expect: {equals: *id002}}
+    - {command: [HMGET, h1, len511, len512, len513], expect: {equals: [*id003, *id001,
+          *id002]}}
+    - {command: [HSET, h2, a00, *id001, a01, *id001, a02, *id001, a03, *id001, a04,
+        *id001, a05, *id001, a06, *id001, a07, *id001, a08, *id001, a09, *id001, a10,
+        *id001, a11, *id001, a12, *id001, a13, *id001, a14, *id001, a15, *id001, a16,
+        *id001, a17, *id001, a18, *id001, a19, *id001, a20, *id001, a21, *id001, a22,
+        *id001, a23, *id001, a24, *id001, a25, *id001, a26, *id001, a27, *id001, a28,
+        *id001, a29, *id001, a30, *id001, a31, *id001, a32, *id001, a33, *id001, *id002,
+        bigfield], expect: {equals: 35}}
+    - {command: [HLEN, h2], expect: {equals: 35}}
+    - {command: [HGETALL, h2], compare: unordered-pairs, expect: {error: false}}
+    - {command: [HKEYS, h2], compare: unordered, expect: {error: false}}
+    - {command: [HVALS, h2], compare: unordered, expect: {error: false}}
+    - {command: [HGET, h2, a17], expect: {equals: *id001}}
+    - {command: [HGET, h2, *id002], expect: {equals: bigfield}}
+    - {command: [HSET, h3, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [HEXPIRE, h3, 1000, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HGETALL, h3], compare: unordered-pairs, expect: {error: false}}
+    - {command: [HKEYS, h3], compare: unordered, expect: {error: false}}
+    - {command: [HVALS, h3], compare: unordered, expect: {error: false}}
+    - {command: [HPERSIST, h3, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HGETALL, h3], compare: unordered-pairs, expect: {error: false}}
+    - {command: [HEXPIRE, h3, 0, FIELDS, 1, f2], expect: {equals: [2]}}
+    - {command: [HLEN, h3], expect: {equals: 2}}
+    - {command: [HGETALL, h3], compare: unordered-pairs, expect: {error: false}}
+    - {command: [CONFIG, SET, hash-max-listpack-entries, "128"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, hash-max-listpack-value, "600"], expect: {equals: OK}}
+    - {command: [HSET, lp, f, "", len9, xxxxxxxxx, len513, *id002], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, lp], compare: skip, expect: {equals: listpack}}
+    - {command: [HGETALL, lp], compare: unordered-pairs, expect: {error: false}}
+    - {command: [HKEYS, lp], expect: {equals: [f, len9, len513]}}
+    - {command: [HVALS, lp], expect: {equals: ["", xxxxxxxxx, *id002]}}
+    - {command: [HGETALL, nosuchhash], expect: {error: false}}
+    - {command: [HKEYS, nosuchhash], expect: {equals: []}}
+    - {command: [HSET, FIELDS, FIELDS, "1"], expect: {equals: 1}}
+    - {command: [HGETALL, FIELDS], compare: unordered-pairs, expect: {error: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [hgetall.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hgetall}

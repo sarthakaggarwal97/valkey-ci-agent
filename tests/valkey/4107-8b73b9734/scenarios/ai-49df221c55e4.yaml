@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9d21c19f69ce..8b73b9734965.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-49df221c55e4
+seed: 41071
+experiment:
+  id: proposed.used-memory-accounting
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
+  server_config:
+    io-threads: 8
+    io-threads-always-active: 'yes'

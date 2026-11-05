@@ -1,0 +1,63 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6902fdc9655abe0f519bcf700c8e469dc6cc38d8",
+  "parent": "8b9019c955e6fc76778b69691a5e100b28a070b3",
+  "pr": 4782,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make quicklist read-only iteration non-mutating on compressed nodes (#4782)",
+  "date": "2026-10-23",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 40,
+    "executed": 40,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.1574,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: bgiteration.c:2689 'wasAdded' is not true",
+      "scenario": "ai-ef8dc4eeeed9",
+      "seed": 104,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #4782, since fixed",
+      "fingerprint": "39773d5994ed5d4b9f00",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: bgiteration.c:2689 'wasAdded' is not true",
+      "scenario": "ai-54da722ceefa",
+      "seed": 106,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #4782, since fixed",
+      "fingerprint": "39773d5994ed5d4b9f00",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-0194a31d5d17",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'stop-automatic-saves' returned ERROR: CONFIG SET save : 0/1 replies matched, 1 unanswered"
+    }
+  ]
+}

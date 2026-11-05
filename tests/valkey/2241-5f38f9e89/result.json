@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5f38f9e89716933a0e5997582bc90989c82a8f81",
+  "parent": "9a029ba836353fd38ce337f83c4383f7fefaf367",
+  "pr": 2241,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Spelling 4 (#2241)",
+  "date": "2026-10-21",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2288,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change (Spelling 4, #2241) only fixes typos in comments across allocator_defrag.c, hyperloglog.c, lolwut5.c, rdb.c and sparkline.c, and renames a local variable binind to bin_index in allocatorShouldDefrag with identical expressions and control flow. No command behaviour, reply, persistence format, replication or config path is altered, so the two builds are behaviourally identical and no scenario can exercise a difference."
+}

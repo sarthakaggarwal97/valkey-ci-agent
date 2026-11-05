@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bc7ceb79a28c4a5188069115164b42c48074e9a9",
+  "parent": "c1ed73bfc03f0788cb7fb3b2e32993d183289691",
+  "pr": 3728,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix grammatical typo \"This functions\" in code comments (#3728)",
+  "date": "2026-10-21",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2079,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely cosmetic: it fixes the grammatical typo \"This functions\" in code comments across db.c, hashtable.c, kvstore.c, object.c and rand.c. No executable code, command behaviour, reply, replication, persistence or configuration path is modified, so no scenario can distinguish the builds and none is needed."
+}

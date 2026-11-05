@@ -1,0 +1,102 @@
+extends: [valkey.liveness]
+id: proposed.quicklist-compressed-iteration
+deployment:
+  modes: [standalone]
+metadata:
+  description: Reads and mutations through list iterators on LZF-compressed quicklist
+    nodes (listpack and plain) reply identically across the change and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    fill: {type: integer, minimum: 1, maximum: 128, default: 2}
+    depth: {type: integer, minimum: 1, maximum: 4, default: 1}
+components:
+- use: valkey.action.commands
+  id: qlist
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      list-max-listpack-size: {$ref: inputs.fill}
+      list-compress-depth: {$ref: inputs.depth}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [RPUSH, biglist, &id001 qlv-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-00,
+        &id002 qlv-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-01, &id003 qlv-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-02,
+        &id004 qlv-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-03, &id005 qlv-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-04,
+        &id006 qlv-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-05, &id007 qlv-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-06,
+        &id008 qlv-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-07, &id009 qlv-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-08,
+        &id010 qlv-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-09, &id011 qlv-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-10,
+        &id012 qlv-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-11, &id013 qlv-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-12,
+        &id014 qlv-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-13, &id015 qlv-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-14,
+        &id016 qlv-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-15], expect: {equals: 16}}
+    - {command: [LLEN, biglist], expect: {equals: 16}}
+    - {command: [LRANGE, biglist, 0, -1], expect: {equals: [*id001, *id002, *id003,
+          *id004, *id005, *id006, *id007, *id008, *id009, *id010, *id011, *id012,
+          *id013, *id014, *id015, *id016]}}
+    - {command: [LINDEX, biglist, 7], expect: {equals: *id008}}
+    - {command: [LPOS, biglist, *id010], expect: {equals: 9}}
+    - {command: [LPOS, biglist, *id010, RANK, -1], expect: {equals: 9}}
+    - {command: [SORT_RO, biglist, BY, nosort, LIMIT, 3, 6], expect: {equals: [*id004,
+          *id005, *id006, *id007, *id008, *id009]}}
+    - {command: [LSET, biglist, 8, &id017 qlw-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-w8],
+      expect: {equals: OK}}
+    - {command: [LRANGE, biglist, 7, 9], expect: {equals: [*id008, *id017, *id010]}}
+    - {command: [LINSERT, biglist, BEFORE, *id012, &id018 qlx-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-x1],
+      expect: {equals: 17}}
+    - {command: [LRANGE, biglist, 10, 12], expect: {equals: [*id011, *id018, *id012]}}
+    - {command: [LREM, biglist, 0, *id018], expect: {equals: 1}}
+    - {command: [LINSERT, biglist, AFTER, *id005, &id019 qly-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-y4],
+      expect: {equals: 17}}
+    - {command: [LRANGE, biglist, 3, 6], expect: {equals: [*id004, *id005, *id019,
+          *id006]}}
+    - {command: [RPUSH, remlist, &id020 qlr-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-rr,
+        &id021 qlr-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-aa, *id020, *id021, *id020,
+        *id021, *id020, *id021, *id020, *id021, *id020, *id021], expect: {equals: 12}}
+    - {command: [LPOS, remlist, *id020, COUNT, 0], expect: {equals: [0, 2, 4, 6, 8,
+          10]}}
+    - {command: [LREM, remlist, 0, *id020], expect: {equals: 6}}
+    - {command: [LRANGE, remlist, 0, -1], expect: {equals: [*id021, *id021, *id021,
+          *id021, *id021, *id021]}}
+    - {command: [LREM, remlist, -3, *id021], expect: {equals: 3}}
+    - {command: [LLEN, remlist], expect: {equals: 3}}
+    - {command: [RPUSH, dellist, &id022 qld-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-dd,
+        *id022, *id022, *id022, *id022, *id022, *id022, *id022], expect: {equals: 8}}
+    - {command: [LREM, dellist, 0, *id022], expect: {equals: 8}}
+    - {command: [EXISTS, dellist], expect: {equals: 0}}
+    - {command: [DEBUG, QUICKLIST-PACKED-THRESHOLD, 100], expect: {equals: OK}}
+    - {command: [RPUSH, plainlist, &id023 qlp0-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-0,
+        &id024 qlp1-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-1,
+        &id025 qlp2-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-2,
+        &id026 qlp3-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-3,
+        &id027 qlp4-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-4,
+        &id028 qlp5-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-5],
+      expect: {equals: 6}}
+    - {command: [LRANGE, plainlist, 0, -1], expect: {equals: [*id023, *id024, *id025,
+          *id026, *id027, *id028]}}
+    - {command: [LINDEX, plainlist, 3], expect: {equals: *id026}}
+    - {command: [LSET, plainlist, 2, &id029 qlq2-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-q],
+      expect: {equals: OK}}
+    - {command: [LINDEX, plainlist, 2], expect: {equals: *id029}}
+    - {command: [LSET, plainlist, 3, tinyval], expect: {equals: OK}}
+    - {command: [LRANGE, plainlist, 2, 4], expect: {equals: [*id029, tinyval, *id027]}}
+    - {command: [LREM, plainlist, 1, *id024], expect: {equals: 1}}
+    - {command: [LLEN, plainlist], expect: {equals: 5}}
+    - {command: [LINSERT, biglist, AFTER, *id017, &id030 qlz8-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-z],
+      expect: {equals: 18}}
+    - {command: [LRANGE, biglist, 8, 11], expect: {equals: [*id008, *id017, *id030,
+          *id010]}}
+    - {command: [DEBUG, QUICKLIST-PACKED-THRESHOLD, 0], expect: {equals: OK}}
+    - {command: [LLEN, biglist], expect: {equals: 18}}
+    - {command: [LRANGE, biglist, 0, -1], expect: {equals: [*id001, *id002, *id003,
+          *id004, *id005, *id019, *id006, *id007, *id008, *id017, *id030, *id010,
+          *id011, *id012, *id013, *id014, *id015, *id016]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [qlist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: qlist}

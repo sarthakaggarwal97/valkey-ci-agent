@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.zinter-zero-weight-inf
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    ZINTER/ZINTERSTORE count a NaN weighted score (0*inf) as 0 for non-first inputs
+    and for a repeated key, agreeing with ZUNION and the first input.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    zset_max_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: zinter
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: {$ref: inputs.zset_max_listpack_entries}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ZADD, zsmall, "-inf", x, "5", y, "-5", z, "7", w], expect: {equals: 4}}
+    - {command: [ZADD, zbig, "inf", x, "inf", y, "-inf", z, "1", w, "2", e1, "3",
+        e2], expect: {equals: 6}}
+    - {command: [OBJECT, ENCODING, zbig], compare: skip}
+    - {command: [ZINTER, "2", zsmall, zbig, WEIGHTS, "1", "0", AGGREGATE, SUM, WITHSCORES],
+      expect_difference: true, expect: {exists: true}}
+    - {command: [ZINTERSTORE, dsum, "2", zsmall, zbig, WEIGHTS, "1", "0", AGGREGATE,
+        SUM], expect: {equals: 4}}
+    - {command: [ZCOUNT, dsum, "0", "0"], expect_difference: true, expect: {equals: 0}}
+    - {command: [ZCOUNT, dsum, "5", "5"], expect_difference: true, expect: {equals: 1}}
+    - {command: [ZRANGEBYSCORE, dsum, "-inf", "-inf"], expect_difference: true, expect: {
+        equals: [x]}}
+    - {command: [ZINTERSTORE, dmin, "2", zsmall, zbig, WEIGHTS, "1", "0", AGGREGATE,
+        MIN], expect: {equals: 4}}
+    - {command: [ZCOUNT, dmin, "0", "0"], expect_difference: true, expect: {equals: 2}}
+    - {command: [ZRANGEBYSCORE, dmin, "-inf", "-inf"], expect: {equals: [x]}}
+    - {command: [ZINTERSTORE, dmax, "2", zsmall, zbig, WEIGHTS, "1", "0", AGGREGATE,
+        MAX], expect: {equals: 4}}
+    - {command: [ZCOUNT, dmax, "0", "0"], expect_difference: true, expect: {equals: 2}}
+    - {command: [ZRANGEBYSCORE, dmax, "-inf", "-inf"], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [ZINTERSTORE, dsame, "2", zbig, zbig, WEIGHTS, "1", "0", AGGREGATE,
+        SUM], expect: {equals: 6}}
+    - {command: [ZCOUNT, dsame, "0", "0"], expect_difference: true, expect: {equals: 0}}
+    - {command: [ZRANGEBYSCORE, dsame, "inf", "inf"], expect_difference: true, expect: {
+        equals: [x, y]}}
+    - {command: [ZINTERSTORE, dsmin, "2", zbig, zbig, WEIGHTS, "1", "0", AGGREGATE,
+        MIN], expect: {equals: 6}}
+    - {command: [ZCOUNT, dsmin, "0", "0"], expect_difference: true, expect: {equals: 5}}
+    - {command: [ZUNIONSTORE, dunion, "2", zsmall, zbig, WEIGHTS, "1", "0", AGGREGATE,
+        SUM], expect: {equals: 6}}
+    - {command: [ZCOUNT, dunion, "0", "0"], expect: {equals: 2}}
+    - {command: [ZRANGEBYSCORE, dunion, "-inf", "-inf"], expect: {equals: [x]}}
+    - {command: [ZINTERCARD, "2", zsmall, zbig], expect: {equals: 4}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [zinter.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zinter}

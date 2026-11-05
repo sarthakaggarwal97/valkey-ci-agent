@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9a029ba836353fd38ce337f83c4383f7fefaf367",
+  "parent": "6b8dfd83c6917399b619f5ff5362414ed25ca45a",
+  "pr": 2252,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix typos in comments and rename TimedOut/Sparkline functions and tests (#2252)",
+  "date": "2026-10-21",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.344,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames internal C functions (migrateCloseTimedoutSockets, latencyCommandGenSparkeline, scriptIsTimedout, sentinelKillTimedoutScripts) with all call sites updated, fixes typos in comments and TCL test names, and changes a reply string solely in the hello* example modules, which are sample code not loaded by the server. No command reply, data structure, replication, cluster or persistence behaviour of the server changes, so there is no path a scenario could differentiate between the two builds."
+}
