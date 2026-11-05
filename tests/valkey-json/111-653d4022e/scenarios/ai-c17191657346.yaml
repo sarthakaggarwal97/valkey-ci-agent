@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-json 0c320dda894d..653d4022e9b3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c17191657346
+seed: 10211
+experiment:
+  id: proposed.json-legacy-rdb-array-oom
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

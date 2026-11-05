@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-json 2114576374c8..fd2753d8c6c8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8d9193312fb8
+seed: 20892
+experiment:
+  id: proposed.json-repl-async-load
+  inputs:
+    resp: 3
+    dual_channel: 'yes'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

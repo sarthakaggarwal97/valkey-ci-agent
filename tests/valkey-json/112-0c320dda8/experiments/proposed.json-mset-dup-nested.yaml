@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.json-mset-dup-nested
+deployment:
+  modes: [standalone]
+metadata:
+  description: JSON.MSET replaces a nested object with an array then writes a deeper
+    path that no longer exists, same key; parent asserts/crashes, fix returns OK with
+    only the first op applied
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: mset
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [JSON.SET, dk, "$", '{"a":{"x":1}}'], expect: {equals: OK}}
+    - {command: [JSON.MSET, dk, ".a", '[9]', dk, ".a.x", "5"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [JSON.GET, dk, ".a"], compare: json, expect_difference: true, expect: {
+        contains: "9"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [mset.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mset}

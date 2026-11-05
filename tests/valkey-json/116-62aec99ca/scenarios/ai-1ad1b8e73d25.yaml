@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-json 653d4022e9b3..62aec99cacc5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1ad1b8e73d25
+seed: 2
+experiment:
+  id: proposed.json-mset-duplicate-key-uaf
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

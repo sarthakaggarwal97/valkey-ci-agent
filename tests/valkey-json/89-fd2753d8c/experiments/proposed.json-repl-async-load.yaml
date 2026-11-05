@@ -1,0 +1,71 @@
+extends: [valkey.liveness]
+id: proposed.json-repl-async-load
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    valkey-json now declares HANDLE_REPL_ASYNC_LOAD, so a replica with repl-diskless-load=swapdb
+    async-loads a full sync while serving the old dataset. Drive a slow full sync
+    carrying JSON values, read old JSON mid-load, abort the load by restarting the
+    primary (half-loaded module values must be freed), then let a second full sync
+    complete and verify the JSON data and KeyTable integrity.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    dual_channel: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: asyncload
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    server_config:
+      save: ""
+      repl-diskless-sync: "yes"
+      repl-diskless-sync-delay: 0
+      repl-diskless-load: swapdb
+      dual-channel-replication-enabled: {$ref: inputs.dual_channel}
+      rdb-key-save-delay: 2000
+    commands:
+    - {command: [SET, oldkey, oldval], node: 1, expect: {equals: OK}}
+    - {command: [JSON.SET, oldjson, $, '{"old":true}'], node: 1, expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 3000], node: 0, expect: {equals: OK}}
+    - {command: [JSON.SET, doc, $, "{\"a\":[1,2,3],\"e\":[],\"o\":{},\"s\":\"h\xE9\
+          llo\",\"i\":9223372036854775807,\"b\":true,\"n\":null}"], node: 0, expect: {
+        equals: OK}}
+    - {command: [JSON.SET, doc2, $, '[{"x":1},{"x":1},{"x":1},{"x":1},{"x":1},{"x":1},{"x":1},{"x":1}]'],
+      node: 0, expect: {equals: OK}}
+    - {command: [JSON.SET, doc3, $, '{"d":{"d":{"d":{"d":{"arr":[[],[[]],{"k":""}]}}}}}'],
+      node: 0, expect: {equals: OK}}
+    - {command: [SAVE], node: 0, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 20, compare: skip, expect: {
+        contains: "master_sync_in_progress:1"}}
+    - {command: [INFO, persistence], node: 1, wait_s: 15, expect_difference: true,
+      expect: {contains: "async_loading:1"}}
+    - {command: [GET, oldkey], node: 1, expect_difference: true, expect: {equals: oldval}}
+    - {command: [JSON.GET, oldjson], node: 1, expect_difference: true, expect: {contains: old}}
+    - {restart: true, node: 0, expect: {equals: OK}}
+    - {command: [GET, oldkey], node: 1, expect_difference: true, expect: {equals: oldval}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [INFO, replication], node: 1, wait_s: 120, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [DBSIZE], node: 1, wait_s: 30, expect: {equals: 3003}}
+    - {command: [GET, "key:42"], node: 1, expect: {equals: "value:42"}}
+    - {command: [JSON.GET, doc], node: 1, compare: json, expect: {error: false}}
+    - {command: [JSON.GET, doc2], node: 1, compare: json, expect: {error: false}}
+    - {command: [JSON.GET, doc3], node: 1, compare: json, expect: {error: false}}
+    - {command: [GET, oldkey], node: 1}
+    - {command: [JSON.DEBUG, KEYTABLE-CHECK], node: 1, compare: skip, expect: {error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [asyncload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: asyncload}

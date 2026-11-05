@@ -1,0 +1,65 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "8a826757c5eb4f795383cfef6a30061236c1cc85",
+  "parent": "faf58c339572c71600b4b1e55198a9ea0af212e3",
+  "pr": 108,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Fix for crash when key contains ~ (#108)",
+  "date": "2026-06-10",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.3918,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in _ZN8Selector12deleteValuesERN9rapidjson12GenericValueINS0_4UTF8IcEE18RapidJsonAllocatorEEPKcRm",
+      "scenario": "ai-cd1c54cb8048",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #108",
+      "fingerprint": "244845c3da2bd02a0290",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in _ZN8Selector12deleteValuesERN9rapidjson12GenericValueINS0_4UTF8IcEE18RapidJsonAllocatorEEPKcRm",
+      "scenario": "ai-7f6c2741981e",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #108",
+      "fingerprint": "244845c3da2bd02a0290",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in _ZN8Selector12deleteValuesERN9rapidjson12GenericValueINS0_4UTF8IcEE18RapidJsonAllocatorEEPKcRm",
+      "scenario": "ai-176cc07b7eac",
+      "seed": 103,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #108",
+      "fingerprint": "244845c3da2bd02a0290",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

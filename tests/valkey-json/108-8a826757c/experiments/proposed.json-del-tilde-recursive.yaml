@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.json-del-tilde-recursive
+deployment:
+  modes: [standalone]
+metadata:
+  description: JSON.DEL recursive descent $..* over nested objects with tilde keys
+    must not crash and returns the deleted count
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: del
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [JSON.SET, k, "$", '{"o":{"~":1,"~a":2}}'], expect: {equals: OK}}
+    - {command: [JSON.DEL, k, "$..*"], expect_difference: true, expect: {equals: 3}}
+    - {command: [JSON.GET, k, "$"], expect_difference: true, compare: json, expect: {
+        equals: [{}]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: del}

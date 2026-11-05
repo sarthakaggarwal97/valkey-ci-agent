@@ -1,0 +1,102 @@
+extends: [valkey.liveness]
+id: proposed.json-shared-api-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: JSON.DEBUG TEST-SHARED-API (SharedAPI SharedJSON_Get) mimics JSON.GET;
+    parent build rejects the subcommand, JSON.GET itself must not change
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: shared
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 15
+    commands:
+    - {command: [JSON.SET, k1, ., '{"a":1,"b":true,"s":"str","arr":[1,2,3],"obj":{},"nested":{"a":{"a":1},"arr2":[{"a":2}]},"fields":"kw"}'],
+      expect: {equals: OK}}
+    - {command: [JSON.GET, k1, $.a], compare: json}
+    - {command: [JSON.GET, k1, .a]}
+    - {command: [JSON.GET, k1, '$..a'], compare: json}
+    - {command: [JSON.GET, k1, $.nope]}
+    - {command: [JSON.GET, k1, .nope], expect: {error: NONEXISTENT}}
+    - {command: [JSON.GET, nosuch, $], expect: {error: false}}
+    - {command: [SET, str1, hello], expect: {equals: OK}}
+    - {command: [JSON.GET, str1, $], expect: {error: WRONGTYPE}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k1, $.a], expect_difference: true, expect: {
+        equals: '[1]'}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k1, .a], expect_difference: true, expect: {
+        equals: '1'}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k1, $.fields], expect_difference: true,
+      expect: {equals: '["kw"]'}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k1, '$..a'], expect_difference: true,
+      expect: {contains: '{"a":1}'}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k1, $], expect_difference: true, expect: {
+        contains: '"fields":"kw"'}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k1, .], expect_difference: true, expect: {
+        contains: '"arr":[1,2,3]'}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k1, $.nope], expect_difference: true,
+      expect: {equals: '[]'}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k1, .nope], expect_difference: true,
+      expect: {error: Invalid Path}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k1, '$.['], expect_difference: true,
+      expect: {error: Invalid Path}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, nosuch, $], expect_difference: true,
+      expect: {error: Unknown key}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, str1, $], expect_difference: true, expect: {
+        error: Invalid Path}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k1], expect_difference: true, expect: {
+        error: wrong number of arguments}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k1, $, extra], expect_difference: true,
+      expect: {error: wrong number of arguments}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k1, ''], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [JSON.GET, k1, '$.arr[2147483647]']}
+    - {command: [JSON.GET, k1, '$.arr[4294967296]']}
+    - {command: [JSON.GET, k1, '$.arr[9223372036854775807]']}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k1, '$.arr[2147483647]'], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k1, '$.arr[4294967296]'], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k1, '$.arr[9223372036854775807]'], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [JSON.SET, k3, ., '{"":1}'], expect: {equals: OK}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k3, $], expect_difference: true, expect: {
+        equals: '[{"":1}]'}}
+    - {command: [COMMAND, GETKEYS, JSON.DEBUG, TEST-SHARED-API, k1, $.a], expect_difference: true,
+      expect: {equals: [k1]}}
+    - {command: [COMMAND, GETKEYS, JSON.DEBUG, TEST-SHARED-API], expect_difference: true,
+      expect: {error: true}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k1, $.a], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: true}}
+    - {command: [JSON.SET, k2, ., '{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":{"a":1}}}}}}}}}}'],
+      expect: {equals: OK}}
+    - {command: [JSON.GET, k2, '$..a'], compare: json}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k2, '$..a'], expect_difference: true,
+      expect: {contains: '"a"'}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k2, '$..a'], expect_difference: true,
+      expect: {contains: '"a"'}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k2, '$..a'], expect_difference: true,
+      expect: {contains: '"a"'}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k2, '$..a'], expect_difference: true,
+      expect: {contains: '"a"'}}
+    - {command: [JSON.DEBUG, TEST-SHARED-API, k2, '$..a'], expect_difference: true,
+      expect: {contains: '"a"'}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [JSON.DEBUG, HELP], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [shared.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shared}

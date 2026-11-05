@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "af935432195b4c1852d11e3c503154b51cf5f061",
+  "parent": "7e63587f338645ee9d458d1f03d8f3400c115a6d",
+  "pr": 76,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Spell Check Workflow for Valkey JSON (#76)",
+  "date": "2025-08-25",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5189,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds a spell-check CI workflow (.github/workflows/spell-check.yml, .config/typos.toml) and fixes typos that are exclusively in code comments (dom.cc, json.cc, memory.cc, selector.cc, rapidjson headers) and in src/commands/json.arrappend.json, a documentation metadata file that is not compiled into or loaded by the module (command info is set programmatically in json.cc and never reads these files). No executable statement, reply, persistence path, or configuration changes, so there is no behaviour to exercise and both builds are byte-for-byte equivalent at runtime."
+}

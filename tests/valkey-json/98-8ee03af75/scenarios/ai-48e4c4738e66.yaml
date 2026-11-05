@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-json 632212f8ba33..8ee03af75fa9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-48e4c4738e66
+seed: 9101
+experiment:
+  id: proposed.json-debug-keytable-gating
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

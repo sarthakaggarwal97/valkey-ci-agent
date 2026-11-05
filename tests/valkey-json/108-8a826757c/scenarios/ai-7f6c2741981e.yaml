@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-json faf58c339572..8a826757c5eb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7f6c2741981e
+seed: 102
+experiment:
+  id: proposed.json-del-tilde-multimatch
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

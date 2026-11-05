@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.json-debug-keytable-gating
+deployment:
+  modes: [standalone]
+metadata:
+  description: Without json.debug-mode, JSON.DEBUG KEYTABLE-CORRUPT/CLEAR/DISTRIBUTION
+    are rejected and carry the admin ACL flag; the parent build runs them ungated
+    and KEYTABLE-CORRUPT really corrupts the KeyTable
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: gating
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [JSON.SET, doc, ., '{"user":{"name":"a","tags":[]}}'], expect: {equals: OK}}
+    - {command: [JSON.GET, doc], compare: json}
+    - {command: [JSON.DEBUG, KEYTABLE-CHECK], expect: {error: false}}
+    - {command: [JSON.DEBUG, KEYTABLE-CORRUPT, corruptme], expect_difference: true,
+      expect: {error: "unknown subcommand 'KEYTABLE-CORRUPT'"}}
+    - {command: [JSON.DEBUG, KEYTABLE-CHECK], expect_difference: true, expect: {error: false}}
+    - {command: [JSON.DEBUG, KEYTABLE-CLEAR], expect_difference: true, expect: {error: "Try\
+          \ JSON.DEBUG HELP"}}
+    - {command: [JSON.DEBUG, KEYTABLE-DISTRIBUTION, 10], expect_difference: true,
+      expect: {error: "unknown subcommand 'KEYTABLE-DISTRIBUTION'"}}
+    - {command: [JSON.DEBUG, HELP], expect_difference: true, expect: {contains: "JSON.DEBUG\
+          \ KEYTABLE-CLEAR - Release all handles injected by KEYTABLE-CORRUPT"}}
+    - {command: [CONFIG, SET, json.debug-mode, yes], expect_difference: true, expect: {
+        error: true}}
+    - {command: [COMMAND, COUNT], expect_difference: true, expect: {min: 1}}
+    - {command: [ACL, SETUSER, limited, on, ">pw", "~*", "+@all", "-@admin"], expect: {
+        equals: OK}}
+    - {command: [AUTH, limited, pw], connection: lim, expect: {equals: OK}}
+    - {command: [JSON.DEBUG, KEYTABLE-CORRUPT, acl_probe], connection: lim, expect_difference: true,
+      expect: {error: "NOPERM"}}
+    - {command: [JSON.DEBUG, KEYTABLE-DISTRIBUTION, 5], connection: lim, expect_difference: true,
+      expect: {error: "NOPERM"}}
+    - {command: [JSON.DEBUG, KEYTABLE-CHECK], expect_difference: true, expect: {error: false}}
+    - {command: [JSON.GET, doc], compare: json}
+    - {command: [JSON.DEBUG, FIELDS, doc]}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [gating.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: gating}

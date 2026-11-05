@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.json-mset-duplicate-key-uaf
+deployment:
+  modes: [standalone]
+metadata:
+  description: JSON.MSET with duplicate keys must not use the freed document of an
+    earlier op (heap-use-after-free)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: mset
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [JSON.MSET, mk, $, '1', mk, $, '2', mk, $, '3', mk, $, '4', mk, $,
+        '5', mk, $, '6', mk, $, '7', mk, $, '8'], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, mk], expect_difference: true, expect: {equals: '8'}, compare: json}
+    - {command: [JSON.MSET, sk, $, '{"a":{"b":1}}', sk, $, '[1,2]', sk, '$.a.b', '9'],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [JSON.GET, sk], expect_difference: true, expect: {equals: '[1,2]'},
+      compare: json}
+    - {command: [JSON.MSET, dup, $, '{"x":1}', dup, $, '[1,2,3]', dup, $, '{"z":9}'],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [JSON.GET, dup], expect_difference: true, expect: {equals: '{"z":9}'},
+      compare: json}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mset}

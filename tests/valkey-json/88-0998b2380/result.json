@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "0998b2380f311267d29c7a8c5e46e6f3b6b8e12d",
+  "parent": "fd2753d8c6c87274f47b6ba814d78e92424e41e5",
+  "pr": 88,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Fix #86: Upgrade pytest and add setuptools to fix test suite (#88)",
+  "date": "2025-12-15",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2079,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only requirements.txt (upgrading pytest from 6 to 7.4.3 and adding setuptools) and tst/integration/README.md to fix the project's own Python test suite. No module source, build configuration, or runtime code is touched, so JSON command behavior, replies, persistence, and replication are identical on both builds; there is no reachable behaviour change to test."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "8ff1f53b7db9a5d69c716b6b4a6bdb4fefc63a9e",
+  "parent": "5e98983ff497d0e4fc0b58ecb1db79469084c269",
+  "pr": 103,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Support reusing externally built valkey-server and valkeymodule.h for test (#103)",
+  "date": "2026-06-08",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2792,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only the build and test infrastructure (CMakeLists.txt, build.sh, README.md): it adds optional VALKEY_SERVER_PATH and VALKEY_MODULE_H_PATH cache variables so the integration-test build can reuse an externally built valkey-server and valkeymodule.h instead of cloning and building Valkey. No module source code is changed, so the module's runtime behavior (commands, replies, persistence, replication) is identical at the change and its parent; a build/CI change needs no scenario."
+}

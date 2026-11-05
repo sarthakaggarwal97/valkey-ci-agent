@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-json 560859a0a63c..fe9b048582a8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-753a1b04fddb
+seed: 303
+experiment:
+  id: proposed.json-shared-api-compare
+  inputs:
+    resp: 2
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

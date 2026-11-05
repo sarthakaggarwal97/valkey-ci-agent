@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.json-legacy-rdb-array-oom
+deployment:
+  modes: [standalone]
+metadata:
+  description: A crafted legacy-encoding (encver 0) RESTORE with a huge declared array
+    count is rejected without OOM, and the server survives
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: oom
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [RESTORE, evilA, 0, !!binary "B4FF4lI435EsAAJAQAKA/////wsAAAAAAAAAAAA="],
+      expect_difference: true, expect: {error: true}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    - {command: [RESTORE, evilB, 0, !!binary "B4FF4lI435EsAAJAQAKBgAAAAAAAAAALAAAAAAAAAAAA"],
+      expect_difference: true, expect: {error: true}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    - {command: [JSON.SET, after, ".", "[1,2,3]"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, after], compare: json, expect_difference: true, expect: {
+        equals: "[1,2,3]"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: oom}

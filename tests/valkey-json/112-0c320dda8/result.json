@@ -1,0 +1,92 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "0c320dda894d0ab38e00bf09c370e40cd512b259",
+  "parent": "8a826757c5eb4f795383cfef6a30061236c1cc85",
+  "pr": 112,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Fix JSON.MSET duplicate-key crash (#112)",
+  "date": "2026-06-11",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 1,
+  "hunted": 4,
+  "dropped": 2,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.203,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-use-after-free",
+      "scenario": "ai-e485a2dabbad",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #112, since fixed",
+      "fingerprint": "80d79339943dd8f93790",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-use-after-free",
+      "scenario": "ai-ad217f98db47",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #112, since fixed",
+      "fingerprint": "80d79339943dd8f93790",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-use-after-free",
+      "scenario": "ai-788a6f1d47ef",
+      "seed": 103,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #112, since fixed",
+      "fingerprint": "80d79339943dd8f93790",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent/src/json/json.cc:782 'rc == JSONUTIL_SUCCESS' is not true",
+      "scenario": "ai-1e085db51386",
+      "seed": 104,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #112",
+      "fingerprint": "47dbf4c43703dcb7342b",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-8b5a1acbb364",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-4aaa0a79a1ec",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

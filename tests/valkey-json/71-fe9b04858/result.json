@@ -1,0 +1,79 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "fe9b048582a88a3b4d3c8701394c85f1ca7490a0",
+  "parent": "560859a0a63cd3f85edd4714d7cc3c0895e4ebd6",
+  "pr": 71,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Implement SharedAPI interface that mimics JSON.GET (#71)",
+  "date": "2025-08-26",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 7.8188,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "acl-overreach: command 9 (JSON.DEBUG TEST-SHARED-API k1 $.a) as the user 'default +@all -@json' was refused, though its rule allows it: {\"error\":\"User default has no permissions to run the 'JSON.DEBUG|TEST-SHARED-API' command\"}",
+      "scenario": "ai-00e616e4aa50",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #71",
+      "fingerprint": "5ed6fe155beb0c4fe4f0",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/47"
+    },
+    {
+      "rule": "check",
+      "detail": "acl-overreach: command 9 (JSON.DEBUG TEST-SHARED-API k1 $.a) as the user 'default +@all -@json' was refused, though its rule allows it: {\"error\":\"User default has no permissions to run the 'JSON.DEBUG|TEST-SHARED-API' command\"}",
+      "scenario": "ai-91c3d74107cb",
+      "seed": 202,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #71",
+      "fingerprint": "5ed6fe155beb0c4fe4f0",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/47"
+    },
+    {
+      "rule": "check",
+      "detail": "acl-overreach: command 9 (JSON.DEBUG TEST-SHARED-API k1 $.a) as the user 'default +@all -@json' was refused, though its rule allows it: {\"error\":\"User default has no permissions to run the 'JSON.DEBUG|TEST-SHARED-API' command\"}",
+      "scenario": "ai-753a1b04fddb",
+      "seed": 303,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #71",
+      "fingerprint": "5ed6fe155beb0c4fe4f0",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/47"
+    },
+    {
+      "rule": "check",
+      "detail": "acl-overreach: command 9 (JSON.DEBUG TEST-SHARED-API k1 $.a) as the user 'default +@all -@json' was refused, though its rule allows it: {\"error\":\"User default has no permissions to run the 'JSON.DEBUG|TEST-SHARED-API' command\"}",
+      "scenario": "ai-31e008c6d109",
+      "seed": 404,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #71",
+      "fingerprint": "5ed6fe155beb0c4fe4f0",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/47"
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

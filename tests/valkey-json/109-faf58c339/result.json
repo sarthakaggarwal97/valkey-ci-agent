@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "faf58c339572c71600b4b1e55198a9ea0af212e3",
+  "parent": "8ff1f53b7db9a5d69c716b6b4a6bdb4fefc63a9e",
+  "pr": 109,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Fixing out of range crash (#109)",
+  "date": "2026-06-09",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 1,
+  "hunted": 3,
+  "dropped": 3,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.1099,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-d34a3b98ac57",
+      "seed": 3,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #109",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-1ef959637a61",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-eceff30e2275",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-c71254aab00f",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

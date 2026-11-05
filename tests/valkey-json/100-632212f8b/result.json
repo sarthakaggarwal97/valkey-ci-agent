@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "632212f8ba33c1687ab54ec0814d0a0742324d65",
+  "parent": "66101ce33fff7d3c0c64a4b221ff36875edffccf",
+  "pr": 100,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "ci: Add cpplint workflow to run linter on PRs (#100)",
+  "date": "2026-05-04",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2146,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely CI tooling: it adds a .github/workflows/linter.yml workflow that runs cpplint on PRs and widens the lint filter lists in src/json/CPPLINT.cfg and tst/unit/CPPLINT.cfg. No C++ source, build script, or module behavior changes, so the compiled valkey-json module is byte-for-byte functionally identical to its parent and no runtime path can reach the change."
+}

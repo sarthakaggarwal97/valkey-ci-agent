@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "5e2f9fd3161eebffeb18d4fc73bba7c1ded793cd",
+  "parent": "62aec99cacc5359388349ec72a0b01de58ce9495",
+  "pr": 115,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Making it so ASAN failures fail the CI workflows (#115)",
+  "date": "2026-06-24",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2608,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only tst/integration/run.sh, the valkey-json CI test-runner script: it adds ASAN/LSAN option exports, pipefail, and log-scanning so ASAN errors, memory leaks, and pytest failures fail the CI job. No module source code is touched, so the built valkey-json module is behaviourally identical on both sides \u2014 no command, reply, persistence, or replication path changes exist for a scenario to exercise. This is a pure CI/build-infrastructure change and needs no fuzzer scenario."
+}

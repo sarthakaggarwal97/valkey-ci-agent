@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "a932a1c38e121b26c88000be6c870e830c607e37",
+  "parent": "6f08bbf02caef7ec7430f8613e566a1348053a02",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Fix build for failure with GCC 16 for maybe_unused var",
+  "date": "2026-02-19",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.216,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a [[maybe_unused]] attribute to a local variable in the vendored rapidjson header to fix a GCC 16 build failure (unused-variable diagnostic). The attribute has no runtime effect: no code path, reply, data layout or resource usage changes, so there is no behaviour to exercise or compare across builds."
+}

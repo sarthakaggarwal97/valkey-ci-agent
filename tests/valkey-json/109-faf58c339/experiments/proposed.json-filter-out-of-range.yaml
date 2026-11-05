@@ -1,0 +1,29 @@
+extends: [valkey.liveness]
+id: proposed.json-filter-out-of-range
+deployment:
+  modes: [standalone]
+metadata:
+  description: A JSONPath filter comparing against an out-of-range literal matches
+    nothing instead of crashing the server
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: filter
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [JSON.SET, doc, $, '{"n":5}'], expect: {equals: OK}}
+    - {command: [JSON.GET, doc, "$[?(@.n > 1e309)]"], expect_difference: true, compare: json,
+      expect: {equals: "[]"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: filter}
