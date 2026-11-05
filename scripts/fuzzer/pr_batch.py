@@ -174,8 +174,9 @@ if grep -q -- '--use-system-modules)' build.sh; then ./build.sh --use-system-mod
     ),
     "valkey-bloom": Module(
         branch="unstable", file="target/release/libvalkey_bloom.so",
-        # Without a Cargo.lock, valkey-module resolves to its newest release, whose API older merges predate
-        # (0.1.15 renamed get_redis_version): the valkey-module crates are taken as they were at the commit.
+        # Without a Cargo.lock, the module SDK resolves to its newest release, whose API older merges predate
+        # (valkey-module 0.1.15 renamed get_redis_version, redis-module 2.0.8 changed its command macro): the SDK
+        # crates, valkey-module now and redis-module before it, are taken as they were at the commit.
         build="""if [ ! -f Cargo.lock ]; then
   cargo generate-lockfile -q
   python3 - "$(git log -1 --format=%cI)" <<'EOF'
@@ -183,7 +184,8 @@ import json, subprocess, sys, urllib.request
 from datetime import datetime
 
 before = datetime.fromisoformat(sys.argv[1])
-for crate in ("valkey-module", "valkey-module-macros", "valkey-module-macros-internals"):
+for crate in ("valkey-module", "valkey-module-macros", "valkey-module-macros-internals",
+              "redis-module", "redis-module-macros", "redis-module-macros-internals"):
     pkgid = subprocess.run(["cargo", "pkgid", crate], capture_output=True, text=True)
     if pkgid.returncode != 0:
         continue
