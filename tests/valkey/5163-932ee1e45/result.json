@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "932ee1e45440cee8304592c95a674d9de71a3b4b",
+  "parent": "3664d77c5952d08eae84c9d6b83786d58eb1ecff",
+  "pr": 5163,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix integer overflow in _quicklistNodeAllowMerge size check (#5163)",
+  "date": "2026-10-29",
+  "unstable": "4f3dba63fb4f2745c46857dc529d5f75d5989992",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4743,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix changes the type of a local sum (merge_sz) in the static function _quicklistNodeAllowMerge from unsigned int to size_t, preventing a 32-bit wrap when two packed quicklist nodes' combined size exceeds UINT32_MAX (~4 GiB). This is only reachable with two packed nodes totaling over 4 GiB, but packed node size is capped by the fill limit (<=65536 bytes for negative fill, 8192 for positive fill) and large elements are diverted to plain nodes that merge rejects, so the overflowing branch cannot be reached through any command or tool with feasible memory. The maintainers could exercise it onl"
+}

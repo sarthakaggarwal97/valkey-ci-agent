@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.replicaof-rewrite-injected-policy
+deployment:
+  modes: [standalone]
+metadata:
+  description: A replicaof host with an embedded newline must not inject maxmemory-policy
+    across a CONFIG REWRITE restart
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.commands
+  id: rewrite
+  config:
+    compare_with: {$ref: inputs.parent}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, GET, maxmemory-policy], expect: {equals: [maxmemory-policy,
+          noeviction]}}
+    - {command: [REPLICAOF, "127.0.0.1 1\nmaxmemory-policy allkeys-lru\n#", 1], expect: {
+        equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, replicaof], expect_difference: true, expect: {equals: [
+          replicaof, "127.0.0.1 1\nmaxmemory-policy allkeys-lru\n# 1"]}}
+    - {command: [CONFIG, GET, maxmemory-policy], expect_difference: true, expect: {
+        equals: [maxmemory-policy, noeviction]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rewrite}

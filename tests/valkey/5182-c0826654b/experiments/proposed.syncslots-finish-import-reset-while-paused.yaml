@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.syncslots-finish-import-reset-while-paused
+deployment:
+  modes: [standalone]
+metadata:
+  description: A failed slot import on a write-paused primary still propagates SYNCSLOTS
+    FINISH; the parent trips the write-pause assertion in propagateNow and crashes,
+    the change survives
+components:
+- use: valkey.action.commands
+  id: finish
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    server_config: {appendonly: "yes"}
+    timeout_s: 20
+    commands:
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        SLOTSRANGE, 16383, 16383], node: 1, connection: job, expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, 100000, WRITE], node: 1, expect: {equals: OK}}
+    - {command: [RESET], node: 1, connection: job, expect: {exists: false}}
+    - {command: [PING], node: 1, expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [finish.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: finish}

@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-05T09:22+00:00.
+Updated 2026-11-05T09:36+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 65 | 2424 | #5151 (2026-10-29) | 65 | 9.3 |
+| valkey-io/valkey | 85 | 2405 | #5186 (2026-10-30) | 85 | 12.1 |
 | valkey-io/valkey-bloom | 29 | 80 | #45 (2025-03-11) | 29 | 4.1 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 62 | 8.9 |
 | valkey-io/valkey-search | 24 | 644 | #1481 (2026-10-14) | 24 | 3.4 |
@@ -13,28 +13,28 @@ Updated 2026-11-05T09:22+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-05T07:25:18+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41977390618): 20 merge(s) tested, 0 without a code change.
+[2026-11-05T09:36:25+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41987127456): 20 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey#5065](https://github.com/valkey-io/valkey/pull/5065) ([tests](tests/valkey/5065-9b4dcf617/)): Cap the length of inbound cluster bus packets (#5065): declined: no proposed test validated
-- [valkey-io/valkey#5068](https://github.com/valkey-io/valkey/pull/5068) ([tests](tests/valkey/5068-15b45dd9f/)): Delete empty Path Hash keys using the Hash lifecycle (#5068): 8 of 8 test(s) reached the change, coverage 100%; check, introduced and since fixed (recorded)
-- [valkey-io/valkey#5121](https://github.com/valkey-io/valkey/pull/5121) ([tests](tests/valkey/5121-19c3a82f2/)): Let FLUSHALL and SHUTDOWN cancel a forkless save that is closing its file (#5121): 0 of 5 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#5213](https://github.com/valkey-io/valkey/pull/5213) ([tests](tests/valkey/5213-40fb246f5/)): Represent valid expiry condition combinations in command metadata (#5213): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#5211](https://github.com/valkey-io/valkey/pull/5211) ([tests](tests/valkey/5211-f8a102d57/)): Remove key specs from hash NUMFIELDS arguments (#5211): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#5127](https://github.com/valkey-io/valkey/pull/5127) ([tests](tests/valkey/5127-7dfa61e04/)): Script debugger: reset *argc on partial-read exit to fix server crash in SYNC mode (#5127): 2 of 2 test(s) reached the change, coverage 100%; crash, fixed by #5127 (recorded)
-- [valkey-io/valkey#5128](https://github.com/valkey-io/valkey/pull/5128) ([tests](tests/valkey/5128-41fb27b2f/)): Propagate PFADD elements applied before an INVALIDOBJ error (#5128): declined: no proposed test validated
-- [valkey-io/valkey#5210](https://github.com/valkey-io/valkey/pull/5210) ([tests](tests/valkey/5210-1f88b16b2/)): Mark sorted-set increments and weights as doubles (#5210): declined: no proposed test validated
-- [valkey-io/valkey#5154](https://github.com/valkey-io/valkey/pull/5154) ([tests](tests/valkey/5154-8e0b71925/)): Keep module global defrag resume state valid across MODULE UNLOAD (#5154): declined: The change only alters behavior when MODULE UNLOAD removes a module during an in-progress active-defrag global pass, with at least two modules registering global-defrag callbacks (one being defragged and unloaded, a second later one to catch a stray cursor), exactly as the PR's defrag.tcl 
-- [valkey-io/valkey#5205](https://github.com/valkey-io/valkey/pull/5205) ([tests](tests/valkey/5205-3ef5fef19/)): bgiteration: avoid missing key check for multi/exec commands (#5205): declined: The fix prevents an assertion crash (serverAssert(wasAdded) in bgiteration.c) that can only be reached through a non-consistent background iterator: the buggy loop is gated by `if (!(it->iteration_flags & BGITERATOR_FLAG_CONSISTENT))`. In this build the only live-server code that creates a
-- [valkey-io/valkey#5206](https://github.com/valkey-io/valkey/pull/5206) ([tests](tests/valkey/5206-329ccfe1d/)): [Forkless] Allow primary client to be blocked with BLOCKED_INUSE (#5206): 0 of 3 test(s) reached the change, coverage 100%; crash, fixed by #5206 (recorded)
-- [valkey-io/valkey#5082](https://github.com/valkey-io/valkey/pull/5082) ([tests](tests/valkey/5082-a230da1a3/)): Replica: Tear down background iterators when swapping in a primary's RDB (#5082): 0 of 6 test(s) reached the change, coverage 0%; crash, fixed by #5082 (recorded)
-- [valkey-io/valkey#5191](https://github.com/valkey-io/valkey/pull/5191) ([tests](tests/valkey/5191-4dc7b008b/)): Clear stale cross-slot flag before computing a command's slot (#5191): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#5179](https://github.com/valkey-io/valkey/pull/5179) ([tests](tests/valkey/5179-e581052a6/)): Bound PHDELPREFIX temporary path copies in bytes (#5179): 3 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#5150](https://github.com/valkey-io/valkey/pull/5150) ([tests](tests/valkey/5150-eaafdf0c7/)): Don't queue a blocked primary when a timed-out script ends (#5150): 1 of 3 test(s) reached the change, coverage 100%; crash, fixed by #5150 (recorded)
-- [valkey-io/valkey#5133](https://github.com/valkey-io/valkey/pull/5133) ([tests](tests/valkey/5133-eb29e2564/)): Keep sds lengths in size_t when comparing and caching keys (#5133): declined: The change only alters behaviour when an sds object's byte length reaches 2^31 (2 GiB): dictSdsKeyCompare and evictionPoolPopulate held the length in a signed int that overflows to a negative value for a >=2GiB key/member, so memcmp/memcpy receive a sign-extended huge size_t and crash or m
-- [valkey-io/valkey#5156](https://github.com/valkey-io/valkey/pull/5156) ([tests](tests/valkey/5156-30a4df7b2/)): Keep the TLS connection postponed while an IO thread is writing (#5156): 0 of 4 test(s) reached the change, coverage 100%; crash, predates #5156, since fixed (recorded)
-- [valkey-io/valkey#5161](https://github.com/valkey-io/valkey/pull/5161) ([tests](tests/valkey/5161-41578166d/)): Bound the bytes clusterReadHandler() reads per event (#5161): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#5131](https://github.com/valkey-io/valkey/pull/5131) ([tests](tests/valkey/5131-d30102951/)): Reply to CLUSTER SLOT-STATS ORDERBY with the slots it collected (#5131): declined: The change only alters the CLUSTER SLOT-STATS ORDERBY reply array length, sizing it from the number of slots actually collected (i) instead of getMyShardSlotCount(). These two values are equal for a primary and for a single-level replica, so in every stable topology both builds produce byt
-- [valkey-io/valkey#5137](https://github.com/valkey-io/valkey/pull/5137) ([tests](tests/valkey/5137-2e878e3e9/)): Ignore ping extension values that nodes.conf cannot load (#5137): 2 of 4 test(s) reached the change, coverage 77%; crash, fixed by #5137 (recorded); crash, fixed by #5137 (recorded)
+- [valkey-io/valkey#5199](https://github.com/valkey-io/valkey/pull/5199) ([tests](tests/valkey/5199-4f3dba63f/)): Keep the 'n' keyspace event flag when 'A' is set (#5199): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#5151](https://github.com/valkey-io/valkey/pull/5151) ([tests](tests/valkey/5151-3e04271dd/)): Fix writevToClient stack overflow for empty bulk strings with copy avoidance (#5151): 3 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#5163](https://github.com/valkey-io/valkey/pull/5163) ([tests](tests/valkey/5163-932ee1e45/)): Fix integer overflow in _quicklistNodeAllowMerge size check (#5163): declined: The fix changes the type of a local sum (merge_sz) in the static function _quicklistNodeAllowMerge from unsigned int to size_t, preventing a 32-bit wrap when two packed quicklist nodes' combined size exceeds UINT32_MAX (~4 GiB). This is only reachable with two packed nodes totaling over 4 
+- [valkey-io/valkey#5153](https://github.com/valkey-io/valkey/pull/5153) ([tests](tests/valkey/5153-3664d77c5/)): Do not let forked script debug sessions postpone automatic saves (#5153): 3 of 3 test(s) reached the change, coverage 100%; crash, introduced and since fixed (recorded); [crash, appeared after #5153](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/55)
+- [valkey-io/valkey#5168](https://github.com/valkey-io/valkey/pull/5168) ([tests](tests/valkey/5168-a7201627e/)): Keep a lone quote in the last CSV dataset field literally (#5168): 1 of 1 test(s) reached the change, coverage 100%; crash, fixed by #5168 (recorded)
+- [valkey-io/valkey#5166](https://github.com/valkey-io/valkey/pull/5166) ([tests](tests/valkey/5166-84d6c236b/)): Don't pause rehashing when iterating a hashtable with no table (#5166): 1 of 1 test(s) reached the change, coverage 100%; crash, fixed by #5166 (recorded)
+- [valkey-io/valkey#5132](https://github.com/valkey-io/valkey/pull/5132) ([tests](tests/valkey/5132-e7205778f/)): Hash HyperLogLog elements with a size_t length (#5132): declined: The change only widens MurmurHash64A's length parameter from int to size_t. Its sole command path is PFADD, which hashes each element using sdslen as the length. The result differs between the two builds only for a single element of 2^31 bytes (2 GiB) or larger, where the old signed int ov
+- [valkey-io/valkey#5135](https://github.com/valkey-io/valkey/pull/5135) ([tests](tests/valkey/5135-d6aff3537/)): Print usage when valkey-check-rdb --output has no file name (#5135): 1 of 1 test(s) reached the change, coverage 100%; crash, fixed by #5135 (recorded)
+- [valkey-io/valkey#5147](https://github.com/valkey-io/valkey/pull/5147) ([tests](tests/valkey/5147-22033385b/)): Check argc before DEBUG SLOTMIGRATION reads its arguments (#5147): 1 of 1 test(s) reached the change, coverage 100%; crash, fixed by #5147 (recorded)
+- [valkey-io/valkey#5140](https://github.com/valkey-io/valkey/pull/5140) ([tests](tests/valkey/5140-fb8e73259/)): Reject RESET on slot migration clients (#5140): 2 of 2 test(s) reached the change, coverage 100%; crash, fixed by #5140 (recorded)
+- [valkey-io/valkey#5145](https://github.com/valkey-io/valkey/pull/5145) ([tests](tests/valkey/5145-b64ba79eb/)): Ignore new nodes gossiped by a sender still in handshake (#5145): 0 of 3 test(s) reached the change, coverage 100%, 1 skipped (required capability 'host' is unsupported)
+- [valkey-io/valkey#5114](https://github.com/valkey-io/valkey/pull/5114) ([tests](tests/valkey/5114-d20193819/)): Allow server.log() during FUNCTION LOAD (#5114): 2 of 2 test(s) reached the change; crash, fixed by #5114 (recorded)
+- [valkey-io/valkey#5126](https://github.com/valkey-io/valkey/pull/5126) ([tests](tests/valkey/5126-cdacae6ce/)): Reject a +CONTINUE reply to PSYNC when there is no cached primary (#5126): declined: The fix guards against a primary that violates the replication protocol by replying +CONTINUE to a PSYNC ? -1 (full-resync) request from a replica with no cached primary. A conformant Valkey primary never does this (primaryTryPartialResynchronization always forces a full resync when the re
+- [valkey-io/valkey#5180](https://github.com/valkey-io/valkey/pull/5180) ([tests](tests/valkey/5180-4c25c23b9/)): Redact HELLO, AUTH and MIGRATE credentials before validating arguments (#5180): 2 of 2 test(s) reached the change, coverage 100%; check, not reproduced (recorded); check, introduced and since fixed (recorded); check, not reproduced (recorded); check, introduced and since fixed (recorded)
+- [valkey-io/valkey#5178](https://github.com/valkey-io/valkey/pull/5178) ([tests](tests/valkey/5178-7a0927136/)): Check XADD element size before creating the stream (#5178): declined: The change adds one guard to xaddCommand that sums the field/value byte lengths and errors before creating the stream key when the total exceeds STREAM_LISTPACK_MAX_SIZE, a fixed compile-time constant of 1<<30 (1 GiB) that no config lowers. The new path only fires when a single XADD carrie
+- [valkey-io/valkey#5174](https://github.com/valkey-io/valkey/pull/5174) ([tests](tests/valkey/5174-90f3534dc/)): Fix GEOSEARCH BYPOLYGON when the vertex centroid is outside geohash range (#5174): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#5182](https://github.com/valkey-io/valkey/pull/5182) ([tests](tests/valkey/5182-c0826654b/)): Exempt slot import SYNCSLOTS FINISH from the write pause assertion (#5182): 0 of 5 test(s) reached the change, coverage 0%; crash, predates #5182, since fixed (recorded)
+- [valkey-io/valkey#5177](https://github.com/valkey-io/valkey/pull/5177) ([tests](tests/valkey/5177-cd4b2c691/)): Size valkey-check-rdb stats for every selected DB (#5177): 1 of 1 test(s) reached the change, coverage 100%; crash, fixed by #5177 (recorded)
+- [valkey-io/valkey#5176](https://github.com/valkey-io/valkey/pull/5176) ([tests](tests/valkey/5176-b8dff68cb/)): Quote the replicaof host when rewriting the config file (#5176): 3 of 3 test(s) reached the change, coverage 100%; [check, introduced by #5176](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/53)
+- [valkey-io/valkey#5185](https://github.com/valkey-io/valkey/pull/5185) ([tests](tests/valkey/5185-679b404d3/)): Replace line breaks in server.log() messages with spaces (#5185): 0 of 2 test(s) reached the change
 
 ### valkey-io/valkey-bloom
 
@@ -93,11 +93,11 @@ Updated 2026-11-05T09:22+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 69 of 89 tested (78%)
-- Changed-line coverage: median 100% of 33 merge(s) measured, 2 under 50%
-- Recall: 19 parents flagged of 24 fix merges
-- Claude: $545.41 in the last 24 hours, $545.41 in the last 7 days, $545.41 in all
-- Issues filed: 13
+- Merges whose tests reached the change: 82 of 105 tested (78%)
+- Changed-line coverage: median 100% of 47 merge(s) measured, 3 under 50%
+- Recall: 21 parents flagged of 26 fix merges
+- Claude: $593.64 in the last 24 hours, $593.64 in the last 7 days, $593.64 in all
+- Issues filed: 15
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -108,7 +108,9 @@ Updated 2026-11-05T09:22+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/48
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/49
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/50
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/53
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/54
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/55
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/56
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/57
 

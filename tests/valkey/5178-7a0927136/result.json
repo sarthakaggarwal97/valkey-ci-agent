@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7a0927136b6fa5e77dec50ea44e1f62ef6b72baf",
+  "parent": "90f3534dc88a6208d83f251d39470cea8fa83e4d",
+  "pr": 5178,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Check XADD element size before creating the stream (#5178)",
+  "date": "2026-10-30",
+  "unstable": "4f3dba63fb4f2745c46857dc529d5f75d5989992",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2624,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds one guard to xaddCommand that sums the field/value byte lengths and errors before creating the stream key when the total exceeds STREAM_LISTPACK_MAX_SIZE, a fixed compile-time constant of 1<<30 (1 GiB) that no config lowers. The new path only fires when a single XADD carries more than 1 GiB of actual transmitted field+value data (Valkey itself exercises it only in violations.tcl under the large-memory/run_solo tag, raising proto-max-bulk-len to 10 GiB and sending two 512 MiB values). valkey.action.commands sends arguments as literal bytes with no repeat or generate primitive, a"
+}

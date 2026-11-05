@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c0826654b6ab..90f3534dc88a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ca16fb9fb3b4
+seed: 51741
+experiment:
+  id: proposed.geosearch-bypolygon-pole-centroid
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.script-debug-fork-autosave
+deployment:
+  modes: [standalone]
+metadata:
+  description: Idle forked SCRIPT DEBUG sessions must not postpone save points or
+    the automatic AOF rewrite
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    save_method: {type: string, enum: [fork, forkless], default: fork}
+components:
+- use: valkey.action.commands
+  id: debugsave
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 150
+    server_config:
+      appendonly: "yes"
+      appendfsync: everysec
+      bgsave-default-method: {$ref: inputs.save_method}
+      forkless-infrastructure-enabled: "yes"
+    commands:
+    - {command: [SCRIPT, DEBUG, YES], connection: dbg, expect: {equals: OK}}
+    - {command: [EVAL, "return 'hello'", "0"], connection: dbg, compare: skip, expect: {
+        exists: true}}
+    - {command: [SCRIPT, DEBUG, YES], connection: dbg2, expect: {equals: OK}}
+    - {command: [EVAL, "return 1", "0"], connection: dbg2, compare: skip, expect: {
+        exists: true}}
+    - {command: [CONFIG, SET, save, "1 1"], expect: {equals: OK}}
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [INFO, persistence], wait_s: 45, expect_difference: true, expect: {
+        contains: "rdb_changes_since_last_save:0"}}
+    - {command: [CONFIG, SET, save, ""], expect: {equals: OK}}
+    - {command: [CONFIG, SET, auto-aof-rewrite-percentage, "1"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, auto-aof-rewrite-min-size, "1"], expect: {equals: OK}}
+    - {command: [SET, grow, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
+      expect: {equals: OK}}
+    - {command: [INFO, persistence], wait_s: 45, expect_difference: true, expect: {
+        contains: "aof_rewrites:1"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [debugsave.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: debugsave}

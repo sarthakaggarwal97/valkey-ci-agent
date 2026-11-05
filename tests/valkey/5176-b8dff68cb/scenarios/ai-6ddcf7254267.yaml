@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 679b404d3af2..b8dff68cb2a7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6ddcf7254267
+seed: 51762
+experiment:
+  id: proposed.replicaof-rewrite-injected-policy
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

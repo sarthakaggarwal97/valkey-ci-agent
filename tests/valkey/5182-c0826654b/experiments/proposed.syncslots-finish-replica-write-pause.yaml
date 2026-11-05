@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.syncslots-finish-replica-write-pause
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: A failing slot import on a write-paused target primary with a connected
+    replica must not crash on the internal SYNCSLOTS FINISH propagation
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.commands
+  id: finish
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 3
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.1.id>"], node: 2, expect: {equals: OK}}
+    - {command: [WAIT, 1, 3000], node: 1, wait_s: 30, expect: {equals: 1}}
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+        SLOTSRANGE, 16383, 16383], node: 1, connection: job, expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, 100000, WRITE], node: 1, expect: {equals: OK}}
+    - {command: [RESET], node: 1, connection: job, expect: {exists: false}}
+    - {command: [PING], node: 1, expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: finish}

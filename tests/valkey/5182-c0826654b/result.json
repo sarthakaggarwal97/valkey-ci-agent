@@ -1,0 +1,192 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c0826654b6ab89191c595f06b826c3f70ff9ad7b",
+  "parent": "cd4b2c69113bccddb898ab77c39c18d6aeab454b",
+  "pr": 5182,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Exempt slot import SYNCSLOTS FINISH from the write pause assertion (#5182)",
+  "date": "2026-10-30",
+  "unstable": "4f3dba63fb4f2745c46857dc529d5f75d5989992",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/cluster_migrateslots.c:1042",
+      "src/cluster_migrateslots.c:1047"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 13.8627,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2355 '!(c->flag.replica || c->flag.primary || c->slot_migration_job)' is not true",
+      "scenario": "ai-fb63cb92085b",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #5182, since fixed",
+      "fingerprint": "139d46e190541c869137",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2355 '!(c->flag.replica || c->flag.primary || c->slot_migration_job)' is not true",
+      "scenario": "ai-442c1433504c",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #5182, since fixed",
+      "fingerprint": "139d46e190541c869137",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2355 '!(c->flag.replica || c->flag.primary || c->slot_migration_job)' is not true",
+      "scenario": "ai-1a3364dc1d56",
+      "seed": 3,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #5182, since fixed",
+      "fingerprint": "139d46e190541c869137",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2355 '!(c->flag.replica || c->flag.primary || c->slot_migration_job)' is not true",
+      "scenario": "ai-a7a006ff6f1d",
+      "seed": 20260,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #5182, since fixed",
+      "fingerprint": "139d46e190541c869137",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2355 '!(c->flag.replica || c->flag.primary || c->slot_migration_job)' is not true",
+      "scenario": "ai-cfcfb16d7f92",
+      "seed": 20261,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #5182, since fixed",
+      "fingerprint": "139d46e190541c869137",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-fb63cb92085b",
+      "build": "unstable",
+      "seed": 1,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-fb63cb92085b",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-fb63cb92085b",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-442c1433504c",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-442c1433504c",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-442c1433504c",
+      "build": "unstable",
+      "seed": 4,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1a3364dc1d56",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1a3364dc1d56",
+      "build": "unstable",
+      "seed": 4,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1a3364dc1d56",
+      "build": "unstable",
+      "seed": 5,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a7a006ff6f1d",
+      "build": "unstable",
+      "seed": 20260,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a7a006ff6f1d",
+      "build": "unstable",
+      "seed": 20261,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a7a006ff6f1d",
+      "build": "unstable",
+      "seed": 20262,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-cfcfb16d7f92",
+      "build": "unstable",
+      "seed": 20261,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-cfcfb16d7f92",
+      "build": "unstable",
+      "seed": 20262,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-cfcfb16d7f92",
+      "build": "unstable",
+      "seed": 20263,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

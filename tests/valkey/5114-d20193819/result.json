@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d201938198cdd943923eed80ab41535c8c431f73",
+  "parent": "cdacae6cec02a331cd7a3dd8a2d749d5e6ca444c",
+  "pr": 5114,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Allow server.log() during FUNCTION LOAD (#5114)",
+  "date": "2026-10-30",
+  "unstable": "4f3dba63fb4f2745c46857dc529d5f75d5989992",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.3083,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: script_lua.c:1419 'rctx' is not true",
+      "scenario": "ai-b8070060097b",
+      "seed": 7001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5114",
+      "fingerprint": "ae1d814d7615f34c7c05",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: script_lua.c:1419 'rctx' is not true",
+      "scenario": "ai-cb756d053d66",
+      "seed": 7002,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5114",
+      "fingerprint": "ae1d814d7615f34c7c05",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

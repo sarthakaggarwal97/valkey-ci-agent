@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cd4b2c69113b..c0826654b6ab.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1a3364dc1d56
+seed: 3
+experiment:
+  id: proposed.syncslots-finish-aof-write-pause
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7200

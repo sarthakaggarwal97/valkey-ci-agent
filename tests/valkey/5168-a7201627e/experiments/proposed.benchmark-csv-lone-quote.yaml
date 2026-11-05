@@ -1,0 +1,21 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-csv-lone-quote
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark keeps a lone quote as the last CSV dataset field literally
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    files:
+      lone_quote.csv: "id,content\n1,\"\n"
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, --dataset, lone_quote.csv, -n, 3,
+        --, SET, "doc:1", "__field:content__"], compare: skip}
+    - {tool: valkey-cli, args: [-p, $port, GET, "doc:1"], expect_difference: true,
+      expect: {stdout: {equals: "\"\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

@@ -1,0 +1,84 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4c25c23b9ad3449ea0346e80f05817c93770de6a",
+  "parent": "7a0927136b6fa5e77dec50ea44e1f62ef6b72baf",
+  "pr": 5180,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Redact HELLO, AUTH and MIGRATE credentials before validating arguments (#5180)",
+  "date": "2026-10-30",
+  "unstable": "4f3dba63fb4f2745c46857dc529d5f75d5989992",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 14,
+    "executed": 14,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.8195,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 1 (SLOWLOG GET 1) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[[7,1793867860,21,[\"HELLO\",\"4\",\"AUTH\",\"(redacted)\",\"(redacted)\"]",
+      "scenario": "ai-3d822efeb56c",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "c67bfd6ad2b265a43dc0",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 1 (SLOWLOG GET 1) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[[7,1793867851,4,[\"HELLO\",\"4\",\"AUTH\",\"(redacted)\",\"(redacted)\"],",
+      "scenario": "ai-3d822efeb56c",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "f338ebe270aea0c45f46",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 1 (SLOWLOG GET 1) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[[8,1793867881,11,[\"HELLO\",\"4\",\"AUTH\",\"(redacted)\",\"(redacted)\"]",
+      "scenario": "ai-4035eee9cf9d",
+      "seed": 202,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "f0baf7711eccd83dd0b7",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 1 (SLOWLOG GET 1) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[[8,1793867872,4,[\"HELLO\",\"4\",\"AUTH\",\"(redacted)\",\"(redacted)\"],",
+      "scenario": "ai-4035eee9cf9d",
+      "seed": 202,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "ff53a30822301bf9d067",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

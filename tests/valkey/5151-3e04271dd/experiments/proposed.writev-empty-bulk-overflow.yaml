@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.writev-empty-bulk-overflow
+deployment:
+  modes: [standalone]
+metadata:
+  description: MGET of many empty copy-avoided RAW strings must not overflow the writevToClient
+    prefix array
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, default: 1}
+    copy_avoid: {type: integer, default: 1}
+components:
+- use: valkey.action.commands
+  id: iov
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      min-io-threads-avoid-copy-reply: {$ref: inputs.copy_avoid}
+      io-threads: {$ref: inputs.io_threads}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SET, k, ""], expect: {equals: OK}}
+    - {command: [APPEND, k, ""], expect: {equals: 0}}
+    - command: [MGET, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k,
+        k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k,
+        k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k,
+        k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k,
+        k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k,
+        k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k,
+        k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k,
+        k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k,
+        k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k,
+        k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k,
+        k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k,
+        k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k,
+        k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k,
+        k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k,
+        k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k,
+        k, k, k, k, k, k, k, k, k]
+      expect_difference: true
+      expect: {contains: ""}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [iov.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: iov}

@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "84d6c236b22eed0166c208e78b7b13b9c59f2c38",
+  "parent": "e7205778fa3c5e3323e8199f5e63e369f82e9d2e",
+  "pr": 5166,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Don't pause rehashing when iterating a hashtable with no table (#5166)",
+  "date": "2026-10-30",
+  "unstable": "4f3dba63fb4f2745c46857dc529d5f75d5989992",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.3181,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: hashtable.c:1423 'ht->pause_rehash >= 0' is not true",
+      "scenario": "ai-3ca54d67d4ac",
+      "seed": 51660,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5166",
+      "fingerprint": "2e374e2c5dc550ae1825",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

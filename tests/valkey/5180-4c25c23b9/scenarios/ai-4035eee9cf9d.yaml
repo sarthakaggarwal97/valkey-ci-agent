@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7a0927136b6f..4c25c23b9ad3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4035eee9cf9d
+seed: 202
+experiment:
+  id: proposed.credential-redaction-on-reject
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

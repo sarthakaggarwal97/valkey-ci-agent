@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b8dff68cb2a7167b3f54bcc9fd155a6bc9bd8523",
+  "parent": "679b404d3af24712676a181540a8d8fcbc38a8af",
+  "pr": 5176,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Quote the replicaof host when rewriting the config file (#5176)",
+  "date": "2026-10-30",
+  "unstable": "4f3dba63fb4f2745c46857dc529d5f75d5989992",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.9411,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"0\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"14\"}, link down",
+      "scenario": "ai-6ee070dc770b",
+      "seed": 51760,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #5176",
+      "fingerprint": "171d9e116799c9e9d37c",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/53"
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"0\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"14\"}, link down",
+      "scenario": "ai-6ddcf7254267",
+      "seed": 51762,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #5176",
+      "fingerprint": "171d9e116799c9e9d37c",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/53"
+    }
+  ],
+  "recorded": []
+}

@@ -1,0 +1,24 @@
+extends: [valkey.liveness]
+id: proposed.check-rdb-output-no-filename
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-rdb with a trailing --output (no file name) prints usage
+    instead of crashing
+components:
+- use: valkey.action.tools
+  id: check-rdb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files:
+      empty-db2.rdb: !!binary 'UkVESVMwMDA5/gL/AAAAAAAAAAA='
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - {tool: valkey-check-rdb, args: [empty-db2.rdb], expect: {exit: {equals: 0},
+        stdout: {contains: RDB looks OK}}}
+    - {tool: valkey-check-rdb, args: [empty-db2.rdb, --output], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "Usage:"}}}
+    - {tool: valkey-check-rdb, args: [empty-db2.rdb, --stats, --output], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "Usage:"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check-rdb}

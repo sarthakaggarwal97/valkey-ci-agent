@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a7201627e8683217aefbd5601b4d14b9d8caddd8",
+  "parent": "84d6c236b22eed0166c208e78b7b13b9c59f2c38",
+  "pr": 5168,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Keep a lone quote in the last CSV dataset field literally (#5168)",
+  "date": "2026-10-29",
+  "unstable": "4f3dba63fb4f2745c46857dc529d5f75d5989992",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.1913,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: sds.c:104 'initlen + hdrlen + 1 > initlen' is not true",
+      "scenario": "ai-54077754af44",
+      "seed": 51680,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5168",
+      "fingerprint": "0c6caa6206dcf4fc3b47",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

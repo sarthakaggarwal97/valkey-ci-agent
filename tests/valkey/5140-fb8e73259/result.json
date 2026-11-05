@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fb8e7325960dc78a5277809894cca6b98ea73b28",
+  "parent": "b64ba79eb1dc676aaa6d48702e7ff149c3c0eb6a",
+  "pr": 5140,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reject RESET on slot migration clients (#5140)",
+  "date": "2026-10-30",
+  "unstable": "4f3dba63fb4f2745c46857dc529d5f75d5989992",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.0064,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2355 '!(c->flag.replica || c->flag.primary || c->slot_migration_job)' is not true",
+      "scenario": "ai-a571399364a2",
+      "seed": 7001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5140",
+      "fingerprint": "139d46e190541c869137",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2355 '!(c->flag.replica || c->flag.primary || c->slot_migration_job)' is not true",
+      "scenario": "ai-b4b26def51fa",
+      "seed": 7002,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5140",
+      "fingerprint": "139d46e190541c869137",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

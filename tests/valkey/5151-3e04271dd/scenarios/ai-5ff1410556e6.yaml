@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 932ee1e45440..3e04271dd487.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5ff1410556e6
+seed: 51510
+experiment:
+  id: proposed.writev-empty-bulk-overflow
+  inputs:
+    resp: 2
+    io_threads: 1
+    copy_avoid: 1
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

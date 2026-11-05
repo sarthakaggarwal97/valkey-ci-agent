@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d6aff353778fff95fc480786a3b799dfa9c64fc7",
+  "parent": "22033385bc43aa52ff1410cd6bab137a63fb6989",
+  "pr": 5135,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Print usage when valkey-check-rdb --output has no file name (#5135)",
+  "date": "2026-10-29",
+  "unstable": "4f3dba63fb4f2745c46857dc529d5f75d5989992",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.1606,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: killed by signal 11",
+      "scenario": "ai-0bb5a2c2dd2f",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5135",
+      "fingerprint": "3c9b6d82c5da2b04c973",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

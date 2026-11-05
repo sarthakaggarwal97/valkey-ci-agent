@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.debug-slotmigration-argc
+deployment:
+  modes: [standalone]
+metadata:
+  description: DEBUG SLOTMIGRATION with too few arguments must not read past argv;
+    the fixed build answers a subcommand error and stays up while the parent dereferences
+    out of bounds
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slotmigration
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SET, canary, alive], expect: {equals: OK}}
+    - {command: [DEBUG, SLOTMIGRATION], expect_difference: true, expect: {error: true}}
+    - {command: [DEBUG, SLOTMIGRATION, PREVENT-PAUSE], expect_difference: true, expect: {
+        error: true}}
+    - {command: [GET, canary], expect_difference: true, expect: {equals: alive}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotmigration}

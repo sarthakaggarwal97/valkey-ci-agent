@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "90f3534dc88a6208d83f251d39470cea8fa83e4d",
+  "parent": "c0826654b6ab89191c595f06b826c3f70ff9ad7b",
+  "pr": 5174,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix GEOSEARCH BYPOLYGON when the vertex centroid is outside geohash range (#5174)",
+  "date": "2026-10-30",
+  "unstable": "4f3dba63fb4f2745c46857dc529d5f75d5989992",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.2061,
+  "findings": [],
+  "recorded": []
+}

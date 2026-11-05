@@ -1,0 +1,40 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "679b404d3af24712676a181540a8d8fcbc38a8af",
+  "parent": "a4ffea9387a35b391208908071f300d4022b0549",
+  "pr": 5185,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replace line breaks in server.log() messages with spaces (#5185)",
+  "date": "2026-10-30",
+  "unstable": "4f3dba63fb4f2745c46857dc529d5f75d5989992",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.5031,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-36bd90fc287e",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "required evidence was not observed: valkey.lua-log.eval-crlf-one-record from logs, valkey.lua-log.fcall-crlf-one-record from logs, valkey.lua-log.redis-alias-one-record from logs, valkey.lua-log.multi-lf-one-record from logs, valkey.lua-log.glued-args-one-record from logs, and 2 more; the run did no"
+    },
+    {
+      "scenario": "ai-d7d98c0a31c4",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "required evidence was not observed: valkey.lua-log.eval-crlf-one-record from logs, valkey.lua-log.fcall-crlf-one-record from logs, valkey.lua-log.redis-alias-one-record from logs, valkey.lua-log.multi-lf-one-record from logs, valkey.lua-log.glued-args-one-record from logs, and 2 more; the run did no"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cdacae6cec02a331cd7a3dd8a2d749d5e6ca444c",
+  "parent": "4c25c23b9ad3449ea0346e80f05817c93770de6a",
+  "pr": 5126,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reject a +CONTINUE reply to PSYNC when there is no cached primary (#5126)",
+  "date": "2026-10-30",
+  "unstable": "4f3dba63fb4f2745c46857dc529d5f75d5989992",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.4924,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix guards against a primary that violates the replication protocol by replying +CONTINUE to a PSYNC ? -1 (full-resync) request from a replica with no cached primary. A conformant Valkey primary never does this (primaryTryPartialResynchronization always forces a full resync when the requested replid is '?'; the dual-channel +CONTINUE case is handled before the new guard), so the only way to produce the triggering reply is a non-conformant peer, which is why the upstream test needs a bespoke fake_primary.tcl. The fuzzer deploys only real Valkey builds, and no installed component can imperso"
+}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 84d6c236b22e..a7201627e868.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-54077754af44
+seed: 51680
+experiment:
+  id: proposed.benchmark-csv-lone-quote
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.function-load-log
+deployment:
+  modes: [standalone]
+metadata:
+  description: redis.log() in a library body during FUNCTION LOAD succeeds on the
+    change and asserts on the parent
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fnload
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - command: [FUNCTION, LOAD, REPLACE, "#!lua name=lib2\nredis.log(redis.LOG_WARNING,\
+          \ 'log from function load')\nredis.log(redis.LOG_NOTICE, 'notice from load')\n\
+          redis.register_function('log_at_load', function() return 1 end)"]
+      expect_difference: true
+      expect: {equals: lib2}
+    - command: [FCALL, log_at_load, 0]
+      expect_difference: true
+      expect: {equals: 1}
+    - command: [FUNCTION, LIST]
+      expect_difference: true
+      expect: {exists: true}
+    - command: [FUNCTION, DELETE, lib2]
+      expect_difference: true
+      expect: {equals: OK}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fnload}

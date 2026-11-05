@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cd4b2c69113b..c0826654b6ab.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a7a006ff6f1d
+seed: 20260
+experiment:
+  id: proposed.syncslots-finish-import-reset-while-paused
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

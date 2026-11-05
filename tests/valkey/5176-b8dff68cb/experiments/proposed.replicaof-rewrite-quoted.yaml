@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.replicaof-rewrite-quoted
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG REWRITE quotes a replicaof host holding a newline so a restart
+    reads it back whole and injects nothing
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rewrite
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, GET, maxmemory], expect: {equals: [maxmemory, "0"]}}
+    - {command: [REPLICAOF, "127.0.0.1 1\nmaxmemory 1234567\n#", 1], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, replicaof], expect_difference: true, expect: {equals: [
+          replicaof, "127.0.0.1 1\nmaxmemory 1234567\n# 1"]}}
+    - {command: [CONFIG, GET, maxmemory], expect_difference: true, expect: {equals: [
+          maxmemory, "0"]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rewrite}

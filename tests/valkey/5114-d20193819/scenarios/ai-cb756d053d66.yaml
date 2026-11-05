@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cdacae6cec02..d201938198cd.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-cb756d053d66
+seed: 7002
+experiment:
+  id: proposed.function-load-log
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

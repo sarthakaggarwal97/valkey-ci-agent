@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.reset-on-slot-migration-client
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: RESET on a slot-migration (import) client is rejected instead of crashing
+    the server via the clearClientConnectionState assertion
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reset
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+        SLOTSRANGE, 16383, 16383], node: 1, connection: job, expect: {equals: OK}}
+    - {command: [RESET], node: 1, connection: job, expect_difference: true, expect: {
+        exists: false}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [CLUSTER, SLOTS], node: 1}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [reset.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reset}

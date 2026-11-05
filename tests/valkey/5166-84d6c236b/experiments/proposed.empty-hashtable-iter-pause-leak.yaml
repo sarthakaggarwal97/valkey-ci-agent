@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.empty-hashtable-iter-pause-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: Iterating an empty (flushed) hashtable must not leak a rehash-pause
+    and overflow the int16 pause counter
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: pauseleak
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [FLUSHDB, SYNC], expect: {equals: OK}}
+    - {command: [EVAL, "for i=1,40000 do server.call('keys','*') end", "0"], expect: {
+        exists: false}}
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [KEYS, "*"], expect_difference: true, expect: {equals: [foo]}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pauseleak}

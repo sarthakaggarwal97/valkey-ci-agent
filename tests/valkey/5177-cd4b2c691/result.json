@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cd4b2c69113bccddb898ab77c39c18d6aeab454b",
+  "parent": "b8dff68cb2a7167b3f54bcc9fd155a6bc9bd8523",
+  "pr": 5177,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Size valkey-check-rdb stats for every selected DB (#5177)",
+  "date": "2026-10-30",
+  "unstable": "4f3dba63fb4f2745c46857dc529d5f75d5989992",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.5337,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: killed by signal 11",
+      "scenario": "ai-905f49bb8b42",
+      "seed": 7001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5177",
+      "fingerprint": "3c9b6d82c5da2b04c973",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

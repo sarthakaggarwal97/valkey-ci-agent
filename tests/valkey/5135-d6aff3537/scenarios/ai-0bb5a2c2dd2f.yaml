@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 22033385bc43..d6aff353778f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0bb5a2c2dd2f
+seed: 1
+experiment:
+  id: proposed.check-rdb-output-no-filename
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

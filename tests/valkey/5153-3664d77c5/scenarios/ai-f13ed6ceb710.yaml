@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a7201627e868..3664d77c5952.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f13ed6ceb710
+seed: 51533
+experiment:
+  id: proposed.script-debug-fork-autosave
+  inputs:
+    resp: 3
+    save_method: fork
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

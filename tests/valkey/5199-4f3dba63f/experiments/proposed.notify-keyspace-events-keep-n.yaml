@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.notify-keyspace-events-keep-n
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CONFIG GET and CONFIG REWRITE keep the 'n' keyspace event flag when 'A' is set;
+    the parent drops 'n' from the flags-to-string conversion, so a REWRITE plus restart
+    silently disables new-key notifications there.
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: notifyflags
+  config:
+    compare_with: {$ref: inputs.parent}
+    server_config: {notify-keyspace-events: KEAn}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, notify-keyspace-events], expect_difference: true, expect: {
+        contains: AnKE}}
+    - {command: [CONFIG, SET, notify-keyspace-events, KEAnm], expect: {equals: OK}}
+    - {command: [CONFIG, GET, notify-keyspace-events], expect_difference: true, expect: {
+        contains: AnKEm}}
+    - {command: [CONFIG, SET, notify-keyspace-events, Kgn], expect: {equals: OK}}
+    - {command: [CONFIG, GET, notify-keyspace-events], expect: {contains: gnK}}
+    - {command: [CONFIG, SET, notify-keyspace-events, KEAn], expect: {equals: OK}}
+    - {command: [SUBSCRIBE, "__keyevent@0__:new"], connection: sub1, expect: {contains: subscribe}}
+    - {command: [SET, firstkey, v1], expect: {equals: OK}}
+    - {connection: sub1, read: true, expect: {contains: firstkey}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, notify-keyspace-events], expect_difference: true, expect: {
+        contains: AnKE}}
+    - {command: [SUBSCRIBE, "__keyevent@0__:new"], connection: sub2, expect: {contains: subscribe}}
+    - {command: [SET, secondkey, v2], expect: {equals: OK}}
+    - {connection: sub2, read: true, expect_difference: true, expect: {contains: secondkey}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [notifyflags.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: notifyflags}

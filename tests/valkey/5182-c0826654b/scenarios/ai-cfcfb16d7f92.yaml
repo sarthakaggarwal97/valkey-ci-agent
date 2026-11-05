@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cd4b2c69113b..c0826654b6ab.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-cfcfb16d7f92
+seed: 20261
+experiment:
+  id: proposed.syncslots-finish-dual-import-while-paused
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7100

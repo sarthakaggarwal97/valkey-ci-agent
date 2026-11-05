@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e7205778fa3c5e3323e8199f5e63e369f82e9d2e",
+  "parent": "d6aff353778fff95fc480786a3b799dfa9c64fc7",
+  "pr": 5132,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Hash HyperLogLog elements with a size_t length (#5132)",
+  "date": "2026-10-29",
+  "unstable": "4f3dba63fb4f2745c46857dc529d5f75d5989992",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3816,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only widens MurmurHash64A's length parameter from int to size_t. Its sole command path is PFADD, which hashes each element using sdslen as the length. The result differs between the two builds only for a single element of 2^31 bytes (2 GiB) or larger, where the old signed int overflowed negative and caused an out-of-bounds read; for every element below that threshold both builds hash identically and produce identical replies. Triggering the fixed path requires embedding a >=2 GiB single argument (a large-memory case), which cannot be expressed within the scenario/experiment size lim"
+}

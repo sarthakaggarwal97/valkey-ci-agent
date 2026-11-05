@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9b4dcf617dfd..4f3dba63fb4f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2a84de8a0ec8
+seed: 5199
+experiment:
+  id: proposed.notify-keyspace-events-keep-n
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4f3dba63fb4f2745c46857dc529d5f75d5989992",
+  "parent": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "pr": 5199,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Keep the 'n' keyspace event flag when 'A' is set (#5199)",
+  "date": "2026-11-05",
+  "unstable": "4f3dba63fb4f2745c46857dc529d5f75d5989992",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.0257,
+  "findings": [],
+  "recorded": []
+}

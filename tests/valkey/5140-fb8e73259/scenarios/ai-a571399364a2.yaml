@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b64ba79eb1dc..fb8e7325960d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a571399364a2
+seed: 7001
+experiment:
+  id: proposed.reset-on-slot-migration-client
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000
