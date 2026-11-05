@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-05T10:29+00:00.
+Updated 2026-11-05T11:23+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -63,7 +63,7 @@ Updated 2026-11-05T10:29+00:00.
 
 ### valkey-io/valkey-json
 
-[2026-11-05T10:24:26+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42010343965): 0 merge(s) tested, 0 without a code change.
+[2026-11-05T11:23:14+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42014574240): 0 merge(s) tested, 0 without a code change.
 
 
 ### valkey-io/valkey-search
@@ -116,5 +116,5 @@ Updated 2026-11-05T10:29+00:00.
 
 ## Retries
 
-- [valkey-io/valkey-bloom#49](https://github.com/valkey-io/valkey-bloom/pull/49): attempt 2 of 3, `cargo build --release` failed in parent (exit 101): Compiling heck v0.5.0 Compiling rustc-demangle v0.1.28 Compiling strum_macros v0.26.4 Compiling valkey-module-macros-internals v0.1.15 Compiling ni
-- [valkey-io/valkey-bloom#48](https://github.com/valkey-io/valkey-bloom/pull/48): attempt 2 of 3, `cargo build --release` failed in merge (exit 101): Compiling lazy_static v1.5.1 Compiling pin-utils v0.1.1 Compiling nix v0.26.4 Compiling valkey-module-macros-internals v0.1.15 Compiling serde_syn v
+- [valkey-io/valkey-bloom#49](https://github.com/valkey-io/valkey-bloom/pull/49): attempt 0 of 3, `cargo build --release` failed in parent (exit 101): Compiling heck v0.5.0 Compiling rustc-demangle v0.1.28 Compiling strum_macros v0.26.4 Compiling valkey-module-macros-internals v0.1.15 Compiling ni
+- [valkey-io/valkey-bloom#48](https://github.com/valkey-io/valkey-bloom/pull/48): attempt 0 of 3, `cargo build --release` failed in merge (exit 101): Compiling lazy_static v1.5.1 Compiling pin-utils v0.1.1 Compiling nix v0.26.4 Compiling valkey-module-macros-internals v0.1.15 Compiling serde_syn v
