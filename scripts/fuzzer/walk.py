@@ -215,9 +215,9 @@ def first_parent(repo_dir: Path, repo: str) -> list[dict[str, Any]]:
 
 
 def _code(path: str, repo: str) -> bool:
-    """Whether a changed path is code: not docs (``*.md``, ``docs/``), CI (``.github/``) or tests (``tests/``,
-    but Valkey's tests/modules, and ``integration/``)."""
-    if path.endswith(".md") or path.startswith(("docs/", ".github/", "integration/")):
+    """Whether a changed path is code: not docs (``*.md``, ``LICENSE``, ``docs/``), CI (``.github/``) or tests
+    (``tests/``, but Valkey's tests/modules, and ``integration/``)."""
+    if path.endswith(".md") or path == "LICENSE" or path.startswith(("docs/", ".github/", "integration/")):
         return False
     return not path.startswith("tests/") or (repo == VALKEY_REPO and path.startswith("tests/modules/"))
 
@@ -262,6 +262,10 @@ def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey
             continue
         if no_code_change(_git(repo_dir, "diff", "--name-only", merge["parent"], merge["sha"]).split(), repo):
             skipped.append(merge)
+        elif module_repository(repo) and no_code_change(
+                _git(repo_dir, "ls-tree", "-r", "--name-only", merge["parent"]).split(), repo):
+            # The module's first code drop: its parent, a README-only stub, has nothing to build or compare with.
+            skipped.append({**merge, "skip_outcome": "no-parent-code"})
         else:
             jobs.append(merge)
     cursor = history[index[pointer["cursor"]]]
@@ -1115,7 +1119,7 @@ def _summary(merge: dict[str, Any], result: dict[str, Any] | None, now: str) -> 
     entry = {key: merge.get(key) for key in ("repo", "pr", "pr_repo", "subject")}
     entry["at"] = now
     if result is None:
-        return {**entry, "outcome": "no-code-change"}
+        return {**entry, "outcome": merge.get("skip_outcome", "no-code-change")}
     entry.update({key: result.get(key) for key in ("outcome", "proposed", "proven", "hunted", "recall", "cost_usd")})
     entry["coverage"] = (result.get("coverage") or {}).get("percent")
     # Tests skipped as unsupported, most often a setting the build does not know: one reason, so a skip that

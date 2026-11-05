@@ -144,6 +144,19 @@ def _with_base(base, call):
         walk.VALKEY_BASE = saved
 
 
+def test_a_modules_first_code_drop_on_a_readme_stub_is_skipped(tmp_path):
+    # valkey-bloom 5237a100 ("Initial commit") and valkey-json #1: the parent is a README-only stub, so there is
+    # nothing to build or compare with; the merge is done without a job, as no-parent-code.
+    repo = _repo(tmp_path, "valkey-bloom", [("Initial stub", "README.md"), ("Initial commit", "src/lib.rs"),
+                                            ("Fix BF.ADD (#2)", "src/lib.rs")])
+    planned = plan(repo, BLOOM, initial_state(BLOOM), 5, UNSTABLE)
+    assert _jobs(planned) == [2]
+    assert [m["subject"] for m in planned["skipped"]] == ["Initial commit"]
+    assert planned["skipped"][0]["skip_outcome"] == "no-parent-code"
+    state = update(initial_state(BLOOM), planned, [], now=NOW)
+    assert state["done"][planned["skipped"][0]["sha"]]["outcome"] == "no-parent-code"
+
+
 def test_a_pointer_off_the_history_stops_the_plan(json_repo):
     state = initial_state(JSON)
     state["pointer"] = {"head": "0" * 40, "cursor": _shas(json_repo)[0], "end": _shas(json_repo)[-1]}
@@ -153,6 +166,7 @@ def test_a_pointer_off_the_history_stops_the_plan(json_repo):
 
 @pytest.mark.parametrize(("paths", "repo", "expected"), [
     (["README.md", "docs/a.txt", ".github/workflows/ci.yml"], JSON, True),
+    (["LICENSE"], JSON, True),
     (["tests/unit/a.tcl", "integration/test.py"], JSON, True),
     (["tests/modules/datatype.c"], walk.VALKEY_REPO, False),
     (["tests/modules/datatype.c"], JSON, True),
