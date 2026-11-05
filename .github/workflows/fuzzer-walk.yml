@@ -5,6 +5,8 @@
 name: Walk Every Merge Through the Fuzzer
 
 on:
+  schedule:
+    - cron: "23 */2 * * *"
   workflow_dispatch:
     inputs:
       repository:
