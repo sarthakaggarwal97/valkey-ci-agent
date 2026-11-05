@@ -348,6 +348,13 @@ def test_only_what_unstable_shows_is_filed_and_each_build_names_the_verdict(pare
     assert files({"builds": builds}) is filed
 
 
+def test_a_sanitizer_finding_on_unstable_alone_names_no_merge():
+    # Only unstable is built with ASan: fuzzer#55 read "appeared after #5153" for a bug older than 7.2.
+    builds = {"parent": False, "merge": False, "unstable": True}
+    assert verdict(builds, "#5153", sanitizer=True) == "shown by ASan on unstable, the one build with it"
+    assert verdict({**builds, "merge": True}, "#5153", sanitizer=True) == "introduced by #5153"
+
+
 def _report(*results: dict) -> dict:
     return {"outcome": {"component_results": list(results)}}
 

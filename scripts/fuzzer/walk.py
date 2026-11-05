@@ -666,11 +666,14 @@ def fuzz(fuzzer_bin: str, doc: dict[str, Any], seed: int, *, candidate: dict[str
             "found": findings(report, run_dir / "artifacts"), "summary": " ".join(str(report["summary"]).split())[:300]}
 
 
-def verdict(builds: dict[str, bool], pr: str) -> str:
-    """What a finding's outcome on the parent, the merge and unstable says of the merge."""
+def verdict(builds: dict[str, bool], pr: str, *, sanitizer: bool = False) -> str:
+    """What a finding's outcome on the parent, the merge and unstable says of the merge. Only unstable is built with
+    ASan, so a sanitizer's finding there alone says nothing of when it appeared."""
     if builds["unstable"]:
         if builds["merge"]:
             return f"predates {pr}" if builds["parent"] else f"introduced by {pr}"
+        if sanitizer and not builds["parent"]:
+            return "shown by ASan on unstable, the one build with it"
         return f"predates {pr}, which hid it" if builds["parent"] else f"appeared after {pr}"
     if builds["merge"]:
         return f"predates {pr}, since fixed" if builds["parent"] else "introduced and since fixed"
@@ -1024,7 +1027,8 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
                     result["recorded"].append({"scenario": test, "build": "unstable", "seed": hunt_seed,
                                                "reason": UNEXPLAINED})
             for finding in found:
-                finding.update(scenario=test, verdict=verdict(finding["builds"], pr))
+                finding.update(scenario=test, verdict=verdict(finding["builds"], pr,
+                                                              sanitizer=bool(_SANITIZER_RE.search(finding["detail"]))))
                 if finding["rule"] == "regressed-fix":
                     finding["verdict"] = f"the fix of {pr} regressed" if finding["builds"]["unstable"] else "not reproduced"
                 if (finding["rule"] == "crash" and finding["builds"]["merge"] and not finding["builds"]["parent"]
