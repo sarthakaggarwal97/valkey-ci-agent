@@ -629,6 +629,23 @@ def reached_commands(report: dict[str, Any]) -> set[tuple[str, int]]:
     return reached
 
 
+def sequence_replies(report: dict[str, Any]) -> dict[tuple[str, int], dict[str, Any]]:
+    """The build under test's reply to each command of the run's sequences, by (component id, index), without
+    the index."""
+    replies = {}
+    for result in report["outcome"]["component_results"]:
+        if not isinstance(result, dict):
+            continue
+        for evidence in result.get("evidence") or []:
+            if isinstance(evidence, dict) and evidence.get("evidence_id") == SEQUENCE_EVIDENCE:
+                value = evidence.get("value")
+                records = ((value.get("candidate") or {}).get("replies") or []) if isinstance(value, dict) else []
+                for record in records:
+                    replies[(str(result.get("component_id")), int(record["index"]))] = {
+                        key: item for key, item in record.items() if key != "index"}
+    return replies
+
+
 # What LeakSanitizer does not report in the servers a run starts.
 LSAN_SUPPRESSIONS = Path(__file__).with_name("lsan.supp")
 
@@ -676,6 +693,7 @@ def fuzz(fuzzer_bin: str, doc: dict[str, Any], seed: int, *, candidate: dict[str
     sequence = (outcome.sequence if outcome else None) or {}
     return {"status": report["status"], "reason": outcome.reason if outcome else None,
             "reached": bool(outcome and outcome.reached), "reached_commands": reached_commands(report),
+            "replies": sequence_replies(report),
             "parent_exited": isinstance(sequence.get("parent"), dict) and "exited" in sequence["parent"],
             "found": findings(report, run_dir / "artifacts"), "summary": " ".join(str(report["summary"]).split())[:300]}
 
@@ -1025,8 +1043,11 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
                             "merge": fingerprint in view(test, doc, "merge", seed)["found"], "unstable": False}})
             hunted = view(test, doc, "unstable", seed)
             # A fix regressed when commands that reached the change at the merge no longer do on unstable: not when
-            # some marked command is unreached on both, which unreached-change alone says.
-            lost = first["reached_commands"] - hunted.get("reached_commands", set())
+            # some marked command is unreached on both, which unreached-change alone says, nor when unstable still
+            # replies as the merge did and only the parent, replying in no fixed order, happened to agree.
+            lost = {command for command in first["reached_commands"] - hunted.get("reached_commands", set())
+                    if command not in first.get("replies", {})
+                    or hunted.get("replies", {}).get(command) != first["replies"][command]}
             if first.get("reached") and hunted.get("reason") == UNREACHED and lost:
                 rerun = view(test, doc, "unstable", seed, again=True)
                 named = ", ".join(f"{component} {index}" for component, index in sorted(lost))

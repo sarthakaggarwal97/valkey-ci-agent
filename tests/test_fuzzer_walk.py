@@ -725,6 +725,32 @@ def test_the_same_commands_unreached_on_both_builds_is_no_regressed_fix(monkeypa
     publisher.upsert.assert_not_called()
 
 
+def test_a_change_that_still_replies_as_at_the_merge_is_no_regressed_fix(monkeypatch, tmp_path):
+    # valkey-search #1287 (fuzzer#68): unstable replied to the marked FT.SEARCH as the merge did; the parent, whose
+    # order is no order, happened to reply alike on unstable's run, so the change looked lost.
+    test = _scenario("seed: 10\nexperiment: {id: proposed.lset}\ndeployment: {mode: standalone}\n")
+    scored = {("search", 23): {"reply": [3, "p:1", "p:3", "p:2"]}}
+
+    def fuzz(fuzzer_bin, doc, seed, *, candidate, compare, core, experiment_dir, run_dir):
+        merge = _build(run_dir) == "merge"
+        return {"status": "PASS" if merge else "ERROR", "reason": None if merge else "unreached-change",
+                "reached": merge, "parent_exited": False, "found": {},
+                "reached_commands": {("search", 23)} if merge else set(), "replies": scored}
+
+    result, publisher = _walk_merge(monkeypatch, tmp_path, fuzz, (test,))
+    assert result["proven"] == 1 and result["findings"] == []
+    publisher.upsert.assert_not_called()
+
+
+def test_the_replies_of_a_runs_sequence_are_known_by_component_and_index():
+    report = {"outcome": {"component_results": [
+        {"component_id": "seq", "evidence": [{"evidence_id": walk.SEQUENCE_EVIDENCE, "value": {"candidate": {
+            "replies": [{"index": 0, "reply": "OK"}, {"index": 1, "error": "WRONGTYPE x"}]}}}]},
+        {"component_id": "tools", "evidence": [{"evidence_id": walk.TOOL_RUNS_EVIDENCE, "value": {}}]},
+    ]}}
+    assert walk.sequence_replies(report) == {("seq", 0): {"reply": "OK"}, ("seq", 1): {"error": "WRONGTYPE x"}}
+
+
 def test_a_finding_of_several_tests_is_one_line_per_merge():
     merge = _merge()
     same = {"rule": "regressed-fix", "verdict": "the fix of #4716 regressed", "issue": "https://x/issues/40",
