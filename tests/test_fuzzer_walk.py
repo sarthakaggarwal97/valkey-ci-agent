@@ -560,12 +560,13 @@ def test_a_merge_is_proven_hunted_rerun_and_filed_by_the_rule(monkeypatch, tmp_p
     crash = {"rule": "crash", "detail": "crash: signal 11 in lsetCommand", "lines": []}
     flaky = {"rule": "crash", "detail": "crash: signal 6 in other", "lines": []}
     fixed = {"rule": "check", "detail": "replica-diverged: x", "lines": []}
-    calls = []
+    calls, dirs = [], []
 
     def fuzz(fuzzer_bin, doc, seed, *, candidate, compare, core, experiment_dir, run_dir):
         again = run_dir.name.endswith("-again")
         build = _build(run_dir)
         calls.append((doc["scenario_id"], build, seed, again, Path(candidate["server"]).parts[-3]))
+        dirs.append((seed == doc["seed"], experiment_dir.name))
         if doc["scenario_id"] == missed["scenario_id"]:
             return {"status": "ERROR", "reason": "unreached-change", "reached": False, "parent_exited": False,
                     "reached_commands": set(), "found": {}}
@@ -601,6 +602,8 @@ def test_a_merge_is_proven_hunted_rerun_and_filed_by_the_rule(monkeypatch, tmp_p
     # Each build runs against its own: the merge against the parent, unstable from the run's build.
     test = reached["scenario_id"]
     assert (test, "merge", 10, False, "merge") in calls and (test, "unstable", 12, False, "unstable") in calls
+    # The checks run at the test's own seed; the hunt's further seeds run without them.
+    assert set(dirs) == {(True, "experiments"), (False, "experiments-plain")}
     assert (test, "unstable", 11, True, "unstable") in calls and (test, "merge", 11, False, "merge") in calls
     folder = tmp_path / "out" / merge_folder(merge)
     assert sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file()) == [

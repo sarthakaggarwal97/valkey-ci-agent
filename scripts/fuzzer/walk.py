@@ -880,13 +880,16 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
     runs: dict[tuple[str, str, int], dict[str, Any]] = {}
 
     def view(test: str, doc: dict[str, Any], build: str, seed: int, again: bool = False) -> dict[str, Any]:
-        """The run of ``test`` on ``build`` at ``seed``, once; ``again`` runs it a second time."""
+        """The run of ``test`` on ``build`` at ``seed``, once; ``again`` runs it a second time. The checks run at
+        the test's own seed: they do not change with the seed, and on ASan builds they take most of a run, so
+        the further seeds the hunt adds for crashes that show only sometimes run without them."""
         key = (test, build, seed)
         if again or key not in runs:
             label = f"{test}-{build}-{seed}" + ("-again" if again else "")
             logger.info("Running %s", label)
+            directory = experiment_dir if seed == int(doc["seed"]) else plain_dir
             done = fuzz(fuzzer_bin, doc, seed, candidate=sides[build], compare=sides[against[build]], core=core,
-                        experiment_dir=experiment_dir, run_dir=work / "runs" / label)
+                        experiment_dir=directory, run_dir=work / "runs" / label)
             if again:
                 return done
             runs[key] = done
