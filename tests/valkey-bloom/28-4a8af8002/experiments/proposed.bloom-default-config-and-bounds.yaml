@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.bloom-default-config-and-bounds
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: valkey-bloom default capacity (100000->100) and widened capacity/expansion
+    bounds (u32->i64/u32::MAX), compared across module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bloom
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [BF.ADD, f1, item1], expect: {equals: 1}}
+    - {command: [BF.INFO, f1, CAPACITY], expect_difference: true, expect: {equals: 100}}
+    - {command: [BF.RESERVE, r1, "0.99", "4294967296"], expect_difference: true, expect: {
+        error: false}}
+    - {command: [BF.RESERVE, r2, "0.01", "9223372036854775807"], expect_difference: true,
+      expect: {error: "exceeding size limit"}}
+    - {command: [BF.RESERVE, r3, "0.01", "9223372036854775808"], expect: {error: "bad\
+          \ capacity"}}
+    - {command: [BF.INSERT, i1, EXPANSION, "11", ITEMS, a], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [BF.INSERT, i2, CAPACITY, "4294967296", ERROR, "0.99", ITEMS, a],
+      expect_difference: true, expect: {equals: [1]}}
+    - {command: [CONFIG, SET, bf.bloom-capacity, "4294967296"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, bf.bloom-expansion, "11"], expect_difference: true,
+      expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bloom}

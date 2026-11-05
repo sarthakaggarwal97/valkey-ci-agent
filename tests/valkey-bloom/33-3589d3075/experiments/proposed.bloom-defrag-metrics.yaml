@@ -1,0 +1,196 @@
+extends: [valkey.liveness]
+id: proposed.bloom-defrag-metrics
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active defrag over bloom objects increments the new bf_bloom_defrag_hits/misses
+    INFO fields (absent on the parent); filters stay intact through defrag, SAVE,
+    restart and a second defrag of RDB-loaded objects
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: defrag
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {active-defrag-ignore-bytes: "1", active-defrag-threshold-lower: "2"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 300
+    commands:
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, no], expect: {equals: OK}}
+    - {command: [BF.RESERVE, k00, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k00, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k01, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k01, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k02, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k02, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k03, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k03, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k04, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k04, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k05, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k05, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k06, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k06, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k07, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k07, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k08, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k08, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k09, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k09, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k10, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k10, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k11, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k11, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k12, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k12, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k13, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k13, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k14, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k14, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k15, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k15, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k16, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k16, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k17, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k17, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k18, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k18, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k19, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k19, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k20, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k20, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k21, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k21, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k22, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k22, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k23, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k23, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k24, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k24, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k25, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k25, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k26, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k26, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k27, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k27, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k28, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k28, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k29, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k29, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k30, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k30, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k31, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, k31, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.INSERT, s00, CAPACITY, 1, EXPANSION, 2, ITEMS, e1, e2, e3, e4,
+        e5, e6, e7, e8]}
+    - {command: [BF.INSERT, s01, CAPACITY, 1, EXPANSION, 2, ITEMS, e1, e2, e3, e4,
+        e5, e6, e7, e8]}
+    - {command: [BF.INSERT, s02, CAPACITY, 1, EXPANSION, 2, ITEMS, e1, e2, e3, e4,
+        e5, e6, e7, e8]}
+    - {command: [BF.INSERT, s03, CAPACITY, 1, EXPANSION, 2, ITEMS, e1, e2, e3, e4,
+        e5, e6, e7, e8]}
+    - {command: [BF.INSERT, s04, CAPACITY, 1, EXPANSION, 2, ITEMS, e1, e2, e3, e4,
+        e5, e6, e7, e8]}
+    - {command: [BF.INSERT, s05, CAPACITY, 1, EXPANSION, 2, ITEMS, e1, e2, e3, e4,
+        e5, e6, e7, e8]}
+    - {command: [BF.INSERT, s06, CAPACITY, 1, EXPANSION, 2, ITEMS, e1, e2, e3, e4,
+        e5, e6, e7, e8]}
+    - {command: [BF.INSERT, s07, CAPACITY, 1, EXPANSION, 2, ITEMS, e1, e2, e3, e4,
+        e5, e6, e7, e8]}
+    - {command: [BF.INSERT, s08, CAPACITY, 1, EXPANSION, 2, ITEMS, e1, e2, e3, e4,
+        e5, e6, e7, e8]}
+    - {command: [BF.INSERT, s09, CAPACITY, 1, EXPANSION, 2, ITEMS, e1, e2, e3, e4,
+        e5, e6, e7, e8]}
+    - {command: [BF.INSERT, s10, CAPACITY, 1, EXPANSION, 2, ITEMS, e1, e2, e3, e4,
+        e5, e6, e7, e8]}
+    - {command: [BF.INSERT, s11, CAPACITY, 1, EXPANSION, 2, ITEMS, e1, e2, e3, e4,
+        e5, e6, e7, e8]}
+    - {command: [BF.INSERT, s12, CAPACITY, 1, EXPANSION, 2, ITEMS, e1, e2, e3, e4,
+        e5, e6, e7, e8]}
+    - {command: [BF.INSERT, s13, CAPACITY, 1, EXPANSION, 2, ITEMS, e1, e2, e3, e4,
+        e5, e6, e7, e8]}
+    - {command: [BF.INSERT, s14, CAPACITY, 1, EXPANSION, 2, ITEMS, e1, e2, e3, e4,
+        e5, e6, e7, e8]}
+    - {command: [BF.INSERT, s15, CAPACITY, 1, EXPANSION, 2, ITEMS, e1, e2, e3, e4,
+        e5, e6, e7, e8]}
+    - {command: [DEL, k00, k02, k04, k06, k08, k10, k12, k14, k16, k18, k20, k22,
+        k24, k26, k28, k30], expect: {equals: 16}}
+    - {command: [DEL, s00, s02, s04, s06, s08, s10, s12, s14], expect: {equals: 8}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_defrag_hits:0"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_defrag_misses:0"}}
+    - {command: [CONFIG, SET, activedefrag, yes], expect: {equals: OK}}
+    - {command: [EVAL, "local s=redis.call('INFO','stats') local t=tonumber(string.match(s,'total_active_defrag_time:(%d+)'))\
+          \ or 0 if t>0 then return 1 end return 0", 0], wait_s: 30, expect: {equals: 1}}
+    - {command: [EVAL, "local s=redis.call('INFO','bf') local h=tonumber(string.match(s,'bf_bloom_defrag_hits:(%d+)'))\
+          \ or 0 local m=tonumber(string.match(s,'bf_bloom_defrag_misses:(%d+)'))\
+          \ or 0 if h+m>0 then return 1 end return 0", 0], wait_s: 30, expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_defrag_hits:"}}
+    - {command: [CONFIG, SET, activedefrag, no], expect: {equals: OK}}
+    - {command: [BF.MEXISTS, k01, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.MEXISTS, k11, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.MEXISTS, s01, e1, e2, e3, e4, e5, e6, e7, e8], expect: {equals: [
+          1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [BF.CARD, k01], expect: {equals: 5}}
+    - {command: [BF.INFO, s01]}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, no], expect: {equals: OK}}
+    - {command: [BF.MEXISTS, k01, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.MEXISTS, s01, e1, e2, e3, e4, e5, e6, e7, e8], expect: {equals: [
+          1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_defrag_hits:0"}}
+    - {command: [BF.RESERVE, n00, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, n00, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, n01, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, n01, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, n02, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, n02, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, n03, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, n03, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, n04, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, n04, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, n05, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, n05, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, n06, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, n06, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, n07, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, n07, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, n08, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, n08, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, n09, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, n09, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, n10, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, n10, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, n11, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, n11, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, n12, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, n12, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, n13, "0.01", 8000], expect: {equals: OK}}
+    - {command: [BF.MADD, n13, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [DEL, n00, n02, n04, n06, n08, n10, n12], expect: {equals: 7}}
+    - {command: [DEL, k17, k19, k21, k23, k25, k27, k29, k31], expect: {equals: 8}}
+    - {command: [CONFIG, SET, activedefrag, yes], expect: {equals: OK}}
+    - {command: [EVAL, "local s=redis.call('INFO','stats') local t=tonumber(string.match(s,'total_active_defrag_time:(%d+)'))\
+          \ or 0 if t>0 then return 1 end return 0", 0], wait_s: 30, expect: {equals: 1}}
+    - {command: [EVAL, "local s=redis.call('INFO','bf') local h=tonumber(string.match(s,'bf_bloom_defrag_hits:(%d+)'))\
+          \ or 0 local m=tonumber(string.match(s,'bf_bloom_defrag_misses:(%d+)'))\
+          \ or 0 if h+m>0 then return 1 end return 0", 0], wait_s: 30, expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bf_bloom_defrag_misses:"}}
+    - {command: [CONFIG, SET, activedefrag, no], expect: {equals: OK}}
+    - {command: [BF.MEXISTS, k01, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.MEXISTS, s01, e1, e2, e3, e4, e5, e6, e7, e8], expect: {equals: [
+          1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [BF.MEXISTS, n01, a, b, c, d, e], expect: {equals: [1, 1, 1, 1, 1]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [defrag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: defrag}

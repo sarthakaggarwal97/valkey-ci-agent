@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.bloom-tightening-ratio-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: bf.bloom-tightening-ratio config existence and its effect on scaled-out
+    bloom filters
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: tr
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, no], expect: {equals: OK}}
+    - {command: [CONFIG, GET, bf.bloom-tightening-ratio], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [BF.INSERT, base, CAPACITY, 1, EXPANSION, 2, ITEMS, a, b, c, d], expect: {
+        exists: true}}
+    - {command: [BF.INFO, base, FILTERS], expect: {min: 2}}
+    - {command: [CONFIG, SET, bf.bloom-tightening-ratio, '0.9'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [BF.INSERT, scaled, CAPACITY, 1, EXPANSION, 2, ITEMS, a, b, c, d],
+      expect: {exists: true}}
+    - {command: [BF.INFO, scaled, FILTERS], expect: {min: 2}}
+    - {command: [DEBUG, DIGEST-VALUE, scaled], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [CONFIG, SET, bf.bloom-tightening-ratio, '1.5'], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, bf.bloom-tightening-ratio, '0'], expect_difference: true,
+      expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tr}

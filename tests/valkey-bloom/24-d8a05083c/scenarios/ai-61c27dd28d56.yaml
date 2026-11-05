@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom eaa218fda810..d8a05083c92a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-61c27dd28d56
+seed: 101
+experiment:
+  id: proposed.bloom-info-size
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

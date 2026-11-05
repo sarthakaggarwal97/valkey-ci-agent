@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.bf-insert-args-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.INSERT new arity, TIGHTENING/SEED on primary, error precedence,
+    and exclusive config bounds, compared across module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: insert
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, no], expect: {equals: OK}}
+    - {command: [BF.INSERT, k1], expect_difference: true, expect: {equals: []}}
+    - {command: [EXISTS, k1], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.INSERT, k2, EXPANSION, "2"], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [EXISTS, k2], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.INSERT, k3, TIGHTENING, "0.9", ITEMS, a], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [BF.INFO, k3], expect_difference: true, expect: {error: false}}
+    - {command: [BF.INSERT, k4, SEED, abcdefghijklmnopqrstuvwxyz012345, ITEMS, a],
+      expect_difference: true, expect: {equals: [1]}}
+    - {command: [BF.INSERT, k4b, SEED, short, ITEMS, a], expect_difference: true,
+      expect: {error: invalid seed}}
+    - {command: [BF.INSERT, k5, TIGHTENING, "2", ITEMS, a], expect_difference: true,
+      expect: {error: tightening ratio range}}
+    - {command: [BF.INSERT, k5b, TIGHTENING, tr, ITEMS, a], expect_difference: true,
+      expect: {error: bad tightening ratio}}
+    - {command: [BF.INSERT, k6, HELLO], expect_difference: true, expect: {error: unknown
+          argument}}
+    - {command: [BF.INSERT, k7, ITEMS], expect: {error: wrong number of arguments}}
+    - {command: [BF.INSERT, NOCREATE, NOCREATE, ITEMS, x], expect: {error: not found}}
+    - {command: [BF.INSERT, big, CAPACITY, "9223372036854775808", ITEMS, x], expect: {
+        error: bad capacity}}
+    - {command: [BF.INSERT, k8, CAPACITY, "100", CAPACITY, "200", ITEMS, x], expect: {
+        equals: [1]}}
+    - {command: [CONFIG, SET, bf.bloom-fp-rate, "1"], expect: {error: error rate range}}
+    - {command: [CONFIG, SET, bf.bloom-fp-rate, "0"], expect_difference: true, expect: {
+        error: error rate range}}
+    - {command: [CONFIG, SET, bf.bloom-tightening-ratio, "0"], expect_difference: true,
+      expect: {error: tightening ratio range}}
+    - {command: [CONFIG, SET, bf.bloom-fp-rate, "0.01"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, bf.bloom-tightening-ratio, "0.5"], expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [insert.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: insert}

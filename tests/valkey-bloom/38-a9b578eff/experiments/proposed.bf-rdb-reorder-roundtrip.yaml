@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.bf-rdb-reorder-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: Reordered RDB serialization (capacity/num_items before bitmap) via
+    DUMP byte difference and SAVE+restart round-trip of a scaled multi-filter object
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rdb
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, no], expect: {equals: OK}}
+    - {command: [BF.RESERVE, bb, "0.001", "1", EXPANSION, "1"], expect: {equals: OK}}
+    - {command: [BF.MADD, bb, i1, i2, i3, i4, i5], expect: {equals: [1, 1, 1, 1, 1]}}
+    - {command: [BF.INFO, bb, FILTERS], expect: {min: 2}}
+    - {command: [BF.INSERT, ns, NONSCALING, ITEMS, n1], expect: {equals: [1]}}
+    - {command: [DUMP, bb], expect_difference: true, expect: {exists: true}}
+    - {command: [DUMP, ns], expect_difference: true, expect: {exists: true}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.EXISTS, bb, i1], expect: {equals: 1}}
+    - {command: [BF.EXISTS, bb, i5], expect: {equals: 1}}
+    - {command: [BF.CARD, bb], expect: {min: 2}}
+    - {command: [BF.INFO, bb, FILTERS], expect: {min: 2}}
+    - {command: [BF.EXISTS, ns, n1], expect: {equals: 1}}
+    - {command: [BF.MADD, bb, i6], expect: {exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [rdb.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rdb}

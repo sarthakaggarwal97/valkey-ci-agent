@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "8a897673d8f2004e71193ec1d7613e6c8b574b64",
+  "parent": "523e19a98426d32dab7097ae46ddaa891148fb10",
+  "pr": 92,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Fixing bug in bloom defrag, adding digest checks to integration test, create new unit test that catches before mentioned bug (#92)",
+  "date": "2026-04-22",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 10.9326,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-33168fe8e31a",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-03f4c5bc89dc",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

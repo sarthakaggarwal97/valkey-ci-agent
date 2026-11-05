@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.bloom-active-defrag
+deployment:
+  modes: [standalone]
+metadata:
+  description: drive the rewritten active-defrag callback over scaled, fragmented
+    bloom objects and check liveness and data
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: df
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, "no"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, bf.bloom-defrag-enabled, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, active-defrag-ignore-bytes, "1"], compare: skip}
+    - {command: [CONFIG, SET, active-defrag-threshold-lower, "2"], compare: skip}
+    - {command: [CONFIG, SET, activedefrag, "yes"], compare: skip}
+    - {command: [BF.RESERVE, k0, "0.001", "2", EXPANSION, "2"], expect: {equals: OK}}
+    - {command: [BF.MADD, k0, a, b, c, d, e, f, g, h], expect: {equals: [1, 1, 1,
+          1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k1, "0.001", "2", EXPANSION, "2"], expect: {equals: OK}}
+    - {command: [BF.MADD, k1, a, b, c, d, e, f, g, h], expect: {equals: [1, 1, 1,
+          1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k2, "0.001", "2", EXPANSION, "2"], expect: {equals: OK}}
+    - {command: [BF.MADD, k2, a, b, c, d, e, f, g, h], expect: {equals: [1, 1, 1,
+          1, 1, 1, 1, 1]}}
+    - {command: [BF.RESERVE, k3, "0.001", "2", EXPANSION, "2"], expect: {equals: OK}}
+    - {command: [BF.MADD, k3, a, b, c, d, e, f, g, h], expect: {equals: [1, 1, 1,
+          1, 1, 1, 1, 1]}}
+    - {command: [DEL, k0], expect: {equals: 1}}
+    - {command: [DEL, k2], expect: {equals: 1}}
+    - {command: [BF.EXISTS, k1, a], expect: {equals: 1}}
+    - {command: [BF.EXISTS, k3, a], expect: {equals: 1}}
+    - {command: [BF.EXISTS, k1, b], expect: {equals: 1}}
+    - {command: [BF.EXISTS, k3, c], expect: {equals: 1}}
+    - {command: [BF.MEXISTS, k1, a, b, c, d, e, f, g, h], expect: {equals: [1, 1,
+          1, 1, 1, 1, 1, 1]}}
+    - {command: [BF.MEXISTS, k3, a, b, c, d, e, f, g, h], expect: {equals: [1, 1,
+          1, 1, 1, 1, 1, 1]}}
+    - {command: [BF.CARD, k1], expect: {equals: 8}}
+    - {command: [BF.CARD, k3], expect: {equals: 8}}
+    - {command: [BF.INFO, k1, FILTERS], expect: {min: 2}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: df}

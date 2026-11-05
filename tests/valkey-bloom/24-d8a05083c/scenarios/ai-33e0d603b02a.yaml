@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom eaa218fda810..d8a05083c92a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-33e0d603b02a
+seed: 105
+experiment:
+  id: proposed.bloom-scale-save-restore
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7400

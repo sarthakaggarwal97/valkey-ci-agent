@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.bloom-defrag-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: the new bf.bloom-defrag-enabled config exists on the change build and
+    is unknown to the parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cfg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, GET, bf.bloom-defrag-enabled], compare: skip}
+    - {command: [CONFIG, SET, bf.bloom-defrag-enabled, "no"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [BF.ADD, k, x], expect: {equals: 1}}
+    - {command: [BF.EXISTS, k, x], expect: {equals: 1}}
+    - {command: [CONFIG, SET, bf.bloom-defrag-enabled, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [BF.ADD, k, y], expect: {equals: 1}}
+    - {command: [BF.EXISTS, k, y], expect: {equals: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cfg}

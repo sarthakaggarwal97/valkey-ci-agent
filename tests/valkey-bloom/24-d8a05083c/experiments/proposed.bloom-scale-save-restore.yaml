@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.bloom-scale-save-restore
+deployment:
+  modes: [standalone]
+metadata:
+  description: a scaled multi-filter bloom object survives SAVE and RDB reload with
+    every added item present
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sr
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, "no"], expect: {equals: OK}}
+    - {command: [BF.RESERVE, k, "0.001", "2", EXPANSION, "2"], expect: {equals: OK}}
+    - {command: [BF.MADD, k, i0, i1, i2, i3, i4, i5, i6, i7, i8, i9, i10, i11, i12,
+        i13, i14, i15, i16, i17, i18, i19, ""], expect: {equals: [1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [BF.CARD, k], expect: {equals: 21}}
+    - {command: [BF.INFO, k, FILTERS], expect: {min: 2}}
+    - {command: [BF.INFO, k, SIZE], expect_difference: true, expect: {min: 1}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.MEXISTS, k, i0, i1, i2, i3, i4, i5, i6, i7, i8, i9, i10, i11,
+        i12, i13, i14, i15, i16, i17, i18, i19, ""], expect: {equals: [1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [BF.CARD, k], expect: {equals: 21}}
+    - {command: [BF.INFO, k, FILTERS], expect: {min: 2}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sr}

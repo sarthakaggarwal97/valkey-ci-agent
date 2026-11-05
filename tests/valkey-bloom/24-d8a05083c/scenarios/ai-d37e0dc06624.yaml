@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom eaa218fda810..d8a05083c92a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d37e0dc06624
+seed: 104
+experiment:
+  id: proposed.bloom-defrag-config
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7300

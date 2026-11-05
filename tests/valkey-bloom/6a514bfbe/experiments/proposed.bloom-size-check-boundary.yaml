@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.bloom-size-check-boundary
+deployment:
+  modes: [standalone]
+metadata:
+  description: validate_size now counts the Bloom struct bytes, so filter creations
+    and scale-outs sitting just above the old estimate are rejected at the bloom-memory-limit-per-filter
+    boundary where the parent accepted them
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: boundary
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, no], expect: {equals: OK}}
+    - {command: [BF.ADD, norm, a], expect: {equals: 1}}
+    - {command: [BF.EXISTS, norm, a], expect: {equals: 1}}
+    - {command: [BF.INFO, norm, FILTERS], expect: {equals: 1}}
+    - {command: [CONFIG, SET, bf.bloom-memory-limit-per-filter, "1319"], expect: {
+        equals: OK}}
+    - {command: [BF.RESERVE, k1, "0.01", "1000"], expect_difference: true, expect: {
+        error: "exceeding size limit"}}
+    - {command: [EXISTS, k1], expect_difference: true, expect: {equals: 0}}
+    - {command: [CONFIG, SET, bf.bloom-memory-limit-per-filter, "240"], expect: {
+        equals: OK}}
+    - {command: [BF.ADD, k2, x], expect_difference: true, expect: {error: "exceeding\
+          \ size limit"}}
+    - {command: [BF.CARD, k2], expect_difference: true, expect: {equals: 0}}
+    - {command: [CONFIG, SET, bf.bloom-memory-limit-per-filter, "7309"], expect: {
+        equals: OK}}
+    - {command: [BF.INSERT, k3, ERROR, "0.001", CAPACITY, "4000", ITEMS, a], expect_difference: true,
+      expect: {error: "exceeding size limit"}}
+    - {command: [BF.INFO, k3, FILTERS], expect_difference: true, expect: {error: "not\
+          \ found"}}
+    - {command: [CONFIG, SET, bf.bloom-memory-limit-per-filter, "37868"], expect: {
+        equals: OK}}
+    - {command: [BF.RESERVE, k4, "0.000001", "1", EXPANSION, "10000"], expect: {equals: OK}}
+    - {command: [BF.ADD, k4, first], expect: {equals: 1}}
+    - {command: [BF.ADD, k4, second], expect_difference: true, expect: {error: "exceeding\
+          \ size limit"}}
+    - {command: [BF.INFO, k4, FILTERS], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.CARD, k4], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.EXISTS, k4, first], expect: {equals: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [boundary.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: boundary}

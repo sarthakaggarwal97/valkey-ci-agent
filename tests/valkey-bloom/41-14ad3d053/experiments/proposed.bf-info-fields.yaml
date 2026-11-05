@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.bf-info-fields
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.INFO ERROR and MAXSCALEDCAPACITY fields present on the change build
+    and absent on the parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: info
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [BF.INSERT, scal, CAPACITY, 100, ITEMS, a], expect: {equals: [1]}}
+    - {command: [BF.INFO, scal, ERROR], expect_difference: true, expect: {equals: "0.01"}}
+    - {command: [BF.INFO, scal, MAXSCALEDCAPACITY], expect_difference: true, expect: {
+        min: 1}}
+    - {command: [BF.INFO, scal], expect_difference: true, expect: {contains: "Max\
+          \ scaled capacity"}}
+    - {command: [BF.INSERT, ns, CAPACITY, 100, NONSCALING, ITEMS, a], expect: {equals: [
+          1]}}
+    - {command: [BF.INFO, ns, ERROR], expect_difference: true, expect: {equals: "0.01"}}
+    - {command: [BF.INFO, ns], expect_difference: true, expect: {contains: "Error\
+          \ rate"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: info}

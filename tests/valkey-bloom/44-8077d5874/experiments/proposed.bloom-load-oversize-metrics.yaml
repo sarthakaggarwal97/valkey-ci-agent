@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.bloom-load-oversize-metrics
+deployment:
+  modes: [standalone]
+metadata:
+  description: A BF.LOAD rejected for exceeding the per-object memory limit must leave
+    bloom_num_objects and bloom_total_memory_bytes intact (no metric underflow)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: load
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, bf.bloom-memory-usage-limit, "1"], expect: {equals: OK}}
+    - {command: [BF.LOAD, k, !!binary "AQIAAAB7FK5H4XqEPwAAAAAAAOA/AQAAAAAAAAAA"],
+      expect: {error: "exceeds bloom object memory limit"}}
+    - {command: [INFO, bf], expect_difference: true, expect: {contains: "bloom_num_objects:0"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: load}

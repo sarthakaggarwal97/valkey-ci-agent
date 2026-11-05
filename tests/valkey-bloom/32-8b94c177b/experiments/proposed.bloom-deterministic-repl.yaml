@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.bloom-deterministic-repl
+deployment:
+  modes: [standalone]
+metadata:
+  description: Bloom object creation replicates with the primary's exact properties
+    (BF.INSERT rewrite) instead of verbatim; replica BF.INFO shows primary config
+    values
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: repl
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [REPLICAOF, '<node.0.host>', '<node.0.port>'], node: 1, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: 'master_link_status:up'}}
+    - {command: [CONFIG, SET, bf.bloom-capacity, 1000], expect: {equals: OK}}
+    - {command: [CONFIG, SET, bf.bloom-expansion, 3], expect: {equals: OK}}
+    - {command: [BF.ADD, 'k:add', item1], expect: {equals: 1}}
+    - {command: ['BF.MADD', 'k:madd', a, b, c], expect: {equals: [1, 1, 1]}}
+    - {command: ['BF.RESERVE', 'k:res', 0.001, 5000], expect: {equals: OK}}
+    - {command: ['BF.INSERT', 'k:ins', ITEMS, x, y], expect: {equals: [1, 1]}}
+    - {command: ['BF.INSERT', 'k:nons', NONSCALING, ITEMS, z], expect: {equals: [
+          1]}}
+    - {command: ['BF.RESERVE', 'k:bigexp', 0.01, 10, EXPANSION, 4294967295], expect: {
+        equals: OK}}
+    - {command: ['BF.RESERVE', 'k:fp', 0.123456789012345, 50], expect: {equals: OK}}
+    - {command: [BF.ADD, 'k:res', item2], expect: {equals: 1}}
+    - {command: [WAIT, 1, 5000], expect: {equals: 1}}
+    - {command: ['BF.INFO', 'k:add', CAPACITY], expect: {equals: 1000}}
+    - {command: ['BF.INFO', 'k:add', CAPACITY], node: 1, expect_difference: true,
+      expect: {equals: 1000}}
+    - {command: ['BF.INFO', 'k:add', EXPANSION], node: 1, expect_difference: true,
+      expect: {equals: 3}}
+    - {command: ['BF.EXISTS', 'k:add', item1], node: 1, expect: {equals: 1}}
+    - {command: ['BF.INFO', 'k:madd', CAPACITY], node: 1, expect_difference: true,
+      expect: {equals: 1000}}
+    - {command: ['BF.MEXISTS', 'k:madd', a, b, c], node: 1, expect: {equals: [1, 1,
+          1]}}
+    - {command: ['BF.INFO', 'k:res', EXPANSION], node: 1, expect_difference: true,
+      expect: {equals: 3}}
+    - {command: ['BF.INFO', 'k:res', CAPACITY], node: 1, expect: {equals: 5000}}
+    - {command: ['BF.EXISTS', 'k:res', item2], node: 1, expect: {equals: 1}}
+    - {command: ['BF.INFO', 'k:ins', CAPACITY], node: 1, expect_difference: true,
+      expect: {equals: 1000}}
+    - {command: ['BF.INFO', 'k:nons', EXPANSION], node: 1}
+    - {command: ['BF.INFO', 'k:bigexp', EXPANSION], node: 1, expect: {equals: 4294967295}}
+    - {command: [EXISTS, 'k:fp'], node: 1, expect: {equals: 1}}
+    - {command: ['BF.INSERT', 'k:guard1', SEED, '01234567890123456789012345678901',
+        ITEMS, q], expect: {error: 'unknown argument'}}
+    - {command: ['BF.INSERT', 'k:guard2', TIGHTENING, 0.6, ITEMS, q], expect: {error: 'unknown
+          argument'}}
+    - {command: ['BF.INSERT', 'k:guard3', CAPACITY, 200], expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [repl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: repl}

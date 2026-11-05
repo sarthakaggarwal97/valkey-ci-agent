@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.bf-acl-categories-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF commands gained @write/@read/@fast ACL categories and BF.LOAD lost
+    the fast flag, verified via restricted users and COMMAND INFO
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ACL, SETUSER, rwuser, on, '>p1', '~*', '+@write', '+@read'], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, breader, on, '>p1', '~*', '-@all', '+@read'], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, nob, on, '>p1', '~*', '+@all', '-@bloom'], expect: {
+        equals: OK}}
+    - {command: [BF.ADD, seedkey, item1], expect: {equals: 1}}
+    - {command: [AUTH, rwuser, p1], connection: rw, expect: {equals: OK}}
+    - {command: [BF.ADD, aclkey, item1], connection: rw, expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [BF.EXISTS, seedkey, item1], connection: rw, expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [BF.INFO, seedkey, CAPACITY], connection: rw, expect_difference: true,
+      expect: {equals: 100}}
+    - {command: [AUTH, breader, p1], connection: rd, expect: {equals: OK}}
+    - {command: [BF.EXISTS, seedkey, item1], connection: rd, expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [BF.ADD, seedkey, w2], connection: rd, expect: {error: no permissions}}
+    - {command: [AUTH, nob, p1], connection: nb, expect: {equals: OK}}
+    - {command: [BF.EXISTS, seedkey, item1], connection: nb, expect: {error: no permissions}}
+    - {command: [COMMAND, INFO, BF.LOAD], expect_difference: true, expect: {error: false}}
+    - {command: [COMMAND, INFO, BF.ADD], expect_difference: true, expect: {error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [acl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.bloom-cluster-repl
+deployment:
+  modes: [standalone]
+metadata:
+  description: Deterministic bloom creation replication over a cluster replica (CLUSTER
+    REPLICATE), read back with READONLY
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: crepl
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, REPLICATE, '<node.0.id>'], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: 'master_link_status:up'}}
+    - {command: [CONFIG, SET, bf.bloom-capacity, 1500], expect: {equals: OK}}
+    - {command: [CONFIG, SET, bf.bloom-expansion, 4], expect: {equals: OK}}
+    - {command: [BF.ADD, key, item1], expect: {equals: 1}}
+    - {command: ['BF.RESERVE', key2, 0.001, 4000], expect: {equals: OK}}
+    - {command: [WAIT, 1, 5000], expect: {equals: 1}}
+    - {command: [READONLY], node: 1, expect: {equals: OK}}
+    - {command: ['BF.INFO', key, CAPACITY], node: 1, expect_difference: true, expect: {
+        equals: 1500}}
+    - {command: ['BF.INFO', key, EXPANSION], node: 1, expect_difference: true, expect: {
+        equals: 4}}
+    - {command: ['BF.INFO', key2, EXPANSION], node: 1, expect_difference: true, expect: {
+        equals: 4}}
+    - {command: ['BF.INFO', key2, CAPACITY], node: 1, expect: {equals: 4000}}
+    - {command: ['BF.EXISTS', key, item1], node: 1, expect: {equals: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [crepl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: crepl}

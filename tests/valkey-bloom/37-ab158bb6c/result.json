@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "ab158bb6c3a66792c2119f91d44d98c309e1a882",
+  "parent": "1c949fb2a73a7f899c898928c60a4aca8f7fa037",
+  "pr": 37,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Large bloom object handling + Rename to BloomFilterType to BloomObject (#37)",
+  "date": "2025-01-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 6,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 9.5706,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

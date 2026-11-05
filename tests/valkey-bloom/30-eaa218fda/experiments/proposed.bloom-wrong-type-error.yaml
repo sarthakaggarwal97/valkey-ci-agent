@@ -1,0 +1,66 @@
+extends: [valkey.liveness]
+id: proposed.bloom-wrong-type-error
+deployment:
+  modes: [standalone]
+metadata:
+  description: Every bloom command on a key of another type answers WRONGTYPE instead
+    of the old generic ERROR, and leaves the key untouched
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: wrongtype
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, strkey, value], expect: {equals: OK}}
+    - {command: [BF.ADD, strkey, item], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [BF.MADD, strkey, i1, i2, i3], expect_difference: true, expect: {
+        error: WRONGTYPE}}
+    - {command: [BF.EXISTS, strkey, item], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [BF.MEXISTS, strkey, i1, i2], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [BF.INSERT, strkey, ITEMS, item], expect_difference: true, expect: {
+        error: WRONGTYPE}}
+    - {command: [BF.INFO, strkey], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [BF.INFO, strkey, FILTERS], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [BF.CARD, strkey], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [BF.RESERVE, strkey, 0.01, 1000], expect_difference: true, expect: {
+        error: WRONGTYPE}}
+    - {command: [BF.LOAD, strkey, payload], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [TYPE, strkey], expect: {equals: string}}
+    - {command: [GET, strkey], expect: {equals: value}}
+    - {command: [RPUSH, listkey, a, b], expect: {equals: 2}}
+    - {command: [BF.ADD, listkey, item], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [HSET, hashkey, f, v], expect: {equals: 1}}
+    - {command: [BF.CARD, hashkey], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [SADD, setkey, m], expect: {equals: 1}}
+    - {command: [BF.INFO, setkey], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [ZADD, zsetkey, 1, m], expect: {equals: 1}}
+    - {command: [BF.RESERVE, zsetkey, 0.01, 100], expect_difference: true, expect: {
+        error: WRONGTYPE}}
+    - {command: [BF.INSERT, zsetkey, CAPACITY, 100, ITEMS, a, b], expect_difference: true,
+      expect: {error: WRONGTYPE}}
+    - {command: [SET, "", v], expect: {equals: OK}}
+    - {command: [BF.EXISTS, "", item], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [BF.ADD, strkey, item], expect: {equals: QUEUED}}
+    - {command: [BF.CARD, strkey], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: true}}
+    - {command: [BF.ADD, bloomkey, item], expect: {equals: 1}}
+    - {command: [BF.EXISTS, bloomkey, item], expect: {equals: 1}}
+    - {command: [BF.CARD, bloomkey], expect: {equals: 1}}
+    - {command: [BF.MADD, bloomkey, i1, i2], expect: {equals: [1, 1]}}
+    - {command: [GET, bloomkey], expect: {error: WRONGTYPE}}
+    - {command: [INCR, bloomkey], expect: {error: WRONGTYPE}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [wrongtype.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: wrongtype}

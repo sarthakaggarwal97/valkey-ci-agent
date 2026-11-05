@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.bloom-copy-scaled
+deployment:
+  modes: [standalone]
+metadata:
+  description: COPY of a scaled bloom object reproduces every added item and filter
+    count independently of the source
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cp
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, "no"], expect: {equals: OK}}
+    - {command: [BF.RESERVE, src, "0.001", "2", EXPANSION, "2"], expect: {equals: OK}}
+    - {command: [BF.MADD, src, a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12,
+        a13, a14, ""], expect: {equals: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1]}}
+    - {command: [BF.INFO, src, FILTERS], expect: {min: 2}}
+    - {command: [COPY, src, dst], expect: {equals: 1}}
+    - {command: [BF.MEXISTS, dst, a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11,
+        a12, a13, a14, ""], expect: {equals: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1]}}
+    - {command: [BF.CARD, dst], expect: {equals: 16}}
+    - {command: [BF.INFO, dst, FILTERS], expect: {min: 2}}
+    - {command: [BF.INFO, dst, SIZE], expect_difference: true, expect: {min: 1}}
+    - {command: [BF.ADD, dst, newitem], expect: {equals: 1}}
+    - {command: [BF.CARD, dst], expect: {equals: 17}}
+    - {command: [BF.CARD, src], expect: {equals: 16}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cp}

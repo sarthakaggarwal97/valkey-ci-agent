@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "d8a05083c92a69cee9fef1e40af7bb8c4f14789f",
+  "parent": "eaa218fda810808aa0030be8a9ef0a2ab88a88ab",
+  "pr": 24,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Updating defragmentation to defrag both bloomfiltertype and bloomfiler structs (#24)",
+  "date": "2024-12-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 8,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 6.7855,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"16dd88e7d0750d803331b018c534a5b38d0d5757\"},\"offset\":\"139\"}, replica {\"digest\":{\"reply\":\"3ec6bfe3ee456b5ab5ac1c0f55b2e40105c45893\"},\"offset\":\"139\"}, link up",
+      "scenario": "ai-65148aad3948",
+      "seed": 103,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"a586f2a11d3feeb709c5eaa7587a51a4d816a5c2\"},\"offset\":\"139\"}, replica {\"digest\":{\"reply\":\"ad195a12ee1485f45cd3b04889266a60a4293c41\"},\"offset\":\"139\"}, link up",
+      "scenario": "ai-d37e0dc06624",
+      "seed": 104,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

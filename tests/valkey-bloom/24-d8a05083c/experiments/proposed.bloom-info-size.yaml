@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.bloom-info-size
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.INFO SIZE reports the new boxed-filter memory accounting; added
+    items still read back
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: info
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, "no"], expect: {equals: OK}}
+    - {command: [BF.RESERVE, k, "0.01", "100"], expect: {equals: OK}}
+    - {command: [BF.ADD, k, x], expect: {equals: 1}}
+    - {command: [BF.INFO, k, SIZE], expect_difference: true, expect: {min: 1}}
+    - {command: [BF.INFO, k, CAPACITY], expect: {equals: 100}}
+    - {command: [BF.INFO, k, ITEMS], expect: {equals: 1}}
+    - {command: [BF.INFO, k, FILTERS], expect: {equals: 1}}
+    - {command: [BF.EXISTS, k, x], expect: {equals: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: info}

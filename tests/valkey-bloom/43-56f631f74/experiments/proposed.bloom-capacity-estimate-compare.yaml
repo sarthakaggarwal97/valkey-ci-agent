@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.bloom-capacity-estimate-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.INFO MAXSCALEDCAPACITY and BF.INSERT VALIDATESCALETO with bf.bloom-memory-usage-limit
+    set inside the windows where the fixed Vec-capacity estimate changes the result,
+    compared across the module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: capacity
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [BF.RESERVE, k-default, "0.01", 100], expect: {equals: OK}}
+    - {command: [BF.INFO, k-default, MAXSCALEDCAPACITY], expect: {equals: 26214300}}
+    - {command: [CONFIG, SET, bf.bloom-memory-usage-limit, 396], expect: {equals: OK}}
+    - {command: [BF.RESERVE, k-first, "0.01", 100], expect: {equals: OK}}
+    - {command: [BF.INFO, k-first, MAXSCALEDCAPACITY], expect_difference: true, expect: {
+        equals: 100}}
+    - {command: [BF.INSERT, k-first-insert, CAPACITY, 100, ERROR, "0.01", VALIDATESCALETO,
+        100, ITEMS, x], expect_difference: true, expect: {equals: [1]}}
+    - {command: [EXISTS, k-first-insert], expect_difference: true, expect: {equals: 1}}
+    - {command: [CONFIG, SET, bf.bloom-memory-usage-limit, 1916], expect: {equals: OK}}
+    - {command: [BF.RESERVE, k-growth, "0.01", 100, EXPANSION, 1], expect: {equals: OK}}
+    - {command: [BF.INFO, k-growth, MAXSCALEDCAPACITY], expect_difference: true, expect: {
+        equals: 400}}
+    - {command: [BF.INSERT, k-growth-insert, CAPACITY, 100, ERROR, "0.01", EXPANSION,
+        1, VALIDATESCALETO, 500, ITEMS, y], expect_difference: true, expect: {error: "exceed\
+          \ memory limit"}}
+    - {command: [EXISTS, k-growth-insert], expect_difference: true, expect: {equals: 0}}
+    - {command: [BF.INSERT, k-ok, CAPACITY, 100, ERROR, "0.01", EXPANSION, 1, VALIDATESCALETO,
+        400, ITEMS, z], expect: {equals: [1]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [capacity.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: capacity}

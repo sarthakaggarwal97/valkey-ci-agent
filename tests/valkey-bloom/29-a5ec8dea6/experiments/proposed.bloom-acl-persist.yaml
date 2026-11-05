@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.bloom-acl-persist
+deployment:
+  modes: [standalone]
+metadata:
+  description: A user granted +@bloom survives ACL SAVE and a restart - the bloom
+    category must resolve when the ACL file is parsed at startup after module load,
+    and again on runtime ACL LOAD
+components:
+- use: valkey.action.commands
+  id: aclpersist
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    files: {users.acl: "user default on nopass ~* &* +@all\n"}
+    server_config: {aclfile: users.acl}
+    timeout_s: 60
+    commands:
+    - {command: [ACL, SETUSER, bloomadmin, "on", ">pw", "~*", "+@bloom"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [ACL, SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ACL, GETUSER, bloomadmin], expect_difference: true, expect: {exists: true}}
+    - {command: [AUTH, bloomadmin, pw], expect_difference: true, expect: {equals: OK}}
+    - {command: ["BF.ADD", "bf:key", item1], expect: {equals: 1}}
+    - {command: ["BF.EXISTS", "bf:key", item1], expect: {equals: 1}}
+    - {command: ["BF.CARD", "bf:key"], expect: {equals: 1}}
+    - {command: [GET, nosuchkey], expect_difference: true, expect: {error: "has no\
+          \ permissions"}}
+    - {command: [AUTH, default, x], expect: {equals: OK}}
+    - {command: [ACL, LOAD], expect: {equals: OK}}
+    - {command: [ACL, WHOAMI], expect: {equals: default}}
+    - {command: [ACL, GETUSER, bloomadmin], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [aclpersist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aclpersist}

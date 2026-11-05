@@ -1,0 +1,65 @@
+extends: [valkey.liveness]
+id: proposed.bloom-acl-category
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.* commands carry the new bloom ACL category - the category is registered
+    and visible, -@bloom denies all nine BF commands, +@bloom grants them and nothing
+    else
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bloomacl
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ACL, CAT, bloom], expect_difference: true, compare: unordered, expect: {
+        error: false}}
+    - {command: [COMMAND, LIST, FILTERBY, ACLCAT, bloom], expect_difference: true,
+      compare: unordered, expect: {error: false}}
+    - {command: [COMMAND, INFO, "BF.ADD"], expect_difference: true, expect: {error: false}}
+    - {command: ["BF.ADD", "bf:key", item1], expect: {equals: 1}}
+    - {command: [ACL, SETUSER, nonbloom, "on", ">pw1", "~*", "+@all", "-@bloom"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [ACL, SETUSER, bloomonly, "on", ">pw2", "~*", "+@bloom"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [AUTH, nonbloom, pw1], expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, plainkey], expect: {exists: false}}
+    - {command: ["BF.ADD", "bf:key", item2], expect_difference: true, expect: {error: "has\
+          \ no permissions"}}
+    - {command: ["BF.MADD", "bf:key", a, b], expect_difference: true, expect: {error: "has\
+          \ no permissions"}}
+    - {command: ["BF.EXISTS", "bf:key", item1], expect_difference: true, expect: {
+        error: "has no permissions"}}
+    - {command: ["BF.MEXISTS", "bf:key", item1], expect_difference: true, expect: {
+        error: "has no permissions"}}
+    - {command: ["BF.CARD", "bf:key"], expect_difference: true, expect: {error: "has\
+          \ no permissions"}}
+    - {command: ["BF.INFO", "bf:key"], expect_difference: true, expect: {error: "has\
+          \ no permissions"}}
+    - {command: ["BF.RESERVE", "bf:res", "0.01", "1000"], expect_difference: true,
+      expect: {error: "has no permissions"}}
+    - {command: ["BF.INSERT", "bf:ins", ITEMS, x], expect_difference: true, expect: {
+        error: "has no permissions"}}
+    - {command: ["BF.LOAD", "bf:load", garbage], expect_difference: true, expect: {
+        error: "has no permissions"}}
+    - {command: [AUTH, default, x], expect: {equals: OK}}
+    - {command: [AUTH, bloomonly, pw2], expect_difference: true, expect: {equals: OK}}
+    - {command: [ACL, WHOAMI], expect_difference: true, expect: {equals: bloomonly}}
+    - {command: ["BF.ADD", "bf:key2", hello], expect: {equals: 1}}
+    - {command: ["BF.EXISTS", "bf:key2", hello], expect: {equals: 1}}
+    - {command: [GET, nosuchkey], expect_difference: true, expect: {error: "has no\
+          \ permissions"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bloomacl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bloomacl}

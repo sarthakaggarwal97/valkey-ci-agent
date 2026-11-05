@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "3589d30755eedc829fe2902e9dde053a3e092e04",
+  "parent": "8b94c177b94545c369c33f1c49be0230fb02f45c",
+  "pr": 33,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Adding bloom defrag hits and misses to info, added check these metrics get incremented in defrag test (#33)",
+  "date": "2024-12-12",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.8831,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

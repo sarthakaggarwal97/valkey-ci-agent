@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom 98ccdc6b4ab3..9baf6fcb873d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a3db08096348
+seed: 1
+experiment:
+  id: proposed.bloom-fp-rate-config
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

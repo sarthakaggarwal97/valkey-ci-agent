@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.bf-insert-validatescaleto
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.INSERT VALIDATESCALETO option on the change build vs the parent,
+    where it is an unknown argument
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: insert
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [BF.INSERT, k1, CAPACITY, 1, ERROR, '0.0000000001', VALIDATESCALETO,
+        '10000000', EXPANSION, 1], expect_difference: true, expect: {error: "false\
+          \ positive to degrade to 0"}}
+    - {command: [BF.INSERT, k2, VALIDATESCALETO, '1000000000000'], expect_difference: true,
+      expect: {error: "exceed memory limit"}}
+    - {command: [BF.INSERT, k3, VALIDATESCALETO, '1000000000000', NONSCALING], expect_difference: true,
+      expect: {error: "cannot use NONSCALING and VALIDATESCALETO"}}
+    - {command: [BF.INSERT, k4, VALIDATESCALETO, 0], expect_difference: true, expect: {
+        error: "capacity should be larger than 0"}}
+    - {command: [BF.INSERT, k5, VALIDATESCALETO, '9223372036854775807'], expect_difference: true,
+      expect: {error: "exceed memory limit"}}
+    - {command: [BF.INSERT, k6, VALIDATESCALETO, notanumber], expect_difference: true,
+      expect: {error: "bad capacity"}}
+    - {command: [BF.INSERT, k7, CAPACITY, 200, VALIDATESCALETO, '1000000', ERROR,
+        '0.0001', ITEMS, a, b, c], expect_difference: true, expect: {equals: [1, 1,
+          1]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: insert}

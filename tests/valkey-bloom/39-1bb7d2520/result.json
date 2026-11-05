@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "1bb7d2520d6d06f031f61d51859cb78c8935e720",
+  "parent": "a9b578effc62bc9dc990cda7f4bfc8942b69ce4b",
+  "pr": 39,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Update README.md (#39)",
+  "date": "2025-01-11",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2369,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewrites README.md and replaces a code comment in src/bloom/command_handler.rs (the lines changed are all `//` comments; the WrongArity return and all surrounding logic are untouched). No command behaviour, reply, persistence, or replication path differs between the change and its parent, so a compared sequence would find nothing and any expect_difference would be an error. No scenario is needed."
+}

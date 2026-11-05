@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.bloom-replica-must-obey
+deployment:
+  modes: [standalone]
+metadata:
+  description: Replicated BF.INSERT create and BF.MADD scale-out that exceed the replica's
+    bloom-memory-usage-limit must still be applied on the replica (must_obey_client
+    true for the primary client on both builds); any wrapper misbehavior or panic
+    shows as a missing key, a stuck wait, or a dead node
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: repl
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    nodes: 2
+    timeout_s: 180
+    commands:
+    - {command: [REPLICAOF, <node.0.host>, <node.0.port>], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [CONFIG, SET, bf.bloom-memory-usage-limit, 1000], node: 1, expect: {
+        equals: OK}}
+    - {command: [BF.INSERT, bigkey, CAPACITY, 100000, NONSCALING, ITEMS, a, b, c],
+      expect: {equals: [1, 1, 1]}}
+    - {command: [BF.CARD, bigkey], node: 1, wait_s: 30, expect: {equals: 3}}
+    - {command: [BF.INFO, bigkey, CAPACITY], node: 1, expect: {equals: 100000}}
+    - {command: [BF.EXISTS, bigkey, a], node: 1, expect: {equals: 1}}
+    - {command: [BF.RESERVE, scaler, 0.001, 100, EXPANSION, 1000], expect: {equals: OK}}
+    - {command: [BF.MADD, scaler, i1, i2, i3, i4, i5, i6, i7, i8, i9, i10, i11, i12,
+        i13, i14, i15, i16, i17, i18, i19, i20, i21, i22, i23, i24, i25, i26, i27,
+        i28, i29, i30, i31, i32, i33, i34, i35, i36, i37, i38, i39, i40, i41, i42,
+        i43, i44, i45, i46, i47, i48, i49, i50, i51, i52, i53, i54, i55, i56, i57,
+        i58, i59, i60, i61, i62, i63, i64, i65, i66, i67, i68, i69, i70, i71, i72,
+        i73, i74, i75, i76, i77, i78, i79, i80, i81, i82, i83, i84, i85, i86, i87,
+        i88, i89, i90, i91, i92, i93, i94, i95, i96, i97, i98, i99, i100, i101, i102,
+        i103, i104, i105, i106, i107, i108, i109, i110], compare: skip, expect: {
+        error: false}}
+    - {command: [BF.INFO, scaler, FILTERS], wait_s: 10, expect: {equals: 2}}
+    - {command: [BF.INFO, scaler, FILTERS], node: 1, wait_s: 30, expect: {equals: 2}}
+    - {command: [BF.CARD, scaler], node: 1, wait_s: 30, compare: skip, expect: {min: 105}}
+    - {command: [CONFIG, SET, bf.bloom-memory-usage-limit, 1000], expect: {equals: OK}}
+    - {command: [BF.RESERVE, guard, 0.01, 100000], expect: {error: "exceeds bloom\
+          \ object memory limit"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [repl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: repl}

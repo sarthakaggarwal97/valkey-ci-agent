@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "98ccdc6b4ab3ad99be14da669b9782e381db1b82",
+  "parent": "3589d30755eedc829fe2902e9dde053a3e092e04",
+  "pr": 34,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Deflaking tests to remove chance of false positives causing tests to fail (#34)",
+  "date": "2024-12-16",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3531,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only test code: the Rust unit-test helper inside `mod tests` in src/bloom/utils.rs and the Python integration tests under tests/, relaxing assertions so probabilistic bloom-filter false positives don't fail CI. No shipped module code (command handling, replies, persistence, scaling) changes, so there is no runtime behaviour to test and no scenario is needed."
+}
