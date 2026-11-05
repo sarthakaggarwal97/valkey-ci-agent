@@ -697,6 +697,24 @@ def test_claude_cut_off_by_its_timeout_answers_in_the_same_session(monkeypatch, 
     assert result["cost_usd"] >= 0.5
 
 
+def test_a_test_whose_expectation_both_builds_violate_hunts_and_keeps_what_it_expected(monkeypatch, tmp_path):
+    # valkey-bloom #110 (fuzzer#69): both builds broke a correct expectation, BF.CARD at least 140, a bug older
+    # than the merge; the test was dropped unseen, and never ran on unstable.
+    test = _scenario("seed: 10\nexperiment: {id: proposed.lset}\ndeployment: {mode: standalone}\n")
+    summary = "expectations both builds violate alike, so they are not about the change: 34 (BF.CARD k9)"
+    ran = []
+
+    def fuzz(fuzzer_bin, doc, seed, *, candidate, compare, core, experiment_dir, run_dir):
+        ran.append(_build(run_dir))
+        return {"status": "ERROR", "reason": "expect-disputed", "reached": False, "parent_exited": False,
+                "reached_commands": set(), "found": {}, "summary": summary}
+
+    result, _ = _walk_merge(monkeypatch, tmp_path, fuzz, (test,))
+    assert (result["hunted"], result["dropped"]) == (1, 0) and "unstable" in ran
+    assert {"scenario": test["scenario_id"], "build": "merge", "reason": "expect-disputed",
+            "summary": summary} in result["recorded"]
+
+
 def test_a_test_skipped_as_unsupported_is_dropped_and_its_reason_shown(monkeypatch, tmp_path):
     # valkey #5110: the forkless experiments set a config current Valkey renamed, and every test skipped unseen.
     test = _scenario("seed: 10\nexperiment: {id: proposed.lset}\ndeployment: {mode: standalone}\n")

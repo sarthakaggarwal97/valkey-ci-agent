@@ -66,6 +66,7 @@ from scripts.common.text_utils import strip_ansi
 from scripts.fuzzer.analyzer import (
     _ANOMALY_PATTERNS,
     _CRASH_TITLES,
+    DISPUTED,
     SEQUENCE_EVIDENCE,
     TOOL_RUNS_EVIDENCE,
     UNEXPLAINED,
@@ -1002,7 +1003,10 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
             doc = yaml.safe_load(text)
             seed = int(doc["seed"])
             first = view(test, doc, "merge", seed)
-            ran = first.get("reached") or first["status"] in ("PASS", "FAIL") or first.get("reason") == UNREACHED
+            # A test whose expectations both builds violate alike ran to its end too: what it expected is kept, for
+            # it may be a bug older than the merge (valkey-bloom's false positives, fuzzer#69).
+            ran = (first.get("reached") or first["status"] in ("PASS", "FAIL")
+                   or first.get("reason") in (UNREACHED, DISPUTED))
             if not ran:
                 # It did not run to its end on the merge (it errored, or was skipped): dropped, only counted.
                 result["dropped"] += 1
@@ -1012,6 +1016,9 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
             # A test that ran to its end hunts, though its marked commands replied alike: it still runs the code
             # the change touched, and its lines count for coverage. It is proven only if it reached the change.
             hunting.append((test, doc))
+            if first.get("reason") == DISPUTED:
+                result["recorded"].append({"scenario": test, "build": "merge", "reason": DISPUTED,
+                                           "summary": first.get("summary")})
             result["proven"] += int(bool(first.get("reached")))
             result["recall"] = result["recall"] or bool(first.get("reached")) or bool(first.get("parent_exited"))
             (folder / "scenarios").mkdir(exist_ok=True)
