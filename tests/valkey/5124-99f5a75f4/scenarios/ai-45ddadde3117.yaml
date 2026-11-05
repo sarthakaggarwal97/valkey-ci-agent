@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d0f45c1104f3..99f5a75f49d3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-45ddadde3117
+seed: 5124
+experiment:
+  id: proposed.hll-truncated-xzero
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

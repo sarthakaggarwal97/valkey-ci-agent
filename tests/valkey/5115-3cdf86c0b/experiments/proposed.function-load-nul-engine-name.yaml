@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.function-load-nul-engine-name
+deployment:
+  modes: [standalone]
+metadata:
+  description: FUNCTION LOAD whose shebang engine name carries an embedded NUL byte
+    that still case-insensitively matches "lua" must not crash on the first load after
+    startup
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: nulload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SET, pre_crash_sentinel, alive], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!\"lua\\x00zz\" name=nultest\nserver.register_function('nulfunc',\
+          \ function(KEYS, ARGV) return 1 end)"], expect_difference: true, expect: {
+        equals: nultest}}
+    - {command: [GET, pre_crash_sentinel], expect_difference: true, expect: {equals: alive}}
+    - {command: [FCALL, nulfunc, 0], expect_difference: true, expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [nulload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: nulload}

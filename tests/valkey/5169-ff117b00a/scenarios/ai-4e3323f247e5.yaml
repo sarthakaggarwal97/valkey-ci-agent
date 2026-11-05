@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c921c0a3d0c1..ff117b00afd6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4e3323f247e5
+seed: 51691
+experiment:
+  id: proposed.watch-expired-key-dirty
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.acl-log-disabled-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: With acllog-max-len 0, a key-denied scripted command leaks the denied
+    key object on the parent, so the leak eventually crosses maxmemory and a later
+    write is refused with OOM; the fixed build frees it and the write succeeds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    maxmemory: {type: string, default: "100mb"}
+components:
+- use: valkey.action.commands
+  id: leak
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      acllog-max-len: 0
+      maxmemory: {$ref: inputs.maxmemory}
+      maxmemory-policy: noeviction
+    commands:
+    - {command: [ACL, SETUSER, leaky, 'on', '>pass', '~allowed:*', '+@all'], expect: {
+        equals: OK}}
+    - {command: [AUTH, leaky, pass], expect: {equals: OK}}
+    - {command: [EVAL, "local k = string.rep('x', 100000) for i=1,3000 do server.pcall('set',\
+          \ k, '1') end return 1", '0'], expect: {equals: 1}}
+    - {command: [AUTH, default, ""], expect: {equals: OK}}
+    - {command: [SET, 'allowed:final', v], expect_difference: true, expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [leak.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: leak}

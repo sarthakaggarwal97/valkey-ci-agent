@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.hll-truncated-xzero
+deployment:
+  modes: [standalone]
+metadata:
+  description: A sparse HLL ending in a truncated XZERO opcode is rejected with INVALIDOBJ
+    on every read path, instead of being read past its buffer end
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hll
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [DEL, hll], expect: {min: 0}}
+    - {command: [PFADD, hll], expect: {equals: 1}}
+    - {command: [SETRANGE, hll, "15", !!binary "gD8/Pz5/"], expect: {equals: 21}}
+    - {command: [PFADD, hll, a], expect_difference: true, expect: {error: "INVALIDOBJ"}}
+    - {command: [DEL, hll], expect: {min: 0}}
+    - {command: [PFADD, hll], expect: {equals: 1}}
+    - {command: [SETRANGE, hll, "15", !!binary "gD8/Pz5/"], expect: {equals: 21}}
+    - {command: [PFCOUNT, hll], expect_difference: true, expect: {error: "INVALIDOBJ"}}
+    - {command: [DEL, hll], expect: {min: 0}}
+    - {command: [PFADD, hll], expect: {equals: 1}}
+    - {command: [SETRANGE, hll, "15", !!binary "gD8/Pz5/"], expect: {equals: 21}}
+    - {command: [PFMERGE, hll, hll], expect_difference: true, expect: {error: "INVALIDOBJ"}}
+    - {command: [DEL, hll], expect: {min: 0}}
+    - {command: [PFADD, hll], expect: {equals: 1}}
+    - {command: [SETRANGE, hll, "15", !!binary "gD8/Pz5/"], expect: {equals: 21}}
+    - {command: [PFDEBUG, TODENSE, hll], expect_difference: true, expect: {error: "INVALIDOBJ"}}
+    - {command: [DEL, hll], expect: {min: 0}}
+    - {command: [PFADD, hll], expect: {equals: 1}}
+    - {command: [SETRANGE, hll, "15", !!binary "gD8/Pz5/"], expect: {equals: 21}}
+    - {command: [PFDEBUG, DECODE, hll], expect_difference: true, expect: {error: "INVALIDOBJ"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hll}

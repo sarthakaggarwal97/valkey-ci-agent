@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.function-restore-flush-async-uaf
+deployment:
+  modes: [standalone]
+metadata:
+  description: FUNCTION RESTORE FLUSH over >64 functions then recreate the Lua engine
+    state; the async free of the old ctx must not touch the recreated state
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: funcs
+  config:
+    compare_with: {$ref: inputs.parent}
+    server_config: {lazyfree-lazy-user-flush: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, "1"], expect: {equals: OK}}
+    - {command: [FUNCTION, FLUSH, SYNC], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=biglib\nfor i=1,200 do server.register_function('f'..i,\
+          \ function() return 'hi' end) end"], expect: {equals: biglib}}
+    - {command: [FCALL, f1, "0"], expect: {equals: hi}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FUNCTION, RESTORE, !!binary "UQAAAAAAAAAAAA==", FLUSH], expect: {
+        equals: QUEUED}}
+    - {command: [FUNCTION, FLUSH, SYNC], expect: {equals: QUEUED}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib2\nserver.register_function('test',\
+          \ function() return 'hello' end)"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK, lib2]}}
+    - {command: [DEBUG, SLEEP, "0.5"], expect: {equals: OK}}
+    - {command: [FCALL, test, "0"], expect_difference: true, expect: {equals: hello}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [funcs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: funcs}

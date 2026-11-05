@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.msetex-hsetex-repeated-expire-aof
+deployment:
+  modes: [standalone]
+metadata:
+  description: MSETEX/HSETEX with repeated EX/PX/EXAT are rewritten into the AOF;
+    on the parent the AOF holds EX next to PXAT, the replay errors out under the default
+    ignore behavior and the keys vanish across a restart
+components:
+- use: valkey.action.commands
+  id: aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes"}
+    timeout_s: 60
+    commands:
+    - {command: [MSETEX, 1, foo, bar, EX, 100, EX, 200], expect: {equals: 1}}
+    - {command: [MSETEX, 1, ex, ex, PX, 100000, PX, 200000, PX, 300000], expect: {
+        equals: 1}}
+    - {command: [MSETEX, 2, k1, v1, k2, v2, EXAT, 33177600000, EXAT, 33177600123],
+      expect: {equals: 1}}
+    - {command: [HSETEX, h, EX, 100, EX, 200, FIELDS, 1, f, v], expect: {equals: 1}}
+    - {command: [HSETEX, px, EXAT, 33177600000, EXAT, 33177600456, FIELDS, 2, f1,
+        v1, f2, v2], expect: {equals: 1}}
+    - {command: [HSETEX, fields, PX, 100000, PX, 200000, FIELDS, 2, ex, 1, fields,
+        2], expect: {equals: 1}}
+    - {command: [MSETEX, 1, ctrl, v, EX, 100], expect: {equals: 1}}
+    - {command: [HSETEX, hc, EX, 100, FIELDS, 1, f, v], expect: {equals: 1}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, foo], expect_difference: true, expect: {equals: bar}}
+    - {command: [GET, ex], expect_difference: true, expect: {equals: ex}}
+    - {command: [MGET, k1, k2], expect_difference: true, expect: {equals: [v1, v2]}}
+    - {command: [PEXPIRETIME, k1], expect_difference: true, expect: {equals: 33177600123000}}
+    - {command: [HGET, h, f], expect_difference: true, expect: {equals: v}}
+    - {command: [HPEXPIRETIME, px, FIELDS, 2, f1, f2], expect_difference: true, expect: {
+        equals: [33177600456000, 33177600456000]}}
+    - {command: [HGET, fields, ex], expect_difference: true, expect: {equals: "1"}}
+    - {command: [GET, ctrl], expect: {equals: v}}
+    - {command: [HGET, hc, f], expect: {equals: v}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 9}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [aof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof}

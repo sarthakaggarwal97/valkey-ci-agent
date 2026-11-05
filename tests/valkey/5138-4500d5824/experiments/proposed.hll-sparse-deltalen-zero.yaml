@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.hll-sparse-deltalen-zero
+deployment:
+  modes: [standalone]
+metadata:
+  description: PFMERGE updating register 0 of a short SDS_TYPE_5 sparse HLL (deltalen
+    zero) must not abort
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.commands
+  id: merge
+  config:
+    compare_with: {$ref: inputs.parent}
+    server_config: {hll-sparse-max-bytes: 0}
+    timeout_s: 10
+    commands:
+    - {command: [SET, hll_dst, !!binary "SFlMTAEAAAAAAAAAAAAAAEBAf74="], expect: {
+        equals: OK}}
+    - {command: [SET, hll_src, !!binary "SFlMTAEAAAAAAAAAAAAAAIB//g=="], expect: {
+        equals: OK}}
+    - {command: [PFMERGE, hll_dst, hll_src], expect_difference: true, expect: {equals: OK}}
+    - {command: [PFCOUNT, hll_dst], expect_difference: true, expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: merge}

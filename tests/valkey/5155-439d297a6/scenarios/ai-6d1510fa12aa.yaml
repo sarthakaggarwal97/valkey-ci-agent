@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 88c77ea816af..439d297a67f5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6d1510fa12aa
+seed: 7001
+experiment:
+  id: proposed.module-calloc-overflow-server-panic
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

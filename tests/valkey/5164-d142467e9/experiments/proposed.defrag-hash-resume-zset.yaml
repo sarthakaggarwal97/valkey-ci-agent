@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.defrag-hash-resume-zset
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active defrag resuming a hash scan after a deferred big ZSET is replaced
+    by a hash must not crash
+components:
+- use: valkey.action.commands
+  id: defrag
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 40
+    server_config:
+      activedefrag: "yes"
+      active-defrag-threshold-lower: 0
+      active-defrag-ignore-bytes: 1
+      active-defrag-cycle-min: 1
+      active-defrag-cycle-max: 1
+      active-defrag-max-scan-fields: 100
+      hash-max-listpack-entries: 1
+      zset-max-listpack-entries: 0
+      hz: 50
+    commands:
+    - {command: [EVAL, "for i=1,200000 do redis.call('zadd', KEYS[1], i, tostring(i))\
+          \ end return redis.call('zcard', KEYS[1])", 1, bigkey], expect: {equals: 200000}}
+    - {command: [HSET, srchash, a, 1, b, 2], expect: {equals: 2}}
+    - {command: [DEBUG, SLEEP, "0.2"], compare: skip}
+    - {command: [DEBUG, SLEEP, "0.2"], compare: skip}
+    - {command: [DEBUG, SLEEP, "0.2"], compare: skip}
+    - {command: [RENAME, srchash, bigkey], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.2"], compare: skip}
+    - {command: [DEBUG, SLEEP, "0.2"], compare: skip}
+    - {command: [HGET, bigkey, a], wait_s: 30, expect_difference: true, expect: {
+        equals: "1"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [defrag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: defrag}

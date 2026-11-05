@@ -1,0 +1,27 @@
+extends: [valkey.liveness]
+id: proposed.module-calloc-overflow-panic
+deployment:
+  modes: [standalone]
+metadata:
+  description: ValkeyModule_Calloc rejects an overflowing nmemb*size by panicking
+    (no reply) instead of allocating a wrapped size
+components:
+- use: valkey.action.commands
+  id: calloc
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module.path}]
+    resp: 2
+    timeout_s: 10
+    commands:
+    - {command: [test.calloc_overflow], expect_difference: true, expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [calloc.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: calloc}

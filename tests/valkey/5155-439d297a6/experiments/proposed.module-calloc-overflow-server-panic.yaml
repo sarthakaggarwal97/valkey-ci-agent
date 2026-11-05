@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.module-calloc-overflow-server-panic
+deployment:
+  modes: [standalone]
+metadata:
+  description: ValkeyModule_Calloc with an nmemb*size that overflows SIZE_MAX panics
+    on the change but silently returns a too-small buffer on the parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: calloc
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [test.trycalloc_overflow], expect_difference: true, expect: {in: [
+          1, true]}}
+    - {command: [test.calloc_overflow], connection: crash, expect_difference: true,
+      expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: calloc}

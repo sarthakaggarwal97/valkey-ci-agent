@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2b1fc8c1f7ad..88c77ea816af.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-069a330cbec7
+seed: 101
+experiment:
+  id: proposed.callreply-attribute-element
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

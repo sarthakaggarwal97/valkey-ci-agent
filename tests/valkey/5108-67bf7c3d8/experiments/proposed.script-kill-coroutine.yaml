@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.script-kill-coroutine
+deployment:
+  modes: [standalone]
+metadata:
+  description: SCRIPT KILL interrupts a read-only script spinning inside a coroutine
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: kill
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, lua-time-limit, "100"], expect: {equals: OK}}
+    - {raw: "*3\r\n$4\r\nEVAL\r\n$86\r\nwhile true do coroutine.resume(coroutine.create(function()\
+        \ while true do end end)) end\r\n$1\r\n0\r\n", connection: script}
+    - {command: [SCRIPT, KILL], connection: killer, compare: skip, expect: {error: false}}
+    - {raw: "PING\r\n", connection: script, expect_difference: true, expect: {error: "killed\
+          \ by user"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: kill}

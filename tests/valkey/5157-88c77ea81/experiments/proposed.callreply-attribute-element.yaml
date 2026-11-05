@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.callreply-attribute-element
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    RM_CallReplyAttributeElement must read key/value from an attribute reply (the
+    parent wrongly demands a map and errors), and RM_CallReplyAttribute must parse
+    the reply before returning the attribute.
+components:
+- use: valkey.action.commands
+  id: attrib
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {enable-debug-command: "yes"}
+    resp: 2
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, PROTOCOL, attrib], expect: {equals: "Some real reply following\
+          \ the attribute"}}
+    - {command: [test.callresp3attribute], expect_difference: true, expect: {equals: OK}}
+    - {command: [test.basics], expect: {equals: "ALL TESTS PASSED"}}
+    - {command: [test.callresp3map], expect: {equals: OK}}
+    - {command: [test.callresp3attribute], expect_difference: true, expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [attrib.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: attrib}

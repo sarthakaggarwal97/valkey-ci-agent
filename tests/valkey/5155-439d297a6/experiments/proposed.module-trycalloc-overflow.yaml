@@ -1,0 +1,27 @@
+extends: [valkey.liveness]
+id: proposed.module-trycalloc-overflow
+deployment:
+  modes: [standalone]
+metadata:
+  description: ValkeyModule_TryCalloc returns NULL when nmemb*size overflows instead
+    of a tiny wrapped allocation
+components:
+- use: valkey.action.commands
+  id: trycalloc
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module.path}]
+    resp: 2
+    timeout_s: 10
+    commands:
+    - {command: [test.trycalloc_overflow], expect_difference: true, expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [trycalloc.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: trycalloc}

@@ -1,0 +1,39 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2b1fc8c1f7ad4b490d3259b87347791d379ee99e",
+  "parent": "fb22585dc7f42102e7c9e8a9574b60faacd8e093",
+  "pr": 5160,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Skip throttled clients in processPendingCommandAndInputBuffer (#5160)",
+  "date": "2026-11-04",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 8,
+    "executed": 4,
+    "percent": 50,
+    "uncovered": [
+      "src/blocked.c:197",
+      "src/blocked.c:198",
+      "src/blocked.c:199",
+      "src/blocked.c:200"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 7.2844,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-47b40f8b60e7",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'full-resync' returned ERROR: not judged: the preconditions were not recorded: valkey.replication.output-limit-logged from logs"
+    }
+  ]
+}

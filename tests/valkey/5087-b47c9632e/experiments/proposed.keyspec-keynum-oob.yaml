@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.keyspec-keynum-oob
+deployment:
+  modes: [standalone]
+metadata:
+  description: KEYNUM spec with a non-zero begin index and a missing numkeys argument
+    no longer reads argv out of bounds; index spec past the last arg matches nothing
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: keyspecs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [ACL, SETUSER, testuser, 'on', nopass, +@all, '%R~read*', '%W~write*',
+        '%RW~rw*'], expect: {equals: OK}}
+    - {command: [COMMAND, GETKEYS, kspec.tworanges, foo], expect_difference: true,
+      expect: {equals: [foo]}}
+    - {command: [COMMAND, GETKEYS, kspec.tworanges, foo, bar, baz, quux], expect: {
+        equals: [foo, bar]}}
+    - {command: [ACL, DRYRUN, testuser, kspec.tworanges, write], expect_difference: true,
+      expect: {contains: "the 'write' key"}}
+    - {command: [COMMAND, GETKEYS, kspec.complex2, foo, bar, '2', baz, quux, banana,
+        STORE, dst, dummy, MOREKEYS, hey, ho], expect: {equals: [dst, foo, bar, baz,
+          quux, hey, ho]}}
+    - {command: [COMMAND, GETKEYS, kspec.complex2, foo, bar], expect_difference: true,
+      expect: {equals: [foo, bar]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: keyspecs}

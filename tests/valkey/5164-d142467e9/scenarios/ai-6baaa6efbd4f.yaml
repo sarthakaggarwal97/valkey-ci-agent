@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e59ba66ec82e..d142467e9231.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6baaa6efbd4f
+seed: 51640
+experiment:
+  id: proposed.defrag-hash-resume-set
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

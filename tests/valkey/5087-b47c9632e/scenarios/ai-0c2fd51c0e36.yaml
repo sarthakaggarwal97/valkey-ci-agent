@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0a9fe22affef..b47c9632ecd0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0c2fd51c0e36
+seed: 1003
+experiment:
+  id: proposed.keyspec-keynum-oob
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

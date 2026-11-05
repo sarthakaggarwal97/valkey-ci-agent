@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2b1fc8c1f7ad..88c77ea816af.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-44c1163d9df7
+seed: 202
+experiment:
+  id: proposed.callreply-attribute-stress
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

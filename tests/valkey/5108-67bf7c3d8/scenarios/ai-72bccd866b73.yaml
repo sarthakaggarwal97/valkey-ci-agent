@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b47c9632ecd0..67bf7c3d86d9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-72bccd866b73
+seed: 51002
+experiment:
+  id: proposed.script-kill-coroutine
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

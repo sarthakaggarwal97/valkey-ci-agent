@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "88c77ea816af68d16917b6072580c246c7b38146",
+  "parent": "2b1fc8c1f7ad4b490d3259b87347791d379ee99e",
+  "pr": 5157,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Check for an attribute reply in RM_CallReplyAttributeElement (#5157)",
+  "date": "2026-11-04",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.4725,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 1 (test.callresp3attribute) replies otherwise with resp 3: {\"reply\":\"Some real reply following the attribute\"}, not {\"reply\":\"OK\"}",
+      "scenario": "ai-069a330cbec7",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #5157",
+      "fingerprint": "8c433c3e8764b1655999",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/44"
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 0 (test.callresp3attribute) replies otherwise with resp 3: {\"reply\":[\"key-popularity\",[\"key:123\",90]]}, not {\"reply\":\"OK\"}",
+      "scenario": "ai-44c1163d9df7",
+      "seed": 202,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #5157",
+      "fingerprint": "146bc09fdb06b1a804d1",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/45"
+    }
+  ],
+  "recorded": []
+}

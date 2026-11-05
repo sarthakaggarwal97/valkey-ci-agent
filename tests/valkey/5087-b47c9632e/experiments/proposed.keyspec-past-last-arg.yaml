@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.keyspec-past-last-arg
+deployment:
+  modes: [standalone]
+metadata:
+  description: Index key spec starting past the last argument (PFMERGE with no source
+    keys) matches no keys instead of aborting extraction
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: pfmerge
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [ACL, SETUSER, command-test, 'on', nopass, +@all, '%R~read*', '%W~write*',
+        '%RW~rw*'], expect: {equals: OK}}
+    - {command: [COMMAND, GETKEYS, PFMERGE, k1], expect_difference: true, expect: {
+        equals: [k1]}}
+    - {command: [COMMAND, GETKEYSANDFLAGS, PFMERGE, k1], expect_difference: true,
+      expect: {error: false}}
+    - {command: [COMMAND, GETKEYS, PFMERGE, k1, k2], expect: {equals: [k1, k2]}}
+    - {command: [ACL, DRYRUN, command-test, PFMERGE, rw], expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, command-test, PFMERGE, read], expect_difference: true,
+      expect: {contains: "the 'read' key"}}
+    - {command: [ACL, DRYRUN, command-test, PFMERGE, nothing], expect_difference: true,
+      expect: {contains: "the 'nothing' key"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pfmerge}

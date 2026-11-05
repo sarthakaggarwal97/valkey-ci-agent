@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.callreply-attribute-stress
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Repeated attribute replies through RM_Call, interleaved with every other RESP3
+    reply shape and a MULTI/EXEC, stress the reordered attribute parsing and private_data
+    assignment in callReplyAttribute (crash, double free, corruption under the liveness
+    oracle).
+components:
+- use: valkey.action.commands
+  id: stress
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {enable-debug-command: "yes"}
+    resp: 2
+    timeout_s: 60
+    commands:
+    - {command: [test.callresp3attribute], expect_difference: true, expect: {equals: OK}}
+    - {command: [test.callresp3map], expect: {equals: OK}}
+    - {command: [test.callresp3attribute], expect_difference: true, expect: {equals: OK}}
+    - {command: [test.callresp3set], expect: {equals: OK}}
+    - {command: [test.callresp3attribute], expect_difference: true, expect: {equals: OK}}
+    - {command: [test.callresp3double], expect: {equals: OK}}
+    - {command: [test.callresp3attribute], expect_difference: true, expect: {equals: OK}}
+    - {command: [test.callresp3bool], expect: {equals: OK}}
+    - {command: [test.callresp3attribute], expect_difference: true, expect: {equals: OK}}
+    - {command: [test.callresp3null], expect: {equals: OK}}
+    - {command: [test.callresp3attribute], expect_difference: true, expect: {equals: OK}}
+    - {command: [test.callreplywithnestedreply], expect: {equals: test}}
+    - {command: [test.callresp3attribute], expect_difference: true, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [test.callresp3attribute], expect: {equals: QUEUED}}
+    - {command: [test.callresp3map], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [OK, OK]}}
+    - {command: [DEBUG, PROTOCOL, attrib], expect: {equals: "Some real reply following\
+          \ the attribute"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [stress.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: stress}

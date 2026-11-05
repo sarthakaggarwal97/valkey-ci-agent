@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "99f5a75f49d3742e05889057af2f352df052f2f0",
+  "parent": "d0f45c1104f3e4ff368593397b72d9806e0ab98d",
+  "pr": 5124,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reject sparse HLLs that end in a truncated XZERO opcode (#5124)",
+  "date": "2026-11-04",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 9,
+    "executed": 8,
+    "percent": 88,
+    "uncovered": [
+      "src/hyperloglog.c:763"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 1.8444,
+  "findings": [],
+  "recorded": []
+}

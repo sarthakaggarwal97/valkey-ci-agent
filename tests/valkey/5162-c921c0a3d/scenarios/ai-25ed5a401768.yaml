@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 94c716abb583..c921c0a3d0c1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-25ed5a401768
+seed: 11
+experiment:
+  id: proposed.acl-log-disabled-leak
+  inputs:
+    resp: 2
+    maxmemory: 100mb
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,32 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fb22585dc7f4..2b1fc8c1f7ad.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-dcc3309ae8ac
+seed: 505
+experiment:
+  id: valkey.replication-chaos
+  inputs:
+    mutation_rate: 1000
+    value_size: 16384
+    mutable_keys: 1000
+    waves:
+    - - op: stall
+        target: replica
+        duration_s: 2.5
+    - - op: stall
+        target: replica
+        duration_s: 2.0
+      - op: kill
+        target: replica
+        delay_s: 0.5
+      - op: restart
+        target: killed
+        delay_s: 1.5
+deployment:
+  mode: standalone
+  replicas_per_primary: 4
+  base_port: 7400
+  server_config:
+    repl-throttling-enabled: 'yes'
+    io-threads: 4
+    prefetch-batch-max-size: 16
+    client-output-buffer-limit: replica 512mb 2mb 0

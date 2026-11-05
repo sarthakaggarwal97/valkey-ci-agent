@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 67bf7c3d86d9..7035f412c024.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fac86839ba28
+seed: 5090
+experiment:
+  id: proposed.msetex-hsetex-repeated-expire-aof
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

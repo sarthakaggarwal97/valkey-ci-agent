@@ -1,0 +1,72 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "439d297a67f55e9d2929cac10239dd35b0643bbe",
+  "parent": "88c77ea816af68d16917b6072580c246c7b38146",
+  "pr": 5155,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reject ValkeyModule_Calloc requests whose nmemb * size overflows (#5155)",
+  "date": "2026-11-04",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 3,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 3,
+    "percent": 75,
+    "uncovered": [
+      "src/module.c:590"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 3.8124,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: ValkeyModule_Calloc(9223372036854775809, 2) overflows #module.c:590",
+      "scenario": "ai-ecadc2d3b9ec",
+      "seed": 2,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #5155",
+      "fingerprint": "04e6e5e1a7639156e3a3",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/43"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: ValkeyModule_Calloc(9223372036854775809, 2) overflows #module.c:590",
+      "scenario": "ai-6d1510fa12aa",
+      "seed": 7001,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #5155",
+      "fingerprint": "04e6e5e1a7639156e3a3",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/43"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: ValkeyModule_Calloc(9223372036854775809, 2) overflows #module.c:590",
+      "scenario": "ai-367985316363",
+      "seed": 7002,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #5155",
+      "fingerprint": "04e6e5e1a7639156e3a3",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/43"
+    }
+  ],
+  "recorded": []
+}

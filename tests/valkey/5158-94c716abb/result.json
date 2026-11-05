@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "94c716abb583e472ac390b5056c266808dfa47f4",
+  "parent": "439d297a67f55e9d2929cac10239dd35b0643bbe",
+  "pr": 5158,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fail CONFIG REWRITE when the old config file reads short (#5158)",
+  "date": "2026-11-04",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.6553,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters behaviour when fread of the old config file returns fewer bytes than fstat reported (src/config.c rewriteConfigReadOldFile): previously a partial read proceeded with an uninitialized SDS_NOINIT buffer tail, now CONFIG REWRITE fails with errno set to EIO on a quiet short read. That condition needs a file whose stat size exceeds its readable bytes - a sysfs/procfs special file (Valkey's own tcl test symlinks the config to /sys/kernel/mm/transparent_hugepage/enabled) or an external truncation racing the single-threaded fstat+fread. No installed component can produce it: the"
+}

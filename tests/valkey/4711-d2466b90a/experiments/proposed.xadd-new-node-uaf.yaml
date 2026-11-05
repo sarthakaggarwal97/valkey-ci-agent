@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.xadd-new-node-uaf
+deployment:
+  modes: [standalone]
+metadata:
+  description: XADD creating new stream macro nodes keeps every entry readable; the
+    parent UAF loses, corrupts, or crashes on them
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: xadd
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [XADD, k, "2-2", f1, gd, f2, bmljhyqvch], expect: {equals: "2-2"}}
+    - {command: [CONFIG, SET, stream-node-max-bytes, "1"], expect: {equals: OK}}
+    - {command: [XADD, k, "2-3", f1, &id002 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        f2, &id001 "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        f3, aaaa, f4, a, f5, *id001, f6, *id001], expect: {equals: "2-3"}}
+    - {command: [CONFIG, SET, stream-node-max-bytes, "4096"], expect: {equals: OK}}
+    - {command: [XADD, k, "2-4", f1, *id002, f2, *id001, f3, aaaa, f4, a, f5, *id001,
+        f6, *id001], expect: {equals: "2-4"}}
+    - {command: [XADD, k, "2-5", f1, *id002, f2, *id001, f3, aaaa, f4, a, f5, *id001,
+        f6, *id001], expect: {equals: "2-5"}}
+    - {command: [XLEN, k], expect: {equals: 4}}
+    - {command: [XREVRANGE, k, "+", "-"], expect_difference: true, expect: {exists: true}}
+    - {command: [XRANGE, k, "-", "+"], expect_difference: true, expect: {exists: true}}
+    - {command: [XADD, k, "2-6", f1, hi], expect_difference: true, expect: {equals: "2-6"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [xadd.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: xadd}

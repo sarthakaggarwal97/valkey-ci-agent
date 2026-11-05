@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "094dcd660a6c554121f21fb8cd845a16422604b4",
+  "parent": "557777cf7c628c663602ad2ff8b137e575f9bd5c",
+  "pr": 5167,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Hash HRANDFIELD and SRANDMEMBER temporary tables case-sensitively (#5167)",
+  "date": "2026-11-03",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5667,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a pure performance fix with no observable behaviour change. It switches the temporary SRANDMEMBER/HRANDFIELD reply hashtable (sdsReplyHashtableType) from a case-insensitive hash function (dictSdsCaseHash) to a case-sensitive one (dictSdsHash), while keeping the case-sensitive comparator. The old case-insensitive-hash/case-sensitive-compare combination was already correctness-safe: distinct case variants still compared unequal, so all elements were inserted as distinct entries, every hashtableAdd succeeded, and the size asserts held. The only effect was that case-variant spellings colli"
+}

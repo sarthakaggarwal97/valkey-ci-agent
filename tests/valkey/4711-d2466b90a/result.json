@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "parent": "c86f6ee511e1a36488feb3b8e62093e69195d332",
+  "pr": 4711,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix UAF in streams when XADD creates a new node (#4711)",
+  "date": "2026-11-04",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.9007,
+  "findings": [],
+  "recorded": []
+}

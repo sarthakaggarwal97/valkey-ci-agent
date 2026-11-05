@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 99f5a75f49d3..4500d5824f70.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-df8285d9a5b5
+seed: 51381
+experiment:
+  id: proposed.hll-sparse-deltalen-zero-tail
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
