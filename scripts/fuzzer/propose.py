@@ -1074,9 +1074,13 @@ def _ask_claude(runner: Runner, prompt: str, workdir: Path) -> dict[str, Any]:
             if not isinstance(payload.get("experiments", []), list):
                 raise ValueError("Claude's experiments are not a list")
             return payload
-        last_error = RuntimeError(f"Claude Code failed (rc={result.returncode}): {result.stderr[:300]}")
-        if "timeout after" in result.stderr:
-            # The same prompt explores the same way: a second try took as long again and timed out too.
+        # The CLI's stderr is folded into its stream, whose result event says why it failed (an API error).
+        text = result_text(result.stdout)
+        detail = result.stderr or (text if text != result.stdout else "")
+        last_error = RuntimeError(f"Claude Code failed (rc={result.returncode}): {detail[:300]}")
+        if "timeout after" in result.stderr or "Usage Policy" in detail:
+            # The same prompt explores the same way: a second try took as long again and timed out too, or was
+            # refused again.
             raise last_error
         if attempt + 1 < _CLAUDE_MAX_ATTEMPTS:
             logger.warning("Claude failed, retrying: %s", last_error)

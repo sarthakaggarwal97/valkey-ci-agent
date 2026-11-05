@@ -485,6 +485,19 @@ def test_a_timed_out_answer_is_not_asked_again(tmp_path, fuzzer_dir):
     assert len(runner.prompts) == 1
 
 
+def test_a_refused_request_says_why_and_is_not_asked_again(tmp_path, fuzzer_dir):
+    # valkey #4214: the API refused the request under its usage policy after 26 minutes, and the walk recorded
+    # "Claude Code failed (rc=1): " with nothing after it, the CLI's stderr being folded into its stdout.
+    refusal = "API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy"
+    stream = "\n".join([json.dumps({"type": "assistant"}), json.dumps({"type": "result", "result": refusal})])
+    refused = AgentRunResult(profile="fuzzer_proposal_readonly", stdout=stream, stderr="", returncode=1,
+                             prompt_sha256="x", cwd="", allowed_tools="", model="", started_at="", finished_at="")
+    runner = StubRunner(refused, _answer([{"rationale": "a", "scenario": GOOD}]))
+    with pytest.raises(RuntimeError, match=r"Claude Code failed \(rc=1\): API Error: .* Usage Policy"):
+        _propose(runner, tmp_path, fuzzer_dir)
+    assert len(runner.prompts) == 1
+
+
 def test_unusable_first_answer_raises(tmp_path, fuzzer_dir):
     # Prose, and prose again when asked to restate it as the object.
     runner = StubRunner(_result("I could not find anything"), _result("Still nothing to say"))
