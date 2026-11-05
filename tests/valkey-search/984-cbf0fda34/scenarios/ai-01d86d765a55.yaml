@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 707324aa1d41..cbf0fda34bec.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-01d86d765a55
+seed: 103
+experiment:
+  id: proposed.ft-create-filter-rdb
+  inputs:
+    resp: 2
+    aof: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

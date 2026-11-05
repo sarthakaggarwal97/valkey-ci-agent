@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.search-aggregate-expr-numeric
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE APPLY numeric semantics (IEEE divide-by-zero, ^ precedence
+    and right-assoc, &&/|| precedence, empty-string-not-numeric) differ across the
+    two module builds
+inputs:
+  required: [module, module_parent]
+  properties:
+    module: {type: environment_reference, reference_kinds: [artifacts], description: "change\
+        \ build, {$ref: artifacts.module.path}"}
+    module_parent: {type: environment_reference, reference_kinds: [artifacts], description: "parent\
+        \ build, {$ref: artifacts.module_parent.path}"}
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: expr
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, search.emulate-release, "1.3.0"], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "h:", SCHEMA, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, "h:1", n, "1"], expect: {equals: 1}}
+    - {command: [FT.AGGREGATE, idx, "*", GROUPBY, "0", REDUCE, COUNT, "0", AS, c],
+      wait_s: 30, expect: {equals: [1, [c, "1"]]}, compare: skip}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "(1)/(0)", AS, r], expect_difference: true,
+      expect: {equals: [1, [r, "inf"]]}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "(0-1)/(0)", AS, r], expect_difference: true,
+      expect: {equals: [1, [r, "-inf"]]}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "(2)*(3)^(2)", AS, r], expect_difference: true,
+      expect: {equals: [1, [r, "18"]]}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "(2)^(3)^(2)", AS, r], expect_difference: true,
+      expect: {equals: [1, [r, "512"]]}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "(1)||(0)&&(0)", AS, r], expect_difference: true,
+      expect: {equals: [1, [r, "1"]]}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "abs(\"\")", AS, r], expect_difference: true,
+      expect: {equals: [1, [r, "nan"]]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: expr}

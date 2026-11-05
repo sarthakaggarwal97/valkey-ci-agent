@@ -1,0 +1,123 @@
+extends: [valkey.liveness]
+id: proposed.ft-cursor-lifecycle-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE and FT.HYBRID WITHCURSOR, FT.CURSOR argument handling,
+    and the cursor table lifecycle (idle expiry, DROPINDEX/FLUSHDB discard, SWAPDB,
+    MULTI/EXEC), compared against the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cursor
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, search.search-result-background-cleanup, yes], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "h:", SCHEMA, title, TEXT, price,
+        NUMERIC, vec, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2],
+      expect: {equals: OK}}
+    - {command: [HSET, "h:1", title, "hello one", price, "10", vec, !!binary "AACAPwAAAAA="],
+      expect: {equals: 3}}
+    - {command: [HSET, "h:2", title, "hello two", price, "20", vec, !!binary "AAAAQAAAAAA="],
+      expect: {equals: 3}}
+    - {command: [HSET, "h:3", title, "hello three", price, "30", vec, !!binary "AABAQAAAAAA="],
+      expect: {equals: 3}}
+    - {command: [HSET, "h:4", title, "hello four", price, "40", vec, !!binary "AACAQAAAAAA="],
+      expect: {equals: 3}}
+    - {command: [HSET, "h:5", title, "hello five", price, "50", vec, !!binary "AACgQAAAAAA="],
+      expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, "@price:[-inf inf]", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [5]}}
+    - {command: [FT.AGGREGATE, idx, "@price:[-inf inf]", LOAD, 1, "@price", SORTBY,
+        2, "@price", ASC], expect: {equals: [5, [price, "10"], [price, "20"], [price,
+            "30"], [price, "40"], [price, "50"]]}}
+    - {command: [FT.AGGREGATE, idx, "@price:[-inf inf]", WITHCURSOR, LOAD, 1, "@price",
+        SORTBY, 2, "@price", ASC], expect_difference: true, expect: {equals: [[5,
+            [price, "10"], [price, "20"], [price, "30"], [price, "40"], [price, "50"]],
+          0]}}
+    - {command: [FT.AGGREGATE, idx, "@price:[-inf inf]", LOAD, 1, "@price", WITHCURSOR,
+        COUNT, 2, SORTBY, 2, "@price", ASC, WITHCURSOR, COUNT, 1000], expect_difference: true,
+      expect: {equals: [[5, [price, "10"], [price, "20"], [price, "30"], [price, "40"],
+            [price, "50"]], 0]}}
+    - {command: [FT.AGGREGATE, idx, "@price:[-inf inf]", LOAD, 1, "@price", SORTBY,
+        2, "@price", ASC, WITHCURSOR, COUNT, 2], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: "search_num_cursors:1"}}
+    - {command: [FT._DEBUG, SHOW_CURSORS], expect_difference: true, expect: {exists: true}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.AGGREGATE, idx, "@price:[-inf inf]", LOAD, 1, "@price", SORTBY,
+        2, "@price", ASC, WITHCURSOR, COUNT, 1], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: true}}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: "search_num_cursors:2"}}
+    - {command: [FT.CURSOR, READ, idx, 0], expect_difference: true, expect: {error: "Cursor\
+          \ not found, id: 0"}}
+    - {command: [FT.CURSOR, DEL, idx, 0], expect_difference: true, expect: {error: "Cursor\
+          \ does not exist"}}
+    - {command: [FT.CURSOR, READ, nosuchindex, 0], expect_difference: true, expect: {
+        error: "not found in database"}}
+    - {command: [FT.CURSOR, READ, idx, notanumber], expect_difference: true, expect: {
+        error: "Bad cursor id"}}
+    - {command: [FT.CURSOR, READ, idx, 18446744073709551615], expect_difference: true,
+      expect: {error: "Cursor not found"}}
+    - {command: [FT.CURSOR, READ, idx, 7, COUNT, 0], expect_difference: true, expect: {
+        error: "COUNT must be between 1 and"}}
+    - {command: [FT.CURSOR, DEL, idx, 7, COUNT, 2], expect_difference: true, expect: {
+        error: "Unexpected argument"}}
+    - {command: [FT.CURSOR, PEEK, idx, 7], expect_difference: true, expect: {error: "Unknown\
+          \ subcommand"}}
+    - {command: [FT.CURSOR, READ, idx], expect_difference: true, expect: {error: true}}
+    - {command: [SWAPDB, 0, 1], expect: {equals: OK}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [FT.CURSOR, READ, idx, 0], expect_difference: true, expect: {error: "Cursor\
+          \ not found, id: 0"}}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: "search_num_cursors:0"}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [FT.CURSOR, READ, idx, 0], expect_difference: true, expect: {error: "not\
+          \ found in database"}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "h:", SCHEMA, title, TEXT, price,
+        NUMERIC, vec, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2],
+      expect: {equals: OK}}
+    - {command: [HSET, "h:1", title, "hello one", price, "10", vec, !!binary "AACAPwAAAAA="],
+      expect: {equals: 3}}
+    - {command: [HSET, "h:2", title, "hello two", price, "20", vec, !!binary "AAAAQAAAAAA="],
+      expect: {equals: 3}}
+    - {command: [HSET, "h:3", title, "hello three", price, "30", vec, !!binary "AABAQAAAAAA="],
+      expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, "@price:[-inf inf]", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [3]}}
+    - {command: [FT.AGGREGATE, idx, "@price:[-inf inf]", LOAD, 1, "@price", SORTBY,
+        2, "@price", ASC, WITHCURSOR, COUNT, 1, MAXIDLE, 100], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [INFO, SEARCH], compare: skip, wait_s: 15, expect: {contains: "search_num_cursors:0"}}
+    - {command: [FT.HYBRID, idx, SEARCH, "@title:hello", VSIM, "@vec", "$q", COMBINE,
+        RRF, 2, WINDOW, 20, LOAD, 1, "@price", SORTBY, 2, "@price", ASC, LIMIT, 0,
+        100, PARAMS, 2, q, !!binary "AAAAAAAAAAA="], expect: {equals: [3, [price,
+            "10"], [price, "20"], [price, "30"]]}}
+    - {command: [FT.HYBRID, idx, SEARCH, "@title:hello", VSIM, "@vec", "$q", COMBINE,
+        RRF, 2, WINDOW, 20, WITHCURSOR, COUNT, 1000, LOAD, 1, "@price", SORTBY, 2,
+        "@price", ASC, LIMIT, 0, 100, PARAMS, 2, q, !!binary "AAAAAAAAAAA="], expect_difference: true,
+      expect: {equals: [[3, [price, "10"], [price, "20"], [price, "30"]], 0]}}
+    - {command: [FT.HYBRID, idx, SEARCH, "@title:hello", VSIM, "@vec", "$q", COMBINE,
+        RRF, 2, WINDOW, 20, LOAD, 1, "@price", SORTBY, 2, "@price", ASC, LIMIT, 0,
+        100, WITHCURSOR, COUNT, 1, PARAMS, 2, q, !!binary "AAAAAAAAAAA="], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: "search_num_cursors:1"}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], compare: skip, wait_s: 10, expect: {contains: "search_num_cursors:0"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [cursor.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cursor}

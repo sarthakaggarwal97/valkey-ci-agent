@@ -1,0 +1,78 @@
+extends: [valkey.liveness]
+id: proposed.search-expansion-scoring
+deployment:
+  modes: [standalone]
+metadata:
+  description: BM25STD scoring for text prefix/suffix/fuzzy expansions on both the
+    in-iterator and extra-step paths, with field-scoped expansions on a two-TEXT-field
+    schema
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: expansion
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idxExp, ON, HASH, PREFIX, "1", "exp:", SCHEMA, body, TEXT,
+        NOSTEM, WITHSUFFIXTRIE], expect: {equals: OK}}
+    - {command: [HSET, "exp:cat", body, cat], expect: {equals: 1}}
+    - {command: [HSET, "exp:multi", body, "category catalog"], expect: {equals: 1}}
+    - {command: [HSET, "exp:cat2", body, category], expect: {equals: 1}}
+    - {command: [HSET, "exp:cat3", body, category], expect: {equals: 1}}
+    - {command: [HSET, "exp:run", body, running], expect: {equals: 1}}
+    - {command: [HSET, "exp:jog", body, jogging], expect: {equals: 1}}
+    - {command: [HSET, "exp:dog", body, dog], expect: {equals: 1}}
+    - {command: [FT.INFO, idxExp], wait_s: 30, expect: {contains: 7}, compare: skip}
+    - {command: [FT.SEARCH, idxExp, dog, NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "exp:dog"]}}
+    - {command: [FT.SEARCH, idxExp, "cat*", WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "exp:cat"}, compare: unordered}
+    - {command: [FT.SEARCH, idxExp, cat, WITHSCORES, NOCONTENT], expect: {contains: "exp:cat"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idxExp, "*ing", WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "exp:run"}, compare: unordered}
+    - {command: [FT.SEARCH, idxExp, "%cat%", WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "exp:cat"}, compare: unordered}
+    - {command: [FT.SEARCH, idxExp, "zz*", NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.CREATE, idxFs, ON, HASH, PREFIX, "1", "fs:", SCHEMA, body, TEXT,
+        NOSTEM, WITHSUFFIXTRIE, title, TEXT, NOSTEM, rank, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "fs:1", body, alzta, title, alxta, rank, "1"], expect: {equals: 3}}
+    - {command: [HSET, "fs:2", body, alxta, title, zed, rank, "2"], expect: {equals: 3}}
+    - {command: [HSET, "fs:3", body, alxta, title, zed, rank, "3"], expect: {equals: 3}}
+    - {command: [HSET, "fs:4", body, alxta, title, zed, rank, "4"], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idxFs, zed, NOCONTENT], wait_s: 30, expect: {contains: "fs:4"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idxFs, "@body:al*", WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "fs:1"}, compare: unordered}
+    - {command: [FT.SEARCH, idxFs, "@body:al* @rank:[0 100]", WITHSCORES, NOCONTENT],
+      expect_difference: true, expect: {contains: "fs:1"}, compare: unordered}
+    - {command: [FT.SEARCH, idxFs, "@body:*ta @rank:[0 100]", WITHSCORES, NOCONTENT],
+      expect_difference: true, expect: {contains: "fs:1"}, compare: unordered}
+    - {command: [FT.SEARCH, idxFs, "@body:%alata% @rank:[0 100]", WITHSCORES, NOCONTENT],
+      expect_difference: true, expect: {contains: "fs:1"}, compare: unordered}
+    - {command: [FT.SEARCH, idxFs, "@title:al* @rank:[0 100]", WITHSCORES, NOCONTENT],
+      expect_difference: true, expect: {contains: "fs:1"}, compare: unordered}
+    - {command: [FT.SEARCH, idxFs, "(@body:alxta)|(@rank:[1 1])", WITHSCORES, NOCONTENT],
+      expect_difference: true, expect: {contains: "fs:1"}, compare: unordered}
+    - {command: [FT.SEARCH, idxFs, "alxta @rank:[0 100]", WITHSCORES, NOCONTENT],
+      expect: {contains: "fs:2"}, compare: unordered}
+    - {command: [DEL, "exp:cat2", "exp:cat3"], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idxExp, category, NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "exp:multi"]}}
+    - {command: [FT.SEARCH, idxExp, "cat*", WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "exp:multi"}, compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [expansion.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: expansion}

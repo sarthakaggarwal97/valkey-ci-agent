@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.ft-sortable-unf-persist
+deployment:
+  modes: [standalone]
+metadata:
+  description: sortable/unf flags survive an RDB save and server restart, reported
+    by FT.INFO afterwards
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: persist
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'p:', NOHL, SCHEMA, sku, TAG,
+        SORTABLE, UNF, amount, NUMERIC, SORTABLE], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idxplain, ON, HASH, PREFIX, 1, 'q:', SCHEMA, f, TAG, SORTABLE],
+      expect: {equals: OK}}
+    - {command: [HSET, 'p:1', sku, a, amount, 2], expect: {equals: 2}}
+    - {command: [HSET, 'q:1', f, x], expect: {equals: 1}}
+    - {command: [FT.INFO, idxplain], wait_s: 30, expect_difference: true, expect: {
+        contains: ready}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true}
+    - {command: [FT.INFO, idxplain], wait_s: 30, expect_difference: true, expect: {
+        contains: ready}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect_difference: true, expect: {contains: ready}}
+    - {command: ['FT.SEARCH', idx, '@amount:[0 10]', SORTBY, sku, ASC, NOCONTENT],
+      wait_s: 30, expect_difference: true, expect: {equals: [1, 'p:1']}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [persist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: persist}

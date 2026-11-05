@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.search-aggregate-text-operand
+deployment:
+  modes: [standalone]
+metadata:
+  description: A TEXT field is now a valid FT.AGGREGATE expression operand (ungated),
+    so upper(@body) resolves on the change build where the parent errors
+inputs:
+  required: [module, module_parent]
+  properties:
+    module: {type: environment_reference, reference_kinds: [artifacts], description: "change\
+        \ build, {$ref: artifacts.module.path}"}
+    module_parent: {type: environment_reference, reference_kinds: [artifacts], description: "parent\
+        \ build, {$ref: artifacts.module_parent.path}"}
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: textop
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "h:", SCHEMA, body, TEXT],
+      expect: {equals: OK}}
+    - {command: [HSET, "h:1", body, hello], expect: {equals: 1}}
+    - {command: [FT.AGGREGATE, idx, "*", GROUPBY, "0", REDUCE, COUNT, "0", AS, c],
+      wait_s: 30, expect: {equals: [1, [c, "1"]]}, compare: skip}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "1", "@body", APPLY, "upper(@body)",
+        AS, u], expect_difference: true, expect: {equals: [1, [body, hello, u, HELLO]]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: textop}

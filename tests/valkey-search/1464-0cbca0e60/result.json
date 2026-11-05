@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "0cbca0e6077efe1de91d428312f4e013943648b8",
+  "parent": "c24e745818604649df079e25aa7b9d93218c089b",
+  "pr": 1464,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix GROUPBY 0 being rejected in FT.AGGREGATE (#1464)",
+  "date": "2026-10-01",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.511,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

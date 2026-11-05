@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "20757bae45a66df400b8e319d67fa947748b2a55",
+  "parent": "1927a526dcfc7bdab3a8456e189a9a92df425eb6",
+  "pr": 1279,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "RFC for multi-language support in FTS (#1279)",
+  "date": "2026-09-14",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4511,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is documentation-only: it adds rfc/multi-language-support.md (a proposal document for future multi-language FTS support) and excludes that file from the typos checker in .config/typos.toml. No source code, build configuration, or runtime behaviour of the module changes, so the change and parent builds are behaviourally identical and no scenario can reach anything the change altered."
+}

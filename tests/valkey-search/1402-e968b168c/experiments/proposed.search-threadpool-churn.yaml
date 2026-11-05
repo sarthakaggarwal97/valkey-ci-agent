@@ -1,0 +1,93 @@
+extends: [valkey.liveness]
+id: proposed.search-threadpool-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: Thread-pool resize churn, backfill, KNN queries, INFO sampling and
+    a full restart on valkey-search, replies compared between the change's module
+    build and its parent; the change rewrote worker-thread id publication, per-thread
+    accounting-node allocation and teardown, so behaviour must stay identical and
+    neither side may crash at thread exit or shutdown
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    server_config: {save: "3600 1"}
+    timeout_s: 240
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, t, TAG, n, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:1", v, !!binary "AACAPwAAAAA=", t, all, n, 1], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:2", v, !!binary "AAAAAAAAgD8=", t, all, n, 2], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:3", v, !!binary "AACAPwAAgD8=", t, all, n, 3], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:4", v, !!binary "AAAAQAAAAEA=", t, all, n, 4], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:5", v, !!binary "AABAQAAAAAA=", t, all, n, 5], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:6", v, !!binary "AAAAPwAAAD8=", t, all, n, 6], expect: {
+        equals: 3}}
+    - {command: [FT.SEARCH, idx, "@t:{all}", NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [6]}}
+    - {command: [CONFIG, SET, search.reader-threads, 32], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, 32], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.utility-threads, 8], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        NOCONTENT, DIALECT, 2], compare: unordered}
+    - {command: [HSET, "doc:7", v, !!binary "AAAAQAAAAEA=", t, all, n, 7], expect: {
+        equals: 3}}
+    - {command: [DEL, "doc:1"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:{all}", NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [6]}}
+    - {command: [CONFIG, SET, search.reader-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.utility-threads, 1], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AAAAAAAAgD8=",
+        NOCONTENT, DIALECT, 2], compare: unordered}
+    - {command: [CONFIG, SET, search.reader-threads, 64], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, 64], expect: {equals: OK}}
+    - {command: [HSET, "doc:8", v, !!binary "AACAPwAAAAA=", t, all, n, 8], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:9", v, !!binary "AAAAAAAAgD8=", t, all, n, 9], expect: {
+        equals: 3}}
+    - {command: [FT.SEARCH, idx, "@t:{all}", NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [8]}}
+    - {command: [INFO, everything], compare: skip}
+    - {command: [CONFIG, SET, search.reader-threads, 2], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, 2], expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, t, TAG, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx2, "@t:{all}", NOCONTENT, LIMIT, 0, 0], wait_s: 60,
+      expect: {equals: [8]}}
+    - {command: [CONFIG, SET, search.reader-threads, 16], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, 16], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx2, "*=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAgD8=",
+        NOCONTENT, DIALECT, 2], compare: unordered}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx2, "@t:{all}", NOCONTENT, LIMIT, 0, 0], wait_s: 60,
+      expect: {equals: [8]}}
+    - {command: [FT.INFO, idx2], compare: skip}
+    - {command: [FT.SEARCH, idx2, "*=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        NOCONTENT, DIALECT, 2], compare: unordered}
+    - {command: [INFO, everything], compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

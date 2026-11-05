@@ -1,0 +1,107 @@
+extends: [valkey.liveness]
+id: proposed.ft-field-scoped-text-group
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH field-scoped text group @field:(a|b|c) compared against the
+    parent module build, covering scoping, nesting, negation, error paths and the
+    depth limit
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftgroup
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, f1, TEXT, f2,
+        TEXT, t, TAG, n, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", f1, foo, f2, zzz, t, red, n, 5], expect: {equals: 4}}
+    - {command: [HSET, "doc:2", f1, bar], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", f1, baz], expect: {equals: 1}}
+    - {command: [HSET, "doc:4", f1, "hello world qux"], expect: {equals: 1}}
+    - {command: [HSET, "doc:5", f2, foo], expect: {equals: 1}}
+    - {command: [HSET, "doc:6", f1, foo, f2, bar], expect: {equals: 2}}
+    - {command: [FT.INFO, idx], compare: skip, wait_s: 30, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          6]}}
+    - {command: [FT.SEARCH, idx, "@f1:(foo|bar|baz)", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [4]}}
+    - {command: [FT.SEARCH, idx, "@f1:(foo|bar|baz)", NOCONTENT], compare: unordered,
+      expect_difference: true, expect: {contains: "doc:3"}}
+    - {command: [FT.SEARCH, idx, "@f1:(foo)", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "@f2:(foo)", NOCONTENT], compare: unordered, expect_difference: true,
+      expect: {contains: "doc:5"}}
+    - {command: [FT.SEARCH, idx, "@f2:(foo)", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, "@f1:(foo bar)", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@f1:(hello world)", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, "(@f1:(foo|bar))", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx, "@f1:((foo|bar))", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx, "@f1:(foo | (bar baz))", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "@f1:((foo|bar) | baz)", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [4]}}
+    - {command: [FT.SEARCH, idx, "-@f1:(foo|bar)", NOCONTENT], compare: unordered,
+      expect_difference: true, expect: {contains: "doc:3"}}
+    - {command: [FT.SEARCH, idx, "@f1:(foo) @f2:(bar)", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, "@f1:(baz) | @f2:(foo)", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "@f1:(foo) @n:[1 10]", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, "@f1:(hello world) @f2:bar", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@f1:(\"hello world\")", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, "@f1:(hel*)", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, "@f1:(%fop%)", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "qux @f2:(world)", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@f1:()", NOCONTENT], expect_difference: true, expect: {
+        error: "Empty brackets"}}
+    - {command: [FT.SEARCH, idx, "@f1:( )", NOCONTENT], expect_difference: true, expect: {
+        error: "Empty brackets"}}
+    - {command: [FT.SEARCH, idx, "@f1:(foo | @f2:bar)", NOCONTENT], expect_difference: true,
+      expect: {error: "Unexpected character"}}
+    - {command: [FT.SEARCH, idx, "@t:(red)", NOCONTENT], expect_difference: true,
+      expect: {error: "text field"}}
+    - {command: [FT.SEARCH, idx, "@nosuch:(foo)", NOCONTENT], expect_difference: true,
+      expect: {error: "text field"}}
+    - {command: [FT.SEARCH, idx, "@f1:(foo", NOCONTENT], expect_difference: true,
+      expect: {error: "Expected"}}
+    - {command: [FT.SEARCH, idx, "@f1:(*)", NOCONTENT], expect_difference: true, expect: {
+        error: "wildcard"}}
+    - {command: [FT.SEARCH, idx, "@f1:(*llo)", NOCONTENT], expect_difference: true,
+      expect: {error: "suffix"}}
+    - {command: [CONFIG, SET, search.query-string-depth, "5"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@f1:((((((((((foo))))))))))", NOCONTENT], expect_difference: true,
+      expect: {error: "too complex"}}
+    - {command: [CONFIG, SET, search.query-string-depth, "1000"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@f1:(foo|bar)", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx, "@f1:foo", LIMIT, 0, 0], expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "foo", LIMIT, 0, 0], expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx, "@t:{red}", LIMIT, 0, 0], expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, "@n:[1 10]", LIMIT, 0, 0], expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, "(foo|bar) baz", LIMIT, 0, 0], expect: {equals: [
+          0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ftgroup.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftgroup}

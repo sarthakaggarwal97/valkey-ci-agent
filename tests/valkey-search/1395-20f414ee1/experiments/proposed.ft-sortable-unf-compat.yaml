@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.ft-sortable-unf-compat
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.CREATE accepts NOHL and SORTABLE UNF, FT.INFO reports SORTABLE/UNF
+    pairs; compared against the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: compat
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idxnohl, ON, HASH, PREFIX, 1, 'n:', NOHL, SCHEMA, f, TAG],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idxnohl2, ON, HASH, PREFIX, 1, 'm:', NOHL, SKIPINITIALSCAN,
+        NOHL, SCHEMA, f, TAG], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idxunf, ON, HASH, PREFIX, 1, 'p:', SCHEMA, sku, TAG, SORTABLE,
+        UNF, price, NUMERIC, SORTABLE], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idxsort, ON, HASH, PREFIX, 1, 's:', SCHEMA, sku, TAG,
+        SORTABLE, amount, NUMERIC, SORTABLE, vec, VECTOR, FLAT, 6, TYPE, FLOAT32,
+        DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxbad, ON, HASH, SCHEMA, sku, TAG, UNF], expect: {error: true}}
+    - {command: [FT.CREATE, idxfield, ON, HASH, PREFIX, 1, 'u:', SCHEMA, sku, TAG,
+        UNF, TEXT], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxbad2, ON, HASH, SCHEMA, sku, TAG, UNF, body, TEXT],
+      expect: {error: true}}
+    - {command: [HSET, 's:1', sku, a, amount, 2], expect: {equals: 2}}
+    - {command: [HSET, 's:2', sku, B, amount, 1], expect: {equals: 2}}
+    - {command: [HSET, 'p:1', sku, a, price, 2], expect: {equals: 2}}
+    - {command: [HSET, 'p:2', sku, B, price, 1], expect: {equals: 2}}
+    - {command: [FT.INFO, idxsort], wait_s: 30, expect_difference: true, expect: {
+        contains: ready}}
+    - {command: ['FT.SEARCH', idxsort, '@amount:[0 10]', SORTBY, sku, ASC, NOCONTENT],
+      wait_s: 30, expect: {equals: [2, 's:2', 's:1']}}
+    - {command: ['FT.SEARCH', idxunf, '@price:[0 10]', SORTBY, sku, ASC, NOCONTENT],
+      wait_s: 30, expect_difference: true, expect: {equals: [2, 'p:2', 'p:1']}}
+    - {command: [FT.INFO, idxnohl], expect_difference: true, expect: {contains: idxnohl}}
+    - {command: [FT.INFO, idxfield], wait_s: 30, expect_difference: true, expect: {
+        contains: ready}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [compat.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: compat}

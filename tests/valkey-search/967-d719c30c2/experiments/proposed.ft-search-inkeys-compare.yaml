@@ -1,0 +1,128 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-inkeys-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH INKEYS compared against the parent module build, which rejects
+    INKEYS as an unknown argument; the candidate must filter non-vector results, keep
+    total_count exact without LIMIT trimming, run exact KNN within the in-set keys,
+    short-circuit INKEYS 0, and reject malformed counts
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: inkeys
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, score, NUMERIC,
+        cat, TAG], expect: {equals: OK}}
+    - {command: [HSET, "doc:0", score, 0, cat, c0], expect: {equals: 2}}
+    - {command: [HSET, "doc:1", score, 1, cat, c1], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", score, 2, cat, c0], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", score, 3, cat, c1], expect: {equals: 2}}
+    - {command: [HSET, "doc:4", score, 4, cat, c0], expect: {equals: 2}}
+    - {command: [HSET, "doc:5", score, 5, cat, c1], expect: {equals: 2}}
+    - {command: [HSET, "doc:6", score, 6, cat, c0], expect: {equals: 2}}
+    - {command: [HSET, "doc:7", score, 7, cat, c1], expect: {equals: 2}}
+    - {command: [HSET, "doc:8", score, 8, cat, c0], expect: {equals: 2}}
+    - {command: [HSET, "doc:9", score, 9, cat, c1], expect: {equals: 2}}
+    - {command: [FT.CREATE, vidx, ON, HASH, PREFIX, 1, "vdoc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, score, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [HSET, "vdoc:0", vec, !!binary "AAAAAAAAAAA=", score, 0], expect: {
+        equals: 2}}
+    - {command: [HSET, "vdoc:1", vec, !!binary "AACAPwAAgD8=", score, 1], expect: {
+        equals: 2}}
+    - {command: [HSET, "vdoc:2", vec, !!binary "AAAAQAAAAEA=", score, 2], expect: {
+        equals: 2}}
+    - {command: [HSET, "vdoc:3", vec, !!binary "AABAQAAAQEA=", score, 3], expect: {
+        equals: 2}}
+    - {command: [HSET, "vdoc:nv", score, 99], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", LIMIT, 0, 0, DIALECT, 2], wait_s: 60,
+      expect: {equals: [10]}}
+    - {command: [FT.SEARCH, vidx, "*=>[KNN 4 @vec $BLOB]", PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=",
+        LIMIT, 0, 0, DIALECT, 2], wait_s: 60, expect: {equals: [4]}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", INKEYS, 3, "doc:0", "doc:1",
+        "doc:2", NOCONTENT, DIALECT, 2], compare: unordered, expect_difference: true,
+      expect: {contains: "doc:2"}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", INKEYS, 4, "doc:0", "doc:9",
+        "doc:4", "doc:5", LIMIT, 0, 0, DIALECT, 2], expect_difference: true, expect: {
+        equals: [4]}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", INKEYS, 0, DIALECT, 2], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", INKEYS, 3, "doc:1", "doc:1",
+        "doc:1", LIMIT, 0, 0, DIALECT, 2], expect_difference: true, expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", INKEYS, 5, "doc:0", "doc:1",
+        "nope:1", "nope:2", "nope:3", LIMIT, 0, 0, DIALECT, 2], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", INKEYS, 2, "", "doc:7", NOCONTENT,
+        DIALECT, 2], expect_difference: true, expect: {equals: [1, "doc:7"]}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", NOCONTENT, DIALECT, 2, INKEYS,
+        3, "doc:0", LIMIT, 0], expect_difference: true, expect: {equals: [1, "doc:0"]}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", INKEYS, 2, "vdoc:0", "doc:3",
+        NOCONTENT, DIALECT, 2], expect_difference: true, expect: {equals: [1, "doc:3"]}}
+    - {command: [FT.SEARCH, idx, "@score:[0 4]", INKEYS, 4, "doc:3", "doc:4", "doc:5",
+        "doc:6", LIMIT, 0, 0, DIALECT, 2], expect_difference: true, expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", INKEYS, 4, "doc:0", "doc:1",
+        "doc:8", "doc:9", SORTBY, score, DESC, LIMIT, 0, 2, RETURN, 1, score, DIALECT,
+        2], expect_difference: true, expect: {equals: [4, "doc:9", [score, "9"], "doc:8",
+          [score, "8"]]}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", INKEYS, 6, "doc:0", "doc:1",
+        "doc:2", "doc:3", "doc:4", "doc:5", SORTBY, score, ASC, LIMIT, 2, 2, RETURN,
+        1, score, DIALECT, 2], expect_difference: true, expect: {equals: [6, "doc:2",
+          [score, "2"], "doc:3", [score, "3"]]}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", INKEYS, 3, "doc:5", "doc:2",
+        "doc:8", NOCONTENT, SORTBY, score, DESC, DIALECT, 2], expect_difference: true,
+      expect: {equals: [3, "doc:8", "doc:5", "doc:2"]}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", INKEYS, 15, "doc:0", "doc:1",
+        "doc:2", "doc:3", "doc:4", "doc:5", "doc:6", "doc:7", "doc:8", "doc:9", "f:1",
+        "f:2", "f:3", "f:4", "f:5", LIMIT, 0, 0, DIALECT, 2], expect_difference: true,
+      expect: {equals: [10]}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", INKEYS, -1, "doc:0", DIALECT,
+        2], expect_difference: true, expect: {error: true}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", INKEYS, abc, DIALECT, 2], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", INKEYS, 5, "doc:0", "doc:1",
+        DIALECT, 2], expect_difference: true, expect: {error: true}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", INKEYS, 4294967296, "doc:0",
+        DIALECT, 2], expect_difference: true, expect: {error: true}}
+    - {command: [FT.SEARCH, idx, "@score:[-inf +inf]", INKEYS, 2147483648, "doc:0",
+        DIALECT, 2], expect_difference: true, expect: {error: true}}
+    - {command: [FT.SEARCH, vidx, "*=>[KNN 2 @vec $BLOB]", INKEYS, 2, "vdoc:2", "vdoc:3",
+        NOCONTENT, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], compare: unordered,
+      expect_difference: true, expect: {contains: "vdoc:3"}}
+    - {command: [FT.SEARCH, vidx, "*=>[KNN 3 @vec $BLOB]", INKEYS, 3, "vdoc:2", "vdoc:3",
+        "vdoc:nv", PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", LIMIT, 0, 0, DIALECT,
+        2], expect_difference: true, expect: {equals: [2]}}
+    - {command: [FT.SEARCH, vidx, "@score:[1 +inf]=>[KNN 4 @vec $BLOB]", INKEYS, 3,
+        "vdoc:0", "vdoc:2", "vdoc:3", NOCONTENT, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=",
+        DIALECT, 2], compare: unordered, expect_difference: true, expect: {contains: "vdoc:2"}}
+    - {command: [FT.SEARCH, vidx, "@score:[1 +inf]=>[KNN 4 @vec $BLOB]", INKEYS, 3,
+        "vdoc:0", "vdoc:2", "vdoc:3", PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", LIMIT,
+        0, 0, DIALECT, 2], expect_difference: true, expect: {equals: [2]}}
+    - {command: [FT.SEARCH, vidx, "*=>[KNN 2 @vec $BLOB]", INKEYS, 0, PARAMS, 2, BLOB,
+        !!binary "AAAAAAAAAAA=", LIMIT, 0, 0, DIALECT, 2], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, vidx, "*=>[KNN 2 @vec $BLOB]", INKEYS, 4, "vdoc:0", "vdoc:1",
+        "vdoc:2", "vdoc:3", NOCONTENT, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT,
+        2], compare: unordered, expect_difference: true, expect: {contains: "vdoc:0"}}
+    - {command: [FT.SEARCH, vidx, "*=>[KNN 2 @vec $BLOB]", INKEYS, 4, "vdoc:0", "vdoc:1",
+        "vdoc:2", "vdoc:3", PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", LIMIT, 0, 0,
+        DIALECT, 2], expect_difference: true, expect: {equals: [2]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [inkeys.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: inkeys}

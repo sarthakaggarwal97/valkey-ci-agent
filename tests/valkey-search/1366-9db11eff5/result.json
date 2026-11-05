@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "9db11eff590e6fae0d9ce8ca709d81d988ac9c7c",
+  "parent": "c7c4579dc4a181a8949c7dfbd6d0e014bb15d5ca",
+  "pr": 1366,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Move compatibility reference to redis:latest and fix what it exposed (supersedes #1068, #1239) (#1366)",
+  "date": "2026-09-12",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 4,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.2123,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-96a4e3cfa4e0",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-24f49a7af8e7",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-47a2e4403c2a",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-f78f7d0d1262",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

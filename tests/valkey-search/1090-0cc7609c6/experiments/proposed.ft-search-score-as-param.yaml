@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-score-as-param
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH KNN with a PARAMS-substituted AS alias names the vector score
+    field by the resolved alias, not the literal $param
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: scoreas
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TAG, v, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", t, x, v, !!binary 'AACAPwAAAAA='], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", t, y, v, !!binary 'AAAAAAAAgD8='], expect: {equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @v $BLOB AS lit_score]", PARAMS, 2, BLOB,
+        !!binary 'AACAPwAAAAA=', RETURN, 1, lit_score, DIALECT, 2], wait_s: 30, expect: {
+        equals: [2, "doc:1", [lit_score, 0], "doc:2", [lit_score, 2]]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @v $BLOB AS $ALIAS]", PARAMS, 4, BLOB,
+        !!binary 'AACAPwAAAAA=', ALIAS, my_score, RETURN, 2, my_score, t, DIALECT,
+        2], expect_difference: true, expect: {equals: [2, "doc:1", [my_score, 0, t,
+            x], "doc:2", [my_score, 2, t, y]]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @v $BLOB AS $ALIAS]", PARAMS, 4, BLOB,
+        !!binary 'AACAPwAAAAA=', ALIAS, my_score, SORTBY, my_score, ASC, WITHSORTKEYS,
+        RETURN, 1, my_score, DIALECT, 2], expect_difference: true, expect: {equals: [
+          2, "doc:1", "#0", [my_score, 0], "doc:2", "#2", [my_score, 2]]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @v $BLOB AS $ALIAS]", PARAMS, 4, BLOB,
+        !!binary 'AACAPwAAAAA=', ALIAS, t, NOCONTENT, DIALECT, 2], expect_difference: true,
+      expect: {error: "already exists in schema"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [scoreas.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scoreas}

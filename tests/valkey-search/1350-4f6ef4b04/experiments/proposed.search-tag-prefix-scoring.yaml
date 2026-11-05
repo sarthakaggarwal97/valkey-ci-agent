@@ -1,0 +1,80 @@
+extends: [valkey.liveness]
+id: proposed.search-tag-prefix-scoring
+deployment:
+  modes: [standalone]
+metadata:
+  description: BM25STD scoring for TAG prefix queries, one representative value per
+    doc, under case-insensitive, CASESENSITIVE, custom-separator and empty-tag corpora
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: tagprefix
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idxTpx, ON, HASH, PREFIX, "1", "tpx:", SCHEMA, body, TEXT,
+        NOSTEM, cat, TAG, rank, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "tpx:a", body, aa, cat, redis, rank, "1"], expect: {equals: 3}}
+    - {command: [HSET, "tpx:b", body, aa, cat, redis, rank, "2"], expect: {equals: 3}}
+    - {command: [HSET, "tpx:c", body, aa, cat, redis, rank, "3"], expect: {equals: 3}}
+    - {command: [HSET, "tpx:d", body, aa, cat, redcap, rank, "4"], expect: {equals: 3}}
+    - {command: [HSET, "tpx:multi", body, aa, cat, "redis,redcap", rank, "5"], expect: {
+        equals: 3}}
+    - {command: [HSET, "tpx:green", body, aa, cat, green, rank, "6"], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idxTpx, "@cat:{green}", NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "tpx:green"]}}
+    - {command: [FT.SEARCH, idxTpx, "@cat:{red*}", WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "tpx:a"}, compare: unordered}
+    - {command: [FT.SEARCH, idxTpx, "@cat:{redis}", WITHSCORES, NOCONTENT], expect: {
+        contains: "tpx:a"}, compare: unordered}
+    - {command: [FT.SEARCH, idxTpx, "@cat:{redis|redcap}", WITHSCORES, NOCONTENT],
+      expect: {contains: "tpx:multi"}, compare: unordered}
+    - {command: [FT.SEARCH, idxTpx, "@cat:{red*} @rank:[0 100]", WITHSCORES, NOCONTENT],
+      expect_difference: true, expect: {contains: "tpx:multi"}, compare: unordered}
+    - {command: [FT.SEARCH, idxTpx, "@cat:{re*|RE*}", WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "tpx:a"}, compare: unordered}
+    - {command: [CONFIG, SET, search.tag-min-prefix-length, "0"], expect: {equals: OK}}
+    - {command: [HSET, "tpx:lead", body, aa, cat, ",red", rank, "7"], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idxTpx, "@cat:{red}", NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "tpx:lead"]}}
+    - {command: [FT.SEARCH, idxTpx, "@cat:{*}", WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "tpx:lead"}, compare: unordered}
+    - {command: [FT.CREATE, idxCs, ON, HASH, PREFIX, "1", "cs:", SCHEMA, body, TEXT,
+        NOSTEM, cat, TAG, CASESENSITIVE, rank, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "cs:1", body, aa, cat, Red, rank, "1"], expect: {equals: 3}}
+    - {command: [HSET, "cs:2", body, aa, cat, red, rank, "2"], expect: {equals: 3}}
+    - {command: [HSET, "cs:3", body, aa, cat, Red, rank, "3"], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idxCs, "@cat:{red}", NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "cs:2"]}}
+    - {command: [FT.SEARCH, idxCs, "@cat:{Re*}", WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "cs:1"}, compare: unordered}
+    - {command: [FT.SEARCH, idxCs, "@cat:{re*}", WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "cs:2"}, compare: unordered}
+    - {command: [FT.CREATE, idxSep, ON, HASH, PREFIX, "1", "sep:", SCHEMA, body, TEXT,
+        NOSTEM, cat, TAG, SEPARATOR, "|", rank, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "sep:1", body, aa, cat, "red| green |blue", rank, "1"], expect: {
+        equals: 3}}
+    - {command: [HSET, "sep:2", body, aa, cat, "redis|redcap", rank, "2"], expect: {
+        equals: 3}}
+    - {command: [HSET, "sep:3", body, aa, cat, green, rank, "3"], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idxSep, "@cat:{blue}", NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "sep:1"]}}
+    - {command: [FT.SEARCH, idxSep, "@cat:{green}", NOCONTENT], wait_s: 30, expect: {
+        contains: "sep:3"}, compare: unordered}
+    - {command: [FT.SEARCH, idxSep, "@cat:{gre*}", WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "sep:1"}, compare: unordered}
+    - {command: [FT.SEARCH, idxSep, "@cat:{red*}", WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "sep:2"}, compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [tagprefix.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tagprefix}

@@ -1,0 +1,88 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-addscores
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE ADDSCORES emits __score and makes it pipeline-resolvable;
+    no-content aggregates skip the main-thread fetch; solved prefilter KNN queries
+    skip per-key re-evaluation; text scoring posting refactor stays reply-identical
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: addscores
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "d:", SCHEMA, desc, TEXT,
+        n, NUMERIC, t, TAG, v, VECTOR, FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [HSET, "d:1", desc, "hello world", n, "1", t, red, v, !!binary "AACAPwAAAAA="],
+      expect: {equals: 4}}
+    - {command: [HSET, "d:2", desc, "hello hello world", n, "2", t, red, v, !!binary "AAAAQAAAAAA="],
+      expect: {equals: 4}}
+    - {command: [HSET, "d:3", desc, "world only", n, "3", t, blue, v, !!binary "AABAQAAAAAA="],
+      expect: {equals: 4}}
+    - {command: [FT.AGGREGATE, idx, hello, LOAD, "1", "@n", SORTBY, "2", "@n", ASC],
+      wait_s: 30, expect: {equals: [2, [n, 1], [n, 2]]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @v $q AS dist]", NOCONTENT, PARAMS, "2",
+        q, !!binary "AAAAAAAAAAA=", DIALECT, "2"], wait_s: 30, expect: {equals: [
+          3, "d:1", "d:2", "d:3"]}}
+    - {command: [FT.AGGREGATE, idx, hello, ADDSCORES, LOAD, "1", "@n", SORTBY, "2",
+        "@n", ASC], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, hello, ADDSCORES], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT.AGGREGATE, idx, hello, ADDSCORES, LOAD, "2", "@n", "@__score",
+        SORTBY, "2", "@n", ASC], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, hello, ADDSCORES, LOAD, "3", "@__score", AS, sc],
+      expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, hello, ADDSCORES, LOAD, "1", "@n", SORTBY, "2",
+        "@__score", DESC], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, hello, ADDSCORES, LOAD, "1", "@n", APPLY, "@__score\
+          \ * 2", AS, dbl], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, hello, ADDSCORES, LOAD, "1", "@n", FILTER, "@__score\
+          \ > 0"], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, hello, ADDSCORES, GROUPBY, "1", "@__score", REDUCE,
+        COUNT, "0", AS, c], expect_difference: true, expect: {error: false}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, "1", "s:", SCHEMA, body, TEXT,
+        __score, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "s:1", body, hello, __score, "42"], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx2, hello, NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "s:1"]}}
+    - {command: [FT.AGGREGATE, idx2, hello, LOAD, "1", "@__score"], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx2, hello, ADDSCORES, LOAD, "1", "@__score"], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*=>[KNN 2 @v $q AS dist]", PARAMS, "2", q, !!binary "AAAAAAAAAAA=",
+        DIALECT, "2", ADDSCORES, LOAD, "1", "@n", SORTBY, "2", "@dist", ASC], expect: {
+        error: false}}
+    - {command: [FT.SEARCH, idx, "@t:{red}=>[KNN 2 @v $q AS dist]", NOCONTENT, PARAMS,
+        "2", q, !!binary "AAAAAAAAAAA=", DIALECT, "2"], expect: {equals: [2, "d:1",
+          "d:2"]}}
+    - {command: [FT.SEARCH, idx, "-@t:{blue}=>[KNN 2 @v $q AS dist]", NOCONTENT, PARAMS,
+        "2", q, !!binary "AAAAAAAAAAA=", DIALECT, "2"], expect: {equals: [2, "d:1",
+          "d:2"]}}
+    - {command: [FT.SEARCH, idx, "@t:{red|blue}=>[KNN 3 @v $q AS dist]", NOCONTENT,
+        PARAMS, "2", q, !!binary "AAAAAAAAAAA=", DIALECT, "2"], expect: {equals: [
+          3, "d:1", "d:2", "d:3"]}}
+    - {command: [FT.SEARCH, idx, "(@t:{red} @n:[1 3])=>[KNN 3 @v $q AS dist]", NOCONTENT,
+        PARAMS, "2", q, !!binary "AAAAAAAAAAA=", DIALECT, "2"], expect: {equals: [
+          2, "d:1", "d:2"]}}
+    - {command: [FT.SEARCH, idx, hello, WITHSCORES, NOCONTENT, LIMIT, "0", "10"],
+      expect: {error: false}}
+    - {command: [FT.SEARCH, idx, hello, NOCONTENT, WITHSCORES, SORTBY, n, ASC], expect: {
+        error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [addscores.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: addscores}

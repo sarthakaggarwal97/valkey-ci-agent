@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.ft-create-filter-rdb
+deployment:
+  modes: [standalone]
+metadata:
+  description: A FILTER index survives SAVE and a server restart, keeps rejecting
+    after the reload's own backfill, and the deferred CompileFilter on the RDB load
+    path does not take the load down
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    aof: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: rdb
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {appendonly: {$ref: inputs.aof}}
+    timeout_s: 60
+    commands:
+    - {command: [HSET, "r:keep1", price, "500", name, aa], expect: {equals: 2}}
+    - {command: [HSET, "r:keep2", price, "300", name, bb], expect: {equals: 2}}
+    - {command: [HSET, "r:drop1", price, "10", name, cc], expect: {equals: 2}}
+    - {command: [FT.CREATE, ctrl, ON, HASH, PREFIX, "1", "c:", SCHEMA, price, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, rdb, ON, HASH, PREFIX, "1", "r:", FILTER, "@price > 100",
+        SCHEMA, price, NUMERIC, name, TAG], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, rdb, "@price:[-inf +inf]", LIMIT, "0", "0"], wait_s: 20,
+      expect_difference: true, expect: {equals: [2]}}
+    - {command: [FT.INFO, rdb], expect_difference: true, expect: {contains: filter_rejected_keys}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT._LIST], expect_difference: true, expect: {contains: rdb}}
+    - {command: [FT.INFO, rdb], expect_difference: true, expect: {contains: filter_rejected_keys}}
+    - {command: [FT.SEARCH, rdb, "@price:[-inf +inf]", LIMIT, "0", "0"], wait_s: 30,
+      expect_difference: true, expect: {equals: [2]}}
+    - {command: [HSET, "r:drop2", price, "20", name, dd], expect: {equals: 2}}
+    - {command: [HSET, "r:keep3", price, "900", name, ee], expect: {equals: 2}}
+    - {command: [FT.SEARCH, rdb, "@price:[-inf +inf]", LIMIT, "0", "0"], wait_s: 15,
+      expect_difference: true, expect: {equals: [3]}}
+    - {command: [FT.SEARCH, rdb, "@name:{cc}", LIMIT, "0", "0"], expect_difference: true,
+      expect: {equals: [0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [rdb.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rdb}

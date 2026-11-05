@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.search-expansion-edge
+deployment:
+  modes: [standalone]
+metadata:
+  description: Expansion scoring edges - max-term-expansions cap of 1, dt shifts after
+    deletes, stem-variant field gating, fuzzy multi-match representative pick
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: edge
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idxCap, ON, HASH, PREFIX, "1", "cap:", SCHEMA, body, TEXT,
+        NOSTEM, WITHSUFFIXTRIE, rank, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "cap:1", body, cata, rank, "1"], expect: {equals: 2}}
+    - {command: [HSET, "cap:2", body, cata, rank, "2"], expect: {equals: 2}}
+    - {command: [HSET, "cap:3", body, catb, rank, "3"], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idxCap, catb, NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "cap:3"]}}
+    - {command: [CONFIG, SET, search.max-term-expansions, "1"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idxCap, "cat*", WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "cap:1"}, compare: unordered}
+    - {command: [FT.SEARCH, idxCap, "cat* @rank:[0 100]", WITHSCORES, NOCONTENT],
+      expect_difference: true, expect: {contains: "cap:1"}, compare: unordered}
+    - {command: [CONFIG, SET, search.max-term-expansions, "200"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idxCap, "cat*", WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "cap:3"}, compare: unordered}
+    - {command: [DEL, "cap:2"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idxCap, cata, NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "cap:1"]}}
+    - {command: [FT.SEARCH, idxCap, "cat*", WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "cap:3"}, compare: unordered}
+    - {command: [FT.CREATE, idxStem, ON, HASH, PREFIX, "1", "st:", SCHEMA, body, TEXT,
+        title, TEXT, NOSTEM, rank, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "st:1", body, runs, title, zzz, rank, "1"], expect: {equals: 3}}
+    - {command: [HSET, "st:2", body, yyy, title, running, rank, "2"], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idxStem, yyy, NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "st:2"]}}
+    - {command: [FT.SEARCH, idxStem, "(@body:running)|(@rank:[2 2])", WITHSCORES,
+        NOCONTENT], expect_difference: true, expect: {contains: "st:2"}, compare: unordered}
+    - {command: [FT.CREATE, idxFz, ON, HASH, PREFIX, "1", "fz:", SCHEMA, body, TEXT,
+        NOSTEM], expect: {equals: OK}}
+    - {command: [HSET, "fz:1", body, dog], expect: {equals: 1}}
+    - {command: [HSET, "fz:2", body, fog], expect: {equals: 1}}
+    - {command: [HSET, "fz:3", body, dig], expect: {equals: 1}}
+    - {command: [HSET, "fz:4", body, "dog fog"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idxFz, dig, NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "fz:3"]}}
+    - {command: [FT.SEARCH, idxFz, "%dog%", WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "fz:4"}, compare: unordered}
+    - {command: [FT.SEARCH, idxFz, dog, WITHSCORES, NOCONTENT], expect: {contains: "fz:1"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idxFz, "%zq%", NOCONTENT], expect: {equals: [0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [edge.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: edge}

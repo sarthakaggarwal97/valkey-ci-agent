@@ -1,0 +1,107 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "cad3560558a070e50e147f8534935f33c29568db",
+  "parent": "d719c30c20c05c7fd053f0517107da53f5c0b868",
+  "pr": 1394,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add WITHCURSOR to FT.AGGREGATE and FT.SEARCH, and the FT.CURSOR command (#1394)",
+  "date": "2026-09-28",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.7192,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-use-after-free",
+      "scenario": "ai-a5a6ca679edd",
+      "seed": 103,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #1394",
+      "fingerprint": "80d79339943dd8f93790",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/61"
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 16 (EXEC) replies otherwise with resp 3: {\"reply\":[[[1,[\"price\",\"10\"]],9681398098]]}, not {\"reply\":[[[1,[\"price\",\"10\"]],11989973332]]}",
+      "scenario": "ai-a5a6ca679edd",
+      "seed": 103,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "07a8901f836e2d562e9c",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-a5a6ca679edd",
+      "seed": 103,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1394",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-use-after-free",
+      "scenario": "ai-26a65dc7f0c3",
+      "seed": 104,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #1394",
+      "fingerprint": "80d79339943dd8f93790",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/61"
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 16 (EXEC) replies otherwise with resp 2: {\"reply\":[[[1,[\"price\",\"10\"]],10499603314]]}, not {\"reply\":[[[1,[\"price\",\"10\"]],11463907280]]}",
+      "scenario": "ai-26a65dc7f0c3",
+      "seed": 104,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "07a8901f836e2d562e9c",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-26a65dc7f0c3",
+      "seed": 104,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1394",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

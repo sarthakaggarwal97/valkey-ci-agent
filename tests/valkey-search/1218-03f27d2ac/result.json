@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "03f27d2ac263af68b4f86e126560a405df548f8f",
+  "parent": "0cc7609c65f0510b45be141503cbff9d2ede2536",
+  "pr": 1218,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Support field-scoped text group @field:(a|b|c) (#1214) (#1218)",
+  "date": "2026-09-16",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 11.9795,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

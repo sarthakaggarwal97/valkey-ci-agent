@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-groupby-zero
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE GROUPBY 0 folds every record into a single group instead
+    of erroring, and emits no row over an empty result set
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: groupby0
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, n1, NUMERIC,
+        t1, TAG], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', n1, 1, t1, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:2', n1, 2, t1, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:3', n1, 3, t1, b], expect: {equals: 2}}
+    - {command: [HSET, 'doc:4', n1, 0, t1, b], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          4]}}
+    - {command: [FT.AGGREGATE, idx, '*', LOAD, 3, '@__key', '@n1', '@t1', GROUPBY,
+        0, REDUCE, COUNT, 0, AS, c], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, '*', LOAD, 2, '@__key', '@n1', GROUPBY, 0, REDUCE,
+        SUM, 1, '@n1', AS, s], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, '*', LOAD, 2, '@__key', '@n1', GROUPBY, 0, REDUCE,
+        COUNT, 0, AS, c, REDUCE, SUM, 1, '@n1', AS, s, REDUCE, AVG, 1, '@n1', AS,
+        a, REDUCE, COUNT_DISTINCT, 1, '@n1', AS, d], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT.AGGREGATE, idx, '*', LOAD, 1, '@__key', GROUPBY, 0], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, '@t1:{nosuchtag}', LOAD, 1, '@n1', GROUPBY, 0,
+        REDUCE, COUNT, 0, AS, c], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, '*', LOAD, 2, '@__key', '@t1', GROUPBY, 1, '@t1',
+        REDUCE, COUNT, 0, AS, c, GROUPBY, 0, REDUCE, SUM, 1, '@c', AS, total], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, '*', LOAD, 2, '@__key', '@n1', GROUPBY, 0, REDUCE,
+        COUNT, 0, AS, c, SORTBY, 2, '@c', ASC, LIMIT, 0, 10], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, '*', LOAD, 1, '@n1', GROUPBY, 0, '@n1'], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, '*', LOAD, 1, '@n1', GROUPBY, -1, REDUCE, COUNT,
+        0, AS, c], expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, '@t1:{a}', LOAD, 2, '@__key', '@t1', GROUPBY,
+        1, '@t1', REDUCE, COUNT, 0, AS, c], expect: {error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [groupby0.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: groupby0}

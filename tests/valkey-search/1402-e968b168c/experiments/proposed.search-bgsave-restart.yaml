@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.search-bgsave-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: BGSAVE with valkey-search loaded (writer-pool suspension across fork,
+    a pool resize issued while suspended, writes landing during the save) and index
+    persistence across a clean restart, replies compared between the change's module
+    build and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: persist
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    server_config: {save: "3600 1"}
+    timeout_s: 240
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, t, TAG], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", v, !!binary "AACAPwAAAAA=", t, all], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", v, !!binary "AAAAAAAAgD8=", t, all], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", v, !!binary "AACAPwAAgD8=", t, all], expect: {equals: 2}}
+    - {command: [HSET, "doc:4", v, !!binary "AAAAQAAAAEA=", t, all], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@t:{all}", NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [4]}}
+    - {command: [BGSAVE], expect: {contains: "Background saving started"}}
+    - {command: [CONFIG, SET, search.writer-threads, 8], expect: {equals: OK}}
+    - {command: [HSET, "doc:5", v, !!binary "AABAQAAAAAA=", t, all], expect: {equals: 2}}
+    - {command: [HSET, "doc:6", v, !!binary "AAAAPwAAAD8=", t, all], expect: {equals: 2}}
+    - {command: [INFO, persistence], wait_s: 30, expect: {contains: "rdb_bgsave_in_progress:0"},
+      compare: skip}
+    - {command: [FT.SEARCH, idx, "@t:{all}", NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [6]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        NOCONTENT, DIALECT, 2], compare: unordered}
+    - {command: [CONFIG, SET, search.writer-threads, 2], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: "Background saving started"}}
+    - {command: [INFO, persistence], wait_s: 30, expect: {contains: "rdb_bgsave_in_progress:0"},
+      compare: skip}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@t:{all}", NOCONTENT, LIMIT, 0, 0], wait_s: 60,
+      expect: {equals: [6]}}
+    - {command: [FT.INFO, idx], compare: skip}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AAAAAAAAgD8=",
+        NOCONTENT, DIALECT, 2], compare: unordered}
+    - {command: [HSET, "doc:7", v, !!binary "AAAAQAAAAEA=", t, all], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@t:{all}", NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [7]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [persist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: persist}

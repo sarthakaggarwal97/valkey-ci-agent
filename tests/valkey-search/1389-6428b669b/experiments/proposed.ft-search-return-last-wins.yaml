@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-return-last-wins
+deployment:
+  modes: [standalone]
+metadata:
+  description: Repeated RETURN clauses in FT.SEARCH are last-one-wins behind search.emulate-release
+    >= 1.3.0; a later clause overrides an earlier RETURN 0, while a final RETURN 0
+    and the NOCONTENT keyword behave the same on both builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ret
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, m, TAG, p,
+        NUMERIC, title, TEXT], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", m, all, p, "10", title, "hello world", extra, offscript],
+      expect: {equals: 4}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, "@m:{all}", RETURN, "0", RETURN, "1", title, DIALECT,
+        "2"], expect: {equals: [1, "doc:1"]}}
+    - {command: [CONFIG, SET, search.emulate-release, "1.3.0"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@m:{all}", RETURN, "0", RETURN, "1", title, DIALECT,
+        "2"], expect_difference: true, expect: {contains: "hello world"}}
+    - {command: [FT.SEARCH, idx, "@m:{all}", RETURN, "1", title, RETURN, "1", p, DIALECT,
+        "2"], expect_difference: true, expect: {contains: "10"}}
+    - {command: [FT.SEARCH, idx, "@m:{all}", RETURN, "0", RETURN, "0", RETURN, "1",
+        p, DIALECT, "2"], expect_difference: true, expect: {contains: "10"}}
+    - {command: [FT.SEARCH, idx, "@m:{all}", RETURN, "2", title, p, RETURN, "3", title,
+        AS, t, DIALECT, "2"], expect_difference: true, expect: {contains: "hello world"}}
+    - {command: [FT.SEARCH, idx, "@m:{all}", RETURN, "1", extra, RETURN, "1", title,
+        DIALECT, "2"], expect_difference: true, expect: {contains: "hello world"}}
+    - {command: [FT.SEARCH, idx, "@m:{all}", RETURN, "1", title, RETURN, "1", p, RETURN,
+        "1", m, RETURN, "1", title, RETURN, "1", p, DIALECT, "2"], expect_difference: true,
+      expect: {contains: "10"}}
+    - {command: [FT.SEARCH, idx, "@m:{all}", RETURN, "1", title, RETURN, "0", DIALECT,
+        "2"], expect: {equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, idx, "@m:{all}", NOCONTENT, RETURN, "1", title, DIALECT,
+        "2"], expect: {equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, idx, "@m:{all}", RETURN, "0", NOCONTENT, RETURN, "1",
+        title, DIALECT, "2"], expect: {equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, idx, "@m:{all}", RETURN, "0", DIALECT, "2"], expect: {
+        equals: [1, "doc:1"]}}
+    - {command: [CONFIG, SET, search.emulate-release, "1.2.1"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@m:{all}", RETURN, "0", RETURN, "1", title, DIALECT,
+        "2"], expect: {equals: [1, "doc:1"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ret.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ret}

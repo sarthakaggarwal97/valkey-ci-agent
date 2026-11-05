@@ -1,0 +1,103 @@
+extends: [valkey.liveness]
+id: proposed.ft-create-filter-semantics
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.CREATE FILTER selective indexing, missing-field and numeric-coercion
+    semantics, FT.INFO shape change, and the pre-SCHEMA ordering refactor, compared
+    between the change's and the parent's module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftfilter
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, ctrl, ON, HASH, PREFIX, "1", "c:", SCHEMA, status, TAG,
+        price, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.INFO, ctrl], expect_difference: true, expect: {contains: filter_rejected_keys}}
+    - {command: [FT.CREATE, ord1, ON, HASH, SCORE, "0.5", PREFIX, "1", "o:", SCHEMA,
+        price, NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, dup, ON, HASH, PREFIX, "1", "a:", PREFIX, "1", "b:", SCHEMA,
+        price, NUMERIC], expect_difference: true, expect: {error: "specified multiple\
+          \ times"}}
+    - {command: [FT.CREATE, "idx{t}", ON, HASH, SCORE, "0.5", SCHEMA, price, NUMERIC],
+      expect: {error: "required for hash-tagged indexes"}}
+    - {command: [HSET, "pre:1", status, active, price, "100"], expect: {equals: 2}}
+    - {command: [HSET, "pre:2", status, inactive, price, "10"], expect: {equals: 2}}
+    - {command: [HSET, "pre:3", price, "300"], expect: {equals: 1}}
+    - {command: [FT.CREATE, f1, ON, HASH, PREFIX, "1", "pre:", FILTER, "@status=='active'",
+        SCHEMA, status, TAG, price, NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, f1, "@price:[-inf +inf]", LIMIT, "0", "0"], wait_s: 20,
+      expect_difference: true, expect: {equals: [1]}}
+    - {command: [FT.SEARCH, f1, "@price:[-inf +inf]", NOCONTENT], expect_difference: true,
+      expect: {contains: "pre:1"}}
+    - {command: [HSET, "pre:4", status, active, price, "50"], expect: {equals: 2}}
+    - {command: [FT.SEARCH, f1, "@price:[-inf +inf]", LIMIT, "0", "0"], wait_s: 15,
+      expect_difference: true, expect: {equals: [2]}}
+    - {command: [HSET, "pre:1", status, inactive, price, "100"], expect: {equals: 0}}
+    - {command: [FT.SEARCH, f1, "@price:[-inf +inf]", LIMIT, "0", "0"], wait_s: 15,
+      expect_difference: true, expect: {equals: [1]}}
+    - {command: [HSET, "pre:1", status, active, price, "100"], expect: {equals: 0}}
+    - {command: [FT.SEARCH, f1, "@price:[-inf +inf]", LIMIT, "0", "0"], wait_s: 15,
+      expect_difference: true, expect: {equals: [2]}}
+    - {command: [FT.INFO, f1], expect_difference: true, expect: {contains: filter_rejected_keys}}
+    - {command: [FT.CREATE, neg, ON, HASH, PREFIX, "1", "pre:", FILTER, "@status !=\
+          \ 'active'", SCHEMA, price, NUMERIC], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [FT.SEARCH, neg, "@price:[-inf +inf]", LIMIT, "0", "0"], wait_s: 20,
+      expect_difference: true, expect: {equals: [1]}}
+    - {command: [FT.CREATE, negg, ON, HASH, PREFIX, "1", "pre:", FILTER, "!(@status\
+          \ == 'active')", SCHEMA, price, NUMERIC], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [FT.SEARCH, negg, "@price:[-inf +inf]", LIMIT, "0", "0"], wait_s: 20,
+      expect_difference: true, expect: {equals: [2]}}
+    - {command: [HSET, "u:1", price, "1", memo, "12"], expect: {equals: 2}}
+    - {command: [HSET, "u:2", price, "2", memo, abc], expect: {equals: 2}}
+    - {command: [HSET, "u:3", price, "3"], expect: {equals: 1}}
+    - {command: [FT.CREATE, une, ON, HASH, PREFIX, "1", "u:", FILTER, "@memo != 5",
+        SCHEMA, price, NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, une, "@price:[-inf +inf]", LIMIT, "0", "0"], wait_s: 20,
+      expect_difference: true, expect: {equals: [2]}}
+    - {command: [FT.CREATE, ugt, ON, HASH, PREFIX, "1", "u:", FILTER, "@memo > 5",
+        SCHEMA, price, NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, ugt, "@price:[-inf +inf]", LIMIT, "0", "0"], wait_s: 20,
+      expect_difference: true, expect: {equals: [1]}}
+    - {command: [FT.CREATE, uq, ON, HASH, PREFIX, "1", "u:", FILTER, "@memo > '5'",
+        SCHEMA, price, NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, uq, "@price:[-inf +inf]", LIMIT, "0", "0"], wait_s: 20,
+      expect_difference: true, expect: {equals: [1]}}
+    - {command: [HSET, "e:1", price, "10", status, ""], expect: {equals: 2}}
+    - {command: [FT.CREATE, emp, ON, HASH, PREFIX, "1", "e:", FILTER, "@status ==\
+          \ ''", SCHEMA, price, NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, emp, "@price:[-inf +inf]", LIMIT, "0", "0"], wait_s: 20,
+      expect_difference: true, expect: {equals: [1]}}
+    - {command: [FT.CREATE, pos, ON, HASH, PREFIX, "1", "e:", SCORE, "0.5", FILTER,
+        "@price > 5", SCHEMA, price, NUMERIC], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, bad, ON, HASH, PREFIX, "1", "e:", FILTER, "", SCHEMA,
+        price, NUMERIC], expect_difference: true, expect: {error: "cannot be empty"}}
+    - {command: [FT.CREATE, f2, ON, HASH, PREFIX, "1", "m:", FILTER, "@status=='active'",
+        SCHEMA, status, TAG, price, NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, "m:1", status, active, price, "5"], expect: {equals: QUEUED}}
+    - {command: [HSET, "m:1", status, inactive, price, "6"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [2, 0]}}
+    - {command: [HSET, "m:2", status, active, price, "7"], expect: {equals: 2}}
+    - {command: [FT.SEARCH, f2, "@price:[-inf +inf]", LIMIT, "0", "0"], wait_s: 20,
+      expect_difference: true, expect: {equals: [1]}}
+    - {command: [FT.SEARCH, f2, "@status:{inactive}", LIMIT, "0", "0"], expect_difference: true,
+      expect: {equals: [0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ftfilter.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftfilter}

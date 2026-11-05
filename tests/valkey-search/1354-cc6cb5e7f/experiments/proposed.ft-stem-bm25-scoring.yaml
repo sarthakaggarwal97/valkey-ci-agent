@@ -1,0 +1,116 @@
+extends: [valkey.liveness]
+id: proposed.ft-stem-bm25-scoring
+deployment:
+  modes: [standalone]
+metadata:
+  description: BM25STD three-leaf scoring for stemmed FT.SEARCH terms, compared across
+    the module builds on the in-iterator path, the extra-step (numeric/tag) path,
+    and across delete/reindex of the stem distinct-doc counters
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: stem
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idxStem, ON, HASH, PREFIX, "1", "s:", SCHEMA, body, TEXT],
+      expect: {equals: OK}}
+    - {command: [HSET, "s:1", body, running], expect: {equals: 1}}
+    - {command: [HSET, "s:2", body, runs], expect: {equals: 1}}
+    - {command: [HSET, "s:3", body, "runs runs runs"], expect: {equals: 1}}
+    - {command: [HSET, "s:4", body, run], expect: {equals: 1}}
+    - {command: [HSET, "s:5", body, "run running"], expect: {equals: 1}}
+    - {command: [HSET, "s:6", body, "running runs"], expect: {equals: 1}}
+    - {command: [HSET, "s:7", body, swimming], expect: {equals: 1}}
+    - {command: [FT.INFO, idxStem], wait_s: 60, compare: skip, expect: {contains: 7}}
+    - {command: [FT.SEARCH, idxStem, running, NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: "s:2"}}
+    - {command: [FT.SEARCH, idxStem, running, NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: "s:6"}}
+    - {command: [FT.SEARCH, idxStem, swimming, NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "s:7"]}}
+    - {command: [FT.SEARCH, idxStem, running, NOCONTENT], expect_difference: true,
+      expect: {equals: [6, "s:5", "s:1", "s:4", "s:6", "s:3", "s:2"]}}
+    - {command: [FT.SEARCH, idxStem, running, WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "s:5"}}
+    - {command: [FT.SEARCH, idxStem, run, WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "s:4"}}
+    - {command: [FT.CREATE, idxStemMix, ON, HASH, PREFIX, "1", "s:", SCHEMA, body,
+        TEXT, rank, NUMERIC, cat, TAG], expect: {equals: OK}}
+    - {command: [HSET, "s:1", rank, "1", cat, a], expect: {equals: 2}}
+    - {command: [HSET, "s:2", rank, "2", cat, a], expect: {equals: 2}}
+    - {command: [HSET, "s:3", rank, "3", cat, b], expect: {equals: 2}}
+    - {command: [HSET, "s:4", rank, "4", cat, a], expect: {equals: 2}}
+    - {command: [HSET, "s:5", rank, "5", cat, b], expect: {equals: 2}}
+    - {command: [HSET, "s:6", rank, "6", cat, a], expect: {equals: 2}}
+    - {command: [HSET, "s:7", rank, "7", cat, b], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idxStemMix, "@rank:[7 7]", NOCONTENT], wait_s: 60, expect: {
+        equals: [1, "s:7"]}}
+    - {command: [FT.SEARCH, idxStemMix, "@cat:{b}", NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: "s:3"}}
+    - {command: [FT.SEARCH, idxStemMix, "@cat:{a}", NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: "s:6"}}
+    - {command: [FT.SEARCH, idxStem, running, NOCONTENT], expect_difference: true,
+      expect: {equals: [6, "s:5", "s:1", "s:4", "s:6", "s:3", "s:2"]}}
+    - {command: [FT.SEARCH, idxStemMix, "running @rank:[1 100]", NOCONTENT], expect_difference: true,
+      expect: {equals: [6, "s:5", "s:1", "s:4", "s:6", "s:3", "s:2"]}}
+    - {command: [FT.SEARCH, idxStemMix, "running @rank:[1 100]", WITHSCORES, NOCONTENT],
+      expect_difference: true, expect: {contains: "s:5"}}
+    - {command: [FT.SEARCH, idxStemMix, "running | @rank:[7 7]", NOCONTENT], expect_difference: true,
+      expect: {equals: [7, "s:5", "s:1", "s:4", "s:6", "s:3", "s:2", "s:7"]}}
+    - {command: [FT.SEARCH, idxStemMix, "running @cat:{a}", WITHSCORES, NOCONTENT],
+      expect_difference: true, expect: {contains: "s:4"}}
+    - {command: [FT.CREATE, idxTwo, ON, HASH, PREFIX, "1", "t:", SCHEMA, title, TEXT,
+        body, TEXT, NOSTEM, r, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "t:1", title, running, r, "1"], expect: {equals: 2}}
+    - {command: [HSET, "t:2", title, runs, r, "2"], expect: {equals: 2}}
+    - {command: [HSET, "t:3", body, run, r, "3"], expect: {equals: 2}}
+    - {command: [HSET, "t:4", title, run, r, "4"], expect: {equals: 2}}
+    - {command: [HSET, "t:5", body, runs, r, "5"], expect: {equals: 2}}
+    - {command: [FT.INFO, idxTwo], wait_s: 60, compare: skip, expect: {contains: 5}}
+    - {command: [FT.SEARCH, idxTwo, "@r:[5 5]", NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "t:5"]}}
+    - {command: [FT.SEARCH, idxTwo, "@title:running @r:[0 100]", WITHSCORES, NOCONTENT],
+      expect_difference: true, expect: {contains: "t:1"}}
+    - {command: [FT.SEARCH, idxTwo, "running @r:[0 100]", WITHSCORES, NOCONTENT],
+      expect_difference: true, expect: {contains: "t:1"}}
+    - {command: [FT.SEARCH, idxTwo, "@body:running @r:[0 100]", NOCONTENT], expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idxTwo, "@body:run @r:[0 100]", NOCONTENT], expect: {
+        equals: [1, "t:3"]}}
+    - {command: [DEL, "s:6"], expect: {equals: 1}}
+    - {command: [HSET, "s:4", body, sprinting], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idxStem, sprinting, NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "s:4"]}}
+    - {command: [FT.SEARCH, idxStem, runs, NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: 4}}
+    - {command: [FT.SEARCH, idxStem, running, NOCONTENT], expect_difference: true,
+      expect: {equals: [4, "s:5", "s:1", "s:3", "s:2"]}}
+    - {command: [FT.SEARCH, idxStem, running, WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "s:5"}}
+    - {command: [DEL, "s:1", "s:2", "s:3", "s:5"], expect: {equals: 4}}
+    - {command: [FT.SEARCH, idxStem, running, NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [HSET, "s:1", body, "running runs"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idxStem, runs, NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "s:1"]}}
+    - {command: [FT.SEARCH, idxStem, running, WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "s:1"}}
+    - {command: [CONFIG, SET, search.max-term-expansions, "1"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idxStem, running, WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {contains: "s:1"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [stem.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: stem}

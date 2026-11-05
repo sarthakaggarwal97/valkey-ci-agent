@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.search-apostrophe-phrase
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH treats an unescaped apostrophe as a phrase delimiter (great
+    wall as an exact phrase) vs the parent dropping it as punctuation
+inputs:
+  required: [module, module_parent]
+  properties:
+    module: {type: environment_reference, reference_kinds: [artifacts], description: "change\
+        \ build, {$ref: artifacts.module.path}"}
+    module_parent: {type: environment_reference, reference_kinds: [artifacts], description: "parent\
+        \ build, {$ref: artifacts.module_parent.path}"}
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, search.emulate-release, "1.3.0"], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "d:", SCHEMA, body, TEXT],
+      expect: {equals: OK}}
+    - {command: [HSET, "d:1", body, "great wall"], expect: {equals: 1}}
+    - {command: [HSET, "d:2", body, "great big wall"], expect: {equals: 1}}
+    - {command: [FT.AGGREGATE, idx, "*", GROUPBY, "0", REDUCE, COUNT, "0", AS, c],
+      wait_s: 30, expect: {equals: [1, [c, "2"]]}, compare: skip}
+    - {command: [FT.SEARCH, idx, "'great wall'", NOCONTENT], expect_difference: true,
+      expect: {equals: [1, "d:1"]}, compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}
