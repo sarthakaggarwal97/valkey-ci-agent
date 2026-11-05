@@ -415,8 +415,8 @@ def test_every_front_door_plans_publishes_and_reports():
     assert set(run._FRONT_DOORS) == set(FrontDoor)
 
 
-@pytest.mark.parametrize("action", ["failed", "refused"])
-def test_the_cli_fails_for_an_unsuccessful_publication(monkeypatch, action):
+@pytest.mark.parametrize(("action", "exit_code"), [("failed", 1), ("refused", 0)])
+def test_the_cli_fails_only_for_failed_publication(monkeypatch, action, exit_code):
     class AuthContext:
         def __enter__(self):
             return self
@@ -432,7 +432,7 @@ def test_the_cli_fails_for_an_unsuccessful_publication(monkeypatch, action):
     monkeypatch.setattr(run, "GitAuth", lambda *_args, **_kwargs: AuthContext())
     monkeypatch.setattr(run, "publish_and_report", lambda *_args, **_kwargs: {"action": action})
 
-    assert run.main(["publish", "--plan", "plan", "--outcome", "outcome"]) == 1
+    assert run.main(["publish", "--plan", "plan", "--outcome", "outcome"]) == exit_code
 
 
 def test_prior_followup_plans_load_from_agent_artifacts() -> None:

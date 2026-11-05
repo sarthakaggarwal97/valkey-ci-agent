@@ -350,10 +350,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         _write_outputs(outputs)
         action = outputs.get("action", "")
-        return 1 if action in {
-            ResultKind.FAILED.value,
-            ResultKind.REFUSED.value,
-        } else 0
+        return 1 if action == ResultKind.FAILED.value else 0
 
     run_url = "{}/{}/actions/runs/{}".format(
         os.environ.get("GITHUB_SERVER_URL", "https://github.com"),
@@ -364,11 +361,7 @@ def main(argv: list[str] | None = None) -> int:
             gh, args.plan, args.outcome, git_env=auth.env(), run_url=run_url,
         )
     print(json.dumps(result, indent=2))
-    return 0 if result.get("action") in {
-        ResultKind.PUSHED.value,
-        ResultKind.SUGGESTED.value,
-        ResultKind.OPENED.value,
-    } else 1
+    return 1 if result.get("action") == ResultKind.FAILED.value else 0
 
 
 def _write_outputs(outputs: dict[str, str]) -> None:

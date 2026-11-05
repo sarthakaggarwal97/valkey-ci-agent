@@ -377,9 +377,9 @@ def _run_link(repo_full_name: str, failure: IssueFailure) -> str:
 def fix_reported(issue: Any, failure: IssueFailure, *, repo_full_name: str, bot_login: str) -> bool:
     """Whether a target comment already retired ``failure``'s occurrence.
 
-    Published fixes are current behavior. Refusal and failure comments are
-    read for compatibility with older runs; new unsuccessful attempts are
-    tracked in the agent repository instead.
+    Published fixes and refusals retire the occurrence. Failure comments are
+    read for compatibility with older runs; new failed attempts are tracked
+    in the agent repository instead.
     """
     comments = retry_github_call(
         lambda: list(issue.get_comments()),
@@ -420,11 +420,12 @@ def _terminal_comment(
     checked: str = "",
     candidate: Optional[FixCandidate] = None,
 ) -> None:
-    if action not in {
-        ResultKind.PUSHED.value,
-        ResultKind.SUGGESTED.value,
-        ResultKind.OPENED.value,
-    }:
+    if action == ResultKind.FAILED.value:
+        logger.info(
+            "Issue #%s: the attempt failed; nothing is posted: %s",
+            issue.number,
+            summary,
+        )
         return
     source = f"From {_run_link(repo_full_name, failure)}"
     if job_name:
@@ -520,7 +521,7 @@ def plan_request(
 
 
 def report_result(gh: Any, plan: FixPlan, result: FixResult) -> dict[str, Any]:
-    """Comment a published fix on its issue, and return every result as a record."""
+    """Comment a published fix or refusal, and return every result as a record."""
     task, failure = plan.task, plan.issue
     if failure is None:
         raise ValueError("an issue fix plan names its issue")

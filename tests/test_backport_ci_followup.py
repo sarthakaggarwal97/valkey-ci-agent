@@ -512,6 +512,15 @@ def test_a_failed_result_does_not_comment(monkeypatch) -> None:
     assert pr.posted == []
 
 
+def test_a_refusal_is_posted_with_a_terminal_marker(monkeypatch) -> None:
+    report, pr = _report(monkeypatch, ResultKind.REFUSED)
+
+    assert report["action"] == "refused"
+    (body,) = pr.posted
+    assert "result: the summary" in body
+    assert " outcome=refused -->" in body
+
+
 def test_silent_plan_artifacts_bound_retries_without_pr_comments(monkeypatch) -> None:
     pr = _pr()
     first = _plan(monkeypatch, _target(pr))

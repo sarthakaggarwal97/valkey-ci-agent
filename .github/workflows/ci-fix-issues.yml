@@ -7,7 +7,7 @@ name: CI Fix Issues
 # The fix runs like every other (ci-fix-run.yml), inside the Valkey job that
 # failed when it can host it.
 # ci-fix-issue-dispatch.yml uses this name as a private, agent-repository retry
-# ledger. No failed-attempt marker needs to be posted on the target issue.
+# ledger. Failed attempts stay silent; refusals retire an occurrence publicly.
 run-name: "CI fix issue #${{ inputs.issue }} (run ${{ inputs.run_id }}, generation ${{ inputs.generation }})"
 
 on:

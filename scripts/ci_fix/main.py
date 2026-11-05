@@ -3,7 +3,8 @@
 A maintainer comments ``@valkeyrie-ops fix [<run-or-job-url>] [hint]`` on a
 pull request; the comment poller dispatches ``ci-fix.yml`` with the request.
 The fix runs like every other (:mod:`scripts.ci_fix.run`). A request the gate
-refuses, or cannot evaluate, is answered right away.
+refuses is answered right away. A request it cannot evaluate stays in the
+workflow logs.
 """
 
 from __future__ import annotations
@@ -95,8 +96,8 @@ def _report(
     kind: ResultKind,
     summary: str,
 ) -> dict[str, Any]:
-    """Report a published fix; unsuccessful attempts stay in workflow logs."""
-    if kind.successful:
+    """Report a published fix or refusal; failures stay in workflow logs."""
+    if kind is not ResultKind.FAILED:
         try:
             _post_comment(gh, repo_full_name, pr_number, body)
         finally:
@@ -128,15 +129,14 @@ def _react_outcome(
 ) -> None:
     if not comment_id:
         return
-    if not kind.successful:
-        return
+    content = "+1" if kind.successful else "-1"
 
     def react() -> None:
         requester = gh.get_repo(repo_full_name)._requester  # noqa: SLF001 - raw reactions endpoint
         requester.requestJsonAndCheck(
             "POST",
             f"/repos/{repo_full_name}/issues/comments/{comment_id}/reactions",
-            input={"content": "+1"},
+            input={"content": content},
         )
 
     try:

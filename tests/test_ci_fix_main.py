@@ -68,16 +68,22 @@ def test_an_authorized_command_is_planned_against_its_exact_job(wired) -> None:
     assert wired.posted == [] and wired.reacted == []
 
 
-@pytest.mark.parametrize(("gate", "kind"), [
-    (GateRejection("not authorized"), ResultKind.REFUSED),
-    (GateError("temporary GitHub failure"), ResultKind.FAILED),
-])
-def test_an_unsuccessful_gate_answer_stays_in_the_workflow(wired, gate, kind) -> None:
-    wired.gate(gate)
+def test_a_gate_refusal_is_posted_and_reacted_to(wired) -> None:
+    wired.gate(GateRejection("not authorized"))
 
     result = main_mod.plan_request(MagicMock(), None, _REQUEST, bot_login=_BOT)
 
-    assert result["action"] == kind.value
+    assert result["action"] == ResultKind.REFUSED.value
+    assert "No fix prepared: not authorized" in wired.posted[0][2]
+    assert wired.reacted == [(7, ResultKind.REFUSED)]
+
+
+def test_a_gate_error_stays_in_the_workflow(wired) -> None:
+    wired.gate(GateError("temporary GitHub failure"))
+
+    result = main_mod.plan_request(MagicMock(), None, _REQUEST, bot_login=_BOT)
+
+    assert result["action"] == ResultKind.FAILED.value
     assert wired.posted == []
     assert wired.reacted == []
 
@@ -114,16 +120,27 @@ def test_the_result_is_commented_and_reacted_to(wired) -> None:
     assert wired.reacted == [(7, ResultKind.PUSHED)]
 
 
-@pytest.mark.parametrize("kind", [ResultKind.FAILED, ResultKind.REFUSED])
-def test_an_unsuccessful_result_does_not_touch_the_pr(wired, kind) -> None:
+def test_a_failed_result_does_not_touch_the_pr(wired) -> None:
     plan = FixPlan(front_door=FrontDoor.PR, task=_task(), comment_id=7)
-    result = FixResult(kind=kind, summary="not published", task=_task())
+    result = FixResult(kind=ResultKind.FAILED, summary="not published", task=_task())
 
     report = main_mod.report_result(MagicMock(), plan, result)
 
-    assert report["action"] == kind.value
+    assert report["action"] == ResultKind.FAILED.value
     assert wired.posted == []
     assert wired.reacted == []
+
+
+def test_a_refusal_is_commented_and_reacted_to(wired) -> None:
+    plan = FixPlan(front_door=FrontDoor.PR, task=_task(), comment_id=7)
+    result = FixResult(kind=ResultKind.REFUSED, summary="not a code defect", task=_task())
+
+    report = main_mod.report_result(MagicMock(), plan, result)
+
+    assert report["action"] == ResultKind.REFUSED.value
+    assert "No fix for `build`" in wired.posted[0][2]
+    assert "Not a code defect." in wired.posted[0][2]
+    assert wired.reacted == [(7, ResultKind.REFUSED)]
 
 
 def test_a_comment_that_cannot_be_posted_fails_the_run_but_still_reacts(wired, monkeypatch) -> None:
@@ -147,4 +164,18 @@ def test_reaction_uses_plus_one_for_published_result() -> None:
         "POST",
         "/repos/o/r/issues/comments/7/reactions",
         input={"content": "+1"},
+    )
+
+
+def test_reaction_uses_minus_one_for_refusal() -> None:
+    requester = MagicMock()
+    gh = MagicMock()
+    gh.get_repo.return_value = SimpleNamespace(_requester=requester)
+
+    main_mod._react_outcome(gh, "o/r", 7, ResultKind.REFUSED)
+
+    requester.requestJsonAndCheck.assert_called_once_with(
+        "POST",
+        "/repos/o/r/issues/comments/7/reactions",
+        input={"content": "-1"},
     )

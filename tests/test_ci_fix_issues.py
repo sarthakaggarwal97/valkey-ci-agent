@@ -443,7 +443,7 @@ def test_log_only_failure_keeps_exact_job_id(monkeypatch):
     assert observed_snapshots == [snapshot]
 
 
-def test_no_matching_job_refusal_stays_in_the_workflow(monkeypatch):
+def test_no_matching_job_refusal_is_posted(monkeypatch):
     issue = _issue()
     gh, _repo, _run_ = _gh(issue)
     monkeypatch.setattr(issues_mod, "_failing_jobs", lambda *args, **kwargs: ())
@@ -461,7 +461,9 @@ def test_no_matching_job_refusal_stays_in_the_workflow(monkeypatch):
 
     assert result["action"] == "refused"
     assert "no failed job" in result["summary"]
-    assert issue.comments == []
+    assert len(issue.comments) == 1
+    assert "No fix was opened." in issue.comments[0].body
+    assert "outcome=refused" in issue.comments[0].body
     engine.assert_not_called()
 
 
@@ -481,7 +483,7 @@ def test_a_crash_while_planning_stays_in_the_workflow(monkeypatch):
     assert issue.comments == []
 
 
-def test_expired_source_logs_do_not_comment(monkeypatch):
+def test_expired_source_logs_are_refused_with_a_comment(monkeypatch):
     issue = _issue()
     gh, _repo, _run_ = _gh(issue)
     monkeypatch.setattr(
@@ -494,7 +496,9 @@ def test_expired_source_logs_do_not_comment(monkeypatch):
 
     assert result["action"] == "refused"
     assert "source job logs expired" in result["summary"]
-    assert issue.comments == []
+    assert len(issue.comments) == 1
+    assert "Source job logs expired" in issue.comments[0].body
+    assert "outcome=refused" in issue.comments[0].body
 
 
 def test_an_unread_log_is_not_taken_for_no_matching_job(monkeypatch):
@@ -556,7 +560,7 @@ def test_orphan_branch_is_reconciled_before_job_artifacts_are_read(monkeypatch):
         ({"path": ".github/workflows/other.yml"}, "is not a scheduled run"),
     ],
 )
-def test_non_daily_source_run_is_refused_without_comment(
+def test_non_daily_source_run_is_refused_with_comment(
     monkeypatch,
     run_kwargs,
     reason,
@@ -577,7 +581,9 @@ def test_non_daily_source_run_is_refused_without_comment(
 
     assert result["action"] == "refused"
     assert reason in result["summary"]
-    assert issue.comments == []
+    assert len(issue.comments) == 1
+    assert reason in issue.comments[0].body
+    assert "outcome=refused" in issue.comments[0].body
     engine.assert_not_called()
 
 
@@ -657,7 +663,7 @@ def test_a_fix_published_as_a_comment_is_the_patch_on_the_issue_and_closes_the_o
     assert issues_mod.fix_reported(issue, issues_mod.parse_issue(issue), repo_full_name="o/r", bot_login=_BOT)
 
 
-def test_a_refusal_with_checks_stays_in_the_workflow(monkeypatch):
+def test_a_refusal_comment_lists_what_the_bot_checked(monkeypatch):
     issue = _issue()
     gh, _repo, _run_ = _gh(issue)
     monkeypatch.setattr(issues_mod, "_failing_jobs", lambda *a, **k: (FailedJob("test-ubuntu-jemalloc", 22),))
@@ -670,7 +676,12 @@ def test_a_refusal_with_checks_stays_in_the_workflow(monkeypatch):
     result = run_issue_fix(gh, MagicMock(), "o/r", issue_number=7, bot_login=_BOT, git_env={})
 
     assert result["action"] == "refused"
-    assert issue.comments == []
+    (comment,) = issue.comments
+    assert comment.body.startswith("No fix was opened. No fix.")
+    assert "**What the bot checked**" in comment.body
+    assert "- Existing fixes found: `abc123`" in comment.body
+    assert "- Did not reproduce with `./runtest`." in comment.body
+    assert "outcome=refused" in comment.body
 
 
 # --- other open detector issues the same patch might fix --------------------------

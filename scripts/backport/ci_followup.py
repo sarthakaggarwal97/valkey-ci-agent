@@ -7,9 +7,9 @@ which runs like every other (:mod:`scripts.ci_fix.run`).
 
 The engine owns diagnosis, editing, and publication. The target PR's normal CI
 remains the final verifier, matching the existing backport workflow model.
-Only a published fix is commented on the target PR. Unsuccessful attempts are
-counted from plan artifacts in the agent repository, so they remain bounded
-without adding failure or infrastructure comments to the target PR.
+Published fixes and reasoned refusals are commented on the target PR. Failed
+attempts are counted from plan artifacts in the agent repository, so they
+remain bounded without adding error or infrastructure comments to the PR.
 """
 
 from __future__ import annotations
@@ -276,9 +276,9 @@ def plan_request(
 
 
 def report_result(gh: Any, plan: FixPlan, result: FixResult) -> dict[str, Any]:
-    """Comment a published fix on the PR; keep other results in workflow logs."""
+    """Comment a published fix or refusal; keep failures in workflow logs."""
     failure = plan.task.failure
-    if result.kind.successful:
+    if result.kind is not ResultKind.FAILED:
         what = "backport" if is_backport_branch(plan.task.target.branch) else "pull request"
         body = f"Automatic follow-up on this {what}'s CI.\n\n" + render_result(result)
         body += "\n\n" + "\n".join(

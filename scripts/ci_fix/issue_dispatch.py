@@ -7,8 +7,8 @@ that are worth an attempt. An issue is skipped while:
 - a ci-fix-issues run for it is queued or in progress (each run is named
   after its issue, see ``RUN_NAME``),
 - it is assigned or an open pull request links it (``validate_issue``),
-- the bot already reported a fix for the occurrence it records, or a legacy
-  result comment retired it (``fix_reported``),
+- the bot already reported a fix or refusal for the occurrence it records, or
+  a legacy result comment retired it (``fix_reported``),
 - two agent-repository workflow runs in the current retry generation failed.
 
 A newer occurrence or infrastructure-repair generation makes it eligible
