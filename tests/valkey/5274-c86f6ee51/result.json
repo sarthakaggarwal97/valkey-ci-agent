@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c86f6ee511e1a36488feb3b8e62093e69195d332",
+  "parent": "4d60ee06fa8d185326b679e0812ba2ca558e1da6",
+  "pr": 5274,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Free valkey-cli test hint before exiting (#5274)",
+  "date": "2026-11-04",
+  "unstable": "c86f6ee511e1a36488feb3b8e62093e69195d332",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3351,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change frees a heap-allocated hint string in valkey-cli's testHint() immediately before exit(0), purely to silence a leak report in a test-only code path (--test_hint). The hint is printed before the free, sdsfree handles both valid and NULL hints, and the process exits on the next line, so no exit status, stdout, stderr, or server-visible behaviour differs between the builds. A compared tools run of valkey-cli --test_hint would produce identical output on both sides, meaning no command could be marked expect_difference; the change needs no scenario."
+}

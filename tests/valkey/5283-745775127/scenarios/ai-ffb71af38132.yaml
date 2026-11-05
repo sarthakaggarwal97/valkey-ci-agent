@@ -1,0 +1,22 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 130b36084a27..745775127af6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ffb71af38132
+seed: 528302
+experiment:
+  id: proposed.forkless-fullsync-list-reads
+  inputs:
+    stable_keys: 3000
+    mutable_keys: 300
+    mutation_rate: 500
+    value_size: 512
+    key_save_delay_us: 1000
+    list_keys: 4
+    list_length: 30000
+    list_read_weight: 2.0
+    list_read_batch: 100
+    list_compress_depth: 1
+    restart_after_s: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7100

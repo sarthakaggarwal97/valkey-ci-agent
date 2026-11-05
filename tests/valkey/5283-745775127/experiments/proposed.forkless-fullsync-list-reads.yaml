@@ -1,0 +1,125 @@
+extends: [valkey.base]
+id: proposed.forkless-fullsync-list-reads
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: >-
+    A replica restart over an overflowed 16kb backlog forces a forkless full resync
+    (the eventual-consistency bgIterator with replication) while LRANGE/LINDEX hammer
+    LZF-compressed quicklists on the primary. After #5283 these reads are never blocked
+    against the sync iterator; the resync must use the forkless method, the replica
+    must converge to the ledger, and nothing may crash.
+inputs:
+  properties:
+    stable_keys: {minimum: 1, default: 3000}
+    mutation_rate: {default: 500}
+    value_size: {default: 512}
+    key_save_delay_us:
+      type: integer
+      minimum: 0
+      maximum: 100000
+      default: 1000
+      description: rdb-key-save-delay per key; stretches the sync so reads land mid-iteration
+    list_keys: {type: integer, minimum: 1, maximum: 100, default: 4, description: lists
+        preloaded for the reads}
+    list_length: {type: integer, minimum: 1, maximum: 10000000, default: 20000, description: elements
+        per list (120 bytes each)}
+    list_read_weight:
+      type: number
+      minimum: 0
+      maximum: 100
+      default: 2.0
+      description: weight of each of LRANGE and LINDEX beside set 0.7, del 0.1, get
+        0.2
+    list_read_batch: {type: integer, minimum: 1, maximum: 1000, default: 50, description: pipelined
+        reads per list operation}
+    list_compress_depth: {type: integer, minimum: 0, maximum: 65535, default: 1, description: list-compress-depth
+        of every instance}
+    restart_after_s: {type: number, minimum: 0.5, maximum: 600, default: 2, description: workload
+        time before the replica restart}
+startup_overlays:
+- overlay_id: forkless-enabled
+  server_config:
+    forkless-infrastructure-enabled: "yes"
+    forkless-policy: prefer-forkless
+    rdb-key-save-delay: {$ref: inputs.key_save_delay_us}
+- overlay_id: compressed-lists
+  server_config: {list-compress-depth: {$ref: inputs.list_compress_depth}}
+- overlay_id: tiny-backlog
+  server_config: {repl-backlog-size: 16kb}
+components:
+- use: valkey.capability.build-probe
+  id: build
+  config:
+    startup_config: {forkless-infrastructure-enabled: "yes", forkless-policy: prefer-forkless}
+    config_get: {forkless-policy: [prefer-forkless]}
+    info_fields: {persistence: [rdb_current_bgsave_type, rdb_last_bgsave_type]}
+- use: valkey.observer.info
+  id: info
+  config:
+    instances: primaries
+    sections: [stats]
+    interval_s: 0.1
+    expectations:
+    - {evidence_id: valkey.replication.full-resync-counted, field: sync_full, delta_min: 1,
+      required: true}
+    - {evidence_id: valkey.replication.partial-refused-counted, field: sync_partial_err,
+      delta_min: 1}
+- use: valkey.observer.log
+  id: logs
+  config:
+    instances: primaries
+    expect:
+    - {evidence_id: valkey.forkless.sync-method-logged, pattern: "Starting BGSAVE\
+        \ for SYNC with target: .* method: forkless", required: true}
+    - {evidence_id: valkey.replication.backlog-exhausted-logged, pattern: "Unable\
+        \ to partial resync with replica .* for lack of backlog"}
+    forbidden:
+    - {pattern: "Falling back to fork-based save"}
+    - {pattern: "forkless-save: forkless save failed"}
+- use: valkey.workload.key-value
+  id: writes
+  config:
+    mix:
+      set: 0.7
+      del: 0.1
+      get: 0.2
+      lrange: {$ref: inputs.list_read_weight}
+      lindex: {$ref: inputs.list_read_weight}
+    list_keys: {$ref: inputs.list_keys}
+    list_length: {$ref: inputs.list_length}
+    list_read_batch: {$ref: inputs.list_read_batch}
+- use: valkey.action.sleep
+  id: run-then-restart
+  depends_on: [writes, info, logs]
+  config: {seconds: {$ref: inputs.restart_after_s}}
+- use: valkey.action.restart-instance
+  id: restart-replica
+  depends_on: [run-then-restart]
+  config: {instance: replica, wait_ready: true}
+- use: valkey.action.poll
+  id: links-up
+  depends_on: [restart-replica]
+  config:
+    instances: replicas
+    section: replication
+    field: master_link_status
+    predicate: {equals: up}
+    timeout_s: 120
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, converge_timeout_s: 120}
+- use: valkey.oracle.evidence
+  id: forkless-fullsync
+  depends_on: [info, logs]
+  config:
+    require:
+    - {evidence_id: valkey.replication.full-resync-counted, source: info}
+    - {evidence_id: valkey.forkless.sync-method-logged, source: logs}
+required_events: [writes.seeded]
+required_evidence:
+- {evidence_id: valkey.instance.restarted, source: restart-replica}
+- {evidence_id: valkey.replication.full-resync-counted, source: info}
+- {evidence_id: valkey.forkless.sync-method-logged, source: logs}
+- {evidence_id: valkey.poll.satisfied, source: links-up}

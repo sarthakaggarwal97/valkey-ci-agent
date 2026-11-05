@@ -1,0 +1,64 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "130b36084a27e0ba97fbb6a0a2a52a66428fc9b1",
+  "parent": "71a43e9dd13afe376eea748fb501058c48901265",
+  "pr": 5110,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Stop zset ops from rewriting keyspace set members during lookups (#5110)",
+  "date": "2026-11-04",
+  "unstable": "c86f6ee511e1a36488feb3b8e62093e69195d332",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 5,
+  "recall": false,
+  "coverage": {
+    "lines": 5,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/t_zset.c:1705",
+      "src/t_zset.c:1706",
+      "src/t_zset.c:1707",
+      "src/t_zset.c:1785",
+      "src/t_zset.c:1786"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 18.3919,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-b5fa2844ad28",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unreached-change"
+    },
+    {
+      "scenario": "ai-553e16a9cff7",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unreached-change"
+    },
+    {
+      "scenario": "ai-fe10f5212635",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": null
+    },
+    {
+      "scenario": "ai-8efca7259d47",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": null
+    },
+    {
+      "scenario": "ai-623b5d995dc8",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": null
+    }
+  ]
+}

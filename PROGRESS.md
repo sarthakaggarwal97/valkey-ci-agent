@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-05T01:54+00:00.
+Updated 2026-11-05T02:29+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 2 | 2480 | #5138 (2026-11-04) | 2 | 0.3 |
+| valkey-io/valkey | 7 | 2480 | #5138 (2026-11-04) | 7 | 1.0 |
 | valkey-io/valkey-bloom | 5 | 104 | #93 (2026-04-26) | 5 | 0.7 |
 | valkey-io/valkey-json | 6 | 56 | #115 (2026-06-24) | 6 | 0.9 |
 | valkey-io/valkey-search | 0 | 667 | #1634 (2026-11-03) | 0 | 0.0 |
@@ -13,10 +13,11 @@ Updated 2026-11-05T01:54+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-04T23:33:34+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41928150529): 2 merge(s) tested, 0 without a code change.
+[2026-11-05T02:29:07+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41936033117): 3 merge(s) tested, 2 without a code change.
 
-- [valkey-io/valkey#5122](https://github.com/valkey-io/valkey/pull/5122) ([tests](tests/valkey/5122-71a43e9dd/)): Return an empty string from lm_asprintf() when vsnprintf() fails (#5122): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#5170](https://github.com/valkey-io/valkey/pull/5170) ([tests](tests/valkey/5170-9f05a35a6/)): Rehash in proportion to scan work when sampling a shrinking hashtable (#5170): 2 of 2 test(s) reached the change; [check, introduced by #5170](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41); check, not reproduced (recorded); [check, appeared after #5170](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41); check, not reproduced (recorded)
+- [valkey-io/valkey#5110](https://github.com/valkey-io/valkey/pull/5110) ([tests](tests/valkey/5110-130b36084/)): Stop zset ops from rewriting keyspace set members during lookups (#5110): 0 of 5 test(s) reached the change, coverage 0%
+- [valkey-io/valkey#5283](https://github.com/valkey-io/valkey/pull/5283) ([tests](tests/valkey/5283-745775127/)): bgiteration: remove RO list commands as format changing (#5283): 0 of 3 test(s) reached the change
+- [valkey-io/valkey#5274](https://github.com/valkey-io/valkey/pull/5274) ([tests](tests/valkey/5274-c86f6ee51/)): Free valkey-cli test hint before exiting (#5274): declined: The change frees a heap-allocated hint string in valkey-cli's testHint() immediately before exit(0), purely to silence a leak report in a test-only code path (--test_hint). The hint is printed before the free, sdsfree handles both valid and NULL hints, and the process exits on the next lin
 
 ### valkey-io/valkey-bloom
 
@@ -43,9 +44,10 @@ Updated 2026-11-05T01:54+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 6 of 7 tested (86%)
+- Merges whose tests reached the change: 6 of 9 tested (67%)
+- Changed-line coverage: median 0% of 1 merge(s) measured, 1 under 50%
 - Recall: 2 parents flagged of 2 fix merges
-- Claude: $49.91 in the last 24 hours, $49.91 in the last 7 days, $49.91 in all
+- Claude: $82.07 in the last 24 hours, $82.07 in the last 7 days, $82.07 in all
 - Issues filed: 3
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41

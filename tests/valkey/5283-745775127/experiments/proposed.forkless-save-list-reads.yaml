@@ -1,0 +1,104 @@
+extends: [valkey.base]
+id: proposed.forkless-save-list-reads
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: >-
+    LRANGE/LINDEX reads of LZF-compressed quicklists race a forkless BGSAVE's background
+    serializer. After #5283 these read-only list commands are no longer treated as
+    format-changing, so they are never blocked while the iterator holds the list.
+    The save must complete, its RDB must reload with every list digest intact, the
+    live data must match the ledger, and no instance may crash.
+inputs:
+  properties:
+    stable_keys: {minimum: 1, default: 3000}
+    mutation_rate: {default: 300}
+    value_size: {default: 128}
+    key_save_delay_us:
+      type: integer
+      minimum: 0
+      maximum: 100000
+      default: 1000
+      description: rdb-key-save-delay per key; stretches the save so reads land mid-iteration
+    list_keys: {type: integer, minimum: 1, maximum: 100, default: 4, description: lists
+        preloaded for the reads}
+    list_length: {type: integer, minimum: 1, maximum: 10000000, default: 20000, description: elements
+        per list (120 bytes each)}
+    list_read_weight:
+      type: number
+      minimum: 0
+      maximum: 100
+      default: 2.0
+      description: weight of each of LRANGE (30 elements) and LINDEX at a random index,
+        beside set 0.7, del 0.1, get 0.2
+    list_read_batch: {type: integer, minimum: 1, maximum: 1000, default: 50, description: pipelined
+        reads per list operation}
+    list_compress_depth: {type: integer, minimum: 0, maximum: 65535, default: 1, description: list-compress-depth
+        of every instance}
+startup_overlays:
+- overlay_id: forkless-enabled
+  server_config:
+    forkless-infrastructure-enabled: "yes"
+    forkless-policy: prefer-forkless
+    rdb-key-save-delay: {$ref: inputs.key_save_delay_us}
+- overlay_id: compressed-lists
+  server_config: {list-compress-depth: {$ref: inputs.list_compress_depth}}
+components:
+- use: valkey.capability.build-probe
+  id: build
+  config:
+    startup_config: {forkless-infrastructure-enabled: "yes", forkless-policy: prefer-forkless}
+    config_get: {forkless-policy: [prefer-forkless]}
+    info_fields: {persistence: [rdb_current_bgsave_type, rdb_last_bgsave_type]}
+- use: valkey.observer.info
+  id: info
+  config:
+    instances: primaries
+    sections: [persistence]
+    interval_s: 0.02
+    on_events: [bgsave.save-started, bgsave.save-completed]
+    expectations:
+    - {evidence_id: valkey.forkless.in-progress, field: rdb_current_bgsave_type, equals: forkless,
+      when: during, instances: all, required: true}
+    - {evidence_id: valkey.forkless.last-type, field: rdb_last_bgsave_type, equals: forkless,
+      when: final, instances: all}
+    - {evidence_id: valkey.persistence.last-status-ok, field: rdb_last_bgsave_status,
+      equals: ok, when: final, instances: all}
+    - {evidence_id: valkey.persistence.idle-after, field: rdb_bgsave_in_progress,
+      equals: 0, when: final, instances: all}
+- use: valkey.observer.log
+  id: logs
+  config:
+    instances: primaries
+    expect:
+    - {evidence_id: valkey.forkless.log-started, pattern: "Beginning forklessSaveToDisk",
+      instances: all, required: true}
+    - {evidence_id: valkey.forkless.log-completed, pattern: "forkless-save: forkless\
+        \ save complete", instances: all}
+    forbidden:
+    - {pattern: "forkless-save: forkless save failed"}
+    - {pattern: "Falling back to fork-based save"}
+- use: valkey.workload.key-value
+  id: writes
+  config:
+    mix:
+      set: 0.7
+      del: 0.1
+      get: 0.2
+      lrange: {$ref: inputs.list_read_weight}
+      lindex: {$ref: inputs.list_read_weight}
+    list_keys: {$ref: inputs.list_keys}
+    list_length: {$ref: inputs.list_length}
+    list_read_batch: {$ref: inputs.list_read_batch}
+- use: valkey.action.bgsave
+  id: bgsave
+  depends_on: [writes, info, logs]
+  config: {instances: primaries, expect: ok, expect_type: forkless}
+- use: valkey.oracle.rdb-snapshot
+  id: snapshot
+  depends_on: [bgsave]
+  config: {bgsave: bgsave, workload: writes}
+required_events: [writes.seeded, bgsave.save-started, bgsave.save-completed]
+required_evidence:
+- {evidence_id: valkey.forkless.in-progress, source: info}
+- {evidence_id: valkey.rdb.reload-verified, source: snapshot}
