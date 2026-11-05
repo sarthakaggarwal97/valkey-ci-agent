@@ -585,7 +585,7 @@ def test_a_merge_is_proven_hunted_rerun_and_filed_by_the_rule(monkeypatch, tmp_p
     result, publisher = _walk_merge(monkeypatch, tmp_path, fuzz, (reached, missed), merge=merge)
 
     assert "error" not in result
-    assert (result["proposed"], result["proven"], result["hunted"], result["dropped"]) == (2, 1, 1, 1)
+    assert (result["proposed"], result["proven"], result["hunted"], result["dropped"]) == (2, 1, 2, 0)
     assert result["recall"] is True and result["cost_usd"] == 0.75 and result["unstable"] == "c" * 40
     by_detail = {f["detail"]: f for f in result["findings"]}
     assert by_detail[crash["detail"]]["verdict"] == "introduced by #4716"
@@ -606,9 +606,25 @@ def test_a_merge_is_proven_hunted_rerun_and_filed_by_the_rule(monkeypatch, tmp_p
     assert set(dirs) == {(True, "experiments"), (False, "experiments-plain")}
     assert (test, "unstable", 11, True, "unstable") in calls and (test, "merge", 11, False, "merge") in calls
     folder = tmp_path / "out" / merge_folder(merge)
-    assert sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file()) == [
-        "experiments/proposed.lset.yaml", "result.json", f"scenarios/{test}.yaml"]
+    # The missed test ran to its end, so it hunts and is kept, though it proves nothing.
+    assert sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file()) == sorted([
+        "experiments/proposed.lset.yaml", "result.json", f"scenarios/{test}.yaml",
+        f"scenarios/{missed['scenario_id']}.yaml"])
     assert json.loads((folder / "result.json").read_text()) == result
+
+
+def test_a_test_skipped_as_unsupported_is_dropped_and_its_reason_shown(monkeypatch, tmp_path):
+    # valkey #5110: the forkless experiments set a config current Valkey renamed, and every test skipped unseen.
+    test = _scenario("seed: 10\nexperiment: {id: proposed.lset}\ndeployment: {mode: standalone}\n")
+    summary = "required capability 'build' is unsupported"
+
+    def fuzz(fuzzer_bin, doc, seed, *, candidate, compare, core, experiment_dir, run_dir):
+        return {"status": "SKIP_UNSUPPORTED", "reason": None, "reached": False, "parent_exited": False,
+                "reached_commands": set(), "found": {}, "summary": summary}
+
+    result, _ = _walk_merge(monkeypatch, tmp_path, fuzz, (test,))
+    assert (result["hunted"], result["dropped"]) == (0, 1)
+    assert walk._summary(_merge(), result, "now")["skipped"] == {"count": 1, "reason": summary}
 
 
 def test_the_same_commands_unreached_on_both_builds_is_no_regressed_fix(monkeypatch, tmp_path):

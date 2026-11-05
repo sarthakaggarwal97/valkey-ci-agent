@@ -651,7 +651,7 @@ def fuzz(fuzzer_bin: str, doc: dict[str, Any], seed: int, *, candidate: dict[str
     return {"status": report["status"], "reason": outcome.reason if outcome else None,
             "reached": bool(outcome and outcome.reached), "reached_commands": reached_commands(report),
             "parent_exited": isinstance(sequence.get("parent"), dict) and "exited" in sequence["parent"],
-            "found": findings(report, run_dir / "artifacts")}
+            "found": findings(report, run_dir / "artifacts"), "summary": " ".join(str(report["summary"]).split())[:300]}
 
 
 def verdict(builds: dict[str, bool], pr: str) -> str:
@@ -911,12 +911,15 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
             doc = yaml.safe_load(text)
             seed = int(doc["seed"])
             first = view(test, doc, "merge", seed)
-            if not first.get("reached") and first["status"] not in ("PASS", "FAIL"):
-                # It neither reached the change nor ran to a verdict on the merge: dropped, only counted.
+            ran = first.get("reached") or first["status"] in ("PASS", "FAIL") or first.get("reason") == UNREACHED
+            if not ran:
+                # It did not run to its end on the merge (it errored, or was skipped): dropped, only counted.
                 result["dropped"] += 1
                 result["recorded"].append({"scenario": test, "build": "merge", "status": first["status"],
-                                           "reason": first.get("reason") or first.get("error")})
+                                           "reason": first.get("reason") or first.get("error") or first.get("summary")})
                 continue
+            # A test that ran to its end hunts, though its marked commands replied alike: it still runs the code
+            # the change touched, and its lines count for coverage. It is proven only if it reached the change.
             hunting.append((test, doc))
             result["proven"] += int(bool(first.get("reached")))
             result["recall"] = result["recall"] or bool(first.get("reached")) or bool(first.get("parent_exited"))
@@ -1049,6 +1052,11 @@ def _summary(merge: dict[str, Any], result: dict[str, Any] | None, now: str) -> 
         return {**entry, "outcome": "no-code-change"}
     entry.update({key: result.get(key) for key in ("outcome", "proposed", "proven", "hunted", "recall", "cost_usd")})
     entry["coverage"] = (result.get("coverage") or {}).get("percent")
+    # Tests skipped as unsupported, most often a setting the build does not know: one reason, so a skip that
+    # every merge hits (a renamed config) shows in PROGRESS.md, not only in a dropped count.
+    skipped = [r for r in result.get("recorded") or [] if r.get("status") == "SKIP_UNSUPPORTED"]
+    if skipped:
+        entry["skipped"] = {"count": len(skipped), "reason": str(skipped[0].get("reason") or "")[:200]}
     if not result.get("error"):
         # record() keeps the tests of a merge whose run finished.
         entry["folder"] = merge_folder(merge)
@@ -1156,6 +1164,8 @@ def progress(states: list[dict[str, Any]], now: datetime) -> str:
             if entry["outcome"] == "tested":
                 what += f"{entry['proven']} of {entry['proposed']} test(s) reached the change"
                 what += f", coverage {entry['coverage']}%" if entry.get("coverage") is not None else ""
+                skipped = entry.get("skipped")
+                what += f", {skipped['count']} skipped ({skipped['reason']})" if skipped else ""
                 what += "".join(f"; [{f['rule']}, {f['verdict']}]({f['issue']})" if f.get("issue")
                                 else f"; {f['rule']}, {f['verdict']} (recorded)" for f in entry.get("findings", []))
             else:
