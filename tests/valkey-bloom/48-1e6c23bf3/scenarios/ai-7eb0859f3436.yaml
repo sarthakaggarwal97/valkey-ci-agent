@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom 8f1c9f42f681..1e6c23bf3c69.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7eb0859f3436
+seed: 480001
+experiment:
+  id: proposed.bloom-version-gate-load
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,113 @@
+extends: [valkey.liveness]
+id: proposed.bloom-commands-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Full BF command surface and adversarial arguments compared across the
+    valkey-module 0.1.3 -> 0.1.5 SDK bump
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bf
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, "no"], expect: {equals: OK}}
+    - {command: [BF.ADD, filter, item1], expect: {equals: 1}}
+    - {command: [BF.ADD, filter, item1], expect: {equals: 0}}
+    - {command: [BF.EXISTS, filter, item1], expect: {equals: 1}}
+    - {command: [BF.CARD, filter], expect: {equals: 1}}
+    - {command: [BF.ADD, filter], expect: {error: true}}
+    - {command: [BF.MADD, filter, a, b, c, a, ""]}
+    - {command: [BF.MEXISTS, filter, a, b, zz, ""]}
+    - {command: [BF.MADD, filter], expect: {error: true}}
+    - {command: [BF.CARD, filter]}
+    - {command: [TYPE, filter], expect: {equals: bloomfltr}}
+    - {command: [BF.RESERVE, res1, "0.001", 1000], expect: {equals: OK}}
+    - {command: [BF.RESERVE, res1, "0.001", 1000], expect: {error: "item exists"}}
+    - {command: [BF.RESERVE, bad, "1.1", 100], expect: {error: "error rate range"}}
+    - {command: [BF.RESERVE, bad, notafloat, 100], expect: {error: true}}
+    - {command: [BF.RESERVE, bad, "0.01", 0], expect: {error: true}}
+    - {command: [BF.RESERVE, bad, "0.01", -1], expect: {error: true}}
+    - {command: [BF.RESERVE, bad, "0.01", 9223372036854775807], expect: {error: true}}
+    - {command: [BF.RESERVE, bad, "0.01", 9223372036854775808], expect: {error: true}}
+    - {command: [BF.RESERVE, bad, "0.01", 100, EXPANSION, 0], expect: {error: true}}
+    - {command: [BF.RESERVE, bad, "0.01", 100, EXPANSION, 4294967296], expect: {error: true}}
+    - {command: [BF.RESERVE, nons, "0.01", 5, NONSCALING], expect: {equals: OK}}
+    - {command: [BF.INSERT, nons, ITEMS, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10]}
+    - {command: [BF.INSERT, ins1, ERROR, "0.02", CAPACITY, 80, EXPANSION, 3, ITEMS,
+        x1, x2, x3]}
+    - {command: [BF.INSERT, ins1, NOCREATE, ITEMS, x4]}
+    - {command: [BF.INSERT, missing, NOCREATE, ITEMS, q], expect: {error: "not found"}}
+    - {command: [BF.INSERT, ins2, NONSCALING, VALIDATESCALETO, 1000, ITEMS, y], expect: {
+        error: true}}
+    - {command: [BF.INSERT, ins2, VALIDATESCALETO, 9223372036854775807, ITEMS, y],
+      expect: {error: true}}
+    - {command: [BF.INSERT, ins2, ITEMS], expect: {error: true}}
+    - {command: [BF.INSERT, ins2, BOGUSARG, ITEMS, y], expect: {error: true}}
+    - {command: [BF.INSERT, ITEMS, ITEMS, ITEMS]}
+    - {command: [BF.ADD, "", emptykeyitem]}
+    - {command: [CONFIG, SET, bf.bloom-capacity, 20], expect: {equals: OK}}
+    - {command: [BF.INSERT, scaled, ITEMS, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10,
+        s11, s12, s13, s14, s15, s16, s17, s18, s19, s20]}
+    - {command: [BF.INSERT, scaled, ITEMS, s21, s22, s23, s24, s25, s26, s27, s28,
+        s29, s30, s31, s32, s33, s34, s35, s36, s37, s38, s39, s40]}
+    - {command: [BF.INSERT, scaled, ITEMS, s41, s42, s43, s44, s45, s46, s47, s48,
+        s49, s50, s51, s52, s53, s54, s55, s56, s57, s58, s59, s60]}
+    - {command: [BF.INFO, scaled, FILTERS]}
+    - {command: [BF.INFO, scaled, CAPACITY]}
+    - {command: [BF.INFO, scaled, ITEMS]}
+    - {command: [BF.INFO, scaled, EXPANSION]}
+    - {command: [BF.INFO, scaled, MAXSCALEDCAPACITY]}
+    - {command: [BF.INFO, scaled, SIZE], compare: skip}
+    - {command: [BF.INFO, scaled], compare: skip}
+    - {command: [BF.INFO, scaled, BOGUS], expect: {error: true}}
+    - {command: [BF.INFO, missing], expect: {error: "not found"}}
+    - {command: [BF.CARD, scaled]}
+    - {command: [BF.MEXISTS, scaled, s1, s15, s33, s59], expect: {equals: [1, 1, 1,
+          1]}}
+    - {command: [COPY, scaled, scaledcopy], expect: {equals: 1}}
+    - {command: [BF.MEXISTS, scaledcopy, s1, s33, s59], expect: {equals: [1, 1, 1]}}
+    - {command: [DEBUG, DIGEST-VALUE, scaled]}
+    - {command: [MEMORY, USAGE, scaled], compare: skip}
+    - {command: [DUMP, scaled], compare: skip}
+    - {command: [SET, str1, v], expect: {equals: OK}}
+    - {command: [BF.ADD, str1, x], expect: {error: WRONGTYPE}}
+    - {command: [BF.CARD, str1], expect: {error: WRONGTYPE}}
+    - {command: [GET, filter], expect: {error: WRONGTYPE}}
+    - {command: [BF.LOAD, filter, xx], expect: {error: BUSYKEY}}
+    - {command: [BF.LOAD, newk, garbage-not-a-valid-payload], expect: {error: true}}
+    - {command: [EXEC], expect: {error: true}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [BF.ADD, txn, titem], expect: {equals: QUEUED}}
+    - {command: [BF.CARD, txn], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [1, 1]}}
+    - {command: [CONFIG, SET, bf.bloom-fp-rate, "1.5"], expect: {error: true}}
+    - {command: [CONFIG, SET, bf.bloom-fp-rate, "0.25"], expect: {equals: OK}}
+    - {command: [CONFIG, GET, bf.bloom-fp-rate]}
+    - {command: [CONFIG, SET, bf.bloom-tightening-ratio, "0.75"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, bf.bloom-tightening-ratio, "1.75"], expect: {error: true}}
+    - {command: [CONFIG, SET, bf.bloom-expansion, 0], expect: {error: true}}
+    - {command: [CONFIG, SET, bf.bloom-expansion, 5], expect: {equals: OK}}
+    - {command: [BF.RESERVE, big, "0.001", 1000000], expect: {equals: OK}}
+    - {command: [BF.MADD, big, g1, g2, g3]}
+    - {command: [UNLINK, big], expect: {equals: 1}}
+    - {command: [CONFIG, SET, bf.bloom-memory-usage-limit, 1000], expect: {equals: OK}}
+    - {command: [BF.RESERVE, memtest, "0.01", 100000], expect: {error: "memory limit"}}
+    - {command: [CONFIG, SET, bf.bloom-memory-usage-limit, 134217728], expect: {equals: OK}}
+    - {command: [DEL, scaledcopy], expect: {equals: 1}}
+    - {command: [DEL, scaled, filter, res1], expect: {equals: 3}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bf.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bf}

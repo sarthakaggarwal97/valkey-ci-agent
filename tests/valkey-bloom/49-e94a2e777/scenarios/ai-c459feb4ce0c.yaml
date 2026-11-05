@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom 1e6c23bf3c69..e94a2e77792d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c459feb4ce0c
+seed: 14
+experiment:
+  id: proposed.bloom-persistence-compare
+  inputs:
+    appendonly: 'yes'
+    aof_preamble: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

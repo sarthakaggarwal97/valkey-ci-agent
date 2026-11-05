@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.bloom-persistence-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Bloom objects across SAVE, AOF rewrite (BF.LOAD path) and a restart,
+    compared across the SDK bump
+inputs:
+  properties:
+    appendonly: {type: string, enum: ["yes", "no"], default: "no"}
+    aof_preamble: {type: string, enum: ["yes", "no"], default: "yes"}
+components:
+- use: valkey.action.commands
+  id: persist
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config:
+      appendonly: {$ref: inputs.appendonly}
+      aof-use-rdb-preamble: {$ref: inputs.aof_preamble}
+      enable-debug-command: "yes"
+    timeout_s: 120
+    commands:
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, "no"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, bf.bloom-capacity, 25], expect: {equals: OK}}
+    - {command: [BF.INSERT, pscale, ITEMS, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10,
+        p11, p12, p13, p14, p15, p16, p17, p18, p19, p20]}
+    - {command: [BF.INSERT, pscale, ITEMS, p21, p22, p23, p24, p25, p26, p27, p28,
+        p29, p30, p31, p32, p33, p34, p35, p36, p37, p38, p39, p40]}
+    - {command: [BF.INSERT, pscale, ITEMS, p41, p42, p43, p44, p45, p46, p47, p48,
+        p49, p50, p51, p52, p53, p54, p55, p56, p57, p58, p59, p60]}
+    - {command: [BF.RESERVE, pres, "0.001", 5000], expect: {equals: OK}}
+    - {command: [BF.MADD, pres, q1, q2, q3, q4, q5, q6, q7, q8, q9, q10]}
+    - {command: [BF.ADD, pone, solo], expect: {equals: 1}}
+    - {command: [BF.INFO, pscale, FILTERS]}
+    - {command: [BF.CARD, pscale]}
+    - {command: [DEBUG, DIGEST-VALUE, pscale]}
+    - {command: [CONFIG, SET, bf.bloom-expansion, 4], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [BGREWRITEAOF]}
+    - {command: [INFO, persistence], wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"},
+      compare: skip}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.MEXISTS, pscale, p1, p20, p33, p60], expect: {equals: [1, 1, 1,
+          1]}}
+    - {command: [BF.CARD, pscale]}
+    - {command: [BF.INFO, pscale, FILTERS]}
+    - {command: [BF.INFO, pscale, ITEMS]}
+    - {command: [DEBUG, DIGEST-VALUE, pscale]}
+    - {command: [BF.EXISTS, pone, solo], expect: {equals: 1}}
+    - {command: [BF.CARD, pres]}
+    - {command: [CONFIG, GET, bf.bloom-expansion]}
+    - {command: [CONFIG, GET, bf.bloom-capacity]}
+    - {command: [BF.ADD, pscale, afterrestart]}
+    - {command: [BF.EXISTS, pscale, afterrestart], expect: {equals: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [persist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: persist}
