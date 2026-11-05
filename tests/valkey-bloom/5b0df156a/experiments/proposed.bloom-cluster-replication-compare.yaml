@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.bloom-cluster-replication-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Bloom write replication to a cluster replica (CLUSTER REPLICATE + READONLY
+    reads); on the parent the replica never receives the writes
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: clrepl
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: true
+    nodes: 2
+    timeout_s: 120
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [READONLY], node: 1, expect: {equals: OK}}
+    - {command: [BF.RESERVE, cr, "0.001", "50"], expect: {equals: OK}}
+    - {command: [BF.ADD, ck, ci1], expect: {equals: 1}}
+    - {command: [BF.MADD, cm, a1, a2, a3], expect: {exists: true}}
+    - {command: [TYPE, ck], expect_difference: true, expect: {equals: "bloom----"}}
+    - {command: [BF.CARD, ck], node: 1, wait_s: 20, expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [BF.EXISTS, ck, ci1], node: 1, expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [BF.INFO, cr, CAPACITY], node: 1, expect_difference: true, expect: {
+        equals: 50}}
+    - {command: [BF.MEXISTS, cm, a1, a2, a3], node: 1, expect_difference: true, expect: {
+        equals: [1, 1, 1]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [clrepl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: clrepl}

@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.bloom-add-creates-key
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.ADD on a missing key must create the key; the refactored single-add
+    path returns before set_value runs
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: addcreate
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [BF.ADD, fresh, v1], expect: {equals: 1}}
+    - {command: [EXISTS, fresh], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.EXISTS, fresh, v1], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.CARD, fresh], expect_difference: true, expect: {equals: 1}}
+    - {command: [TYPE, fresh], expect_difference: true, expect: {equals: bloomtype}}
+    - {command: [BF.ADD, fresh, v2], expect: {equals: 1}}
+    - {command: [BF.CARD, fresh], expect_difference: true, expect: {equals: 2}}
+    - {command: [BF.INFO, fresh, FILTERS], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.MADD, mkey, a, b], expect: {equals: [1, 1]}}
+    - {command: [EXISTS, mkey], expect: {equals: 1}}
+    - {command: [BF.EXISTS, mkey, a], expect: {equals: 1}}
+    - {command: [BF.INSERT, ikey, ITEMS, c], expect: {equals: [1]}}
+    - {command: [EXISTS, ikey], expect: {equals: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [addcreate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: addcreate}

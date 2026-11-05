@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom ec72262033e7..28164741debf.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d74bbe56c764
+seed: 101
+experiment:
+  id: proposed.bloom-free-effort-rdb
+  inputs:
+    resp: 2
+    lazyfree: 'yes'
+    appendonly: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

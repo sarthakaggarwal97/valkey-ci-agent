@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "85e20fd3864140ad8f46c9ed3be37ca56e4c62f6",
+  "parent": "0d2ad8a48fc36097f9c9854572176340d0eaaddf",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Add Python testing framework to support Integration testing of the bloom module + Add basic sanity tests",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2598,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds only a Python integration-testing framework and CI/build tooling (build.sh, requirements.txt, pytest test files, .gitignore and README edits). No module source code changes, so the bloom module's runtime behaviour is identical at the change and its parent; there is no behaviour for a scenario to exercise or compare."
+}

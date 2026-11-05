@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom 5b0df156a336..c66243d12c58.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-228c176d4266
+seed: 303
+experiment:
+  id: proposed.bloom-type-rename-errors
+  inputs:
+    resp: 2
+    cluster: true
+deployment:
+  mode: standalone
+  base_port: 7200

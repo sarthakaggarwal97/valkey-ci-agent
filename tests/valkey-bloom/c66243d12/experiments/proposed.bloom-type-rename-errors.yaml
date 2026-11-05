@@ -1,0 +1,87 @@
+extends: [valkey.liveness]
+id: proposed.bloom-type-rename-errors
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    valkey-bloom renamed its module data type from bloom---- to bloomfltr and changed
+    BF.RESERVE/BF.INSERT error strings (new 'ERR bad error rate' arm for unparseable
+    rates, 'Bad capacity'->'bad capacity', 'Bad error rate'->'bad error rate'). Compare
+    TYPE replies, every changed error path, and RDB save/reload of the renamed type
+    across the two module builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: bloom
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [BF.ADD, k, item1], expect: {equals: 1}}
+    - {command: [TYPE, k], expect_difference: true, expect: {equals: bloomfltr}}
+    - {command: [BF.EXISTS, k, item1], expect: {equals: 1}}
+    - {command: [BF.MEXISTS, k, item1, item1], expect: {equals: [1, 1]}}
+    - {command: [BF.CARD, k], expect: {equals: 1}}
+    - {command: [BF.INFO, k, ITEMS], expect: {equals: 1}}
+    - {command: [BF.INFO, k, FILTERS], expect: {equals: 1}}
+    - {command: [BF.ADD, kempty, ""], expect: {equals: 1}}
+    - {command: [BF.EXISTS, kempty, ""], expect: {equals: 1}}
+    - {command: [DUMP, k], compare: skip}
+    - {command: [BF.RESERVE, k2, 0.01, 1000], expect: {equals: OK}}
+    - {command: [BF.INFO, k2, CAPACITY], expect: {equals: 1000}}
+    - {command: [TYPE, k2], expect_difference: true, expect: {equals: bloomfltr}}
+    - {command: [BF.RESERVE, k2, 0.01, 1000], expect: {error: "item exists"}}
+    - {command: [BF.RESERVE, k3, notanumber, 100], expect_difference: true, expect: {
+        error: "bad error rate"}}
+    - {command: [BF.RESERVE, k3, 1.5, 100], expect: {error: "0 < error rate range\
+          \ < 1"}}
+    - {command: [BF.RESERVE, k3, -0.5, 100], expect: {error: "0 < error rate range\
+          \ < 1"}}
+    - {command: [BF.RESERVE, k3, 0.01, 0], expect: {error: "capacity should be larger\
+          \ than 0"}}
+    - {command: [BF.RESERVE, k3, 0.01, notanumber], expect_difference: true, expect: {
+        error: "bad capacity"}}
+    - {command: [BF.RESERVE, k3, 0.01, 4294967295], expect_difference: true, expect: {
+        error: "bad capacity"}}
+    - {command: [BF.RESERVE, k3, 0.01, 4294967296], expect_difference: true, expect: {
+        error: "bad capacity"}}
+    - {command: [BF.RESERVE, k3, 0.01, -1], expect_difference: true, expect: {error: "bad\
+          \ capacity"}}
+    - {command: [BF.RESERVE, k3, 0.01, 100, EXPANSION, 11], expect: {error: "bad expansion"}}
+    - {command: [BF.RESERVE, k3, 0.01, 100, EXPANSION, 0], expect: {error: "bad expansion"}}
+    - {command: [BF.RESERVE, k3, 0.01, 100, BOGUSARG], expect: {error: true}}
+    - {command: [BF.INSERT, k4, ERROR, notanumber, ITEMS, a], expect_difference: true,
+      expect: {error: "bad error rate"}}
+    - {command: [BF.INSERT, k4, CAPACITY, notanumber, ITEMS, a], expect_difference: true,
+      expect: {error: "bad capacity"}}
+    - {command: [BF.INSERT, k4, CAPACITY, 0, ITEMS, a], expect: {error: "capacity\
+          \ should be larger than 0"}}
+    - {command: [BF.INSERT, k4, ERROR, 2.0, ITEMS, a], expect: {error: "0 < error\
+          \ rate range < 1"}}
+    - {command: [BF.INSERT, k4, EXPANSION, 11, ITEMS, a], expect: {error: "bad expansion"}}
+    - {command: [BF.INSERT, k4, NOCREATE, ITEMS, a], expect: {error: "not found"}}
+    - {command: [BF.INFO, nosuchkey], expect: {error: "not found"}}
+    - {command: [BF.INFO, k, BOGUS], expect: {error: "Invalid information value"}}
+    - {command: [SET, strkey, v], expect: {equals: OK}}
+    - {command: [BF.ADD, strkey, x], expect: {error: true}}
+    - {command: [BF.EXISTS, strkey, x], expect: {error: true}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [TYPE, k], expect_difference: true, expect: {equals: bloomfltr}}
+    - {command: [BF.EXISTS, k, item1], expect: {equals: 1}}
+    - {command: [BF.CARD, k], expect: {equals: 1}}
+    - {command: [BF.INFO, k2, CAPACITY], expect: {equals: 1000}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bloom.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bloom}

@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.bloom-nonscaling-rdb-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: A full non scaling filter and a tightened scaled filter survive SAVE
+    and restart, and the reloaded non scaling filter still refuses adds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [BF.RESERVE, nsf, "0.000001", 1, NONSCALING], expect: {equals: OK}}
+    - {command: [BF.ADD, nsf, r1], expect: {equals: 1}}
+    - {command: [BF.ADD, nsf, r2], expect_difference: true, expect: {error: "non scaling\
+          \ filter is full"}}
+    - {command: [BF.RESERVE, scale, "0.000001", 20, EXPANSION, 2], expect: {equals: OK}}
+    - {command: [BF.MADD, scale, s01, s02, s03, s04, s05, s06, s07, s08, s09, s10,
+        s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, s21]}
+    - {command: [BF.INFO, scale, FILTERS], expect: {equals: 2}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.INFO, nsf, EXPANSION], expect: {equals: -1}}
+    - {command: [BF.CARD, nsf], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.ADD, nsf, r3], expect_difference: true, expect: {error: "non scaling\
+          \ filter is full"}}
+    - {command: [BF.EXISTS, nsf, r1], expect: {equals: 1}}
+    - {command: [BF.INFO, scale, FILTERS], expect: {equals: 2}}
+    - {command: [BF.CARD, scale], expect: {equals: 21}}
+    - {command: [BF.INFO, scale, SIZE], expect_difference: true, expect: {min: 1}}
+    - {command: [BF.ADD, scale, extra1], expect: {equals: 1}}
+    - {command: [BF.CARD, scale], expect: {equals: 22}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

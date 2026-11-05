@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "3c285d5595aeaa12ce34e5e89a22c0553f16f30b",
+  "parent": "28164741debfa76aca09451bc923ca19873a3039",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Defrag Bloom Object callback",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 4,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 8.8309,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

@@ -1,0 +1,79 @@
+extends: [valkey.liveness]
+id: proposed.bloom-free-effort-rdb
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Drive the new free_effort callback through every free decision point (UNLINK of
+    a 70-sub-filter object crossing the 64 lazy-free threshold, UNLINK of a 1-filter
+    object now freed synchronously, DEL, RENAME overwrite, expiry, FLUSHALL ASYNC)
+    and the aux_save removal / aux_load compatibility through a SAVE + restart RDB
+    round-trip, on the change's and the parent's module build, replies compared.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    lazyfree: {type: string, enum: ["yes", "no"], default: "yes"}
+    appendonly: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: bloom
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    server_config:
+      appendonly: {$ref: inputs.appendonly}
+      lazyfree-lazy-user-del: {$ref: inputs.lazyfree}
+      lazyfree-lazy-server-del: {$ref: inputs.lazyfree}
+      lazyfree-lazy-expire: {$ref: inputs.lazyfree}
+      lazyfree-lazy-user-flush: {$ref: inputs.lazyfree}
+    commands:
+    - {command: [BF.RESERVE, small, "0.001", "100"], expect: {equals: OK}}
+    - {command: [BF.ADD, small, a], expect: {equals: 1}}
+    - {command: [BF.RESERVE, scale, "1e-09", "1", EXPANSION, "1"], expect: {equals: OK}}
+    - {command: [BF.MADD, scale, i01, i02, i03, i04, i05, i06, i07, i08, i09, i10,
+        i11, i12, i13, i14, i15, i16, i17, i18, i19, i20, i21, i22, i23, i24, i25,
+        i26, i27, i28, i29, i30, i31, i32, i33, i34, i35, i36, i37, i38, i39, i40,
+        i41, i42, i43, i44, i45, i46, i47, i48, i49, i50, i51, i52, i53, i54, i55,
+        i56, i57, i58, i59, i60, i61, i62, i63, i64, i65, i66, i67, i68, i69, i70],
+      expect: {equals: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1]}}
+    - {command: [BF.INFO, scale, FILTERS], expect: {equals: 70}}
+    - {command: [BF.INFO, scale, CAPACITY], expect: {equals: 70}}
+    - {command: [BF.CARD, scale], expect: {equals: 70}}
+    - {command: [COPY, scale, scalecopy], expect: {equals: 1}}
+    - {command: [BF.CARD, scalecopy], expect: {equals: 70}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.CARD, scale], expect: {equals: 70}}
+    - {command: [BF.INFO, scale, FILTERS], expect: {equals: 70}}
+    - {command: [BF.EXISTS, small, a], expect: {equals: 1}}
+    - {command: [BF.MEXISTS, scale, i01, i35, i70], expect: {equals: [1, 1, 1]}}
+    - {command: [UNLINK, small], expect: {equals: 1}}
+    - {command: [BF.ADD, tiny, x], expect: {equals: 1}}
+    - {command: [RENAME, tiny, scalecopy], expect: {equals: OK}}
+    - {command: [BF.EXISTS, scalecopy, x], expect: {equals: 1}}
+    - {command: [DEL, scalecopy], expect: {equals: 1}}
+    - {command: [BGSAVE], expect: {contains: "Background saving started"}}
+    - {command: [UNLINK, scale], expect: {equals: 1}}
+    - {command: [BF.CARD, scale], expect: {equals: 0}}
+    - {command: [BF.ADD, exp, e1], expect: {equals: 1}}
+    - {command: [PEXPIRE, exp, "100"], expect: {equals: 1}}
+    - {command: [EXISTS, exp], wait_s: 15, expect: {equals: 0}}
+    - {command: [BF.ADD, f1, a], expect: {equals: 1}}
+    - {command: [BF.MADD, f2, b, c, d], expect: {equals: [1, 1, 1]}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [BF.ADD, small, a], expect: {equals: 1}}
+    - {command: [BF.CARD, small], expect: {equals: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bloom.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bloom}
