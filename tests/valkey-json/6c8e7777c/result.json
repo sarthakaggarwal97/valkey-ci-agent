@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "6c8e7777cfe27556fd309e1a72eed21d9a3455f6",
+  "parent": "9ba9ff46fabd9f31e375ddd7b1362c1907e9c3c2",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Force clang on macOS",
+  "date": "2025-06-25",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2182,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is build-system only: CMakeLists.txt forces clang as the compiler on macOS and refactors the existing Clang/AppleClang detection into a COMPILER_IS_CLANG variable. The VALKEYMODULE_ATTR_COMMON definition is applied under exactly the same condition as before, and no module source code, command behaviour, reply format, or data handling changes. On the Linux CI platform the fuzzer runs on, the added block (APPLE AND NOT COMPILER_IS_CLANG) is never taken, so both builds are byte-for-byte driven by identical compile settings. There is no runtime behaviour to test."
+}

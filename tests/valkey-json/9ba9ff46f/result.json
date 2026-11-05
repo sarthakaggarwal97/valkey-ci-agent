@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "9ba9ff46fabd9f31e375ddd7b1362c1907e9c3c2",
+  "parent": "5b2f3db24c0135a8d8b8e5cf434c7a3d42bd91f0",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Support building on Clang / Apple",
+  "date": "2025-06-25",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3194,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a build/portability fix to compile valkey-json under Clang/AppleClang: CMake gains arm64 support, Clang warning suppressions, and a Clang-only weak-symbol define; the source edits are warning fixes with no semantic effect (removing std::move on temporaries, friend class->friend struct, naming anonymous typedef'd structs, [[maybe_unused]] attributes, a cast in a unit test, and %lu->%llu / %lx->%llx in log format strings, which on LP64 Linux print identically and touch only log text, never replies or persisted data). On the fuzzer's GCC/Linux build the compiled module is behavioura"
+}

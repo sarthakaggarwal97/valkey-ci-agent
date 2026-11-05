@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "7e63587f338645ee9d458d1f03d8f3400c115a6d",
+  "parent": "4990f212beeaef13acbd8d4060d9841245f78d6c",
+  "pr": 70,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Modify JSON Tests to allow connection to external server. (#70)",
+  "date": "2025-08-12",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2468,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only the module's Python integration-test harness (tst/integration/json_test_case.py, test_json_basic.py, test_rdb.py) to optionally connect to an external server via VALKEY_EXTERNAL_SERVER/VALKEY_HOST/VALKEY_PORT environment variables. No module source code is touched, so the built valkey-json artifact and every JSON command's behavior are identical on both builds; this is test/CI infrastructure with nothing for the fuzzer to exercise."
+}
