@@ -1,0 +1,107 @@
+extends: [valkey.liveness]
+id: proposed.json-merge-rfc7396
+deployment:
+  modes: [standalone]
+metadata:
+  description: JSON.MERGE RFC 7396 semantics, null stripping, error paths and RDB
+    round-trip, compared against the parent module build where the command does not
+    exist
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: merge
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [JSON.MERGE, doc, ".", '{"a":1,"b":2}'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [JSON.GET, doc], expect_difference: true, expect: {equals: '{"a":1,"b":2}'}}
+    - {command: [JSON.MERGE, doc, ".", '{"b":3,"c":4}'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [JSON.GET, doc], expect_difference: true, expect: {equals: '{"a":1,"b":3,"c":4}'}}
+    - {command: [JSON.MERGE, doc, ".", '{"b":null}'], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, doc], expect_difference: true, expect: {equals: '{"a":1,"c":4}'}}
+    - {command: [JSON.SET, nest, ".", '{"user":{"name":"John","age":30},"city":"NYC"}'],
+      expect: {equals: OK}}
+    - {command: [JSON.MERGE, nest, ".", '{"user":{"age":31,"email":"j@x"},"country":"USA"}'],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [JSON.GET, nest], expect_difference: true, expect: {equals: '{"user":{"name":"John","age":31,"email":"j@x"},"city":"NYC","country":"USA"}'}}
+    - {command: [JSON.MERGE, nest, ".user", '{"name":null,"z":{"k":[1,2]}}'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [JSON.GET, nest, ".user"], expect_difference: true, expect: {equals: '{"age":31,"email":"j@x","z":{"k":[1,2]}}'}}
+    - {command: [JSON.MERGE, nest, ".", '{}'], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, nest], expect_difference: true, expect: {equals: '{"user":{"age":31,"email":"j@x","z":{"k":[1,2]}},"city":"NYC","country":"USA"}'}}
+    - {command: [JSON.SET, arr, ".", '{"a":[1,2,3]}'], expect: {equals: OK}}
+    - {command: [JSON.MERGE, arr, ".a", '{"m":1}'], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, arr, ".a"], expect_difference: true, expect: {equals: '{"m":1}'}}
+    - {command: [JSON.MERGE, arr, ".a", '[9]'], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, arr], expect_difference: true, expect: {equals: '{"a":[9]}'}}
+    - {command: [JSON.MERGE, arr, ".", '"bar"'], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, arr], expect_difference: true, expect: {equals: '"bar"'}}
+    - {command: [JSON.MERGE, arr, ".", 'null'], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, arr], expect_difference: true, expect: {equals: 'null'}}
+    - {command: [JSON.SET, r1, ".", '{"a":[{"b":"c"}]}'], expect: {equals: OK}}
+    - {command: [JSON.MERGE, r1, ".", '{"a":[1]}'], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, r1], expect_difference: true, expect: {equals: '{"a":[1]}'}}
+    - {command: [JSON.SET, r2, ".", '{"e":null}'], expect: {equals: OK}}
+    - {command: [JSON.MERGE, r2, ".", '{"a":1}'], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, r2], expect_difference: true, expect: {equals: '{"e":null,"a":1}'}}
+    - {command: [JSON.SET, r3, ".", '[1,2]'], expect: {equals: OK}}
+    - {command: [JSON.MERGE, r3, ".", '{"a":"b","c":null}'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [JSON.GET, r3], expect_difference: true, expect: {equals: '{"a":"b"}'}}
+    - {command: [JSON.SET, r4, ".", '{}'], expect: {equals: OK}}
+    - {command: [JSON.MERGE, r4, ".", '{"a":{"bb":{"ccc":null}}}'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [JSON.GET, r4], expect_difference: true, expect: {equals: '{"a":{"bb":{}}}'}}
+    - {command: [JSON.MERGE, nk, ".", '{"x":null,"y":{"z":null,"w":1}}'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [JSON.GET, nk], expect_difference: true, expect: {equals: '{"y":{"w":1}}'}}
+    - {command: [JSON.MERGE, ns, ".", '[1,2,3]'], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, ns], expect_difference: true, expect: {equals: '[1,2,3]'}}
+    - {command: [JSON.MERGE, big64, ".", '{"i":9223372036854775807,"j":-9223372036854775808,"u":18446744073709551615}'],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [JSON.GET, big64], expect_difference: true, expect: {equals: '{"i":9223372036854775807,"j":-9223372036854775808,"u":18446744073709551615}'}}
+    - {command: [JSON.MERGE, dup, ".", '{"d":1,"d":2}'], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [JSON.MERGE, ek2, ".", '{"":1}'], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, ek2], expect_difference: true, expect: {equals: '{"":1}'}}
+    - {command: [JSON.MERGE, nokey, ".x", '{"a":1}'], expect_difference: true, expect: {
+        error: "SYNTAXERR"}}
+    - {command: [JSON.MERGE, nokey2, "", '{"a":1}'], expect_difference: true, expect: {
+        error: "SYNTAXERR"}}
+    - {command: [JSON.MERGE, doc, ".", "not json"], expect_difference: true, expect: {
+        error: true}}
+    - {command: [SET, plainstr, v], expect: {equals: OK}}
+    - {command: [JSON.MERGE, plainstr, ".", '{"a":1}'], expect_difference: true, expect: {
+        error: "WRONGTYPE"}}
+    - {command: [JSON.MERGE, doc, "."], expect_difference: true, expect: {error: true}}
+    - {command: [COMMAND, INFO, JSON.MERGE], expect_difference: true, expect: {exists: true}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [JSON.GET, doc], expect_difference: true, expect: {equals: '{"a":1,"c":4}'}}
+    - {command: [JSON.GET, nk], expect_difference: true, expect: {equals: '{"y":{"w":1}}'}}
+    - {command: [JSON.GET, nest], expect_difference: true, expect: {equals: '{"user":{"age":31,"email":"j@x","z":{"k":[1,2]}},"city":"NYC","country":"USA"}'}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [merge.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: merge}

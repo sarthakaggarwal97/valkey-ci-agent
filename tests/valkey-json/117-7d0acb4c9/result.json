@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "7d0acb4c9727b75ba84020e3a93efb94f0dc6968",
+  "parent": "dcaa82c2e182876d4ce1ac4ef08f569454d6c33d",
+  "pr": 117,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Making PR's run unstable and latest only, adding a daily job for all versions (#117)",
+  "date": "2026-07-31",
+  "unstable": "c86f6ee511e1a36488feb3b8e62093e69195d332",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.256,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only modifies the GitHub Actions CI workflow (which server-version matrix runs on PRs versus the daily schedule) and adds a SERVER_VERSION validation check to build.sh. No module source code, command behaviour, reply format, or data path is touched, so there is no runtime behaviour a fuzzer scenario could reach or regress."
+}

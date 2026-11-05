@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "dcaa82c2e182876d4ce1ac4ef08f569454d6c33d",
+  "parent": "5e2f9fd3161eebffeb18d4fc73bba7c1ded793cd",
+  "pr": 95,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "feat: JSON.MERGE plus unit and integration tests (#95)",
+  "date": "2026-07-01",
+  "unstable": "c86f6ee511e1a36488feb3b8e62093e69195d332",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 6,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.401,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: 4797 byte(s) leaked in 36 allocation(s). from rapidjson::GenericMember<rapidjson::UTF8<char>,",
+      "scenario": "ai-b730decaefee",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #95",
+      "fingerprint": "b354d2524b6e54186674",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42"
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: 4797 byte(s) leaked in 36 allocation(s). from rapidjson::GenericMember<rapidjson::UTF8<char>,",
+      "scenario": "ai-7b9f575c83d9",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #95",
+      "fingerprint": "b354d2524b6e54186674",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42"
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

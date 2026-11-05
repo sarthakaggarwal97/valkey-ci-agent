@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.json-merge-limits
+deployment:
+  modes: [standalone]
+metadata:
+  description: JSON.MERGE path and per-target document size limits, and all-or-nothing
+    atomicity when a multi-target merge is rejected, compared against the parent module
+    build
+components:
+- use: valkey.action.commands
+  id: limits
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, json.max-path-limit, "6"], expect: {equals: OK}}
+    - {command: [JSON.SET, pk, ".", '{"a":1}'], expect: {equals: OK}}
+    - {command: [JSON.MERGE, pk, ".", '{"l1":{"l2":{"l3":{"l4":{"l5":{"l6":{"l7":1}}}}}}}'],
+      expect_difference: true, expect: {error: "LIMIT"}}
+    - {command: [JSON.GET, pk], expect: {equals: '{"a":1}'}}
+    - {command: [JSON.MERGE, pk, ".", '{"b":{"c":1}}'], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, pk], expect_difference: true, expect: {equals: '{"a":1,"b":{"c":1}}'}}
+    - {command: [CONFIG, SET, json.max-path-limit, "128"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, json.max-document-size, "2048"], expect: {equals: OK}}
+    - {command: [JSON.SET, sz, ".", '{"a":{},"b":{},"c":{},"d":{}}'], expect: {equals: OK}}
+    - {command: [JSON.MERGE, sz, "$.*", '{"data":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}'],
+      expect_difference: true, expect: {error: "LIMIT"}}
+    - {command: [JSON.GET, sz], expect: {equals: '{"a":{},"b":{},"c":{},"d":{}}'}}
+    - {command: [JSON.MERGE, sz, "$.a", '{"data":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}'],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [JSON.OBJLEN, sz, ".a"], expect_difference: true, expect: {equals: 1}}
+    - {command: [CONFIG, SET, json.max-document-size, "1024"], expect: {equals: OK}}
+    - {command: [JSON.SET, ins, ".", '{"u":[{"p":{}},{}]}'], expect: {equals: OK}}
+    - {command: [JSON.MERGE, ins, "$.u[*].p", '{"data":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}'],
+      expect_difference: true, expect: {error: "LIMIT"}}
+    - {command: [JSON.GET, ins], expect: {equals: '{"u":[{"p":{}},{}]}'}}
+    - {command: [CONFIG, SET, json.max-document-size, "0"], expect: {equals: OK}}
+    - {command: [JSON.MERGE, ins, "$.u[*].p", '{"e":1,"t":null}'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [JSON.GET, ins], expect_difference: true, expect: {equals: '{"u":[{"p":{"e":1}},{"p":{"e":1}}]}'}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [limits.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: limits}

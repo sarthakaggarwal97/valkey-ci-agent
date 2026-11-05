@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-json 5e2f9fd3161e..dcaa82c2e182.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-dbc7725cc8eb
+seed: 105
+experiment:
+  id: proposed.json-merge-limits
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

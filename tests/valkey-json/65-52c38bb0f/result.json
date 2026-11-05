@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "52c38bb0f3403d7295b67cb70d49927ddb624f83",
+  "parent": "7d0acb4c9727b75ba84020e3a93efb94f0dc6968",
+  "pr": 65,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Correct spelling and terminology across JSON documentation and tests (#65)",
+  "date": "2026-08-12",
+  "unstable": "c86f6ee511e1a36488feb3b8e62093e69195d332",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.9217,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely spelling/terminology edits: README and test-file text, renamed unit/integration test functions, comment-only edits in json.cc, keytable, and the rapidjson headers, a macro renamed with an identical string value, a string inside trace() which is an empty macro (compiles to nothing), and a summary field in src/commands/json.mget.json that is never embedded in the module binary (SetCommandInfo only passes arity and key specs, so COMMAND DOCS output is unchanged). No runtime behavior, reply, error message, or persisted data differs between the two builds, so no scenario can ob"
+}

@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.json-merge-multipath
+deployment:
+  modes: [standalone]
+metadata:
+  description: JSON.MERGE wildcard and recursive-descent targets, ancestor-covers-descendant
+    skipping, mixed updates and inserts, path errors and keyspace notification, compared
+    against the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: multi
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, notify-keyspace-events, KEA], expect: {equals: OK}}
+    - {command: [SUBSCRIBE, "__keyevent@0__:json.merge"], connection: ev, expect: {
+        exists: true}}
+    - {command: [JSON.SET, w, ".", '{"users":[{"name":"Alice","meta":{"active":false}},{"name":"Bob","meta":{"active":false}}]}'],
+      expect: {equals: OK}}
+    - {command: [JSON.MERGE, w, "$..meta", '{"active":true,"upd":1}'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [JSON.GET, w, "$..meta"], expect_difference: true, expect: {equals: '[{"active":true,"upd":1},{"active":true,"upd":1}]'}}
+    - {command: [JSON.MERGE, w, "$..name", '"X"'], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, w, "$..name"], expect_difference: true, expect: {equals: '["X","X"]'}}
+    - {connection: ev, read: true, expect_difference: true, expect: {exists: true}}
+    - {command: [JSON.SET, o, ".", '{"a":{"a":1}}'], expect: {equals: OK}}
+    - {command: [JSON.MERGE, o, "$..a", "5"], expect_difference: true, expect: {equals: OK}}
+    - {command: [JSON.GET, o], expect_difference: true, expect: {equals: '{"a":5}'}}
+    - {command: [JSON.SET, o2, ".", '{"a":{"a":1}}'], expect: {equals: OK}}
+    - {command: [JSON.MERGE, o2, "$..a", '{"x":2}'], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, o2], expect_difference: true, expect: {equals: '{"a":{"a":1,"x":2}}'}}
+    - {command: [JSON.SET, dj, ".", '{"x":{"v":1},"y":{"v":2}}'], expect: {equals: OK}}
+    - {command: [JSON.MERGE, dj, "$..v", "9"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, dj, "$..v"], expect_difference: true, expect: {equals: '[9,9]'}}
+    - {command: [JSON.SET, m, ".", '{"users":[{"id":1,"p":{"e":"a"}},{"id":2}]}'],
+      expect: {equals: OK}}
+    - {command: [JSON.MERGE, m, "$.users[*].p", '{"ph":"1","tmp":null}'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [JSON.GET, m], expect_difference: true, expect: {equals: '{"users":[{"id":1,"p":{"e":"a","ph":"1"}},{"id":2,"p":{"ph":"1"}}]}'}}
+    - {command: [JSON.SET, l, ".", '{"u":{}}'], expect: {equals: OK}}
+    - {command: [JSON.MERGE, l, ".u.bob", '{"e":"x","t":null}'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [JSON.GET, l, ".u.bob"], expect_difference: true, expect: {equals: '{"e":"x"}'}}
+    - {command: [JSON.MERGE, l, "$.u.bob.e", '"y"'], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, l, ".u.bob"], expect_difference: true, expect: {equals: '{"e":"y"}'}}
+    - {command: [JSON.MERGE, l, ".u.v.w", "1"], expect_difference: true, expect: {
+        error: "NONEXISTENT"}}
+    - {command: [JSON.MERGE, newk, "$..f", "1"], expect_difference: true, expect: {
+        error: "SYNTAXERR"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [multi.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: multi}
