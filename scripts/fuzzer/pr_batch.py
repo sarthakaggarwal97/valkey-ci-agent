@@ -130,8 +130,8 @@ MODULES = {
         # build.sh takes the Valkey build's valkeymodule.h since 2026. Before, it fetched the header of
         # SERVER_VERSION itself, and a parallel build could compile before the header landed, so it is put in
         # place first; and it also ran the module's own tests, from a test framework commit that is gone, so only
-        # the module is built, with its own flags but -Werror, which fails on what newer GCC warns of. Older
-        # RapidJSON asks for a CMake older than CMake 4 accepts.
+        # the module is built. Its flags end in -Werror, which fails on what newer GCC warns of: a build type of
+        # its own adds -Wno-error after them. Older RapidJSON asks for a CMake older than CMake 4 accepts.
         build="""export CMAKE_POLICY_VERSION_MINIMUM=3.5
 mkdir -p src/include && cp "${VALKEY_SRC}/src/valkeymodule.h" src/include/
 if grep -q VALKEY_MODULE_H_PATH build.sh; then
@@ -139,7 +139,7 @@ if grep -q VALKEY_MODULE_H_PATH build.sh; then
 else
   mkdir -p build && cd build
   cmake .. -DVALKEY_VERSION=unstable -DENABLE_UNIT_TESTS=OFF -DENABLE_INTEGRATION_TESTS=OFF \
-    -DCFLAGS="-g -O3 -fno-omit-frame-pointer -Wall -Wextra"
+    -DCMAKE_BUILD_TYPE=Walk -DCMAKE_C_FLAGS_WALK=-Wno-error -DCMAKE_CXX_FLAGS_WALK=-Wno-error
   make -j"$(nproc)" json
 fi""",
         note="For valkey-json, give JSON.GET `compare: json`: both replies are parsed and compared as JSON "
