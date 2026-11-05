@@ -127,7 +127,13 @@ MODULES = {
     "valkey-json": Module(
         branch="unstable", file="build/src/libjson.so",
         setup="command -v cmake > /dev/null || sudo apt-get install -y cmake",
-        build='SERVER_VERSION=unstable VALKEY_MODULE_H_PATH="${VALKEY_SRC}/src/valkeymodule.h" ./build.sh',
+        # build.sh takes the Valkey build's valkeymodule.h since 2026; before, it fetched the header of
+        # SERVER_VERSION itself.
+        build="""if grep -q VALKEY_MODULE_H_PATH build.sh; then
+  SERVER_VERSION=unstable VALKEY_MODULE_H_PATH="${VALKEY_SRC}/src/valkeymodule.h" ./build.sh
+else
+  SERVER_VERSION=unstable ./build.sh
+fi""",
         note="For valkey-json, give JSON.GET `compare: json`: both replies are parsed and compared as JSON "
              "values, so key order and spacing do not count.",
     ),
