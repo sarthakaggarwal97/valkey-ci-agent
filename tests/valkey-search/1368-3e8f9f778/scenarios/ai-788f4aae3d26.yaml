@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 5da3b130b1a1..3e8f9f778412.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-788f4aae3d26
+seed: 3
+experiment:
+  id: proposed.ft-max-timeout-rewrite-restart
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.ft-max-timeout-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: search.max-timeout-ms caps TIMEOUT for FT.SEARCH and FT.AGGREGATE;
+    parent has no such config
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC,
+        t, TAG], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", n, 1, t, alpha], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", n, 2, t, beta], expect: {equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: "doc:2"}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, TIMEOUT, 60000], compare: unordered,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, TIMEOUT, 60001], expect: {error: "cannot\
+          \ exceed 60000"}}
+    - {command: [CONFIG, SET, search.max-timeout-ms, 100], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT], expect_difference: true, expect: {
+        error: "cannot exceed 100"}}
+    - {command: [CONFIG, SET, search.default-timeout-ms, 50], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT], compare: unordered, expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, TIMEOUT, 100], compare: unordered,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, TIMEOUT, 101], expect_difference: true,
+      expect: {error: "cannot exceed 100"}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, TIMEOUT, 4294967296], expect_difference: true,
+      expect: {error: "cannot exceed 100"}}
+    - {command: [FT.AGGREGATE, idx, "*", GROUPBY, 0, REDUCE, COUNT, 0, AS, cnt, TIMEOUT,
+        101], expect_difference: true, expect: {error: "cannot exceed 100"}}
+    - {command: [FT.AGGREGATE, idx, "*", GROUPBY, 0, REDUCE, COUNT, 0, AS, cnt, TIMEOUT,
+        100], compare: skip, expect: {exists: true}}
+    - {command: [CONFIG, SET, search.max-timeout-ms, 0], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.max-timeout-ms, 60001], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.max-timeout-ms, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, TIMEOUT, 2], expect_difference: true,
+      expect: {error: "cannot exceed 1"}}
+    - {command: [CONFIG, SET, search.max-timeout-ms, 60000], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, TIMEOUT, 60000], compare: unordered,
+      expect: {contains: "doc:1"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

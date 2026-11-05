@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 024955289ed7..df38d5f17d49.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-806e3dadb7ac
+seed: 3
+experiment:
+  id: proposed.vector-registry-multidb
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.ft-bfloat16-cosine-conflicts
+deployment:
+  modes: [standalone]
+metadata:
+  description: BFLOAT16 HNSW indexes, the FLOAT16 cosine normalization path including
+    the zero-magnitude guard, and the self- and cross-index vector-type conflict validation,
+    compared against the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bf16
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [FT.CREATE, idxb, ON, HASH, PREFIX, 1, 'b:', SCHEMA, v, VECTOR, HNSW,
+        10, TYPE, BFLOAT16, DIM, 2, DISTANCE_METRIC, L2, M, 4, EF_CONSTRUCTION, 32],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [HSET, 'b:1', v, !!binary 'gD8AAA=='], expect: {equals: 1}}
+    - {command: [HSET, 'b:2', v, !!binary 'AACAPw=='], expect: {equals: 1}}
+    - {command: [HSET, 'b:3', v, !!binary 'AEAAQA=='], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idxb, '*', LIMIT, 0, 0], wait_s: 20, expect_difference: true,
+      expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idxb, '*=>[KNN 2 @v $q AS score]', PARAMS, 2, q, !!binary 'gD8AAA==',
+        RETURN, 1, score], expect_difference: true, expect: {equals: [2, 'b:1', [
+            score, '0'], 'b:2', [score, '2']]}}
+    - {command: [FT.INFO, idxb], expect_difference: true, expect: {contains: BFLOAT16}}
+    - {command: [FT.CREATE, cos16, ON, HASH, PREFIX, 1, 'c:', SCHEMA, v, VECTOR, FLAT,
+        6, TYPE, FLOAT16, DIM, 2, DISTANCE_METRIC, COSINE], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [HSET, 'c:1', v, !!binary 'ADwAAA=='], expect: {equals: 1}}
+    - {command: [HSET, 'c:2', v, !!binary 'ADwAPA=='], expect: {equals: 1}}
+    - {command: [HSET, 'c:3', v, !!binary 'ALwAAA=='], expect: {equals: 1}}
+    - {command: [HSET, 'c:4', v, !!binary 'AAAAAA=='], expect: {equals: 1}}
+    - {command: [FT.SEARCH, cos16, '*', LIMIT, 0, 0], wait_s: 20, expect_difference: true,
+      expect: {equals: [4]}}
+    - {command: [FT.SEARCH, cos16, '*=>[KNN 4 @v $q]', PARAMS, 2, q, !!binary 'ADwAAA==',
+        NOCONTENT], expect_difference: true, expect: {equals: [4, 'c:1', 'c:2', 'c:4',
+          'c:3']}}
+    - {command: [FT.CREATE, dup, ON, HASH, PREFIX, 1, 'd:', SCHEMA, v, AS, a1, VECTOR,
+        FLAT, 6, TYPE, FLOAT16, DIM, 2, DISTANCE_METRIC, L2, v, AS, a2, VECTOR, FLAT,
+        6, TYPE, BFLOAT16, DIM, 2, DISTANCE_METRIC, L2], expect_difference: true,
+      expect: {error: 'declared as both'}}
+    - {command: [FT.CREATE, bconf, ON, HASH, PREFIX, 1, 'b:', SCHEMA, v, VECTOR, FLAT,
+        6, TYPE, FLOAT16, DIM, 2, DISTANCE_METRIC, L2], expect_difference: true, expect: {
+        error: 'already indexed as BFLOAT16'}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bf16.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bf16}

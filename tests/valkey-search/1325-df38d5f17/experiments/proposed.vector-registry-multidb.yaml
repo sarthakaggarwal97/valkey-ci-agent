@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.vector-registry-multidb
+deployment:
+  modes: [standalone]
+metadata:
+  description: Multi-DB isolation of VectorRegistry - FLUSHDB of one DB preserving
+    another, MOVE of indexed keys to a DB with a matching index, to a DB without one,
+    round trip, and SWAPDB - with hash value integrity checked after each transition
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: multidb
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [CONFIG, GET, search.vector-unshare-batch-size], expect_difference: true,
+      expect: {contains: search.vector-unshare-batch-size}}
+    - {command: [FT.CREATE, idx0, ON, HASH, PREFIX, "1", "doc:", SCHEMA, vec, VECTOR,
+        HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, "1", "doc:", SCHEMA, vec, VECTOR,
+        HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:b", vec, "11111111"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx1, "*=>[KNN 10 @vec $q]", NOCONTENT, PARAMS, "2", q,
+        "11111111", DIALECT, "2"], wait_s: 30, compare: unordered, expect: {contains: "doc:b"}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [HSET, "doc:a", vec, "00000000"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx0, "*=>[KNN 10 @vec $q]", NOCONTENT, PARAMS, "2", q,
+        "00000000", DIALECT, "2"], wait_s: 30, compare: unordered, expect: {contains: "doc:a"}}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [HGET, "doc:b", vec], expect: {equals: "11111111"}}
+    - {command: [FT.SEARCH, idx1, "*=>[KNN 10 @vec $q]", NOCONTENT, PARAMS, "2", q,
+        "11111111", DIALECT, "2"], wait_s: 30, compare: unordered, expect: {contains: "doc:b"}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [HSET, "doc:a", vec, "00000000"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx0, "*=>[KNN 10 @vec $q]", NOCONTENT, PARAMS, "2", q,
+        "00000000", DIALECT, "2"], wait_s: 30, compare: unordered, expect: {contains: "doc:a"}}
+    - {command: [MOVE, "doc:a", "1"], expect: {equals: 1}}
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [HGET, "doc:a", vec], expect: {equals: "00000000"}}
+    - {command: [FT.SEARCH, idx1, "*=>[KNN 10 @vec $q]", NOCONTENT, PARAMS, "2", q,
+        "00000000", DIALECT, "2"], wait_s: 30, compare: unordered, expect: {contains: "doc:a"}}
+    - {command: [MOVE, "doc:a", "0"], expect: {equals: 1}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [HGET, "doc:a", vec], expect: {equals: "00000000"}}
+    - {command: [FT.SEARCH, idx0, "*=>[KNN 10 @vec $q]", NOCONTENT, PARAMS, "2", q,
+        "00000000", DIALECT, "2"], wait_s: 30, compare: unordered, expect: {contains: "doc:a"}}
+    - {command: [MOVE, "doc:a", "2"], expect: {equals: 1}}
+    - {command: [SELECT, "2"], expect: {equals: OK}}
+    - {command: [HGET, "doc:a", vec], expect: {equals: "00000000"}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [SWAPDB, "1", "2"], expect: {equals: OK}}
+    - {command: [SELECT, "2"], expect: {equals: OK}}
+    - {command: [HGET, "doc:b", vec], expect: {equals: "11111111"}}
+    - {command: [FT.SEARCH, idx1, "*=>[KNN 10 @vec $q]", NOCONTENT, PARAMS, "2", q,
+        "11111111", DIALECT, "2"], wait_s: 30, compare: unordered, expect: {contains: "doc:b"}}
+    - {command: [FT._DEBUG, VECTOR_SHARING_STATS], expect_difference: true, expect: {
+        contains: pending_unshare_cnt}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [FT._DEBUG, VECTOR_SHARING_STATS], expect_difference: true, expect: {
+        contains: pending_unshare_cnt}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [multidb.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: multidb}

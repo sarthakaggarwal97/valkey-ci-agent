@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ad9ea08b546b5fc066752a37accfea8d4c5932e2",
+  "parent": "a450bf9c806ba1c86da5e88dfc31b504c1688b0d",
+  "pr": 1374,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "vmsdk: keep std symbols local in versionscript.lds required due to recent change in allocation strategy (#1374)",
+  "date": "2026-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.2979,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

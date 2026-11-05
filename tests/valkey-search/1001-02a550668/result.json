@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "02a550668352c9b6798370b4fd529e817e423b6c",
+  "parent": "9e8fec7e0841344bf37aa48843a5f1203bf6addb",
+  "pr": 1001,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Implement FLOAT16 and BFLOAT16 (#1001)",
+  "date": "2026-09-07",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 6,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.4656,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

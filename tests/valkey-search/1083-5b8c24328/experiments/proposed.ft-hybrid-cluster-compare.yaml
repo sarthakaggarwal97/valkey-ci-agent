@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.ft-hybrid-cluster-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.HYBRID fanout, LOCALONLY, single-slot routing vs parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hc
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: true
+    nodes: 3
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, i, ON, HASH, PREFIX, 1, 'd:', SCHEMA, t, TEXT, v, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2]}
+    - {command: [HSET, 'd:1', t, hey, v, !!binary "AACAPwAAAAA="]}
+    - {command: [HSET, 'd:2', t, hey, v, !!binary "AAAAQAAAAAA="]}
+    - {command: [FT.SEARCH, i, hey, NOCONTENT, LIMIT, 0, 0], wait_s: 60, expect: {
+        equals: [2]}}
+    - {command: [FT.HYBRID, i, SEARCH, hey, VSIM, '@v', $q, LOCALONLY, GROUPBY, 0,
+        REDUCE, COUNT, 0, AS, c, PARAMS, 2, q, !!binary "AACAPwAAAAA="], expect_difference: true,
+      expect: {equals: [1, [c, '2']]}}
+    - {command: [FT.HYBRID, i, SEARCH, hey, VSIM, '@v', $q, LOCALONLY, PARAMS, 2,
+        q, !!binary "AACAPwAAAAA="], node: 1, expect_difference: true, expect: {equals: [
+          0]}}
+    - {command: [FT.HYBRID, i, SEARCH, hey, VSIM, '@v', $q, LOAD, 1, '@__key', SORTBY,
+        2, '@__key', ASC, PARAMS, 2, q, !!binary "AACAPwAAAAA="], node: 1, expect_difference: true,
+      expect: {equals: [2, ['__key', 'd:1'], ['__key', 'd:2']]}}
+    - {command: [FT.CREATE, j, ON, HASH, PREFIX, 1, '{t}:', SCHEMA, t, TEXT, v, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2]}
+    - {command: [HSET, '{t}:1', t, hey, v, !!binary "AACAPwAAAAA="]}
+    - {command: [FT.SEARCH, j, hey, NOCONTENT, LIMIT, 0, 0], wait_s: 60, expect: {
+        equals: [1]}}
+    - {command: [FT.HYBRID, j, SEARCH, hey, VSIM, '@v', $q, GROUPBY, 0, REDUCE, COUNT,
+        0, AS, c, PARAMS, 2, q, !!binary "AACAPwAAAAA="], node: 1, expect_difference: true,
+      expect: {equals: [1, [c, '1']]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [hc.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hc}

@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.search-allocator-fork-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: BGSAVE forks while the text index mutation queue is busy, with an index
+    drop during a second save, on two builds of the valkey-search module; drives the
+    new allocator under fork copy-on-write and concurrent rax churn
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 180
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'k:', SCHEMA, txt, TEXT, WITHSUFFIXTRIE,
+        num, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, 'k:1', txt, 'first wave of documents filling the radix tree
+          with many distinct tokens one two three four five', num, 1], expect: {equals: 2}}
+    - {command: [HSET, 'k:2', txt, 'second wave six seven eight nine ten eleven twelve
+          thirteen fourteen fifteen', num, 2], expect: {equals: 2}}
+    - {command: [HSET, 'k:3', txt, 'third wave sixteen seventeen eighteen nineteen
+          twenty twentyone twentytwo', num, 3], expect: {equals: 2}}
+    - {command: [HSET, 'k:4', txt, 'fourth wave sharing prefixes twentythree twentyfour
+          twentyfive twentysix', num, 4], expect: {equals: 2}}
+    - {command: [HSET, 'k:5', txt, 'fifth wave sharing suffixes alignment realignment
+          assignment consignment', num, 5], expect: {equals: 2}}
+    - {command: [BGSAVE], expect: {contains: 'Background saving'}}
+    - {command: [HSET, 'k:6', txt, 'written while the save child holds a copy of the
+          heap pages', num, 6], expect: {equals: 2}}
+    - {command: [HSET, 'k:1', txt, 'first document rewritten entirely with new vocabulary
+          reallocating its postings'], expect: {equals: 0}}
+    - {command: [DEL, 'k:2'], expect: {equals: 1}}
+    - {command: [HSET, 'k:7', txt, 'more churn during the fork seventeen eighteen
+          overlap overlap overlap overlap overlap overlap', num, 7], expect: {equals: 2}}
+    - {command: [HSET, 'k:8', txt, '', num, 8], expect: {equals: 2}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 60, expect: {contains: 'rdb_bgsave_in_progress:0'}}
+    - {command: [FT.SEARCH, idx, '*', NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [7]}}
+    - {command: [FT.SEARCH, idx, '@txt:overlap', NOCONTENT], expect: {equals: [1,
+          'k:7']}}
+    - {command: [FT.SEARCH, idx, '@txt:*ment', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@txt:wave', NOCONTENT], compare: unordered}
+    - {command: [BGSAVE], expect: {contains: 'Background saving'}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 60, expect: {contains: 'rdb_bgsave_in_progress:0'}}
+    - {command: [INFO, persistence], compare: skip, expect: {contains: 'rdb_last_bgsave_status:ok'}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'k:', SCHEMA, txt, TEXT, num,
+        NUMERIC], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '*', NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [7]}}
+    - {command: [FT.SEARCH, idx, '@txt:rewritten', NOCONTENT], expect: {equals: [
+          1, 'k:1']}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

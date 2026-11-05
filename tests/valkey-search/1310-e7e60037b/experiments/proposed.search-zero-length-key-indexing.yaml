@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.search-zero-length-key-indexing
+deployment:
+  modes: [standalone]
+metadata:
+  description: A zero-length key is indexed by valkey-search via backfill and live
+    keyspace notifications, across text/tag/numeric and HNSW vector indexes, and untracked
+    on DEL; the parent build skips it
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zerokey
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [HSET, "", content, backfilltoken, cat, books, price, "19.99"], expect: {
+        equals: 3}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "", SCHEMA, content, TEXT,
+        NOSTEM, cat, TAG, price, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, "@content:backfilltoken", NOCONTENT], wait_s: 10,
+      expect_difference: true, expect: {equals: [1, ""]}}
+    - {command: [FT.SEARCH, idx, "@cat:{books} @price:[19 20]", NOCONTENT], expect_difference: true,
+      expect: {equals: [1, ""]}}
+    - {command: [FT.SEARCH, idx, "@content:backfilltoken", RETURN, "1", content],
+      expect_difference: true, expect: {equals: [1, "", [content, backfilltoken]]}}
+    - {command: [HSET, "", content, livetoken], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@content:livetoken", NOCONTENT], wait_s: 10, expect_difference: true,
+      expect: {equals: [1, ""]}}
+    - {command: [FT.SEARCH, idx, "@content:backfilltoken", NOCONTENT], expect: {equals: [
+          0]}}
+    - {command: [DEL, ""], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@content:livetoken", NOCONTENT], wait_s: 10, expect: {
+        equals: [0]}}
+    - {command: [FT.CREATE, vidx, ON, HASH, PREFIX, "1", "", SCHEMA, v, VECTOR, HNSW,
+        "10", TYPE, FLOAT32, DIM, "3", DISTANCE_METRIC, L2, M, "2", EF_CONSTRUCTION,
+        "1"], expect: {equals: OK}}
+    - {command: [FT.INFO, vidx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [HSET, "", v, !!binary "AACAPwAAAEAAAEBA"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, vidx, "*=>[KNN 1 @v $BLOB]", PARAMS, "2", BLOB, !!binary "AACAPwAAAEAAAEBA",
+        NOCONTENT], wait_s: 10, expect_difference: true, expect: {equals: [1, ""]}}
+    - {command: [HSET, "", v, !!binary "AACAQAAAoEAAAMBA"], expect: {equals: 0}}
+    - {command: [FT.SEARCH, vidx, "*=>[KNN 1 @v $BLOB]", PARAMS, "2", BLOB, !!binary "AACAQAAAoEAAAMBA",
+        NOCONTENT], wait_s: 10, expect_difference: true, expect: {equals: [1, ""]}}
+    - {command: [DEL, ""], expect: {equals: 1}}
+    - {command: [FT.SEARCH, vidx, "*=>[KNN 1 @v $BLOB]", PARAMS, "2", BLOB, !!binary "AACAQAAAoEAAAMBA",
+        NOCONTENT], wait_s: 10, expect: {equals: [0]}}
+    - {command: [FT.INFO, vidx], expect: {contains: ready}, compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [zerokey.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zerokey}

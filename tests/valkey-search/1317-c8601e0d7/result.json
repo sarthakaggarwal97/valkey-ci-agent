@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "c8601e0d7ffeee431dd86e814683130fea652333",
+  "parent": "d8dd200c2ce07e78dba0a8b9c69cb1bffe94dbd9",
+  "pr": 1317,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Follow-ups from #1268 (the PR search benchmark workflow) (#1317)",
+  "date": "2026-09-08",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2694,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only CI and build tooling: the search-benchmark-pr.yml GitHub Actions workflow (runner label change, trusted checkout of CI scripts, cleanup of the checkout directory) and a new ci/install_deps.sh script that installs build dependencies and the GCC toolchain on Amazon Linux 2023. No valkey-search module source, command behaviour, replies, persistence, replication, or server-visible behaviour changes, so no scenario can exercise it and none is needed."
+}

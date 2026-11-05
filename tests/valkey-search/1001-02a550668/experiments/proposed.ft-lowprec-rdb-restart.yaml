@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.ft-lowprec-rdb-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: FLOAT16 HNSW and BFLOAT16 FLAT indexes saved with SAVE and reloaded
+    across a restart, exercising the new templated LoadFromRDB factory and the kRelease13
+    version stamping, compared against the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 300
+    commands:
+    - {command: [FT.CREATE, idx16, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, v, VECTOR,
+        HNSW, 10, TYPE, FLOAT16, DIM, 2, DISTANCE_METRIC, L2, M, 4, EF_CONSTRUCTION,
+        32], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idxb, ON, HASH, PREFIX, 1, 'b:', SCHEMA, v, VECTOR, FLAT,
+        6, TYPE, BFLOAT16, DIM, 2, DISTANCE_METRIC, L2], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', v, !!binary 'ADwAAA=='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:2', v, !!binary 'AAAAPA=='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:3', v, !!binary 'AEAAQA=='], expect: {equals: 1}}
+    - {command: [HSET, 'b:1', v, !!binary 'gD8AAA=='], expect: {equals: 1}}
+    - {command: [HSET, 'b:2', v, !!binary 'AACAPw=='], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx16, '*', LIMIT, 0, 0], wait_s: 20, expect_difference: true,
+      expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idxb, '*', LIMIT, 0, 0], wait_s: 20, expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx16, '*', LIMIT, 0, 0], wait_s: 30, expect_difference: true,
+      expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idxb, '*', LIMIT, 0, 0], wait_s: 30, expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx16, '*=>[KNN 2 @v $q AS score]', PARAMS, 2, q, !!binary 'ADwAAA==',
+        RETURN, 1, score], expect_difference: true, expect: {equals: [2, 'doc:1',
+          [score, '0'], 'doc:2', [score, '2']]}}
+    - {command: [FT.SEARCH, idxb, '*=>[KNN 2 @v $q AS score]', PARAMS, 2, q, !!binary 'gD8AAA==',
+        RETURN, 1, score], expect_difference: true, expect: {equals: [2, 'b:1', [
+            score, '0'], 'b:2', [score, '2']]}}
+    - {command: [FT.INFO, idx16], expect_difference: true, expect: {contains: FLOAT16}}
+    - {command: [FT.INFO, idxb], expect_difference: true, expect: {contains: BFLOAT16}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

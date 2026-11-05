@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "1e41c0a9d293b60d4becda19a76ecf953996bf53",
+  "parent": "02a550668352c9b6798370b4fd529e817e423b6c",
+  "pr": 1345,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Scoring: score all-text OR by fanning out fetchers instead of building a OR composite iterator (#1345)",
+  "date": "2026-09-08",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.5909,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-3e1592e42239",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-482ecd30eb78",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

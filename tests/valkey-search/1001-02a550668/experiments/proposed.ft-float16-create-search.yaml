@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.ft-float16-create-search
+deployment:
+  modes: [standalone]
+metadata:
+  description: FLOAT16 vector indexes (HNSW and FLAT) across FT.CREATE, ingest, KNN
+    search, FT.INFO, and the new conflicting-vector-type validation, compared against
+    the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fp16
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [FT.CREATE, idx16, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, v, VECTOR,
+        HNSW, 10, TYPE, FLOAT16, DIM, 2, DISTANCE_METRIC, L2, M, 4, EF_CONSTRUCTION,
+        32], expect_difference: true, expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', v, !!binary 'ADwAAA=='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:2', v, !!binary 'AAAAPA=='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:3', v, !!binary 'AEAAQA=='], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx16, '*', LIMIT, 0, 0], wait_s: 20, expect_difference: true,
+      expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx16, '*=>[KNN 2 @v $q AS score]', PARAMS, 2, q, !!binary 'ADwAAA==',
+        RETURN, 1, score], expect_difference: true, expect: {equals: [2, 'doc:1',
+          [score, '0'], 'doc:2', [score, '2']]}}
+    - {command: [FT.INFO, idx16], expect_difference: true, expect: {contains: FLOAT16}}
+    - {command: [FT.CREATE, flat16, ON, HASH, PREFIX, 1, 'p:', SCHEMA, v, VECTOR,
+        FLAT, 6, TYPE, FLOAT16, DIM, 2, DISTANCE_METRIC, L2], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [HSET, 'p:1', v, !!binary 'ADwAAA=='], expect: {equals: 1}}
+    - {command: [HSET, 'p:2', v, !!binary 'AAAAPA=='], expect: {equals: 1}}
+    - {command: [FT.SEARCH, flat16, '*', LIMIT, 0, 0], wait_s: 20, expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, flat16, '*=>[KNN 2 @v $q AS score]', PARAMS, 2, q, !!binary 'ADwAAA==',
+        RETURN, 1, score], expect_difference: true, expect: {equals: [2, 'p:1', [
+            score, '0'], 'p:2', [score, '2']]}}
+    - {command: [FT.CREATE, idx32, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, v, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect_difference: true,
+      expect: {error: 'already indexed as FLOAT16'}}
+    - {command: [FT.CREATE, other32, ON, HASH, PREFIX, 1, 'zz:', SCHEMA, v, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, badtype, ON, HASH, PREFIX, 1, 'bt:', SCHEMA, v, VECTOR,
+        FLAT, 6, TYPE, FLOAT8, DIM, 2, DISTANCE_METRIC, L2], expect: {error: 'Unknown
+          argument'}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [fp16.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fp16}

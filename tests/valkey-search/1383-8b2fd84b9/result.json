@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "8b2fd84b957950282bab15a4ba399b80bd72d735",
+  "parent": "207aa05913eecbcc30425fdbbd356611c9f3f78a",
+  "pr": 1383,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Install gcc14 static libstdc++ for benchmark builds due to #1360 (#1383)",
+  "date": "2026-09-11",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2072,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only ci/install_deps.sh, installing the gcc14-libstdc++-static package and asserting that libstdc++.a exists so CI benchmark builds can link statically. It is purely a build/CI infrastructure change with no modification to module code, commands, replies, persistence, or replication, so no runtime behavior changed and no fuzzer scenario can exercise it."
+}

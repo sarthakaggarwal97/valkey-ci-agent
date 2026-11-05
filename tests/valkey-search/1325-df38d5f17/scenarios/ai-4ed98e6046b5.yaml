@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 024955289ed7..df38d5f17d49.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4ed98e6046b5
+seed: 5
+experiment:
+  id: proposed.vector-registry-rename
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7400

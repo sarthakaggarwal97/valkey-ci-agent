@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search df38d5f17d49..a450bf9c806b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f69873d04cf3
+seed: 101
+experiment:
+  id: proposed.search-multi-fork-deadlock
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

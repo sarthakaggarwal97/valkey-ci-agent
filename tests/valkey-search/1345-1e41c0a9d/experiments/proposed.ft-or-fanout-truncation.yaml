@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.ft-or-fanout-truncation
+deployment:
+  modes: [standalone]
+metadata:
+  description: All-text OR under a tiny max-nonvector-search-results-fetched, driving
+    the max_keys break against the seen_at try_emplace left one past the end
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: trunc
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, '1', 'doc:', SCHEMA, body, TEXT,
+        NOSTEM], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', body, 'hello world one two three'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:2', body, 'hello world one two three hello'], expect: {
+        equals: 1}}
+    - {command: [HSET, 'doc:3', body, 'hello world one two three hello hello'], expect: {
+        equals: 1}}
+    - {command: [HSET, 'doc:4', body, 'hello world one two three hello hello hello
+          hello'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:5', body, 'hello hello hello hello'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:6', body, 'world rare unique document'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:7', body, 'hello world one two three hello'], expect: {
+        equals: 1}}
+    - {command: [HSET, 'doc:8', body, 'rare'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, 'hello | rare', NOCONTENT, LIMIT, '0', '20'], wait_s: 30,
+      expect: {contains: 8}, compare: skip}
+    - {command: [FT.SEARCH, idx, 'hello | (rare | unique)', NOCONTENT, WITHSCORES,
+        LIMIT, '0', '20'], expect: {contains: 'doc:6'}}
+    - {command: [CONFIG, SET, 'search.max-nonvector-search-results-fetched', '4'],
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, 'hello | rare', NOCONTENT, WITHSCORES, LIMIT, '0',
+        '20'], compare: skip, expect: {exists: true}}
+    - {command: [FT.SEARCH, idx, 'hello | (rare | unique)', NOCONTENT, WITHSCORES,
+        LIMIT, '0', '20'], compare: skip, expect: {exists: true}}
+    - {command: [FT.SEARCH, idx, 'world | rare', NOCONTENT, WITHSCORES, LIMIT, '2',
+        '10'], compare: skip, expect: {exists: true}}
+    - {command: [FT.SEARCH, idx, '(hello world) | rare | unique | document', NOCONTENT,
+        WITHSCORES, LIMIT, '0', '10'], compare: skip, expect: {exists: true}}
+    - {command: [CONFIG, SET, 'search.max-nonvector-search-results-fetched', '1'],
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, 'world | rare', NOCONTENT, WITHSCORES, LIMIT, '0',
+        '10'], compare: skip, expect: {exists: true}}
+    - {command: [CONFIG, SET, 'search.max-nonvector-search-results-fetched', '0'],
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, 'hello | rare', NOCONTENT, WITHSCORES, LIMIT, '0',
+        '10'], compare: skip, expect: {exists: true}}
+    - {command: [CONFIG, SET, 'search.max-nonvector-search-results-fetched', '100000'],
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, 'hello | rare', NOCONTENT, WITHSCORES, LIMIT, '0',
+        '20'], expect: {contains: 'doc:6'}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [trunc.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: trunc}

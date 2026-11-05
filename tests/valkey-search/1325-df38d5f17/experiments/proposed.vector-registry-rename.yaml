@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.vector-registry-rename
+deployment:
+  modes: [standalone]
+metadata:
+  description: RENAME transitions through the new ProcessMoveNotification and MoveKey
+    paths - multi-vector rename overwriting another indexed key, rename out of the
+    prefix (unshare), unindexed hash renamed over an indexed key, rename into a schema
+    with a different attribute name - hash bytes verified intact after each
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ren
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [CONFIG, GET, search.vector-unshare-batch-size], expect_difference: true,
+      expect: {contains: search.vector-unshare-batch-size}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, vec_a, VECTOR,
+        HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2, vec_b, VECTOR, FLAT,
+        "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:src", vec_a, "00000000", vec_b, "11111111"], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:dst", vec_a, "22222222"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec_a $q]", NOCONTENT, PARAMS, "2",
+        q, "00000000", DIALECT, "2"], wait_s: 30, compare: unordered, expect: {contains: "doc:src"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec_a $q]", NOCONTENT, PARAMS, "2",
+        q, "22222222", DIALECT, "2"], wait_s: 30, compare: unordered, expect: {contains: "doc:dst"}}
+    - {command: [RENAME, "doc:src", "doc:dst"], expect: {equals: OK}}
+    - {command: [HGET, "doc:dst", vec_a], expect: {equals: "00000000"}}
+    - {command: [HGET, "doc:dst", vec_b], expect: {equals: "11111111"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec_a $q]", NOCONTENT, PARAMS, "2",
+        q, "00000000", DIALECT, "2"], wait_s: 30, compare: unordered, expect: {contains: "doc:dst"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec_b $q]", NOCONTENT, PARAMS, "2",
+        q, "11111111", DIALECT, "2"], wait_s: 30, compare: unordered, expect: {contains: "doc:dst"}}
+    - {command: [RENAME, "doc:dst", "outside:1"], expect: {equals: OK}}
+    - {command: [HGET, "outside:1", vec_a], expect: {equals: "00000000"}}
+    - {command: [HGET, "outside:1", vec_b], expect: {equals: "11111111"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec_a $q]", NOCONTENT, PARAMS, "2",
+        q, "00000000", DIALECT, "2"], wait_s: 30, expect: {equals: [0]}}
+    - {command: [HSET, "doc:t", vec_a, "33333333"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec_a $q]", NOCONTENT, PARAMS, "2",
+        q, "33333333", DIALECT, "2"], wait_s: 30, compare: unordered, expect: {contains: "doc:t"}}
+    - {command: [HSET, plain, other, x], expect: {equals: 1}}
+    - {command: [RENAME, plain, "doc:t"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec_a $q]", NOCONTENT, PARAMS, "2",
+        q, "33333333", DIALECT, "2"], wait_s: 30, expect: {equals: [0]}}
+    - {command: [HGET, "doc:t", other], expect: {equals: x}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, "1", "item:", SCHEMA, ivec, VECTOR,
+        HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:u", vec_a, "44444444"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec_a $q]", NOCONTENT, PARAMS, "2",
+        q, "44444444", DIALECT, "2"], wait_s: 30, compare: unordered, expect: {contains: "doc:u"}}
+    - {command: [RENAME, "doc:u", "item:1"], expect: {equals: OK}}
+    - {command: [HGET, "item:1", vec_a], expect: {equals: "44444444"}}
+    - {command: [FT._DEBUG, VECTOR_SHARING_STATS], expect_difference: true, expect: {
+        contains: pending_unshare_cnt}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ren.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ren}

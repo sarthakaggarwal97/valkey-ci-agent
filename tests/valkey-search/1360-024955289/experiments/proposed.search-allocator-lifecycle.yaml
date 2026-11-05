@@ -1,0 +1,83 @@
+extends: [valkey.liveness]
+id: proposed.search-allocator-lifecycle
+deployment:
+  modes: [standalone]
+metadata:
+  description: Full index lifecycle (create, ingest, search, churn, drop, backfill)
+    on two builds of the valkey-search module, replies compared; drives the new module-local
+    malloc/realloc/free and the rax text index allocator
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: lifecycle
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 120
+    commands:
+    - {command: [FT._LIST], expect: {equals: []}}
+    - {command: [COMMAND, COUNT], expect: {min: 100}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, txt, TEXT, WITHSUFFIXTRIE,
+        cat, TAG, num, NUMERIC, vec, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', txt, 'running runner ran suffix matching stems', cat,
+        red, num, 1, vec, !!binary 'AACAPwAAAAA='], expect: {equals: 4}}
+    - {command: [HSET, 'doc:2', txt, 'hello world, the quick brown fox; jumps-over
+          the lazy dog!', cat, blue, num, 2147483647, vec, !!binary 'AAAAAAAAgD8='],
+      expect: {equals: 4}}
+    - {command: [HSET, 'doc:3', txt, '', cat, '', num, -2147483648, vec, !!binary 'AAAAQAAAAEA='],
+      expect: {equals: 4}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, 'doc:4', txt, 'alpha beta gamma delta epsilon zeta eta theta
+          iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi
+          omega', num, 4], expect: {equals: QUEUED}}
+    - {command: [HSET, 'doc:5', txt, 'SCHEMA PREFIX FILTER fields VECTOR TAG NUMERIC
+          TEXT', cat, 'red,blue', num, 5], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [2, 3]}}
+    - {command: [FT.SEARCH, idx, '*', NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [5]}}
+    - {command: [FT.SEARCH, idx, '@txt:run*', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@txt:*ing', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@txt:hello', NOCONTENT, LIMIT, 0, 10], expect: {
+        equals: [1, 'doc:2']}}
+    - {command: [FT.SEARCH, idx, '@cat:{red}', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@num:[2147483647 2147483647]', NOCONTENT], expect: {
+        equals: [1, 'doc:2']}}
+    - {command: [FT.SEARCH, idx, '@num:[-2147483648 -2147483648]', NOCONTENT], expect: {
+        equals: [1, 'doc:3']}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @vec $b]', PARAMS, 2, b, !!binary 'AAAAAAAAAAA=',
+        NOCONTENT, DIALECT, 2], compare: unordered}
+    - {command: [HSET, 'doc:1', txt, 'completely different vocabulary now with reallocation
+          pressure and longer strings stretching rax nodes substantially'], expect: {
+        equals: 0}}
+    - {command: [HDEL, 'doc:2', txt], expect: {equals: 1}}
+    - {command: [DEL, 'doc:3'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@txt:vocabulary', NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, '*', NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [4]}}
+    - {command: [FT.SEARCH, idx, '@txt:hello', NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, '@txt:*ing', NOCONTENT], compare: unordered}
+    - {command: [FT.INFO, idx], compare: skip}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    - {command: [FT.SEARCH, idx, '*'], expect: {error: true}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, txt, TEXT,
+        num, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx2, '*', NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [4]}}
+    - {command: [FT.SEARCH, idx2, '@txt:alpha', NOCONTENT], expect: {equals: [1, 'doc:4']}}
+    - {command: [FT.DROPINDEX, idx2], expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [lifecycle.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lifecycle}

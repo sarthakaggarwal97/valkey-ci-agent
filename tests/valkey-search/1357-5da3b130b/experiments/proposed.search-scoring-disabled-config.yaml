@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.search-scoring-disabled-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    search.scoring-disabled is a new dev-only config: it must be registered with default
+    no (the parent does not know it), CONFIG SET must be refused with the debug-mode
+    PermissionDenied error since the module is loaded without --debug-mode yes, FT._DEBUG
+    LIST_CONFIGS DEV must list it, and with the switch left at its default every scoring
+    path (in-drain pure text, text+tag extra step, match-all, hybrid text=>[KNN])
+    must keep its BM25 WITHSCORES replies identical to the parent build.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: scoring
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, search.scoring-disabled], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [CONFIG, SET, search.scoring-disabled, yes], expect_difference: true,
+      expect: {error: "debug-mode"}}
+    - {command: [CONFIG, SET, search.scoring-disabled, no], expect_difference: true,
+      expect: {error: "debug-mode"}}
+    - {command: [FT._DEBUG, LIST_CONFIGS, DEV], expect_difference: true, expect: {
+        contains: scoring-disabled}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, body, TEXT,
+        NOSTEM, cat, TAG, vec, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', body, hello, cat, a, vec, !!binary 'AACAPwAAgD8='],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:2', body, hello world, cat, 'a,b', vec, !!binary 'AAAAQAAAAEA='],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:3', body, hello world again, cat, b], expect: {equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, hello, NOCONTENT], wait_s: 30, expect: {equals: [
+          3, 'doc:1', 'doc:2', 'doc:3']}}
+    - {command: [FT.SEARCH, idx, hello, NOCONTENT, WITHSCORES], expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx, 'hello @cat:{a}', NOCONTENT, WITHSCORES], expect: {
+        contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx, '@cat:{b}', NOCONTENT, WITHSCORES], expect: {contains: 'doc:3'}}
+    - {command: [FT.SEARCH, idx, '*', NOCONTENT, WITHSCORES], expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx, 'hello=>[KNN 2 @vec $q]', PARAMS, 2, q, !!binary 'AACAPwAAgD8=',
+        DIALECT, 2, NOCONTENT, WITHSCORES], expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx, hello, WITHSCORES], expect: {contains: 'doc:1'}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [scoring.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scoring}

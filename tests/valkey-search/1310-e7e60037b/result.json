@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "e7e60037bb29334a3c29825021b11dfd3ce1feb2",
+  "parent": "bbafc3dd0970ffc7dc5e2f03396e588682a11428",
+  "pr": 1310,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Reapplies indexing for zero-length keys(#1171)  (#1310)",
+  "date": "2026-09-09",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.8154,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

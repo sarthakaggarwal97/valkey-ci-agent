@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 024955289ed7..df38d5f17d49.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c8249f00bf1d
+seed: 7
+experiment:
+  id: proposed.vector-registry-unshare-batch
+  inputs:
+    resp: 2
+    batch: 1
+deployment:
+  mode: standalone
+  base_port: 7600

@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.search-zero-length-key-rdb
+deployment:
+  modes: [standalone]
+metadata:
+  description: An index holding a zero-length key (text and FLAT vector) survives
+    RDB v2 SAVE and a server restart; the parent build never indexes it, before or
+    after the restart
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rdbzero
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [HSET, "", content, persisttoken], expect: {equals: 1}}
+    - {command: [HSET, zk1, content, othertoken], expect: {equals: 1}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "", SCHEMA, content, TEXT,
+        NOSTEM], expect: {equals: OK}}
+    - {command: [FT.CREATE, vidx, ON, HASH, PREFIX, "1", "", SCHEMA, v, VECTOR, FLAT,
+        "6", TYPE, FLOAT32, DIM, "3", DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "", v, !!binary "AACAPwAAAEAAAEBA"], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.INFO, vidx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, "@content:persisttoken", NOCONTENT], wait_s: 10,
+      expect_difference: true, expect: {equals: [1, ""]}}
+    - {command: [FT.SEARCH, vidx, "*=>[KNN 1 @v $BLOB]", PARAMS, "2", BLOB, !!binary "AACAPwAAAEAAAEBA",
+        NOCONTENT], wait_s: 10, expect_difference: true, expect: {equals: [1, ""]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 60, expect: {contains: ready}, compare: skip}
+    - {command: [FT.INFO, vidx], wait_s: 60, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, "@content:othertoken", NOCONTENT], wait_s: 10, expect: {
+        equals: [1, zk1]}}
+    - {command: [FT.SEARCH, idx, "@content:persisttoken", NOCONTENT], wait_s: 10,
+      expect_difference: true, expect: {equals: [1, ""]}}
+    - {command: [FT.SEARCH, vidx, "*=>[KNN 1 @v $BLOB]", PARAMS, "2", BLOB, !!binary "AACAPwAAAEAAAEBA",
+        NOCONTENT], wait_s: 10, expect_difference: true, expect: {equals: [1, ""]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [rdbzero.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rdbzero}

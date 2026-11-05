@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.ft-max-timeout-rewrite-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: search.max-timeout-ms survives CONFIG REWRITE and restart and is enforced
+    after reload
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    timeout_s: 90
+    commands:
+    - {command: [CONFIG, SET, search.max-timeout-ms, 500], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.default-timeout-ms, 200], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.max-timeout-ms], expect_difference: true, expect: {
+        equals: [search.max-timeout-ms, "500"]}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "item:", SCHEMA, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, "item:1", n, 5], expect: {equals: 1}}
+    - {command: [FT.INFO, idx2], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx2, "*", NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: "item:1"}}
+    - {command: [FT.SEARCH, idx2, "*", NOCONTENT, TIMEOUT, 501], expect_difference: true,
+      expect: {error: "cannot exceed 500"}}
+    - {command: [FT.SEARCH, idx2, "*", NOCONTENT, TIMEOUT, 500], compare: unordered,
+      expect: {contains: "item:1"}}
+    - {command: [FT.AGGREGATE, idx2, "*", GROUPBY, 0, REDUCE, COUNT, 0, AS, cnt, TIMEOUT,
+        501], expect_difference: true, expect: {error: "cannot exceed 500"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

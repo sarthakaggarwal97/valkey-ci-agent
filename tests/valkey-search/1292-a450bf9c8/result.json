@@ -1,0 +1,65 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a450bf9c806ba1c86da5e88dfc31b504c1688b0d",
+  "parent": "df38d5f17d497b39d16af6622e511b4748727f78",
+  "pr": 1292,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Avoid main-thread deadlock when draining the multi/exec queue during a fork (#1292)",
+  "date": "2026-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.9486,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"414186167cc8bc9431c9a515394880f80aa88504\"},\"offset\":\"295\"}, replica {\"digest\":{\"reply\":\"32a5f09ea76fa65e1a4b21ab765a46ab9962477c\"},\"offset\":\"295\"}, link up",
+      "scenario": "ai-f69873d04cf3",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #1292",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/64"
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"414186167cc8bc9431c9a515394880f80aa88504\"},\"offset\":\"295\"}, replica {\"digest\":{\"reply\":\"32a5f09ea76fa65e1a4b21ab765a46ab9962477c\"},\"offset\":\"295\"}, link up",
+      "scenario": "ai-977972e4b9fa",
+      "seed": 202,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #1292",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/64"
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"d3b39d79c0941b9bc14938cadd0b75e94a0f3829\"},\"offset\":\"1035\"}, replica {\"digest\":{\"reply\":\"a057ebf11b330151eacbbc749219b3bad9c5fa51\"},\"offset\":\"1035\"}, link up",
+      "scenario": "ai-cf20f8be8347",
+      "seed": 303,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #1292",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/64"
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

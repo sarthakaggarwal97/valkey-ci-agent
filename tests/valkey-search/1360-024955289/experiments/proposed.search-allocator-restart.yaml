@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.search-allocator-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: Build a text+vector index, SAVE, restart, and reload it on two builds
+    of the valkey-search module; drives the module RDB-save serialization and the
+    RDB/AOF load path right after dlopen, the earliest-allocation window the change
+    rewrote
+inputs:
+  properties:
+    appendonly: {type: string, enum: ['no', 'yes'], default: 'no'}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {appendonly: {$ref: inputs.appendonly}}
+    timeout_s: 180
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'd:', SCHEMA, txt, TEXT, WITHSUFFIXTRIE,
+        num, NUMERIC, vec, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [HSET, 'd:1', txt, 'persisting snapshot of terms surviving a restart',
+        num, 1, vec, !!binary 'AACAPwAAAAA='], expect: {equals: 3}}
+    - {command: [HSET, 'd:2', txt, 'another document with overlapping terms persisting
+          state', num, 2, vec, !!binary 'AAAAAAAAgD8='], expect: {equals: 3}}
+    - {command: [HSET, 'd:3', txt, 'suffix trie entries reloading rebuilding reconstructing',
+        num, 2147483648, vec, !!binary 'AAAAQAAAAEA='], expect: {equals: 3}}
+    - {command: [HSET, 'd:4', txt, '', num, -1, vec, !!binary 'AAAAAAAAAAA='], expect: {
+        equals: 3}}
+    - {command: [FT.SEARCH, idx, '*', NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [4]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT._LIST], wait_s: 30, expect: {equals: [idx]}}
+    - {command: [FT.SEARCH, idx, '*', NOCONTENT, LIMIT, 0, 0], wait_s: 60, expect: {
+        equals: [4]}}
+    - {command: [FT.SEARCH, idx, '@txt:persisting', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@txt:*ing', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@num:[2147483648 2147483648]', NOCONTENT], expect: {
+        equals: [1, 'd:3']}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @vec $b]', PARAMS, 2, b, !!binary 'AAAAAAAAAAA=',
+        NOCONTENT, DIALECT, 2], compare: unordered}
+    - {command: [HSET, 'd:5', txt, 'indexing continues after the reload with fresh
+          allocations', num, 5, vec, !!binary 'AACAPwAAAAA='], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, '*', NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [5]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

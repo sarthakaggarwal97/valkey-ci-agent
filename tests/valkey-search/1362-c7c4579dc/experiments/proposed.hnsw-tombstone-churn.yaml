@@ -1,0 +1,112 @@
+extends: [valkey.liveness]
+id: proposed.hnsw-tombstone-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Interleaved vector inserts and deletes on an HNSW index (M=2, tiny EF_CONSTRUCTION)
+    build tombstone-heavy graphs and race deletion of the entry point against concurrent
+    writer-thread insertions. The fixed build must self-heal the root and never fail
+    an insertion, so every surviving document ends up indexed; the parent throws "no
+    neighbors found to mutually connect to" on tombstone clusters and permanently
+    loses documents from the index.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 300
+    commands:
+    - {command: [CONFIG, SET, search.writer-threads, 8], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v, VECTOR, HNSW,
+        10, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2, M, 2, EF_CONSTRUCTION, 4],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:k000", v, AAAAAAAAAAAAk000], expect: {equals: 1}}
+    - {command: [HSET, "doc:k001", v, AAAAAAAAAAAAk001], expect: {equals: 1}}
+    - {command: [HSET, "doc:k002", v, AAAAAAAAAAAAk002], expect: {equals: 1}}
+    - {command: [HSET, "doc:k003", v, AAAAAAAAAAAAk003], expect: {equals: 1}}
+    - {command: [HSET, "doc:k004", v, AAAAAAAAAAAAk004], expect: {equals: 1}}
+    - {command: [HSET, "doc:k005", v, AAAAAAAAAAAAk005], expect: {equals: 1}}
+    - {command: [HSET, "doc:k006", v, AAAAAAAAAAAAk006], expect: {equals: 1}}
+    - {command: [HSET, "doc:k007", v, AAAAAAAAAAAAk007], expect: {equals: 1}}
+    - {command: [HSET, "doc:k008", v, AAAAAAAAAAAAk008], expect: {equals: 1}}
+    - {command: [HSET, "doc:k009", v, AAAAAAAAAAAAk009], expect: {equals: 1}}
+    - {command: [HSET, "doc:t000", v, AAAAAAAAAAAAt000], expect: {equals: 1}}
+    - {command: [HSET, "doc:k010", v, AAAAAAAAAAAAk010], expect: {equals: 1}}
+    - {command: [HSET, "doc:t001", v, AAAAAAAAAAAAt001], expect: {equals: 1}}
+    - {command: [HSET, "doc:k011", v, AAAAAAAAAAAAk011], expect: {equals: 1}}
+    - {command: [HSET, "doc:t002", v, AAAAAAAAAAAAt002], expect: {equals: 1}}
+    - {command: [HSET, "doc:k012", v, AAAAAAAAAAAAk012], expect: {equals: 1}}
+    - {command: [DEL, "doc:t000"], expect: {equals: 1}}
+    - {command: [HSET, "doc:t003", v, AAAAAAAAAAAAt003], expect: {equals: 1}}
+    - {command: [HSET, "doc:k013", v, AAAAAAAAAAAAk013], expect: {equals: 1}}
+    - {command: [DEL, "doc:t001"], expect: {equals: 1}}
+    - {command: [HSET, "doc:t004", v, AAAAAAAAAAAAt004], expect: {equals: 1}}
+    - {command: [HSET, "doc:k014", v, AAAAAAAAAAAAk014], expect: {equals: 1}}
+    - {command: [DEL, "doc:t002"], expect: {equals: 1}}
+    - {command: [HSET, "doc:t005", v, AAAAAAAAAAAAt005], expect: {equals: 1}}
+    - {command: [HSET, "doc:k015", v, AAAAAAAAAAAAk015], expect: {equals: 1}}
+    - {command: [DEL, "doc:t003"], expect: {equals: 1}}
+    - {command: [HSET, "doc:t006", v, AAAAAAAAAAAAt006], expect: {equals: 1}}
+    - {command: [HSET, "doc:k016", v, AAAAAAAAAAAAk016], expect: {equals: 1}}
+    - {command: [DEL, "doc:t004"], expect: {equals: 1}}
+    - {command: [HSET, "doc:t007", v, AAAAAAAAAAAAt007], expect: {equals: 1}}
+    - {command: [HSET, "doc:k017", v, AAAAAAAAAAAAk017], expect: {equals: 1}}
+    - {command: [DEL, "doc:t005"], expect: {equals: 1}}
+    - {command: [HSET, "doc:t008", v, AAAAAAAAAAAAt008], expect: {equals: 1}}
+    - {command: [HSET, "doc:k018", v, AAAAAAAAAAAAk018], expect: {equals: 1}}
+    - {command: [DEL, "doc:t006"], expect: {equals: 1}}
+    - {command: [HSET, "doc:t009", v, AAAAAAAAAAAAt009], expect: {equals: 1}}
+    - {command: [HSET, "doc:k019", v, AAAAAAAAAAAAk019], expect: {equals: 1}}
+    - {command: [DEL, "doc:t007"], expect: {equals: 1}}
+    - {command: [HSET, "doc:t010", v, AAAAAAAAAAAAt010], expect: {equals: 1}}
+    - {command: [HSET, "doc:k020", v, AAAAAAAAAAAAk020], expect: {equals: 1}}
+    - {command: [DEL, "doc:t008"], expect: {equals: 1}}
+    - {command: [HSET, "doc:t011", v, AAAAAAAAAAAAt011], expect: {equals: 1}}
+    - {command: [HSET, "doc:k021", v, AAAAAAAAAAAAk021], expect: {equals: 1}}
+    - {command: [DEL, "doc:t009"], expect: {equals: 1}}
+    - {command: [HSET, "doc:t012", v, AAAAAAAAAAAAt012], expect: {equals: 1}}
+    - {command: [HSET, "doc:k022", v, AAAAAAAAAAAAk022], expect: {equals: 1}}
+    - {command: [DEL, "doc:t010"], expect: {equals: 1}}
+    - {command: [HSET, "doc:t013", v, AAAAAAAAAAAAt013], expect: {equals: 1}}
+    - {command: [HSET, "doc:k023", v, AAAAAAAAAAAAk023], expect: {equals: 1}}
+    - {command: [DEL, "doc:t011"], expect: {equals: 1}}
+    - {command: [HSET, "doc:t014", v, AAAAAAAAAAAAt014], expect: {equals: 1}}
+    - {command: [HSET, "doc:k024", v, AAAAAAAAAAAAk024], expect: {equals: 1}}
+    - {command: [DEL, "doc:t012"], expect: {equals: 1}}
+    - {command: [HSET, "doc:t015", v, AAAAAAAAAAAAt015], expect: {equals: 1}}
+    - {command: [HSET, "doc:k025", v, AAAAAAAAAAAAk025], expect: {equals: 1}}
+    - {command: [DEL, "doc:t013"], expect: {equals: 1}}
+    - {command: [HSET, "doc:t016", v, AAAAAAAAAAAAt016], expect: {equals: 1}}
+    - {command: [HSET, "doc:k026", v, AAAAAAAAAAAAk026], expect: {equals: 1}}
+    - {command: [DEL, "doc:t014"], expect: {equals: 1}}
+    - {command: [HSET, "doc:t017", v, AAAAAAAAAAAAt017], expect: {equals: 1}}
+    - {command: [HSET, "doc:k027", v, AAAAAAAAAAAAk027], expect: {equals: 1}}
+    - {command: [DEL, "doc:t015"], expect: {equals: 1}}
+    - {command: [HSET, "doc:t018", v, AAAAAAAAAAAAt018], expect: {equals: 1}}
+    - {command: [HSET, "doc:k028", v, AAAAAAAAAAAAk028], expect: {equals: 1}}
+    - {command: [DEL, "doc:t016"], expect: {equals: 1}}
+    - {command: [HSET, "doc:t019", v, AAAAAAAAAAAAt019], expect: {equals: 1}}
+    - {command: [HSET, "doc:k029", v, AAAAAAAAAAAAk029], expect: {equals: 1}}
+    - {command: [DEL, "doc:t017"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, LIMIT, 0, 0], wait_s: 60, expect: {
+        equals: [32]}}
+    - {command: [DEL, "doc:t018"], expect: {equals: 1}}
+    - {command: [DEL, "doc:t019"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, LIMIT, 0, 0], wait_s: 60, expect_difference: true,
+      expect: {equals: [30]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 30 @v $q]", PARAMS, 2, q, AAAAAAAAAAAAk000,
+        NOCONTENT], compare: unordered, expect_difference: true, expect: {contains: "doc:k000"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

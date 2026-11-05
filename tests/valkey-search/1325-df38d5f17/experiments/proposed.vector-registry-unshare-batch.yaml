@@ -1,0 +1,65 @@
+extends: [valkey.liveness]
+id: proposed.vector-registry-unshare-batch
+deployment:
+  modes: [standalone]
+metadata:
+  description: Rate-limited pending-unshare queue - set the new vector-unshare-batch-size
+    config, drop an index with tracked vectors so unshares drain via server cron,
+    recreate the index while unshares may still be pending (CancelPendingUnshare on
+    re-track), then delete and drop again - vector bytes verified intact throughout
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    batch: {type: integer, minimum: 1, maximum: 100000, default: 1}
+components:
+- use: valkey.action.commands
+  id: unshare
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [CONFIG, SET, search.vector-unshare-batch-size, {$ref: inputs.batch}],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, vec, VECTOR,
+        HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:0", vec, "00000000"], expect: {equals: 1}}
+    - {command: [HSET, "doc:1", vec, "11111111"], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", vec, "22222222"], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", vec, "33333333"], expect: {equals: 1}}
+    - {command: [HSET, "doc:4", vec, "44444444"], expect: {equals: 1}}
+    - {command: [HSET, "doc:5", vec, "55555555"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", NOCONTENT, PARAMS, "2", q,
+        "55555555", DIALECT, "2"], wait_s: 30, compare: unordered, expect: {contains: "doc:5"}}
+    - {command: [FT._DEBUG, VECTOR_SHARING_STATS], expect_difference: true, expect: {
+        contains: pending_unshare_cnt}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [HGET, "doc:0", vec], expect: {equals: "00000000"}}
+    - {command: [HGET, "doc:1", vec], expect: {equals: "11111111"}}
+    - {command: [HGET, "doc:2", vec], expect: {equals: "22222222"}}
+    - {command: [HGET, "doc:3", vec], expect: {equals: "33333333"}}
+    - {command: [HGET, "doc:4", vec], expect: {equals: "44444444"}}
+    - {command: [HGET, "doc:5", vec], expect: {equals: "55555555"}}
+    - {command: [FT._DEBUG, VECTOR_SHARING_STATS], expect_difference: true, expect: {
+        contains: pending_unshare_cnt}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, vec, VECTOR,
+        HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", NOCONTENT, PARAMS, "2", q,
+        "00000000", DIALECT, "2"], wait_s: 60, compare: unordered, expect: {contains: "doc:0"}}
+    - {command: [HGET, "doc:3", vec], expect: {equals: "33333333"}}
+    - {command: [DEL, "doc:0", "doc:1", "doc:2", "doc:3", "doc:4", "doc:5"], expect: {
+        equals: 6}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", NOCONTENT, PARAMS, "2", q,
+        "00000000", DIALECT, "2"], wait_s: 30, expect: {equals: [0]}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT._DEBUG, VECTOR_SHARING_STATS], expect_difference: true, expect: {
+        contains: pending_unshare_cnt}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [unshare.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: unshare}

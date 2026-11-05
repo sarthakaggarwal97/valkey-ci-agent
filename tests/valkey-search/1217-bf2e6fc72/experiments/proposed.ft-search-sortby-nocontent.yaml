@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-sortby-nocontent
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    FT.SEARCH with SORTBY and NOCONTENT must return globally sorted ids (regression
+    #1215): the parent short-circuits the NOCONTENT reply on the background thread
+    before ApplySorting runs.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sortby
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, SCHEMA, t, TAG, n, NUMERIC, SORTABLE, v, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, d0, t, a, n, 70, v, !!binary "AACAPwAAAAA="], expect: {equals: 3}}
+    - {command: [HSET, d1, t, a, n, 10, v, !!binary "AAAAQAAAAAA="], expect: {equals: 3}}
+    - {command: [HSET, d2, t, a, n, 50, v, !!binary "AABAQAAAAAA="], expect: {equals: 3}}
+    - {command: [HSET, d3, t, a, n, 30, v, !!binary "AACAQAAAAAA="], expect: {equals: 3}}
+    - {command: [HSET, d4, t, a, n, 80, v, !!binary "AAKAQAAAAAA="], expect: {equals: 3}}
+    - {command: [HSET, d5, t, a, n, 20, v, !!binary "AAwAQAAAAAA="], expect: {equals: 3}}
+    - {command: [HSET, d6, t, a, n, 60, v, !!binary "AA4AQAAAAAA="], expect: {equals: 3}}
+    - {command: [HSET, d7, t, a, n, 40, v, !!binary "AAAAQQAAAAA="], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [8]}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", SORTBY, n, ASC, NOCONTENT, LIMIT, 0, 10],
+      expect_difference: true, expect: {equals: [8, d1, d5, d3, d7, d2, d6, d0, d4]}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", SORTBY, n, DESC, NOCONTENT, LIMIT, 0, 10],
+      expect_difference: true, expect: {equals: [8, d4, d0, d6, d2, d7, d3, d5, d1]}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", SORTBY, n, ASC, NOCONTENT, LIMIT, 0, 3],
+      expect_difference: true, expect: {equals: [8, d1, d5, d3]}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", SORTBY, n, ASC, NOCONTENT, LIMIT, 2, 3],
+      expect_difference: true, expect: {equals: [8, d3, d7, d2]}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", SORTBY, n, DESC, WITHSORTKEYS, NOCONTENT,
+        LIMIT, 0, 10], expect_difference: true, expect: {equals: [8, d4, d0, d6, d2,
+          d7, d3, d5, d1]}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", NOCONTENT, LIMIT, 0, 10], compare: unordered}
+    - {command: [FT.SEARCH, idx, "@t:{a}", SORTBY, n, ASC, RETURN, 1, n, LIMIT, 0,
+        3], expect: {equals: [8, d1, [n, "10"], d5, [n, "20"], d3, [n, "30"]]}}
+    - {command: [FT.SEARCH, idx, "@t:{zzz}", SORTBY, n, ASC, NOCONTENT, LIMIT, 0,
+        10], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @v $b]", PARAMS, 2, b, !!binary "AAAAAAAAAAA=",
+        DIALECT, 2, SORTBY, n, ASC, NOCONTENT, LIMIT, 0, 10], expect_difference: true,
+      expect: {equals: [5, d1, d3, d2, d0, d4]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @v $b AS dist]", PARAMS, 2, b, !!binary "AAAAAAAAAAA=",
+        DIALECT, 2, SORTBY, dist, DESC, NOCONTENT, LIMIT, 0, 10], expect_difference: true,
+      expect: {equals: [5, d4, d3, d2, d1, d0]}}
+    - {command: [HSET, d8, t, a], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [9]}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", SORTBY, n, ASC, NOCONTENT, LIMIT, 0, 20],
+      compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [sortby.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sortby}

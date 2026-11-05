@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-format-double
+deployment:
+  modes: [standalone]
+metadata:
+  description: FormatDouble change (ungated) - integral doubles render in fixed notation
+    instead of shortest-round-trip scientific, non-integral take 12 significant digits
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fmt
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, t1, TAG, n1, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, "d:1", t1, ga, n1, 1700000000], expect: {equals: 2}}
+    - {command: [HSET, "d:2", t1, gb, n1, 1700000000123], expect: {equals: 2}}
+    - {command: [HSET, "d:3", t1, gc, n1, 2.5], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          3]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{ga}", LOAD, 2, "@t1", "@n1", APPLY, "(@n1)+(0)",
+        AS, v, DIALECT, 2], expect_difference: true, expect: {equals: [1, [t1, ga,
+            n1, 1700000000, v, 1700000000]]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{gb}", LOAD, 2, "@t1", "@n1", APPLY, "(@n1)+(0)",
+        AS, v, DIALECT, 2], expect_difference: true, expect: {equals: [1, [t1, gb,
+            n1, 1700000000123, v, 1700000000123]]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{gc}", LOAD, 2, "@t1", "@n1", APPLY, "sqrt(@n1)",
+        AS, v, DIALECT, 2], expect_difference: true, expect: {equals: [1, [t1, gc,
+            n1, 2.5, v, "1.58113883008"]]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{gb}", LOAD, 2, "@t1", "@n1", APPLY, "(@n1)*(10)",
+        AS, v, DIALECT, 2], expect_difference: true, expect: {equals: [1, [t1, gb,
+            n1, 1700000000123, v, 17000000001230]]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{gb}", LOAD, 2, "@t1", "@n1", GROUPBY, 1,
+        "@t1", REDUCE, SUM, 1, "@n1", AS, s, DIALECT, 2], expect_difference: true,
+      expect: {equals: [1, [t1, gb, s, 1700000000123]]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{gc}", LOAD, 2, "@t1", "@n1", APPLY, "(@n1)+(0.5)",
+        AS, v, DIALECT, 2], expect: {equals: [1, [t1, gc, n1, 2.5, v, 3]]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [fmt.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fmt}

@@ -1,0 +1,65 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "024955289ed74aa4a249f3975d00dd92f66456ec",
+  "parent": "e7e60037bb29334a3c29825021b11dfd3ce1feb2",
+  "pr": 1360,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "New memory allocation machinery (#1360)",
+  "date": "2026-09-09",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 1,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 7.7794,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-1bd54bce7d9d",
+      "build": "unstable",
+      "seed": 1001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1bd54bce7d9d",
+      "build": "unstable",
+      "seed": 1002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1bd54bce7d9d",
+      "build": "unstable",
+      "seed": 1003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a449fe92ee43",
+      "build": "unstable",
+      "seed": 1002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a449fe92ee43",
+      "build": "unstable",
+      "seed": 1003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a449fe92ee43",
+      "build": "unstable",
+      "seed": 1004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d1554a0f7e5b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

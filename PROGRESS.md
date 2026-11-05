@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-05T17:35+00:00.
+Updated 2026-11-05T17:55+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 158 | 2333 | #4890 (2026-10-16) | 158 | 22.6 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 109 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 62 | 8.9 |
-| valkey-io/valkey-search | 77 | 591 | #1362 (2026-09-12) | 77 | 11.0 |
+| valkey-io/valkey-search | 100 | 568 | #1084 (2026-09-06) | 100 | 14.3 |
 
 ## Last runs
 
@@ -48,36 +48,36 @@ Updated 2026-11-05T17:35+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-05T14:01:10+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42007906355): 20 merge(s) tested, 6 without a code change.
+[2026-11-05T17:55:09+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42040984391): 20 merge(s) tested, 4 without a code change.
 
-- [valkey-io/valkey-search#1464](https://github.com/valkey-io/valkey-search/pull/1464) ([tests](tests/valkey-search/1464-0cbca0e60/)): Fix GROUPBY 0 being rejected in FT.AGGREGATE (#1464): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1487](https://github.com/valkey-io/valkey-search/pull/1487) ([tests](tests/valkey-search/1487-c24e74581/)): perf: Restore HNSW ingestion and search throughput to 1.2 levels (#1487): declined: no proposed test validated
-- [valkey-io/valkey-search#1304](https://github.com/valkey-io/valkey-search/pull/1304) ([tests](tests/valkey-search/1304-7687ca2e9/)): Skip metadata reconciliation after replica demotion (#1304): declined: The only behavioral change is a race guard added inside the asynchronous RunByMain callback in MetadataManager::HandleBroadcastedMetadata: it re-checks vmsdk::IsReplica(ctx) on the main thread after the gRPC GetGlobalMetadata fetch returns, discarding the reconciliation if the node was dem
-- [valkey-io/valkey-search#1445](https://github.com/valkey-io/valkey-search/pull/1445) ([tests](tests/valkey-search/1445-0a8e615a2/)): fixed: sort key should be nil instead of `#` when sortby is missing (#1445): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1395](https://github.com/valkey-io/valkey-search/pull/1395) ([tests](tests/valkey-search/1395-20f414ee1/)): Accept NOHL and SORTABLE UNF in FT.CREATE, and report sortable/unf in FT.INFO (#1395): 4 of 4 test(s) reached the change
-- [valkey-io/valkey-search#1354](https://github.com/valkey-io/valkey-search/pull/1354) ([tests](tests/valkey-search/1354-cc6cb5e7f/)): Scoring: BM25STD scoring for stemming queries (#1354): 4 of 4 test(s) reached the change
-- [valkey-io/valkey-search#1394](https://github.com/valkey-io/valkey-search/pull/1394) ([tests](tests/valkey-search/1394-cad356055/)): Add WITHCURSOR to FT.AGGREGATE and FT.SEARCH, and the FT.CURSOR command (#1394): 4 of 4 test(s) reached the change; [crash, appeared after #1394](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/61); check, introduced and since fixed (recorded); crash, fixed by #1394 (recorded)
-- [valkey-io/valkey-search#967](https://github.com/valkey-io/valkey-search/pull/967) ([tests](tests/valkey-search/967-d719c30c2/)): feat: Implement INKEYS parameter for FT.SEARCH (#967): 3 of 3 test(s) reached the change
-- [valkey-io/valkey-search#1400](https://github.com/valkey-io/valkey-search/pull/1400) ([tests](tests/valkey-search/1400-0e1bc3303/)): Various small scoring changes (#1400): 4 of 4 test(s) reached the change
-- [valkey-io/valkey-search#1083](https://github.com/valkey-io/valkey-search/pull/1083): to retry, the job left no result
-- [valkey-io/valkey-search#1402](https://github.com/valkey-io/valkey-search/pull/1402) ([tests](tests/valkey-search/1402-e968b168c/)): Fixing Alpine Build (#1402): 0 of 6 test(s) reached the change
-- [valkey-io/valkey-search#1406](https://github.com/valkey-io/valkey-search/pull/1406) ([tests](tests/valkey-search/1406-ef5771391/)): Fix long-running clang-format after running integration tests (#1406): declined: The change modifies only the format() function in build.sh, adding a -prune for .build* directories so clang-format skips build artifacts after integration tests. It is a developer-tooling/build-script fix with no change to any module source file, command, reply, persistence, or replicatio
-- [valkey-io/valkey-search#1389](https://github.com/valkey-io/valkey-search/pull/1389) ([tests](tests/valkey-search/1389-6428b669b/)): Bug fix: only last RETURN in SEARCH should be effective (#1389): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1350](https://github.com/valkey-io/valkey-search/pull/1350) ([tests](tests/valkey-search/1350-4f6ef4b04/)): Scoring: BM25STD scoring for prefix, suffix and fuzzy queries (#1350): 7 of 7 test(s) reached the change
-- [valkey-io/valkey-search#1218](https://github.com/valkey-io/valkey-search/pull/1218) ([tests](tests/valkey-search/1218-03f27d2ac/)): Support field-scoped text group @field:(a|b|c) (#1214) (#1218): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1090](https://github.com/valkey-io/valkey-search/pull/1090) ([tests](tests/valkey-search/1090-0cc7609c6/)): Fix AS parameter substitution for vector score aliases (#1090): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1279](https://github.com/valkey-io/valkey-search/pull/1279) ([tests](tests/valkey-search/1279-20757bae4/)): RFC for multi-language support in FTS (#1279): declined: The change is documentation-only: it adds rfc/multi-language-support.md (a proposal document for future multi-language FTS support) and excludes that file from the typos checker in .config/typos.toml. No source code, build configuration, or runtime behaviour of the module changes, so the c
-- [valkey-io/valkey-search#984](https://github.com/valkey-io/valkey-search/pull/984) ([tests](tests/valkey-search/984-cbf0fda34/)): Implement FILTER option on FT.CREATE (#984): 5 of 5 test(s) reached the change
-- [valkey-io/valkey-search#1373](https://github.com/valkey-io/valkey-search/pull/1373) ([tests](tests/valkey-search/1373-707324aa1/)): FT.AGGREGATE: SORTBY ignores a following LIMIT, breaking paging past the first page (#1373): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1366](https://github.com/valkey-io/valkey-search/pull/1366) ([tests](tests/valkey-search/1366-9db11eff5/)): Move compatibility reference to redis:latest and fix what it exposed (supersedes #1068, #1239) (#1366): 4 of 8 test(s) reached the change
+- [valkey-io/valkey-search#1083](https://github.com/valkey-io/valkey-search/pull/1083) ([tests](tests/valkey-search/1083-5b8c24328/)): FT.Hybrid Initial Implementation (#1083): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1362](https://github.com/valkey-io/valkey-search/pull/1362) ([tests](tests/valkey-search/1362-c7c4579dc/)): Fix HNSW insertion failure on tombstone clusters and self-heal root (#1362): 0 of 3 test(s) reached the change
+- [valkey-io/valkey-search#1383](https://github.com/valkey-io/valkey-search/pull/1383) ([tests](tests/valkey-search/1383-8b2fd84b9/)): Install gcc14 static libstdc++ for benchmark builds due to #1360 (#1383): declined: The change edits only ci/install_deps.sh, installing the gcc14-libstdc++-static package and asserting that libstdc++.a exists so CI benchmark builds can link statically. It is purely a build/CI infrastructure change with no modification to module code, commands, replies, persistence, or re
+- [valkey-io/valkey-search#1204](https://github.com/valkey-io/valkey-search/pull/1204) ([tests](tests/valkey-search/1204-207aa0591/)): Remove continue in OnFlushDBEnded, to async free when recreate fails (#1204): declined: The diff only removes a `continue` inside OnFlushDBEnded's recreate-failure branch, so a schema whose coordinator-mode recreation fails during FLUSHDB is freed on the utility thread instead of inline on the main thread. That branch is unreachable from any input: recreating a just-removed s
+- [valkey-io/valkey-search#1320](https://github.com/valkey-io/valkey-search/pull/1320) ([tests](tests/valkey-search/1320-feccde4ad/)): fix: guard HNSW prefetches against empty neighbor lists (#1320): declined: The change is internal memory-safety hardening in the bundled HNSW library and has no command-reachable behavior difference. Hunk 1 (searchBaseLayer) only moves two non-faulting __builtin_prefetch(visited_array+id) hints inside an if(size>0) block; the sole dereferencing prefetch there was
+- [valkey-io/valkey-search#1364](https://github.com/valkey-io/valkey-search/pull/1364): to retry, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search#1312](https://github.com/valkey-io/valkey-search/pull/1312) ([tests](tests/valkey-search/1312-583fe14cd/)): Fix stale RDB restore counters inflating number_of_indexes metric (#1312): declined: The change fixes an inflated search_number_of_indexes INFO metric, but the inflated paths are unreachable by the fuzzer. The at-rest over-count requires the non-index RDB_SECTION_GLOBAL_METADATA section, which valkey-search writes only in coordinator mode (the Hidden(), start-up-only, argv
+- [valkey-io/valkey-search#1355](https://github.com/valkey-io/valkey-search/pull/1355) ([tests](tests/valkey-search/1355-f737938b5/)): Run integration tests in parallel (reduces runtime from ~12 minutes to ~95 seconds) (#1355): declined: The change modifies only valkey-search's own build and test infrastructure: build.sh and scripts/common.rc gain a --parallel flag and dependency checks; integration/ and testing/integration/ gain pytest-xdist support, per-worker port/log/tmpdir isolation, and hardened setup/teardown cleanu
+- [valkey-io/valkey-search#1217](https://github.com/valkey-io/valkey-search/pull/1217) ([tests](tests/valkey-search/1217-bf2e6fc72/)): Fix SORTBY with NOCONTENT returning unsorted results (#1215) (#1217): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1374](https://github.com/valkey-io/valkey-search/pull/1374) ([tests](tests/valkey-search/1374-ad9ea08b5/)): vmsdk: keep std symbols local in versionscript.lds required due to recent change in allocation strategy (#1374): 0 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1292](https://github.com/valkey-io/valkey-search/pull/1292) ([tests](tests/valkey-search/1292-a450bf9c8/)): Avoid main-thread deadlock when draining the multi/exec queue during a fork (#1292): 0 of 3 test(s) reached the change; [check, introduced by #1292](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/64)
+- [valkey-io/valkey-search#1325](https://github.com/valkey-io/valkey-search/pull/1325) ([tests](tests/valkey-search/1325-df38d5f17/)): Fix VectorRegistry lifecycle management, multi-DB isolation, and server event handling (#1325): 8 of 8 test(s) reached the change; crash, fixed by #1325 (recorded)
+- [valkey-io/valkey-search#1360](https://github.com/valkey-io/valkey-search/pull/1360) ([tests](tests/valkey-search/1360-024955289/)): New memory allocation machinery (#1360): 0 of 6 test(s) reached the change
+- [valkey-io/valkey-search#1310](https://github.com/valkey-io/valkey-search/pull/1310) ([tests](tests/valkey-search/1310-e7e60037b/)): Reapplies indexing for zero-length keys(#1171)  (#1310): 3 of 3 test(s) reached the change
+- [valkey-io/valkey-search#1368](https://github.com/valkey-io/valkey-search/pull/1368) ([tests](tests/valkey-search/1368-3e8f9f778/)): Add configurable maximum TIMEOUT for search commands (#1368): 3 of 3 test(s) reached the change
+- [valkey-io/valkey-search#1357](https://github.com/valkey-io/valkey-search/pull/1357) ([tests](tests/valkey-search/1357-5da3b130b/)): Scoring: scoring-disabled dev only config (#1357): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1271](https://github.com/valkey-io/valkey-search/pull/1271) ([tests](tests/valkey-search/1271-e4880d457/)): Extended Array compatibility fixes (#1271): 6 of 6 test(s) reached the change
+- [valkey-io/valkey-search#1317](https://github.com/valkey-io/valkey-search/pull/1317) ([tests](tests/valkey-search/1317-c8601e0d7/)): Follow-ups from #1268 (the PR search benchmark workflow) (#1317): declined: The change modifies only CI and build tooling: the search-benchmark-pr.yml GitHub Actions workflow (runner label change, trusted checkout of CI scripts, cleanup of the checkout directory) and a new ci/install_deps.sh script that installs build dependencies and the GCC toolchain on Amazon L
+- [valkey-io/valkey-search#1345](https://github.com/valkey-io/valkey-search/pull/1345) ([tests](tests/valkey-search/1345-1e41c0a9d/)): Scoring: score all-text OR by fanning out fetchers instead of building a OR composite iterator (#1345): 0 of 4 test(s) reached the change
+- [valkey-io/valkey-search#1001](https://github.com/valkey-io/valkey-search/pull/1001) ([tests](tests/valkey-search/1001-02a550668/)): Implement FLOAT16 and BFLOAT16 (#1001): 6 of 6 test(s) reached the change
 
 ## Totals
 
-- Merges whose tests reached the change: 173 of 222 tested (78%)
+- Merges whose tests reached the change: 181 of 235 tested (77%)
 - Changed-line coverage: median 100% of 84 merge(s) measured, 4 under 50%
-- Recall: 46 parents flagged of 58 fix merges
-- Claude: $1294.05 in the last 24 hours, $1294.05 in the last 7 days, $1294.05 in all
-- Issues filed: 21
+- Recall: 49 parents flagged of 62 fix merges
+- Claude: $1386.08 in the last 24 hours, $1386.08 in the last 7 days, $1386.08 in all
+- Issues filed: 22
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -99,8 +99,9 @@ Updated 2026-11-05T17:35+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/61
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/62
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/63
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/64
 
 ## Retries
 
-- [valkey-io/valkey-search#1083](https://github.com/valkey-io/valkey-search/pull/1083): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#1364](https://github.com/valkey-io/valkey-search/pull/1364): attempt 1 of 3, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
 - [valkey-io/valkey#5173](https://github.com/valkey-io/valkey/pull/5173): attempt 0 of 3, the job left no result

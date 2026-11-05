@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.search-multi-fork-deadlock
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH draining a single pending MULTI/EXEC mutation while a BGSAVE
+    fork is in flight must drain inline and reply, not deadlock the main thread
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fork_search
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, search.writer-threads, "2"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, "1000"], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "p:", SCHEMA, t, TAG], expect: {
+        equals: OK}}
+    - {command: [DEBUG, POPULATE, "500000"], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {equals: "Background saving started"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, "p:1", t, run], expect: {equals: QUEUED}}
+    - {command: [EXEC]}
+    - {command: [FT.SEARCH, idx, "@t:{run}", LIMIT, "0", "1"], compare: unordered,
+      expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fork_search}

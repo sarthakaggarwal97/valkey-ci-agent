@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.search-std-symbol-locality
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Allocation-heavy FT command sequence on the module built at the change and at
+    its parent, loaded into the same Valkey build. versionscript.lds now keeps libstdc++
+    symbols local so the module's statically linked libstdc++ cannot cross-bind with
+    libstdc++.so.6 and mix allocators after the module took over malloc/operator new;
+    the sequence churns std strings and containers (index create/drop, HNSW search,
+    error paths, RDB save and restart) and must load, not crash, and reply identically
+    on both builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ft
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'd:', SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, t, TAG, n, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, SCHEMA, v, VECTOR, HNSW, 6, TYPE, FLOAT32,
+        DIM, 2, DISTANCE_METRIC, L2], expect: {error: true}}
+    - {command: [FT.CREATE, idx2, ON, HASH, SCHEMA, v, VECTOR, HNSW, 3, TYPE, FLOAT32,
+        DIM], expect: {error: true}}
+    - {command: [HSET, 'd:a', v, !!binary 'AACAPwAAAAA=', t, red, n, 1], expect: {
+        equals: 3}}
+    - {command: [HSET, 'd:b', v, !!binary 'AAAAAACAPw==', t, blue, n, 2], expect: {
+        equals: 3}}
+    - {command: [HSET, 'd:c', v, !!binary 'AACAPwAAgD8=', t, red, n, 3], expect: {
+        equals: 3}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @v $vec AS score]', NOCONTENT, PARAMS,
+        2, vec, !!binary 'AACAPwAAAAA=', DIALECT, 2], wait_s: 30, expect: {equals: [
+          2, 'd:a', 'd:c']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:{red}', NOCONTENT], wait_s: 30, expect: {equals: [
+          2, 'd:a', 'd:c']}, compare: unordered}
+    - {command: [FT.SEARCH, nosuchindex, '*'], expect: {error: true}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '*'], expect: {error: true}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'd:', SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, t, TAG, n, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @v $vec AS score]', NOCONTENT, PARAMS,
+        2, vec, !!binary 'AACAPwAAAAA=', DIALECT, 2], wait_s: 30, expect: {equals: [
+          2, 'd:a', 'd:c']}, compare: unordered}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT._LIST], wait_s: 30, expect: {contains: idx}, compare: unordered}
+    - {command: [FT.INFO, idx], wait_s: 60, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @v $vec AS score]', NOCONTENT, PARAMS,
+        2, vec, !!binary 'AACAPwAAAAA=', DIALECT, 2], wait_s: 30, expect: {equals: [
+          2, 'd:a', 'd:c']}, compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ft.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ft}

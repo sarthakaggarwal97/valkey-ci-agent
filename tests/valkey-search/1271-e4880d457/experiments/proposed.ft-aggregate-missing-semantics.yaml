@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-missing-semantics
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE missing-field semantics under emulate-release 1.3.0 -
+    APPLY drops records referencing absent fields, nil aliases are named, MIN/MAX
+    numeric with 0 identity, FIRST_VALUE and absent group keys reply nil
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.emulate-release, 1.3.0, "$f"], expect: {error: true}}
+    - {command: [CONFIG, SET, search.emulate-release, 1.3.0], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, t1, TAG, n1, NUMERIC,
+        n2, NUMERIC, t2, TAG], expect: {equals: OK}}
+    - {command: [HSET, "d:1", t1, ga, n1, 1, n2, 10, t2, apple], expect: {equals: 4}}
+    - {command: [HSET, "d:2", t1, ga, n1, 2, n2, 20, t2, Banana], expect: {equals: 4}}
+    - {command: [HSET, "d:3", t1, ge, n1, 3], expect: {equals: 2}}
+    - {command: [HSET, "d:4", t1, ge, n1, 4], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          4]}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 3, "@t1", "@n1", "@n2", APPLY, "(@n2)+(1)",
+        AS, x, GROUPBY, 1, "@t1", REDUCE, COUNT, 0, AS, c, SORTBY, 2, "@t1", ASC,
+        DIALECT, 2], expect_difference: true, expect: {equals: [1, [t1, ga, c, 2]]}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 2, "@t1", "@t2", APPLY, "!(@t2)", AS,
+        neg, GROUPBY, 2, "@t1", "@neg", REDUCE, COUNT, 0, AS, c, SORTBY, 2, "@t1",
+        ASC, DIALECT, 2], expect_difference: true, expect: {equals: [1, [t1, ga, neg,
+            0, c, 2]]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{ga}", LOAD, 2, "@__key", "@n1", APPLY, "lower(@n1)",
+        AS, lo, SORTBY, 2, "@__key", ASC, DIALECT, 2], expect_difference: true, expect: {
+        equals: [2, [__key, "d:1", n1, 1, lo, null], [__key, "d:2", n1, 2, lo, null]]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{ga}", LOAD, 2, "@t1", "@t2", GROUPBY, 1,
+        "@t1", REDUCE, MIN, 1, "@t2", AS, mn, REDUCE, MAX, 1, "@t2", AS, mx, DIALECT,
+        2], expect_difference: true, expect: {equals: [1, [t1, ga, mn, 0, mx, 0]]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{ge}", LOAD, 2, "@t1", "@n2", GROUPBY, 1,
+        "@t1", REDUCE, COUNT, 0, AS, c, REDUCE, MIN, 1, "@n2", AS, mn, DIALECT, 2],
+      expect_difference: true, expect: {equals: [1, [t1, ge, c, 2, mn, 0]]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{ge}", LOAD, 3, "@t1", "@n1", "@n2", GROUPBY,
+        1, "@t1", REDUCE, FIRST_VALUE, 3, "@n2", BY, "@n1", AS, fv, DIALECT, 2], expect_difference: true,
+      expect: {equals: [1, [t1, ge, fv, null]]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{ge}", LOAD, 2, "@t1", "@t2", GROUPBY, 1,
+        "@t2", REDUCE, COUNT, 0, AS, c, DIALECT, 2], expect_difference: true, expect: {
+        equals: [1, [t2, null, c, 2]]}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 2, "@t1", "@t2", FILTER, "!(@t2)",
+        GROUPBY, 1, "@t1", REDUCE, COUNT, 0, AS, c, DIALECT, 2], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 2, "@t1", "@t2", APPLY, "exists(@t2)",
+        AS, e, GROUPBY, 2, "@t1", "@e", REDUCE, COUNT, 0, AS, c, SORTBY, 2, "@t1",
+        ASC, DIALECT, 2], expect: {equals: [2, [t1, ga, e, 1, c, 2], [t1, ge, e, 0,
+            c, 2]]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

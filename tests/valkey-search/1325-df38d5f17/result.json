@@ -1,0 +1,64 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "df38d5f17d497b39d16af6622e511b4748727f78",
+  "parent": "024955289ed74aa4a249f3975d00dd92f66456ec",
+  "pr": 1325,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix VectorRegistry lifecycle management, multi-DB isolation, and server event handling (#1325)",
+  "date": "2026-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 8,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.868,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-use-after-free",
+      "scenario": "ai-4ed98e6046b5",
+      "seed": 5,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1325",
+      "fingerprint": "80d79339943dd8f93790",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-use-after-free",
+      "scenario": "ai-2aaadd52c11f",
+      "seed": 6,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1325",
+      "fingerprint": "80d79339943dd8f93790",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-4ed98e6046b5",
+      "build": "unstable",
+      "seed": 5,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2aaadd52c11f",
+      "build": "unstable",
+      "seed": 7,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

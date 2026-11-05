@@ -1,0 +1,84 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-array-inputs
+deployment:
+  modes: [standalone]
+metadata:
+  description: TOLIST arrays flowing into GROUPBY (per-element key expansion and the
+    new max-group-key-expansion limit), FILTER, APPLY functions, comparisons and reducers
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: arr
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.emulate-release, 1.3.0], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, t1, TAG, n1, NUMERIC,
+        n2, NUMERIC, t2, TAG], expect: {equals: OK}}
+    - {command: [HSET, "d:1", t1, ga, n1, 1, n2, 10], expect: {equals: 3}}
+    - {command: [HSET, "d:2", t1, ga, n1, 2, n2, 20], expect: {equals: 3}}
+    - {command: [HSET, "d:3", t1, gb, n1, 2, n2, 10], expect: {equals: 3}}
+    - {command: [HSET, "d:4", t1, gb, n1, 3, n2, 30], expect: {equals: 3}}
+    - {command: [HSET, "d:5", t1, gc, n1, 4, t2, Banana], expect: {equals: 3}}
+    - {command: [HSET, "d:6", t1, ge, n1, 5], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          6]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{ga|gb}", LOAD, 2, "@t1", "@n1", GROUPBY,
+        1, "@t1", REDUCE, TOLIST, 1, "@n1", AS, items, GROUPBY, 1, "@items", REDUCE,
+        COUNT, 0, AS, c, SORTBY, 2, "@items", ASC, DIALECT, 2], expect_difference: true,
+      expect: {equals: [3, [items, 1, c, 1], [items, 2, c, 2], [items, 3, c, 1]]}}
+    - {command: [CONFIG, SET, search.max-group-key-expansion, 2], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{ga|gb}", LOAD, 3, "@t1", "@n1", "@n2", GROUPBY,
+        1, "@t1", REDUCE, TOLIST, 1, "@n1", AS, a1, REDUCE, TOLIST, 1, "@n2", AS,
+        a2, GROUPBY, 2, "@a1", "@a2", REDUCE, COUNT, 0, AS, c, DIALECT, 2], expect_difference: true,
+      expect: {error: "exceeds"}}
+    - {command: [CONFIG, SET, search.max-group-key-expansion, 65536], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{ga|gb}", LOAD, 3, "@t1", "@n1", "@n2", GROUPBY,
+        1, "@t1", REDUCE, TOLIST, 1, "@n1", AS, a1, REDUCE, TOLIST, 1, "@n2", AS,
+        a2, GROUPBY, 2, "@a1", "@a2", REDUCE, COUNT, 0, AS, c, SORTBY, 4, "@a1", ASC,
+        "@a2", ASC, DIALECT, 2], expect_difference: true, expect: {equals: [7, [a1,
+            1, a2, 10, c, 1], [a1, 1, a2, 20, c, 1], [a1, 2, a2, 10, c, 2], [a1, 2,
+            a2, 20, c, 1], [a1, 2, a2, 30, c, 1], [a1, 3, a2, 10, c, 1], [a1, 3, a2,
+            30, c, 1]]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{gc}", LOAD, 2, "@t1", "@n1", GROUPBY, 1,
+        "@t1", REDUCE, TOLIST, 1, "@n1", AS, items, APPLY, "(@items)<(\"a\")", AS,
+        r, DIALECT, 2], expect_difference: true, expect: {equals: [1, [t1, gc, items,
+            [4], r, 1]]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{gc}", LOAD, 2, "@t1", "@n1", GROUPBY, 1,
+        "@t1", REDUCE, TOLIST, 1, "@n1", AS, items, FILTER, "@items", DIALECT, 2],
+      expect_difference: true, expect: {equals: [1, [t1, gc, items, [4]]]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{gc}", LOAD, 2, "@t1", "@n1", GROUPBY, 1,
+        "@t1", REDUCE, TOLIST, 1, "@n1", AS, items, APPLY, "sqrt(@items)", AS, s,
+        DIALECT, 2], expect_difference: true, expect: {equals: [1, [t1, gc, items,
+            [4], s, nan]]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{gc}", LOAD, 2, "@t1", "@t2", GROUPBY, 1,
+        "@t1", REDUCE, TOLIST, 1, "@t2", AS, sitems, APPLY, "lower(@sitems)", AS,
+        lo, DIALECT, 2], expect_difference: true, expect: {equals: [1, [t1, gc, sitems,
+            [Banana], lo, null]]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{gc}", LOAD, 2, "@t1", "@n1", GROUPBY, 1,
+        "@t1", REDUCE, TOLIST, 1, "@n1", AS, items, GROUPBY, 1, "@t1", REDUCE, MIN,
+        1, "@items", AS, m, REDUCE, MAX, 1, "@items", AS, mx, DIALECT, 2], expect_difference: true,
+      expect: {equals: [1, [t1, gc, m, 0, mx, 0]]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{ga}", LOAD, 2, "@t1", "@n1", GROUPBY, 1,
+        "@t1", REDUCE, TOLIST, 1, "@n1", AS, items, GROUPBY, 1, "@t1", REDUCE, STDDEV,
+        1, "@items", AS, sd, DIALECT, 2], expect_difference: true, expect: {equals: [
+          1, [t1, ga, sd, "0.707106781187"]]}}
+    - {command: [FT.AGGREGATE, idx, "@t1:{ge}", LOAD, 3, "@t1", "@n1", "@n2", GROUPBY,
+        1, "@t1", REDUCE, TOLIST, 1, "@n2", AS, items, GROUPBY, 1, "@items", REDUCE,
+        COUNT, 0, AS, c, DIALECT, 2], expect_difference: true, expect: {equals: [
+          1, [items, null, c, 1]]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [arr.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: arr}
