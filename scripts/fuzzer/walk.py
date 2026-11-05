@@ -113,6 +113,12 @@ MAX_JOBS = 256
 # result at all (it never ran, or the runner was lost) is given up after MAX_MISSES runs.
 MAX_ATTEMPTS = 3
 MAX_MISSES = 10
+# A merge whose request the API refused under its usage policy counts no attempt: the same request may be
+# answered another time. It waits REFUSAL_WAIT before its next try, so it takes no run's place meanwhile, and is
+# given up after MAX_REFUSALS refusals.
+REFUSAL = "Usage Policy"
+REFUSAL_WAIT = timedelta(days=1)
+MAX_REFUSALS = 5
 # Seeds each test runs with on unstable: its own and the next ones.
 HUNT_SEEDS = 3
 RUN_TIMEOUT_S = 900
@@ -227,9 +233,11 @@ def no_code_change(paths: list[str], repo: str) -> bool:
     return not any(_code(path, repo) for path in paths)
 
 
-def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey_head: str) -> dict[str, Any]:
+def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey_head: str, *,
+         now: str) -> dict[str, Any]:
     """The run's merges, the merges done without a job, the repository's new pointer, and the heads the run
     builds: the repository's, and for a module the Valkey ``unstable`` commit ``valkey_head`` it loads into.
+    A merge to retry is taken once its ``retry_after``, if it has one, is no later than ``now``.
 
     ``repo_dir`` is a full clone of ``repo`` with its default branch checked out. A repository the state does
     not know yet starts at its head: the forward head and the backlog cursor both name the newest merge, so the
@@ -243,7 +251,7 @@ def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey
         if pointer[key] not in index:
             raise ValueError(f"the walk's {key} of {repo}, {pointer[key]}, is not on its first-parent history")
     new = [(i, "new") for i in reversed(range(index[pointer["head"]]))]
-    retries = [(entry, "retry") for entry in state["failed"].values()]
+    retries = [(entry, "retry") for entry in state["failed"].values() if entry.get("retry_after", "") <= now]
     backlog = [(i, "backlog") for i in range(index[pointer["cursor"]], index[pointer["end"]])]
     jobs: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
@@ -1163,11 +1171,17 @@ def update(state: dict[str, Any], planned: dict[str, Any], results: list[dict[st
             state["failed"].pop(sha, None)
             continue
         entry = state["failed"].get(sha) or {**{key: merge.get(key) for key in MERGE_KEYS}, "attempts": 0}
-        entry["attempts"] += int(result is not None)
-        entry["misses"] = entry.get("misses", 0) + int(result is None)
         entry["error"] = result["error"] if result is not None else "the job left no result"
+        if REFUSAL in entry["error"]:
+            entry["refusals"] = entry.get("refusals", 0) + 1
+            entry["retry_after"] = (datetime.fromisoformat(now) + REFUSAL_WAIT).isoformat(timespec="seconds")
+        else:
+            entry["attempts"] += int(result is not None)
+            entry["misses"] = entry.get("misses", 0) + int(result is None)
+            entry.pop("retry_after", None)
         entry["cost_usd"] = round(float(entry.get("cost_usd") or 0) + float((result or {}).get("cost_usd") or 0), 4)
-        if entry["attempts"] >= MAX_ATTEMPTS or entry["misses"] >= MAX_MISSES:
+        if (entry["attempts"] >= MAX_ATTEMPTS or entry.get("misses", 0) >= MAX_MISSES
+                or entry.get("refusals", 0) >= MAX_REFUSALS):
             state["done"][sha] = {**_summary(merge, result or {"error": entry["error"]}, now),
                                   "cost_usd": entry["cost_usd"]}
             state["failed"].pop(sha, None)
@@ -1354,7 +1368,8 @@ def main(argv: list[str] | None = None) -> int:
         repo = f"{VALKEY_REPO.split('/')[0]}/{args.repo}"
         state = json.loads(args.state.read_text()) if args.state.is_file() else initial_state(repo)
         planned = plan(clone(repo, args.work / args.repo), repo, state, args.max,
-                       "" if repo == VALKEY_REPO else remote_head(VALKEY_REPO))
+                       "" if repo == VALKEY_REPO else remote_head(VALKEY_REPO),
+                       now=datetime.now(timezone.utc).isoformat(timespec="seconds"))
         args.out.write_text(json.dumps(planned, indent=2), encoding="utf-8")
         log_outcome(logger, logging.INFO, f"{len(planned['merges'])} merge(s) of {repo} to walk, "
                                           f"{len(planned['skipped'])} without a code change")

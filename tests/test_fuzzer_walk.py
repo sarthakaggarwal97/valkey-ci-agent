@@ -82,7 +82,7 @@ UNSTABLE = "c" * 40
 
 
 def test_the_first_run_starts_at_the_head_and_walks_back_to_the_first_commit(json_repo):
-    planned = plan(json_repo, JSON, initial_state(JSON), 2, UNSTABLE)
+    planned = plan(json_repo, JSON, initial_state(JSON), 2, UNSTABLE, now=NOW)
     shas = _shas(json_repo)
     assert _jobs(planned) == [5, 4] and planned["repo"] == JSON
     assert planned["merges"][0] == {"repo": JSON, "sha": shas[0], "parent": shas[1], "pr": 5, "pr_repo": JSON,
@@ -98,11 +98,11 @@ def test_the_first_run_starts_at_the_head_and_walks_back_to_the_first_commit(jso
     state = update(initial_state(JSON), planned, [], now=NOW)
     state["done"].update({m["sha"]: {"repo": JSON} for m in planned["merges"]})
     state["failed"].clear()
-    rest = plan(json_repo, JSON, state, 10, UNSTABLE)
+    rest = plan(json_repo, JSON, state, 10, UNSTABLE, now=NOW)
     assert _jobs(rest) == [2, 1]
     assert [m["pr"] for m in rest["skipped"]] == [3]
     assert rest["pointer"]["cursor"] == shas[-1] and rest["pointer"]["remaining"] == 0
-    assert _jobs(plan(json_repo, JSON, {**state, "pointer": rest["pointer"]}, 10, UNSTABLE)) == []
+    assert _jobs(plan(json_repo, JSON, {**state, "pointer": rest["pointer"]}, 10, UNSTABLE, now=NOW)) == []
 
 
 def test_new_merges_come_first_oldest_first_then_retries_then_the_backlog(json_repo):
@@ -115,7 +115,7 @@ def test_new_merges_come_first_oldest_first_then_retries_then_the_backlog(json_r
     state["done"][shas[3]] = {"repo": JSON}
     _commit(json_repo, "Fix JSON.MSET (#6)", "src/e.c", 6)
     _commit(json_repo, "Fix JSON.TYPE (#7)", "src/f.c", 7)
-    planned = plan(json_repo, JSON, state, 4, UNSTABLE)
+    planned = plan(json_repo, JSON, state, 4, UNSTABLE, now=NOW)
     # In the backlog, the docs-only #3 is skipped and the done #2 passed over.
     assert _jobs(planned) == [6, 7, 9, 1]
     assert [m["pr"] for m in planned["skipped"]] == [3]
@@ -123,14 +123,14 @@ def test_new_merges_come_first_oldest_first_then_retries_then_the_backlog(json_r
     assert planned["merges"][2] == {**{k: retry[k] for k in walk.MERGE_KEYS}, "name": "valkey-json", "deps": ""}
     assert planned["pointer"]["head"] == _shas(json_repo)[0]
     # --max bounds the run: the head moves only past the new merges taken.
-    first = plan(json_repo, JSON, state, 1, UNSTABLE)
+    first = plan(json_repo, JSON, state, 1, UNSTABLE, now=NOW)
     assert _jobs(first) == [6] and first["pointer"]["head"] == _shas(json_repo)[1]
     assert first["pointer"]["cursor"] == shas[2]
 
 
 def test_a_valkey_run_builds_only_valkeys_head(tmp_path):
     repo = _repo(tmp_path, "valkey", [("Base", "src/a.c"), ("Fix (#1)", "src/b.c")])
-    planned = _with_base(_shas(repo)[-1], lambda: plan(repo, walk.VALKEY_REPO, initial_state(walk.VALKEY_REPO), 5, ""))
+    planned = _with_base(_shas(repo)[-1], lambda: plan(repo, walk.VALKEY_REPO, initial_state(walk.VALKEY_REPO), 5, "", now=NOW))
     assert planned["heads"] == {walk.VALKEY_REPO: _shas(repo)[0]}
     assert _jobs(planned) == [1] and planned["merges"][0]["name"] == "valkey"
 
@@ -149,7 +149,7 @@ def test_a_modules_first_code_drop_on_a_readme_stub_is_skipped(tmp_path):
     # nothing to build or compare with; the merge is done without a job, as no-parent-code.
     repo = _repo(tmp_path, "valkey-bloom", [("Initial stub", "README.md"), ("Initial commit", "src/lib.rs"),
                                             ("Fix BF.ADD (#2)", "src/lib.rs")])
-    planned = plan(repo, BLOOM, initial_state(BLOOM), 5, UNSTABLE)
+    planned = plan(repo, BLOOM, initial_state(BLOOM), 5, UNSTABLE, now=NOW)
     assert _jobs(planned) == [2]
     assert [m["subject"] for m in planned["skipped"]] == ["Initial commit"]
     assert planned["skipped"][0]["skip_outcome"] == "no-parent-code"
@@ -161,7 +161,7 @@ def test_a_pointer_off_the_history_stops_the_plan(json_repo):
     state = initial_state(JSON)
     state["pointer"] = {"head": "0" * 40, "cursor": _shas(json_repo)[0], "end": _shas(json_repo)[-1]}
     with pytest.raises(ValueError, match="head of valkey-io/valkey-json"):
-        plan(json_repo, JSON, state, 1, UNSTABLE)
+        plan(json_repo, JSON, state, 1, UNSTABLE, now=NOW)
 
 
 @pytest.mark.parametrize(("paths", "repo", "expected"), [
@@ -229,6 +229,36 @@ def test_the_state_marks_done_retries_and_gives_up():
     text = dump_state(state)
     assert json.loads(text) == state
     assert sum(1 for line in text.splitlines() if line.startswith('  "')) == len(state["done"]) + len(state["failed"])
+
+
+REFUSED = "Claude Code failed (rc=1): API Error: ... appears to violate our Usage Policy"
+
+
+def test_a_refused_merge_is_retried_a_day_later_without_counting_an_attempt():
+    # valkey #4214: the API refused the request; the same request may be answered another time.
+    refused = _merge(sha="c" * 40, pr=4214)
+    planned = {"repo": walk.VALKEY_REPO, "merges": [refused], "skipped": [], "pointer": {"head": "h"}}
+    state = initial_state(walk.VALKEY_REPO)
+    for refusals in range(1, walk.MAX_REFUSALS):
+        state = update(state, planned, [_result(refused, error=REFUSED, cost_usd=4.0)], now=NOW)
+        entry = state["failed"][refused["sha"]]
+        assert (entry["attempts"], entry["refusals"]) == (0, refusals)
+        assert entry["retry_after"] == "2026-11-05T12:00:00+00:00"
+    state = update(state, planned, [_result(refused, error=REFUSED, cost_usd=4.0)], now=NOW)
+    assert refused["sha"] not in state["failed"]
+    assert state["done"][refused["sha"]]["reason"] == REFUSED
+
+
+def test_a_merge_waiting_to_be_retried_leaves_the_run_to_others(json_repo):
+    shas = _shas(json_repo)
+    state = initial_state(JSON)
+    state["pointer"] = {"head": shas[0], "cursor": shas[0], "end": shas[-1]}
+    fields = {"repo": JSON, "parent": "e" * 40, "pr_repo": JSON, "subject": "s", "date": "d", "attempts": 0}
+    state["failed"]["f" * 40] = {**fields, "sha": "f" * 40, "pr": 9, "retry_after": "2026-11-05T12:00:00+00:00"}
+    state["failed"]["9" * 40] = {**fields, "sha": "9" * 40, "pr": 8, "retry_after": "2026-11-04T11:00:00+00:00"}
+
+    assert _jobs(plan(json_repo, JSON, state, 2, UNSTABLE, now=NOW)) == [8, 5]
+    assert _jobs(plan(json_repo, JSON, state, 2, UNSTABLE, now="2026-11-05T12:00:00+00:00")) == [9, 8]
 
 
 def _results(tmp_path: Path, *pairs: tuple[dict, dict]) -> Path:
