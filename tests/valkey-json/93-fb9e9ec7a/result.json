@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "fb9e9ec7a2e4975dff1b1baecde3eae62332c6e4",
+  "parent": "ac5a0e42b5f475c9c6d51712f04d455fe55ecd55",
+  "pr": 93,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Revert \"Simplify offline build (#73)\" (#93)",
+  "date": "2025-12-16",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2783,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a revert that touches only the build system and CI: .github/workflows/ci.yml, CMakeLists.txt, src/CMakeLists.txt and build.sh. It removes the VALKEY_INCLUDE_DIR and RAPIDJSON_SOURCE_DIR offline-build paths and restores the unconditional ExternalProject fetch of Valkey, changing only how headers and dependencies are obtained during compilation. No module source file is modified, the RapidJSON pin and valkeymodule.h source are unchanged, so the compiled module's runtime behaviour (commands, replies, persistence, replication) is identical on both builds; there is no reachable behavi"
+}

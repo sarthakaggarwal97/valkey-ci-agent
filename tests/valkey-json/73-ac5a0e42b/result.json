@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "ac5a0e42b5f475c9c6d51712f04d455fe55ecd55",
+  "parent": "3a29d8a429ac5ce6d5d5ca18b4d36af0eb03c477",
+  "pr": 73,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Simplify offline build (#73)",
+  "date": "2025-12-15",
+  "unstable": "9b4dcf617dfd0dc5f267624973f25877a44c66a6",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.276,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely a build/CI change: it quotes strings in the GitHub workflow, lets CMake use a pre-provided VALKEY_INCLUDE_DIR and RAPIDJSON_SOURCE_DIR instead of downloading valkey and RapidJSON (for offline builds), passes VALKEY_INCLUDE_DIR through build.sh, and makes the ExternalProject dependency conditional on tests being enabled. It fetches the same valkeymodule.h and the same pinned RapidJSON commit either way, and no module source code is modified, so the built module's runtime behaviour is unchanged; there is no command, reply, persistence or replication path for a scenario to ex"
+}
