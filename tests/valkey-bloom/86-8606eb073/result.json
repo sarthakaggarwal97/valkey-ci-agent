@@ -1,0 +1,37 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "8606eb07395f299c409567d28533b9457f376309",
+  "parent": "348bd9f6560a4ca9ef6b129a5826e7eda43c7dfc",
+  "pr": 86,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Fix replica crash on partial-success BF.MADD/BF.INSERT replication (#86)",
+  "date": "2026-04-16",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 4.9597,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: This replica panicked sending an error to its primary after processing the command 'BF.MADD' #networking.c:1005",
+      "scenario": "ai-d1dd42599582",
+      "seed": 70003,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #86",
+      "fingerprint": "1143878dc31106ba2291",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

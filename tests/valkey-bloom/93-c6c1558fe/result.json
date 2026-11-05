@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "c6c1558fe045cfd291a032da075fd087a995b9a3",
+  "parent": "fc0655648412d79c69239430863ec4eceee21935",
+  "pr": 93,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Moving metric increment to very end of decode (#93)",
+  "date": "2026-04-26",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 1,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 8.3316,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-8638615a9d4c",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

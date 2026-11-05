@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "523e19a98426d32dab7097ae46ddaa891148fb10",
+  "parent": "8606eb07395f299c409567d28533b9457f376309",
+  "pr": 89,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Prevalidate in BF.LOAD (#89)",
+  "date": "2026-04-22",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.6461,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure reordering refactor of BloomObject::decode_object (the decoder behind BF.LOAD): the capacity<=0 and num_items>capacity validation checks are unchanged context lines present in both builds \u2014 the change only splits the single validate+increment loop into a validate-all loop followed by an increment loop. The BF.LOAD reply is byte-for-byte identical on both builds for every input (the error and its position depend only on the first invalid filter in iteration order, and the parent already validated each filter before incrementing its metrics, so no crash is introduced or fixed). The sole dif"
+}

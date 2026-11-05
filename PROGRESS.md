@@ -1,11 +1,11 @@
 # Fuzzer walk
 
-Updated 2026-11-05T04:39+00:00.
+Updated 2026-11-05T04:40+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 26 | 2462 | #5244 (2026-11-03) | 26 | 3.7 |
-| valkey-io/valkey-bloom | 5 | 104 | #93 (2026-04-26) | 5 | 0.7 |
+| valkey-io/valkey-bloom | 29 | 80 | #45 (2025-03-11) | 29 | 4.1 |
 | valkey-io/valkey-json | 26 | 36 | #70 (2025-08-12) | 26 | 3.7 |
 | valkey-io/valkey-search | 0 | 667 | #1634 (2026-11-03) | 0 | 0.0 |
 
@@ -38,11 +38,28 @@ Updated 2026-11-05T04:39+00:00.
 
 ### valkey-io/valkey-bloom
 
-[2026-11-05T00:41:15+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41936041312): 3 merge(s) tested, 0 without a code change.
+[2026-11-05T04:40:06+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41956216161): 20 merge(s) tested, 5 without a code change.
 
-- [valkey-io/valkey-bloom#110](https://github.com/valkey-io/valkey-bloom/pull/110) ([tests](tests/valkey-bloom/110-9ab369980/)): Match bloom memory tracking by small over count of bytes after a defrag operation (#110): 0 of 2 test(s) reached the change
-- [valkey-io/valkey-bloom#97](https://github.com/valkey-io/valkey-bloom/pull/97) ([tests](tests/valkey-bloom/97-c340f0ec2/)): Support reusing an externally built valkey-server binary for test (#97): declined: The change modifies only build.sh and README.md of valkey-bloom's test harness: it lets the integration-test setup reuse an externally built valkey-server binary (VALKEY_SERVER_PATH) and whitelists '9.1' as a SERVER_VERSION. No module code, command handling, data format, or runtime behavio
-- [valkey-io/valkey-bloom#94](https://github.com/valkey-io/valkey-bloom/pull/94) ([tests](tests/valkey-bloom/94-712a1d7ee/)): remove 'validate_scale_to' check in replica (#94): 3 of 3 test(s) reached the change
+- [valkey-io/valkey-bloom#93](https://github.com/valkey-io/valkey-bloom/pull/93) ([tests](tests/valkey-bloom/93-c6c1558fe/)): Moving metric increment to very end of decode (#93): 0 of 1 test(s) reached the change
+- [valkey-io/valkey-bloom#91](https://github.com/valkey-io/valkey-bloom/pull/91) ([tests](tests/valkey-bloom/91-fc0655648/)): Adding validation on tightening_ratio and fp_rate for load (#91): declined: The change only adds defensive (0,1) range validation for fp_rate and tightening_ratio to the bloom module's RDB-load callback (BloomObject::load_from_rdb in src/bloom/data_type.rs); on an out-of-range value it now returns None, failing the load, where the parent accepted it. Every command
+- [valkey-io/valkey-bloom#92](https://github.com/valkey-io/valkey-bloom/pull/92): to retry, Claude Code failed (rc=1): timeout after 3000s
+- [valkey-io/valkey-bloom#89](https://github.com/valkey-io/valkey-bloom/pull/89) ([tests](tests/valkey-bloom/89-523e19a98/)): Prevalidate in BF.LOAD (#89): declined: Pure reordering refactor of BloomObject::decode_object (the decoder behind BF.LOAD): the capacity<=0 and num_items>capacity validation checks are unchanged context lines present in both builds — the change only splits the single validate+increment loop into a validate-all loop followed by 
+- [valkey-io/valkey-bloom#86](https://github.com/valkey-io/valkey-bloom/pull/86) ([tests](tests/valkey-bloom/86-8606eb073/)): Fix replica crash on partial-success BF.MADD/BF.INSERT replication (#86): 3 of 3 test(s) reached the change; crash, fixed by #86 (recorded)
+- [valkey-io/valkey-bloom#88](https://github.com/valkey-io/valkey-bloom/pull/88) ([tests](tests/valkey-bloom/88-348bd9f65/)): Add more validation in the RDB Load and BF.LOAD paths (#88): 2 of 2 test(s) reached the change; crash, fixed by #88 (recorded)
+- [valkey-io/valkey-bloom#82](https://github.com/valkey-io/valkey-bloom/pull/82) ([tests](tests/valkey-bloom/82-a68614b6e/)): Set ModuleOptions to Handle IO Errors (#82): 2 of 2 test(s) reached the change; crash, fixed by #82 (recorded)
+- [valkey-io/valkey-bloom#79](https://github.com/valkey-io/valkey-bloom/pull/79) ([tests](tests/valkey-bloom/79-9b774acd5/)): Fix typo in bf.info.json from 'TIGHTENTING' to 'TIGHTENING' (#79): declined: The change fixes a typo ('TIGHTENTING' -> 'TIGHTENING') in src/commands/bf.info.json, a command-metadata documentation file. These JSON files are not compiled into the module: there is no build.rs, no include_str!/include_bytes!, and no set-command-info call in the crate; commands are regi
+- [valkey-io/valkey-bloom#81](https://github.com/valkey-io/valkey-bloom/pull/81) ([tests](tests/valkey-bloom/81-097c2a452/)): Fix AOF rewrite and restore BF tests (#81): declined: The change modifies only the module's own CI test harness: requirements.txt bumps pytest from 6 to 7.4.3, and tests/test_bloom_aofrewrite.py is fixed to enable appendonly before writing data and to keep appendonly=yes across the test's server restart so the AOF is actually replayed. No mod
+- [valkey-io/valkey-bloom#73](https://github.com/valkey-io/valkey-bloom/pull/73) ([tests](tests/valkey-bloom/73-d9998e8ce/)): update build.sh to ensure POSIX compliance for dash shell (#73): declined: The change edits only build.sh, converting bash-specific [[ ]] conditionals to POSIX [ ] tests for dash compatibility. It is a build/CI script change with no modification to the module's source code, so the compiled module's runtime behaviour (commands, replies, persistence, replication) i
+- [valkey-io/valkey-bloom#76](https://github.com/valkey-io/valkey-bloom/pull/76) ([tests](tests/valkey-bloom/76-148c86d2b/)): Update README to fix 8.0 build and update build.sh to support 9.0 (#76): declined: The change edits only README.md (documentation wording for SERVER_VERSION) and build.sh (accepting '9.0' as a SERVER_VERSION for the integration-test build script). No module source code is touched, so the compiled valkey-bloom artifact at the change is behaviorally identical to the parent
+- [valkey-io/valkey-bloom#68](https://github.com/valkey-io/valkey-bloom/pull/68) ([tests](tests/valkey-bloom/68-223d780d2/)): Spelling (#68): declined: The change is a spelling-only PR: it edits CI step names, README/QUICK_START prose, code comments, Python test comments and an assertion message, and the wording of one internal log-warning string. The only code change is renaming the internal Rust constant BLOOM_DEFRAG_DEAFULT to BLOOM_DE
+- [valkey-io/valkey-bloom#67](https://github.com/valkey-io/valkey-bloom/pull/67) ([tests](tests/valkey-bloom/67-bf60c40e3/)): Adding clean option for build script and fixing current clippy issues (#67): declined: The change is build/CI and documentation only: a `clean` subcommand added to build.sh, a README note for it, and re-indentation of doc comments in src/bloom/utils.rs to fix a clippy doc-formatting lint. No executable Rust code changes — the module's commands, replies, serialization, and co
+- [valkey-io/valkey-bloom#57](https://github.com/valkey-io/valkey-bloom/pull/57) ([tests](tests/valkey-bloom/57-148930ed7/)): Cleaning up usage of valkey-test-framework (#57): declined: no proposed test validated
+- [valkey-io/valkey-bloom#47](https://github.com/valkey-io/valkey-bloom/pull/47) ([tests](tests/valkey-bloom/47-c97e0c6da/)): Adding Bloom command JSON files (#47): declined: The change only adds static JSON command-documentation files under src/commands/ (and a trailing newline in .gitignore). Nothing consumes them: valkey-bloom has no build.rs and no include_str!/include_bytes! or other reference to src/commands/; all BF.* commands, their arity, flags and ACL
+- [valkey-io/valkey-bloom#56](https://github.com/valkey-io/valkey-bloom/pull/56) ([tests](tests/valkey-bloom/56-d6b8763bc/)): Updating build script and github workflow to get test framework from github and removing it locally (#56): declined: The change modifies only build/CI/test infrastructure: ci.yml and build.sh now clone the valkey-test-framework repo from GitHub, the vendored copy under tests/valkeytests/ is deleted, .gitignore gains an entry, and one test file loses a trailing newline. No module source code (src/) is tou
+- [valkey-io/valkey-bloom#55](https://github.com/valkey-io/valkey-bloom/pull/55) ([tests](tests/valkey-bloom/55-5d514e051/)): Set default unstable version and update readme.md (#55): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-bloom#54](https://github.com/valkey-io/valkey-bloom/pull/54) ([tests](tests/valkey-bloom/54-9d403c4c7/)): Adding a quick start guide for bloom (#54): declined: The change only adds a new documentation file (QUICK_START.md) and removes an unused Windows branch from build.sh; the build script change cannot affect a Linux build's output, and no module source, command behaviour, replies, persistence or replication code changed. There is no runtime be
+- [valkey-io/valkey-bloom#52](https://github.com/valkey-io/valkey-bloom/pull/52) ([tests](tests/valkey-bloom/52-d23399a41/)): Update development script's tests use module extensions from different platforms + Define default/unstable version, stage + add placeholder release notes (#52): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-bloom#50](https://github.com/valkey-io/valkey-bloom/pull/50) ([tests](tests/valkey-bloom/50-e308fedf1/)): Adding tightening ratio to bf.info. Making BF.BLOOM-EXPANSION also (#50): 2 of 2 test(s) reached the change
 
 ### valkey-io/valkey-json
 
@@ -78,10 +95,10 @@ Updated 2026-11-05T04:39+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 24 of 31 tested (77%)
+- Merges whose tests reached the change: 30 of 38 tested (79%)
 - Changed-line coverage: median 100% of 13 merge(s) measured, 1 under 50%
-- Recall: 8 parents flagged of 10 fix merges
-- Claude: $200.26 in the last 24 hours, $200.26 in the last 7 days, $200.26 in all
+- Recall: 9 parents flagged of 11 fix merges
+- Claude: $238.40 in the last 24 hours, $238.40 in the last 7 days, $238.40 in all
 - Issues filed: 8
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
@@ -94,6 +111,7 @@ Updated 2026-11-05T04:39+00:00.
 
 ## Retries
 
+- [valkey-io/valkey-bloom#92](https://github.com/valkey-io/valkey-bloom/pull/92): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
 - [valkey-io/valkey-json#93](https://github.com/valkey-io/valkey-json/pull/93): attempt 1 of 3, `SERVER_VERSION=unstable VALKEY_MODULE_H_PATH="${VALKEY_SRC}/src/valkeymodule.h" ./build.sh` failed in parent (exit 2): compilation terminated. In file included from /home/runner/work/valkey-ci-agent/
 - [valkey-io/valkey-json#73](https://github.com/valkey-io/valkey-json/pull/73): attempt 1 of 3, `SERVER_VERSION=unstable VALKEY_MODULE_H_PATH="${VALKEY_SRC}/src/valkeymodule.h" ./build.sh` failed in merge (exit 2): In file included from /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work
 - [valkey-io/valkey-search#1576](https://github.com/valkey-io/valkey-search/pull/1576): attempt 1 of 3, 'reached'

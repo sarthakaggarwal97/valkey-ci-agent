@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.bloom-module-version-report
+deployment:
+  modes: [standalone]
+metadata:
+  description: Unstable branch reports module version 999999 instead of 0 in MODULE
+    LIST and INFO modules, with no functional change to BF commands
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: modver
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [MODULE, LIST], expect_difference: true, expect: {contains: "999999"}}
+    - {command: [INFO, modules], expect_difference: true, expect: {contains: "ver=999999"}}
+    - {command: [BF.ADD, filt, item1], expect: {equals: 1}}
+    - {command: [BF.ADD, filt, item1], expect: {equals: 0}}
+    - {command: [BF.EXISTS, filt, item1], expect: {equals: 1}}
+    - {command: [BF.CARD, filt], expect: {equals: 1}}
+    - {command: [BF.RESERVE, rsv, 0.01, 1000], expect: {equals: OK}}
+    - {command: [BF.INFO, rsv, CAPACITY], expect: {equals: 1000}}
+    - {command: [BF.INSERT, ins, CAPACITY, 100, ITEMS, a, b, c], expect: {equals: [
+          1, 1, 1]}}
+    - {command: [TYPE, filt], expect: {equals: bloomfltr}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [modver.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modver}

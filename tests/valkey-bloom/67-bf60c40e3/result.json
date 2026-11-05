@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "bf60c40e3df671723869bb47516800cc9eb17d8b",
+  "parent": "5b95585c83fc734957e7e3f204fa031c658cefcc",
+  "pr": 67,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Adding clean option for build script and fixing current clippy issues (#67)",
+  "date": "2025-06-13",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2284,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is build/CI and documentation only: a `clean` subcommand added to build.sh, a README note for it, and re-indentation of doc comments in src/bloom/utils.rs to fix a clippy doc-formatting lint. No executable Rust code changes \u2014 the module's commands, replies, serialization, and configs are identical to the parent \u2014 so there is no behaviour for a scenario to exercise."
+}

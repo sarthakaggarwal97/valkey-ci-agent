@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "d6b8763bcc79537d9752cb21a501357dba69c382",
+  "parent": "5d514e051cb8ab8533a75c3d1cc295e1e52384a9",
+  "pr": 56,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Updating build script and github workflow to get test framework from github and removing it locally (#56)",
+  "date": "2025-03-28",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2696,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only build/CI/test infrastructure: ci.yml and build.sh now clone the valkey-test-framework repo from GitHub, the vendored copy under tests/valkeytests/ is deleted, .gitignore gains an entry, and one test file loses a trailing newline. No module source code (src/) is touched, so the compiled valkey-bloom module and all its runtime behaviour (commands, replies, persistence) are identical on both builds; there is nothing a scenario could reach or differentiate."
+}

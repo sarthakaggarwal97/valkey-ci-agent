@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "c97e0c6da096318eb14b70aa872d3ed748e571a4",
+  "parent": "d6b8763bcc79537d9752cb21a501357dba69c382",
+  "pr": 47,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Adding Bloom command JSON files (#47)",
+  "date": "2025-03-28",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6819,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds static JSON command-documentation files under src/commands/ (and a trailing newline in .gitignore). Nothing consumes them: valkey-bloom has no build.rs and no include_str!/include_bytes! or other reference to src/commands/; all BF.* commands, their arity, flags and ACL categories are registered by the valkey_module! macro in src/lib.rs, which is unchanged. The compiled module is identical on both sides of the change, so there is no runtime behaviour to test."
+}

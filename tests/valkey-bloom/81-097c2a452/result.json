@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "097c2a452211a419e8a31549cbd4ea6d788a3a28",
+  "parent": "d9998e8ce7236bbffe35f8ac24591eb620057997",
+  "pr": 81,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Fix AOF rewrite and restore BF tests (#81)",
+  "date": "2026-01-05",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2335,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only the module's own CI test harness: requirements.txt bumps pytest from 6 to 7.4.3, and tests/test_bloom_aofrewrite.py is fixed to enable appendonly before writing data and to keep appendonly=yes across the test's server restart so the AOF is actually replayed. No module source code (command handlers, AOF rewrite callback, serialization, or any runtime path) is touched, so the module's behaviour is byte-for-byte identical on both builds and no scenario can reach a behavioural difference."
+}

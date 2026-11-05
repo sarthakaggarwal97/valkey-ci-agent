@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "9d403c4c7746ceac8dec69326409746b53984d83",
+  "parent": "60513c7bb1a3a053feeb4b6f20cb39d204723fcd",
+  "pr": 54,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Adding a quick start guide for bloom (#54)",
+  "date": "2025-03-28",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.223,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a new documentation file (QUICK_START.md) and removes an unused Windows branch from build.sh; the build script change cannot affect a Linux build's output, and no module source, command behaviour, replies, persistence or replication code changed. There is no runtime behaviour to test."
+}

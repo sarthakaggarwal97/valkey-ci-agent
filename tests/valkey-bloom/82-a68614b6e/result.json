@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "a68614b6e3845777d383b3a513cedcc08b3b7ccd",
+  "parent": "9b774acd5563d0b78e188bc4d4013afb4ba09cef",
+  "pr": 82,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Set ModuleOptions to Handle IO Errors (#82)",
+  "date": "2026-02-23",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.443,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: Error loading data from RDB (short read or EOF). Read performed by module 'bf' about type 'bloomfltr' after reading '0' bytes of a value for key named: '*redacted*'. #module.c:7842",
+      "scenario": "ai-8f67e26c0523",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #82",
+      "fingerprint": "9ddbde5dd83732e534c4",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: Error loading data from RDB (short read or EOF). Read performed by module 'bf' about type 'bloomfltr' after reading '0' bytes of a value for key named: '*redacted*'. #module.c:7842",
+      "scenario": "ai-fe5138eccf20",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #82",
+      "fingerprint": "9ddbde5dd83732e534c4",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

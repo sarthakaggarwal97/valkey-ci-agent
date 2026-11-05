@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "fc0655648412d79c69239430863ec4eceee21935",
+  "parent": "8a897673d8f2004e71193ec1d7613e6c8b574b64",
+  "pr": 91,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Adding validation on tightening_ratio and fp_rate for load (#91)",
+  "date": "2026-04-23",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.4736,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds defensive (0,1) range validation for fp_rate and tightening_ratio to the bloom module's RDB-load callback (BloomObject::load_from_rdb in src/bloom/data_type.rs); on an out-of-range value it now returns None, failing the load, where the parent accepted it. Every command path that creates a bloom object already enforces the same bound unchanged by this PR -- CONFIG SET, BF.RESERVE/BF.INSERT, and BF.LOAD via decode_object's checks at utils.rs:497-504, which the diff does not touch -- so no command sequence can place an out-of-range fp_rate/tightening_ratio into the keyspace, "
+}

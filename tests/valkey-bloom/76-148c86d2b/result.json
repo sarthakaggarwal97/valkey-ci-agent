@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "148c86d2b595857ac05001e59f1886f394b35aa3",
+  "parent": "1460d4f84b8bc22a5264391a077dd391b0aba4fb",
+  "pr": 76,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Update README to fix 8.0 build and update build.sh to support 9.0 (#76)",
+  "date": "2025-12-16",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2138,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only README.md (documentation wording for SERVER_VERSION) and build.sh (accepting '9.0' as a SERVER_VERSION for the integration-test build script). No module source code is touched, so the compiled valkey-bloom artifact at the change is behaviorally identical to the parent: no command, reply, persistence, or replication path changed. This is a build/CI and documentation change that needs no scenario."
+}

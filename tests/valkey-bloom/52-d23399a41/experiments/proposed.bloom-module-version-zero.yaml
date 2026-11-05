@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.bloom-module-version-zero
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-bloom now registers with version MODULE_VERSION (0) instead
+    of 1; INFO modules must show ver=0 on the change and ver=1 on the parent, and
+    every BF command, error path and module config must behave identically on both
+    builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bloomver
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [INFO, modules], expect_difference: true, expect: {contains: "ver=0"}}
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, no], expect: {equals: OK}}
+    - {command: [BF.RESERVE, filt, 0.001, 1000], expect: {equals: OK}}
+    - {command: [BF.ADD, filt, item1], expect: {equals: 1}}
+    - {command: [BF.ADD, filt, item1], expect: {equals: 0}}
+    - {command: [BF.EXISTS, filt, item1], expect: {equals: 1}}
+    - {command: [BF.MADD, filt, alpha, beta, gamma], expect: {equals: [1, 1, 1]}}
+    - {command: [BF.MEXISTS, filt, item1, alpha], expect: {equals: [1, 1]}}
+    - {command: [BF.CARD, filt], expect: {equals: 4}}
+    - {command: [BF.INFO, filt, CAPACITY], expect: {equals: 1000}}
+    - {command: [BF.INFO, filt, ITEMS], expect: {equals: 4}}
+    - {command: [BF.INFO, filt, FILTERS], expect: {equals: 1}}
+    - {command: [BF.INSERT, filt2, CAPACITY, 500, ERROR, 0.001, ITEMS, x, y], expect: {
+        equals: [1, 1]}}
+    - {command: [BF.CARD, filt2], expect: {equals: 2}}
+    - {command: [TYPE, filt], expect: {equals: bloomfltr}}
+    - {command: [BF.INFO, missingkey], expect: {error: "not found"}}
+    - {command: [BF.RESERVE, filt, 0.001, 1000], expect: {error: "already exists"}}
+    - {command: [BF.RESERVE, bad, 2, 1000], expect: {error: true}}
+    - {command: [BF.INFO, filt, NOSUCHFIELD], expect: {error: "invalid information\
+          \ value"}}
+    - {command: [CONFIG, GET, bf.bloom-capacity], expect: {contains: "100"}}
+    - {command: [CONFIG, GET, bf.bloom-fp-rate], expect: {contains: "0.01"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bloomver.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bloomver}

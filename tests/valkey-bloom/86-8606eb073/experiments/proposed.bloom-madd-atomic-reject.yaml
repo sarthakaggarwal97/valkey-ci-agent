@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.bloom-madd-atomic-reject
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.MADD/BF.INSERT that cannot add every new item is rejected atomically
+    with a top-level error (no partial success), on nonscaling-full and memory-limit
+    scale-out paths
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: madd
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, no], expect: {equals: OK}}
+    - {command: [BF.RESERVE, ns, "0.01", "2", NONSCALING], expect: {equals: OK}}
+    - {command: [BF.ADD, ns, a], expect: {equals: 1}}
+    - {command: [BF.MADD, ns, b, c], expect_difference: true, expect: {error: "non\
+          \ scaling filter is full"}}
+    - {command: [BF.INFO, ns, ITEMS], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.EXISTS, ns, a], expect: {equals: 1}}
+    - {command: [BF.MADD, ns, x, x, y], expect_difference: true, expect: {error: "non\
+          \ scaling filter is full"}}
+    - {command: [BF.INFO, ns, ITEMS], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.RESERVE, ns2, "0.01", "2", NONSCALING], expect: {equals: OK}}
+    - {command: [BF.ADD, ns2, p], expect: {equals: 1}}
+    - {command: [BF.MADD, ns2, q, q, q], expect: {equals: [1, 0, 0]}}
+    - {command: [BF.MADD, ns2, q, q], expect: {equals: [0, 0]}}
+    - {command: [BF.MADD, ns2, p, s], expect_difference: true, expect: {error: "non\
+          \ scaling filter is full"}}
+    - {command: [BF.INFO, ns2, ITEMS], expect: {equals: 2}}
+    - {command: [BF.INSERT, ns, NOCREATE, ITEMS, d, e], expect_difference: true, expect: {
+        error: "non scaling filter is full"}}
+    - {command: [BF.INSERT, newk, CAPACITY, "1", NONSCALING, ITEMS, u, v], expect_difference: true,
+      expect: {error: "non scaling filter is full"}}
+    - {command: [EXISTS, newk], expect: {equals: 1}}
+    - {command: [BF.INFO, newk, ITEMS], expect_difference: true, expect: {equals: 0}}
+    - {command: [BF.RESERVE, sc, "0.01", "1", EXPANSION, "4294967295"], expect: {
+        equals: OK}}
+    - {command: [BF.ADD, sc, m1], expect: {equals: 1}}
+    - {command: [BF.MADD, sc, m2, m3], expect_difference: true, expect: {error: "exceeds\
+          \ bloom object memory limit"}}
+    - {command: [BF.INFO, sc, ITEMS], expect: {equals: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [madd.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: madd}

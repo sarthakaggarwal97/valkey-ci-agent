@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.bf-info-tightening-expansion0
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.INFO TIGHTENING subcommand and field, and bf.bloom-expansion 0 creating
+    non-scaling filters, compared across the two module builds, including CONFIG REWRITE,
+    SAVE and restart
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bfinfo
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, bf.bloom-use-random-seed, 'no'], expect: {equals: OK}}
+    - {command: [BF.RESERVE, scaling, '0.01', '1000'], expect: {equals: OK}}
+    - {command: [BF.INFO, scaling, TIGHTENING], expect_difference: true, expect: {
+        error: false}}
+    - {command: [BF.INFO, scaling], expect_difference: true, expect: {contains: 'Tightening
+          ratio'}}
+    - {command: [BF.INFO, scaling, MAXSCALEDCAPACITY], expect: {min: 1000}}
+    - {command: [BF.RESERVE, nonscaling, '0.01', '1000', NONSCALING], expect: {equals: OK}}
+    - {command: [BF.INFO, nonscaling, TIGHTENING], expect: {error: 'invalid information
+          value'}}
+    - {command: [BF.INFO, nonscaling, MAXSCALEDCAPACITY], expect: {error: 'invalid
+          information value'}}
+    - {command: [CONFIG, SET, bf.bloom-tightening-ratio, '0.6'], expect: {equals: OK}}
+    - {command: [BF.RESERVE, scaling2, '0.001', '500'], expect: {equals: OK}}
+    - {command: [BF.INFO, scaling2, TIGHTENING], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CONFIG, SET, bf.bloom-expansion, '-1'], expect: {error: true}}
+    - {command: [CONFIG, SET, bf.bloom-expansion, '4294967295'], expect: {equals: OK}}
+    - {command: [CONFIG, SET, bf.bloom-expansion, '2'], expect: {equals: OK}}
+    - {command: [CONFIG, SET, bf.bloom-expansion, '0'], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, bf.bloom-fp-rate, '0.0001'], expect: {equals: OK}}
+    - {command: [CONFIG, SET, bf.bloom-capacity, '1'], expect: {equals: OK}}
+    - {command: [BF.ADD, defkey, item1], expect: {equals: 1}}
+    - {command: [BF.ADD, defkey, item2], expect_difference: true, expect: {error: 'non
+          scaling filter is full'}}
+    - {command: [BF.INFO, defkey, FILTERS], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.INFO, defkey], expect_difference: true, expect: {contains: Capacity}}
+    - {command: [BF.INSERT, insdef, ITEMS, a], expect: {equals: [1]}}
+    - {command: [BF.INFO, insdef, TIGHTENING], expect: {error: 'invalid information
+          value'}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.INFO, scaling, TIGHTENING], expect_difference: true, expect: {
+        error: false}}
+    - {command: [BF.INFO, scaling2, TIGHTENING], expect_difference: true, expect: {
+        error: false}}
+    - {command: [BF.INFO, scaling], expect_difference: true, expect: {contains: 'Tightening
+          ratio'}}
+    - {command: [BF.ADD, post, x], expect: {equals: 1}}
+    - {command: [BF.INFO, post, TIGHTENING], expect: {error: 'invalid information
+          value'}}
+    - {command: [BF.INFO, post], expect_difference: true, expect: {contains: Capacity}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bfinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bfinfo}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "9b774acd5563d0b78e188bc4d4013afb4ba09cef",
+  "parent": "097c2a452211a419e8a31549cbd4ea6d788a3a28",
+  "pr": 79,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Fix typo in bf.info.json from 'TIGHTENTING' to 'TIGHTENING' (#79)",
+  "date": "2026-01-12",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.0201,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change fixes a typo ('TIGHTENTING' -> 'TIGHTENING') in src/commands/bf.info.json, a command-metadata documentation file. These JSON files are not compiled into the module: there is no build.rs, no include_str!/include_bytes!, and no set-command-info call in the crate; commands are registered solely via the valkey_module! macro in src/lib.rs with plain flag strings, so neither COMMAND INFO nor COMMAND DOCS nor any reply is derived from the file. The runtime parsing of the TIGHTENING token in BF.INFO (src/bloom/command_handler.rs:722) was already spelled correctly and is unchanged. No observ"
+}
