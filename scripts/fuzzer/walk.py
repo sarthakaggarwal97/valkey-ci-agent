@@ -495,11 +495,12 @@ def cover(measure: Callable[[list[Any]], dict[str, Any]], more: Callable[[dict[s
 # --- Running a test ------------------------------------------------------------
 
 
-def with_checks(text: str, *, concurrency: bool = True) -> str:
+def with_checks(text: str, *, test_module: bool = False) -> str:
     """An experiment's YAML with CHECKS on every valkey.action.commands that compares two builds: of Valkey
     (``compare_with``), or of a module (``modules_parent``), which leaves out compat, a check of two Valkey
-    builds. ``concurrency`` false leaves out the concurrency check too: Valkey's test modules keep one client's
-    state in globals, and N clients at once crash them by design.
+    builds. ``test_module`` (Valkey's test modules are loaded) leaves out the concurrency and replica checks too:
+    the modules keep one client's state in globals, and N clients at once crash them by design; and their
+    commands write without replicating as they please (test.call_argv_s calls CallArgv without REPLICATE).
 
     It edits the YAML's nodes, not the values they load as, so every scalar keeps its text: PyYAML reads ``no``
     as false, and a command's ``no`` would come back a boolean the fuzzer refuses."""
@@ -523,8 +524,9 @@ def with_checks(text: str, *, concurrency: bool = True) -> str:
             checks = {key: value for key, value in CHECKS.items() if key != "compat"}
         else:
             continue
-        if not concurrency:
+        if test_module:
             checks.pop("concurrency")
+            checks.pop("replica")
         key = yaml.ScalarNode("tag:yaml.org,2002:str", "checks")
         config.value.append((key, yaml.compose(yaml.safe_dump(checks), Loader=yaml.SafeLoader)))
     return yaml.serialize(root, Dumper=yaml.SafeDumper)
@@ -915,7 +917,7 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
         experiment_dir.mkdir(parents=True, exist_ok=True)
         for file, text in proposed.items():
             if file not in clash:
-                plain[file], experiments[file] = text, with_checks(text, concurrency=not test_module)
+                plain[file], experiments[file] = text, with_checks(text, test_module=test_module)
                 (plain_dir / file).write_text(text, encoding="utf-8")
                 (experiment_dir / file).write_text(experiments[file], encoding="utf-8")
         fresh = {}
