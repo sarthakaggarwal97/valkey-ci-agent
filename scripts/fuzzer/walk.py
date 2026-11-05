@@ -495,10 +495,11 @@ def cover(measure: Callable[[list[Any]], dict[str, Any]], more: Callable[[dict[s
 # --- Running a test ------------------------------------------------------------
 
 
-def with_checks(text: str) -> str:
+def with_checks(text: str, *, concurrency: bool = True) -> str:
     """An experiment's YAML with CHECKS on every valkey.action.commands that compares two builds: of Valkey
     (``compare_with``), or of a module (``modules_parent``), which leaves out compat, a check of two Valkey
-    builds.
+    builds. ``concurrency`` false leaves out the concurrency check too: Valkey's test modules keep one client's
+    state in globals, and N clients at once crash them by design.
 
     It edits the YAML's nodes, not the values they load as, so every scalar keeps its text: PyYAML reads ``no``
     as false, and a command's ``no`` would come back a boolean the fuzzer refuses."""
@@ -522,6 +523,8 @@ def with_checks(text: str) -> str:
             checks = {key: value for key, value in CHECKS.items() if key != "compat"}
         else:
             continue
+        if not concurrency:
+            checks.pop("concurrency")
         key = yaml.ScalarNode("tag:yaml.org,2002:str", "checks")
         config.value.append((key, yaml.compose(yaml.safe_dump(checks), Loader=yaml.SafeLoader)))
     return yaml.serialize(root, Dumper=yaml.SafeDumper)
@@ -895,13 +898,16 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
                 build_test_modules(tree)
                 sides[build]["module"] = tree / module_file
             sides["unstable"]["module"] = unstable / module_file
+        # A Valkey merge's module is one of Valkey's test modules (valkey #5159: postponed_unmatched_free, run by
+        # four clients, freed its one global context twice).
+        test_module = core and sides["merge"]["module"] is not None
         # A later round's experiment named like an earlier one's but unlike it is not taken, nor its scenarios.
         clash = {file for file, text in proposed.items() if plain.get(file, text) != text}
         plain_dir.mkdir(parents=True, exist_ok=True)
         experiment_dir.mkdir(parents=True, exist_ok=True)
         for file, text in proposed.items():
             if file not in clash:
-                plain[file], experiments[file] = text, with_checks(text)
+                plain[file], experiments[file] = text, with_checks(text, concurrency=not test_module)
                 (plain_dir / file).write_text(text, encoding="utf-8")
                 (experiment_dir / file).write_text(experiments[file], encoding="utf-8")
         fresh = {}

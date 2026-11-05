@@ -436,6 +436,14 @@ def test_the_template_turns_every_check_on_where_a_sequence_compares_two_builds(
     assert doc["components"][0]["config"]["compare_with"] == {"$ref": "artifacts.parent.binary"}
 
 
+def test_a_valkey_test_module_runs_no_concurrency_check():
+    # valkey #5159: blockedclient's postponed_unmatched_free frees its one global context; four clients freed it twice.
+    doc = yaml.safe_load(with_checks(EXPERIMENT, concurrency=False))
+    checks = [c["config"].get("checks") for c in doc["components"]]
+    assert [c is None or "concurrency" in c for c in checks] == [False, True, False]
+    assert checks[0] == {key: value for key, value in CHECKS.items() if key != "concurrency"}
+
+
 def test_a_plain_sequence_replays_as_valkey_cli_steps():
     single = EXPERIMENT.split("  - use: valkey.action.commands\n    id: plain")[0]
     doc = {"experiment": {"id": "proposed.lset"}}
