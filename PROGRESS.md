@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-05T07:05+00:00.
+Updated 2026-11-05T07:19+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -63,14 +63,22 @@ Updated 2026-11-05T07:05+00:00.
 
 ### valkey-io/valkey-json
 
-[2026-11-05T07:05:17+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41983439161): 6 merge(s) tested, 0 without a code change.
+[2026-11-05T07:19:02+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41984770333): 14 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-json#18](https://github.com/valkey-io/valkey-json/pull/18): to retry, the job left no result
-- [valkey-io/valkey-json#22](https://github.com/valkey-io/valkey-json/pull/22): to retry, the job left no result
-- [valkey-io/valkey-json@1e33774dd28b](https://github.com/valkey-io/valkey-json/commit/1e33774dd28bdba94bc7f807a4e453f01e1f8f7c): to retry, the job left no result
-- [valkey-io/valkey-json#14](https://github.com/valkey-io/valkey-json/pull/14): to retry, the job left no result
-- [valkey-io/valkey-json#13](https://github.com/valkey-io/valkey-json/pull/13): to retry, the job left no result
-- [valkey-io/valkey-json#1](https://github.com/valkey-io/valkey-json/pull/1): to retry, the job left no result
+- [valkey-io/valkey-json#18](https://github.com/valkey-io/valkey-json/pull/18): to retry, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): make[3]: *** Waiting for unfinished jobs.... make[3]: *** [src/CMakeFiles/json-objects.dir/build.make:121: src/CMakeFiles/json-objec
+- [valkey-io/valkey-json#22](https://github.com/valkey-io/valkey-json/pull/22): to retry, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false make[3]: *** [s
+- [valkey-io/valkey-json@1e33774dd28b](https://github.com/valkey-io/valkey-json/commit/1e33774dd28bdba94bc7f807a4e453f01e1f8f7c): to retry, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/json/dom.cc:1420:9: warning: the address of ‘str’ will never b
+- [valkey-io/valkey-json#14](https://github.com/valkey-io/valkey-json/pull/14): to retry, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false make[3]: *** [s
+- [valkey-io/valkey-json#13](https://github.com/valkey-io/valkey-json/pull/13): to retry, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): | ^~~~~ /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false /home/r
+- [valkey-io/valkey-json#1](https://github.com/valkey-io/valkey-json/pull/1): to retry, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): | ^~~~~ /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false /home/r
+- [valkey-io/valkey-json#41](https://github.com/valkey-io/valkey-json/pull/41): to retry, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in parent (exit 2): | ^~~~~ /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false /home/
+- [valkey-io/valkey-json#39](https://github.com/valkey-io/valkey-json/pull/39): to retry, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): make[3]: *** Waiting for unfinished jobs.... make[3]: *** [src/CMakeFiles/json-objects.dir/build.make:121: src/CMakeFiles/json-objec
+- [valkey-io/valkey-json#35](https://github.com/valkey-io/valkey-json/pull/35): to retry, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): | ^~~~~ /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false /home/r
+- [valkey-io/valkey-json@ac4f334af7a6](https://github.com/valkey-io/valkey-json/commit/ac4f334af7a6cd028b2f2ab898d52ea61f501c70): to retry, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/json/dom.cc:1419:9: warning: the address of ‘str’ will never b
+- [valkey-io/valkey-json@d3ce5afb6dd3](https://github.com/valkey-io/valkey-json/commit/d3ce5afb6dd3fb88086aa9218cfef3197b75b388): to retry, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/json/dom.cc:1420:9: warning: the address of ‘str’ will never b
+- [valkey-io/valkey-json#27](https://github.com/valkey-io/valkey-json/pull/27): to retry, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): make[3]: *** Waiting for unfinished jobs.... /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/json/dom.cc: In f
+- [valkey-io/valkey-json#21](https://github.com/valkey-io/valkey-json/pull/21): to retry, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/json/dom.cc:1420:9: warning: the address of ‘str’ will never b
+- [valkey-io/valkey-json#23](https://github.com/valkey-io/valkey-json/pull/23): to retry, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): | ^~~~~ /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false /home/r
 
 ### valkey-io/valkey-search
 
@@ -118,20 +126,20 @@ Updated 2026-11-05T07:05+00:00.
 ## Retries
 
 - [valkey-io/valkey-bloom#92](https://github.com/valkey-io/valkey-bloom/pull/92): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
-- [valkey-io/valkey-json#18](https://github.com/valkey-io/valkey-json/pull/18): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-json#22](https://github.com/valkey-io/valkey-json/pull/22): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-json@1e33774dd28b](https://github.com/valkey-io/valkey-json/commit/1e33774dd28bdba94bc7f807a4e453f01e1f8f7c): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-json#14](https://github.com/valkey-io/valkey-json/pull/14): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-json#13](https://github.com/valkey-io/valkey-json/pull/13): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-json#1](https://github.com/valkey-io/valkey-json/pull/1): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-json#41](https://github.com/valkey-io/valkey-json/pull/41): attempt 0 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in parent (exit 2): | ^~~~~ /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false /home/
-- [valkey-io/valkey-json#39](https://github.com/valkey-io/valkey-json/pull/39): attempt 0 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/json/dom.cc:1435:9: warning: the address of ‘str’ will never b
-- [valkey-io/valkey-json#35](https://github.com/valkey-io/valkey-json/pull/35): attempt 0 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): | ^~~~~ /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false /home/r
-- [valkey-io/valkey-json@ac4f334af7a6](https://github.com/valkey-io/valkey-json/commit/ac4f334af7a6cd028b2f2ab898d52ea61f501c70): attempt 0 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/json/dom.cc:1419:9: warning: the address of ‘str’ will never b
-- [valkey-io/valkey-json@d3ce5afb6dd3](https://github.com/valkey-io/valkey-json/commit/d3ce5afb6dd3fb88086aa9218cfef3197b75b388): attempt 0 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/json/dom.cc:1420:9: warning: the address of ‘str’ will never b
-- [valkey-io/valkey-json#27](https://github.com/valkey-io/valkey-json/pull/27): attempt 0 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false make[3]: *** [s
-- [valkey-io/valkey-json#21](https://github.com/valkey-io/valkey-json/pull/21): attempt 0 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/json/dom.cc:1420:9: warning: the address of ‘str’ will never b
-- [valkey-io/valkey-json#23](https://github.com/valkey-io/valkey-json/pull/23): attempt 0 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): | ^~~~~ /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false /home/r
+- [valkey-io/valkey-json#18](https://github.com/valkey-io/valkey-json/pull/18): attempt 1 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): make[3]: *** Waiting for unfinished jobs.... make[3]: *** [src/CMakeFiles/json-objects.dir/build.make:121: src/CMakeFiles/json-objec
+- [valkey-io/valkey-json#22](https://github.com/valkey-io/valkey-json/pull/22): attempt 1 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false make[3]: *** [s
+- [valkey-io/valkey-json@1e33774dd28b](https://github.com/valkey-io/valkey-json/commit/1e33774dd28bdba94bc7f807a4e453f01e1f8f7c): attempt 1 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/json/dom.cc:1420:9: warning: the address of ‘str’ will never b
+- [valkey-io/valkey-json#14](https://github.com/valkey-io/valkey-json/pull/14): attempt 1 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false make[3]: *** [s
+- [valkey-io/valkey-json#13](https://github.com/valkey-io/valkey-json/pull/13): attempt 1 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): | ^~~~~ /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false /home/r
+- [valkey-io/valkey-json#1](https://github.com/valkey-io/valkey-json/pull/1): attempt 1 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): | ^~~~~ /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false /home/r
+- [valkey-io/valkey-json#41](https://github.com/valkey-io/valkey-json/pull/41): attempt 1 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in parent (exit 2): | ^~~~~ /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false /home/
+- [valkey-io/valkey-json#39](https://github.com/valkey-io/valkey-json/pull/39): attempt 1 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): make[3]: *** Waiting for unfinished jobs.... make[3]: *** [src/CMakeFiles/json-objects.dir/build.make:121: src/CMakeFiles/json-objec
+- [valkey-io/valkey-json#35](https://github.com/valkey-io/valkey-json/pull/35): attempt 1 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): | ^~~~~ /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false /home/r
+- [valkey-io/valkey-json@ac4f334af7a6](https://github.com/valkey-io/valkey-json/commit/ac4f334af7a6cd028b2f2ab898d52ea61f501c70): attempt 1 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/json/dom.cc:1419:9: warning: the address of ‘str’ will never b
+- [valkey-io/valkey-json@d3ce5afb6dd3](https://github.com/valkey-io/valkey-json/commit/d3ce5afb6dd3fb88086aa9218cfef3197b75b388): attempt 1 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/json/dom.cc:1420:9: warning: the address of ‘str’ will never b
+- [valkey-io/valkey-json#27](https://github.com/valkey-io/valkey-json/pull/27): attempt 1 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): make[3]: *** Waiting for unfinished jobs.... /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/json/dom.cc: In f
+- [valkey-io/valkey-json#21](https://github.com/valkey-io/valkey-json/pull/21): attempt 1 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/src/json/dom.cc:1420:9: warning: the address of ‘str’ will never b
+- [valkey-io/valkey-json#23](https://github.com/valkey-io/valkey-json/pull/23): attempt 1 of 3, `export CMAKE_POLICY_VERSION_MINIMUM=3.5` failed in merge (exit 2): | ^~~~~ /usr/include/c++/15/bits/alloc_traits.h:85:31: note: ‘std::integral_constant<bool, false>::value’ evaluates to false /home/r
 - [valkey-io/valkey-search#1650](https://github.com/valkey-io/valkey-search/pull/1650): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
 - [valkey-io/valkey-search#1634](https://github.com/valkey-io/valkey-search/pull/1634): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
 - [valkey-io/valkey-search#1381](https://github.com/valkey-io/valkey-search/pull/1381): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
