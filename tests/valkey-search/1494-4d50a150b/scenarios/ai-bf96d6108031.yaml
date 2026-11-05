@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 87d29cc4c7f1..4d50a150be66.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-bf96d6108031
+seed: 141002
+experiment:
+  id: proposed.ft-aggregate-hybrid-knn-distance
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

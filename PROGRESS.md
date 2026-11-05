@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-05T06:21+00:00.
+Updated 2026-11-05T06:22+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 45 | 2443 | #5213 (2026-11-02) | 45 | 6.4 |
 | valkey-io/valkey-bloom | 29 | 80 | #45 (2025-03-11) | 29 | 4.1 |
 | valkey-io/valkey-json | 36 | 26 | c1423d7e4b38 (2024-11-25) | 36 | 5.1 |
-| valkey-io/valkey-search | 0 | 667 | #1634 (2026-11-03) | 0 | 0.0 |
+| valkey-io/valkey-search | 24 | 644 | #1481 (2026-10-14) | 24 | 3.4 |
 
 ## Last runs
 
@@ -88,17 +88,35 @@ Updated 2026-11-05T06:21+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-05T01:54:48+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41928158333): 2 merge(s) tested, 0 without a code change.
+[2026-11-05T06:22:48+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41956212865): 20 merge(s) tested, 8 without a code change.
 
-- [valkey-io/valkey-search#1576](https://github.com/valkey-io/valkey-search/pull/1576): to retry, 'reached'
-- [valkey-io/valkey-search#1542](https://github.com/valkey-io/valkey-search/pull/1542): to retry, Claude Code failed (rc=1): timeout after 3000s
+- [valkey-io/valkey-search#1650](https://github.com/valkey-io/valkey-search/pull/1650): to retry, Claude Code failed (rc=1): timeout after 3000s
+- [valkey-io/valkey-search#1576](https://github.com/valkey-io/valkey-search/pull/1576) ([tests](tests/valkey-search/1576-7750ee8fa/)): Add Record whether SEPARATOR was given for TAG fields (#1576): 5 of 5 test(s) reached the change
+- [valkey-io/valkey-search#1542](https://github.com/valkey-io/valkey-search/pull/1542) ([tests](tests/valkey-search/1542-eda3508f7/)): Stability wedge detection and NaN fix for vectors (#1542): 0 of 1 test(s) reached the change
+- [valkey-io/valkey-search#1634](https://github.com/valkey-io/valkey-search/pull/1634): to retry, Claude Code failed (rc=1): timeout after 3000s
+- [valkey-io/valkey-search#1528](https://github.com/valkey-io/valkey-search/pull/1528) ([tests](tests/valkey-search/1528-92b779bdd/)): Type-sensitive expression compiler, matching Redis 8 (#1528): 6 of 6 test(s) reached the change
+- [valkey-io/valkey-search#1606](https://github.com/valkey-io/valkey-search/pull/1606) ([tests](tests/valkey-search/1606-d11b59102/)): [BUG fix] Fix FT.AGGREGATE ignoring VERBATIM, INORDER and SLOP (#1606): 3 of 3 test(s) reached the change
+- [valkey-io/valkey-search#1396](https://github.com/valkey-io/valkey-search/pull/1396) ([tests](tests/valkey-search/1396-fb5cfc828/)): Make SimSIMD dynamic dispatch thread-safe to fix a NULL-call race (#1396): 0 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1381](https://github.com/valkey-io/valkey-search/pull/1381): to retry, Claude Code failed (rc=1): timeout after 3000s
+- [valkey-io/valkey-search#1436](https://github.com/valkey-io/valkey-search/pull/1436) ([tests](tests/valkey-search/1436-4bb501a45/)): Scoring compatibility tests (#1436): declined: The only product change is a narrow TOCTOU concurrency fix in TextIndexSchema::DeleteKeyData: it skips removing an emptied word from the stem tree if a concurrent add has re-added the word. It has no single-threaded observable effect (empty_words is only populated when the word has no rema
+- [valkey-io/valkey-search#1621](https://github.com/valkey-io/valkey-search/pull/1621) ([tests](tests/valkey-search/1621-771657ae8/)): Bracket IPv6 hosts in FT.HYBRID fanout targets (#1621): declined: The only production change is one line in PerformMultiSearchFanoutAsync (src/query/fanout.cc:754): the gRPC dial target for FT.HYBRID's remote-shard fanout is now built with coordinator::FormatAddressWithPort, which brackets IPv6 hosts. That code runs only when valkey-search's coordinator 
+- [valkey-io/valkey-search#1491](https://github.com/valkey-io/valkey-search/pull/1491) ([tests](tests/valkey-search/1491-42e85f582/)): fix: Tag revalidation scoring doesn't reliably use latest text field value (#1439) (#1491): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1511](https://github.com/valkey-io/valkey-search/pull/1511) ([tests](tests/valkey-search/1511-859e32846/)): test(cursor): Fix race in DestructionObeysBackgroundCleanupSetting (#1511): declined: The change modifies only a unit test file (testing/ft_cursor_test.cc), suspending the utility thread pool to remove a race in the DestructionObeysBackgroundCleanupSetting test's assertions. No production code in the valkey-search module is touched, so the built module at the change is beha
+- [valkey-io/valkey-search#1494](https://github.com/valkey-io/valkey-search/pull/1494) ([tests](tests/valkey-search/1494-4d50a150b/)): fix FT.AGGREGATE reports BM25 relevance instead of the KNN distance for hybrid text=>[KNN] queries (#1410) (#1494): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1610](https://github.com/valkey-io/valkey-search/pull/1610) ([tests](tests/valkey-search/1610-87d29cc4c/)): Wait for in-flight mutations before sync-path revalidation (#1602) (#1610): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1447](https://github.com/valkey-io/valkey-search/pull/1447) ([tests](tests/valkey-search/1447-ad7f1d679/)): fix: compare metadata minimum version during reconciliation (#1447): declined: The change swaps top_level_version for top_level_min_version in the single reconciliation gate in MetadataManager::ReconcileMetadata. A differing accept/reject decision requires proposed metadata whose logical counter (top_level_version) and minimum-version (top_level_min_version) straddle
+- [valkey-io/valkey-search#1490](https://github.com/valkey-io/valkey-search/pull/1490) ([tests](tests/valkey-search/1490-c672fd7a7/)): fix: hybrid tag => KNN queries return correct score (issue #1414) (#1490): 4 of 4 test(s) reached the change
+- [valkey-io/valkey-search#1472](https://github.com/valkey-io/valkey-search/pull/1472): to retry, Claude Code failed (rc=1): timeout after 3000s
+- [valkey-io/valkey-search#1404](https://github.com/valkey-io/valkey-search/pull/1404) ([tests](tests/valkey-search/1404-584d697f0/)): Drop index schemas in every database on FLUSHALL (#1404): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1574](https://github.com/valkey-io/valkey-search/pull/1574) ([tests](tests/valkey-search/1574-78eaedf84/)): fix native build on Amazon Linux 2 (#1574): declined: The change modifies only build and CI infrastructure: ci/check_module_allocators.sh gets an expanded allowlist of linked shared libraries (OpenSSL 1.1, libpthread/librt/libdl) with explanatory comments, and src/CMakeLists.txt adds a configure-time check that falls back to the BFD linker wh
+- [valkey-io/valkey-search#1319](https://github.com/valkey-io/valkey-search/pull/1319) ([tests](tests/valkey-search/1319-6788bf861/)): ci: add Codecov workflow for unit and integration test coverage (#1319): declined: The change is purely CI/test infrastructure: it adds a Codecov GitHub Actions workflow and codecov.yml, installs lcov in the devcontainer image, hardens ci/build_ubuntu.sh (array-based argument forwarding, safer artifact copying, propagating cleanup errors into the exit code, a --debug fla
 
 ## Totals
 
-- Merges whose tests reached the change: 44 of 54 tested (81%)
+- Merges whose tests reached the change: 52 of 64 tested (81%)
 - Changed-line coverage: median 100% of 22 merge(s) measured, 1 under 50%
-- Recall: 10 parents flagged of 12 fix merges
-- Claude: $317.69 in the last 24 hours, $317.69 in the last 7 days, $317.69 in all
+- Recall: 14 parents flagged of 18 fix merges
+- Claude: $410.47 in the last 24 hours, $410.47 in the last 7 days, $410.47 in all
 - Issues filed: 10
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
@@ -140,7 +158,9 @@ Updated 2026-11-05T06:21+00:00.
 - [valkey-io/valkey-json#14](https://github.com/valkey-io/valkey-json/pull/14): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JS
 - [valkey-io/valkey-json#13](https://github.com/valkey-io/valkey-json/pull/13): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JS
 - [valkey-io/valkey-json#1](https://github.com/valkey-io/valkey-json/pull/1): attempt 0 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JS
-- [valkey-io/valkey-search#1576](https://github.com/valkey-io/valkey-search/pull/1576): attempt 1 of 3, 'reached'
-- [valkey-io/valkey-search#1542](https://github.com/valkey-io/valkey-search/pull/1542): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
+- [valkey-io/valkey-search#1650](https://github.com/valkey-io/valkey-search/pull/1650): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
+- [valkey-io/valkey-search#1634](https://github.com/valkey-io/valkey-search/pull/1634): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
+- [valkey-io/valkey-search#1381](https://github.com/valkey-io/valkey-search/pull/1381): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
+- [valkey-io/valkey-search#1472](https://github.com/valkey-io/valkey-search/pull/1472): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
 - [valkey-io/valkey#5068](https://github.com/valkey-io/valkey/pull/5068): attempt 1 of 3, 4 of 4 run(s) could not start: the run could not start: environment acquisition failed
 - [valkey-io/valkey#5121](https://github.com/valkey-io/valkey/pull/5121): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s

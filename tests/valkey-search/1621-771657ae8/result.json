@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "771657ae869feeba762e6d98efe7030c07913a94",
+  "parent": "42e85f582c3a4fe1bec51e2f1a174dd309711d3b",
+  "pr": 1621,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Bracket IPv6 hosts in FT.HYBRID fanout targets (#1621)",
+  "date": "2026-10-27",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.8552,
+  "findings": [],
+  "recorded": [],
+  "reason": "The only production change is one line in PerformMultiSearchFanoutAsync (src/query/fanout.cc:754): the gRPC dial target for FT.HYBRID's remote-shard fanout is now built with coordinator::FormatAddressWithPort, which brackets IPv6 hosts. That code runs only when valkey-search's coordinator is active: commands.cc gates fanout on UsingCoordinator() && IsCluster(), and the coordinator exists only when the module is started with the use-coordinator option. That option is a Hidden config (valkey_search_options.cc:167) that ModuleConfigManager::Init never registers with Valkey, so CONFIG SET and a co"
+}

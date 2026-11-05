@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "4bb501a45de05e2ad168e59042df3dbef6966689",
+  "parent": "771657ae869feeba762e6d98efe7030c07913a94",
+  "pr": 1436,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Scoring compatibility tests (#1436)",
+  "date": "2026-10-27",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.2876,
+  "findings": [],
+  "recorded": [],
+  "reason": "The only product change is a narrow TOCTOU concurrency fix in TextIndexSchema::DeleteKeyData: it skips removing an emptied word from the stem tree if a concurrent add has re-added the word. It has no single-threaded observable effect (empty_words is only populated when the word has no remaining postings, so FindPostingsTarget is null and the new continue never fires without a concurrent writer), and its only visible effect requires a precise add/delete interleaving on the same stemmed word across writer threads. That interleaving cannot be driven through the command-compare framework: making i"
+}

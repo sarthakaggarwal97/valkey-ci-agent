@@ -1,0 +1,91 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-text-flags
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    FT.AGGREGATE honours VERBATIM, INORDER and SLOP by re-parsing the filter tree
+    after the arguments are read; on a NOOFFSETS index INORDER and SLOP are ignored
+    instead of rejected, and compat counters count a re-parsed command once. The parent
+    build ignores all three flags on FT.AGGREGATE.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, "ON", HASH, PREFIX, "1", "d:", SCHEMA, s, TEXT, v,
+        VECTOR, FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idx2, "ON", HASH, PREFIX, "1", "e:", NOOFFSETS, SCHEMA,
+        s, TEXT], expect: {equals: OK}}
+    - {command: [HSET, "d:1", s, "hello world", v, !!binary "AAAAAAAAAAA="], expect: {
+        equals: 2}}
+    - {command: [HSET, "d:2", s, "world hello", v, !!binary "AACAPwAAAAA="], expect: {
+        equals: 2}}
+    - {command: [HSET, "d:3", s, "hello big wide world", v, !!binary "AAAAQAAAAAA="],
+      expect: {equals: 2}}
+    - {command: [HSET, "d:4", s, "worlds apart", v, !!binary "AABAQAAAAAA="], expect: {
+        equals: 2}}
+    - {command: [HSET, "e:1", s, "hello world"], expect: {equals: 1}}
+    - {command: [HSET, "e:2", s, "world hello"], expect: {equals: 1}}
+    - {command: [HSET, "e:3", s, "hello big wide world"], expect: {equals: 1}}
+    - {command: [HSET, "e:4", s, "worlds apart"], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: "ready"}}
+    - {command: [FT.SEARCH, idx, "@s:apart", NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "d:4"]}}
+    - {command: [FT.SEARCH, idx2, "@s:apart", NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "e:4"]}}
+    - {command: [FT.AGGREGATE, idx, "@s:(hello world)", GROUPBY, "0", REDUCE, COUNT,
+        "0", AS, c], wait_s: 30, expect: {equals: [1, [c, "3"]]}}
+    - {command: [FT.AGGREGATE, idx, "@s:worlds", VERBATIM, LOAD, "1", "@__key"], expect_difference: true,
+      expect: {equals: [1, ["__key", "d:4"]]}}
+    - {command: [FT.AGGREGATE, idx, "@s:(world hello)", INORDER, LOAD, "1", "@__key"],
+      expect_difference: true, expect: {equals: [1, ["__key", "d:2"]]}}
+    - {command: [FT.AGGREGATE, idx, "@s:(hello world)", SLOP, "0", GROUPBY, "0", REDUCE,
+        COUNT, "0", AS, c], expect_difference: true, expect: {equals: [1, [c, "2"]]}}
+    - {command: [FT.AGGREGATE, idx, "@s:(hello wide)", SLOP, "0", LOAD, "1", "@__key"],
+      expect_difference: true, expect: {equals: [0]}}
+    - {command: [FT.AGGREGATE, idx, "@s:(hello wide)", SLOP, "1", LOAD, "1", "@__key"],
+      expect: {equals: [1, ["__key", "d:3"]]}}
+    - {command: [FT.AGGREGATE, idx, "@s:(world hello)", SLOP, "0", INORDER, LOAD,
+        "1", "@__key"], expect_difference: true, expect: {equals: [1, ["__key", "d:2"]]}}
+    - {command: [FT.AGGREGATE, idx, "@s:(world hello)", INORDER, GROUPBY, "0", REDUCE,
+        COUNT, "0", AS, c], expect_difference: true, expect: {equals: [1, [c, "1"]]}}
+    - {command: [FT.AGGREGATE, idx, "@s:(world hello)=>[KNN 4 @v $q]", INORDER, GROUPBY,
+        "0", REDUCE, COUNT, "0", AS, c, PARAMS, "2", q, !!binary "AAAAAAAAAAA=", DIALECT,
+        "2"], expect_difference: true, expect: {equals: [1, [c, "1"]]}}
+    - {command: [FT.AGGREGATE, idx, "@s:(world hello) @v:[VECTOR_RANGE 100 $q]=>{$yield_distance_as:\
+          \ dist}", INORDER, GROUPBY, "0", REDUCE, COUNT, "0", AS, c, PARAMS, "2",
+        q, !!binary "AAAAAAAAAAA=", DIALECT, "2"], expect_difference: true, expect: {
+        equals: [1, [c, "1"]]}}
+    - {command: [FT.SEARCH, idx, "@s:(world hello)", INORDER, NOCONTENT], expect: {
+        equals: [1, "d:2"]}}
+    - {command: [FT.SEARCH, idx, "@s:worlds", VERBATIM, NOCONTENT], expect: {equals: [
+          1, "d:4"]}}
+    - {command: [FT.SEARCH, idx2, "@s:(hello world)", INORDER, NOCONTENT], expect: {
+        error: "does not support offsets"}}
+    - {command: [FT.AGGREGATE, idx2, "@s:worlds", VERBATIM, LOAD, "1", "@__key"],
+      expect_difference: true, expect: {equals: [1, ["__key", "e:4"]]}}
+    - {command: [FT.AGGREGATE, idx2, "@s:(hello world)", INORDER, SLOP, "1", GROUPBY,
+        "0", REDUCE, COUNT, "0", AS, c], expect: {equals: [1, [c, "3"]]}}
+    - {command: [CONFIG, SET, search.emulate-release, "1.0.0"], expect: {equals: OK}}
+    - {command: [FT.AGGREGATE, idx, !!binary "QHM6KGhlbGxv/yB3b3JsZCdzKQ==", VERBATIM,
+        LOAD, "1", "@__key"], compare: skip, expect: {error: false}}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: "filter_parser_invalid_utf8_expression:1"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

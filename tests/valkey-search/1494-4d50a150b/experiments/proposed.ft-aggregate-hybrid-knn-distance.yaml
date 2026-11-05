@@ -1,0 +1,88 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-hybrid-knn-distance
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE on a hybrid text=>[KNN] query reports the KNN distance
+    in the AS alias, not the BM25 relevance (issue 1410)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hybrid
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, title, TEXT,
+        vec, VECTOR, HNSW, "6", TYPE, FLOAT32, DIM, "3", DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:1", title, "hello hello hello hello", vec, !!binary 'AAAAAAAAAAAAAAAA'],
+      expect: {equals: 2}}
+    - {command: [HSET, "doc:2", title, "hello world of many other words here to dilute",
+        vec, !!binary 'AACAPwAAAAAAAAAA'], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", title, "hello hello there", vec, !!binary 'AAAAQAAAAAAAAAAA'],
+      expect: {equals: 2}}
+    - {command: [HSET, "doc:4", title, "hello a b c d e f g h i j k l m n o p", vec,
+        !!binary 'AABAQAAAAAAAAAAA'], expect: {equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4 @vec $q AS mydist]", LIMIT, "0", "0",
+        PARAMS, "2", q, !!binary 'AAAAAAAAAAAAAAAA', DIALECT, "2"], wait_s: 30, expect: {
+        equals: [4]}}
+    - {command: [FT.SEARCH, idx, "@title:hello", LIMIT, "0", "0", DIALECT, "2"], wait_s: 30,
+      expect: {equals: [4]}}
+    - {command: [FT.SEARCH, idx, "@title:hello=>[KNN 4 @vec $q AS mydist]", RETURN,
+        "1", mydist, PARAMS, "2", q, !!binary 'AAAAAAAAAAAAAAAA', DIALECT, "2"]}
+    - command: [FT.AGGREGATE, idx, "*=>[KNN 4 @vec $q AS mydist]", LOAD, "2", "@__key",
+        "@mydist", SORTBY, "2", "@mydist", ASC, PARAMS, "2", q, !!binary 'AAAAAAAAAAAAAAAA',
+        DIALECT, "2"]
+      expect:
+        equals:
+        - 4
+        - [__key, "doc:1", mydist, "0"]
+        - [__key, "doc:2", mydist, "1"]
+        - [__key, "doc:3", mydist, "4"]
+        - [__key, "doc:4", mydist, "9"]
+    - command: [FT.AGGREGATE, idx, "@title:hello=>[KNN 4 @vec $q AS mydist]", LOAD,
+        "2", "@__key", "@mydist", SORTBY, "2", "@mydist", ASC, PARAMS, "2", q, !!binary 'AAAAAAAAAAAAAAAA',
+        DIALECT, "2"]
+      expect_difference: true
+      expect:
+        equals:
+        - 4
+        - [__key, "doc:1", mydist, "0"]
+        - [__key, "doc:2", mydist, "1"]
+        - [__key, "doc:3", mydist, "4"]
+        - [__key, "doc:4", mydist, "9"]
+    - command: [FT.AGGREGATE, idx, "@title:hello=>[KNN 4 @vec $q AS mydist]", ADDSCORES,
+        LOAD, "2", "@__key", "@mydist", SORTBY, "2", "@mydist", ASC, PARAMS, "2",
+        q, !!binary 'AAAAAAAAAAAAAAAA', DIALECT, "2"]
+      expect_difference: true
+      expect:
+        equals:
+        - 4
+        - [__key, "doc:1", mydist, "0"]
+        - [__key, "doc:2", mydist, "1"]
+        - [__key, "doc:3", mydist, "4"]
+        - [__key, "doc:4", mydist, "9"]
+    - command: [FT.AGGREGATE, idx, "@title:hello=>[KNN 4 @vec $q AS mydist]", LOAD,
+        "1", "@mydist", GROUPBY, "0", REDUCE, SUM, "1", "@mydist", AS, total, PARAMS,
+        "2", q, !!binary 'AAAAAAAAAAAAAAAA', DIALECT, "2"]
+      expect_difference: true
+      expect:
+        equals:
+        - 1
+        - [total, "14"]
+    - {command: [FT.AGGREGATE, idx, "@title:hello", ADDSCORES, LOAD, "2", "@__key",
+        "@__score", SORTBY, "2", "@__score", DESC, DIALECT, "2"]}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [hybrid.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hybrid}

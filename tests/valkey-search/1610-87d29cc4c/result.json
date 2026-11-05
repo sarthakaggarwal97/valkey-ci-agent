@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "87d29cc4c7f1df0db8ed62512a229c03e157d589",
+  "parent": "b0051e4963d10b081f67a6acd5af588a8006218d",
+  "pr": 1610,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Wait for in-flight mutations before sync-path revalidation (#1602) (#1610)",
+  "date": "2026-10-26",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.9424,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

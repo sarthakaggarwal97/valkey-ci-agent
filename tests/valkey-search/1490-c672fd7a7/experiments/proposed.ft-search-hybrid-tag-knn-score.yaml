@@ -1,0 +1,95 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-hybrid-tag-knn-score
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Hybrid tag=>[KNN] FT.SEARCH ranks by tag relevance (issue #1414); the parent returns
+    score 0 for every document and keeps KNN distance order.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: hybrid
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, body, TEXT,
+        NOSTEM, cat, TAG, rank, NUMERIC, vec, VECTOR, FLAT, "6", TYPE, FLOAT32, DIM,
+        "2", DISTANCE_METRIC, L2]
+      expect: {equals: OK}
+    - {command: [HSET, "doc:1", body, "one", cat, a, rank, "1", vec, !!binary 'AAAAPwAAAAA='],
+      expect: {equals: 4}}
+    - {command: [HSET, "doc:2", body, "one two", cat, a, rank, "2", vec, !!binary 'zczMPgAAAAA='],
+      expect: {equals: 4}}
+    - {command: [HSET, "doc:3", body, "one two three", cat, a, rank, "3", vec, !!binary 'mpmZPgAAAAA='],
+      expect: {equals: 4}}
+    - {command: [HSET, "doc:4", body, "one two three four", cat, a, rank, "4", vec,
+        !!binary 'zcxMPgAAAAA='], expect: {equals: 4}}
+    - {command: [HSET, "doc:5", body, "one two three four five", cat, a, rank, "5",
+        vec, !!binary 'zczMPQAAAAA='], expect: {equals: 4}}
+    - command: [FT.SEARCH, idx, "@cat:{a}", NOCONTENT, DIALECT, "2"]
+      wait_s: 60
+      expect: {equals: [5, "doc:1", "doc:2", "doc:3", "doc:4", "doc:5"]}
+    - command: [FT.SEARCH, idx, "@cat:{a}=>[KNN 5 @vec $q]", NOCONTENT, PARAMS, "2",
+        q, !!binary 'AAAAAAAAAAA=', DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [5, "doc:1", "doc:2", "doc:3", "doc:4", "doc:5"]}
+    - command: [FT.SEARCH, idx, "@cat:{a}=>[KNN 3 @vec $q]", NOCONTENT, PARAMS, "2",
+        q, !!binary 'AAAAAAAAAAA=', DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [3, "doc:3", "doc:4", "doc:5"]}
+    - command: [FT.SEARCH, idx, "@cat:{a}=>[KNN 3 @vec $q]", NOCONTENT, WITHSCORES,
+        PARAMS, "2", q, !!binary 'AAAAAAAAAAA=', DIALECT, "2"]
+      expect_difference: true
+      expect: {exists: true}
+    - command: [FT.SEARCH, idx, "@cat:{a}=>[KNN 3 @vec $q]", NOCONTENT, LIMIT, "0",
+        "2", PARAMS, "2", q, !!binary 'AAAAAAAAAAA=', DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [3, "doc:3", "doc:4"]}
+    - command: [FT.SEARCH, idx, "(@cat:{a} @rank:[1 4])=>[KNN 3 @vec $q]", NOCONTENT,
+        PARAMS, "2", q, !!binary 'AAAAAAAAAAA=', DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [3, "doc:2", "doc:3", "doc:4"]}
+    - command: [FT.SEARCH, idx, "(-@cat:{b})=>[KNN 3 @vec $q]", NOCONTENT, PARAMS,
+        "2", q, !!binary 'AAAAAAAAAAA=', DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [3, "doc:3", "doc:4", "doc:5"]}
+    - command: [FT.SEARCH, idx, "@cat:{a}=>[KNN 3 @vec $q]", NOCONTENT, SORTBY, rank,
+        PARAMS, "2", q, !!binary 'AAAAAAAAAAA=', DIALECT, "2"]
+      expect: {equals: [3, "doc:3", "doc:4", "doc:5"]}
+    - command: [FT.SEARCH, idx, "@rank:[1 5]=>[KNN 3 @vec $q]", NOCONTENT, PARAMS,
+        "2", q, !!binary 'AAAAAAAAAAA=', DIALECT, "2"]
+      expect: {equals: [3, "doc:5", "doc:4", "doc:3"]}
+    - command: [FT.SEARCH, idx, "*=>[KNN 3 @vec $q]", NOCONTENT, PARAMS, "2", q, !!binary 'AAAAAAAAAAA=',
+        DIALECT, "2"]
+      expect: {equals: [3, "doc:5", "doc:4", "doc:3"]}
+    - command: [FT.SEARCH, idx, "@body:one=>[KNN 3 @vec $q]", NOCONTENT, PARAMS, "2",
+        q, !!binary 'AAAAAAAAAAA=', DIALECT, "2"]
+      expect: {equals: [3, "doc:3", "doc:4", "doc:5"]}
+    - {command: [HSET, "doc:1", body, "one two three"], expect: {equals: 0}}
+    - {command: [HSET, "doc:2", body, "one two three"], expect: {equals: 0}}
+    - {command: [HSET, "doc:3", body, "one two three"], expect: {equals: 0}}
+    - {command: [HSET, "doc:4", body, "one two three"], expect: {equals: 0}}
+    - {command: [HSET, "doc:5", body, "one two three"], expect: {equals: 0}}
+    - command: [FT.SEARCH, idx, "@body:four", NOCONTENT, DIALECT, "2"]
+      wait_s: 60
+      expect: {equals: [0]}
+    - command: [FT.SEARCH, idx, "@cat:{a}=>[KNN 3 @vec $q]", NOCONTENT, PARAMS, "2",
+        q, !!binary 'AAAAAAAAAAA=', DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [3, "doc:3", "doc:4", "doc:5"]}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [hybrid.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hybrid}

@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.ft-tag-separator-flag
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.CREATE TAG records whether SEPARATOR was given; FT._DEBUG SHOW_INDEXSCHEMAS
+    shows explicit_separator on the change only, while separator parsing errors and
+    tag search behaviour stay unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: tagsep
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, "1", "doc:", SCHEMA, tags, TAG,
+        SEPARATOR, "|", CASESENSITIVE], expect: {equals: OK}}
+    - {command: [FT._DEBUG, SHOW_INDEXSCHEMAS], expect_difference: true, expect: {
+        contains: "explicit_separator: true"}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, "1", "car:", SCHEMA, tags, TAG],
+      expect: {equals: OK}}
+    - {command: [FT._DEBUG, SHOW_INDEXSCHEMAS], expect_difference: true, expect: {
+        contains: "explicit_separator: false"}}
+    - {command: [FT.CREATE, idx3, ON, HASH, PREFIX, "1", "p:", SCHEMA, tags, TAG,
+        separator, ","], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx4, ON, HASH, PREFIX, "1", "q:", SCHEMA, tags, TAG,
+        SEPARATOR, ";", SEPARATOR, "|"], expect: {equals: OK}}
+    - {command: [FT.CREATE, bad1, ON, HASH, PREFIX, "1", "b:", SCHEMA, t, TAG, SEPARATOR,
+        "@@"], expect: {error: "single character"}}
+    - {command: [FT.CREATE, bad2, ON, HASH, PREFIX, "1", "b:", SCHEMA, t, TAG, SEPARATOR,
+        ""], expect: {error: "single character"}}
+    - {command: [FT.CREATE, bad3, ON, HASH, PREFIX, "1", "b:", SCHEMA, t, TAG, SEPARATOR],
+      expect: {error: true}}
+    - {command: [HSET, "doc:1", tags, "red|Green|blue"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx1, "@tags:{Green}", RETURN, "0"], wait_s: 30, compare: unordered,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx1, "@tags:{green}", RETURN, "0"]}
+    - {command: [HSET, "car:1", tags, "x,yy"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx2, "@tags:{yy}", RETURN, "0"], wait_s: 30, compare: unordered,
+      expect: {contains: "car:1"}}
+    - {command: [FT.INFO, idx1], compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [tagsep.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tagsep}

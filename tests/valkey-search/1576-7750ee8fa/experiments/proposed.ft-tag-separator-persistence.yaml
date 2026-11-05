@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.ft-tag-separator-persistence
+deployment:
+  modes: [standalone]
+metadata:
+  description: explicit_separator survives an RDB save/load (Tag ctor and ToProto
+    round-trip) and an AOF replay of FT.CREATE across a restart; tag search still
+    works after reload
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    appendonly: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: persist
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {appendonly: {$ref: inputs.appendonly}, save: "900 1"}
+    timeout_s: 180
+    commands:
+    - {command: [FT.CREATE, idxs, ON, HASH, PREFIX, "1", "d:", SCHEMA, tags, TAG,
+        SEPARATOR, ";", CASESENSITIVE], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxd, ON, HASH, PREFIX, "1", "e:", SCHEMA, tags, TAG],
+      expect: {equals: OK}}
+    - {command: [HSET, "d:1", tags, "A;b"], expect: {equals: 1}}
+    - {command: [HSET, "e:1", tags, "a,b"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idxs, "@tags:{b}", RETURN, "0"], wait_s: 30, compare: unordered,
+      expect: {contains: "d:1"}}
+    - {command: [FT.SEARCH, idxd, "@tags:{b}", RETURN, "0"], wait_s: 30, compare: unordered,
+      expect: {contains: "e:1"}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT._DEBUG, SHOW_INDEXSCHEMAS], expect_difference: true, expect: {
+        contains: "explicit_separator: true"}}
+    - {command: [FT._DEBUG, SHOW_INDEXSCHEMAS], expect_difference: true, expect: {
+        contains: "explicit_separator: false"}}
+    - {command: [FT.SEARCH, idxs, "@tags:{A}", RETURN, "0"], wait_s: 60, compare: unordered,
+      expect: {contains: "d:1"}}
+    - {command: [FT.SEARCH, idxd, "@tags:{b}", RETURN, "0"], wait_s: 60, compare: unordered,
+      expect: {contains: "e:1"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [persist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: persist}

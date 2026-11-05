@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.ft-hybrid-combine-typed
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.HYBRID COMBINE FUNCTION type checks - a non-number expression and
+    a number argument to a string function are rejected at parse time, and a runtime
+    conversion error fails the query, where the parent accepted and ran them
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fthybrid
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 300
+    commands:
+    - {command: [FT.CREATE, hidx, ON, HASH, PREFIX, "1", "v:", SCHEMA, vec, VECTOR,
+        FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2, title, TAG], expect: {
+        equals: OK}}
+    - {command: [HSET, "v:1", title, hello, vec, !!binary "AACAPwAAAAA="], expect: {
+        equals: 2}}
+    - {command: [HSET, "v:2", title, hello, vec, !!binary "AAAAAAAAgD8="], expect: {
+        equals: 2}}
+    - {command: [FT.SEARCH, hidx, "@title:{hello}", LIMIT, "0", "0"], wait_s: 30,
+      expect: {equals: [2]}}
+    - {command: [FT.HYBRID, hidx, SEARCH, "@title:{hello}", VSIM, "@vec", "$q", KNN,
+        "2", K, "5", COMBINE, FUNCTION, "2", EXPR, "@__search_score + @__vector_score",
+        PARAMS, "2", q, !!binary "AACAPwAAAAA="], compare: skip}
+    - {command: [FT.HYBRID, hidx, SEARCH, "@title:{hello}", VSIM, "@vec", "$q", KNN,
+        "2", K, "5", COMBINE, FUNCTION, "2", EXPR, "concat(@__search_score, @__vector_score)",
+        PARAMS, "2", q, !!binary "AACAPwAAAAA="], expect_difference: true, expect: {
+        error: "does not produce a number"}}
+    - {command: [FT.HYBRID, hidx, SEARCH, "@title:{hello}", VSIM, "@vec", "$q", KNN,
+        "2", K, "5", COMBINE, FUNCTION, "2", EXPR, "strlen(@__vector_score)", PARAMS,
+        "2", q, !!binary "AACAPwAAAAA="], expect_difference: true, expect: {error: "must\
+          \ be a string"}}
+    - {command: [FT.HYBRID, hidx, SEARCH, "@title:{hello}", VSIM, "@vec", "$q", KNN,
+        "2", K, "5", COMBINE, FUNCTION, "2", EXPR, "@__vector_score < 'abc'", PARAMS,
+        "2", q, !!binary "AACAPwAAAAA="], expect_difference: true, expect: {error: "Error\
+          \ converting string"}}
+    - {command: [FT.HYBRID, hidx, SEARCH, "@title:{hello}", VSIM, "@vec", "$q", KNN,
+        "2", K, "5", COMBINE, FUNCTION, "2", EXPR, "lower(@__vector_score)", PARAMS,
+        "2", q, !!binary "AACAPwAAAAA="], expect_difference: true, expect: {error: "does\
+          \ not produce a number"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [fthybrid.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fthybrid}

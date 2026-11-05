@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.ft-create-filter-typed
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.CREATE FILTER typed comparisons - a non-numeric string in a numeric
+    comparison is an error that rejects the document even under negation or inside
+    ||, where the parent answered false and admitted it
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftfilter
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 300
+    commands:
+    - {command: [HSET, "d:1", price, abc, t, keep], expect: {equals: 2}}
+    - {command: [HSET, "d:2", price, "10", t, a], expect: {equals: 2}}
+    - {command: [HSET, "d:3", price, "100", t, a], expect: {equals: 2}}
+    - {command: [HSET, "d:4", price, "7", t, a], expect: {equals: 2}}
+    - {command: [FT.CREATE, plain, ON, HASH, PREFIX, "1", "d:", SCHEMA, t, TAG], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, f1, ON, HASH, PREFIX, "1", "d:", FILTER, "!(@price > 50)",
+        SCHEMA, t, TAG], expect: {equals: OK}}
+    - {command: [FT.CREATE, f4, ON, HASH, PREFIX, "1", "d:", FILTER, "@price <= 50\
+          \ || @t == 'keep'", SCHEMA, t, TAG], expect: {equals: OK}}
+    - {command: [FT.SEARCH, plain, "*", LIMIT, "0", "0"], wait_s: 30, expect: {equals: [
+          4]}}
+    - {command: [FT.SEARCH, f1, "*", LIMIT, "0", "0"], wait_s: 20, expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, f1, "*", NOCONTENT, LIMIT, "0", "10"], compare: unordered,
+      expect_difference: true, expect: {contains: "d:2"}}
+    - {command: [FT.SEARCH, f4, "*", LIMIT, "0", "0"], wait_s: 15, expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [HSET, "d:5", price, abc, t, keep], expect: {equals: 2}}
+    - {command: [FT.SEARCH, f1, "*", LIMIT, "0", "0"], wait_s: 15, expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, f4, "*", LIMIT, "0", "0"], wait_s: 15, expect_difference: true,
+      expect: {equals: [2]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ftfilter.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftfilter}

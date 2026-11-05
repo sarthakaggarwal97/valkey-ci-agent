@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "6788bf86158a0c6f159352fafc4a2981e6785bf0",
+  "parent": "3df4bca4966874cb7df855ff51088272d7d113ee",
+  "pr": 1319,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "ci: add Codecov workflow for unit and integration test coverage (#1319)",
+  "date": "2026-10-14",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3439,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely CI/test infrastructure: it adds a Codecov GitHub Actions workflow and codecov.yml, installs lcov in the devcontainer image, hardens ci/build_ubuntu.sh (array-based argument forwarding, safer artifact copying, propagating cleanup errors into the exit code, a --debug flag), and fixes a Python integration test to measure net memory usage instead of absolute used_memory. No module source file is touched, so the loaded libsearch.so is behaviourally identical at the change and its parent; there is no command, reply, indexing, replication or persistence path a scenario could exer"
+}

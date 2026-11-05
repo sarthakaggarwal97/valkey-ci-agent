@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "42e85f582c3a4fe1bec51e2f1a174dd309711d3b",
+  "parent": "859e328468b3253e33457de39575ca1c35d5a10a",
+  "pr": 1491,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix: Tag revalidation scoring doesn't reliably use latest text field value (#1439) (#1491)",
+  "date": "2026-10-27",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 15.943,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

@@ -1,0 +1,91 @@
+extends: [valkey.liveness]
+id: proposed.flushall-multidb-schema-drop
+deployment:
+  modes: [standalone]
+metadata:
+  description: FLUSHALL drops valkey-search index schemas in every database, not only
+    the selected one; FLUSHDB stays per-DB
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flushall
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx0, ON, HASH, PREFIX, 1, "d:", SCHEMA, t, TAG, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, 'd:1', t, a, n, 1], expect: {equals: 2}}
+    - {command: [HSET, 'd:2', t, a, n, 2], expect: {equals: 2}}
+    - {command: [HSET, 'd:3', t, a, n, 3], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx0, "@t:{a}", NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [3]}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, 1, "d:", SCHEMA, t, TAG, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, 'd:1', t, a, n, 1], expect: {equals: 2}}
+    - {command: [HSET, 'd:2', t, a, n, 2], expect: {equals: 2}}
+    - {command: [HSET, 'd:3', t, a, n, 3], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx1, "@t:{a}", NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [3]}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "d:", SCHEMA, t, TAG, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, 'd:1', t, a, n, 1], expect: {equals: 2}}
+    - {command: [HSET, 'd:2', t, a, n, 2], expect: {equals: 2}}
+    - {command: [HSET, 'd:3', t, a, n, 3], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx2, "@t:{a}", NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [3]}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: [idx0]}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: [idx2]}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, 1, "d:", SCHEMA, t, TAG, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, 'd:1', t, a, n, 1], expect: {equals: 2}}
+    - {command: [HSET, 'd:2', t, a, n, 2], expect: {equals: 2}}
+    - {command: [HSET, 'd:3', t, a, n, 3], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx1, "@t:{a}", NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [3]}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [FLUSHALL, SYNC], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [FT._LIST], expect_difference: true, expect: {equals: []}}
+    - {command: [FT.INFO, idx1], expect_difference: true, expect: {error: "not found"}}
+    - {command: [FT.SEARCH, idx1, "@t:{a}", NOCONTENT, LIMIT, 0, 0], expect_difference: true,
+      expect: {error: "not found"}}
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, 1, "d:", SCHEMA, t, TAG, n, NUMERIC],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx1, "@t:{a}", NOCONTENT, LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [FT._LIST], expect_difference: true, expect: {equals: []}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "d:", SCHEMA, t, TAG, n, NUMERIC],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [FT._LIST], expect_difference: true, expect: {equals: []}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [FT._LIST], expect_difference: true, expect: {equals: []}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [flushall.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flushall}

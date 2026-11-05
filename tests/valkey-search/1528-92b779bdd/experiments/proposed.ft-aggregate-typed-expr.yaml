@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-typed-expr
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE under search.emulate-release 1.3.0 - typed comparisons
+    turn failed numeric conversions into query errors, typed strlen rejects numbers,
+    lower(number) is a null that exists(), numeric PARAMS, LOAD * raw strings, ||
+    right-side error, and a SORTBY MAX heap canary
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftagg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 300
+    commands:
+    - {command: [CONFIG, SET, search.emulate-release, 1.3.0], expect: {equals: OK}}
+    - {command: [FT.CREATE, agg, ON, HASH, PREFIX, "1", "h:", SCHEMA, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, tidx, ON, HASH, PREFIX, "1", "g:", SCHEMA, t, TAG], expect: {
+        equals: OK}}
+    - {command: [HSET, "h:1", n, "9"], expect: {equals: 1}}
+    - {command: [HSET, "h:2", n, "10"], expect: {equals: 1}}
+    - {command: [HSET, "h:3", n, "0050"], expect: {equals: 1}}
+    - {command: [HSET, "g:1", t, abc], expect: {equals: 1}}
+    - {command: [HSET, "g:2", t, "5.0"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, agg, "*", LIMIT, "0", "0"], wait_s: 30, expect: {equals: [
+          3]}}
+    - {command: [FT.SEARCH, tidx, "*", LIMIT, "0", "0"], wait_s: 30, expect: {equals: [
+          2]}}
+    - {command: [FT.AGGREGATE, agg, "*", LOAD, "*", SORTBY, "2", "@n", ASC], expect_difference: true,
+      expect: {equals: [3, [n, "9"], [n, "10"], [n, "0050"]]}}
+    - {command: [FT.AGGREGATE, agg, "*", LOAD, "1", "@n", APPLY, "strlen(@n)", AS,
+        L], expect_difference: true, expect: {error: "strlen"}}
+    - {command: [FT.AGGREGATE, agg, "*", LOAD, "1", "@n", APPLY, "exists(lower(@n))",
+        AS, e, FILTER, "@e == 1", GROUPBY, "0", REDUCE, COUNT, "0", AS, c], expect_difference: true,
+      expect: {equals: [1, [c, "3"]]}}
+    - {command: [FT.AGGREGATE, tidx, "*", LOAD, "1", "@t", APPLY, "@t < 5", AS, c],
+      expect_difference: true, expect: {error: "Error converting string"}}
+    - {command: [FT.AGGREGATE, tidx, "*", LOAD, "1", "@t", APPLY, "@t < $x", AS, c,
+        PARAMS, "2", x, "5", DIALECT, "2"], expect_difference: true, expect: {error: "Error\
+          \ converting string"}}
+    - {command: [FT.AGGREGATE, agg, "*", LOAD, "1", "@n", APPLY, "(@n < 5) || strlen(@n)",
+        AS, c], expect_difference: true, expect: {error: "strlen"}}
+    - {command: [FT.AGGREGATE, agg, "*", LOAD, "1", "@n", APPLY, "(@n < 5) && strlen(@n)",
+        AS, c, GROUPBY, "0", REDUCE, COUNT, "0", AS, cnt], expect: {equals: [1, [
+            cnt, "3"]]}}
+    - {command: [FT.AGGREGATE, agg, "*", LOAD, "1", "@n", SORTBY, "2", "@n", DESC,
+        MAX, "2"], expect: {equals: [2, [n, "50"], [n, "10"]]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ftagg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftagg}

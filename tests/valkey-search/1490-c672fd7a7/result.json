@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "c672fd7a7e9de1e655e2de35930fbdd66a8f0fc3",
+  "parent": "8360dc56eceb0bd3ba5f49ff3199ec58466b1b02",
+  "pr": 1490,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix: hybrid tag => KNN queries return correct score (issue #1414) (#1490)",
+  "date": "2026-10-22",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 6.6403,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

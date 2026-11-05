@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search eda3508f7f53..7750ee8faf67.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-95878fdf8586
+seed: 105
+experiment:
+  id: proposed.ft-tag-separator-replica
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7400

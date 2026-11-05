@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search af257c5f3a52..fb5cfc828aa9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-656223a97719
+seed: 2396
+experiment:
+  id: proposed.simsimd-dispatch-race
+  inputs:
+    resp: 3
+    concurrency: 16
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

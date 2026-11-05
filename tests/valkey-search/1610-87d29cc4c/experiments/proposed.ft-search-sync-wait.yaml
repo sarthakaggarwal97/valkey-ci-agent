@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-sync-wait
+deployment:
+  modes: [standalone]
+metadata:
+  description: A text-predicate FT.SEARCH/FT.AGGREGATE on the synchronous reply path
+    (EVAL) blocks until an in-flight mutation of a result key is indexed, bounded
+    by its TIMEOUT; the parent build does not wait and revalidates against the stale
+    index.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, content, TEXT],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", content, "hello world"], expect: {equals: 1}}
+    - {command: [FT._DEBUG, PAUSEPOINT, SET, mutation_processing], expect: {equals: OK}}
+    - {connection: writer, raw: "HSET doc:1 content bye\r\n"}
+    - {command: [FT._DEBUG, PAUSEPOINT, TEST, mutation_processing], wait_s: 10, expect: {
+        min: 1}}
+    - {command: [EVAL, "return redis.call('FT.SEARCH', 'idx', ARGV[1], 'TIMEOUT',\
+          \ ARGV[2])", 0, "@content:hello", 1000], expect_difference: true, expect: {
+        error: "timeout"}}
+    - {command: [EVAL, "return redis.call('FT.SEARCH', 'idx', ARGV[1], 'TIMEOUT',\
+          \ ARGV[2])", 0, "@content:hel*", 1000], expect_difference: true, expect: {
+        error: "timeout"}}
+    - {command: [EVAL, "return redis.call('FT.AGGREGATE', 'idx', ARGV[1], 'LOAD',\
+          \ '1', 'content', 'TIMEOUT', ARGV[2])", 0, "@content:hello", 1000], expect_difference: true,
+      expect: {error: "timeout"}}
+    - {command: [FT._DEBUG, PAUSEPOINT, RESET, mutation_processing], expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [search.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "fb5cfc828aa98644d83bcc1e4815990730541d2b",
+  "parent": "af257c5f3a52e03280fc31b4b9c7a570f951a26f",
+  "pr": 1396,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Make SimSIMD dynamic dispatch thread-safe to fix a NULL-call race (#1396)",
+  "date": "2026-10-29",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 6.2518,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "78eaedf84d30226f654571c5768f0984f11e0510",
+  "parent": "6788bf86158a0c6f159352fafc4a2981e6785bf0",
+  "pr": 1574,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix native build on Amazon Linux 2 (#1574)",
+  "date": "2026-10-15",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2383,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only build and CI infrastructure: ci/check_module_allocators.sh gets an expanded allowlist of linked shared libraries (OpenSSL 1.1, libpthread/librt/libdl) with explanatory comments, and src/CMakeLists.txt adds a configure-time check that falls back to the BFD linker when the default linker (GNU gold, as on Amazon Linux 2) cannot parse the INSERT directive in deferred_init.lds. No module source code changes; no command, reply, data, replication or persistence behavior is affected. On any platform where the build already succeeded, the produced binary is unchanged from the p"
+}

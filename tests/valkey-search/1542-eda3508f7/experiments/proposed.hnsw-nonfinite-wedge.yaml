@@ -1,0 +1,79 @@
+extends: [valkey.liveness]
+id: proposed.hnsw-nonfinite-wedge
+deployment:
+  modes: [standalone]
+metadata:
+  description: Inserting NaN/Inf vectors into an HNSW index must still finish indexing,
+    not wedge the writer thread
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: vec
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, SCHEMA, v, VECTOR, HNSW, "10", TYPE, FLOAT32,
+        DIM, "4", DISTANCE_METRIC, L2, M, "2", EF_CONSTRUCTION, "10"], expect: {equals: OK}}
+    - {command: [HSET, k0, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k1, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k2, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k3, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k4, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k5, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k6, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k7, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k8, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k9, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k10, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k11, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k12, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k13, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k14, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k15, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k16, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k17, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k18, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k19, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k20, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k21, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k22, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k23, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k24, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k25, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k26, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k27, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k28, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, k29, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="]}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, "0", "0"], wait_s: 30, expect: {equals: [
+          30]}}
+    - {command: [HSET, b0, v, !!binary "AADAfwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, b1, v, !!binary "AADAfwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, b2, v, !!binary "AADAfwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, b3, v, !!binary "AADAfwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, b4, v, !!binary "AADAfwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, b5, v, !!binary "AADAfwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, b6, v, !!binary "AADAfwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, b7, v, !!binary "AADAfwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, b8, v, !!binary "AADAfwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, b9, v, !!binary "AADAfwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, b10, v, !!binary "AACAfwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, b11, v, !!binary "AACAfwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, b12, v, !!binary "AACAfwAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, b13, v, !!binary "AACA/wAAAAAAAAAAAAAAAA=="]}
+    - {command: [HSET, b14, v, !!binary "AACA/wAAAAAAAAAAAAAAAA=="]}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, "0", "0"], wait_s: 30, expect_difference: true,
+      expect: {equals: [45]}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [vec.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: vec}

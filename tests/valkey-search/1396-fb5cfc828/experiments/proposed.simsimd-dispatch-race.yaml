@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.simsimd-dispatch-race
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Concurrent first-use of SimSIMD vector-distance functions during HNSW indexing
+    and search. On the parent module build the shared dynamic-dispatch static is zeroed
+    before resolution, so a racing writer/reader thread can NULL-call it and crash;
+    the change loads and publishes it atomically. The crash is nondeterministic, so
+    the concurrency check (which flags a server that stops answering PING as a hang)
+    and the liveness oracle are the judges, not a marked reply difference.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    concurrency: {type: integer, minimum: 1, maximum: 16, default: 16}
+components:
+- use: valkey.action.commands
+  id: vectors
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    checks:
+      concurrency: {$ref: inputs.concurrency}
+    commands:
+    - {command: [CONFIG, SET, search.writer-threads, "8"], expect: {error: false}}
+    - {command: [CONFIG, SET, search.reader-threads, "8"], expect: {error: false}}
+    - {command: [FT.CREATE, idxl2, ON, HASH, PREFIX, 1, "l:", SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxip, ON, HASH, PREFIX, 1, "i:", SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, IP], expect: {equals: OK}}
+    - {command: [HSET, "l:1", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "l:2", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "l:3", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "l:4", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "l:5", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "l:6", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "l:7", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "l:8", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "l:9", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "l:10", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        min: 0}}
+    - {command: [HSET, "i:1", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "i:2", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "i:3", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "i:4", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "i:5", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "i:6", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "i:7", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "i:8", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "i:9", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {min: 0}}
+    - {command: [HSET, "i:10", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        min: 0}}
+    - {command: [FT.INFO, idxl2], wait_s: 30, expect: {contains: 10}, compare: skip}
+    - {command: [FT.INFO, idxip], wait_s: 30, expect: {contains: 10}, compare: skip}
+    - {command: [FT.SEARCH, idxl2, "*=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAAAAAAAAAAAAA==",
+        DIALECT, 2, NOCONTENT], expect: {exists: true}, compare: skip}
+    - {command: [FT.SEARCH, idxip, "*=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAAAAAAAAAAAAA==",
+        DIALECT, 2, NOCONTENT], expect: {exists: true}, compare: skip}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: vectors}

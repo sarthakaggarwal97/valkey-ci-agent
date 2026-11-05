@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ad7f1d679e96bee8a962d5854bf822de440ff0bd",
+  "parent": "e335d9ea36e32c32a1f67074fd7c43cc2fa0870b",
+  "pr": 1447,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix: compare metadata minimum version during reconciliation (#1447)",
+  "date": "2026-10-26",
+  "unstable": "d2466b90a281344b61256221616d5963a0b3ff52",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.0798,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change swaps top_level_version for top_level_min_version in the single reconciliation gate in MetadataManager::ReconcileMetadata. A differing accept/reject decision requires proposed metadata whose logical counter (top_level_version) and minimum-version (top_level_min_version) straddle the module-version integer (1.3.0 = 66304) in opposite directions. This is unreachable in a fuzzer run: both module builds are the same version (1.3.0), so ComputeMinVersion never yields a min_version above 66304 and the min-version direction shows no divergence; the counter direction needs >66304 FT.CREATE/"
+}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search fb5cfc828aa9..d11b59102628.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-488ad4ca227d
+seed: 202
+experiment:
+  id: proposed.ft-aggregate-text-flags
+  inputs:
+    resp: 3
+    cluster: false
+deployment:
+  mode: standalone
+  base_port: 7100
