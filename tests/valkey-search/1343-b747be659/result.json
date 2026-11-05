@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "b747be65912e4e24e04a235ac01aeddfb4e6c9bc",
+  "parent": "2fe364f204ce64f976c5baa91a3ac8ed89b49def",
+  "pr": 1343,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix aarch64 RDB compatibility integration tests (#1343)",
+  "date": "2026-09-01",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2947,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only fixes the project's own integration-test harness and build scripts: it adds an aarch64 prebuilt 1.0.0 module fixture to a test zip and makes the Python RDB-compatibility test pick the fixture per architecture, moves AI-assistant skill docs, and corrects an inverted sanitizer-build condition in submodules/package-submodules.sh that decides when Google Benchmark is compiled. No module source code changes, so the valkey-search module's runtime behavior (commands, replies, RDB format, replication) is identical on both builds; there is nothing a scenario could reach or mark expect_d"
+}

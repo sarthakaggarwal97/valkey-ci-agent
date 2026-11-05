@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "cae4fd2dbb14189dcd7326366e9ff203d58d1ae7",
+  "parent": "20efe9774e1079c1654399935637990a7220362f",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Revert \"Fix indexing for zero-length keys (#1171)\"",
+  "date": "2026-08-20",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 8.0401,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

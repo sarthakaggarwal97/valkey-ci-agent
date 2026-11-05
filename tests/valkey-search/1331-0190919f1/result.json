@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "0190919f15741d6f935f9ffe655b79aec219ddb5",
+  "parent": "bc55ab18cf430e030edce211ae7c0055e7b85ff1",
+  "pr": 1331,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix ThreadPool suspend/resume race with concurrent Resize (#1331)",
+  "date": "2026-09-04",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.473,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

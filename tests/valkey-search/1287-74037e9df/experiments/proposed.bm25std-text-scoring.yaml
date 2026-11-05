@@ -1,0 +1,126 @@
+extends: [valkey.liveness]
+id: proposed.bm25std-text-scoring
+deployment:
+  modes: [standalone]
+metadata:
+  description: BM25STD text scoring, WITHSCORES/SCORER/$weight syntax, inf document-score
+    propagation, hybrid KNN re-ranking and live corpus-statistic updates, compared
+    against the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: scoring
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 240
+    commands:
+    - {command: [FT.CREATE, idxMain, ON, HASH, PREFIX, "1", "doc:", SCHEMA, body,
+        TEXT, NOSTEM, title, TEXT, NOSTEM, rank, NUMERIC, cat, TAG, vec, VECTOR, FLAT,
+        "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxDoc, ON, HASH, PREFIX, "1", "doc:", SCORE, "0.5", SCORE_FIELD,
+        boost, SCHEMA, body, TEXT, NOSTEM], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", body, "hello world one two three", rank, "10", boost,
+        "2.0"], expect: {equals: 3}}
+    - {command: [HSET, "doc:2", body, "hello world one two three hello", rank, "20"],
+      expect: {equals: 2}}
+    - {command: [HSET, "doc:3", body, "hello world one two three hello hello", rank,
+        "30", boost, "0.25"], expect: {equals: 3}}
+    - {command: [HSET, "doc:4", body, "hello world one two three hello hello hello\
+          \ hello", rank, "40", boost, "-1.0"], expect: {equals: 3}}
+    - {command: [HSET, "doc:5", body, "hello hello hello hello", rank, "50", boost,
+        "inf"], expect: {equals: 3}}
+    - {command: [HSET, "doc:6", body, "world rare unique document", rank, "55", vec,
+        !!binary "AACAPwAAgD8="], expect: {equals: 3}}
+    - {command: [HSET, "doc:7", body, "hello world one two three hello", rank, "60",
+        boost, "-inf"], expect: {equals: 3}}
+    - {command: [HSET, "doc:8", body, "rare", rank, "70", vec, !!binary "AACgQAAAoEA="],
+      expect: {equals: 3}}
+    - {command: [FT.SEARCH, idxMain, "*", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [8]}}
+    - {command: [FT.SEARCH, idxDoc, "*", LIMIT, "0", "0"], wait_s: 30, expect: {equals: [
+          8]}}
+    - {command: [FT.SEARCH, idxMain, hello, NOCONTENT], expect_difference: true, expect: {
+        equals: [6, "doc:5", "doc:4", "doc:3", "doc:2", "doc:7", "doc:1"]}}
+    - {command: [FT.SEARCH, idxMain, hello, WITHSCORES], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.SEARCH, idxMain, hello, SCORER, BM25STD, NOCONTENT], expect_difference: true,
+      expect: {equals: [6, "doc:5", "doc:4", "doc:3", "doc:2", "doc:7", "doc:1"]}}
+    - {command: [FT.SEARCH, idxMain, hello, SCORER, TFIDF], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.SEARCH, idxMain, "hello world one", NOCONTENT], expect_difference: true,
+      expect: {equals: [5, "doc:2", "doc:7", "doc:3", "doc:1", "doc:4"]}}
+    - {command: [FT.SEARCH, idxMain, "(hello world) | (rare unique)", NOCONTENT],
+      expect_difference: true, expect: {equals: [6, "doc:6", "doc:4", "doc:3", "doc:2",
+          "doc:7", "doc:1"]}}
+    - {command: [FT.SEARCH, idxMain, "((hello)=>{$weight:4} (world)=>{$weight:3})=>{$weight:2}",
+        NOCONTENT], expect_difference: true, expect: {equals: [5, "doc:4", "doc:3",
+          "doc:2", "doc:7", "doc:1"]}}
+    - {command: [FT.SEARCH, idxMain, "((hello)=>{$weight:4} | (rare)=>{$weight:2})=>{$weight:3}",
+        NOCONTENT], expect_difference: true, expect: {equals: [8, "doc:8", "doc:6",
+          "doc:5", "doc:4", "doc:3", "doc:2", "doc:7", "doc:1"]}}
+    - {command: [FT.SEARCH, idxMain, "@body:\"hello world\"", NOCONTENT], expect_difference: true,
+      expect: {equals: [5, "doc:4", "doc:3", "doc:2", "doc:7", "doc:1"]}}
+    - {command: [FT.SEARCH, idxMain, "@body:\"one world\"", NOCONTENT], expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idxMain, "(hello)=>{$weight:0}", NOCONTENT], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.SEARCH, idxMain, "(hello)=>{$weight:99999999999999999999999999999999999999999}",
+        NOCONTENT], expect_difference: true, expect: {error: true}}
+    - {command: [FT.SEARCH, idxMain, "*", NOCONTENT], expect_difference: true, expect: {
+        equals: [8, "doc:8", "doc:5", "doc:6", "doc:1", "doc:2", "doc:7", "doc:3",
+          "doc:4"]}}
+    - {command: [FT.SEARCH, idxDoc, hello, NOCONTENT], expect_difference: true, expect: {
+        equals: [6, "doc:5", "doc:1", "doc:2", "doc:3", "doc:4", "doc:7"]}}
+    - {command: [FT.SEARCH, idxDoc, hello, WITHSCORES, NOCONTENT], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.SEARCH, idxMain, "rare=>[KNN 2 @vec $q]", PARAMS, "2", q, !!binary "AACAPwAAgD8=",
+        DIALECT, "2", NOCONTENT], expect_difference: true, expect: {equals: [2, "doc:8",
+          "doc:6"]}}
+    - {command: [FT.SEARCH, idxMain, "rare=>[KNN 2 @vec $q]", PARAMS, "2", q, !!binary "AACAPwAAgD8=",
+        DIALECT, "2", SORTBY, __vec_score, DESC, NOCONTENT], expect_difference: true,
+      expect: {equals: [2, "doc:8", "doc:6"]}}
+    - {command: [FT.SEARCH, idxMain, "rare=>[KNN 2 @vec $q]", PARAMS, "2", q, !!binary "AACAPwAAgD8=",
+        DIALECT, "2", SORTBY, __vec_score, ASC, NOCONTENT], expect: {equals: [2, "doc:6",
+          "doc:8"]}}
+    - {command: [FT.SEARCH, idxMain, "*=>[KNN 2 @vec $q AS rank]", PARAMS, "2", q,
+        !!binary "AACAPwAAgD8=", DIALECT, "2", NOCONTENT], expect_difference: true,
+      expect: {error: "already exists in schema"}}
+    - {command: [FT.AGGREGATE, idxMain, hello, SCORER, BM25STD, LOAD, "1", "@rank"],
+      expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idxMain, "rare=>[KNN 2 @vec $q]", PARAMS, "2", q, !!binary "AACAPwAAgD8=",
+        DIALECT, "2", LOAD, "1", "@__vec_score"], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CONFIG, GET, search.default-scorer], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CONFIG, SET, search.default-scorer, BM25STD], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DEL, "doc:6"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idxMain, "*", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [7]}}
+    - {command: [FT.SEARCH, idxMain, hello, NOCONTENT], expect_difference: true, expect: {
+        equals: [6, "doc:5", "doc:4", "doc:3", "doc:2", "doc:7", "doc:1"]}}
+    - {command: [DEL, "doc:5"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idxMain, "*", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [6]}}
+    - {command: [FT.SEARCH, idxMain, hello, NOCONTENT], expect_difference: true, expect: {
+        equals: [5, "doc:4", "doc:3", "doc:2", "doc:7", "doc:1"]}}
+    - {command: [HSET, "doc:5", body, "hello hello hello hello", rank, "50", boost,
+        "inf"], expect: {equals: 3}}
+    - {command: [HSET, "doc:6", body, "world rare unique document", rank, "55", vec,
+        !!binary "AACAPwAAgD8="], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idxMain, "*", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [8]}}
+    - {command: [FT.SEARCH, idxMain, hello, NOCONTENT], expect_difference: true, expect: {
+        equals: [6, "doc:5", "doc:4", "doc:3", "doc:2", "doc:7", "doc:1"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [scoring.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scoring}

@@ -1,0 +1,122 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-random-sample
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE GROUPBY RANDOM_SAMPLE reducer compared between the module
+    build under test and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: sample
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, products, ON, HASH, PREFIX, 1, "product:", SCHEMA, price,
+        NUMERIC, rating, NUMERIC, category, TAG], expect: {equals: OK}}
+    - {command: [HSET, "product:1", price, 1, rating, 4.5, category, electronics],
+      expect: {equals: 3}}
+    - {command: [HSET, "product:2", price, 2, rating, 1.0, category, books], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:3", price, 3, rating, 3.8, category, electronics],
+      expect: {equals: 3}}
+    - {command: [HSET, "product:4", price, 4, rating, 4.8, category, books], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:5", price, 5, rating, 2.2, category, electronics],
+      expect: {equals: 3}}
+    - {command: [HSET, "product:6", price, 6, rating, 3.1, category, books], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:7", price, 7, rating, 4.0, category, electronics],
+      expect: {equals: 3}}
+    - {command: [HSET, "product:8", price, 8, rating, 2.9, category, books], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:9", price, 9, rating, 5, category, electronics], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:10", price, 10, rating, 5, category, books], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:11", price, 11, category, electronics], expect: {
+        equals: 2}}
+    - {command: [HSET, "product:12", price, 12, category, books], expect: {equals: 2}}
+    - {command: [FT.SEARCH, products, "@price:[1 12]", NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [12]}}
+    - {command: [FT.INFO, products], compare: skip}
+    - {command: [FT.AGGREGATE, products, "@price:[1 12]", LOAD, 1, price, APPLY, "1",
+        AS, all, GROUPBY, 1, "@all", REDUCE, RANDOM_SAMPLE, 2, "@price", 5, AS, sample],
+      expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 12]", LOAD, 1, price, APPLY, "1",
+        AS, all, GROUPBY, 1, "@all", REDUCE, RANDOM_SAMPLE, 2, "@price", 1, AS, sample],
+      expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 12]", LOAD, 1, price, APPLY, "1",
+        AS, all, GROUPBY, 1, "@all", REDUCE, RANDOM_SAMPLE, 2, "@price", 0, AS, sample],
+      expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 12]", LOAD, 1, price, APPLY, "1",
+        AS, all, GROUPBY, 1, "@all", REDUCE, RANDOM_SAMPLE, 2, "@price", 1000, AS,
+        sample], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, products, "@price:[7 7]", LOAD, 1, price, APPLY, "1",
+        AS, all, GROUPBY, 1, "@all", REDUCE, RANDOM_SAMPLE, 2, "@price", 3, AS, sample],
+      expect_difference: true, expect: {equals: [1, [all, "1", sample, ["7"]]]}}
+    - {command: [FT.AGGREGATE, products, "@price:[9 12]", LOAD, 1, rating, APPLY,
+        "1", AS, all, GROUPBY, 1, "@all", REDUCE, RANDOM_SAMPLE, 2, "@rating", 10,
+        AS, sample], expect_difference: true, expect: {equals: [1, [all, "1", sample,
+            ["5", "5"]]]}}
+    - {command: [FT.AGGREGATE, products, "@price:[7 7]", LOAD, 1, price, APPLY, "1",
+        AS, all, GROUPBY, 1, "@all", REDUCE, RANDOM_SAMPLE, 2, "@price", 3], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 12]", LOAD, 2, price, category,
+        GROUPBY, 1, "@category", REDUCE, RANDOM_SAMPLE, 2, "@price", 1000, AS, sample],
+      expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 12]", LOAD, 2, price, rating,
+        APPLY, "1", AS, all, GROUPBY, 1, "@all", REDUCE, RANDOM_SAMPLE, 2, "@price",
+        5, AS, ps, REDUCE, RANDOM_SAMPLE, 2, "@rating", 5, AS, rs], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 12]", LOAD, 1, price, APPLY, "1",
+        AS, all, GROUPBY, 1, "@all", REDUCE, COUNT, 0, AS, cnt, REDUCE, RANDOM_SAMPLE,
+        2, "@price", 4, AS, sample], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, products, "@price:[7 7]", LOAD, 1, price, APPLY, "1",
+        AS, all, GROUPBY, 1, "@all", REDUCE, random_sample, 2, "@price", 3, AS, sample],
+      expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 12]", LOAD, 1, price, GROUPBY,
+        1, "@category", REDUCE, RANDOM_SAMPLE, 0, AS, sample], expect_difference: true,
+      expect: {error: "incorrect number of arguments"}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 12]", LOAD, 1, price, GROUPBY,
+        1, "@category", REDUCE, RANDOM_SAMPLE, 1, "@price", AS, sample], expect_difference: true,
+      expect: {error: "incorrect number of arguments"}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 12]", LOAD, 1, price, GROUPBY,
+        1, "@category", REDUCE, RANDOM_SAMPLE, 3, "@price", 5, extra, AS, sample],
+      expect_difference: true, expect: {error: "incorrect number of arguments"}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 12]", LOAD, 1, price, GROUPBY,
+        1, "@category", REDUCE, RANDOM_SAMPLE, 2, "@price", "1.5", AS, sample], expect_difference: true,
+      expect: {error: "sample size must be a non-negative integer constant"}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 12]", LOAD, 1, price, GROUPBY,
+        1, "@category", REDUCE, RANDOM_SAMPLE, 2, "@price", "-1", AS, sample], expect_difference: true,
+      expect: {error: "sample size must be a non-negative integer constant"}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 12]", LOAD, 1, price, GROUPBY,
+        1, "@category", REDUCE, RANDOM_SAMPLE, 2, "@price", "@price", AS, sample],
+      expect_difference: true, expect: {error: "sample size must be a non-negative\
+          \ integer constant"}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 12]", LOAD, 1, price, GROUPBY,
+        1, "@category", REDUCE, RANDOM_SAMPLE, 2, "@price", 1001, AS, sample], expect_difference: true,
+      expect: {error: "sample size must be <= 1000"}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 12]", LOAD, 1, price, GROUPBY,
+        1, "@category", REDUCE, RANDOM_SAMPLE, 2, "@price", 9223372036854775807, AS,
+        sample], expect_difference: true, expect: {error: "sample size must be <=\
+          \ 1000"}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 12]", LOAD, 1, price, GROUPBY,
+        1, "@category", REDUCE, RANDOM_SAMPLE, 2, "@nosuchfield", 5, AS, sample],
+      expect_difference: true, expect: {error: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [sample.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sample}

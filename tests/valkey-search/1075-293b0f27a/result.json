@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "293b0f27a213fcb20c1902124fe6426a838ba80a",
+  "parent": "74037e9dfaba853af6bf1e1895c2f1bb35a614a2",
+  "pr": 1075,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix TAG indexing of non UTF-8 data (#1075)",
+  "date": "2026-08-31",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 12.3425,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

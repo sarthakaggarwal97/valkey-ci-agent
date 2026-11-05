@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.vector-sharing-rename-uaf
+deployment:
+  modes: [standalone]
+metadata:
+  description: RENAME of a hash holding a shared vector field (del then rename_to)
+    must keep the vector intact, not use-after-free
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rename
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {hash-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, hidx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAEAAAEBAAACAQA=="], expect: {
+        equals: 1}}
+    - {command: [FT.SEARCH, hidx, "*"], wait_s: 30, expect: {contains: "doc:1"}, compare: unordered}
+    - {command: [FT._DEBUG, VECTOR_SHARING_STATS], expect_difference: true, expect: {
+        error: false}}
+    - {command: [RENAME, "doc:1", "doc:2"], expect: {equals: OK}}
+    - {command: [HGET, "doc:2", vec], wait_s: 10, expect: {equals: !!binary "AACAPwAAAEAAAEBAAACAQA=="}}
+    - {command: [FT.SEARCH, hidx, "*"], wait_s: 30, expect: {contains: "doc:2"}, compare: unordered}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rename}

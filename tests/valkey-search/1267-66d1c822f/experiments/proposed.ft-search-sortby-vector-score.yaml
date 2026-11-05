@@ -1,0 +1,85 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-sortby-vector-score
+deployment:
+  modes: [standalone]
+metadata:
+  description: "FT.SEARCH SORTBY on the KNN vector-score alias: ascending is now accepted\
+    \ and keeps natural KNN order, descending is rejected; replies compared across\
+    \ the module's change and parent builds"
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: sortby
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 90
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, num, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @vec $BLOB AS score]", NOCONTENT, SORTBY,
+        score, ASC, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAA=", num, 50], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAQAAAAAA=", num, 40], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:3", vec, !!binary "AABAQAAAAAA=", num, 30], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:4", vec, !!binary "AACAQAAAAAA=", num, 20], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:5", vec, !!binary "AACgQAAAAAA=", num, 10], expect: {
+        equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: 5}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @vec $BLOB AS score]", NOCONTENT, PARAMS,
+        2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], wait_s: 30, expect: {equals: [
+          5, "doc:1", "doc:2", "doc:3", "doc:4", "doc:5"]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @vec $BLOB AS score]", NOCONTENT, SORTBY,
+        score, ASC, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {equals: [5, "doc:1", "doc:2", "doc:3", "doc:4", "doc:5"]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @vec $BLOB AS score]", NOCONTENT, SORTBY,
+        score, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {equals: [5, "doc:1", "doc:2", "doc:3", "doc:4", "doc:5"]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @vec $BLOB AS score]", NOCONTENT, SORTBY,
+        score, DESC, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {error: "only supported in ascending order"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @vec $BLOB]", NOCONTENT, SORTBY, __vec_score,
+        ASC, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {equals: [5, "doc:1", "doc:2", "doc:3", "doc:4", "doc:5"]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @vec $BLOB AS score]", NOCONTENT, SORTBY,
+        score, ASC, LIMIT, 2, 2, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT,
+        2], expect_difference: true, expect: {equals: [5, "doc:3", "doc:4"]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @vec $BLOB AS score]", NOCONTENT, SORTBY,
+        score, ASC, LIMIT, 0, 0, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT,
+        2], expect_difference: true, expect: {equals: [5]}}
+    - {command: [FT.SEARCH, idx, "(@num:[15 45])=>[KNN 5 @vec $BLOB AS score]", NOCONTENT,
+        SORTBY, score, ASC, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2],
+      expect_difference: true, expect: {equals: [3, "doc:2", "doc:3", "doc:4"]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @vec $BLOB AS score]", SORTBY, num, ASC,
+        RETURN, 1, num, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect: {
+        equals: [5, "doc:5", ["num", "10"], "doc:4", ["num", "20"], "doc:3", ["num",
+            "30"], "doc:2", ["num", "40"], "doc:1", ["num", "50"]]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @vec $BLOB AS num]", SORTBY, num, ASC,
+        RETURN, 1, num, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {equals: [5, "doc:1", ["num", "1"], "doc:2", ["num", "4"], "doc:3",
+          ["num", "9"], "doc:4", ["num", "16"], "doc:5", ["num", "25"]]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @vec $BLOB AS num]", SORTBY, num, DESC,
+        RETURN, 1, num, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {error: "only supported in ascending order"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @vec $BLOB AS score]", NOCONTENT, SORTBY,
+        nosuch, ASC, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect: {
+        error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [sortby.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sortby}

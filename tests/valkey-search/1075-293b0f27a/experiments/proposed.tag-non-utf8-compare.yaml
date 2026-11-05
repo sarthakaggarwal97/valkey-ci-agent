@@ -1,0 +1,90 @@
+extends: [valkey.liveness]
+id: proposed.tag-non-utf8-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: TAG fields holding invalid UTF-8 are rejected (hash_indexing_failures)
+    instead of indexed, across the AddRecord, ModifyRecord, MULTI/EXEC flush and backfill
+    paths
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: tag
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, category,
+        TAG, price, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 20, expect: {contains: ready}}
+    - {command: [HSET, "doc:1", category, books, price, "10"], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", category, !!binary "aW52YWxpZMM=", price, "5"], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:3", category, !!binary "dmFsaWQxLGJhZP9taWQsdmFsaWQy"],
+      expect: {equals: 1}}
+    - {command: [HSET, "doc:4", category, !!binary "//4="], expect: {equals: 1}}
+    - {command: [HSET, "doc:5", category, !!binary "gGxvbmVseQ=="], expect: {equals: 1}}
+    - {command: [HSET, "doc:6", category, "caf\xE9"], expect: {equals: 1}}
+    - {command: [HSET, "doc:7", category, sentinel], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@category:{sentinel}", NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "doc:7"]}}
+    - {command: [FT.SEARCH, idx, "@category:{books}", NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, idx, "@category:{caf\xE9}", NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "doc:6"]}}
+    - {command: [FT.SEARCH, idx, !!binary "QGNhdGVnb3J5OntpbnZhbGlkw30=", NOCONTENT],
+      expect_difference: true, expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@category:{valid1}", NOCONTENT], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@price:[5 5]", NOCONTENT], expect: {equals: [1,
+          "doc:2"]}}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {contains: ready}}
+    - {command: [HSET, "doc:1", category, !!binary "ZmxpcMM="], expect: {equals: 0}}
+    - {command: [HSET, "doc:8", category, sentinel2], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@category:{sentinel2}", NOCONTENT], wait_s: 30,
+      expect: {equals: [1, "doc:8"]}}
+    - {command: [FT.SEARCH, idx, "@category:{books}", NOCONTENT], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idx, !!binary "QGNhdGVnb3J5OntmbGlww30=", NOCONTENT],
+      expect_difference: true, expect: {equals: [0]}}
+    - {command: [HSET, "doc:2", category, recovered], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@category:{recovered}", NOCONTENT], wait_s: 30,
+      expect: {equals: [1, "doc:2"]}}
+    - {command: [FT.SEARCH, idx, !!binary "QGNhdGVnb3J5OntpbnZhbGlkw30=", NOCONTENT],
+      wait_s: 30, expect: {equals: [0]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, "doc:9", category, !!binary "bXVsdGnD"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, !!binary "QGNhdGVnb3J5OnttdWx0acN9", NOCONTENT],
+      expect_difference: true, expect: {equals: [0]}}
+    - {command: [DEL, "doc:4"], expect: {equals: 1}}
+    - {command: [HSET, "pre:1", tags, alpha], expect: {equals: 1}}
+    - {command: [HSET, "pre:2", tags, !!binary "Z29vZDtiYWT/"], expect: {equals: 1}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, "1", "pre:", SCHEMA, tags, TAG,
+        SEPARATOR, ";"], expect: {equals: OK}}
+    - {command: [FT.INFO, idx2], wait_s: 30, expect_difference: true, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx2, "@tags:{alpha}", NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "pre:1"]}}
+    - {command: [FT.SEARCH, idx2, "@tags:{good}", NOCONTENT], expect_difference: true,
+      expect: {equals: [0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [tag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tag}

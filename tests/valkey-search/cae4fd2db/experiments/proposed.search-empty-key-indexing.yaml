@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.search-empty-key-indexing
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    After the revert of #1171, zero-length keys must not be indexed: backfill, live
+    keyspace notifications, vector TrackKey/UnTrackKey and tag searches are compared
+    against the parent module build, which still indexes them.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: emptykey
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 120
+    commands:
+    - {command: [HSET, "", content, backfilltoken, tag, red], expect: {equals: 2}}
+    - {command: [HSET, "doc:1", content, backfilltoken, tag, red], expect: {equals: 2}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "", SCHEMA, tag, TAG], expect: {
+        equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, "@tag:{red}", NOCONTENT], expect_difference: true,
+      expect: {equals: [1, "doc:1"]}}
+    - {command: [HSET, "", tag, blue], expect: {equals: 0}}
+    - {command: [HSET, "doc:2", tag, blue], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@tag:{red}", NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:1"]}}
+    - {command: [FT.SEARCH, idx, "@tag:{blue}", NOCONTENT], wait_s: 30, expect_difference: true,
+      expect: {contains: "doc:2"}}
+    - {command: [HSET, "", v, aaaabbbb], expect: {equals: 1}}
+    - {command: [HSET, "doc:1", v, aaaabbbb], expect: {equals: 1}}
+    - {command: [FT.CREATE, vidx, ON, HASH, PREFIX, 1, "", SCHEMA, v, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.INFO, vidx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, vidx, "*=>[KNN 3 @v $BLOB]", PARAMS, 2, BLOB, aaaabbbb,
+        NOCONTENT], expect_difference: true, expect: {equals: [1, "doc:1"]}}
+    - {command: [DEL, ""], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@tag:{blue}", NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "doc:2"]}}
+    - {command: [FT.SEARCH, vidx, "*=>[KNN 3 @v $BLOB]", PARAMS, 2, BLOB, aaaabbbb,
+        NOCONTENT], wait_s: 30, expect: {equals: [1, "doc:1"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [emptykey.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: emptykey}

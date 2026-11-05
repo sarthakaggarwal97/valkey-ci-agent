@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-reducer-default-alias
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    FT.AGGREGATE REDUCE with no AS clause: the rewritten default-name code (StrCat/StrJoin
+    behind VALKEY_SEARCH_COMPATIBILITY_FIX 1.3.0) must still produce the byte-identical
+    legacy name REDUCER(args) under the default search.emulate-release (1.0.0, and
+    the module version 1.2.1 caps it below 1.3.0 without debug-mode, so the legacy
+    branch is the one production runs), and the change's new lazily-constructed INFO
+    counter compatibility-aggregate_reducer_default_alias must appear on the change's
+    build after the first no-AS REDUCE and never on the parent's.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    checks: {concurrency: 6}
+    commands:
+    - {command: [FT._DEBUG, LIST_METRICS, APP, NAMES_ONLY], compare: unordered}
+    - {command: [FT.CREATE, products, ON, HASH, PREFIX, "1", "product:", SCHEMA, price,
+        NUMERIC, rating, NUMERIC, category, TAG], expect: {equals: OK}}
+    - {command: [HSET, "product:1", category, electronics, name, Laptop, price, "999.99",
+        rating, "4.5", desc, Great], expect: {equals: 5}}
+    - {command: [HSET, "product:2", category, electronics, name, Tablet, price, "499.00",
+        rating, "4.0", desc, Good], expect: {equals: 5}}
+    - {command: [HSET, "product:3", category, electronics, name, Phone, price, "299.00",
+        rating, "3.8", desc, Ok], expect: {equals: 5}}
+    - {command: [HSET, "product:4", category, books, name, Book, price, "19.99", rating,
+        "4.8", desc, Excellent], expect: {equals: 5}}
+    - {command: [FT.SEARCH, products, "*", NOCONTENT, LIMIT, "0", "0"], wait_s: 30,
+      expect: {equals: [4]}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 1000]", GROUPBY, "1", "@category",
+        REDUCE, COUNT_DISTINCT, "1", "@rating", AS, distinct_ratings], compare: unordered,
+      expect: {exists: true}}
+    - {command: [FT._DEBUG, LIST_METRICS, APP, NAMES_ONLY], compare: unordered}
+    - {command: [FT.AGGREGATE, products, "@price:[1 1000]", LOAD, "2", rating, category,
+        GROUPBY, "1", "@category", REDUCE, COUNT_DISTINCT, "1", "@rating"], compare: unordered,
+      expect: {exists: true}}
+    - {command: [FT.AGGREGATE, products, "*", GROUPBY, "1", "@category", REDUCE, COUNT,
+        "0"], compare: unordered, expect: {exists: true}}
+    - {command: [FT.AGGREGATE, products, "*", GROUPBY, "1", "@category", REDUCE, COUNT,
+        "0", REDUCE, COUNT, "0"], compare: unordered}
+    - {command: [FT.AGGREGATE, products, "*", GROUPBY, "1", "@category", REDUCE, MIN,
+        "1", "@price", REDUCE, MAX, "1", "@price"], compare: unordered}
+    - {command: [FT.AGGREGATE, products, "*", GROUPBY, "1", "@category", REDUCE, MAX,
+        "1", price], compare: unordered}
+    - {command: [FT.AGGREGATE, products, "*", GROUPBY, "1", "@category", REDUCE, COUNT_DISTINCT,
+        "1", "@"], compare: unordered}
+    - {command: [FT.AGGREGATE, products, "*", GROUPBY, "1", "@category", REDUCE, FIRST_VALUE,
+        "4", "@price", BY, "@rating", DESC], compare: unordered}
+    - {command: [FT._DEBUG, LIST_METRICS, APP, NAMES_ONLY], compare: unordered, expect_difference: true,
+      expect: {contains: compatibility-aggregate_reducer_default_alias}}
+    - {command: [INFO, everything], expect_difference: true, expect: {contains: compatibility-aggregate_reducer_default_alias}}
+    - {command: [CONFIG, SET, search.emulate-release, "1.3.0"], expect: {error: "must\
+          \ be <="}}
+    - {command: [CONFIG, SET, search.emulate-release, "1.2.1"], expect: {equals: OK}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 1000]", GROUPBY, "1", "@category",
+        REDUCE, COUNT_DISTINCT, "1", "@rating"], compare: unordered, expect: {exists: true}}
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

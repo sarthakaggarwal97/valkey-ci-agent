@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.threadpool-resize-during-suspend
+deployment:
+  modes: [standalone]
+metadata:
+  description: Resizing the writer thread pool up while a BGSAVE holds it suspended
+    must not crash the module
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    save_delay_us: {type: integer, default: 2000, minimum: 0, maximum: 100000}
+components:
+- use: valkey.action.commands
+  id: race
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {rdb-key-save-delay: {$ref: inputs.save_delay_us}}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, search.max-worker-suspension-secs, "60"], expect: {
+        error: false}}
+    - {command: [CONFIG, SET, search.writer-threads, "1"], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, v, VECTOR,
+        HNSW, "6", TYPE, FLOAT32, DIM, "4", DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:2", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:3", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:4", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:5", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:6", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:7", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:8", v, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [BGSAVE], expect: {error: false}}
+    - {command: [CONFIG, SET, search.writer-threads, "32"], expect: {error: false}}
+    - {command: [CONFIG, SET, search.writer-threads, "1"], expect: {error: false}}
+    - {command: [BGSAVE], expect: {error: false}}
+    - {command: [CONFIG, SET, search.writer-threads, "32"], expect: {error: false}}
+    - {command: [CONFIG, SET, search.writer-threads, "1"], expect: {error: false}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [race.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: race}

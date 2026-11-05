@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-implicit-load
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE implicitly loads fields referenced by GROUPBY/REDUCE/SORTBY/APPLY/FILTER
+    but absent from the LOAD clause (issue
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'h:', SCHEMA, cat, TAG, price,
+        NUMERIC, qty, NUMERIC, load, TAG, vec, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM,
+        2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, 'h:1', cat, a, price, 10, qty, 1, load, x, vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 6}}
+    - {command: [HSET, 'h:2', cat, b, price, 20, qty, 2, load, y, vec, !!binary 'AAAAAAAAgD8='],
+      expect: {equals: 6}}
+    - {command: [HSET, 'h:3', cat, a, price, 30, qty, 3, load, x, vec, !!binary 'AACAPwAAgD8='],
+      expect: {equals: 6}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          3]}}
+    - {command: [FT.AGGREGATE, idx, '*', GROUPBY, 1, '@cat', REDUCE, COUNT, 0, AS,
+        cnt, SORTBY, 2, '@cat', ASC], expect_difference: true, expect: {equals: [
+          2, [cat, a, cnt, 2], [cat, b, cnt, 1]]}}
+    - {command: [FT.AGGREGATE, idx, '*', GROUPBY, 1, '@cat', REDUCE, SUM, 1, '@price',
+        AS, total, SORTBY, 2, '@cat', ASC], expect_difference: true, expect: {equals: [
+          2, [cat, a, total, 40], [cat, b, total, 20]]}}
+    - {command: [FT.AGGREGATE, idx, '*', LOAD, 1, '@__key', SORTBY, 2, '@price', ASC],
+      expect_difference: true, expect: {equals: [3, [__key, 'h:1', price, 10], [__key,
+            'h:2', price, 20], [__key, 'h:3', price, 30]]}}
+    - {command: [FT.AGGREGATE, idx, '*', LOAD, 1, '@__key', APPLY, '@price+@qty',
+        AS, total, SORTBY, 2, '@total', ASC], expect_difference: true, expect: {equals: [
+          3, [__key, 'h:1', price, 10, qty, 1, total, 11], [__key, 'h:2', price, 20,
+            qty, 2, total, 22], [__key, 'h:3', price, 30, qty, 3, total, 33]]}}
+    - {command: [FT.AGGREGATE, idx, '*', LOAD, 1, '@__key', FILTER, '@price>15', SORTBY,
+        2, '@__key', ASC], expect_difference: true, expect: {equals: [2, [__key, 'h:2',
+            price, 20], [__key, 'h:3', price, 30]]}}
+    - {command: [FT.AGGREGATE, idx, '*', GROUPBY, 1, '@load', REDUCE, COUNT, 0, AS,
+        cnt, SORTBY, 2, '@load', ASC], expect_difference: true, expect: {equals: [
+          2, [load, x, cnt, 2], [load, y, cnt, 1]]}}
+    - {command: [FT.AGGREGATE, idx, '*', GROUPBY, 1, '@cat', REDUCE, COUNT, 0, AS,
+        cnt, APPLY, '@cnt*10', AS, scaled, SORTBY, 2, '@cat', ASC], expect_difference: true,
+      expect: {equals: [2, [cat, a, cnt, 2, scaled, 20], [cat, b, cnt, 1, scaled,
+            10]]}}
+    - {command: [FT.AGGREGATE, idx, '*', GROUPBY, 1, '@vec', REDUCE, COUNT, 0, AS,
+        cnt], expect: {equals: [1, [cnt, 3]]}}
+    - {command: [FT.AGGREGATE, idx, '*', GROUPBY, 1, '@nosuchfield', REDUCE, COUNT,
+        0, AS, cnt], expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, '*', GROUPBY, 1, '@', REDUCE, COUNT, 0, AS, cnt],
+      expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

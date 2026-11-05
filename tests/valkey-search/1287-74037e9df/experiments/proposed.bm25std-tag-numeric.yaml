@@ -1,0 +1,97 @@
+extends: [valkey.liveness]
+id: proposed.bm25std-tag-numeric
+deployment:
+  modes: [standalone]
+metadata:
+  description: BM25STD tag scoring with per-value IDF, numeric always-zero scoring,
+    degenerate no-TEXT-field schema (avg_doc_len 0), document-wide term frequency,
+    and N counting keyspace-only docs, compared against the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: tagnum
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 240
+    commands:
+    - {command: [FT.CREATE, idxPart, ON, HASH, PREFIX, "1", "p:", SCHEMA, body, TEXT,
+        NOSTEM, cat, TAG, rank, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxNoText, ON, HASH, PREFIX, "1", "p:", SCHEMA, cat, TAG,
+        rank, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxMulti, ON, HASH, PREFIX, "1", "m:", SCHEMA, body, TEXT,
+        NOSTEM, title, TEXT, NOSTEM], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxBad, ON, HASH, SCORE, "2.0", SCHEMA, body, TEXT, NOSTEM],
+      expect: {error: true}}
+    - {command: [HSET, "p:1", body, "hello world", cat, "a,b", rank, "1"], expect: {
+        equals: 3}}
+    - {command: [HSET, "p:2", body, "hello there friend", cat, "b", rank, "2"], expect: {
+        equals: 3}}
+    - {command: [HSET, "p:3", body, "hello", cat, "a", rank, "3"], expect: {equals: 3}}
+    - {command: [HSET, "p:4", body, "world only", cat, "c", rank, "4"], expect: {
+        equals: 3}}
+    - {command: [HSET, "p:5", cat, "x", rank, "5"], expect: {equals: 2}}
+    - {command: [HSET, "p:6", cat, "x", rank, "6"], expect: {equals: 2}}
+    - {command: [HSET, "p:7", cat, "x", rank, "7"], expect: {equals: 2}}
+    - {command: [HSET, "p:8", cat, "x", rank, "8"], expect: {equals: 2}}
+    - {command: [HSET, "p:9", cat, "x", rank, "9"], expect: {equals: 2}}
+    - {command: [HSET, "p:10", cat, "x", rank, "10"], expect: {equals: 2}}
+    - {command: [HSET, "m:1", body, "alpha", title, "alpha alpha"], expect: {equals: 2}}
+    - {command: [HSET, "m:2", body, "alpha alpha", title, "beta"], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idxPart, "*", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [10]}}
+    - {command: [FT.SEARCH, idxNoText, "*", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [10]}}
+    - {command: [FT.SEARCH, idxMulti, "*", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [2]}}
+    - {command: [FT.SEARCH, idxPart, hello, NOCONTENT], expect_difference: true, expect: {
+        equals: [3, "p:3", "p:1", "p:2"]}}
+    - {command: [FT.SEARCH, idxPart, hello, WITHSCORES], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.SEARCH, idxPart, "@cat:{a}", WITHSCORES], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.SEARCH, idxPart, "@cat:{a}", NOCONTENT], compare: unordered, expect: {
+        equals: [2, "p:3", "p:1"]}}
+    - {command: [FT.SEARCH, idxPart, "@cat:{a|b}", NOCONTENT], expect_difference: true,
+      expect: {equals: [3, "p:1", "p:3", "p:2"]}}
+    - {command: [FT.SEARCH, idxPart, "(@cat:{a})=>{$weight:3}", NOCONTENT], expect_difference: true,
+      expect: {equals: [2, "p:3", "p:1"]}}
+    - {command: [FT.SEARCH, idxPart, "hello | @cat:{a}", NOCONTENT], expect_difference: true,
+      expect: {equals: [3, "p:3", "p:1", "p:2"]}}
+    - {command: [FT.SEARCH, idxPart, "((hello)=>{$weight:4} | (@cat:{a})=>{$weight:2})=>{$weight:3}",
+        NOCONTENT], expect_difference: true, expect: {equals: [3, "p:3", "p:1", "p:2"]}}
+    - {command: [FT.SEARCH, idxPart, "hello @cat:{a} @rank:[0 100]", NOCONTENT], compare: unordered,
+      expect: {equals: [2, "p:3", "p:1"]}}
+    - {command: [FT.SEARCH, idxPart, "@rank:[0 100]", NOCONTENT], compare: unordered,
+      expect: {equals: [10, "p:1", "p:10", "p:2", "p:3", "p:4", "p:5", "p:6", "p:7",
+          "p:8", "p:9"]}}
+    - {command: [FT.SEARCH, idxNoText, "@cat:{a}", NOCONTENT, WITHSCORES], expect_difference: true,
+      expect: {equals: [2, "p:1", "0", "p:3", "0"]}}
+    - {command: [FT.SEARCH, idxNoText, "@rank:[1 10]", NOCONTENT], compare: unordered,
+      expect: {equals: [10, "p:1", "p:10", "p:2", "p:3", "p:4", "p:5", "p:6", "p:7",
+          "p:8", "p:9"]}}
+    - {command: [FT.SEARCH, idxMulti, "@body:alpha", WITHSCORES], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.SEARCH, idxMulti, "@body:alpha", NOCONTENT], compare: unordered,
+      expect: {equals: [2, "m:1", "m:2"]}}
+    - {command: [FT.SEARCH, idxMulti, "@title:alpha", NOCONTENT], expect: {equals: [
+          1, "m:1"]}}
+    - {command: [HSET, "p:11", filler, "one two three four five six seven eight nine\
+          \ ten"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idxPart, "*", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [11]}}
+    - {command: [FT.SEARCH, idxPart, hello, NOCONTENT], expect_difference: true, expect: {
+        equals: [3, "p:3", "p:1", "p:2"]}}
+    - {command: [FT.SEARCH, idxPart, hello, WITHSCORES], expect_difference: true,
+      expect: {error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [tagnum.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tagnum}

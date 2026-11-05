@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.ftsearch-return-raw-vector
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH returning a COSINE index's vector returns the exact stored
+    vector, not a denormalized round-trip
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [FT.CREATE, idxh, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, COSINE], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxf, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, COSINE], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAEAAAEBAAACAQA=="], expect: {
+        equals: 1}}
+    - {command: [FT.SEARCH, idxh, "*=>[KNN 1 @vec $B]", PARAMS, 2, B, !!binary "AACAPwAAAEAAAEBAAACAQA==",
+        RETURN, 1, vec, DIALECT, 2], wait_s: 15, compare: unordered, expect_difference: true,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idxf, "*=>[KNN 1 @vec $B]", PARAMS, 2, B, !!binary "AACAPwAAAEAAAEBAAACAQA==",
+        RETURN, 1, vec, DIALECT, 2], wait_s: 15, compare: unordered, expect_difference: true,
+      expect: {contains: "doc:1"}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAQAAAQEAAAABAAACAPw=="], expect: {
+        equals: 0}}
+    - {command: [FT.SEARCH, idxh, "*=>[KNN 1 @vec $B]", PARAMS, 2, B, !!binary "AACAQAAAQEAAAABAAACAPw==",
+        RETURN, 1, vec, DIALECT, 2], wait_s: 15, compare: unordered, expect_difference: true,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idxf, "*=>[KNN 1 @vec $B]", PARAMS, 2, B, !!binary "AACAQAAAQEAAAABAAACAPw==",
+        RETURN, 1, vec, DIALECT, 2], wait_s: 15, compare: unordered, expect_difference: true,
+      expect: {contains: "doc:1"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

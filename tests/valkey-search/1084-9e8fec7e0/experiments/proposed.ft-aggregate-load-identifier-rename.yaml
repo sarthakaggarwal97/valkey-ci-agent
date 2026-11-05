@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-load-identifier-rename
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    FT.AGGREGATE LOAD clause after the rename/JSON-path change, compared across the
+    two module builds on one Valkey build. The gated AS-rename branch needs search.emulate-release
+    >= 1.3.0, which needs the --debug-mode module argument the fuzzer cannot pass,
+    so the sequence drives the ungated parts: LOAD by a schema identifier on a HASH
+    index declared `price_id AS price` (the HASH analog of the JSON-path fix: the
+    parent errors, the change resolves it via GetAlias), the rewritten column/extra-field
+    record building, and the gate itself, which must keep every legacy reply byte-identical.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "h:", SCHEMA, price_id, AS,
+        price, NUMERIC, qty, NUMERIC, cat, TAG], expect: {equals: OK}}
+    - {command: [HSET, "h:1", price_id, "10", qty, "5", cat, a], expect: {equals: 3}}
+    - {command: [HSET, "h:2", price_id, "20", qty, "1", cat, b], expect: {equals: 3}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "1", "@__key", SORTBY, "2", "@qty",
+        ASC], wait_s: 30, expect: {equals: [2, [__key, "h:2", qty, "1"], [__key, "h:1",
+            qty, "5"]]}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "1", price_id, SORTBY, "2", "@price",
+        ASC], expect_difference: true, expect: {equals: [2, [price_id, "10"], [price_id,
+            "20"]]}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "1", price_id, APPLY, "@price+1", AS,
+        r, SORTBY, "2", "@r", ASC], expect_difference: true, expect: {equals: [2,
+          [price_id, "10", r, "11"], [price_id, "20", r, "21"]]}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "1", price_id, GROUPBY, "1", "@cat",
+        REDUCE, SUM, "1", "@price", AS, total], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "3", price_id, AS, cost], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "3", "@price", AS, cost], expect: {
+        error: true}}
+    - {command: [CONFIG, SET, search.emulate-release, 1.3.0], expect: {error: true}}
+    - {command: [CONFIG, SET, search.emulate-release, 1.2.1], expect: {equals: OK}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "3", "@price", AS, cost], expect: {
+        error: true}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "1", "@__key", APPLY, "@price*2", AS,
+        dbl, SORTBY, "2", "@dbl", ASC], expect: {equals: [2, [__key, "h:1", price_id,
+            "10", dbl, "20"], [__key, "h:2", price_id, "20", dbl, "40"]]}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "2", "@qty", "@qty", SORTBY, "2", "@qty",
+        ASC], expect: {equals: [2, [qty, "1"], [qty, "5"]]}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "1", ""], expect: {error: "Empty argument"}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "1", "@"], expect: {error: "Empty argument"}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "4294967295", "@qty"], expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "*", SORTBY, "2", "@price", ASC], compare: skip,
+      expect: {error: false}}
+    - {command: [FT.CREATE, idxv, ON, HASH, PREFIX, "1", "v:", SCHEMA, vec, VECTOR,
+        FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2, num, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [HSET, "v:1", vec, !!binary "AACAPwAAAEA=", num, "7"], expect: {equals: 2}}
+    - {command: [FT.AGGREGATE, idxv, "@num:[7 7]", LOAD, "1", "@__key"], wait_s: 30,
+      expect: {equals: [1, [__key, "v:1"]]}}
+    - {command: [FT.AGGREGATE, idxv, "*=>[KNN 1 @vec $b]", PARAMS, "2", b, !!binary "AACAPwAAAEA=",
+        DIALECT, "2", LOAD, "1", "@__key"], compare: skip, expect: {error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

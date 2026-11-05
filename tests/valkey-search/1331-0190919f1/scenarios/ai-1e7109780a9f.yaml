@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search bc55ab18cf43..0190919f1574.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1e7109780a9f
+seed: 1005
+experiment:
+  id: proposed.threadpool-resize-during-suspend
+  inputs:
+    resp: 3
+    save_delay_us: 8000
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

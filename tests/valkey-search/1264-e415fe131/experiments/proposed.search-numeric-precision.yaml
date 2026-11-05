@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.search-numeric-precision
+deployment:
+  modes: [standalone]
+metadata:
+  description: Numeric field content materialization and double formatting keep full
+    precision (FT.SEARCH RETURN of numeric fields, FT.AGGREGATE LOAD/APPLY/REDUCE)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: precision
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC,
+        t, TAG, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:a", n, 20260201, t, g, v, !!binary "AACAPwAAAAA="], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:b", n, 202602011234, t, g, v, !!binary "AAAAQAAAAAA="],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:c", n, 0.5, t, g, v, !!binary "AABAQAAAAAA="], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:d", n, 1.7976931348623157e+308, t, g, v, !!binary "AACAQAAAAAA="],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:e", n, 5e-324, t, g, v, !!binary "AACgQAAAAAA="], expect: {
+        equals: 3}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, "@t:{g}", NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [5]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @v $B AS score]", PARAMS, 2, B, !!binary "AAAAAAAAAAA=",
+        RETURN, 1, n, DIALECT, 2], expect_difference: true, compare: unordered, expect: {
+        contains: "20260201"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @v $B AS score]", PARAMS, 2, B, !!binary "AAAAAAAAAAA=",
+        RETURN, 1, n, DIALECT, 2], expect_difference: true, compare: unordered, expect: {
+        contains: "202602011234"}}
+    - {command: [FT.AGGREGATE, idx, "@t:{g}", LOAD, 2, "@n", "@t", SORTBY, 2, "@n",
+        ASC], expect_difference: true, compare: unordered, expect: {contains: "202602011234"}}
+    - {command: [FT.AGGREGATE, idx, "@t:{g}", LOAD, 1, "@n", APPLY, "0.1 + 0.2", AS,
+        frac, SORTBY, 2, "@n", ASC], expect_difference: true, compare: unordered,
+      expect: {contains: "0.30000000000000004"}}
+    - {command: [FT.AGGREGATE, idx, "@t:{g}", LOAD, 2, "@n", "@t", GROUPBY, 1, "@t",
+        REDUCE, SUM, 1, "@n", AS, total], expect_difference: true, compare: unordered,
+      expect: {contains: "1.7976931348623157e+308"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [precision.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: precision}

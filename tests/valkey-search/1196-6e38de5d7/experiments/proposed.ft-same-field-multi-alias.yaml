@@ -1,0 +1,96 @@
+extends: [valkey.liveness]
+id: proposed.ft-same-field-multi-alias
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    FT.CREATE indexing one source field under several aliases (TEXT+TAG, NUMERIC+TAG+TEXT,
+    TEXT+TEXT NOSTEM), both aliases queried, the field deleted and re-added, the schema
+    SAVEd and reloaded across a restart. The parent rejects every such schema with
+    "Duplicate field in schema", so each command marked expect_difference errors there.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dualfield
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, '1', 'blog:', SCHEMA, sku, AS,
+        sku_text, TEXT, sku, AS, sku_tag, TAG, SORTABLE], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx3, ON, HASH, PREFIX, '1', 'item:', SCHEMA, price, AS,
+        p_num, NUMERIC, price, AS, p_tag, TAG, price, AS, p_txt, TEXT], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx4, ON, HASH, PREFIX, '1', 'doc:', SCHEMA, body, AS,
+        b_stem, TEXT, body, AS, b_raw, TEXT, NOSTEM], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, iddup, ON, HASH, SCHEMA, sku, AS, dup, TEXT, price, AS,
+        dup, TAG], expect: {error: 'Duplicate field in schema - dup'}}
+    - {command: [FT.CREATE, idxswap, ON, HASH, PREFIX, '1', 'sw:', SCHEMA, fa, AS,
+        fb, TEXT, fb, AS, fa, TAG], expect: {equals: OK}}
+    - {command: [HSET, 'blog:1', sku, widget], expect: {equals: 1}}
+    - {command: [HSET, 'blog:2', sku, 'widget,gadget'], expect: {equals: 1}}
+    - {command: [HSET, 'item:1', price, '10'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:1', body, 'running quickly'], expect: {equals: 1}}
+    - {command: [HSET, 'sw:1', fa, hello, fb, world], expect: {equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 45, expect_difference: true, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, '@sku_tag:{gadget}', NOCONTENT], wait_s: 30, expect_difference: true,
+      expect: {equals: [1, 'blog:2']}}
+    - {command: [FT.SEARCH, idx, '@sku_text:gadget', NOCONTENT], expect_difference: true,
+      expect: {equals: [1, 'blog:2']}}
+    - {command: [FT.SEARCH, idx, '@sku_tag:{widget}', NOCONTENT], compare: unordered,
+      expect_difference: true, expect: {contains: 'blog:1'}}
+    - {command: [FT.SEARCH, idx, '@sku_text:widget', NOCONTENT], compare: unordered,
+      expect_difference: true, expect: {contains: 'blog:1'}}
+    - {command: [FT.SEARCH, idx, gadget, NOCONTENT], expect_difference: true, expect: {
+        equals: [1, 'blog:2']}}
+    - {command: [FT.SEARCH, idx3, '@p_num:[5 15]', NOCONTENT], wait_s: 30, expect_difference: true,
+      expect: {equals: [1, 'item:1']}}
+    - {command: [FT.SEARCH, idx3, '@p_tag:{10}', NOCONTENT], expect_difference: true,
+      expect: {equals: [1, 'item:1']}}
+    - {command: [FT.SEARCH, idx3, '@p_txt:10', NOCONTENT], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.SEARCH, idx4, '@b_raw:running', NOCONTENT], wait_s: 30, expect_difference: true,
+      expect: {equals: [1, 'doc:1']}}
+    - {command: [FT.SEARCH, idx4, '@b_stem:runs', NOCONTENT], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, gadget, LOAD, '1', '@sku_tag'], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.SEARCH, idxswap, '@fa:{world}', NOCONTENT], wait_s: 30, expect: {
+        equals: [1, 'sw:1']}}
+    - {command: [FT.SEARCH, idxswap, '@fb:hello', NOCONTENT], expect: {equals: [1,
+          'sw:1']}}
+    - {command: [HDEL, 'blog:2', sku], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@sku_tag:{gadget}', NOCONTENT], wait_s: 30, expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, '@sku_text:gadget', NOCONTENT], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [HSET, 'blog:2', sku, 'widget,gadget'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@sku_tag:{gadget}', NOCONTENT], wait_s: 30, expect_difference: true,
+      expect: {equals: [1, 'blog:2']}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 60, expect_difference: true, expect: {contains: ready}}
+    - {command: [FT._LIST], compare: unordered, expect_difference: true, expect: {
+        contains: idx}}
+    - {command: [FT.SEARCH, idx, '@sku_tag:{gadget}', NOCONTENT], wait_s: 30, expect_difference: true,
+      expect: {equals: [1, 'blog:2']}}
+    - {command: [FT.SEARCH, idx, '@sku_text:widget', NOCONTENT], compare: unordered,
+      expect_difference: true, expect: {contains: 'blog:2'}}
+    - {command: [FT.SEARCH, idx4, '@b_raw:running', NOCONTENT], wait_s: 30, expect_difference: true,
+      expect: {equals: [1, 'doc:1']}}
+    - {command: [FT.SEARCH, idxswap, '@fa:{world}', NOCONTENT], wait_s: 30, expect: {
+        equals: [1, 'sw:1']}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [dualfield.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dualfield}

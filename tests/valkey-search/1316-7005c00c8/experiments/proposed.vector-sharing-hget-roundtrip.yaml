@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.vector-sharing-hget-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: HGET on a shared vector field returns identical bytes while shared
+    and after index drop, for HNSW and FLAT
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: roundtrip
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {hash-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, hidx, ON, HASH, PREFIX, 1, "hdoc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, fidx, ON, HASH, PREFIX, 1, "fdoc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "hdoc:1", vec, !!binary "AACAPwAAAEAAAEBAAACAQA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "fdoc:1", vec, !!binary "AACAPwAAAEAAAEBAAACAQA=="], expect: {
+        equals: 1}}
+    - {command: [FT.SEARCH, hidx, "*"], wait_s: 30, expect: {contains: "hdoc:1"},
+      compare: unordered}
+    - {command: [FT.SEARCH, fidx, "*"], wait_s: 30, expect: {contains: "fdoc:1"},
+      compare: unordered}
+    - {command: [FT._DEBUG, VECTOR_SHARING_STATS], expect_difference: true, expect: {
+        error: false}}
+    - {command: [HGET, "hdoc:1", vec], expect: {equals: !!binary "AACAPwAAAEAAAEBAAACAQA=="}}
+    - {command: [HGET, "fdoc:1", vec], expect: {equals: !!binary "AACAPwAAAEAAAEBAAACAQA=="}}
+    - {command: [FT.DROPINDEX, hidx], expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, fidx], expect: {equals: OK}}
+    - {command: [HGET, "hdoc:1", vec], wait_s: 10, expect: {equals: !!binary "AACAPwAAAEAAAEBAAACAQA=="}}
+    - {command: [HGET, "fdoc:1", vec], wait_s: 10, expect: {equals: !!binary "AACAPwAAAEAAAEBAAACAQA=="}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: roundtrip}

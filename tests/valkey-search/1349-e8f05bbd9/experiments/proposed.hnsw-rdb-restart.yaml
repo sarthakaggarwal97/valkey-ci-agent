@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.hnsw-rdb-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: A single-element HNSW index survives an RDB save and restart; the parent
+    crashes on reload
+components:
+- use: valkey.action.commands
+  id: hnsw
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: 2
+    timeout_s: 40
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:0", vec, !!binary "AACAPwAAAAAAAAAA"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary "AACAPwAAAAAAAAAA",
+        DIALECT, 2, NOCONTENT], wait_s: 20, compare: unordered, expect: {contains: 1}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect_difference: true, expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [hnsw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hnsw}

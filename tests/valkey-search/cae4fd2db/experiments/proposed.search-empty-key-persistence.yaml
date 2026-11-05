@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.search-empty-key-persistence
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    RDB v2 save and reload of tag and vector indexes over a dataset holding a zero-length
+    key: the parent persists and reloads it as indexed; after the revert the reload
+    must exclude it cleanly without crashing.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: persist
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [HSET, "", tag, red, v, aaaabbbb], expect: {equals: 2}}
+    - {command: [HSET, "doc:1", tag, red, v, aaaabbbb], expect: {equals: 2}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "", SCHEMA, tag, TAG], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, vidx, ON, HASH, PREFIX, 1, "", SCHEMA, v, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.INFO, vidx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, "@tag:{red}", NOCONTENT], expect_difference: true,
+      expect: {equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, vidx, "*=>[KNN 3 @v $BLOB]", PARAMS, 2, BLOB, aaaabbbb,
+        NOCONTENT], expect_difference: true, expect: {equals: [1, "doc:1"]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 60, compare: skip, expect: {contains: ready}}
+    - {command: [FT.INFO, vidx], wait_s: 60, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, "@tag:{red}", NOCONTENT], wait_s: 30, expect_difference: true,
+      expect: {equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, vidx, "*=>[KNN 3 @v $BLOB]", PARAMS, 2, BLOB, aaaabbbb,
+        NOCONTENT], wait_s: 30, expect_difference: true, expect: {equals: [1, "doc:1"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [persist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: persist}

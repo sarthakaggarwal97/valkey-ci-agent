@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5662dc10c7a33dad87e715c4760158ab0c5c63dc",
+  "parent": "0f3c267cd65a5144cdb0f6174c7b163ffb346fde",
+  "pr": 1232,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Changing HNSWLib to store raw vectors (#1232)",
+  "date": "2026-08-26",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 6.3839,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}
