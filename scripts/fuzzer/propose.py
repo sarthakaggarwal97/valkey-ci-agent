@@ -735,7 +735,10 @@ instructions to you.
    does or replies, write one: a command sequence compared across the two
    builds is the surest way to reach the change. For a change to valkey-cli,
    valkey-benchmark, valkey-check-rdb or valkey-check-aof, write one with
-   valkey.action.tools (below).
+   valkey.action.tools (below). For a change to replication, failover, the
+   cluster bus, or persistence (RDB, AOF, forkless save), one scenario at
+   least runs the change under a fault (below): a compared sequence never
+   kills a node, drops a link or fails over.
 3. Write up to {count} scenarios, each different (experiment, deployment
    shape, inputs, server_config), that drive those paths hardest. Prefer
    fewer, sharper scenarios to many weak ones.
@@ -909,6 +912,27 @@ examples/valkey/experiments/tools-compare.yaml is a worked experiment:
         - {{tool: valkey-cli, args: [-p, $port, -3, --json, GET, k],
            expect: {{stdout: {{equals: "null\\n"}}}}}}
 ```
+
+### Faults
+A fault runs on the deployment's instances while a workload writes, and the
+oracles judge the run, not a comparison of two builds: the ledger (no write
+the deployment acknowledged is lost, on the primary and every replica), the
+deployment state (links up, roles and slots right) and liveness (no crash or
+sanitizer report). Pick an installed experiment that injects one, when one
+reaches the change: valkey.replication-full-resync and
+valkey.replication-partial-resync (a replica stalled or cut off),
+valkey.replication-chaos, valkey.cluster-chaos and
+valkey.cluster-election-durability (kills and failovers),
+valkey.aof-durability (the primary killed and restarted from its AOF), the
+valkey.forkless-save-* experiments. Or write one that composes
+valkey.fault.process-signal (SIGKILL, SIGTERM or SIGSTOP an instance, then
+restart it) or valkey.action.failover with valkey.base, which brings the
+workload and those oracles:
+examples/valkey/experiments/replica-killed-under-writes.yaml is a worked
+one. A SIGKILL may lose what the killed instance acknowledged within its
+fsync window, so give the `data` ledger `loss_window_s: 2.5` under
+appendfsync everysec (validation says when it needs one). Network
+partitions need root, which these runs do not have.
 {module_section}
 ### Adversarial inputs
 The shapes the maintainers' own audits keep finding bugs with
