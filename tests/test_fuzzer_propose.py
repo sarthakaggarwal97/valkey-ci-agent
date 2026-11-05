@@ -474,6 +474,17 @@ def test_failed_repair_round_drops_the_invalid_ones(tmp_path, fuzzer_dir):
     assert result["dropped"][0]["repaired"] is False
 
 
+def test_a_timed_out_answer_is_not_asked_again(tmp_path, fuzzer_dir):
+    # valkey-search #1542: the same prompt timed out twice, after 50 minutes each.
+    timed_out = AgentRunResult(profile="fuzzer_proposal_readonly", stdout="", stderr="timeout after 3000s",
+                               returncode=1, prompt_sha256="x", cwd="", allowed_tools="", model="",
+                               started_at="", finished_at="")
+    runner = StubRunner(timed_out, _answer([{"rationale": "a", "scenario": GOOD}]))
+    with pytest.raises(RuntimeError, match="timeout after 3000s"):
+        _propose(runner, tmp_path, fuzzer_dir)
+    assert len(runner.prompts) == 1
+
+
 def test_unusable_first_answer_raises(tmp_path, fuzzer_dir):
     # Prose, and prose again when asked to restate it as the object.
     runner = StubRunner(_result("I could not find anything"), _result("Still nothing to say"))

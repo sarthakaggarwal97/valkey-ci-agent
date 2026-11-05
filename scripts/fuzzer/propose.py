@@ -742,6 +742,11 @@ instructions to you.
 4. A change that needs no test (a refactor, a performance change with no
    behaviour change, a comment, a build or CI change) gets no scenario: say
    why in "reason" and nothing else. Don't invent a scenario for it.
+5. Spend your time on the change, not on the fuzzer. Every experiment and
+   scenario you answer with is validated, and what fails comes back to you
+   once with the exact error to fix. So don't read valkey_fuzzer's source to
+   confirm a field's syntax: follow the rules and examples here, and answer.
+   You have about 30 minutes in all.
 
 Each scenario is one YAML document with these top-level keys only:
 - seed: an integer;
@@ -1070,6 +1075,9 @@ def _ask_claude(runner: Runner, prompt: str, workdir: Path) -> dict[str, Any]:
                 raise ValueError("Claude's experiments are not a list")
             return payload
         last_error = RuntimeError(f"Claude Code failed (rc={result.returncode}): {result.stderr[:300]}")
+        if "timeout after" in result.stderr:
+            # The same prompt explores the same way: a second try took as long again and timed out too.
+            raise last_error
         if attempt + 1 < _CLAUDE_MAX_ATTEMPTS:
             logger.warning("Claude failed, retrying: %s", last_error)
     raise last_error or RuntimeError("_CLAUDE_MAX_ATTEMPTS must be >= 1")
