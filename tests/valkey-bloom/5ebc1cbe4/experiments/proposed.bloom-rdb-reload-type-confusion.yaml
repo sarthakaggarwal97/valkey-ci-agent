@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.bloom-rdb-reload-type-confusion
+deployment:
+  modes: [standalone]
+metadata:
+  description: SAVE then restart reloads a BF.ADD key via the type-confused rdb_save/rdb_load
+    path
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [BF.ADD, k, hello], expect: {equals: 1}}
+    - {command: [BF.ADD, k, world], expect: {equals: 1}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [BF.EXISTS, k, hello], expect: {equals: 1}}
+    - {command: [BF.EXISTS, k, world], expect: {equals: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

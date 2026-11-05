@@ -1,11 +1,11 @@
 # Fuzzer walk
 
-Updated 2026-11-05T14:28+00:00.
+Updated 2026-11-05T14:29+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 135 | 2356 | #2250 (2026-10-21) | 135 | 19.3 |
-| valkey-io/valkey-bloom | 107 | 2 | ce516d0ef6e3 (2024-04-26) | 107 | 15.3 |
+| valkey-io/valkey-bloom | 108 | 1 | ce516d0ef6e3 (2024-04-26) | 108 | 15.4 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 62 | 8.9 |
 | valkey-io/valkey-search | 77 | 591 | #1362 (2026-09-12) | 77 | 11.0 |
 
@@ -38,16 +38,9 @@ Updated 2026-11-05T14:28+00:00.
 
 ### valkey-io/valkey-bloom
 
-[2026-11-05T14:04:19+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42035755074): 9 merge(s) tested, 2 without a code change.
+[2026-11-05T14:29:27+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42041481600): 2 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-bloom@b11970ee2c0a](https://github.com/valkey-io/valkey-bloom/commit/b11970ee2c0a78cc2bf5e17a0ccb5af9a2888761) ([tests](tests/valkey-bloom/b11970ee2/)): Add support for BF.MEXISTS: 3 of 3 test(s) reached the change
-- [valkey-io/valkey-bloom@778c219cf655](https://github.com/valkey-io/valkey-bloom/commit/778c219cf655e084091911757a2ad79e9040988c) ([tests](tests/valkey-bloom/778c219cf/)): Add support for BF.INFO: 5 of 5 test(s) reached the change; check, introduced and since fixed (recorded)
-- [valkey-io/valkey-bloom@2db0e4b437e3](https://github.com/valkey-io/valkey-bloom/commit/2db0e4b437e3914a114b2379708f273ef4a864bb) ([tests](tests/valkey-bloom/2db0e4b43/)): Add support for BF.RESERVE and expansion config: 2 of 5 test(s) reached the change; crash, introduced and since fixed (recorded); check, predates 2db0e4b437e3, since fixed (recorded)
-- [valkey-io/valkey-bloom@be80d9d4bab8](https://github.com/valkey-io/valkey-bloom/commit/be80d9d4bab85a82fbded5c455f0dd23e76e6079) ([tests](tests/valkey-bloom/be80d9d4b/)): Create Module Datatype and support RDB load, save, free: 4 of 4 test(s) reached the change; crash, fixed by be80d9d4bab8 (recorded)
-- [valkey-io/valkey-bloom@17295202f3bd](https://github.com/valkey-io/valkey-bloom/commit/17295202f3bd26e1d1c7e0015a165ec76cb23952) ([tests](tests/valkey-bloom/17295202f/)): Add Dev Profile in Cargo.toml for debugging: declined: The change only adds a [profile.dev] section to Cargo.toml (opt-level 0, debug 2, debug-assertions true), which merely restates Cargo's default dev-profile settings to aid debugging. No source code, command behaviour, data format, replication or persistence path of the valkey-bloom module 
-- [valkey-io/valkey-bloom@8557b557c393](https://github.com/valkey-io/valkey-bloom/commit/8557b557c3936d49b061949265ac23cdcbceb7ee) ([tests](tests/valkey-bloom/8557b557c/)): Remove older Bloom APIs using prev serialization apporach: 2 of 4 test(s) reached the change; crash, introduced and since fixed (recorded); crash, fixed by 8557b557c393 (recorded); crash, fixed by 8557b557c393 (recorded); crash, fixed by 8557b557c393 (recorded); crash, predates 8557b557c393, since fixed (recorded)
-- [valkey-io/valkey-bloom@5ebc1cbe42d9](https://github.com/valkey-io/valkey-bloom/commit/5ebc1cbe42d95dc08069f1accda719136ca1cb89): to retry, Claude did not return a scenarios list
-- [valkey-io/valkey-bloom@a96c08acc6bf](https://github.com/valkey-io/valkey-bloom/commit/a96c08acc6bfba9c95e7a7921d9e068472c05019) ([tests](tests/valkey-bloom/a96c08acc/)): Add support for BF.ADD, BF.EXISTS, BF.CARD: 4 of 5 test(s) reached the change; crash, introduced and since fixed (recorded); crash, introduced and since fixed (recorded); crash, fixed by a96c08acc6bf (recorded); crash, introduced and since fixed (recorded); crash, introduced and since fixed (recorded)
+- [valkey-io/valkey-bloom@5ebc1cbe42d9](https://github.com/valkey-io/valkey-bloom/commit/5ebc1cbe42d95dc08069f1accda719136ca1cb89) ([tests](tests/valkey-bloom/5ebc1cbe4/)): Optimize bloom operations to use a reference to already created Bloom objects. Update RDB load/save: 2 of 4 test(s) reached the change; crash, predates 5ebc1cbe42d9, since fixed (recorded); crash, predates 5ebc1cbe42d9, since fixed (recorded); crash, predates 5ebc1cbe42d9, since fixed (recorded); crash, predates 5ebc1cbe42d9, since fixed (recorded)
 - [valkey-io/valkey-bloom@5237a1008041](https://github.com/valkey-io/valkey-bloom/commit/5237a10080413fc9f1082e7083f167c4aaadcb1f): to retry, `if [ ! -f Cargo.lock ]; then` failed in parent (exit 101): error: could not find `Cargo.toml` in `/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent` or any parent directory
 
 ### valkey-io/valkey-json
@@ -82,10 +75,10 @@ Updated 2026-11-05T14:28+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 162 of 207 tested (78%)
+- Merges whose tests reached the change: 163 of 208 tested (78%)
 - Changed-line coverage: median 100% of 70 merge(s) measured, 4 under 50%
 - Recall: 41 parents flagged of 52 fix merges
-- Claude: $1228.04 in the last 24 hours, $1228.04 in the last 7 days, $1228.04 in all
+- Claude: $1231.03 in the last 24 hours, $1231.03 in the last 7 days, $1231.03 in all
 - Issues filed: 20
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
@@ -110,8 +103,7 @@ Updated 2026-11-05T14:28+00:00.
 
 ## Retries
 
-- [valkey-io/valkey-bloom@5ebc1cbe42d9](https://github.com/valkey-io/valkey-bloom/commit/5ebc1cbe42d95dc08069f1accda719136ca1cb89): attempt 1 of 3, Claude did not return a scenarios list
-- [valkey-io/valkey-bloom@5237a1008041](https://github.com/valkey-io/valkey-bloom/commit/5237a10080413fc9f1082e7083f167c4aaadcb1f): attempt 1 of 3, `if [ ! -f Cargo.lock ]; then` failed in parent (exit 101): error: could not find `Cargo.toml` in `/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent` or any parent directory
+- [valkey-io/valkey-bloom@5237a1008041](https://github.com/valkey-io/valkey-bloom/commit/5237a10080413fc9f1082e7083f167c4aaadcb1f): attempt 2 of 3, `if [ ! -f Cargo.lock ]; then` failed in parent (exit 101): error: could not find `Cargo.toml` in `/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent` or any parent directory
 - [valkey-io/valkey-search#1083](https://github.com/valkey-io/valkey-search/pull/1083): attempt 0 of 3, the job left no result
 - [valkey-io/valkey#5173](https://github.com/valkey-io/valkey/pull/5173): attempt 0 of 3, the job left no result
 - [valkey-io/valkey#5030](https://github.com/valkey-io/valkey/pull/5030): attempt 0 of 3, the job left no result

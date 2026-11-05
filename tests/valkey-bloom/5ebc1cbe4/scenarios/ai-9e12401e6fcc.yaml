@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom be97a2584349..5ebc1cbe42d9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9e12401e6fcc
+seed: 1002
+experiment:
+  id: proposed.bloom-card-new-commands
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

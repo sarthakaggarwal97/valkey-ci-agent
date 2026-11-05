@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.bloom-save-free-type-confusion
+deployment:
+  modes: [standalone]
+metadata:
+  description: SAVE, MEMORY USAGE and DEL on a BF.ADD key cast the stored value to
+    the wrong Rust type
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: save
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [BF.ADD, k, hello], expect: {equals: 1}}
+    - {command: [BF.ADD, k, world], expect: {equals: 1}}
+    - {command: [MEMORY, USAGE, k], compare: skip}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [BF.EXISTS, k, hello], expect: {equals: 1}}
+    - {command: [DEL, k], expect: {equals: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [save.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: save}

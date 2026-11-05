@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.bloom-card-new-commands
+deployment:
+  modes: [standalone]
+metadata:
+  description: BF.CARD errors on a BF.ADD key (type mismatch), and BF.ADD2/BF.EXISTS2
+    are new
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: card
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [BF.ADD, k, item-one], expect: {equals: 1}}
+    - {command: [BF.ADD, k, item-one], expect: {equals: 0}}
+    - {command: [BF.ADD, k, item-two], expect: {equals: 1}}
+    - {command: [BF.EXISTS, k, item-one], expect: {equals: 1}}
+    - {command: [BF.CARD, k], expect_difference: true, expect: {error: true}}
+    - {command: [BF.ADD2, k2, x], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.EXISTS2, k2, x], expect_difference: true, expect: {equals: 1}}
+    - {command: [BF.CARD, k2], expect_difference: true, expect: {equals: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [card.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: card}

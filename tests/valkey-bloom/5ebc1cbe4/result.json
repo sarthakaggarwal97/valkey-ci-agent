@@ -1,0 +1,126 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "5ebc1cbe42d95dc08069f1accda719136ca1cb89",
+  "parent": "be97a2584349d898b1c9d4bb626ee3c840553e13",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Optimize bloom operations to use a reference to already created Bloom objects. Update RDB load/save",
+  "date": "2024-09-10",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.9899,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: unknown-crash (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server+0x27766f) (BuildId: 6b16d9c23e7b2f10c6e291bc5662bbe48efc07ed) in __asan_memcpy",
+      "scenario": "ai-d2322d45965b",
+      "seed": 1001,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates 5ebc1cbe42d9, since fixed",
+      "fingerprint": "3e7345c8dafcf1a68e2b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in xorObjectDigest",
+      "scenario": "ai-d2322d45965b",
+      "seed": 1001,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates 5ebc1cbe42d9, since fixed",
+      "fingerprint": "9808cd59bb5fb235e5ef",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: unknown-crash (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server+0x27766f) (BuildId: 6b16d9c23e7b2f10c6e291bc5662bbe48efc07ed) in __asan_memcpy",
+      "scenario": "ai-9e12401e6fcc",
+      "seed": 1002,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates 5ebc1cbe42d9, since fixed",
+      "fingerprint": "3e7345c8dafcf1a68e2b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in xorObjectDigest",
+      "scenario": "ai-9e12401e6fcc",
+      "seed": 1002,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates 5ebc1cbe42d9, since fixed",
+      "fingerprint": "9808cd59bb5fb235e5ef",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in moduleGetMemUsage",
+      "scenario": "ai-4cba4df18e6b",
+      "seed": 1003,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates 5ebc1cbe42d9, since fixed",
+      "fingerprint": "329791b20b386f58d4bf",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in rdbSaveObject",
+      "scenario": "ai-f87555565076",
+      "seed": 1004,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates 5ebc1cbe42d9, since fixed",
+      "fingerprint": "df919fb1be74741cb342",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-f87555565076",
+      "build": "unstable",
+      "seed": 1004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-f87555565076",
+      "build": "unstable",
+      "seed": 1005,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-f87555565076",
+      "build": "unstable",
+      "seed": 1006,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}
