@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-json 00c740742a19..3daf1832e0b1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9482651c46cb
+seed: 103
+experiment:
+  id: proposed.json-config-restart
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

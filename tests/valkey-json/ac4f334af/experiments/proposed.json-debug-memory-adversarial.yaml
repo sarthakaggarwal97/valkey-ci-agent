@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.json-debug-memory-adversarial
+deployment:
+  modes: [standalone]
+metadata:
+  description: JSON.DEBUG MEMORY on a hashtable-mode object (40 members, including
+    a key named like a keyword) and on empty containers, exercising the hashtable
+    and empty-collection branches of ComputeMallocedSize
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: mem
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [JSON.SET, big, "$", '{"fields":0,"k1":1,"k2":2,"k3":3,"k4":4,"k5":5,"k6":6,"k7":7,"k8":8,"k9":9,"k10":10,"k11":11,"k12":12,"k13":13,"k14":14,"k15":15,"k16":16,"k17":17,"k18":18,"k19":19,"k20":20,"k21":21,"k22":22,"k23":23,"k24":24,"k25":25,"k26":26,"k27":27,"k28":28,"k29":29,"k30":30,"k31":31,"k32":32,"k33":33,"k34":34,"k35":35,"k36":36,"k37":37,"k38":38,"k39":39}'],
+      expect: {equals: OK}}
+    - {command: [JSON.DEBUG, MEMORY, big, "."], expect_difference: true, expect: {
+        min: 1}}
+    - {command: [JSON.SET, ec, "$", '{"o":{},"a":[]}'], expect: {equals: OK}}
+    - {command: [JSON.DEBUG, MEMORY, ec, "."], expect_difference: true, expect: {
+        min: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mem}

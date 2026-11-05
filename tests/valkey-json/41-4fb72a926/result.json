@@ -1,0 +1,65 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "4fb72a926987b941ebde88d5aab750dea7652b5e",
+  "parent": "10d2793bb9daa5f78aac1e6d3c9754cffc9dd6cb",
+  "pr": 41,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Resolved issues when using GCC >= 12 (#41)",
+  "date": "2025-03-05",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.8885,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from void",
+      "scenario": "ai-596f17aa878b",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #41",
+      "fingerprint": "7a17f2eafbc51064d99a",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/56"
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from void",
+      "scenario": "ai-11d4005421d7",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #41",
+      "fingerprint": "7a17f2eafbc51064d99a",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/56"
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from void",
+      "scenario": "ai-954e3bec0657",
+      "seed": 103,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #41",
+      "fingerprint": "7a17f2eafbc51064d99a",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/56"
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

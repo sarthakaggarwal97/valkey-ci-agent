@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.json-enforce-rdb-version-check-removed
+deployment:
+  modes: [standalone]
+metadata:
+  description: The json.enforce-rdb-version-check module config is removed by the
+    change, so CONFIG GET/SET of it differs between the two module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cfg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [JSON.SET, doc, $, '{"a":1}'], expect: {equals: OK}}
+    - {command: [JSON.GET, doc, $], compare: json}
+    - {command: [CONFIG, GET, json.enforce-rdb-version-check], expect_difference: true,
+      expect: {equals: []}}
+    - {command: [CONFIG, SET, json.enforce-rdb-version-check, 'yes'], expect_difference: true,
+      expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cfg}

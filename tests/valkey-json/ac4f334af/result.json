@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "ac4f334af7a6cd028b2f2ab898d52ea61f501c70",
+  "parent": "d3ce5afb6dd3fb88086aa9218cfef3197b75b388",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Bug fix: JSON document size reported by 'json.debug memory'",
+  "date": "2025-01-22",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 5,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 8.921,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

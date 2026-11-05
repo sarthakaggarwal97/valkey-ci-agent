@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.json-mset-correctness
+deployment:
+  modes: [standalone]
+metadata:
+  description: JSON.MSET sets many keys of every datatype, mixed root and nested paths,
+    duplicate keys (last wins), empty collections and a keyword-named key in one call
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: mset
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [JSON.MSET, s, ".", '"Boston"', n, ".", "123", a, ".", "[1,2,3]",
+        o, ".", '{"x":1}', e, ".", "{}", z, ".", "null", b, ".", "false", empty, ".",
+        '""', path, ".", '"p"'], expect_difference: true, expect: {equals: OK}}
+    - {command: [JSON.GET, s], expect_difference: true, compare: json, expect: {equals: '"Boston"'}}
+    - {command: [JSON.GET, n], expect_difference: true, compare: json, expect: {equals: "123"}}
+    - {command: [JSON.GET, a], expect_difference: true, compare: json, expect: {equals: "[1,2,3]"}}
+    - {command: [JSON.GET, o], expect_difference: true, compare: json, expect: {equals: '{"x":1}'}}
+    - {command: [JSON.GET, e], expect_difference: true, compare: json, expect: {equals: "{}"}}
+    - {command: [JSON.GET, z], expect_difference: true, compare: json, expect: {equals: "null"}}
+    - {command: [JSON.GET, b], expect_difference: true, compare: json, expect: {equals: "false"}}
+    - {command: [JSON.GET, empty], expect_difference: true, compare: json, expect: {
+        equals: '""'}}
+    - {command: [JSON.GET, path], expect_difference: true, compare: json, expect: {
+        equals: '"p"'}}
+    - {command: [JSON.MSET, d, ".", "1", d, ".", "2"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, d], expect_difference: true, compare: json, expect: {equals: "2"}}
+    - {command: [JSON.SET, doc, ".", '{"address":{"city":"X"},"age":1,"arr":[0]}'],
+      expect: {equals: OK}}
+    - {command: [JSON.MSET, doc, ".address.city", '"Boston"', doc, ".age", "30", doc,
+        ".arr[0]", "9"], expect_difference: true, expect: {equals: OK}}
+    - {command: [JSON.GET, doc], expect_difference: true, compare: json, expect: {
+        equals: '{"address":{"city":"Boston"},"age":30,"arr":[9]}'}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mset}

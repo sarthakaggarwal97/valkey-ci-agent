@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.json-debug-memory-estimator
+deployment:
+  modes: [standalone]
+metadata:
+  description: JSON.DEBUG MEMORY byte size for root, nested object and long-string
+    paths changes with the new allocator-based estimator that no longer counts key
+    strings
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: mem
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [JSON.SET, doc, "$", '{"name":"shortname","bigstr":"abcdefghijklmnopqrstuvwxyz0123","nums":[1,2,3,4,5],"nested":{"alpha":1,"beta":2,"gamma":3}}'],
+      expect: {equals: OK}}
+    - {command: [JSON.GET, doc, "$"], compare: json}
+    - {command: [JSON.DEBUG, MEMORY, doc, "."], expect_difference: true, expect: {
+        min: 1}}
+    - {command: [JSON.DEBUG, MEMORY, doc, ".bigstr"], expect_difference: true, expect: {
+        min: 1}}
+    - {command: [JSON.DEBUG, MEMORY, doc, ".nested"], expect_difference: true, expect: {
+        min: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mem}

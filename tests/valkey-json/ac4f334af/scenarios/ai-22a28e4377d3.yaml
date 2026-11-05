@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-json d3ce5afb6dd3..ac4f334af7a6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-22a28e4377d3
+seed: 1003
+experiment:
+  id: proposed.json-debug-memory-adversarial
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

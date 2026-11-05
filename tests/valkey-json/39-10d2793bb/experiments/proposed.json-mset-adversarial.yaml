@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.json-mset-adversarial
+deployment:
+  modes: [standalone]
+metadata:
+  description: JSON.MSET edge cases - arg count not a multiple of three, zero-triple
+    call, a non-document key, and an out-of-range 2^31 array index in a path
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: mset
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [JSON.MSET, k, "."], expect_difference: true, expect: {error: true}}
+    - {command: [JSON.MSET], expect_difference: true, expect: {equals: OK}}
+    - {command: [SET, strk, "v"], expect: {equals: OK}}
+    - {command: [JSON.MSET, strk, ".", "1"], expect_difference: true, expect: {error: true}}
+    - {command: [TYPE, strk], expect: {equals: string}}
+    - {command: [JSON.SET, arr, ".", "[1,2,3]"], expect: {equals: OK}}
+    - {command: [JSON.MSET, arr, ".[2147483648]", "9"], expect_difference: true, expect: {
+        error: true}}
+    - {command: [JSON.GET, arr], compare: json, expect: {equals: "[1,2,3]"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mset}

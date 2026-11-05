@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "4a7a08ba6c89d82184d9f896515a4d154dec0a3a",
+  "parent": "ac4f334af7a6cd028b2f2ab898d52ea61f501c70",
+  "pr": 35,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Change prelaunch version to 0.0.9 (#35)",
+  "date": "2025-02-13",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.2759,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from void",
+      "scenario": "ai-f0710253ab64",
+      "seed": 90001,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #35",
+      "fingerprint": "7a17f2eafbc51064d99a",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/54"
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from void",
+      "scenario": "ai-fd21007bf286",
+      "seed": 90002,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #35",
+      "fingerprint": "7a17f2eafbc51064d99a",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/54"
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

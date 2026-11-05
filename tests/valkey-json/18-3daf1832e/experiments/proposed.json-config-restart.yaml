@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.json-config-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    CONFIG REWRITE and restart across valkey-json #18. The parent persists the removed
+    json.max-parser-recursion-depth and json.hash-table-min-size into its config file
+    and re-applies them after restart; the change rejects the SETs, persists only
+    the kept json.max-path-limit, and must reload identically-behaving constants plus
+    the JSON data saved in the RDB.
+components:
+- use: valkey.action.commands
+  id: rewrite
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 90
+    commands:
+    - {command: [JSON.SET, doc, ".", '{"a":[1,2,3],"b":{"c":"x"}}'], expect: {equals: OK}}
+    - {command: [CONFIG, SET, json.max-path-limit, "64"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, json.max-parser-recursion-depth, "4"], expect_difference: true,
+      expect: {error: "Unknown option"}}
+    - {command: [CONFIG, SET, json.hash-table-min-size, "7"], expect_difference: true,
+      expect: {error: "Unknown option"}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [JSON.GET, doc], compare: json, expect: {contains: "x"}}
+    - {command: [CONFIG, GET, json.max-path-limit], expect: {equals: [json.max-path-limit,
+          "64"]}}
+    - {command: [CONFIG, GET, json.max-parser-recursion-depth], expect_difference: true,
+      expect: {equals: []}}
+    - {command: [JSON.SET, deep, ".", "[[[[[[1]]]]]]"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [JSON.GET, deep], expect_difference: true, expect: {contains: "1"}}
+    - {command: [JSON.DEL, deep], expect_difference: true, expect: {equals: 1}}
+    - {command: [JSON.DEBUG, KEYTABLE-CHECK]}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [rewrite.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rewrite}

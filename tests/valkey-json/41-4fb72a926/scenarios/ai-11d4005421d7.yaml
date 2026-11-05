@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-json 10d2793bb9da..4fb72a926987.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-11d4005421d7
+seed: 102
+experiment:
+  id: proposed.json-gcc12-allocator-compare
+  inputs:
+    resp: 3
+    appendonly: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

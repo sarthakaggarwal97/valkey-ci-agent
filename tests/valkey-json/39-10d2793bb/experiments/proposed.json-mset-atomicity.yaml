@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.json-mset-atomicity
+deployment:
+  modes: [standalone]
+metadata:
+  description: JSON.MSET with a valid prefix followed by an invalid triple (new key
+    with a non-root path) must reject the whole batch and leave every key unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: mset
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [JSON.SET, ek, ".", '{"x":1}'], expect: {equals: OK}}
+    - {command: [JSON.SET, ek2, ".", "[1]"], expect: {equals: OK}}
+    - {command: [JSON.MSET, ek, ".", '"changed"', ek2, ".", "[9]", newk, ".bad", '"v"'],
+      expect_difference: true, expect: {error: true}}
+    - {command: [JSON.GET, ek], compare: json, expect: {equals: '{"x":1}'}}
+    - {command: [JSON.GET, ek2], compare: json, expect: {equals: "[1]"}}
+    - {command: [EXISTS, newk], expect: {equals: 0}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mset}

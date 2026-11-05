@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.json-module-version-bump
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module version reported as 90 (0.0.9) in INFO modules; JSON behaviour
+    and RDB round trip unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ver
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [INFO, modules], expect_difference: true, expect: {contains: "ver=90"}}
+    - {command: [JSON.SET, doc, $, '{"a":1,"b":[1,2,3],"c":{"d":"x","e":[]},"f":""}'],
+      expect: {equals: OK}}
+    - {command: [JSON.GET, doc, $], compare: json}
+    - {command: [JSON.ARRAPPEND, doc, $.b, 4], expect: {equals: [4]}}
+    - {command: [JSON.OBJLEN, doc, $], expect: {equals: [4]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [JSON.GET, doc], compare: json}
+    - {command: [JSON.ARRLEN, doc, $.b], expect: {equals: [4]}}
+    - {command: [INFO, modules], expect_difference: true, expect: {contains: "ver=90"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ver.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ver}

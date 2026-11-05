@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "1e33774dd28bdba94bc7f807a4e453f01e1f8f7c",
+  "parent": "4e50a2d56b31f67ab6a0d420673cf501ab3bbc2b",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Merge pull request #15 from joehu21/issue12",
+  "date": "2024-12-06",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 0.9757,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "00c740742a1979d92de4eabf7c750b54eed15648",
+  "parent": "1e33774dd28bdba94bc7f807a4e453f01e1f8f7c",
+  "pr": 22,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Fix #7 - Make SERVER_VERSION open to all versions (#22)",
+  "date": "2024-12-09",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2468,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits build scripts and documentation: CMakeLists.txt gains a default for the VALKEY_VERSION cache variable, build.sh/run.sh stop rejecting SERVER_VERSION values other than 'unstable'/'8.0.0' and default it to 'unstable', and README/log messages are reworded. No module source code that affects runtime behaviour is touched (the src/CMakeLists.txt edit changes only a build-time message string), so the module binary built at the change behaves identically to the parent's; there is no command, reply, persistence or replication path to exercise, and a compared sequence could not leg"
+}

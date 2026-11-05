@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.json-metrics-cleanup
+deployment:
+  modes: [standalone]
+metadata:
+  description: Removed INFO sections (json_ext_metrics, json_document_composition,
+    json_histograms) are gone on the change and still present on the parent; json_core_metrics
+    survives after traffic that drives every removed stat
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: jsoninfo
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [JSON.SET, doc, '.', '{"a":[1,2,3],"b":"str","c":null,"d":true,"e":{"f":1.5},"empty_obj":{},"empty_arr":[]}'],
+      expect: {equals: OK}}
+    - {command: [JSON.GET, doc], compare: json}
+    - {command: [JSON.ARRINSERT, doc, '$.a', '0', '0'], expect: {equals: [4]}}
+    - {command: [JSON.STRAPPEND, doc, '$.b', '"xy"'], expect: {equals: [5]}}
+    - {command: [JSON.ARRPOP, doc, '$.a'], expect: {equals: ['3']}}
+    - {command: [JSON.ARRTRIM, doc, '$.a', '0', '1'], expect: {equals: [2]}}
+    - {command: [JSON.SET, deep, '.', '[[[[[[[[[[["x"]]]]]]]]]]]'], expect: {equals: OK}}
+    - {command: [JSON.SET, doc2, '.', '{"x":[1,2],"y":"zz"}'], expect: {equals: OK}}
+    - {command: [JSON.DEL, doc2], expect: {equals: 1}}
+    - {command: [JSON.MGET, doc, deep, '$'], compare: json}
+    - {command: [INFO, json_ext_metrics], expect_difference: true, expect: {exists: true}}
+    - {command: [INFO, json_document_composition], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [INFO, json_histograms], expect_difference: true, expect: {exists: true}}
+    - {command: [INFO, json_core_metrics], compare: skip, expect: {contains: 'json_num_documents:'}}
+    - {command: [INFO, modules], compare: skip, expect: {contains: json_core_metrics}}
+    - {command: [JSON.SET, doc, '$.g', '"post-info"'], expect: {equals: [1]}}
+    - {command: [JSON.GET, doc, '$.g'], compare: json}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [jsoninfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: jsoninfo}

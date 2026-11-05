@@ -1,0 +1,79 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "10d2793bb9daa5f78aac1e6d3c9754cffc9dd6cb",
+  "parent": "87de05e8beafda8a2b3b06c2a3e5b99ef9840e79",
+  "pr": 39,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Adds JSON.MSET command (#39)",
+  "date": "2025-03-03",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 4,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 4.4272,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-use-after-free",
+      "scenario": "ai-cf8f0670cff7",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "80d79339943dd8f93790",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-use-after-free",
+      "scenario": "ai-09ce4ffe0f99",
+      "seed": 102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "80d79339943dd8f93790",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: heap-use-after-free /home/runner/work/_temp/head/valkey/src/object.c:57:15 in objectGetType",
+      "scenario": "ai-063d05ffc901",
+      "seed": 103,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "17a5ec3b5fdf1ecd4e00",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: heap-use-after-free /home/runner/work/_temp/head/valkey/src/object.c:57:15 in objectGetType",
+      "scenario": "ai-28b2f2efbe24",
+      "seed": 104,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "17a5ec3b5fdf1ecd4e00",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

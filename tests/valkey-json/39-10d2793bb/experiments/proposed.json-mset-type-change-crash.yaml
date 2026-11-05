@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.json-mset-type-change-crash
+deployment:
+  modes: [standalone]
+metadata:
+  description: JSON.MSET validates every triple against the pre-mutation document,
+    then asserts on apply; a same-key retype (object to array) makes a later non-root
+    update fail at apply and crash the server
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: mset
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [JSON.SET, k, ".", '{"a":"b"}'], expect: {equals: OK}}
+    - {command: [JSON.MSET, k, ".", "[1,2,3]", k, ".zzz", "9"], expect_difference: true,
+      expect: {exists: false}}
+    - {command: [PING], expect_difference: true, expect: {exists: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mset}

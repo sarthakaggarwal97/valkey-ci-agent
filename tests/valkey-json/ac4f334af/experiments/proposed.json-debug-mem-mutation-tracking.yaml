@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.json-debug-mem-mutation-tracking
+deployment:
+  modes: [standalone]
+metadata:
+  description: After JSON.NUMINCRBY and JSON.NUMMULTBY change a value between inline
+    and heap storage, the maintained document size reported by JSON.DEBUG MEMORY (no
+    path) is now updated, where the parent left it stale
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: mem
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [JSON.SET, b, "$", '{"n":0}'], expect: {equals: OK}}
+    - {command: [JSON.NUMINCRBY, b, ".n", "2.2250738585072014e-308"], expect: {error: false}}
+    - {command: [JSON.DEBUG, MEMORY, b], expect_difference: true, expect: {min: 1}}
+    - {command: [JSON.SET, c, "$", '{"n":2.2250738585072014e-308}'], expect: {equals: OK}}
+    - {command: [JSON.NUMMULTBY, c, ".n", "0"], expect: {error: false}}
+    - {command: [JSON.DEBUG, MEMORY, c], expect_difference: true, expect: {min: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mem}

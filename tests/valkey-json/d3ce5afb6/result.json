@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "d3ce5afb6dd3fb88086aa9218cfef3197b75b388",
+  "parent": "09612c9ba5d9be2ae658ca6ec283e17ac539a7f6",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Fix #19 - Remove aux type loading code not related to JSON",
+  "date": "2025-01-03",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7758,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only removes aux-type stubs (scdtype00, ft_index0, graphdata, GEARS_DT0, GEAR_REQ0) that let a JSON-only server skip foreign module aux blobs (RediSearch/RedisGraph/RedisGears) when loading an RDB produced elsewhere. These stubs have aux_load but no aux_save, and valkey-json's own DocumentType uses rdb_save/rdb_load (not module aux), so valkey-json never writes any of these aux fields. The only behavioral difference is loading a pre-existing RDB that already contains those foreign aux sections; the fuzzer loads only valkey-json plus pinned Valkey and can generate RDBs solely through"
+}

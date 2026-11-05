@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "373a92e5d92eef764b65cf1ca5a8a0a5518fafee",
+  "parent": "926b6fd6feba583e251383094fedd6f0f1d19712",
+  "pr": 13,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Update integration test script (#13)",
+  "date": "2024-12-03",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2223,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only README.md (docs for running a single integration test) and tst/integration/run.sh (the integration test harness script: defaulting SERVER_VERSION to \"unstable\", a log-message tweak, and trailing newlines). Nothing in the module's compiled source (src/) changes, so the built libjson.so is byte-for-byte unaffected and no command, reply, persistence or replication behaviour differs between the two builds. A build/CI/test-script change like this cannot be reached by any runtime scenario, so none is needed."
+}

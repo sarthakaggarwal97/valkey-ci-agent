@@ -1,0 +1,100 @@
+extends: [valkey.liveness]
+id: proposed.json-gcc12-allocator-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    The GCC>=12 fix rewrote jsn::stl_allocator (memory.h) from inheriting std::allocator
+    and routing through the module's tracked ValkeyModule_Alloc pointers to a standalone
+    allocator whose private statics call plain std::malloc/std::free, shadowing the
+    tracked allocator. Every jsn:: container (selector results, reply building, JSON.DEBUG
+    scans, serialization) now allocates from a different, untracked heap. Run one
+    container-heavy JSON command sequence on two private servers of the pinned Valkey
+    build, one loading the module at the change and one at the parent, across a SAVE
+    and restart: replies must stay identical and nothing may crash or corrupt memory
+    accounting.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    appendonly: {type: string, enum: ["no", "yes"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: json
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {appendonly: {$ref: inputs.appendonly}}
+    timeout_s: 60
+    commands:
+    - {command: [JSON.SET, doc, $, '{"a":{"b":{"c":[1,2,3],"d":"x"}},"arr":[],"s":"","n":1.5,"i":9223372036854775807,"m":-2147483648,"u":4294967296}'],
+      expect: {equals: OK}}
+    - {command: [JSON.GET, doc], compare: json, expect: {contains: "9223372036854775807"}}
+    - {command: [JSON.GET, doc, $.a, $.n], compare: json}
+    - {command: [JSON.GET, doc, .a], compare: json}
+    - {command: [JSON.TYPE, doc, $.a], expect: {equals: [object]}}
+    - {command: [JSON.OBJKEYS, doc, $]}
+    - {command: [JSON.OBJLEN, doc, $], expect: {equals: [7]}}
+    - {command: [JSON.RESP, doc]}
+    - {command: [JSON.DEBUG, DEPTH, doc], expect: {min: 3}}
+    - {command: [JSON.DEBUG, FIELDS, doc, $]}
+    - {command: [JSON.DEBUG, MEMORY, doc], expect: {min: 1}}
+    - {command: [JSON.DEBUG, MEMORY, doc, $]}
+    - {command: [JSON.SET, wide, $, '{"a00":0,"a01":1,"a02":2,"a03":3,"a04":4,"a05":5,"a06":6,"a07":7,"a08":8,"a09":9,"a10":10,"a11":11,"a12":12,"a13":13,"a14":14,"a15":15,"a16":16,"a17":17,"a18":18,"a19":19,"a20":20,"a21":21,"a22":22,"a23":23,"a24":24,"a25":25,"a26":26,"a27":27,"a28":28,"a29":29,"a30":30,"a31":31,"a32":32,"a33":33,"a34":34,"a35":35,"a36":36,"a37":37,"a38":38,"a39":39,"a40":40,"a41":41,"a42":42,"a43":43,"a44":44,"a45":45,"a46":46,"a47":47,"a48":48,"a49":49,"a50":50,"a51":51,"a52":52,"a53":53,"a54":54,"a55":55,"a56":56,"a57":57,"a58":58,"a59":59,"a60":60,"a61":61,"a62":62,"a63":63}'],
+      expect: {equals: OK}}
+    - {command: [JSON.OBJLEN, wide, $], expect: {equals: [64]}}
+    - {command: [JSON.OBJKEYS, wide, $]}
+    - {command: [JSON.DEL, wide, $.a32], expect: {equals: 1}}
+    - {command: [JSON.OBJLEN, wide, $], expect: {equals: [63]}}
+    - {command: [JSON.SET, arr, $, '[]'], expect: {equals: OK}}
+    - {command: [JSON.ARRAPPEND, arr, $, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        1, 1, 1, 1, 1, 1], expect: {equals: [20]}}
+    - {command: [JSON.ARRINSERT, arr, $, 0, 7], expect: {equals: [21]}}
+    - {command: [JSON.ARRINDEX, arr, $, 7], expect: {equals: [0]}}
+    - {command: [JSON.ARRTRIM, arr, $, 5, 10], expect: {equals: [6]}}
+    - {command: [JSON.ARRPOP, arr, $]}
+    - {command: [JSON.ARRLEN, arr, $], expect: {equals: [5]}}
+    - {command: [JSON.SET, earr, $, '[]'], expect: {equals: OK}}
+    - {command: [JSON.ARRPOP, earr, $]}
+    - {command: [JSON.SET, num, $, '0'], expect: {equals: OK}}
+    - {command: [JSON.NUMINCRBY, num, $, "0.1"], expect: {contains: "0.1"}}
+    - {command: [JSON.NUMINCRBY, num, $, "1e300"], expect: {contains: "300"}}
+    - {command: [JSON.NUMMULTBY, num, $, "1e300"], expect: {error: true}}
+    - {command: [JSON.SET, num2, $, '9007199254740993'], expect: {equals: OK}}
+    - {command: [JSON.GET, num2], expect: {contains: "9007199254740993"}}
+    - {command: [JSON.SET, str, $, '"ab"'], expect: {equals: OK}}
+    - {command: [JSON.STRAPPEND, str, $, '""'], expect: {equals: [2]}}
+    - {command: [JSON.STRAPPEND, str, $, '"0123456789abcdef0123456789abcdef"'], expect: {
+        equals: [34]}}
+    - {command: [JSON.STRLEN, str, $], expect: {equals: [34]}}
+    - {command: [JSON.SET, flag, $, 'true'], expect: {equals: OK}}
+    - {command: [JSON.TOGGLE, flag, $], expect: {equals: [0]}}
+    - {command: [JSON.TOGGLE, flag, $], expect: {equals: [1]}}
+    - {command: [JSON.SET, deep, $, '[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]'],
+      expect: {equals: OK}}
+    - {command: [JSON.DEBUG, DEPTH, deep], expect: {min: 30}}
+    - {command: [JSON.SET, fields, $, '{"fields":{"memory":{"fields":[]}}}'], expect: {
+        equals: OK}}
+    - {command: [JSON.GET, fields, $.fields.memory], compare: json}
+    - {command: [JSON.DEBUG, MAX-DEPTH-KEY]}
+    - {command: [JSON.DEBUG, MAX-SIZE-KEY]}
+    - {command: [JSON.MGET, doc, num2, $]}
+    - {command: [INFO, everything], compare: skip, expect: {contains: "json_num_documents:"}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [JSON.GET, doc], compare: json, expect: {contains: "9223372036854775807"}}
+    - {command: [JSON.GET, wide], compare: json}
+    - {command: [JSON.OBJLEN, wide, $], expect: {equals: [63]}}
+    - {command: [JSON.GET, deep], compare: json}
+    - {command: [JSON.DEBUG, DEPTH, deep], expect: {min: 30}}
+    - {command: [JSON.DEBUG, MEMORY, doc], expect: {min: 1}}
+    - {command: [JSON.DEL, wide, $], expect: {equals: 1}}
+    - {command: [JSON.GET, wide]}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [json.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: json}

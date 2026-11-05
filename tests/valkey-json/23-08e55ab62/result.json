@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "08e55ab62cea5f8bc5b8b1eb6666afe462eae38f",
+  "parent": "3daf1832e0b18ed68cfe55aa1dbfc626c04ef791",
+  "pr": 23,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "Fix #6 - Make the compiler flags configurable (#23)",
+  "date": "2024-12-09",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": "aeaa68237eb862069061d2797de8c0e790c57c11",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2653,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is build/CI-only: it makes compiler flags overridable in CMakeLists.txt and build.sh (defaulting to the same -g -O3 -fno-omit-frame-pointer -Wall -Werror -Wextra flags as before), fixes a CI typo, and updates README and the integration-test runner's shell quoting. No source file of the module changes, so there is no runtime behaviour \u2014 commands, replies, data, replication or persistence \u2014 that a scenario could reach or distinguish between the two builds."
+}
