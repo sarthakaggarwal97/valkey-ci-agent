@@ -1,12 +1,12 @@
 # Fuzzer walk
 
-Updated 2026-11-05T05:21+00:00.
+Updated 2026-11-05T05:24+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 26 | 2462 | #5244 (2026-11-03) | 26 | 3.7 |
 | valkey-io/valkey-bloom | 29 | 80 | #45 (2025-03-11) | 29 | 4.1 |
-| valkey-io/valkey-json | 56 | 6 | c1423d7e4b38 (2024-11-25) | 56 | 8.0 |
+| valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 62 | 8.9 |
 | valkey-io/valkey-search | 0 | 667 | #1634 (2026-11-03) | 0 | 0.0 |
 
 ## Last runs
@@ -63,16 +63,14 @@ Updated 2026-11-05T05:21+00:00.
 
 ### valkey-io/valkey-json
 
-[2026-11-05T05:21:15+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41973132165): 8 merge(s) tested, 0 without a code change.
+[2026-11-05T05:24:29+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41973488938): 6 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-json#21](https://github.com/valkey-io/valkey-json/pull/21): Fix #19 - RDB compatibility with ReJSON and add compatibility test (#21): error: `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSON for x86_64 -- The C compiler identification is GNU 15.2.0 -- The CXX compiler identificatio
-- [valkey-io/valkey-json#23](https://github.com/valkey-io/valkey-json/pull/23): Fix #6 - Make the compiler flags configurable (#23): error: `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSON for x86_64 -- The C compiler identification is GNU 15.2.0 -- The CXX compiler identificatio
-- [valkey-io/valkey-json#18](https://github.com/valkey-io/valkey-json/pull/18): to retry, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
-- [valkey-io/valkey-json#22](https://github.com/valkey-io/valkey-json/pull/22): to retry, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
-- [valkey-io/valkey-json@1e33774dd28b](https://github.com/valkey-io/valkey-json/commit/1e33774dd28bdba94bc7f807a4e453f01e1f8f7c): to retry, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JS
-- [valkey-io/valkey-json#14](https://github.com/valkey-io/valkey-json/pull/14): to retry, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JS
-- [valkey-io/valkey-json#13](https://github.com/valkey-io/valkey-json/pull/13): to retry, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JS
-- [valkey-io/valkey-json#1](https://github.com/valkey-io/valkey-json/pull/1): to retry, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JS
+- [valkey-io/valkey-json#18](https://github.com/valkey-io/valkey-json/pull/18): Fix #2 - Replace the configs with constants (#18): error: `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSON for x86_64 -- The C compiler identification is GNU 15.2.0 -- The CXX compiler identificatio
+- [valkey-io/valkey-json#22](https://github.com/valkey-io/valkey-json/pull/22): Fix #7 - Make SERVER_VERSION open to all versions (#22): error: `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSON for x86_64 -- The C compiler identification is GNU 15.2.0 -- The CXX compiler identificatio
+- [valkey-io/valkey-json@1e33774dd28b](https://github.com/valkey-io/valkey-json/commit/1e33774dd28bdba94bc7f807a4e453f01e1f8f7c): Merge pull request #15 from joehu21/issue12: error: `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JSON for x86_64 -- The C compiler identification is GNU 15.2.0 -- The CXX compiler identificati
+- [valkey-io/valkey-json#14](https://github.com/valkey-io/valkey-json/pull/14): Fix #11 - Clean up existing module metrics (#14): error: `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JSON for x86_64 -- The C compiler identification is GNU 15.2.0 -- The CXX compiler identificati
+- [valkey-io/valkey-json#13](https://github.com/valkey-io/valkey-json/pull/13): Update integration test script (#13): error: `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JSON for x86_64 -- The C compiler identification is GNU 15.2.0 -- The CXX compiler identificati
+- [valkey-io/valkey-json#1](https://github.com/valkey-io/valkey-json/pull/1): Contributing valkeyJSON module (#1): error: `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JSON for x86_64 -- The C compiler identification is GNU 15.2.0 -- The CXX compiler identificati
 
 ### valkey-io/valkey-search
 
@@ -100,12 +98,6 @@ Updated 2026-11-05T05:21+00:00.
 ## Retries
 
 - [valkey-io/valkey-bloom#92](https://github.com/valkey-io/valkey-bloom/pull/92): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
-- [valkey-io/valkey-json#18](https://github.com/valkey-io/valkey-json/pull/18): attempt 2 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
-- [valkey-io/valkey-json#22](https://github.com/valkey-io/valkey-json/pull/22): attempt 2 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building valkeyJSON... Building valkeyJSO
-- [valkey-io/valkey-json@1e33774dd28b](https://github.com/valkey-io/valkey-json/commit/1e33774dd28bdba94bc7f807a4e453f01e1f8f7c): attempt 2 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JS
-- [valkey-io/valkey-json#14](https://github.com/valkey-io/valkey-json/pull/14): attempt 2 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JS
-- [valkey-io/valkey-json#13](https://github.com/valkey-io/valkey-json/pull/13): attempt 2 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JS
-- [valkey-io/valkey-json#1](https://github.com/valkey-io/valkey-json/pull/1): attempt 2 of 3, `if grep -q VALKEY_MODULE_H_PATH build.sh; then` failed in merge (exit 1): Script Directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Building ValkeyJSON module... Building JS
 - [valkey-io/valkey-search#1576](https://github.com/valkey-io/valkey-search/pull/1576): attempt 1 of 3, 'reached'
 - [valkey-io/valkey-search#1542](https://github.com/valkey-io/valkey-search/pull/1542): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
 - [valkey-io/valkey#5146](https://github.com/valkey-io/valkey/pull/5146): attempt 1 of 3, Claude Code failed (rc=1): timeout after 3000s
