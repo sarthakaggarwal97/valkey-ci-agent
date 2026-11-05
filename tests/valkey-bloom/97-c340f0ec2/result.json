@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-bloom",
+  "sha": "c340f0ec2447bfdc080325aa9ff27bc6fe4988f8",
+  "parent": "712a1d7eeaceba3a9f954c9eb5b222b74a4fdcd7",
+  "pr": 97,
+  "pr_repo": "valkey-io/valkey-bloom",
+  "subject": "Support reusing an externally built valkey-server binary for test (#97)",
+  "date": "2026-06-04",
+  "unstable": "c86f6ee511e1a36488feb3b8e62093e69195d332",
+  "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2154,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only build.sh and README.md of valkey-bloom's test harness: it lets the integration-test setup reuse an externally built valkey-server binary (VALKEY_SERVER_PATH) and whitelists '9.1' as a SERVER_VERSION. No module code, command handling, data format, or runtime behaviour changes, so there is no server-visible path for a fuzzer scenario to reach; this is a build/CI change that needs no test."
+}

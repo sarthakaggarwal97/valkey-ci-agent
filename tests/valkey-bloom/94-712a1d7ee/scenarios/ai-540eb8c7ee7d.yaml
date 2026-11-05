@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-bloom c6c1558fe045..712a1d7eeace.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-540eb8c7ee7d
+seed: 4096
+experiment:
+  id: proposed.bloom-validatescaleto-subreplica
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

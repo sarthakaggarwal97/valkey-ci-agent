@@ -1,11 +1,11 @@
 # Fuzzer walk
 
-Updated 2026-11-05T00:15+00:00.
+Updated 2026-11-05T00:41+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 2 | 2480 | #5138 (2026-11-04) | 2 | 0.3 |
-| valkey-io/valkey-bloom | 2 | 107 | #97 (2026-06-04) | 2 | 0.3 |
+| valkey-io/valkey-bloom | 5 | 104 | #93 (2026-04-26) | 5 | 0.7 |
 | valkey-io/valkey-json | 6 | 56 | #115 (2026-06-24) | 6 | 0.9 |
 
 ## Last runs
@@ -19,10 +19,11 @@ Updated 2026-11-05T00:15+00:00.
 
 ### valkey-io/valkey-bloom
 
-[2026-11-04T23:21:01+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41928161790): 2 merge(s) tested, 1 without a code change.
+[2026-11-05T00:41:15+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/41936041312): 3 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-bloom#110](https://github.com/valkey-io/valkey-bloom/pull/110): to retry, 'reached'
-- [valkey-io/valkey-bloom#104](https://github.com/valkey-io/valkey-bloom/pull/104) ([tests](tests/valkey-bloom/104-f428f3e31/)): `BF.INFO`: documentation and reabability nits (#104): declined: The change is purely cosmetic: it reorders two mutually exclusive string-literal match arms (EXPANSION/TIGHTENING) inside bloom_filter_info, which cannot alter which arm matches or any BF.INFO reply, and edits src/commands/bf.info.json, a documentation-only metadata file that no code loads
+- [valkey-io/valkey-bloom#110](https://github.com/valkey-io/valkey-bloom/pull/110) ([tests](tests/valkey-bloom/110-9ab369980/)): Match bloom memory tracking by small over count of bytes after a defrag operation (#110): 0 of 2 test(s) reached the change
+- [valkey-io/valkey-bloom#97](https://github.com/valkey-io/valkey-bloom/pull/97) ([tests](tests/valkey-bloom/97-c340f0ec2/)): Support reusing an externally built valkey-server binary for test (#97): declined: The change modifies only build.sh and README.md of valkey-bloom's test harness: it lets the integration-test setup reuse an externally built valkey-server binary (VALKEY_SERVER_PATH) and whitelists '9.1' as a SERVER_VERSION. No module code, command handling, data format, or runtime behavio
+- [valkey-io/valkey-bloom#94](https://github.com/valkey-io/valkey-bloom/pull/94) ([tests](tests/valkey-bloom/94-712a1d7ee/)): remove 'validate_scale_to' check in replica (#94): 3 of 3 test(s) reached the change
 
 ### valkey-io/valkey-json
 
@@ -34,10 +35,10 @@ Updated 2026-11-05T00:15+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 5 of 5 tested (100%)
+- Merges whose tests reached the change: 6 of 7 tested (86%)
 - Changed-line coverage: none measured
 - Recall: 2 parents flagged of 2 fix merges
-- Claude: $30.57 in the last 24 hours, $30.57 in the last 7 days, $30.57 in all
+- Claude: $49.91 in the last 24 hours, $49.91 in the last 7 days, $49.91 in all
 - Issues filed: 3
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
@@ -45,4 +46,4 @@ Updated 2026-11-05T00:15+00:00.
 
 ## Retries
 
-- [valkey-io/valkey-bloom#110](https://github.com/valkey-io/valkey-bloom/pull/110): attempt 1 of 3, 'reached'
+None.
