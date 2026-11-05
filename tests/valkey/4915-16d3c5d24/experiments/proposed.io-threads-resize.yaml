@@ -1,0 +1,35 @@
+extends: [valkey.base]
+id: proposed.io-threads-resize
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Resize io-threads up and down under key-value writes, with BGSAVE forks
+    between, exercising the shared query buffer registry and the join-time debug assert
+    added by the fork-child Valgrind fix
+inputs:
+  properties:
+    threads_high: {type: integer, minimum: 2, maximum: 12, default: 9}
+    threads_mid: {type: integer, minimum: 1, maximum: 12, default: 4}
+components:
+- use: valkey.action.commands
+  id: resize
+  depends_on: [writes]
+  config:
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, io-threads, {$ref: inputs.threads_high}], wait_s: 30,
+      expect: {equals: OK}}
+    - {command: [BGSAVE], wait_s: 30, expect: {contains: started}}
+    - {command: [CONFIG, SET, io-threads, 1], wait_s: 30, expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, {$ref: inputs.threads_mid}], wait_s: 30,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, {$ref: inputs.threads_high}], wait_s: 30,
+      expect: {equals: OK}}
+    - {command: [BGSAVE], wait_s: 30, expect: {contains: started}}
+    - {command: [CONFIG, SET, io-threads, 2], wait_s: 30, expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, {$ref: inputs.threads_high}], wait_s: 30,
+      expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+required_events: [resize.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: resize}

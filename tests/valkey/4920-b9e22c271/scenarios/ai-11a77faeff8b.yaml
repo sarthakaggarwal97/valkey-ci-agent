@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 319db007f36c..b9e22c27152d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-11a77faeff8b
+seed: 4921
+experiment:
+  id: proposed.slot-import-db-select
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

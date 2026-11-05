@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "741b0159f5f1169bbb87b847463aaa52e86cfd60",
+  "parent": "e1b4ec84554a0eedb865487a0cc0be3443cfbc63",
+  "pr": 4679,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Support LBOUND, UBOUND, SATURATE, ENX, and PERSIST options for INCREX (#4679)",
+  "date": "2026-10-18",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 6,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 141,
+    "executed": 126,
+    "percent": 89,
+    "uncovered": [
+      "src/server.c:8301",
+      "src/server.c:8401",
+      "src/t_hash.c:1785",
+      "src/t_hash.c:2043",
+      "src/t_string.c:855",
+      "src/t_string.c:856",
+      "src/t_string.c:867",
+      "src/t_string.c:882",
+      "src/t_string.c:904",
+      "src/t_string.c:918",
+      "src/t_string.c:919",
+      "src/t_string.c:958",
+      "src/t_string.c:959",
+      "src/t_string.c:964",
+      "src/t_string.c:965"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 5.901,
+  "findings": [],
+  "recorded": []
+}

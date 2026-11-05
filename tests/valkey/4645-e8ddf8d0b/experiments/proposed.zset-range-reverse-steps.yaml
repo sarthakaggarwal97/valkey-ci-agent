@@ -1,0 +1,85 @@
+extends: [valkey.liveness]
+id: proposed.zset-range-reverse-steps
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Module zset range iteration on btree keys: reversing direction must step to the
+    neighbour instead of re-returning the current element, an out-of-range probe must
+    not strand the cursor past the bound, and ZsetRangeEndReached must follow the
+    last step. Compared against the parent build via the zset.so walk command.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: walk
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, zset-max-listpack-entries, "0"], expect: {equals: OK}}
+    - {command: [ZADD, k, 1, a, 2, b, 3, c, 4, d, 5, e], expect: {equals: 5}}
+    - {command: [OBJECT, ENCODING, k], expect: {equals: btree}}
+    - {command: [zset.walk, k, score, 2, 4, npnp], expect_difference: true, expect: {
+        equals: [b, c, b, c, b]}}
+    - {command: [zset.walk, k, score, 2, 4, pnn], expect_difference: true, expect: {
+        equals: [b, END, c, d]}}
+    - {command: [zset.walk, k, score, 2, 4, nnnppp], expect_difference: true, expect: {
+        equals: [b, c, d, END, c, b, END]}}
+    - {command: [zset.walk, k, score-last, 2, 4, np], expect_difference: true, expect: {
+        equals: [d, END, c]}}
+    - {command: [zset.walk, k, score-last, 2, 4, ppp], expect: {equals: [d, c, b,
+          END]}}
+    - {command: [zset.walk, k, score, "-inf", "+inf", nnnnnpppppn], expect_difference: true,
+      expect: {equals: [a, b, c, d, e, END, d, c, b, a, END, b]}}
+    - {command: [zset.walk, k, score, 2, 4, ennnepeppene], expect_difference: true,
+      expect: {equals: [b, 0, c, d, END, 1, c, 0, b, END, 1, c, 0]}}
+    - {command: [zset.walk, k, score, 10, 20, ene], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [ZADD, lexk, 0, a, 0, b, 0, c, 0, d, 0, e], expect: {equals: 5}}
+    - {command: [zset.walk, lexk, lex, "[b", "[d", npnp], expect_difference: true,
+      expect: {equals: [b, c, b, c, b]}}
+    - {command: [zset.walk, lexk, lex, "[b", "[d", nnnppp], expect_difference: true,
+      expect: {equals: [b, c, d, END, c, b, END]}}
+    - {command: [zset.walk, lexk, lex-last, "[b", "[d", ppp], expect: {equals: [d,
+          c, b, END]}}
+    - {command: [zset.walk, lexk, lex, "(", "(", n]}
+    - {command: [zset.walk, lexk, lex, "-", "+", nnnnnpppppn], expect_difference: true,
+      expect: {equals: [a, b, c, d, e, END, d, c, b, a, END, b]}}
+    - {command: [ZADD, big, 0, e00, 1, e01, 2, e02, 3, e03, 4, e04, 5, e05, 6, e06,
+        7, e07, 8, e08, 9, e09, 10, e10, 11, e11, 12, e12, 13, e13, 14, e14, 15, e15,
+        16, e16, 17, e17, 18, e18, 19, e19, 20, e20, 21, e21, 22, e22, 23, e23, 24,
+        e24, 25, e25, 26, e26, 27, e27, 28, e28, 29, e29, 30, e30, 31, e31], expect: {
+        equals: 32}}
+    - {command: [ZADD, big, 32, e32, 33, e33, 34, e34, 35, e35, 36, e36, 37, e37,
+        38, e38, 39, e39, 40, e40, 41, e41, 42, e42, 43, e43, 44, e44, 45, e45, 46,
+        e46, 47, e47, 48, e48, 49, e49, 50, e50, 51, e51, 52, e52, 53, e53, 54, e54,
+        55, e55, 56, e56, 57, e57, 58, e58, 59, e59, 60, e60, 61, e61, 62, e62, 63,
+        e63], expect: {equals: 32}}
+    - {command: [OBJECT, ENCODING, big], expect: {equals: btree}}
+    - {command: [zset.walk, big, score, 0, 63, nnnnnnnnnnnnnnnnpppppppppppppppp],
+      expect_difference: true, expect: {equals: [e00, e01, e02, e03, e04, e05, e06,
+          e07, e08, e09, e10, e11, e12, e13, e14, e15, e16, e15, e14, e13, e12, e11,
+          e10, e09, e08, e07, e06, e05, e04, e03, e02, e01, e00]}}
+    - {command: [zset.walk, big, score-last, 0, 63, ppppppppppppppppnnnnnnnnnnnnnnnn],
+      expect_difference: true, expect: {equals: [e63, e62, e61, e60, e59, e58, e57,
+          e56, e55, e54, e53, e52, e51, e50, e49, e48, e47, e48, e49, e50, e51, e52,
+          e53, e54, e55, e56, e57, e58, e59, e60, e61, e62, e63]}}
+    - {command: [CONFIG, SET, zset-max-listpack-entries, "128"], expect: {equals: OK}}
+    - {command: [ZADD, lk, 1, a, 2, b, 3, c, 4, d, 5, e], expect: {equals: 5}}
+    - {command: [OBJECT, ENCODING, lk], expect: {equals: listpack}}
+    - {command: [zset.walk, lk, score, 2, 4, npnp], expect: {equals: [b, c, b, c,
+          b]}}
+    - {command: [zset.walk, lk, score, 2, 4, ennnepeppene], expect_difference: true,
+      expect: {equals: [b, 0, c, d, END, 1, c, 0, b, END, 1, c, 0]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [walk.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: walk}

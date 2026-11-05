@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9fdda3152ec4..fbb5ab63bba3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-88ac1b9a5f89
+seed: 202
+experiment:
+  id: proposed.hash-copy-expired-fields
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

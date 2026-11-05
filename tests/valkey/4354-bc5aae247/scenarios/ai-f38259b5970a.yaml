@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f870ab590c3d..bc5aae2479fd.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f38259b5970a
+seed: 102
+experiment:
+  id: proposed.timer-driven-timeouts
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

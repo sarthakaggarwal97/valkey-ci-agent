@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e8ddf8d0bcee..f2e5af9f175f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6fa9e8e5c67e
+seed: 1004
+experiment:
+  id: proposed.cli-hex-timeout
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b93600171448..45ec67c30745.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-64503b8fcf6a
+seed: 3
+experiment:
+  id: proposed.hsetex-hgetex-key-named-fields
+  inputs:
+    resp: 3
+    hash_max_listpack_entries: 0
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

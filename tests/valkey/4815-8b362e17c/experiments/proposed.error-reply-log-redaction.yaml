@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.error-reply-log-redaction
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    A replica that replies an error to its primary logs the "== CRITICAL ==" line
+    from afterErrorReply; with hide-user-data-from-log yes the error text must be
+    "*redacted*", with no it must be the raw error text. Divergence is created by
+    writing conflicting values directly on a writable replica, then propagating LPUSH
+    and INCR from the primary.
+inputs:
+  properties:
+    expected_pattern:
+      type: string
+      default: "== CRITICAL == This replica is sending an error to its primary: '\\\
+        *redacted\\*'"
+    forbidden_pattern:
+      type: string
+      default: "sending an error to its primary: '-?(WRONGTYPE|value is not an integer)"
+components:
+- use: valkey.observer.log
+  id: logs
+  config:
+    instances: replicas
+    expect:
+    - evidence_id: valkey.log.error-reply-logged
+      pattern: {$ref: inputs.expected_pattern}
+    forbidden:
+    - pattern: {$ref: inputs.forbidden_pattern}
+- use: valkey.action.commands
+  id: diverge-replica
+  config:
+    instances: replica
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, replica-read-only, no], expect: {equals: OK}}
+    - {command: [SET, conflictkey, secret-user-payload], expect: {equals: OK}}
+    - {command: [SET, numkey, secret-not-a-number], expect: {equals: OK}}
+- use: valkey.action.commands
+  id: trigger
+  depends_on: [logs, diverge-replica]
+  config:
+    instances: primary
+    timeout_s: 10
+    commands:
+    - {command: [LPUSH, conflictkey, x], expect: {equals: 1}}
+    - {command: [INCR, numkey], expect: {equals: 1}}
+- use: valkey.action.poll
+  id: errors-counted
+  depends_on: [trigger]
+  config:
+    instances: replica
+    section: stats
+    field: unexpected_error_replies
+    predicate: {min: 2}
+    timeout_s: 30
+- use: valkey.oracle.evidence
+  id: redaction-logged
+  depends_on: [logs]
+  config:
+    require:
+    - {evidence_id: valkey.log.error-reply-logged, source: logs}
+required_events: [trigger.completed, errors-counted.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: trigger}
+- {evidence_id: valkey.poll.satisfied, source: errors-counted}

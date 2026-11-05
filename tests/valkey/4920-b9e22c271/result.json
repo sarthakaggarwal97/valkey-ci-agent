@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b9e22c27152dcb9e97ed6adc7aabb95434be4686",
+  "parent": "319db007f36cb2339f666aac8a4ca07cac128068",
+  "pr": 4920,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix eviction replication and replica DB selection during atomic slot migration (#4920)",
+  "date": "2026-10-19",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 26,
+    "executed": 26,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.6584,
+  "findings": [],
+  "recorded": []
+}

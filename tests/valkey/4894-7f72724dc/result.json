@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7f72724dc2c9acabb7916e4909af0ad7afcee83a",
+  "parent": "1519066403d3cc91095937396b1565bc6c6e2072",
+  "pr": 4894,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix untracked expired hash fields after listpack-to-hashtable conversion (#4894)",
+  "date": "2026-10-19",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.3667,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: t_hash.c:231 'vsetUpdateEntry(set, entryGetExpiryVsetFunc, old_entry, new_entry, old_expiry, new_expiry) == 1' is not true",
+      "scenario": "ai-1b32d567ee91",
+      "seed": 7001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4894",
+      "fingerprint": "c0a006cfcbb1b1a62de6",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: assertion failed: 15531:M 05 Nov 2026 16:01:50.607 # ==> t_hash.c:231 'vsetUpdateEntry(set, entryGetExpiryVsetFunc, old_entry, new_entry, old_expiry, new_expiry) == 1' is not true",
+      "scenario": "ai-28a2143710d9",
+      "seed": 7002,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4894",
+      "fingerprint": "977d348ef86fb6b2c141",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

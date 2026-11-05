@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bce52d39fadb..8b362e17c508.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5674739f9c7b
+seed: 1003
+experiment:
+  id: proposed.error-reply-log-redaction
+  inputs:
+    expected_pattern: '== CRITICAL == This replica is sending an error to its primary:
+      ''\*redacted\*'' after processing the command ''incr'''
+    forbidden_pattern: 'sending an error to its primary: ''-?(WRONGTYPE|value is not
+      an integer)'
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7200
+  server_config:
+    hide-user-data-from-log: 'yes'

@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bce52d39fadb..8b362e17c508.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f93b9f4081b3
+seed: 1002
+experiment:
+  id: proposed.error-reply-log-redaction
+  inputs:
+    expected_pattern: '== CRITICAL == This replica is sending an error to its primary:
+      ''-?WRONGTYPE Operation against a key holding the wrong kind of value'' after
+      processing the command ''lpush'''
+    forbidden_pattern: 'sending an error to its primary: ''\*redacted\*'
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7100
+  server_config:
+    hide-user-data-from-log: 'no'

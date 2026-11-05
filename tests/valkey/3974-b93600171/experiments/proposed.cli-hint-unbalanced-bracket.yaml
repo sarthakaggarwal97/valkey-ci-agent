@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.cli-hint-unbalanced-bracket
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli hint for a partially typed optional+multiple argument (BITFIELD_RO
+    GET, SORT GET, MIGRATE KEYS) no longer ends with an unbalanced ']' , on both the
+    COMMAND DOCS and the static cli_commands hint sources
+components:
+- use: valkey.action.tools
+  id: hints-docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, --test_hint, "BITFIELD_RO k "], expect: {
+        exit: {equals: 0}, stdout: {equals: "[GET encoding offset [GET encoding offset\
+            \ ...]]\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --test_hint, "BITFIELD_RO k GET "], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "encoding offset [GET encoding\
+            \ offset ...]\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --test_hint, "BITFIELD_RO k GET xyz 12 "],
+      expect_difference: true, expect: {exit: {equals: 0}, stdout: {equals: "[GET\
+            \ encoding offset ...]\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --test_hint, "BITFIELD_RO k GET enc1 12\
+          \ GET enc2 "], expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          equals: "offset [GET encoding offset ...]\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --test_hint, "SORT mylist GET "], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "pattern [GET pattern ...]"}}}
+    - {tool: valkey-cli, args: [-p, $port, --test_hint, "MIGRATE host 6379 key 0 100\
+          \ KEYS "], expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: "key [key ...]"}}}
+- use: valkey.action.tools
+  id: hints-static
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files:
+      hint_suite.txt: |
+        "BITFIELD_RO k " "[GET encoding offset [GET encoding offset ...]]"
+        "BITFIELD_RO k GET " "encoding offset [GET encoding offset ...]"
+        "BITFIELD_RO k GET xyz " "offset [GET encoding offset ...]"
+        "BITFIELD_RO k GET xyz 12 " "[GET encoding offset ...]"
+        "BITFIELD_RO k GET xyz 12 GET " "encoding offset [GET encoding offset ...]"
+        "BITFIELD_RO k GET enc1 12 GET enc2 " "offset [GET encoding offset ...]"
+        "BITFIELD_RO k GET enc1 12 GET enc2 34 " "[GET encoding offset ...]"
+    runs:
+    - {tool: valkey-cli, args: [-p, 1, --test_hint, "BITFIELD_RO k GET "], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "encoding offset [GET encoding\
+            \ offset ...]\n"}}}
+    - {tool: valkey-cli, args: [-p, 1, --test_hint_file, hint_suite.txt], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "SUCCESS: 7/7 passed"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: hints-docs}
+- {evidence_id: valkey.tool.runs, source: hints-static}

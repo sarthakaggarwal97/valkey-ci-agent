@@ -1,0 +1,31 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f2e5af9f175f92e3715db9b35106804a1f5f98ec",
+  "parent": "e8ddf8d0bcee510e4cbbf6a06b383e6527972b66",
+  "pr": 4875,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Restore hex float parsing for sorted set scores (#4875)",
+  "date": "2026-10-19",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 20,
+    "executed": 17,
+    "percent": 85,
+    "uncovered": [
+      "src/valkey_strtod.c:34",
+      "src/valkey_strtod.c:35",
+      "src/valkey_strtod.c:36"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 6.6248,
+  "findings": [],
+  "recorded": []
+}

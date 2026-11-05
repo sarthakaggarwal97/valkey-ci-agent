@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.hincrbyfloat-inf-equivalence
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    HINCRBYFLOAT NaN/Infinity edge cases compared across builds. The change removed
+    isnan() from both guards as dead code (string2ld already rejects NaN before either
+    check), so every reply must stay identical to the parent's: no expect_difference
+    anywhere, and any divergence is a behaviour change the refactor introduced.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_max_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: hincr
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      hash-max-listpack-entries: {$ref: inputs.hash_max_listpack_entries}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [HINCRBYFLOAT, h, f, "10.5"], expect: {equals: "10.5"}}
+    - {command: [HINCRBYFLOAT, h, f, "-0.5"], expect: {equals: "10"}}
+    - {command: [HINCRBYFLOAT, h, f, "inf"], expect: {error: "value is NaN or Infinity"}}
+    - {command: [HINCRBYFLOAT, h, f, "-inf"], expect: {error: "value is NaN or Infinity"}}
+    - {command: [HINCRBYFLOAT, h, f, "+Infinity"], expect: {error: "value is NaN or\
+          \ Infinity"}}
+    - {command: [HINCRBYFLOAT, h, f, "nan"], expect: {error: "not a valid float"}}
+    - {command: [HINCRBYFLOAT, h, f, "-nan"], expect: {error: "not a valid float"}}
+    - {command: [HINCRBYFLOAT, h, f, "nan(0xdead)"], expect: {error: "not a valid\
+          \ float"}}
+    - {command: [HINCRBYFLOAT, h, f, ""], expect: {error: "not a valid float"}}
+    - {command: [HGET, h, f], expect: {equals: "10"}}
+    - {command: [HSET, h, pos, "inf"], expect: {equals: 1}}
+    - {command: [HINCRBYFLOAT, h, pos, "1"], expect: {error: "increment would produce\
+          \ NaN or Infinity"}}
+    - {command: [HINCRBYFLOAT, h, pos, "-1e4932"], expect: {error: "increment would\
+          \ produce NaN or Infinity"}}
+    - {command: [HGET, h, pos], expect: {equals: "inf"}}
+    - {command: [HSET, h, neg, "-Infinity"], expect: {equals: 1}}
+    - {command: [HINCRBYFLOAT, h, neg, "1e100"], expect: {error: "increment would\
+          \ produce NaN or Infinity"}}
+    - {command: [HSET, h, big, "1e4932"], expect: {equals: 1}}
+    - {command: [HINCRBYFLOAT, h, big, "1e4932"], expect: {error: "increment would\
+          \ produce NaN or Infinity"}}
+    - {command: [HGET, h, big], expect: {equals: "1e4932"}}
+    - {command: [HSET, h, n, "nan"], expect: {equals: 1}}
+    - {command: [HINCRBYFLOAT, h, n, "1"], expect: {error: "hash value is not a float"}}
+    - {command: [HSET, h, s, "abc"], expect: {equals: 1}}
+    - {command: [HINCRBYFLOAT, h, s, "1"], expect: {error: "hash value is not a float"}}
+    - {command: [HSET, h, i, "9007199254740993"], expect: {equals: 1}}
+    - {command: [HINCRBYFLOAT, h, i, "0.5"], expect: {equals: "9007199254740993.5"}}
+    - {command: [HEXPIRE, h, "100", FIELDS, "1", f], expect: {equals: [1]}}
+    - {command: [HINCRBYFLOAT, h, f, "1"], expect: {equals: "11"}}
+    - {command: [HTTL, h, FIELDS, "1", f], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [hincr.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hincr}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4a698691cf574f9875362fb520c6cc70b238d1e1",
+  "parent": "45ec67c3074562de0d6d0be56b44e6ef1a72f819",
+  "pr": 2238,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "spelling: ; otherwise, (#2238)",
+  "date": "2026-10-21",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7957,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change (PR #2238, 'spelling: ; otherwise,') edits only comments and documentation text: C source comments in acl.c, bitops.c, cluster*.c, module.c, networking.c, replication.c and others, Tcl test-suite comments, and commented lines in valkey.conf. No code path, error message, reply, config value, or build rule changes, so there is no observable behaviour to test and no scenario is needed."
+}

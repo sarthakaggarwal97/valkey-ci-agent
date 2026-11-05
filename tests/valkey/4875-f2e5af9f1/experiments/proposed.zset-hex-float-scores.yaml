@@ -1,0 +1,99 @@
+extends: [valkey.liveness]
+id: proposed.zset-hex-float-scores
+deployment:
+  modes: [standalone]
+metadata:
+  description: Hex-float and leading-whitespace doubles parse again in zset range
+    bounds, ZADD/ZINCRBY scores, ZUNIONSTORE weights, SORT, GEO args and latency percentiles
+    config; parent rejects them
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    zset_entries: {type: integer, minimum: 0, maximum: 1024, default: 128}
+components:
+- use: valkey.action.commands
+  id: hexfloat
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: {$ref: inputs.zset_entries}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ZADD, zset, 1, a, 2, b, 3, c, 10, d], expect: {equals: 4}}
+    - {command: [ZCOUNT, zset, "0x0", "0x3"], expect_difference: true, expect: {equals: 3}}
+    - {command: [ZRANGEBYSCORE, zset, "0x0", "0x3"], expect_difference: true, expect: {
+        equals: [a, b, c]}}
+    - {command: [ZRANGEBYSCORE, zset, "(0x1", "0x3"], expect_difference: true, expect: {
+        equals: [b, c]}}
+    - {command: [ZCOUNT, zset, " 0", " 3"], expect_difference: true, expect: {equals: 3}}
+    - {command: [ZRANGEBYSCORE, zset, "( 1", "3"], expect_difference: true, expect: {
+        equals: [b, c]}}
+    - {command: [ZCOUNT, zset, "0X0", "0X1P1"], expect_difference: true, expect: {
+        equals: 2}}
+    - {command: [ZCOUNT, zset, "0x1.8p1", "0x3"], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [ZCOUNT, zset, !!binary "MHgxAGp1bms=", "3"], expect_difference: true,
+      expect: {equals: 3}}
+    - {command: [ZCOUNT, zset, "-0x1p+2000", "0x1p+2000"], expect_difference: true,
+      expect: {equals: 4}}
+    - {command: [ZREVRANGEBYSCORE, zset, "0x3", "0x0"], expect_difference: true, expect: {
+        equals: [c, b, a]}}
+    - {command: [ZRANGE, zset, "(0x1", "0x3", BYSCORE], expect_difference: true, expect: {
+        equals: [b, c]}}
+    - {command: [ZRANGESTORE, dest, zset, "0x0", "0x2", BYSCORE], expect_difference: true,
+      expect: {equals: 2}}
+    - {command: [ZRANGE, dest, 0, -1], expect_difference: true, expect: {equals: [
+          a, b]}}
+    - {command: [ZCOUNT, zset, "-inf", "+inf"], expect: {equals: 4}}
+    - {command: [ZCOUNT, zset, "0x", "3"], expect: {error: true}}
+    - {command: [ZCOUNT, zset, "0xg", "3"], expect: {error: true}}
+    - {command: [ZCOUNT, zset, nan, "3"], expect: {error: true}}
+    - {command: [ZADD, ctl, " 1", m], expect: {error: "not a valid float"}}
+    - {command: [ZADD, ctl, nan, m], expect: {error: "not a valid float"}}
+    - {command: [ZREMRANGEBYSCORE, zset, "0x4", "0xA"], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [ZRANGE, zset, 0, -1], expect_difference: true, expect: {equals: [
+          a, b, c]}}
+    - {command: [ZADD, hexscores, "0x10", m1], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [ZRANGEBYSCORE, hexscores, 16, 16], expect_difference: true, expect: {
+        equals: [m1]}}
+    - {command: [ZADD, hexscores, GT, CH, "0x20", m1], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [ZINCRBY, hexscores, "0x8", m1], expect_difference: true, expect: {
+        error: false}}
+    - {command: [ZRANGEBYSCORE, hexscores, 40, 40], expect_difference: true, expect: {
+        equals: [m1]}}
+    - {command: [ZADD, signed, "-0x10", neg, "+0x10", pos], expect_difference: true,
+      expect: {equals: 2}}
+    - {command: [ZRANGEBYSCORE, signed, -16, -16], expect_difference: true, expect: {
+        equals: [neg]}}
+    - {command: [ZRANGEBYSCORE, signed, "+0x10", "+0x10"], expect_difference: true,
+      expect: {equals: [pos]}}
+    - {command: [ZADD, wz1, 1, a, 2, b], expect: {equals: 2}}
+    - {command: [ZADD, wz2, 4, b], expect: {equals: 1}}
+    - {command: [ZUNIONSTORE, wdest, 2, wz1, wz2, WEIGHTS, "0x2", 1], expect_difference: true,
+      expect: {equals: 2}}
+    - {command: [ZRANGEBYSCORE, wdest, 8, 8], expect_difference: true, expect: {equals: [
+          b]}}
+    - {command: [RPUSH, nums, "3", "0x2", "1"], expect: {equals: 3}}
+    - {command: [SORT, nums], expect_difference: true, expect: {equals: ["1", "0x2",
+          "3"]}}
+    - {command: [RPUSH, nums2, " 2", "1"], expect: {equals: 2}}
+    - {command: [SORT, nums2], expect_difference: true, expect: {equals: ["1", " 2"]}}
+    - {command: [GEOADD, geo, 0, 0, gm], expect: {equals: 1}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, 0, 0, BYRADIUS, "0x64", m, ASC], expect_difference: true,
+      expect: {equals: [gm]}}
+    - {command: [GEOADD, geo, "0x1", "0x1", gm2], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [CONFIG, SET, latency-tracking-info-percentiles, "0x32"], expect_difference: true,
+      expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [hexfloat.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hexfloat}

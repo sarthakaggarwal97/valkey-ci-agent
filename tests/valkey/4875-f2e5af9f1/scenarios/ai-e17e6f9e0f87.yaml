@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e8ddf8d0bcee..f2e5af9f175f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e17e6f9e0f87
+seed: 1002
+experiment:
+  id: proposed.zset-hex-float-scores
+  inputs:
+    resp: 3
+    zset_entries: 128
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

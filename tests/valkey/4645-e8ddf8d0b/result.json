@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e8ddf8d0bcee510e4cbbf6a06b383e6527972b66",
+  "parent": "e401d52d7261cbde9cb47a0836d64b27364e062b",
+  "pr": 4645,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix module zset range steps re-returning the current element on btree keys (#4645)",
+  "date": "2026-10-19",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 43,
+    "executed": 43,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.13,
+  "findings": [],
+  "recorded": []
+}

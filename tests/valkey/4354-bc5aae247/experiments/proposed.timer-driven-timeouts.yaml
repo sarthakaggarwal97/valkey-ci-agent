@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.timer-driven-timeouts
+deployment:
+  modes: [standalone]
+metadata:
+  description: Blocking-command timeouts and active expiry still fire on time before
+    and after heavy eviction-timer create/fire/free churn, compared across the change
+    and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: timers
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [BLPOP, missing-list, 1], expect: {exists: false}}
+    - {command: [BRPOP, missing-list, 0.5], expect: {exists: false}}
+    - {command: [BLMPOP, 0.5, 1, missing-list, LEFT], expect: {exists: false}}
+    - {command: [WAIT, 1, 300], expect: {equals: 0}}
+    - {command: [XREAD, BLOCK, 300, STREAMS, missing-stream, $], expect: {exists: false}}
+    - {command: [SET, short-lived, v, PX, 100], expect: {equals: OK}}
+    - {command: [BLPOP, missing-list, 1], expect: {exists: false}}
+    - {command: [DBSIZE], wait_s: 10, expect: {equals: 0}}
+    - {command: [EVAL, "for i=1,50000 do redis.call('set', 'bulk:' .. i, string.rep('x',\
+          \ 100)) end return 'DONE'", 0], expect: {equals: DONE}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-random], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, 6mb], expect: {equals: OK}}
+    - {command: [SET, evict-trigger-1, v], expect: {equals: OK}}
+    - {command: [BLPOP, missing-list, 0.5], expect: {exists: false}}
+    - {command: [SET, evict-trigger-2, v], expect: {equals: OK}}
+    - {command: [DBSIZE], compare: skip}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: [BLPOP, missing-list, 1], expect: {exists: false}}
+    - {command: [WAIT, 1, 300], expect: {equals: 0}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [SET, short-lived-2, v, PX, 100], expect: {equals: OK}}
+    - {command: [BLPOP, missing-list, 1], expect: {exists: false}}
+    - {command: [DBSIZE], wait_s: 10, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [timers.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: timers}

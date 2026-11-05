@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.hash-convert-expired-tracking
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    After a listpack->hashtable conversion of a hash holding several already-expired-but-unreaped
+    fields, every expired field must be tracked in the volatile set so active expiry
+    reaps them all. The parent tracks only the first expired field visited and skips
+    the rest, so the untracked ones stay counted by HLEN and visible to HKEYS forever.
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hashconv
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 40
+    server_config: {hash-max-listpack-value: 64, hash-max-listpack-entries: 128}
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [HSET, myhash, e1, v, e2, v, e3, v, e4, v, e5, v, l1, v, l2, v, l3,
+        v], expect: {equals: 8}}
+    - {command: [HPEXPIRE, myhash, 1, FIELDS, 5, e1, e2, e3, e4, e5], expect: {equals: [
+          1, 1, 1, 1, 1]}}
+    - {command: [HPEXPIRE, myhash, 100000, FIELDS, 3, l1, l2, l3], expect: {equals: [
+          1, 1, 1]}}
+    - {command: [HEXISTS, myhash, e5], expect: {equals: 0}, wait_s: 5}
+    - {command: [HSET, myhash, big, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      expect: {equals: 1}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 1], expect: {equals: OK}}
+    - {command: [HLEN, myhash], expect_difference: true, expect: {equals: 4}, wait_s: 30}
+    - {command: [HKEYS, myhash], compare: unordered, expect_difference: true, expect: {
+        equals: [big, l1, l2, l3]}}
+    - {command: [HSET, myhash, e1, n]}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hashconv}

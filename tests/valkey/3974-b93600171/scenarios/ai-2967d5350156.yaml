@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1074b3cada6d..b93600171448.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2967d5350156
+seed: 974431
+experiment:
+  id: proposed.cli-hint-unbalanced-bracket
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8b362e17c508493efe6be7fa254160abf53c4a0f",
+  "parent": "bce52d39fadb0c94da4513c4a1b194f317409851",
+  "pr": 4815,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Redacting when hide_user_data_from_log is set for after error reply (#4815)",
+  "date": "2026-10-19",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 6,
+    "executed": 5,
+    "percent": 83,
+    "uncovered": [
+      "src/aof.c:1685"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 4.7528,
+  "findings": [],
+  "recorded": []
+}

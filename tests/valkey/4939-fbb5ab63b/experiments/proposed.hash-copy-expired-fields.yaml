@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.hash-copy-expired-fields
+deployment:
+  modes: [standalone]
+metadata:
+  description: COPY of a hashtable-encoded hash keeps expired-but-unreaped fields
+    in the copy, tracks them, and the reaper later removes them; the parent build
+    drops them, leaving a short copy and a stuck empty hash
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: copyseq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HSET, h3, g1, w1, g2, w2], expect: {equals: 2}}
+    - {command: [HPEXPIRE, h, 1, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HPEXPIRE, h3, 1, FIELDS, 2, g1, g2], expect: {equals: [1, 1]}}
+    - {command: [HEXISTS, h, f1], wait_s: 10, expect: {equals: 0}}
+    - {command: [HEXISTS, h3, g1], wait_s: 10, expect: {equals: 0}}
+    - {command: [OBJECT, ENCODING, h], compare: skip, expect: {equals: hashtable}}
+    - {command: [COPY, h, c], expect: {equals: 1}}
+    - {command: [COPY, h3, c3], expect: {equals: 1}}
+    - {command: [HLEN, c], expect_difference: true, expect: {equals: 2}}
+    - {command: [HLEN, c3], expect_difference: true, expect: {equals: 2}}
+    - {command: [HGETALL, c], compare: unordered-pairs}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 1], expect: {equals: OK}}
+    - {command: [HLEN, c], wait_s: 20, expect: {equals: 1}}
+    - {command: [EXISTS, c3], wait_s: 20, expect_difference: true, expect: {equals: 0}}
+    - {command: [HLEN, h], wait_s: 20, expect: {equals: 1}}
+    - {command: [EXISTS, h3], wait_s: 20, expect: {equals: 0}}
+    - {command: [HKEYS, c], compare: unordered, expect: {equals: [f2]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [copyseq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: copyseq}

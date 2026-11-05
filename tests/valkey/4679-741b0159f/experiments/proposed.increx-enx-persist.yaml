@@ -1,0 +1,76 @@
+extends: [valkey.liveness]
+id: proposed.increx-enx-persist
+deployment:
+  modes: [standalone]
+metadata:
+  description: INCREX ENX and PERSIST TTL semantics, past EXAT handling, declined
+    operations leaving the TTL alone, compared with the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ttl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k, 10], expect: {equals: OK}}
+    - {command: [INCREX, k, ENX], expect_difference: true, expect: {error: "ENX flag\
+          \ requires an expiration"}}
+    - {command: [INCREX, k, EX, 100, ENX], expect_difference: true, expect: {equals: [
+          11, 1]}}
+    - {command: [TTL, k], compare: skip, expect: {min: 1, max: 100}}
+    - {command: [SET, k, 10, EX, 500], expect: {equals: OK}}
+    - {command: [INCREX, k, EX, 100, ENX], expect_difference: true, expect: {equals: [
+          11, 1]}}
+    - {command: [TTL, k], compare: skip, expect: {min: 400, max: 500}}
+    - {command: [INCREX, k, PX, 60000, ENX], expect_difference: true, expect: {equals: [
+          12, 1]}}
+    - {command: [TTL, k], compare: skip, expect: {min: 400, max: 500}}
+    - {command: [SET, p, 10, EX, 500], expect: {equals: OK}}
+    - {command: [INCREX, p, PERSIST], expect_difference: true, expect: {equals: [
+          11, 1]}}
+    - {command: [TTL, p], expect_difference: true, expect: {equals: -1}}
+    - {command: [INCREX, q, PERSIST], expect_difference: true, expect: {equals: [
+          1, 1]}}
+    - {command: [TTL, q], expect_difference: true, expect: {equals: -1}}
+    - {command: [INCREX, p, EX, 10, PERSIST], expect: {error: "syntax error"}}
+    - {command: [INCREX, p, PERSIST, ENX], expect: {error: "syntax error"}}
+    - {command: [INCREX, p, PERSIST, PERSIST], expect: {error: "syntax error"}}
+    - {command: [SET, x1, 10], expect: {equals: OK}}
+    - {command: [INCREX, x1, EXAT, 100, ENX], expect_difference: true, expect: {equals: [
+          11, 1]}}
+    - {command: [EXISTS, x1], expect_difference: true, expect: {equals: 0}}
+    - {command: [SET, x2, 10, EX, 500], expect: {equals: OK}}
+    - {command: [INCREX, x2, EXAT, 100, ENX], expect_difference: true, expect: {equals: [
+          11, 1]}}
+    - {command: [EXISTS, x2], expect: {equals: 1}}
+    - {command: [GET, x2], expect_difference: true, expect: {equals: "11"}}
+    - {command: [TTL, x2], compare: skip, expect: {min: 400, max: 500}}
+    - {command: [SET, b1, 9223372036854775807], expect: {equals: OK}}
+    - {command: [INCREX, b1, BYINT, 1, EX, 100, ENX], expect_difference: true, expect: {
+        equals: [9223372036854775807, 0]}}
+    - {command: [TTL, b1], expect: {equals: -1}}
+    - {command: [SET, b2, 10, EX, 500], expect: {equals: OK}}
+    - {command: [INCREX, b2, BYINT, 5, UBOUND, 5, PERSIST], expect_difference: true,
+      expect: {equals: [10, 0]}}
+    - {command: [TTL, b2], compare: skip, expect: {min: 400, max: 500}}
+    - {command: [INCREX, b2, NX, PERSIST], expect_difference: true, expect: {equals: [
+          10, 0]}}
+    - {command: [TTL, b2], compare: skip, expect: {min: 400, max: 500}}
+    - {command: [SET, fp, "10.5", EX, 500], expect: {equals: OK}}
+    - {command: [INCREX, fp, BYFLOAT, "1.0", PERSIST], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [GET, fp], expect_difference: true, expect: {equals: "11.5"}}
+    - {command: [TTL, fp], expect_difference: true, expect: {equals: -1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ttl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ttl}

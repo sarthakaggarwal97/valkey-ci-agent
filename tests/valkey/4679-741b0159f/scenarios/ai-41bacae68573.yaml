@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e1b4ec84554a..741b0159f5f1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-41bacae68573
+seed: 5
+experiment:
+  id: proposed.increx-replication
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

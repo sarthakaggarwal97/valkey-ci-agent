@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.slot-import-eviction-repl
+deployment:
+  modes: [standalone]
+metadata:
+  description: Evictions performed by an atomic slot import target must reach its
+    replica; the parent suppressed their DELs while the import client was current_client
+components:
+- use: valkey.action.commands
+  id: evict
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 16383, 16383, NODE, "<node.1.id>"],
+      expect: {equals: OK}}
+    - {command: [SET, "{6ZJ}probe", v], node: 1, wait_s: 60, expect: {equals: OK}}
+    - {command: [SETRANGE, "{6ZJ}big1", 4000000, x], node: 1, expect: {equals: 4000001}}
+    - {command: [SETRANGE, "{6ZJ}big2", 4000000, x], node: 1, expect: {equals: 4000001}}
+    - {command: [SETRANGE, "{6ZJ}big3", 4000000, x], node: 1, expect: {equals: 4000001}}
+    - {command: [SET, "{06S}victim", VICTIMVALUE, EX, 10000], expect: {equals: OK}}
+    - {command: [SETRANGE, "{06S}f1", 5000000, x], expect: {equals: 5000001}}
+    - {command: [SETRANGE, "{06S}f2", 5000000, x], expect: {equals: 5000001}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 2, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 2, wait_s: 60, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [READONLY], node: 2, expect: {equals: OK}}
+    - {command: [GET, "{06S}victim"], node: 2, wait_s: 60, expect: {equals: VICTIMVALUE}}
+    - {command: [CONFIG, SET, maxmemory-policy, volatile-random], expect: {equals: OK}}
+    - {command: [CONFIG, SET, lazyfree-lazy-eviction, no], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-eviction-tenacity, 100], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, 20mb], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 16383, 16383, NODE, "<node.0.id>"],
+      node: 1, expect: {equals: OK}}
+    - {command: [GET, "{06S}victim"], wait_s: 90, expect: {equals: null}}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: [SET, "{06S}done", v], expect: {equals: OK}}
+    - {command: [GET, "{06S}done"], node: 2, wait_s: 60, expect: {equals: v}}
+    - {command: [GET, "{06S}victim"], node: 2, expect_difference: true, expect: {
+        equals: null}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [evict.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evict}

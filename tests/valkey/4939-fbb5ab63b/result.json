@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fbb5ab63bba3024bae8b435003acfae0df118fc8",
+  "parent": "9fdda3152ec435beb3e96036160a2b3e4cea8932",
+  "pr": 4939,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Copy expired-but-unreaped fields in hashTypeDup (#4939)",
+  "date": "2026-10-19",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.5686,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "compat-sync: the replica did not reach the primary's data within 30s (compat-sync): primary {\"digest\":{\"reply\":\"3fac3b5bfcb6c46352ca30ed06a05f54e131d91c\"},\"offset\":\"42\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"0\"}, link down",
+      "scenario": "ai-fe3deb059d61",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #4939",
+      "fingerprint": "cc966ec5f036751c722b",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/63"
+    },
+    {
+      "rule": "check",
+      "detail": "compat-sync: the replica did not reach the primary's data within 30s (compat-sync): primary {\"digest\":{\"reply\":\"3fac3b5bfcb6c46352ca30ed06a05f54e131d91c\"},\"offset\":\"42\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"0\"}, link down",
+      "scenario": "ai-88ac1b9a5f89",
+      "seed": 202,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #4939",
+      "fingerprint": "cc966ec5f036751c722b",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/63"
+    }
+  ],
+  "recorded": []
+}

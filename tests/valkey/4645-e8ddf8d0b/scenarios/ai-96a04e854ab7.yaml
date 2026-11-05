@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e401d52d7261..e8ddf8d0bcee.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-96a04e854ab7
+seed: 4646
+experiment:
+  id: proposed.zset-range-reverse-steps
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

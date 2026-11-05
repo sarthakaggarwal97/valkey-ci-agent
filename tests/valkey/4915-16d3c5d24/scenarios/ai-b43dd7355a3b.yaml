@@ -1,0 +1,21 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bc5aae2479fd..16d3c5d24f9c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b43dd7355a3b
+seed: 4917
+experiment:
+  id: proposed.io-threads-resize
+  inputs:
+    threads_high: 5
+    threads_mid: 2
+    mutation_rate: 600
+    mutable_keys: 300
+    value_size: 16384
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    io-threads: 5
+    io-threads-always-active: 'yes'
+    enable-debug-assert: 'yes'

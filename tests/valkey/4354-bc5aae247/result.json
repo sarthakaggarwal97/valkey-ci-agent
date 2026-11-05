@@ -1,0 +1,116 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bc5aae2479fdb138dfc0e86b1bbdda02927f16c7",
+  "parent": "f870ab590c3d403d145687e5bb9425e7137ef724",
+  "pr": 4354,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Cache earliest timer for O(1) usUntilEarliestTimer lookup (#4354)",
+  "date": "2026-10-20",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 16,
+    "executed": 13,
+    "percent": 81,
+    "uncovered": [
+      "src/ae.c:352",
+      "src/ae.c:353",
+      "src/ae.c:428"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 4.6288,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: bgiteration.c:2689 'wasAdded' is not true",
+      "scenario": "ai-b9f3bd197d9c",
+      "seed": 103,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "39773d5994ed5d4b9f00",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: assertion failed: 16066:M 05 Nov 2026 14:59:43.044 # ==> bgiteration.c:2689 'wasAdded' is not true",
+      "scenario": "ai-b9f3bd197d9c",
+      "seed": 103,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4354",
+      "fingerprint": "6e51efbe36e6bd2926a9",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: Fatal glibc error: pthread_mutex_lock.c:426 (__pthread_mutex_lock_full): assertion failed: e != ESRCH || !robust",
+      "scenario": "ai-b9f3bd197d9c",
+      "seed": 103,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4354",
+      "fingerprint": "2cad09c67900ed684aff",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: assertion failed: 16067:S 05 Nov 2026 14:59:43.041 # ==> blocked.c:109 '!(isReplicatedClient(c) && btype != BLOCKED_MODULE && btype != BLOCKED_POSTPONE)' is not true",
+      "scenario": "ai-b9f3bd197d9c",
+      "seed": 103,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4354",
+      "fingerprint": "ebd995c57b97f12f1911",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: Fatal glibc error: pthread_mutex_lock.c:88 (___pthread_mutex_lock): assertion failed: mutex->__data.__owner == 0",
+      "scenario": "ai-b9f3bd197d9c",
+      "seed": 103,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4354",
+      "fingerprint": "91a11322fa2cc082034f",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in pthread_cancel",
+      "scenario": "ai-b9f3bd197d9c",
+      "seed": 103,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4354",
+      "fingerprint": "bc6f524c6189a2a2eada",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

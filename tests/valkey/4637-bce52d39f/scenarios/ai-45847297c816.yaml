@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f2e5af9f175f..bce52d39fadb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-45847297c816
+seed: 101
+experiment:
+  id: proposed.zset-negative-limit-offset
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

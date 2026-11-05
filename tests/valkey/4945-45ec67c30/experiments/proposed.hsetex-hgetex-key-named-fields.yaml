@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.hsetex-hgetex-key-named-fields
+deployment:
+  modes: [standalone]
+metadata:
+  description: HSETEX and HGETEX parse correctly when the key is named "fields" (the
+    parent matched the key as the FIELDS keyword, rejecting valid syntax and accepting
+    invalid syntax)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_max_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: fieldskey
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: {$ref: inputs.hash_max_listpack_entries}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [HSET, fields, f1, v1], expect: {equals: 1}}
+    - {command: [HGETEX, fields, FIELDS, 1, f1], expect_difference: true, expect: {
+        equals: [v1]}}
+    - {command: [HGETEX, fields, PERSIST, FIELDS, 1, f1], expect_difference: true,
+      expect: {equals: [v1]}}
+    - {command: [HGETEX, fields, EXAT, 33177117600, FIELDS, 1, f1], expect_difference: true,
+      expect: {equals: [v1]}}
+    - {command: [HEXPIRETIME, fields, FIELDS, 1, f1], expect_difference: true, expect: {
+        equals: [33177117600]}}
+    - {command: [HSETEX, fields, FIELDS, 1, g1, w1], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [HSETEX, fields, EXAT, 33177117600, FIELDS, 1, g2, w2], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [HMGET, fields, g1, g2], expect_difference: true, expect: {equals: [
+          w1, w2]}}
+    - {command: [HEXPIRETIME, fields, FIELDS, 2, g1, g2], expect_difference: true,
+      expect: {equals: [-1, 33177117600]}}
+    - {command: [HSETEX, fields, FNX, FIELDS, 1, g3, w3], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [HSETEX, fields, FIELDS, 2, fields, v5, f9, v9], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [HMGET, fields, fields, f9], expect_difference: true, expect: {equals: [
+          v5, v9]}}
+    - {command: [HSETEX, fields, 1, g4, w4], expect_difference: true, expect: {error: "numfields"}}
+    - {command: [HEXISTS, fields, g4], expect_difference: true, expect: {equals: 0}}
+    - {command: [HGETEX, fields, 2, g1, g2], expect_difference: true, expect: {error: "numfields"}}
+    - {command: [HSET, FIELDS, a, b], expect: {equals: 1}}
+    - {command: [HGETEX, FIELDS, FIELDS, 1, a], expect_difference: true, expect: {
+        equals: [b]}}
+    - {command: [HSETEX, FIELDS, FIELDS, 1, c, d], expect_difference: true, expect: {
+        equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [fieldskey.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fieldskey}

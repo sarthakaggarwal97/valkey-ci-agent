@@ -1,0 +1,95 @@
+extends: [valkey.liveness]
+id: proposed.increx-bounds-saturate
+deployment:
+  modes: [standalone]
+metadata:
+  description: INCREX LBOUND/UBOUND/SATURATE in integer and float mode, INT64 and
+    float boundaries, repeated-option rejection, compared with the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bounds
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k, 10], expect: {equals: OK}}
+    - {command: [INCREX, k, BYINT, 5, UBOUND, 12], expect_difference: true, expect: {
+        equals: [10, 0]}}
+    - {command: [GET, k], expect: {equals: "10"}}
+    - {command: [INCREX, k, BYINT, 5, UBOUND, 12, SATURATE], expect_difference: true,
+      expect: {equals: [12, 2]}}
+    - {command: [GET, k], expect_difference: true, expect: {equals: "12"}}
+    - {command: [SET, k, 10], expect: {equals: OK}}
+    - {command: [INCREX, k, BYINT, 5, UBOUND, 5, SATURATE], expect_difference: true,
+      expect: {equals: [5, -5]}}
+    - {command: [INCREX, k, BYINT, -5, LBOUND, 20, SATURATE], expect_difference: true,
+      expect: {equals: [20, 15]}}
+    - {command: [SET, k, 9223372036854775807], expect: {equals: OK}}
+    - {command: [INCREX, k, BYINT, 1, SATURATE], expect_difference: true, expect: {
+        equals: [9223372036854775807, 0]}}
+    - {command: [SET, k, 9223372036854775800], expect: {equals: OK}}
+    - {command: [INCREX, k, BYINT, 100, SATURATE], expect_difference: true, expect: {
+        equals: [9223372036854775807, 7]}}
+    - {command: [SET, k, -9223372036854775808], expect: {equals: OK}}
+    - {command: [INCREX, k, BYINT, -1, SATURATE], expect_difference: true, expect: {
+        equals: [-9223372036854775808, 0]}}
+    - {command: [SET, k, 9223372036854775807], expect: {equals: OK}}
+    - {command: [INCREX, k, BYINT, -5, UBOUND, -9223372036854775808, SATURATE], expect_difference: true,
+      expect: {error: "applied increment would overflow"}}
+    - {command: [GET, k], expect: {equals: "9223372036854775807"}}
+    - {command: [INCREX, k, BYINT, 5, LBOUND, 20, UBOUND, 0], expect_difference: true,
+      expect: {error: "LBOUND can't be greater than UBOUND"}}
+    - {command: [INCREX, k, BYINT, 5, UBOUND, "12.5"], expect_difference: true, expect: {
+        error: "UBOUND is not an integer or out of range"}}
+    - {command: [INCREX, k, UBOUND], expect: {error: "syntax error"}}
+    - {command: [SET, k, 10], expect: {equals: OK}}
+    - {command: [INCREX, k, EX, 10, EX, 20], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [DEL, k2], expect: {equals: 0}}
+    - {command: [INCREX, k2, NX, NX], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [SET, k3, 10, NX, NX], expect: {equals: OK}}
+    - {command: [GETEX, k3, PERSIST, PERSIST], expect: {equals: "10"}}
+    - {command: [INCREX, m, UBOUND, 0], expect_difference: true, expect: {equals: [
+          0, 0]}}
+    - {command: [EXISTS, m], expect: {equals: 0}}
+    - {command: [INCREX, m, UBOUND, 0, SATURATE], expect_difference: true, expect: {
+        equals: [0, 0]}}
+    - {command: [EXISTS, m], expect_difference: true, expect: {equals: 1}}
+    - {command: [DEL, m], expect_difference: true, expect: {equals: 1}}
+    - {command: [INCREX, m, LBOUND, 5, SATURATE], expect_difference: true, expect: {
+        equals: [5, 5]}}
+    - {command: [GET, m], expect_difference: true, expect: {equals: "5"}}
+    - {command: [SET, f, 10], expect: {equals: OK}}
+    - {command: [INCREX, f, BYFLOAT, "5.5", UBOUND, "12.5"], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [GET, f], expect: {equals: "10"}}
+    - {command: [INCREX, f, BYFLOAT, "5.5", UBOUND, "12.5", SATURATE], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [GET, f], expect_difference: true, expect: {equals: "12.5"}}
+    - {command: [INCREX, f, BYFLOAT, "1.0", LBOUND, "inf"], expect_difference: true,
+      expect: {error: "LBOUND can't be greater than UBOUND"}}
+    - {command: [INCREX, f, BYFLOAT, "1.0", LBOUND, "-inf", UBOUND, "-inf", SATURATE],
+      expect_difference: true, expect: {error: "applied increment would be Infinity"}}
+    - {command: [INCREX, f, BYFLOAT, "1.0", UBOUND, abc], expect_difference: true,
+      expect: {error: "UBOUND is not a valid float"}}
+    - {command: [SET, g, 10], expect: {equals: OK}}
+    - {command: [INCREX, g, BYFLOAT, "1e300", UBOUND, 100, SATURATE], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [GET, g], expect_difference: true, expect: {equals: "100"}}
+    - {command: [INCREX, g, BYFLOAT, "1e300", UBOUND, 200], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [GET, g], expect_difference: true, expect: {equals: "100"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bounds.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bounds}

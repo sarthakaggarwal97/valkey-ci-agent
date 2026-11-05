@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c1ed73bfc03f0788cb7fb3b2e32993d183289691",
+  "parent": "4a698691cf574f9875362fb520c6cc70b238d1e1",
+  "pr": 2250,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix typos in comments and rename VALKEY_SANITAIZER_* CMake variables (#2250)",
+  "date": "2026-10-21",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2471,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only fixes typos in comments (acl.c, db.c, replication.c, valkey-cli.c, zmalloc.c, test .tcl files) and renames the misspelled VALKEY_SANITAIZER_* CMake variables to VALKEY_SANITIZER_*, updated consistently at both the definition (ValkeySetup.cmake) and the use (src/CMakeLists.txt). No runtime code path, command reply, replication behavior, or tool output changes; it is a comment/build-system refactor with no behavior change, so no scenario is needed."
+}

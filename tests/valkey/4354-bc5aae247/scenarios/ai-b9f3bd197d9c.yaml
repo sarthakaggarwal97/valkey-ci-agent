@@ -1,0 +1,21 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f870ab590c3d..bc5aae2479fd.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b9f3bd197d9c
+seed: 103
+experiment:
+  id: valkey.forkless-save-churn
+  inputs:
+    auto_save: 1 1
+    churn_s: 20
+    mutation_rate: 1000
+    mutable_keys: 500
+    stable_keys: 3000
+    rename_weight: 0.3
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    activedefrag: 'yes'
+    active-defrag-ignore-bytes: 1mb
+    active-defrag-threshold-lower: 1

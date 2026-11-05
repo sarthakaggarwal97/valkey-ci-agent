@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.increx-aof-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: INCREX PERSIST/SATURATE/ENX results survive an AOF reload across a
+    restart, compared with the parent build
+components:
+- use: valkey.action.commands
+  id: aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes", appendfsync: always}
+    timeout_s: 60
+    commands:
+    - {command: [SET, a, 10, EX, 500], expect: {equals: OK}}
+    - {command: [INCREX, a, PERSIST], expect_difference: true, expect: {equals: [
+          11, 1]}}
+    - {command: [SET, b, 10], expect: {equals: OK}}
+    - {command: [INCREX, b, BYINT, 5, UBOUND, 12, SATURATE], expect_difference: true,
+      expect: {equals: [12, 2]}}
+    - {command: [SET, c, 10, EX, 500], expect: {equals: OK}}
+    - {command: [INCREX, c, EX, 100, ENX], expect_difference: true, expect: {equals: [
+          11, 1]}}
+    - {command: [SET, f, "10.5"], expect: {equals: OK}}
+    - {command: [INCREX, f, BYFLOAT, "2.5"], expect: {exists: true}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, a], expect_difference: true, expect: {equals: "11"}}
+    - {command: [TTL, a], expect_difference: true, expect: {equals: -1}}
+    - {command: [GET, b], expect_difference: true, expect: {equals: "12"}}
+    - {command: [GET, c], expect_difference: true, expect: {equals: "11"}}
+    - {command: [TTL, c], compare: skip, expect: {min: 300, max: 500}}
+    - {command: [GET, f], expect: {equals: "13"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [aof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof}

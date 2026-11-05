@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1519066403d3..7f72724dc2c9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-28a2143710d9
+seed: 7002
+experiment:
+  id: proposed.hash-convert-expired-tracking
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

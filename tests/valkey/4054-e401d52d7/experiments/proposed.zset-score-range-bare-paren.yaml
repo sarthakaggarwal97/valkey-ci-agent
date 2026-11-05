@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.zset-score-range-bare-paren
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Bare "(" and empty string zset score bounds are rejected with "min or max is not
+    a float"; the parent silently parsed both as score 0 (exclusive for "(", inclusive
+    for ""), returning wrong ranges, deleting members via ZREMRANGEBYSCORE and storing
+    wrong results via ZRANGESTORE.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: zrange
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 10
+    commands:
+    - {command: [ZADD, "{t}z", -1, a, 0, b, 1, c], expect: {equals: 3}}
+    - {command: [ZRANGEBYSCORE, "{t}z", notafloat, 1], expect: {error: "not a float"}}
+    - {command: [ZRANGEBYSCORE, "{t}z", "(", "+inf"], expect_difference: true, expect: {
+        error: "not a float"}}
+    - {command: [ZRANGEBYSCORE, "{t}z", "-inf", "("], expect_difference: true, expect: {
+        error: "not a float"}}
+    - {command: [ZRANGEBYSCORE, "{t}z", "", "+inf"], expect_difference: true, expect: {
+        error: "not a float"}}
+    - {command: [ZRANGEBYSCORE, "{t}z", "-inf", ""], expect_difference: true, expect: {
+        error: "not a float"}}
+    - {command: [ZCOUNT, "{t}z", "(", "("], expect_difference: true, expect: {error: "not\
+          \ a float"}}
+    - {command: [ZCOUNT, "{t}z", "", ""], expect_difference: true, expect: {error: "not\
+          \ a float"}}
+    - {command: [ZREVRANGEBYSCORE, "{t}z", "(", "-inf"], expect_difference: true,
+      expect: {error: "not a float"}}
+    - {command: [ZRANGESTORE, "{t}dest", "{t}z", "", "+inf", BYSCORE], expect_difference: true,
+      expect: {error: "not a float"}}
+    - {command: [ZRANGE, "{t}dest", 0, -1], expect_difference: true, expect: {equals: []}}
+    - {command: [EXISTS, "{t}dest"], expect_difference: true, expect: {equals: 0}}
+    - {command: [ZREMRANGEBYSCORE, "{t}z", "(", "+inf"], expect_difference: true,
+      expect: {error: "not a float"}}
+    - {command: [ZRANGE, "{t}z", 0, -1], expect_difference: true, expect: {equals: [
+          a, b, c]}}
+    - {command: [ZRANGE, "{t}z", "", "(", BYSCORE], expect_difference: true, expect: {
+        error: "not a float"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [zrange.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zrange}

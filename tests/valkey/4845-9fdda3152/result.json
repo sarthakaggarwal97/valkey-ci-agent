@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9fdda3152ec435beb3e96036160a2b3e4cea8932",
+  "parent": "7f72724dc2c9acabb7916e4909af0ad7afcee83a",
+  "pr": 4845,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix broken link in ValkeyModule_ReplyWithAttribute docs (#4845)",
+  "date": "2026-10-19",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2136,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only a comment in src/module.c, fixing a broken documentation link in the ValkeyModule_ReplyWithAttribute doc comment. No executable code, reply behaviour, or build configuration is altered, so there is nothing a scenario could exercise."
+}

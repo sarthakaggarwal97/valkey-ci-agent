@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.zset-negative-limit-offset
+deployment:
+  modes: [standalone]
+metadata:
+  description: zset range commands with a negative LIMIT offset return empty on both
+    builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [ZADD, z, 1, a, 2, b, 3, c, 4, d, 5, e, 6, f, 7, g], expect: {equals: 7}}
+    - {command: [OBJECT, ENCODING, z], compare: skip}
+    - {command: [ZREVRANGEBYSCORE, z, +inf, -inf, LIMIT, -1, 10], expect_difference: true,
+      expect: {equals: []}}
+    - {command: [ZRANGE, z, +inf, -inf, BYSCORE, REV, LIMIT, -1, 10], expect_difference: true,
+      expect: {equals: []}}
+    - {command: [ZRANGE, z, -inf, +inf, BYSCORE, LIMIT, -2, 10], expect_difference: true,
+      expect: {equals: []}}
+    - {command: [ZREVRANGEBYSCORE, z, +inf, -inf, LIMIT, -9223372036854775808, 10],
+      expect: {equals: []}}
+    - {command: [ZADD, zl, 0, a, 0, b, 0, c, 0, d, 0, e, 0, f, 0, g], expect: {equals: 7}}
+    - {command: [ZREVRANGEBYLEX, zl, +, '-', LIMIT, -1, 10], expect_difference: true,
+      expect: {equals: []}}
+    - {command: [ZRANGE, zl, +, '-', BYLEX, REV, LIMIT, -1, 10], expect_difference: true,
+      expect: {equals: []}}
+    - {command: [ZRANGEBYLEX, zl, '-', +, LIMIT, -2, 10], expect_difference: true,
+      expect: {equals: []}}
+    - {command: [ZRANGE, zl, '-', +, BYLEX, LIMIT, -2, 10], expect_difference: true,
+      expect: {equals: []}}
+    - {command: [ZRANGESTORE, dst, z, +inf, -inf, BYSCORE, REV, LIMIT, -1, 10], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [EXISTS, dst], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

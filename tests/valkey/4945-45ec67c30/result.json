@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "45ec67c3074562de0d6d0be56b44e6ef1a72f819",
+  "parent": "b93600171448df9481e4a4a6aba7bdce3219d9f8",
+  "pr": 4945,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix HSETEX and HGETEX when the key is named \"fields\" (#4945)",
+  "date": "2026-10-21",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.9087,
+  "findings": [],
+  "recorded": []
+}

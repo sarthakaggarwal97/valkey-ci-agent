@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b4c125082ad285e10df7a87ef90528ed55802b89",
+  "parent": "e50b62d0bb33dedb0222f65ef36d9537f9e864ea",
+  "pr": 5030,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix cluster Pub/Sub length truncation (#5030)",
+  "date": "2026-10-26",
+  "unstable": "686abfe751a7cb0fb21e29d6999119ec80e2bb8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4952,
+  "findings": [],
+  "recorded": [],
+  "reason": "The only observable change is a new \"Publish message is too large for the cluster bus\" error returned by PUBLISH/SPUBLISH in cluster mode when a channel+message payload reaches the ~UINT32_MAX (2^32-byte, ~4 GB) cluster-bus limit; below that boundary the size_t refactor is byte-identical to the parent, so normal-sized publishes produce no markable difference. The oversized path cannot be exercised by a fuzzer scenario: it requires transmitting a literal ~4 GB argument, which cannot be embedded as command/!!binary bytes in a scenario document and has no server-side construction shortcut (PUBLIS"
+}

@@ -1,0 +1,24 @@
+extends: [valkey.liveness]
+id: proposed.cli-hex-timeout
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli -t accepts hex and leading-whitespace timeouts again via
+    valkey_strtod's libc fallback; parent exits 1 with Invalid connection timeout
+components:
+- use: valkey.action.tools
+  id: cli-timeout
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    runs:
+    - {tool: valkey-cli, args: [-t, "0x2", -p, $port, PING], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: PONG}}}
+    - {tool: valkey-cli, args: [-t, " 1.5", -p, $port, PING], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: PONG}}}
+    - {tool: valkey-cli, args: [-t, "2", -p, $port, PING], expect: {exit: {equals: 0},
+        stdout: {contains: PONG}}}
+    - {tool: valkey-cli, args: [-t, "0xzz", -p, $port, PING], expect: {exit: {equals: 1},
+        stderr: {contains: "Invalid connection timeout"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-timeout}
