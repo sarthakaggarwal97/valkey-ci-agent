@@ -15,10 +15,12 @@ permissions: {}
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # The App where it is installed; a fork reads its own valkey-fuzzer's runs and files there with REHEARSAL_PAT.
+  HAS_APP: ${{ secrets.VALKEYRIE_BOT_APP_ID != '' }}
 
 jobs:
   monitor:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.repository == 'valkey-io/valkey-ci-agent' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.repository == 'valkey-io/valkey-ci-agent' || github.repository_owner != 'valkey-io' }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
     permissions:
@@ -46,16 +48,28 @@ jobs:
 
       - name: Generate GitHub App token
         id: generate-token
+        if: env.HAS_APP == 'true'
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         with:
           app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
           private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
+          owner: ${{ github.repository_owner }}
           repositories: valkey-fuzzer
           permission-actions: read
           permission-contents: read
           permission-issues: write
           permission-metadata: read
+
+      # A fork without the App reads and files with its owner's PAT instead.
+      - name: Use the rehearsal PAT
+        id: pat
+        if: env.HAS_APP != 'true'
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: |
+          echo '::notice title=App token scope (production)::repositories: valkey-fuzzer; permission-actions: read; permission-contents: read; permission-issues: write; permission-metadata: read'
+          echo "token=${PAT}" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
@@ -67,12 +81,13 @@ jobs:
       - name: Analyze the latest fuzzer run
         shell: bash
         env:
-          TARGET_TOKEN: ${{ steps.generate-token.outputs.token }}
+          TARGET_TOKEN: ${{ steps.generate-token.outputs.token || steps.pat.outputs.token }}
+          FUZZER_REPO: ${{ github.repository_owner }}/valkey-fuzzer
           # Claude's runs outlast the hour the credentials step grants; each run first assumes the role again.
           CI_AGENT_AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
         run: |
           set -euo pipefail
-          args=(-m scripts.fuzzer.main --output fuzzer-monitor-result.json)
+          args=(-m scripts.fuzzer.main --output fuzzer-monitor-result.json --fuzzer-repo "${FUZZER_REPO}")
           if [[ "${DRY_RUN}" == "true" ]]; then
             args+=(--dry-run)
           fi
