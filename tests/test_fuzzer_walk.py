@@ -951,3 +951,15 @@ def test_checks_leave_every_scalar_as_written():
     out = walk.with_checks(text)
     assert yaml.safe_load(out)["components"][0]["config"]["checks"] == CHECKS
     assert "bf.bloom-use-random-seed, no]" in out and "false" not in out
+
+
+def test_a_panic_the_change_adds_is_intended_not_filed():
+    # valkey-io/valkey#5155 panics on purpose when ValkeyModule_Calloc's nmemb * size overflows.
+    diff = ('+    if (nmemb && size > SIZE_MAX / nmemb)\n'
+            '+        serverPanic("ValkeyModule_Calloc(%zu, %zu) overflows", nmemb, size);\n')
+    cause = "crash: ValkeyModule_Calloc(9223372036854775809, 2) overflows #module.c:590"
+    assert walk.intended_crash(diff, cause)
+    assert not walk.intended_crash(diff.replace("+  ", "   "), cause)  # a line the change keeps, not adds
+    assert not walk.intended_crash('+    serverAssert(x > 0);\n', "crash: assertion failed: 'x > 0' is not true")
+    finding = {"builds": {"parent": False, "merge": True, "unstable": True}, "verdict": "intended by #5155: a panic"}
+    assert not walk.files(finding) and walk.files({**finding, "verdict": "introduced by #5155"})

@@ -666,8 +666,25 @@ def verdict(builds: dict[str, bool], pr: str) -> str:
 
 
 def files(finding: dict[str, Any]) -> bool:
-    """The one filing rule: a finding is filed when unstable shows it, after a rerun."""
-    return bool(finding["builds"]["unstable"])
+    """The one filing rule: a finding is filed when unstable shows it, after a rerun, unless the change meant it."""
+    return bool(finding["builds"]["unstable"]) and not finding.get("verdict", "").startswith("intended by")
+
+
+_STRING_RE = re.compile(r'"((?:[^"\\]|\\.){12,})"')
+_FORMAT_RE = re.compile(r"%[-+ #0-9.*]*(?:hh|h|ll|l|z|j|t|L)?[a-zA-Z]")
+
+
+def intended_crash(diff: str, cause: str) -> bool:
+    """Whether a crash's message is a string the change adds: a panic it raises on purpose (serverPanic's format,
+    its arguments in place of %zu and the like). Assertions are not: a new assert that fires is the bug it guards."""
+    for line in diff.splitlines():
+        if not line.startswith("+") or line.startswith("+++"):
+            continue
+        for literal in _STRING_RE.findall(line):
+            parts = [re.escape(part) for part in _FORMAT_RE.split(literal)]
+            if sum(len(part) for part in _FORMAT_RE.split(literal)) >= 12 and re.search(".+?".join(parts), cause):
+                return True
+    return False
 
 
 def cli_steps(doc: dict[str, Any], experiments: dict[str, str], module: str) -> list[str] | None:
@@ -971,6 +988,10 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
                 finding.update(scenario=test, verdict=verdict(finding["builds"], pr))
                 if finding["rule"] == "regressed-fix":
                     finding["verdict"] = f"the fix of {pr} regressed" if finding["builds"]["unstable"] else "not reproduced"
+                if (finding["rule"] == "crash" and finding["builds"]["merge"] and not finding["builds"]["parent"]
+                        and intended_crash(change.diff, finding["detail"])):
+                    # The change raises this panic on purpose, as valkey#5155's ValkeyModule_Calloc does on overflow.
+                    finding["verdict"] = f"intended by {pr}: a panic the change adds"
                 builds = finding["builds"]
                 result["recall"] = result["recall"] or (builds["parent"] and not builds["merge"]
                                                         and finding["rule"] != "regressed-fix")
