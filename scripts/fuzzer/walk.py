@@ -116,6 +116,10 @@ MAX_MISSES = 10
 # Seeds each test runs with on unstable: its own and the next ones.
 HUNT_SEEDS = 3
 RUN_TIMEOUT_S = 900
+# What Claude is told when its timeout cuts it off, in the same session, and how long it has to answer.
+TIME_UP_PROMPT = ("Your time is up. Stop reading and answer now with what you have: the one JSON object the first "
+                  "message asks for, or its \"reason\" alone if you found no test worth writing.")
+TIME_UP_TIMEOUT_S = 600
 # The tests asked for: MIN_TESTS for a change of a few lines, one more per 50 changed lines of code and per file
 # of code past the first, at most MAX_TESTS.
 MIN_TESTS, MAX_TESTS = 3, 15
@@ -761,6 +765,18 @@ def render_issue(finding: dict[str, Any], merge: dict[str, Any], context: dict[s
     return render
 
 
+def session_id(stdout: str) -> str | None:
+    """The session id Claude's stream names, so a run cut off by its timeout can be resumed."""
+    for line in stdout.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(event, dict) and event.get("session_id"):
+            return str(event["session_id"])
+    return None
+
+
 def claude_cost(stdout: str) -> float:
     """The cost Claude's stream reports for one run (its ``result`` events' ``total_cost_usd``)."""
     total = 0.0
@@ -795,9 +811,21 @@ def run(merge: dict[str, Any], *, gh: Any, token: str, publisher: Any, fuzzer_re
         result["cost_usd"] = round(cost[0], 4)
         (folder / RESULT_FILE).write_text(json.dumps(result, indent=2), encoding="utf-8")
 
+    def agent(prompt: str, workdir: Path, resume: str | None = None) -> AgentRunResult:
+        if runner:
+            return runner(prompt, workdir)
+        return run_agent("fuzzer_proposal_readonly", prompt, cwd=str(workdir), resume=resume,
+                         timeout=TIME_UP_TIMEOUT_S if resume else None)
+
     def ask(prompt: str, workdir: Path) -> AgentRunResult:
-        answer = runner(prompt, workdir) if runner else run_agent("fuzzer_proposal_readonly", prompt, cwd=str(workdir))
+        answer = agent(prompt, workdir)
         cost[0] += claude_cost(answer.stdout)
+        # A long reading of a complex change can run out the clock before it answers: what it read is kept.
+        session = session_id(answer.stdout) if answer.stderr.startswith("timeout") else None
+        if session:
+            logger.warning("Claude ran out of time; asking it to answer with what it has")
+            answer = agent(TIME_UP_PROMPT, workdir, resume=session)
+            cost[0] += claude_cost(answer.stdout)
         return answer
 
     save()

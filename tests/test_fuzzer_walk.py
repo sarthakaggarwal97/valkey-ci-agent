@@ -505,7 +505,7 @@ def _scenario(text: str) -> dict:
 
 
 def _walk_merge(monkeypatch, tmp_path, fuzz, *rounds, merge=None, diff="diff", extras=None, counts=None,
-                build=None):
+                build=None, runner=None):
     """walk.run on one merge with fakes: Claude proposes each round's docs (using proposed.lset), the last again when
     asked more often, and ``fuzz`` runs them. ``extras`` collects the extra section of each round's prompt."""
     merge = merge or _merge()
@@ -545,7 +545,7 @@ def _walk_merge(monkeypatch, tmp_path, fuzz, *rounds, merge=None, diff="diff", e
     result = walk.run(merge, gh=MagicMock(), token="t", publisher=publisher, fuzzer_repo="o/valkey-fuzzer",
                       fuzzer_dir=tmp_path, fuzzer_bin="valkey-fuzzer", heads={walk.VALKEY_REPO: "c" * 40},
                       unstable=tmp_path / "unstable", module_head=None, out=tmp_path / "out", work=tmp_path / "work",
-                      tests_url="https://t", runner=lambda prompt, workdir: answer)
+                      tests_url="https://t", runner=runner or (lambda prompt, workdir: answer))
     return result, publisher
 
 
@@ -611,6 +611,30 @@ def test_a_merge_is_proven_hunted_rerun_and_filed_by_the_rule(monkeypatch, tmp_p
         "experiments/proposed.lset.yaml", "result.json", f"scenarios/{test}.yaml",
         f"scenarios/{missed['scenario_id']}.yaml"])
     assert json.loads((folder / "result.json").read_text()) == result
+
+
+def test_claude_cut_off_by_its_timeout_answers_in_the_same_session(monkeypatch, tmp_path):
+    # valkey-search #1650: Claude read the change for 50 minutes, timed out, and everything it read was lost.
+    test = _scenario("seed: 10\nexperiment: {id: proposed.lset}\ndeployment: {mode: standalone}\n")
+    prompts = []
+
+    def runner(prompt, workdir):
+        prompts.append(prompt)
+        cut = len(prompts) == 1
+        stream = [json.dumps({"type": "system", "subtype": "init", "session_id": "s-1"})]
+        if not cut:
+            stream.append(json.dumps({"type": "result", "total_cost_usd": 0.5}))
+        return AgentRunResult(profile="fuzzer_proposal_readonly", stdout="\n".join(stream),
+                              stderr="timeout after 3000s" if cut else "", returncode=int(cut), prompt_sha256="",
+                              cwd="", allowed_tools="", model="", started_at="", finished_at="")
+
+    def fuzz(fuzzer_bin, doc, seed, *, candidate, compare, core, experiment_dir, run_dir):
+        return {"status": "PASS", "reason": None, "reached": True, "parent_exited": False,
+                "reached_commands": set(), "found": {}}
+
+    result, _ = _walk_merge(monkeypatch, tmp_path, fuzz, (test,), runner=runner)
+    assert prompts[:2] == ["propose", walk.TIME_UP_PROMPT]
+    assert result["cost_usd"] >= 0.5
 
 
 def test_a_test_skipped_as_unsupported_is_dropped_and_its_reason_shown(monkeypatch, tmp_path):

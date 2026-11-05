@@ -62,8 +62,11 @@ def run_claude_code(
     allowed_tools: str = "Read,Edit,MultiEdit,Write,Bash,Glob,Grep",
     disallowed_tools: str | None = None,
     env_allowlist: tuple[str, ...] | None = None,
+    resume: str | None = None,
 ) -> tuple[str, str, int]:
     """Run claude CLI and return (stdout, stderr, exit_code).
+
+    ``resume`` continues the session of that id, from the same ``cwd``, with ``prompt`` as its next message.
 
     Requires ``claude`` on PATH and Bedrock credentials in the
     environment (CLAUDE_CODE_USE_BEDROCK=1 + AWS creds).
@@ -117,6 +120,8 @@ def run_claude_code(
         cmd.extend(["--model", resolved_model])
     if effort:
         cmd.extend(["--effort", effort])
+    if resume:
+        cmd.extend(["--resume", resume])
 
     logger.info("Running Claude Code in %s (timeout %ds)", cwd or ".", timeout)
     started = time.monotonic()

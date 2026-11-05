@@ -194,6 +194,7 @@ def run_agent(
     timeout: int | None = None,
     model: str | None = None,
     evidence_dir: str | Path | None = None,
+    resume: str | None = None,
 ) -> AgentRunResult:
     """Run Claude Code under a named capability profile.
 
@@ -217,6 +218,7 @@ def run_agent(
         allowed_tools=profile.allowed_tools,
         disallowed_tools=profile.disallowed_tools,
         env_allowlist=profile.env_allowlist,
+        resume=resume,
     )
     finished_at = datetime.now(timezone.utc).isoformat()
     result = AgentRunResult(
