@@ -1,11 +1,11 @@
 # Fuzzer walk
 
-Updated 2026-11-05T14:29+00:00.
+Updated 2026-11-05T15:30+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 135 | 2356 | #2250 (2026-10-21) | 135 | 19.3 |
-| valkey-io/valkey-bloom | 108 | 1 | ce516d0ef6e3 (2024-04-26) | 108 | 15.4 |
+| valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 109 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 62 | 8.9 |
 | valkey-io/valkey-search | 77 | 591 | #1362 (2026-09-12) | 77 | 11.0 |
 
@@ -38,10 +38,9 @@ Updated 2026-11-05T14:29+00:00.
 
 ### valkey-io/valkey-bloom
 
-[2026-11-05T14:29:27+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42041481600): 2 merge(s) tested, 0 without a code change.
+[2026-11-05T15:30:56+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42045510453): 1 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-bloom@5ebc1cbe42d9](https://github.com/valkey-io/valkey-bloom/commit/5ebc1cbe42d95dc08069f1accda719136ca1cb89) ([tests](tests/valkey-bloom/5ebc1cbe4/)): Optimize bloom operations to use a reference to already created Bloom objects. Update RDB load/save: 2 of 4 test(s) reached the change; crash, predates 5ebc1cbe42d9, since fixed (recorded); crash, predates 5ebc1cbe42d9, since fixed (recorded); crash, predates 5ebc1cbe42d9, since fixed (recorded); crash, predates 5ebc1cbe42d9, since fixed (recorded)
-- [valkey-io/valkey-bloom@5237a1008041](https://github.com/valkey-io/valkey-bloom/commit/5237a10080413fc9f1082e7083f167c4aaadcb1f): to retry, `if [ ! -f Cargo.lock ]; then` failed in parent (exit 101): error: could not find `Cargo.toml` in `/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent` or any parent directory
+- [valkey-io/valkey-bloom@5237a1008041](https://github.com/valkey-io/valkey-bloom/commit/5237a10080413fc9f1082e7083f167c4aaadcb1f): Initial commit: error: `if [ ! -f Cargo.lock ]; then` failed in parent (exit 101): error: could not find `Cargo.toml` in `/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent` or any parent directory
 
 ### valkey-io/valkey-json
 
@@ -103,7 +102,6 @@ Updated 2026-11-05T14:29+00:00.
 
 ## Retries
 
-- [valkey-io/valkey-bloom@5237a1008041](https://github.com/valkey-io/valkey-bloom/commit/5237a10080413fc9f1082e7083f167c4aaadcb1f): attempt 2 of 3, `if [ ! -f Cargo.lock ]; then` failed in parent (exit 101): error: could not find `Cargo.toml` in `/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent` or any parent directory
 - [valkey-io/valkey-search#1083](https://github.com/valkey-io/valkey-search/pull/1083): attempt 0 of 3, the job left no result
 - [valkey-io/valkey#5173](https://github.com/valkey-io/valkey/pull/5173): attempt 0 of 3, the job left no result
 - [valkey-io/valkey#5030](https://github.com/valkey-io/valkey/pull/5030): attempt 0 of 3, the job left no result
