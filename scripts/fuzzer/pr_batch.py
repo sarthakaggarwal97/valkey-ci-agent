@@ -173,7 +173,32 @@ if grep -q -- '--use-system-modules)' build.sh; then ./build.sh --use-system-mod
              "on its num_docs or indexing state before any FT.SEARCH.",
     ),
     "valkey-bloom": Module(
-        branch="unstable", file="target/release/libvalkey_bloom.so", build="cargo build --release",
+        branch="unstable", file="target/release/libvalkey_bloom.so",
+        # Without a Cargo.lock, valkey-module resolves to its newest release, whose API older merges predate
+        # (0.1.15 renamed get_redis_version): the valkey-module crates are taken as they were at the commit.
+        build="""if [ ! -f Cargo.lock ]; then
+  cargo generate-lockfile -q
+  python3 - "$(git log -1 --format=%cI)" <<'EOF'
+import json, subprocess, sys, urllib.request
+from datetime import datetime
+
+before = datetime.fromisoformat(sys.argv[1])
+for crate in ("valkey-module", "valkey-module-macros", "valkey-module-macros-internals"):
+    pkgid = subprocess.run(["cargo", "pkgid", crate], capture_output=True, text=True)
+    if pkgid.returncode != 0:
+        continue
+    series = pkgid.stdout.strip().rsplit("@", 1)[1].split(".")[:2]
+    request = urllib.request.Request(f"https://crates.io/api/v1/crates/{crate}/versions",
+                                     headers={"User-Agent": "valkey-ci-agent-walk"})
+    versions = [v for v in json.load(urllib.request.urlopen(request))["versions"]
+                if not v["yanked"] and v["num"].split(".")[:2] == series
+                and datetime.fromisoformat(v["created_at"]) <= before]
+    if versions:
+        newest = max(versions, key=lambda v: v["created_at"])["num"]
+        subprocess.run(["cargo", "update", "-q", "-p", crate, "--precise", newest], check=True)
+EOF
+fi
+cargo build --release""",
         note="For valkey-bloom (BF.ADD, BF.MADD, BF.EXISTS, BF.MEXISTS, BF.CARD, BF.RESERVE, BF.INFO, BF.INSERT, "
              "BF.LOAD), a filter is probabilistic: BF.EXISTS of an item never added may answer 1, so never expect "
              "a reply about an absent item; BF.INFO's sizes follow the build's internals.",
