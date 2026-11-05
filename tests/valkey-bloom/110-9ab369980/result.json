@@ -6,7 +6,7 @@
   "pr_repo": "valkey-io/valkey-bloom",
   "subject": "Match bloom memory tracking by small over count of bytes after a defrag operation (#110)",
   "date": "2026-07-22",
-  "unstable": "c86f6ee511e1a36488feb3b8e62093e69195d332",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
   "module_head": "74d7eb17c9ef25d36223120f46fd406ec5d52862",
   "outcome": "tested",
   "proposed": 2,
@@ -15,7 +15,7 @@
   "dropped": 2,
   "recall": false,
   "coverage": null,
-  "cost_usd": 13.2226,
+  "cost_usd": 11.7453,
   "findings": [],
   "recorded": [
     {
@@ -25,7 +25,7 @@
       "reason": "expect-disputed"
     },
     {
-      "scenario": "ai-3c52039cba7e",
+      "scenario": "ai-1db6a672ea88",
       "build": "merge",
       "status": "ERROR",
       "reason": "expect-disputed"

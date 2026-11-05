@@ -1,11 +1,11 @@
 # Fuzzer walk
 
-Updated 2026-11-05T20:22+00:00.
+Updated 2026-11-05T20:29+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 179 | 2312 | #3413 (2026-10-11) | 179 | 25.6 |
-| valkey-io/valkey-bloom | 108 | 1 | ce516d0ef6e3 (2024-04-26) | 108 | 15.4 |
+| valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 109 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 62 | 8.9 |
 | valkey-io/valkey-search | 100 | 568 | #1084 (2026-09-06) | 100 | 14.3 |
 
@@ -38,8 +38,9 @@ Updated 2026-11-05T20:22+00:00.
 
 ### valkey-io/valkey-bloom
 
-[2026-11-05T18:09:08+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42081336814): 0 merge(s) tested, 0 without a code change.
+[2026-11-05T20:29:25+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42086303278): 1 merge(s) tested, 0 without a code change.
 
+- [valkey-io/valkey-bloom#110](https://github.com/valkey-io/valkey-bloom/pull/110) ([tests](tests/valkey-bloom/110-9ab369980/)): Match bloom memory tracking by small over count of bytes after a defrag operation (#110): 0 of 2 test(s) reached the change
 
 ### valkey-io/valkey-json
 
@@ -73,10 +74,10 @@ Updated 2026-11-05T20:22+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 191 of 247 tested (77%)
+- Merges whose tests reached the change: 191 of 248 tested (77%)
 - Changed-line coverage: median 100% of 97 merge(s) measured, 4 under 50%
 - Recall: 54 parents flagged of 68 fix merges
-- Claude: $1447.15 in the last 24 hours, $1447.15 in the last 7 days, $1447.15 in all
+- Claude: $1458.89 in the last 24 hours, $1458.89 in the last 7 days, $1458.89 in all
 - Issues filed: 25
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
@@ -106,7 +107,6 @@ Updated 2026-11-05T20:22+00:00.
 
 ## Retries
 
-- [valkey-io/valkey-bloom#110](https://github.com/valkey-io/valkey-bloom/pull/110): attempt 0 of 3, walked before every test that ran to its end hunted (23753e31): walked again
 - [valkey-io/valkey-search#1364](https://github.com/valkey-io/valkey-search/pull/1364): attempt 1 of 3, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
 - [valkey-io/valkey#5173](https://github.com/valkey-io/valkey/pull/5173): attempt 0 of 3, the job left no result
 - [valkey-io/valkey#5110](https://github.com/valkey-io/valkey/pull/5110): attempt 0 of 3, walked before every test that ran to its end hunted (23753e31): walked again
