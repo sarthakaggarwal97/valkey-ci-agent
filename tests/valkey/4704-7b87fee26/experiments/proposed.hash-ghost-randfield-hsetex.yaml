@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.hash-ghost-randfield-hsetex
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Drives the ignore-TTL brackets the conversion fix interacts with: HRANDFIELD's
+    hashtable fair-random probe rejecting expired-but-unreaped fields that the fixed
+    listpack-to-hashtable conversion carried over, and HSETEX with an already-past
+    expiry deleting those ghost fields under the ignore-TTL bracket, on both hashtable
+    and listpack encodings.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ghosts
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 128, hash-max-listpack-value: 64}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HPEXPIRE, h, 1, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HEXISTS, h, f1], expect: {equals: 0}, wait_s: 10}
+    - {command: [HLEN, h], expect: {equals: 2}}
+    - {command: [HSET, h, f2, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      expect: {equals: 0}}
+    - {command: [OBJECT, ENCODING, h], compare: skip}
+    - {command: [HLEN, h], expect_difference: true, expect: {equals: 2}}
+    - {command: [HRANDFIELD, h], expect: {equals: f2}}
+    - {command: [HRANDFIELD, h, -3], expect: {equals: [f2, f2, f2]}}
+    - {command: [HPEXPIRE, h, 1, FIELDS, 1, f2], expect: {equals: [1]}}
+    - {command: [HEXISTS, h, f2], expect: {equals: 0}, wait_s: 10}
+    - {command: [HLEN, h], expect_difference: true, expect: {equals: 2}}
+    - {command: [HRANDFIELD, h], expect: {exists: false}}
+    - {command: [HSETEX, h, EXAT, 1, FIELDS, 2, f1, x, f2, x], expect: {equals: 1}}
+    - {command: [EXISTS, h], expect: {equals: 0}}
+    - {command: [HSET, lp, a, 1, b, 2], expect: {equals: 2}}
+    - {command: [HPEXPIRE, lp, 1, FIELDS, 1, a], expect: {equals: [1]}}
+    - {command: [HEXISTS, lp, a], expect: {equals: 0}, wait_s: 10}
+    - {command: [OBJECT, ENCODING, lp], compare: skip}
+    - {command: [HSETEX, lp, EXAT, 1, FIELDS, 1, missing, v], expect: {equals: 1}}
+    - {command: [HSETEX, lp, EXAT, 1, FIELDS, 1, a, v], expect: {equals: 1}}
+    - {command: [HGET, lp, a], expect: {exists: false}}
+    - {command: [HGET, lp, b], expect: {equals: "2"}}
+    - {command: [HLEN, lp], expect: {equals: 1}}
+    - {command: [HSET, leak, g1, v1], expect: {equals: 1}}
+    - {command: [HPEXPIRE, leak, 1, FIELDS, 1, g1], expect: {equals: [1]}}
+    - {command: [HEXISTS, leak, g1], expect: {equals: 0}, wait_s: 10}
+    - {command: [HLEN, leak], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ghosts.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ghosts}

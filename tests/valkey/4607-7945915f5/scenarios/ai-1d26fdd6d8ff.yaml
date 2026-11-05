@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 11387e50c67a..7945915f537b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1d26fdd6d8ff
+seed: 12
+experiment:
+  id: proposed.delex-predicates
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

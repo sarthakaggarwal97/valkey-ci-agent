@@ -1,0 +1,24 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-latency-60s
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark reports latencies above 3s truthfully up to the new
+    60s histogram cap; the parent clamps them to ~3000.319 ms
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 120
+    ignore:
+    - '[^\r\n]*\r'
+    - '\d+\.\d+ requests per second'
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 1, -n, 1, -q, DEBUG, SLEEP, 4],
+      expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: "p50=4"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 1, -n, 1, -q, DEBUG, SLEEP, 61],
+      expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: "p50=600"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

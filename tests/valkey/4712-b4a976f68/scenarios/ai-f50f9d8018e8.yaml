@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 47c9839b2263..b4a976f68f22.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f50f9d8018e8
+seed: 4712
+experiment:
+  id: proposed.exec-getkeys-static-buffer
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

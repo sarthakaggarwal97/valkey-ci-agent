@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.delex-option-rejects
+deployment:
+  modes: [standalone]
+metadata:
+  description: DELEX rejects EX/PX/EXAT/PXAT and foreign options, arity errors, case-insensitive
+    predicates, keyword-like keys and values, COMMAND GETKEYS
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rejects
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [SET, e1, v], expect: {equals: OK}}
+    - {command: [DELEX, e1, EX, 100], expect_difference: true, expect: {error: syntax}}
+    - {command: [DELEX, e1, PX, 100], expect_difference: true, expect: {error: syntax}}
+    - {command: [DELEX, e1, EXAT, 99999999999], expect_difference: true, expect: {
+        error: syntax}}
+    - {command: [DELEX, e1, PXAT, 99999999999], expect_difference: true, expect: {
+        error: syntax}}
+    - {command: [DELEX, e1, ex, 100], expect_difference: true, expect: {error: syntax}}
+    - {command: [DELEX, e1, pxat, 99999999999], expect_difference: true, expect: {
+        error: syntax}}
+    - {command: [DELEX, e1, KEEPTTL, v], expect_difference: true, expect: {error: syntax}}
+    - {command: [DELEX, e1, NX, v], expect_difference: true, expect: {error: syntax}}
+    - {command: [DELEX, e1, XX, v], expect_difference: true, expect: {error: syntax}}
+    - {command: [DELEX, e1, GET, v], expect_difference: true, expect: {error: syntax}}
+    - {command: [DELEX, e1, v, IFEQ], expect_difference: true, expect: {error: syntax}}
+    - {command: [GET, e1], expect: {equals: v}}
+    - {command: [DELEX, e1], expect_difference: true, expect: {error: "wrong number\
+          \ of arguments"}}
+    - {command: [DELEX, e1, IFEQ], expect_difference: true, expect: {error: "wrong\
+          \ number of arguments"}}
+    - {command: [DELEX, e1, IFEQ, v, extra], expect_difference: true, expect: {error: "wrong\
+          \ number of arguments"}}
+    - {command: [SET, c1, v], expect: {equals: OK}}
+    - {command: [delex, c1, ifeq, v], expect_difference: true, expect: {equals: 1}}
+    - {command: [SET, c2, v], expect: {equals: OK}}
+    - {command: [DELEX, c2, IfNe, w], expect_difference: true, expect: {equals: 1}}
+    - {command: [SET, kw, IFNE], expect: {equals: OK}}
+    - {command: [DELEX, kw, IFEQ, IFNE], expect_difference: true, expect: {equals: 1}}
+    - {command: [SET, ifeq, ifeq], expect: {equals: OK}}
+    - {command: [DELEX, ifeq, IFEQ, ifeq], expect_difference: true, expect: {equals: 1}}
+    - {command: [COMMAND, GETKEYS, DELEX, kx, IFEQ, vx], expect_difference: true,
+      expect: {equals: [kx]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [rejects.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rejects}

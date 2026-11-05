@@ -1,0 +1,46 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7945915f537b87e35392725b2f4e9de57ba7e2d9",
+  "parent": "11387e50c67ab22dce61f093be6c4af8087a189f",
+  "pr": 4607,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add DELEX command with conditional predicates (#4607)",
+  "date": "2026-09-21",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 10,
+  "proven": 7,
+  "hunted": 7,
+  "dropped": 5,
+  "recall": true,
+  "coverage": {
+    "lines": 24,
+    "executed": 24,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.4589,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-5b183d4b009d",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-5269f1b5a6ce",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-6b8fe2d7556e",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    }
+  ]
+}

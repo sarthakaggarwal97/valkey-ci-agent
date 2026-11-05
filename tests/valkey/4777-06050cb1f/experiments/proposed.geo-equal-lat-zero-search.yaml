@@ -1,0 +1,43 @@
+id: proposed.geo-equal-lat-zero-search
+extends: [valkey.liveness]
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    On the fixed build, zero-size-box and zero-radius searches centered exactly on
+    a member must return that member with distance 0.0000 on every platform: the fixed
+    geohashGetLatDistance computes deg_rad(lat2 - lat1), exactly 0 for equal latitudes
+    regardless of FMA contraction, where the parent's per-latitude conversion could
+    leave a tiny nonzero remainder.
+components:
+- use: valkey.action.commands
+  id: geo
+  config:
+    timeout_s: 15
+    commands:
+    - {command: [DEL, points, dest], expect: {max: 2}}
+    - {command: [GEOADD, points, "-122.40710645914077759", "37.79430076631935975",
+        position], expect: {equals: 1}}
+    - {command: [GEOADD, points, "10.3", "80.1", north], expect: {equals: 1}}
+    - {command: [GEOADD, points, "5.5", "-45.7", south], expect: {equals: 1}}
+    - {command: [GEOSEARCH, points, FROMMEMBER, position, BYBOX, "0", "0", m, ASC,
+        WITHDIST], expect: {equals: [[position, "0.0000"]]}}
+    - {command: [GEOSEARCH, points, FROMLONLAT, "-122.40710645914077759", "37.79430076631935975",
+        BYBOX, "0", "0", mi, ASC, WITHDIST], expect: {equals: [[position, "0.0000"]]}}
+    - {command: [GEOSEARCH, points, FROMMEMBER, position, BYRADIUS, "0", m, ASC, WITHDIST],
+      expect: {equals: [[position, "0.0000"]]}}
+    - {command: [GEOSEARCH, points, FROMLONLAT, "-122.40710645914077759", "37.79430076631935975",
+        BYRADIUS, "0", km, ASC, WITHDIST], expect: {equals: [[position, "0.0000"]]}}
+    - {command: [GEOSEARCH, points, FROMMEMBER, north, BYBOX, "0", "0", km, ASC],
+      expect: {equals: [north]}}
+    - {command: [GEOSEARCH, points, FROMMEMBER, south, BYBOX, "0", "0", ft, ASC],
+      expect: {equals: [south]}}
+    - {command: [GEORADIUSBYMEMBER, points, position, "0", m, ASC], expect: {equals: [
+          position]}}
+    - {command: [GEODIST, points, position, position, m], expect: {equals: "0.0000"}}
+    - {command: [GEOSEARCHSTORE, dest, points, FROMMEMBER, position, BYBOX, "0", "0",
+        m], expect: {equals: 1}}
+    - {command: [ZRANGE, dest, "0", "-1"], expect: {equals: [position]}}
+required_events: [geo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: geo}

@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-05T22:32+00:00.
+Updated 2026-11-05T22:45+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 204 | 2288 | #4778 (2026-09-25) | 204 | 29.1 |
+| valkey-io/valkey | 233 | 2259 | #4506 (2026-09-16) | 233 | 33.3 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 109 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 62 | 8.9 |
 | valkey-io/valkey-search | 125 | 543 | #946 (2026-08-19) | 125 | 17.9 |
@@ -13,28 +13,28 @@ Updated 2026-11-05T22:32+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-05T21:33:12+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42086130846): 20 merge(s) tested, 6 without a code change.
+[2026-11-05T22:45:05+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42113690922): 20 merge(s) tested, 9 without a code change.
 
-- [valkey-io/valkey#4983](https://github.com/valkey-io/valkey/pull/4983) ([tests](tests/valkey/4983-7836c5afe/)): Fix for XINFO GROUPS reports too-high lag after XTRIM removes unread … (#4983): 3 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#5173](https://github.com/valkey-io/valkey/pull/5173) ([tests](tests/valkey/5173-b14acea0a/)): Reject a non-positive --hotkeys-count in valkey-cli (#5173): 1 of 1 test(s) reached the change, coverage 100%; crash, fixed by #5173 (recorded)
-- [valkey-io/valkey#5110](https://github.com/valkey-io/valkey/pull/5110) ([tests](tests/valkey/5110-130b36084/)): Stop zset ops from rewriting keyspace set members during lookups (#5110): 1 of 3 test(s) reached the change, coverage 60%; crash, fixed by #5110 (recorded); regressed-fix, not reproduced (recorded)
-- [valkey-io/valkey#4214](https://github.com/valkey-io/valkey/pull/4214) ([tests](tests/valkey/4214-035a9ee25/)): fix(acl): prevent NULL pointer dereference on malformed selector in ACL file (#4214): declined: The fix (src/acl.c:3244) adds a missing `sdsfreesplitres(argv, argc); continue;` so that when ACLMergeSelectorArguments returns NULL on a user line with an unmatched parenthesis in a selector, the loader stops instead of falling through to `for (j=0; j<merged_argc; j++) acl_args[j]=...` wi
-- [valkey-io/valkey#3413](https://github.com/valkey-io/valkey/pull/3413) ([tests](tests/valkey/3413-b3a135637/)): Optimize infoCommand with SDS pre-allocation (#3413): declined: The change adds a single sdsMakeRoomFor(info, 4096) call to pre-allocate the SDS buffer used to build the INFO reply. sdsMakeRoomFor only grows allocated capacity and leaves the string length and contents untouched, so the INFO output and every reply are byte-identical to the parent build;
-- [valkey-io/valkey#4707](https://github.com/valkey-io/valkey/pull/4707) ([tests](tests/valkey/4707-2fce936b3/)): Skip raw TSC when the kernel clocksource is not tsc (#4707): 0 of 2 test(s) reached the change, coverage 75%
-- [valkey-io/valkey#4787](https://github.com/valkey-io/valkey/pull/4787) ([tests](tests/valkey/4787-1db8edcbe/)): geohash code cleanup (#4787): declined: The change only deletes the unused wrapper function geohashDecodeWGS84 (which merely forwarded to geohashDecodeType) and its header declaration. No call sites are modified, so no code path, command reply, encoding, or data format changes; it is a pure dead-code refactor with no observable 
-- [valkey-io/valkey#4765](https://github.com/valkey-io/valkey/pull/4765) ([tests](tests/valkey/4765-ff9481cfb/)): Restore replica flow control with I/O threads enabled (#4765): 0 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4657](https://github.com/valkey-io/valkey/pull/4657) ([tests](tests/valkey/4657-f213a6750/)): Build: make the Make / CMake gtest build link on macOS (#4657): declined: The change only modifies the gtest unit-test build machinery (src/unit CMakeLists.txt and Makefile, plus the symbol-wrapping Python scripts) so the unit-test binary links on macOS. It compiles no code into valkey-server or any shipped tool and changes no runtime behaviour, replies, persist
-- [valkey-io/valkey#4800](https://github.com/valkey-io/valkey/pull/4800) ([tests](tests/valkey/4800-642196f63/)):  bracketed IPv6 cluster CLI address parsing (#4800): 1 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3645](https://github.com/valkey-io/valkey/pull/3645): to retry, 3 of 3 run(s) could not start: the run could not start: environment acquisition failed
-- [valkey-io/valkey#4424](https://github.com/valkey-io/valkey/pull/4424) ([tests](tests/valkey/4424-2a823011b/)): Resolve slot from key for module and arbitrary-key commands (#4424): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4783](https://github.com/valkey-io/valkey/pull/4783) ([tests](tests/valkey/4783-28ecc5142/)): Fix HEXPIRE family command summaries (#4783): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#4710](https://github.com/valkey-io/valkey/pull/4710) ([tests](tests/valkey/4710-278384274/)): Fix IO thread shutdown cleanup leak (#4710): 0 of 10 test(s) reached the change, coverage 40%
-- [valkey-io/valkey#4775](https://github.com/valkey-io/valkey/pull/4775) ([tests](tests/valkey/4775-9b270b6d8/)): Bound the time spent evicting keys from the tracking table (#4775): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4567](https://github.com/valkey-io/valkey/pull/4567) ([tests](tests/valkey/4567-329309165/)): Fix valkey-benchmark spin on would-block writes (#4567): declined: no proposed test validated
-- [valkey-io/valkey#4754](https://github.com/valkey-io/valkey/pull/4754) ([tests](tests/valkey/4754-51b3f0c87/)): Support streaming-compressed RDB preambles in AOF (#4754): 2 of 19 test(s) reached the change, coverage 75%
-- [valkey-io/valkey#4632](https://github.com/valkey-io/valkey/pull/4632) ([tests](tests/valkey/4632-722305525/)): bgiteration hardening (#4632): 0 of 5 test(s) reached the change, coverage 100%; crash, introduced and since fixed (recorded); crash, fixed by #4632 (recorded)
-- [valkey-io/valkey#4759](https://github.com/valkey-io/valkey/pull/4759) ([tests](tests/valkey/4759-026d29167/)): Fix inline protocol parser stalling on an embedded '\0' (#4759): 0 of 4 test(s) reached the change, coverage 0%
-- [valkey-io/valkey#4749](https://github.com/valkey-io/valkey/pull/4749) ([tests](tests/valkey/4749-7fe7ca45f/)): Decouple `rdbcompression` (disk format) from `repl-compression` (wire format) (#4749): 2 of 24 test(s) reached the change, coverage 79%
+- [valkey-io/valkey#3645](https://github.com/valkey-io/valkey/pull/3645) ([tests](tests/valkey/3645-f4cbd1c5e/)): fix: Reject module writes during client pause to prevent crash (#3645): 1 of 7 test(s) reached the change, coverage 25%; crash, fixed by #3645 (recorded); [crash, appeared after #3645](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/70); crash, introduced and since fixed (recorded)
+- [valkey-io/valkey#4777](https://github.com/valkey-io/valkey/pull/4777) ([tests](tests/valkey/4777-06050cb1f/)): Fix geohashGetLatDistance() when latitudes are equal (#4777): 2 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3491](https://github.com/valkey-io/valkey/pull/3491) ([tests](tests/valkey/3491-c79f17d25/)): zset: add in-place fast path for score updates in listpack encoding (#3491): 0 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3157](https://github.com/valkey-io/valkey/pull/3157) ([tests](tests/valkey/3157-60f3944c1/)): Increase valkey-benchmark max latency bucket to 60 seconds (#3157): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#4745](https://github.com/valkey-io/valkey/pull/4745) ([tests](tests/valkey/4745-019ec0bc2/)): Remove duplicate pointer-key hashtable callbacks (#4745): declined: Pure refactor with no observable behaviour change. In bgiteration.c the removed pointerHash was byte-for-byte Thomas Wang's 64-bit mix, which is exactly what the new shared hashtablePointerHash computes (wangHash64), and the removed pointerCompare equals the hashtable's NULL-callback defau
+- [valkey-io/valkey#4750](https://github.com/valkey-io/valkey/pull/4750) ([tests](tests/valkey/4750-77b00b2dd/)): bgiteration: fix barrier item count for swap/flush during termination (#4750): declined: The fix removes a double-decrement of bgIterator.barrier_items that only occurs when queued SWAPDB/FLUSHDB barrier items are drained during iterator termination. Those barrier items are queued exclusively for non-consistent background iterators: handleSwapdb (bgiteration.c:1801) queues SWA
+- [valkey-io/valkey#4752](https://github.com/valkey-io/valkey/pull/4752) ([tests](tests/valkey/4752-504562458/)): Remove duplicate clientsCronTcpIsClosing() call in clientsCron (#4752): declined: The change deletes a redundant second call to clientsCronTcpIsClosing() in clientsCron(); the same function is still called first in the per-client check chain (server.c:1301), and none of the checks between the two call sites (query/output buffer resize, expensive-client tracking) can cha
+- [valkey-io/valkey#3798](https://github.com/valkey-io/valkey/pull/3798) ([tests](tests/valkey/3798-f2bcd083d/)): ZSTD Support for Streaming Compression  (#3798): 1 of 12 test(s) reached the change, coverage 90%
+- [valkey-io/valkey#4739](https://github.com/valkey-io/valkey/pull/4739) ([tests](tests/valkey/4739-27c68f14f/)): Fix valkey-check-aof detection of Valkey RDB base files (#4739): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#4747](https://github.com/valkey-io/valkey/pull/4747) ([tests](tests/valkey/4747-eae50c20c/)): Regenerate commands.def for DELEX (#4747): 0 of 2 test(s) reached the change
+- [valkey-io/valkey#4607](https://github.com/valkey-io/valkey/pull/4607) ([tests](tests/valkey/4607-7945915f5/)): Add DELEX command with conditional predicates (#4607): 7 of 10 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#4738](https://github.com/valkey-io/valkey/pull/4738) ([tests](tests/valkey/4738-11387e50c/)): Persist OPENSSL_PREFIX across builds (#4738): declined: The change is build-system only: a single line in src/Makefile that writes OPENSSL_PREFIX into .make-settings during 'make persist-settings' so incremental rebuilds remember the OpenSSL location. It alters no server, command, replication, persistence, or tool behaviour — given identical bu
+- [valkey-io/valkey#4704](https://github.com/valkey-io/valkey/pull/4704) ([tests](tests/valkey/4704-7b87fee26/)): Preserve expired but unreaped fields across listpack-to-hashtable conversion (#4704): 6 of 6 test(s) reached the change, coverage 100%; crash, fixed by #4704 (recorded)
+- [valkey-io/valkey#4712](https://github.com/valkey-io/valkey/pull/4712) ([tests](tests/valkey/4712-b4a976f68/)): Fix execGetKeys() dropping the first 256 keys past the static buffer (#4712): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#4702](https://github.com/valkey-io/valkey/pull/4702) ([tests](tests/valkey/4702-00a8a1955/)): Attribute LZ4 codec context memory to client memory usage (#4702): 0 of 6 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#4716](https://github.com/valkey-io/valkey/pull/4716) ([tests](tests/valkey/4716-e082696cf/)): Document VALKEYMODULE_OPTIONS_HANDLE_FORKLESS (#4716): declined: The diff touches only comments in src/module.c: it adds documentation for VALKEYMODULE_OPTIONS_HANDLE_FORKLESS above VM_SetModuleOptions and corrects a stale flag name (HANDLE_FORKLESS_SAVE -> HANDLE_FORKLESS) in another comment. No code, constant, or behaviour changes, so there is no path
+- [valkey-io/valkey#4714](https://github.com/valkey-io/valkey/pull/4714) ([tests](tests/valkey/4714-f93169d8b/)): Deflake BgIterationTest.createAndCleanup (#4714): declined: The change modifies only src/unit/test_bgiteration.cpp, loosening a timing assertion (runtime_ms < 5 to < 1000) in the BgIterationTest.createAndCleanup unit test to deflake it in CI. It is a test-only change with no effect on Valkey server behavior, commands, replication, persistence, or t
+- [valkey-io/valkey#4654](https://github.com/valkey-io/valkey/pull/4654) ([tests](tests/valkey/4654-5c24e5d20/)): [Bug Fix] Echo the rejected request epoch in FAILOVER_AUTH_NACK (#4654): 0 of 9 test(s) reached the change, coverage 64%, 1 skipped (required capability 'host' is unsupported)
+- [valkey-io/valkey#4709](https://github.com/valkey-io/valkey/pull/4709) ([tests](tests/valkey/4709-bf8031274/)): Regenerate commands.def for the path hash command tips (#4709): 0 of 2 test(s) reached the change
+- [valkey-io/valkey#4703](https://github.com/valkey-io/valkey/pull/4703) ([tests](tests/valkey/4703-72049a302/)): Report the real error when a reply schema fails validation (#4703): declined: The change modifies only utils/req-res-log-validator.py, a Python developer/test utility that validates reply-schema logs; it alters error reporting in that script, not any behaviour of valkey-server, replication, cluster, or the shipped tools. The fuzzer exercises real servers and Valkey 
 
 ### valkey-io/valkey-bloom
 
@@ -73,11 +73,11 @@ Updated 2026-11-05T22:32+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 213 of 278 tested (77%)
-- Changed-line coverage: median 100% of 110 merge(s) measured, 6 under 50%
-- Recall: 62 parents flagged of 80 fix merges
-- Claude: $1691.20 in the last 24 hours, $1691.20 in the last 7 days, $1691.20 in all
-- Issues filed: 26
+- Merges whose tests reached the change: 221 of 291 tested (76%)
+- Changed-line coverage: median 100% of 120 merge(s) measured, 7 under 50%
+- Recall: 66 parents flagged of 85 fix merges
+- Claude: $1765.75 in the last 24 hours, $1765.75 in the last 7 days, $1765.75 in all
+- Issues filed: 27
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -104,7 +104,8 @@ Updated 2026-11-05T22:32+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/66
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/67
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/68
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/70
 
 ## Retries
 
-- [valkey-io/valkey#3645](https://github.com/valkey-io/valkey/pull/3645): attempt 1 of 3, 3 of 3 run(s) could not start: the run could not start: environment acquisition failed
+None.

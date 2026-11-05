@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "72049a302e0d8e6f0ca77ccba3c5b28c926e3e01",
+  "parent": "a84b2f5b9ae27f3799690cd3a778cc9907303c84",
+  "pr": 4703,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Report the real error when a reply schema fails validation (#4703)",
+  "date": "2026-09-16",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2349,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only utils/req-res-log-validator.py, a Python developer/test utility that validates reply-schema logs; it alters error reporting in that script, not any behaviour of valkey-server, replication, cluster, or the shipped tools. The fuzzer exercises real servers and Valkey binaries, none of which execute this script, so no scenario can reach the change and none is needed."
+}

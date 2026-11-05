@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c79f17d25103..06050cb1fc93.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-39f26f80e887
+seed: 4779
+experiment:
+  id: proposed.geo-equal-lat-zero-search
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

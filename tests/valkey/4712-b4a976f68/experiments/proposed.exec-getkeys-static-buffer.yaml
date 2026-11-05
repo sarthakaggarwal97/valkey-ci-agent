@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.exec-getkeys-static-buffer
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND GETKEYS on an EXEC with more than 256 conditions returns every
+    condition key in order, not garbage past the static buffer
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: getkeys
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - command: [COMMAND, GETKEYS, EXEC, NX, SENTINEL0, NX, f, NX, f, NX, f, NX, f,
+        NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX, f, NX,
+        f, NX, f, NX, f]
+      expect_difference: true
+      expect: {contains: SENTINEL0}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: getkeys}

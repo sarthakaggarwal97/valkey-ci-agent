@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "60f3944c14260f9462975d684c0f1dede93ebb5a",
+  "parent": "03f0c4b99ae30eef64ce3ca06ddd798a50ba1a70",
+  "pr": 3157,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Increase valkey-benchmark max latency bucket to 60 seconds (#3157)",
+  "date": "2026-09-24",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.8159,
+  "findings": [],
+  "recorded": []
+}

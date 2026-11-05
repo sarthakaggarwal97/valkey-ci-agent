@@ -1,0 +1,29 @@
+extends: [valkey.liveness]
+id: proposed.check-aof-live-valkey-base
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-aof on an RDB and a Multi Part AOF each side's own server
+    wrote (SAVE and CONFIG SET appendonly yes), the end-to-end path of the fix
+components:
+- use: valkey.action.tools
+  id: live-check
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, SET, foo, bar], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SAVE], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-check-aof, args: [dump.rdb], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "RDB preamble is OK"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, appendonly, yes], expect: {
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, -r, 5, -i, 1, PING], expect: {stdout: {
+          contains: PONG}}}
+    - {tool: valkey-check-aof, args: [appendonlydir/appendonly.aof.manifest], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "Start to check BASE AOF (RDB\
+            \ format)"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: live-check}

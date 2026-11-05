@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 03f0c4b99ae3..60f3944c1426.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e1a78529d609
+seed: 2
+experiment:
+  id: proposed.benchmark-latency-threads-report
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

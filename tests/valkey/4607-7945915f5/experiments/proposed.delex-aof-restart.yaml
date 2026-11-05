@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.delex-aof-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: DELEX deletes survive an AOF reload across a restart; conditional non-deletes
+    leave the key intact
+components:
+- use: valkey.action.commands
+  id: aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes", appendfsync: always}
+    timeout_s: 90
+    commands:
+    - {command: [SET, ak, av], expect: {equals: OK}}
+    - {command: [SET, bk, bv], expect: {equals: OK}}
+    - {command: [DELEX, ak, IFEQ, av], expect_difference: true, expect: {equals: 1}}
+    - {command: [DELEX, bk, IFEQ, wrong], expect_difference: true, expect: {equals: 0}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [EXISTS, ak], expect_difference: true, expect: {equals: 0}}
+    - {command: [GET, bk], expect: {equals: bv}}
+    - {command: [DELEX, bk, IFNE, nope], expect_difference: true, expect: {equals: 1}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [EXISTS, bk], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [aof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof}

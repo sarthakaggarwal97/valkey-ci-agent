@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "11387e50c67ab22dce61f093be6c4af8087a189f",
+  "parent": "7b87fee268b8f3de41e9e1fbd4bbb3f1a8fbd0aa",
+  "pr": 4738,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Persist OPENSSL_PREFIX across builds (#4738)",
+  "date": "2026-09-18",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2013,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is build-system only: a single line in src/Makefile that writes OPENSSL_PREFIX into .make-settings during 'make persist-settings' so incremental rebuilds remember the OpenSSL location. It alters no server, command, replication, persistence, or tool behaviour \u2014 given identical build inputs the produced binaries are unchanged \u2014 so no runtime scenario can exercise or observe it."
+}

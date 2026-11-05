@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "019ec0bc275bbf7917e2cd6ce1a6d88232e51a34",
+  "parent": "dcc66eff8b759f90372f861b166b5edccfac26c7",
+  "pr": 4745,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove duplicate pointer-key hashtable callbacks (#4745)",
+  "date": "2026-09-23",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.9373,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure refactor with no observable behaviour change. In bgiteration.c the removed pointerHash was byte-for-byte Thomas Wang's 64-bit mix, which is exactly what the new shared hashtablePointerHash computes (wangHash64), and the removed pointerCompare equals the hashtable's NULL-callback default (key1 == key2, hashtable.c compareKeys). In cluster_legacy.c the removed dictPtrHash/dictPtrCompare are bit-identical to the hashtable's NULL-callback defaults (siphash over the pointer's bytes, pointer equality), so clusterSlotDictType computes the same hashes as before. The only site whose hash values ch"
+}

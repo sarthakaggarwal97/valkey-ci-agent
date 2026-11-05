@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f93169d8b7e4cdbafdead25666f3e5300927b751",
+  "parent": "5c24e5d20df204fd247d8f700b887d372935fb84",
+  "pr": 4714,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Deflake BgIterationTest.createAndCleanup (#4714)",
+  "date": "2026-09-16",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2024,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only src/unit/test_bgiteration.cpp, loosening a timing assertion (runtime_ms < 5 to < 1000) in the BgIterationTest.createAndCleanup unit test to deflake it in CI. It is a test-only change with no effect on Valkey server behavior, commands, replication, persistence, or tools, so there is no changed runtime path for a fuzzer scenario to reach."
+}

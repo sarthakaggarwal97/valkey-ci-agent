@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7945915f537b..eae50c20c9d9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-051578d6e3b0
+seed: 474702
+experiment:
+  id: proposed.delex-command-docs
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

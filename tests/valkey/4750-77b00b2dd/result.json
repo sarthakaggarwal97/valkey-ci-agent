@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "77b00b2ddaf1b5cce154313098d3951ea83b155c",
+  "parent": "5045624583ab012e9b5923481edf2322f903c973",
+  "pr": 4750,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "bgiteration: fix barrier item count for swap/flush during termination (#4750)",
+  "date": "2026-09-22",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.3219,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix removes a double-decrement of bgIterator.barrier_items that only occurs when queued SWAPDB/FLUSHDB barrier items are drained during iterator termination. Those barrier items are queued exclusively for non-consistent background iterators: handleSwapdb (bgiteration.c:1801) queues SWAPDB only when the iterator lacks BGITERATOR_FLAG_CONSISTENT, and handleFlushdb (bgiteration.c:1840) queues a FLUSHDB barrier item only when it does NOT abort/terminate, which for a consistent iterator it always does. In this build the sole production bgIterator is the forkless disk save, created with BGITERAT"
+}

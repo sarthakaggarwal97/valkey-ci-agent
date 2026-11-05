@@ -1,0 +1,25 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-latency-threads-report
+deployment:
+  modes: [standalone]
+metadata:
+  description: multithreaded valkey-benchmark records >3s latencies into the enlarged
+    per-thread histograms, folds them after join, and the full percentile and cumulative
+    report iterates the 60s range
+components:
+- use: valkey.action.tools
+  id: bench-threads
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    ignore:
+    - '[^\r\n]*\r'
+    - '\d+\.\d+ requests per second'
+    - '\d+ requests completed in \d+\.\d+ seconds'
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 2, -n, 2, --threads, 2, DEBUG,
+        SLEEP, 5], expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: "latency summary"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench-threads}

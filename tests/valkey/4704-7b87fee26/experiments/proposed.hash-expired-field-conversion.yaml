@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.hash-expired-field-conversion
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    A hash holding a logically-expired but unreaped field is converted from listpack
+    to hashtable. The fixed build carries the field over (HLEN still counts it) and
+    the reaper later collects it; the parent drops it during conversion, leaving HLEN
+    short and the db's volatile-key tracking stale, so re-enabling active expiry makes
+    the field-expire cron abort on fieldExpireScanCallback's hashTypeHasVolatileFields
+    assert. Also checks the conversion's new ignore-TTL bracket does not leak to other
+    hashes.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: convert
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    server_config: {hash-max-listpack-entries: 16, hash-max-listpack-value: 64}
+    timeout_s: 120
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [HSET, myhash, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HPEXPIRE, myhash, 1, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HEXISTS, myhash, f1], wait_s: 5, expect: {equals: 0}}
+    - {command: [HLEN, myhash], expect: {equals: 2}}
+    - {command: [OBJECT, ENCODING, myhash], compare: skip, expect: {equals: listpack}}
+    - {command: [HSET, myhash, f3, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
+      expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, myhash], compare: skip, expect: {equals: hashtable}}
+    - {command: [HLEN, myhash], expect_difference: true, expect: {equals: 3}}
+    - {command: [HEXISTS, myhash, f1], expect: {equals: 0}}
+    - {command: [HGETALL, myhash], compare: unordered-pairs}
+    - {command: [HSET, victimhash, g1, v1, g2, v2], expect: {equals: 2}}
+    - {command: [HPEXPIRE, victimhash, 1, FIELDS, 1, g1], expect: {equals: [1]}}
+    - {command: [HEXISTS, victimhash, g1], wait_s: 5, expect: {equals: 0}}
+    - {command: [HSET, otherhash, g0, v0], expect: {equals: 1}}
+    - {command: [HPEXPIRE, otherhash, 1, FIELDS, 1, g0], expect: {equals: [1]}}
+    - {command: [HEXISTS, otherhash, g0], wait_s: 5, expect: {equals: 0}}
+    - {command: [HSET, otherhash, h1, v, h2, v, h3, v, h4, v, h5, v, h6, v, h7, v,
+        h8, v, h9, v, h10, v, h11, v, h12, v, h13, v, h14, v, h15, v], expect: {equals: 15}}
+    - {command: [OBJECT, ENCODING, otherhash], compare: skip, expect: {equals: listpack}}
+    - {command: [HSET, otherhash, h16, v], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, otherhash], compare: skip, expect: {equals: hashtable}}
+    - {command: [HLEN, otherhash], expect_difference: true, expect: {equals: 17}}
+    - {command: [HEXISTS, victimhash, g1], expect: {equals: 0}}
+    - {command: [HSTRLEN, victimhash, g1], expect: {equals: 0}}
+    - {command: [HLEN, victimhash], expect: {equals: 2}}
+    - {command: [SET, tick, 1, PX, 800], expect: {equals: OK}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 1], expect: {equals: OK}}
+    - {command: [HLEN, myhash], wait_s: 15, expect: {equals: 2}, compare: skip}
+    - {command: [HLEN, otherhash], wait_s: 15, expect: {equals: 16}, compare: skip}
+    - {command: [EXISTS, tick], wait_s: 10, expect: {equals: 0}, compare: skip}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [convert.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: convert}

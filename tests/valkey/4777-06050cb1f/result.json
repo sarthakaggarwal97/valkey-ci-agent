@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "06050cb1fc93a96cd457d509aa403cd4f17ea5d2",
+  "parent": "c79f17d251038cfb660a5ad836053d06d25d8342",
+  "pr": 4777,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix geohashGetLatDistance() when latitudes are equal (#4777)",
+  "date": "2026-09-24",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.729,
+  "findings": [],
+  "recorded": []
+}

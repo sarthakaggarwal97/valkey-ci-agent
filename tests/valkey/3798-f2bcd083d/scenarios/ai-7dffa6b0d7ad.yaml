@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 27c68f14f4f6..f2bcd083dc5e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7dffa6b0d7ad
+seed: 110
+experiment:
+  id: valkey.rdb-compression
+  inputs:
+    rdbcompression: zstd
+    bgsave_method: forkless
+    compressible: false
+    value_size: 65536
+    stable_keys: 500
+deployment:
+  mode: standalone
+  base_port: 7900

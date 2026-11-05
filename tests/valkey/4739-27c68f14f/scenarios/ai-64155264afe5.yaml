@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 15aa872383dc..27c68f14f4f6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-64155264afe5
+seed: 27068
+experiment:
+  id: proposed.check-aof-live-valkey-base
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

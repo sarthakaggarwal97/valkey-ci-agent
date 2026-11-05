@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.check-aof-valkey-rdb-base
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-aof on crafted VALKEY-magic RDB base files, Multi Part
+    and old-style, which the parent misreads as RESP AOFs and fails or truncates;
+    also the tightened REDIS0 check and a REDIS0011 legacy base as a regression guard
+components:
+- use: valkey.action.tools
+  id: check-aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    ignore: ['^\d+:[A-Z] .*\n']
+    files:
+      appendonly.aof.manifest: "file appendonly.aof.1.base.rdb seq 1 type b\nfile\
+        \ appendonly.aof.1.incr.aof seq 1 type i\n"
+      appendonly.aof.1.base.rdb: !!binary 'VkFMS0VZMDgx/wAAAAAAAAAA'
+      appendonly.aof.1.incr.aof: "*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"
+      valkey-base.rdb: !!binary 'VkFMS0VZMDgx/wAAAAAAAAAA'
+      legacy.aof.manifest: "file legacy.aof.1.base.rdb seq 1 type b\nfile legacy.aof.1.incr.aof\
+        \ seq 1 type i\n"
+      legacy.aof.1.base.rdb: !!binary 'UkVESVMwMDEx/wAAAAAAAAAA'
+      legacy.aof.1.incr.aof: "*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n"
+      redis-prefix-not-rdb.aof: "REDISXYZ123\n"
+      fixme.aof.manifest: "file fixme.aof.1.base.rdb seq 1 type b\n"
+      fixme.aof.1.base.rdb: !!binary 'VkFMS0VZMDgx/wAAAAAAAAAA'
+    runs:
+    - {tool: valkey-check-aof, args: [appendonly.aof.manifest], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "Start to check BASE AOF (RDB\
+            \ format)"}}}
+    - {tool: valkey-check-aof, args: [valkey-base.rdb], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "RDB preamble is OK"}}}
+    - {tool: valkey-check-aof, args: [redis-prefix-not-rdb.aof], expect_difference: true,
+      expect: {exit: {equals: 1}, stdout: {contains: "Use the --fix option"}}}
+    - {tool: valkey-check-aof, args: [legacy.aof.manifest], expect: {exit: {equals: 0},
+        stdout: {contains: "All AOF files and manifest are valid"}}}
+    - {tool: valkey-check-aof, args: [--fix, fixme.aof.manifest], stdin: "y\n", expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "Start to check BASE AOF (RDB\
+            \ format)"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check-aof}

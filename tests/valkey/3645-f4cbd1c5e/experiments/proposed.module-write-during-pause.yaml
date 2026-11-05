@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.module-write-during-pause
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module async writes (timer/thread-safe context) during CLIENT PAUSE
+    WRITE must be rejected, not crash the primary
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "propagate.so under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "parent commit's propagate.so, {$ref: artifacts.module_parent.path}"
+    trigger:
+      type: string
+      enum: [propagate-test.timer, propagate-test.timer-eval, propagate-test.timer-nested,
+        propagate-test.thread]
+      default: propagate-test.timer
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    server_config: {appendonly: "yes"}
+    timeout_s: 15
+    commands:
+    - {command: [CLIENT, PAUSE, "20000", WRITE], expect: {equals: OK}}
+    - {command: [{$ref: inputs.trigger}], expect: {equals: OK}}
+    - {command: [WAIT, "1", "500"], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

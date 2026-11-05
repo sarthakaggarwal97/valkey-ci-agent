@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "00a8a19554a39facb591837ea41ba4350260919d",
+  "parent": "e082696cf13e2bba67454179e9335cf41029e8a6",
+  "pr": 4702,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Attribute LZ4 codec context memory to client memory usage (#4702)",
+  "date": "2026-09-16",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 18,
+    "executed": 18,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 11.8876,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c79f17d251038cfb660a5ad836053d06d25d8342",
+  "parent": "06d4c3b79db4cc3a277d16a4a781189e7d8cf6f5",
+  "pr": 3491,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "zset: add in-place fast path for score updates in listpack encoding (#3491)",
+  "date": "2026-09-24",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 28,
+    "executed": 28,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.1741,
+  "findings": [],
+  "recorded": []
+}

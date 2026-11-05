@@ -1,0 +1,70 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7b87fee268b8f3de41e9e1fbd4bbb3f1a8fbd0aa",
+  "parent": "1c847e8868f2210eddb0a0b0438750a7f3283628",
+  "pr": 4704,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Preserve expired but unreaped fields across listpack-to-hashtable conversion (#4704)",
+  "date": "2026-09-18",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 6,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 17,
+    "executed": 17,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.4774,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: expire.c:171 'hashTypeHasVolatileFields(o)' is not true",
+      "scenario": "ai-e4f59d7ee921",
+      "seed": 4704,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4704",
+      "fingerprint": "21c49a5afa5fd0890fe8",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: expire.c:171 'hashTypeHasVolatileFields(o)' is not true",
+      "scenario": "ai-c1a36f779500",
+      "seed": 4705,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4704",
+      "fingerprint": "21c49a5afa5fd0890fe8",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: expire.c:171 'hashTypeHasVolatileFields(o)' is not true",
+      "scenario": "ai-dd1c9c512f66",
+      "seed": 4706,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4704",
+      "fingerprint": "21c49a5afa5fd0890fe8",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

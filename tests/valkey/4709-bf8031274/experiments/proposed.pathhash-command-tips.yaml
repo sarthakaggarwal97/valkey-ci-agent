@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.pathhash-command-tips
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND INFO for PHLONGEST, PHPREFIXES and PHSCAN reports the nondeterministic_output_order
+    tip after the commands.def regeneration, and the regenerated table entries still
+    dispatch the path-hash commands
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: tips
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, INFO, phlongest], expect_difference: true, expect: {contains: nondeterministic_output_order}}
+    - {command: [COMMAND, INFO, phprefixes], expect_difference: true, expect: {contains: nondeterministic_output_order}}
+    - {command: [COMMAND, INFO, phscan], expect_difference: true, expect: {contains: nondeterministic_output_order}}
+    - {command: [COMMAND, INFO, phgetall], expect: {contains: nondeterministic_output_order}}
+    - {command: [PHSET, k, /a, FIELDS, 1, g, w], expect: {error: false}}
+    - {command: [PHSET, k, /a/b, FIELDS, 2, f, v, f2, v2], expect: {error: false}}
+    - {command: [PHLONGEST, k, /a/b/c]}
+    - {command: [PHLONGEST, k, /a/b, LENGTH]}
+    - {command: [PHPREFIXES, k, /a/b], compare: unordered}
+    - {command: [PHSCAN, k, "0", COUNT, 100], compare: skip, expect: {error: false}}
+    - {command: [PHLONGEST, k], expect: {error: true}}
+    - {command: [PHSCAN, k], expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [tips.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tips}

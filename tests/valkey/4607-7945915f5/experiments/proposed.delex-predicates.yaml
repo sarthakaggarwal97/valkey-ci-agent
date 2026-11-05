@@ -1,0 +1,76 @@
+extends: [valkey.liveness]
+id: proposed.delex-predicates
+deployment:
+  modes: [standalone]
+metadata:
+  description: DELEX IFEQ/IFNE semantics, wrong type, expired keys, MULTI and WATCH,
+    compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: delex
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [DELEX, k1, IFEQ, v1], expect_difference: true, expect: {equals: 1}}
+    - {command: [EXISTS, k1], expect_difference: true, expect: {equals: 0}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [DELEX, k2, IFEQ, nope], expect_difference: true, expect: {equals: 0}}
+    - {command: [GET, k2], expect: {equals: v2}}
+    - {command: [SET, k3, v3], expect: {equals: OK}}
+    - {command: [DELEX, k3, IFNE, v3], expect_difference: true, expect: {equals: 0}}
+    - {command: [GET, k3], expect: {equals: v3}}
+    - {command: [SET, k4, v4], expect: {equals: OK}}
+    - {command: [DELEX, k4, IFNE, other], expect_difference: true, expect: {equals: 1}}
+    - {command: [EXISTS, k4], expect_difference: true, expect: {equals: 0}}
+    - {command: [DELEX, nokey, IFEQ, x], expect_difference: true, expect: {equals: 0}}
+    - {command: [DELEX, nokey, IFNE, x], expect_difference: true, expect: {equals: 0}}
+    - {command: [SADD, s1, m], expect: {equals: 1}}
+    - {command: [DELEX, s1, IFEQ, m], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [SET, es, ""], expect: {equals: OK}}
+    - {command: [DELEX, es, IFEQ, ""], expect_difference: true, expect: {equals: 1}}
+    - {command: [SET, bk, !!binary "YQBi"], expect: {equals: OK}}
+    - {command: [DELEX, bk, IFEQ, a], expect_difference: true, expect: {equals: 0}}
+    - {command: [DELEX, bk, IFEQ, !!binary "YQBi"], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [SET, n1, 12345], expect: {equals: OK}}
+    - {command: [DELEX, n1, IFNE, 12345], expect_difference: true, expect: {equals: 0}}
+    - {command: [DELEX, n1, IFEQ, "012345"], expect_difference: true, expect: {equals: 0}}
+    - {command: [DELEX, n1, IFEQ, 12345], expect_difference: true, expect: {equals: 1}}
+    - {command: [EXISTS, n1], expect_difference: true, expect: {equals: 0}}
+    - {command: [SET, ek, ev, PX, 10], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [DELEX, ek, IFEQ, ev], expect_difference: true, expect: {equals: 0}}
+    - {command: [SET, mk, mv], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [DELEX, mk, IFEQ, mv], expect_difference: true, expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [1]}}
+    - {command: [SET, wk, wv], expect: {equals: OK}}
+    - {command: [WATCH, wk], expect: {equals: OK}}
+    - {command: [DELEX, wk, IFEQ, wv], connection: w2, expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, wk, other], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {error: false}}
+    - {command: [EXISTS, wk], expect_difference: true, expect: {equals: 0}}
+    - {command: [SET, d1, v], expect: {equals: OK}}
+    - {command: [DELIFEQ, d1, v], expect: {equals: 1}}
+    - {command: [SET, d2, v], expect: {equals: OK}}
+    - {command: [DELIFEQ, d2, w], expect: {equals: 0}}
+    - {command: [DELIFEQ, nokey2, v], expect: {equals: 0}}
+    - {command: [SADD, ds, m], expect: {equals: 1}}
+    - {command: [DELIFEQ, ds, m], expect: {error: WRONGTYPE}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [delex.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: delex}

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b4a976f68f22205a56145f10d94e478f74351fc1",
+  "parent": "47c9839b22638e04e93a689fa304ee2985eb5771",
+  "pr": 4712,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix execGetKeys() dropping the first 256 keys past the static buffer (#4712)",
+  "date": "2026-09-17",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.6255,
+  "findings": [],
+  "recorded": []
+}

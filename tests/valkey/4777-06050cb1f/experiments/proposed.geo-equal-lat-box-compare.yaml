@@ -1,0 +1,48 @@
+id: proposed.geo-equal-lat-box-compare
+extends: [valkey.liveness]
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Compare GEOSEARCH/GEOSEARCHSTORE BYBOX 0 0 centered exactly on a member across
+    builds. The parent converts each latitude to radians before subtracting, so FMA
+    contraction can leave a tiny nonzero latitude distance for equal latitudes and
+    a zero-size box wrongly excludes the center member; the fix subtracts the degrees
+    first, giving exactly 0.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: geo
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [GEOADD, points, "-122.40710645914077759", "37.79430076631935975",
+        position], expect: {equals: 1}}
+    - {command: [GEOADD, points, "10.3", "80.1", north], expect: {equals: 1}}
+    - {command: [GEOADD, points, "5.5", "-45.7", south], expect: {equals: 1}}
+    - {command: [GEOSEARCH, points, FROMMEMBER, position, BYBOX, "0", "0", m, ASC],
+      expect_difference: true, expect: {equals: [position]}}
+    - {command: [GEOSEARCH, points, FROMLONLAT, "-122.40710645914077759", "37.79430076631935975",
+        BYBOX, "0", "0", mi, ASC, WITHDIST], expect_difference: true, expect: {equals: [
+          [position, "0.0000"]]}}
+    - {command: [GEOSEARCH, points, FROMMEMBER, north, BYBOX, "0", "0", km, ASC],
+      expect_difference: true, expect: {equals: [north]}}
+    - {command: [GEOSEARCH, points, FROMMEMBER, south, BYBOX, "0", "0", ft, ASC],
+      expect_difference: true, expect: {equals: [south]}}
+    - {command: [GEOSEARCHSTORE, dest, points, FROMMEMBER, position, BYBOX, "0", "0",
+        m], expect_difference: true, expect: {equals: 1}}
+    - {command: [ZRANGE, dest, "0", "-1"], expect_difference: true, expect: {equals: [
+          position]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [geo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: geo}

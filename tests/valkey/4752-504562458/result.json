@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5045624583ab012e9b5923481edf2322f903c973",
+  "parent": "f2bcd083dc5efb83a3aff1d155261c031440b448",
+  "pr": 4752,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove duplicate clientsCronTcpIsClosing() call in clientsCron (#4752)",
+  "date": "2026-09-21",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3145,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change deletes a redundant second call to clientsCronTcpIsClosing() in clientsCron(); the same function is still called first in the per-client check chain (server.c:1301), and none of the checks between the two call sites (query/output buffer resize, expensive-client tracking) can change the connection's read/write handlers or closing state, so the removed call was unreachable-effect dead code. No reply, data, replication, or connection-cleanup behavior differs between the builds, so no scenario can exercise a behavioral difference."
+}

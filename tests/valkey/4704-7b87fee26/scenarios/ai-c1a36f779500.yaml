@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1c847e8868f2..7b87fee268b8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c1a36f779500
+seed: 4705
+experiment:
+  id: proposed.hash-expired-field-conversion
+  inputs:
+    resp: 3
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

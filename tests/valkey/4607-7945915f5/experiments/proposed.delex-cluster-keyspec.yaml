@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.delex-cluster-keyspec
+deployment:
+  modes: [standalone]
+metadata:
+  description: DELEX key spec routes correctly in cluster mode, including hash-tagged
+    keys
+components:
+- use: valkey.action.commands
+  id: ckeys
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    timeout_s: 60
+    commands:
+    - {command: [SET, ck, cv], expect: {equals: OK}}
+    - {command: [DELEX, ck, IFEQ, cv], expect_difference: true, expect: {equals: 1}}
+    - {command: [EXISTS, ck], expect_difference: true, expect: {equals: 0}}
+    - {command: [SET, "{tag}k", v], expect: {equals: OK}}
+    - {command: [DELEX, "{tag}k", IFNE, w], expect_difference: true, expect: {equals: 1}}
+    - {command: [EXISTS, "{tag}k"], expect_difference: true, expect: {equals: 0}}
+    - {command: [COMMAND, GETKEYS, DELEX, ck, IFEQ, cv], expect_difference: true,
+      expect: {equals: [ck]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ckeys.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ckeys}

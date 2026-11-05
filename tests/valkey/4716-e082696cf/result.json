@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e082696cf13e2bba67454179e9335cf41029e8a6",
+  "parent": "f93169d8b7e4cdbafdead25666f3e5300927b751",
+  "pr": 4716,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Document VALKEYMODULE_OPTIONS_HANDLE_FORKLESS (#4716)",
+  "date": "2026-09-16",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2384,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff touches only comments in src/module.c: it adds documentation for VALKEYMODULE_OPTIONS_HANDLE_FORKLESS above VM_SetModuleOptions and corrects a stale flag name (HANDLE_FORKLESS_SAVE -> HANDLE_FORKLESS) in another comment. No code, constant, or behaviour changes, so there is no path a scenario could reach or break."
+}

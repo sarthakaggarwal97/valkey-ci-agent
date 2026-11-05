@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2a823011bd69..f4cbd1c5ef06.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-90a4d70d56f9
+seed: 1003
+experiment:
+  id: proposed.module-write-during-pause
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    trigger: propagate-test.timer-nested
+deployment:
+  mode: standalone
+  base_port: 7200
+  replicas_per_primary: 0

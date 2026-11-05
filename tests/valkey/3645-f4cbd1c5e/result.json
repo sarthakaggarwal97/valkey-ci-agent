@@ -1,0 +1,180 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f4cbd1c5ef06f0dd574799a0a6ab5f5bf57c82a5",
+  "parent": "2a823011bd69e067f652c34bc5939320923bb220",
+  "pr": 3645,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "fix: Reject module writes during client pause to prevent crash (#3645)",
+  "date": "2026-10-01",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 1,
+  "hunted": 4,
+  "dropped": 3,
+  "recall": true,
+  "coverage": {
+    "lines": 8,
+    "executed": 2,
+    "percent": 25,
+    "uncovered": [
+      "src/module.c:3869",
+      "src/module.c:6868",
+      "src/module.c:6869",
+      "src/module.c:6870",
+      "src/module.c:6873",
+      "src/module.c:6875"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 8.7851,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: server.c:3833 '!isPausedActions(PAUSE_ACTION_REPLICA) || server.client_pause_in_transaction || server.server_del_keys_in_slot' is not true",
+      "scenario": "ai-ccc32097f66a",
+      "seed": 1001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3645",
+      "fingerprint": "40471dfe1087ed9afdd1",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in callReplyGetPrivateData",
+      "scenario": "ai-6271c690a8a9",
+      "seed": 1002,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #3645",
+      "fingerprint": "5cffc38ae639da7308b5",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/70"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in VM_FreeCallReply",
+      "scenario": "ai-6271c690a8a9",
+      "seed": 1002,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "76a316ab90de3db6e270",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: server.c:3833 '!isPausedActions(PAUSE_ACTION_REPLICA) || server.client_pause_in_transaction || server.server_del_keys_in_slot' is not true",
+      "scenario": "ai-6271c690a8a9",
+      "seed": 1002,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3645",
+      "fingerprint": "40471dfe1087ed9afdd1",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in callReplyGetPrivateData",
+      "scenario": "ai-90a4d70d56f9",
+      "seed": 1003,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #3645",
+      "fingerprint": "5cffc38ae639da7308b5",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/70"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in VM_FreeCallReply",
+      "scenario": "ai-90a4d70d56f9",
+      "seed": 1003,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #3645, since fixed",
+      "fingerprint": "76a316ab90de3db6e270",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in callReplyGetPrivateData",
+      "scenario": "ai-9e4f8bbcde56",
+      "seed": 1004,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #3645",
+      "fingerprint": "5cffc38ae639da7308b5",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/70"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in VM_FreeCallReply",
+      "scenario": "ai-9e4f8bbcde56",
+      "seed": 1004,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "76a316ab90de3db6e270",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: server.c:3833 '!isPausedActions(PAUSE_ACTION_REPLICA) || server.client_pause_in_transaction || server.server_del_keys_in_slot' is not true",
+      "scenario": "ai-9e4f8bbcde56",
+      "seed": 1004,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3645",
+      "fingerprint": "40471dfe1087ed9afdd1",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-779512ac4b07",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-dbeb985192c8",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-5e4ade0957f2",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    }
+  ]
+}

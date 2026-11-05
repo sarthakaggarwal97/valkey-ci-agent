@@ -1,0 +1,124 @@
+extends: [valkey.liveness]
+id: proposed.zset-listpack-inplace-score-update
+deployment:
+  modes: [standalone]
+metadata:
+  description: ZADD/ZINCRBY score updates on listpack zsets hit the new in-place fast
+    path at head, tail, single element, score ties in both lex directions, int/string
+    score re-encoding, and survive SAVE plus restart; every reply compared against
+    the parent build
+components:
+- use: valkey.action.commands
+  id: zadd
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 128, zset-max-listpack-value: 64}
+    resp: 2
+    timeout_s: 60
+    commands:
+    - {command: [ZADD, z, 1, a, 2, b, 3, c], expect: {equals: 3}}
+    - {command: [ZADD, z, 0.5, a], expect: {equals: 0}}
+    - {command: [ZSCORE, z, a], expect: {equals: "0.5"}}
+    - {command: [ZADD, z, 4, c], expect: {equals: 0}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES], expect: {equals: [a, "0.5", b, "2",
+          c, "4"]}}
+    - {command: [OBJECT, ENCODING, z], compare: skip, expect: {equals: listpack}}
+    - {command: [DEL, z], expect: {equals: 1}}
+    - {command: [ZADD, z, 1, solo], expect: {equals: 1}}
+    - {command: [ZADD, z, 100, solo], expect: {equals: 0}}
+    - {command: [ZADD, z, -5, solo], expect: {equals: 0}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES], expect: {equals: [solo, "-5"]}}
+    - {command: [DEL, z], expect: {equals: 1}}
+    - {command: [ZADD, z, 1, a, 2, b, 2, c, 3, d], expect: {equals: 4}}
+    - {command: [ZADD, z, 2, a], expect: {equals: 0}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES], expect: {equals: [a, "2", b, "2",
+          c, "2", d, "3"]}}
+    - {command: [DEL, z], expect: {equals: 1}}
+    - {command: [ZADD, z, 1, c, 2, a, 2, b, 3, d], expect: {equals: 4}}
+    - {command: [ZADD, z, 2, c], expect: {equals: 0}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES], expect: {equals: [a, "2", b, "2",
+          c, "2", d, "3"]}}
+    - {command: [DEL, z], expect: {equals: 1}}
+    - {command: [ZADD, z, 1, a, 1, b, 2, c, 3, d], expect: {equals: 4}}
+    - {command: [ZADD, z, 1, c], expect: {equals: 0}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES], expect: {equals: [a, "1", b, "1",
+          c, "1", d, "3"]}}
+    - {command: [DEL, z], expect: {equals: 1}}
+    - {command: [ZADD, z, 1, b, 1, c, 2, a, 3, d], expect: {equals: 4}}
+    - {command: [ZADD, z, 1, a], expect: {equals: 0}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES], expect: {equals: [a, "1", b, "1",
+          c, "1", d, "3"]}}
+    - {command: [DEL, z], expect: {equals: 1}}
+    - {command: [ZADD, z, 5, m, 10, n, 15, o], expect: {equals: 3}}
+    - {command: [ZADD, z, 12.5, n], expect: {equals: 0}}
+    - {command: [ZSCORE, z, n], expect: {equals: "12.5"}}
+    - {command: [ZADD, z, 10, n], expect: {equals: 0}}
+    - {command: [ZSCORE, z, n], expect: {equals: "10"}}
+    - {command: [ZADD, z, 4611686018427387904, o], expect: {equals: 0}}
+    - {command: [ZSCORE, z, o], expect: {equals: "4611686018427387904"}}
+    - {command: [ZADD, z, "inf", o], expect: {equals: 0}}
+    - {command: [ZSCORE, z, o], expect: {equals: "inf"}}
+    - {command: [ZADD, z, "-inf", m], expect: {equals: 0}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES], expect: {equals: [m, "-inf", n, "10",
+          o, "inf"]}}
+    - {command: [ZADD, z, 7, m], expect: {equals: 0}}
+    - {command: [ZADD, z, 8, o], expect: {equals: 0}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES], expect: {equals: [m, "7", o, "8",
+          n, "10"]}}
+    - {command: [DEL, z], expect: {equals: 1}}
+    - {command: [ZADD, z, 1, x, 2, y, 3, w], expect: {equals: 3}}
+    - {command: [ZINCRBY, z, 0.5, x], expect: {equals: "1.5"}}
+    - {command: [ZINCRBY, z, 10, x], expect: {equals: "11.5"}}
+    - {command: [ZADD, z, GT, CH, 1, y], expect: {equals: 0}}
+    - {command: [ZADD, z, GT, CH, 2.5, y], expect: {equals: 1}}
+    - {command: [ZADD, z, LT, CH, 2, w], expect: {equals: 1}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES], expect: {equals: [w, "2", y, "2.5",
+          x, "11.5"]}}
+    - {command: [ZINCRBY, z, -0.5, y], expect: {equals: "2"}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES], expect: {equals: [w, "2", y, "2",
+          x, "11.5"]}}
+    - {command: [DEL, z], expect: {equals: 1}}
+    - {command: [ZADD, z, 1, "", 2, ab], expect: {equals: 2}}
+    - {command: [ZADD, z, 3, ""], expect: {equals: 0}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES], expect: {equals: [ab, "2", "", "3"]}}
+    - {command: [ZADD, z, 2, ""], expect: {equals: 0}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES], expect: {equals: ["", "2", ab, "2"]}}
+    - {command: [ZADD, z, 2, llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll],
+      expect: {equals: 1}}
+    - {command: [ZADD, z, 1.25, llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll],
+      expect: {equals: 0}}
+    - {command: [ZADD, z, 1.5, llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll],
+      expect: {equals: 0}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES], expect: {equals: [llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllll,
+          "1.5", "", "2", ab, "2"]}}
+    - {command: [ZADD, withscores, 1, withscores], expect: {equals: 1}}
+    - {command: [ZADD, withscores, 2, withscores], expect: {equals: 0}}
+    - {command: [ZSCORE, withscores, withscores], expect: {equals: "2"}}
+    - {command: [DEL, z], expect: {equals: 1}}
+    - {command: [ZADD, z, 1, e01, 1, e02, 1, e03, 1, e04, 1, e05, 1, e06, 1, e07,
+        1, e08, 1, e09, 1, e10, 1, e11, 1, e12, 1, e13, 1, e14, 1, e15, 1, e16], expect: {
+        equals: 16}}
+    - {command: [ZINCRBY, z, 5, e08], expect: {equals: "6"}}
+    - {command: [ZINCRBY, z, -5, e08], expect: {equals: "1"}}
+    - {command: [ZADD, z, 0, e16], expect: {equals: 0}}
+    - {command: [ZADD, z, 1, e16], expect: {equals: 0}}
+    - {command: [ZRANGE, z, 0, -1], expect: {equals: [e01, e02, e03, e04, e05, e06,
+          e07, e08, e09, e10, e11, e12, e13, e14, e15, e16]}}
+    - {command: [ZCARD, z], expect: {equals: 16}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES], expect: {equals: [e01, "1", e02, "1",
+          e03, "1", e04, "1", e05, "1", e06, "1", e07, "1", e08, "1", e09, "1", e10,
+          "1", e11, "1", e12, "1", e13, "1", e14, "1", e15, "1", e16, "1"]}}
+    - {command: [ZRANGE, withscores, 0, -1, WITHSCORES], expect: {equals: [withscores,
+          "2"]}}
+    - {command: [OBJECT, ENCODING, z], compare: skip, expect: {equals: listpack}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [zadd.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zadd}
