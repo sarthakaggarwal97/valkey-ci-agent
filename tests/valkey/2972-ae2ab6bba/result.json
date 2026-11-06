@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ae2ab6bba84945c4187eea17f36a2f07b3398042",
+  "parent": "06d35aca655f80e07d12585fc3ce110ccdeb5321",
+  "pr": 2972,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add optional XX to SISMEMBER; return -1 if the key does not exist (#2972)",
+  "date": "2026-09-15",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 13,
+    "executed": 13,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.7055,
+  "findings": [],
+  "recorded": []
+}

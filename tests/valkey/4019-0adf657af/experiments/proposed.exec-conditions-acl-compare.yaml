@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.exec-conditions-acl-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: EXEC condition keys need read permission, checked against the active
+    database even when the transaction SELECTed another
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 30
+    commands:
+    - {command: [ACL, SETUSER, wuser, on, nopass, "%W~write*", "+@all"], expect: {
+        equals: OK}}
+    - {command: [SET, writecond, value], expect: {equals: OK}}
+    - {command: [SET, secret, s3cr3t], expect: {equals: OK}}
+    - {command: [SET, public1, pv], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, seluser, on, nopass, "(db=1 +@all ~*)", "(db=0 +@all\
+          \ ~public*)"], expect: {equals: OK}}
+    - {command: [AUTH, wuser, x], connection: u2, expect: {equals: OK}}
+    - {command: [MULTI], connection: u2, expect: {equals: OK}}
+    - {command: [LPUSH, writelist, v], connection: u2, expect: {equals: QUEUED}}
+    - {command: [EXEC, IFEQ, writecond, value], connection: u2, expect_difference: true,
+      expect: {error: "NOPERM"}}
+    - {command: [MULTI], connection: u2, expect: {equals: OK}}
+    - {command: [LPUSH, writelist, v], connection: u2, expect: {equals: QUEUED}}
+    - {command: [EXEC, IFNE, writecond, other], connection: u2, expect_difference: true,
+      expect: {error: "NOPERM"}}
+    - {command: [MULTI], connection: u2, expect: {equals: OK}}
+    - {command: [LPUSH, writelist, v], connection: u2, expect: {equals: QUEUED}}
+    - {command: [EXEC, NX, writecond], connection: u2, expect_difference: true, expect: {
+        error: "NOPERM"}}
+    - {command: [MULTI], connection: u2, expect: {equals: OK}}
+    - {command: [LPUSH, writelist, v], connection: u2, expect: {equals: QUEUED}}
+    - {command: [EXEC, XX, writecond], connection: u2, expect_difference: true, expect: {
+        error: "NOPERM"}}
+    - {command: [MULTI], connection: u2, expect: {equals: OK}}
+    - {command: [LPUSH, writelist, v], connection: u2, expect: {equals: QUEUED}}
+    - {command: [EXEC, IFEQ, writecond, other, junk], connection: u2, expect_difference: true,
+      expect: {error: "invalid check condition syntax"}}
+    - {command: [LLEN, writelist], expect: {equals: 0}}
+    - {command: [AUTH, seluser, x], connection: u3, expect: {equals: OK}}
+    - {command: [SELECT, 0], connection: u3, expect: {equals: OK}}
+    - {command: [MULTI], connection: u3, expect: {equals: OK}}
+    - {command: [SELECT, 1], connection: u3, expect: {equals: QUEUED}}
+    - {command: [EXEC, IFEQ, secret, s3cr3t], connection: u3, expect_difference: true,
+      expect: {error: "NOPERM"}}
+    - {command: [MULTI], connection: u3, expect: {equals: OK}}
+    - {command: [SELECT, 1], connection: u3, expect: {equals: QUEUED}}
+    - {command: [EXEC, IFEQ, public1, pv], connection: u3, expect_difference: true,
+      expect: {equals: [OK]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [acl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

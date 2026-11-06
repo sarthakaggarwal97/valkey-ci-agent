@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.acl-role-pubsub-kill
+deployment:
+  modes: [standalone]
+metadata:
+  description: Subscribed clients of role members are killed when SETROLE or resetroles
+    revokes their channels, and spared when access is a superset or allchannels
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 2
+    timeout_s: 20
+    commands:
+    - {command: [ACL, SETROLE, chat, "&news:*", "+subscribe", "+ping"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [ACL, SETUSER, sam, on, ">sampw", "+auth", "+subscribe", "+ping",
+        "role=chat"], expect_difference: true, expect: {equals: OK}}
+    - {connection: c2, command: [AUTH, sam, sampw], expect_difference: true, expect: {
+        equals: OK}}
+    - {connection: c2, command: [SUBSCRIBE, "news:1"], expect: {exists: true}}
+    - {command: [ACL, SETROLE, chat, resetchannels, "&other:*", "+subscribe", "+ping"],
+      expect_difference: true, expect: {equals: OK}}
+    - {connection: c2, command: [PING], expect_difference: true, expect: {exists: false}}
+    - {command: [ACL, SETROLE, feedr, "&feed:*", "+subscribe", "+ping"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [ACL, SETUSER, tia, on, ">tiapw", "+auth", "+subscribe", "+ping",
+        "role=feedr"], expect_difference: true, expect: {equals: OK}}
+    - {connection: c3, command: [AUTH, tia, tiapw], expect_difference: true, expect: {
+        equals: OK}}
+    - {connection: c3, command: [SUBSCRIBE, "feed:9"], expect: {exists: true}}
+    - {command: [ACL, SETROLE, feedr, "&feed:*", "&extra:*", "+subscribe", "+ping"],
+      expect_difference: true, expect: {equals: OK}}
+    - {connection: c3, command: [PING], expect: {equals: PONG}}
+    - {command: [ACL, SETUSER, tia, resetroles], expect_difference: true, expect: {
+        equals: OK}}
+    - {connection: c3, command: [PING], expect_difference: true, expect: {exists: false}}
+    - {command: [ACL, SETROLE, allc, "&*", "+subscribe", "+ping"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [ACL, SETUSER, uli, on, ">ulipw", "+auth", "+subscribe", "+ping",
+        "role=allc"], expect_difference: true, expect: {equals: OK}}
+    - {connection: c4, command: [AUTH, uli, ulipw], expect_difference: true, expect: {
+        equals: OK}}
+    - {connection: c4, command: [SUBSCRIBE, "any:1"], expect: {exists: true}}
+    - {command: [ACL, SETROLE, allc, "&*", "+subscribe", "+ping", "+get"], expect_difference: true,
+      expect: {equals: OK}}
+    - {connection: c4, command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

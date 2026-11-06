@@ -1,0 +1,31 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c0739a2b4070f08e89f407f4cd19a7ba6bcffc82",
+  "parent": "ae2ab6bba84945c4187eea17f36a2f07b3398042",
+  "pr": 3459,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix missing signalModifiedKey calls for stream commands (#3459)",
+  "date": "2026-09-15",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 27,
+    "executed": 24,
+    "percent": 88,
+    "uncovered": [
+      "src/t_stream.c:3359",
+      "src/t_stream.c:3431",
+      "src/t_stream.c:3551"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 3.9372,
+  "findings": [],
+  "recorded": []
+}

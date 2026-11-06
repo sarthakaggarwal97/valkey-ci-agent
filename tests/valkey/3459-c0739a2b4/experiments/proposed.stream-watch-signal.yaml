@@ -1,0 +1,143 @@
+extends: [valkey.liveness]
+id: proposed.stream-watch-signal
+deployment:
+  modes: [standalone]
+metadata:
+  description: Stream group commands (XGROUP, XSETID, XACK, XREADGROUP, XCLAIM, XAUTOCLAIM)
+    now dirty WATCHed keys via signalModifiedKey, and XDELEX DELREF of a PEL-only
+    reference no longer emits an xdel keyspace event
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: watch
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [XADD, s, 1-0, f, v], expect: {equals: 1-0}}
+    - {command: [XADD, s, 2-0, f, v2], expect: {equals: 2-0}}
+    - {command: [XGROUP, CREATE, s, g, 0], expect: {equals: OK}}
+    - {command: [WATCH, s], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s, g2, 0], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: false}}
+    - {command: [WATCH, s], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s, g, 0], expect: {error: BUSYGROUP}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [PONG]}}
+    - {command: [WATCH, s], expect: {equals: OK}}
+    - {command: [XGROUP, SETID, s, g, 1-0], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: false}}
+    - {command: [WATCH, s], expect: {equals: OK}}
+    - {command: [XGROUP, CREATECONSUMER, s, g, alice], expect: {equals: 1}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: false}}
+    - {command: [WATCH, s], expect: {equals: OK}}
+    - {command: [XGROUP, CREATECONSUMER, s, g, alice], expect: {equals: 0}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [PONG]}}
+    - {command: [WATCH, s], expect: {equals: OK}}
+    - {command: [XGROUP, DELCONSUMER, s, g, alice], expect: {equals: 0}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: false}}
+    - {command: [WATCH, s], expect: {equals: OK}}
+    - {command: [XGROUP, DELCONSUMER, s, g, bob], expect: {equals: 0}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [PONG]}}
+    - {command: [WATCH, s], expect: {equals: OK}}
+    - {command: [XSETID, s, 5-0], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: false}}
+    - {command: [WATCH, s], expect: {equals: OK}}
+    - {command: [XGROUP, DESTROY, s, g2], expect: {equals: 1}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: false}}
+    - {command: [WATCH, s], expect: {equals: OK}}
+    - {command: [XGROUP, DESTROY, s, nope], expect: {equals: 0}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [PONG]}}
+    - {command: [WATCH, s], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g, c1, COUNT, '1', STREAMS, s, '>'], expect: {
+        exists: true}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: false}}
+    - {command: [WATCH, s], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g, c1, COUNT, '1', STREAMS, s, '>'], expect: {
+        exists: false}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [PONG]}}
+    - {command: [WATCH, s], expect: {equals: OK}}
+    - {command: [XACK, s, g, 2-0], expect: {equals: 1}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: false}}
+    - {command: [WATCH, s], expect: {equals: OK}}
+    - {command: [XACK, s, g, 2-0], expect: {equals: 0}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [PONG]}}
+    - {command: [XGROUP, SETID, s, g, 0], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g, c1, STREAMS, s, '>'], expect: {exists: true}}
+    - {command: [WATCH, s], expect: {equals: OK}}
+    - {command: [XCLAIM, s, g, c2, '0', 1-0], expect: {exists: true}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: false}}
+    - {command: [WATCH, s], expect: {equals: OK}}
+    - {command: [XCLAIM, s, g, c2, '0', 99-99], expect: {equals: []}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [PONG]}}
+    - {command: [WATCH, s], expect: {equals: OK}}
+    - {command: [XAUTOCLAIM, s, g, c3, '0', 0-0, COUNT, '1'], expect: {exists: true}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: xdelex
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, notify-keyspace-events, Kt], expect: {equals: OK}}
+    - {command: [XADD, t, 1-0, msg, hello], expect: {equals: 1-0}}
+    - {command: [XGROUP, CREATE, t, grp, 0], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, grp, cons, COUNT, '1', STREAMS, t, '>'], expect: {
+        exists: true}}
+    - {command: [XDELEX, t, KEEPREF, IDS, '1', 1-0], expect: {equals: [1]}}
+    - {command: [SUBSCRIBE, '__keyspace@0__:t'], connection: sub, expect: {exists: true}}
+    - {command: [XDELEX, t, DELREF, IDS, '1', 1-0], expect: {equals: [-1]}}
+    - {connection: sub, read: true, expect_difference: true, expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [watch.completed, xdelex.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: watch}
+- {evidence_id: valkey.command.sequence, source: xdelex}

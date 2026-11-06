@@ -1,0 +1,46 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "22b3faaa623026ef9d343bf88a1c5b06edf5b0b6",
+  "parent": "6163991268a4e9593a9799528be2be883950a6b6",
+  "pr": 866,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "New maxmemory-scripts config to limit EVAL scripts memory, add DENYOOM flag to SCRIPT LOAD (#866)",
+  "date": "2026-09-16",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 84,
+    "executed": 79,
+    "percent": 94,
+    "uncovered": [
+      "src/defrag.c:971",
+      "src/eval.c:384",
+      "src/eval.c:385",
+      "src/eval.c:480",
+      "src/object.c:1697"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 3.0116,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-541dcd715ed8",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'oom' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (EVAL return 1 0)"
+    },
+    {
+      "scenario": "ai-47dd86a887e7",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'oom' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (EVAL return 1 0)"
+    }
+  ]
+}

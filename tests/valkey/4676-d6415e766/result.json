@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d6415e766b8d0273d7f353eacf4791ed0d4ef1a5",
+  "parent": "66f9618f4309250c3e94f7c722e1130467fc7f5f",
+  "pr": 4676,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix return types of three module API declarations to match definitions (#4676)",
+  "date": "2026-09-15",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3707,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only corrects three function-pointer declarations in valkeymodule.h from void to int so they match the definitions in module.c, which already returned int (module.c:10480, 10751, 10765), and adds a doc comment. No executable server code changes: modules resolve these APIs by name at load time and the return-value ABI is unaffected, so both builds behave identically at runtime and no scenario can reach a behavioral difference."
+}

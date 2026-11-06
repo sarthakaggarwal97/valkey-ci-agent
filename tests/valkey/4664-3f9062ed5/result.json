@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3f9062ed54d56ec0e6b0cfb0037cebbd3726acdc",
+  "parent": "d265ca949baf5468a38e6508fc074b15733c710e",
+  "pr": 4664,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Report each server certificate against the config that loaded it (#4664)",
+  "date": "2026-09-15",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.386,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to src/tls.c and only alters how INFO tls attributes each server certificate's serial/expiry (tls_server_cert_serial, tls_server_alt_cert_serial and their expire-time fields) when dual certificates of different key algorithms are loaded, plus carrying that attribution through the background auto-reload. It affects no data, replication, persistence, or command reply outside the diagnostic INFO tls output. Reaching it needs a TLS-enabled build with a tls-port (an option the provider reserves and the command-sequence experiment refuses to CONFIG SET) and a pair of valid RSA"
+}

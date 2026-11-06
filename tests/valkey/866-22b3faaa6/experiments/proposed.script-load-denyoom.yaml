@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.script-load-denyoom
+deployment:
+  modes: [standalone]
+metadata:
+  description: SCRIPT LOAD is rejected with OOM when used memory exceeds maxmemory
+    (new DENYOOM flag), while a no-writes EVAL still runs
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: oom
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, maxmemory-policy, noeviction], expect: {equals: OK}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, 1], expect: {equals: OK}}
+    - {command: [SCRIPT, LOAD, "return 'loaded'"], expect_difference: true, expect: {
+        error: "OOM command not allowed"}}
+    - {command: [SCRIPT, EXISTS, b534286061d4b9e4026607613b95c06c06015ae8], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [EVAL, "return 1", 0], expect: {error: "OOM"}}
+    - {command: [EVAL, "#!lua flags=no-writes\nreturn 7", 0], expect: {equals: 7}}
+    - {command: [SCRIPT, LOAD, "#!lua flags=no-writes\nreturn 7"], expect_difference: true,
+      expect: {error: "OOM command not allowed"}}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: [SCRIPT, LOAD, "return 'loaded'"], expect: {equals: b534286061d4b9e4026607613b95c06c06015ae8}}
+    - {command: [EVALSHA, b534286061d4b9e4026607613b95c06c06015ae8, 0], expect: {
+        equals: loaded}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [oom.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: oom}

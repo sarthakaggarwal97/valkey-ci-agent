@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "754d9f15bcb32fb05c070a2f2389c81d001da9a9",
+  "parent": "0adf657af9327f906430ab526e5cbe326ba5410a",
+  "pr": 4497,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "zset bugfix - Fix lex range sentinel handling in the ordered index (#4497)",
+  "date": "2026-09-14",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 9,
+    "executed": 9,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.749,
+  "findings": [],
+  "recorded": []
+}

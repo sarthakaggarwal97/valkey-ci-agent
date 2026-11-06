@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6225ee7c37ca..66f9618f4309.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-907cb8166415
+seed: 107
+experiment:
+  id: valkey.repl-compression-runtime-change
+  inputs:
+    primary_repl_compression: 'no'
+    replica_repl_compression: lz4
+    primary_change_1: lz4
+    replica_change: 'no'
+    primary_change_2: 'no'
+    change_interval_s: 3
+    mutation_rate: 500
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7600

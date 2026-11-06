@@ -1,0 +1,109 @@
+extends: [valkey.liveness]
+id: proposed.path-hash-commands
+deployment:
+  modes: [standalone]
+metadata:
+  description: Core path hash command semantics, parsing edges, FNX/FXX atomicity,
+    empty-object edge, COPY, transactions and the new 'p' notification class, compared
+    against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ph
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 4}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    checks: {replica: true, variants: true}
+    commands:
+    - {command: [PHSET, k, p, FIELDS, 1, f, v1], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [PHGET, k, p, f], expect_difference: true, expect: {equals: [v1]}}
+    - {command: [PHSET, k, p, FIELDS, 2, f, v2, g, w], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [PHGET, k, p, f, g, nof], expect_difference: true, expect: {equals: [
+          v2, w, null]}}
+    - {command: [PHSET, k, p, FNX, FIELDS, 1, f, zz], expect_difference: true, expect: {
+        exists: false}}
+    - {command: [PHSET, k, p, FNX, FIELDS, 2, nf, x, f, y], expect_difference: true,
+      expect: {exists: false}}
+    - {command: [PHGET, k, p, f, nf], expect_difference: true, expect: {equals: [
+          v2, null]}}
+    - {command: [PHSET, k, p, FXX, FIELDS, 1, nof2, x], expect_difference: true, expect: {
+        exists: false}}
+    - {command: [PHSET, k, p, FXX, FIELDS, 1, f, v3], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [PHGET, k, p, f], expect_difference: true, expect: {equals: [v3]}}
+    - {command: [PHSET, k, '', FIELDS, 1, rf, rv], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [PHSET, k, !!binary 'cAAx', FIELDS, 1, bf, bv], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [PHEXISTS, k, !!binary 'cAAx'], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [PHSET, fields, fields, FIELDS, 1, FIELDS, fields], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [PHGET, fields, fields, FIELDS], expect_difference: true, expect: {
+        equals: [fields]}}
+    - {command: [PHSET, k, big, FIELDS, 5, f1, '1', f2, '2', f3, '3', f4, '4', f5,
+        '5'], expect_difference: true, expect: {equals: OK}}
+    - {command: [PHGETALL, k, big], expect_difference: true, expect: {error: false}}
+    - {command: [PHGETALL, k, nopath], expect_difference: true, expect: {error: false}}
+    - {command: [PHCARD, k], expect_difference: true, expect: {equals: 4}}
+    - {command: [PHSET, k, q, FIELDS, 2, f, v], expect_difference: true, expect: {
+        error: syntax}}
+    - {command: [PHSET, k, q, FIELDS, 0, f, v], expect_difference: true, expect: {
+        error: true}}
+    - {command: [PHSET, k, q, FIELDS, 9223372036854775807, f, v], expect_difference: true,
+      expect: {error: syntax}}
+    - {command: [PHSET, k, q, FIELDS, 9223372036854775808, f, v], expect_difference: true,
+      expect: {error: true}}
+    - {command: [PHMSET, k, m1, FIELDS, 1, a, '1', m2, FIELDS, 2, b, '2', c, '3'],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [PHMGET, k, m1, FIELDS, 2, a, zz, m2, FIELDS, 1, c], expect_difference: true,
+      expect: {equals: ['1', null, '3']}}
+    - {command: [PHMSET, k, m3, FIELDS, 1, a, '1', EXTRA], expect_difference: true,
+      expect: {error: syntax}}
+    - {command: [PHEXISTS, k, m3], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHDEL, k, m2, b, zz], expect_difference: true, expect: {equals: 1}}
+    - {command: [PHDEL, k, m2, c], expect_difference: true, expect: {equals: 1}}
+    - {command: [PHEXISTS, k, m2], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHDEL, k, m1], expect_difference: true, expect: {equals: 1}}
+    - {command: [PHDEL, k, nopath], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHSET, k2, solo, FIELDS, 1, f, v], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [PHDEL, k2, solo], expect_difference: true, expect: {equals: 1}}
+    - {command: [EXISTS, k2], expect_difference: true, expect: {equals: 1}}
+    - {command: [PHCARD, k2], expect_difference: true, expect: {equals: 0}}
+    - {command: [TYPE, k2], expect_difference: true, expect: {equals: pathhash}}
+    - {command: [DEL, k2], expect_difference: true, expect: {equals: 1}}
+    - {command: [SET, s, x], expect: {equals: OK}}
+    - {command: [PHSET, s, p, FIELDS, 1, f, v], expect_difference: true, expect: {
+        error: WRONGTYPE}}
+    - {command: [PHGET, s, p, f], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [GET, k], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [COPY, k, kcopy], expect_difference: true, expect: {equals: 1}}
+    - {command: [PHCARD, kcopy], expect_difference: true, expect: {equals: 4}}
+    - {command: [PHDEL, kcopy, big], expect_difference: true, expect: {equals: 1}}
+    - {command: [PHCARD, k], expect_difference: true, expect: {equals: 4}}
+    - {command: [OBJECT, ENCODING, k], compare: skip, expect: {equals: pathhash}}
+    - {command: [MEMORY, USAGE, k], compare: skip, expect: {min: 1}}
+    - {command: [TYPE, k], expect_difference: true, expect: {equals: pathhash}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PHSET, k, tx, FIELDS, 1, f, v], expect_difference: true, expect: {
+        equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [OK]}}
+    - {command: [PHEXISTS, k, tx], expect_difference: true, expect: {equals: 1}}
+    - {command: [CONFIG, SET, notify-keyspace-events, Kp], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SUBSCRIBE, '__keyspace@0__:nk'], connection: sub, expect: {error: false}}
+    - {command: [PHSET, nk, np, FIELDS, 1, f, v], expect_difference: true, expect: {
+        equals: OK}}
+    - {read: true, connection: sub, expect_difference: true, expect: {equals: [[message,
+            '__keyspace@0__:nk', phset]]}}
+    - {command: [SCAN, 0, TYPE, pathhash, COUNT, 1000], compare: skip, expect: {error: false}}
+required_events: [ph.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ph}

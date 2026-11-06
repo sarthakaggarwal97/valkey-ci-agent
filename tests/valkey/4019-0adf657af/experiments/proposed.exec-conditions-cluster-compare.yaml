@@ -1,0 +1,71 @@
+extends: [valkey.liveness]
+id: proposed.exec-conditions-cluster-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Conditional EXEC cluster routing on two-node clusters - CROSSSLOT with
+    condition keys, EXEC without MULTI before routing, MOVED for remote condition
+    keys, ASK for a missing condition key in a migrating slot
+components:
+- use: valkey.action.commands
+  id: routing
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, SETSLOT, 5061, NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 5061, NODE, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [GET, bar], node: 0, wait_s: 10, expect: {error: "MOVED"}}
+    - {command: [SET, "{a}k", v], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: QUEUED}}
+    - {command: [EXEC, IFEQ, "{a}k", v], expect_difference: true, expect: {equals: [
+          1]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "{a}dest", x], expect: {equals: QUEUED}}
+    - {command: [EXEC, IFEQ, "{a}k", v, NX, "{b}k"], expect_difference: true, expect: {
+        error: "CROSSSLOT"}}
+    - {command: [EXISTS, "{a}dest"], expect: {equals: 0}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "{b}dest", x], expect: {equals: QUEUED}}
+    - {command: [EXEC, IFEQ, "{a}k", v], expect_difference: true, expect: {error: "CROSSSLOT"}}
+    - {command: [EXEC, IFEQ, "{a}k", v, IFEQ, "{b}k", v], expect_difference: true,
+      expect: {error: "EXEC without MULTI"}}
+    - {command: [EXEC, IFEQ, bar, v], expect_difference: true, expect: {error: "EXEC\
+          \ without MULTI"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, bar, remote], expect: {error: "MOVED"}}
+    - {command: [EXEC, IFEQ, "{a}k", v], expect_difference: true, expect: {error: "previous\
+          \ errors"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: QUEUED}}
+    - {command: [EXEC, IFEQ, bar, v], expect_difference: true, expect: {error: "MOVED"}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [SET, "{foo}x", v], expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, MIGRATING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, "{foo}x"], expect: {equals: QUEUED}}
+    - {command: [EXEC, XX, "{foo}x"], expect_difference: true, expect: {equals: [
+          v]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, "{foo}x"], expect: {equals: QUEUED}}
+    - {command: [EXEC, XX, "{foo}missing"], expect_difference: true, expect: {error: "ASK"}}
+    - {command: [CLUSTER, SETSLOT, 12182, STABLE], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, STABLE], node: 1, expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [routing.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: routing}

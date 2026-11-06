@@ -1,0 +1,20 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 63f56bd16c83..f26b1609e577.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0f144d571f37
+seed: 46121
+experiment:
+  id: proposed.repl-throttle-stall
+  inputs:
+    pause_s: 3
+    mutation_rate: 2000
+    value_size: 16384
+    mutable_keys: 400
+    stable_keys: 500
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7000
+  server_config:
+    repl-throttling-enabled: 'yes'
+    client-output-buffer-limit: replica 4096mb 1mb 3600
+    repl-backlog-size: 8mb

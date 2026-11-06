@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 88a536033c88..63f56bd16c83.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-90304fe3882f
+seed: 1
+experiment:
+  id: proposed.module-external-memory
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

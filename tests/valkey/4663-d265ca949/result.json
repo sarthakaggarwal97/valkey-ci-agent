@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d265ca949baf5468a38e6508fc074b15733c710e",
+  "parent": "d6415e766b8d0273d7f353eacf4791ed0d4ef1a5",
+  "pr": 4663,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fixes to dual certs (#4663)",
+  "date": "2026-09-15",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.6078,
+  "findings": [],
+  "recorded": [],
+  "reason": "The only server-code change (src/tls.c) adds the alternate dual-cert key file to the TLS auto-reload change-detection metadata (tlsMaterialsMetadata, captureMetadata, metadataChanged), so a periodic background reload now notices when only the alt key file changed on disk. This path (metadataChanged) is reached solely from the background tls-auto-reload-interval timer, never from CONFIG SET. It is unreachable and unobservable with the installed fuzzer components: it requires an OpenSSL build with TLS enabled and real certs (tls-port is a forbidden provider-owned config and no component configur"
+}

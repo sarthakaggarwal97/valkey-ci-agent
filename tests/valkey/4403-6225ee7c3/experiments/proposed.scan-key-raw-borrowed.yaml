@@ -1,0 +1,104 @@
+extends: [valkey.liveness]
+id: proposed.scan-key-raw-borrowed
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_ScanKeyRawBorrowed via scan.scan_key_raw on every encoding (listpack/hashtable
+    hash, listpack/intset/hashtable set, listpack/btree zset), wrong types and a missing
+    key, compared with the parent build and parent module
+inputs:
+  required: [parent, module, module_parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "scan.so built at the change, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "scan.so built at the parent commit, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: scan
+  config:
+    compare_with: {$ref: inputs.parent}
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [HSET, rh, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [scan.scan_key_raw, rh], expect_difference: true, expect: {equals: [
+          [f1, v1], [f2, v2]]}}
+    - {command: [scan.scan_key, rh]}
+    - {command: [HSET, rh2, 10, 20, f3, 7], expect: {equals: 2}}
+    - {command: [scan.scan_key_raw, rh2], expect_difference: true, expect: {equals: [
+          ["10", "20"], [f3, "7"]]}}
+    - {command: [HSET, rh3, "", ""], expect: {equals: 1}}
+    - {command: [scan.scan_key_raw, rh3], expect_difference: true, expect: {equals: [
+          ["", ""]]}}
+    - {command: [HSET, rbin, !!binary "AGYAAQ==", !!binary "dgAA"], expect: {equals: 1}}
+    - {command: [scan.scan_key_raw, rbin], expect_difference: true, expect: {error: false}}
+    - {command: [HSET, rlong, f1, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, rlong], compare: skip}
+    - {command: [scan.scan_key_raw, rlong], expect_difference: true, expect: {equals: [
+          [f1, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]]}}
+    - {command: [HSET, rttl, f1, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      expect: {equals: 1}}
+    - {command: [HEXPIRE, rttl, 10000, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [scan.scan_key_raw, rttl], expect_difference: true, expect: {equals: [
+          [f1, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]]}}
+    - {command: [HSET, rmany, f01, v01, f02, v02, f03, v03, f04, v04, f05, v05, f06,
+        v06, f07, v07, f08, v08, f09, v09, f10, v10, f11, v11, f12, v12, f13, v13,
+        f14, v14, f15, v15, f16, v16, f17, v17, f18, v18, f19, v19, f20, v20, f21,
+        v21, f22, v22, f23, v23, f24, v24, big, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      expect: {equals: 25}}
+    - {command: [HLEN, rmany], expect: {equals: 25}}
+    - {command: [scan.scan_key_raw, rmany], expect_difference: true, expect: {error: false}}
+    - {command: [SADD, sl, alpha, beta, gamma], expect: {equals: 3}}
+    - {command: [scan.scan_key_raw, sl], expect_difference: true, expect: {contains: gamma}}
+    - {command: [scan.scan_key, sl]}
+    - {command: [SADD, si, 9223372036854775807, -9223372036854775808, 0], expect: {
+        equals: 3}}
+    - {command: [scan.scan_key_raw, si], expect_difference: true, expect: {contains: "-9223372036854775808"}}
+    - {command: [scan.scan_key_raw, si], expect_difference: true, expect: {contains: "9223372036854775807"}}
+    - {command: [SADD, sh, a, b, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      expect: {equals: 3}}
+    - {command: [scan.scan_key_raw, sh], expect_difference: true, expect: {error: false}}
+    - {command: [ZADD, zl, 1.5, m1, 2, m2], expect: {equals: 2}}
+    - {command: [scan.scan_key_raw, zl], expect_difference: true, expect: {equals: [
+          [m1, "1.5"], [m2, "2"]]}}
+    - {command: [scan.scan_key, zl]}
+    - {command: [ZADD, zb, 1.5, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, zb], compare: skip}
+    - {command: [scan.scan_key_raw, zb], expect_difference: true, expect: {equals: [
+          [xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,
+            "1.5"]]}}
+    - {command: [ZADD, zb2, inf, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      expect: {equals: 1}}
+    - {command: [scan.scan_key_raw, zb2], expect_difference: true, expect: {equals: [
+          [xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,
+            inf]]}}
+    - {command: [ZADD, zb3, 3.0e300, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,
+        -1.5, short1, 0, short2], expect: {equals: 3}}
+    - {command: [scan.scan_key_raw, zb3], expect_difference: true, expect: {error: false}}
+    - {command: [SET, str, hello], expect: {equals: OK}}
+    - {command: [RPUSH, lst, a, b], expect: {equals: 2}}
+    - {command: [scan.scan_key_raw, str], expect_difference: true, expect: {equals: []}}
+    - {command: [scan.scan_key_raw, lst], expect_difference: true, expect: {equals: []}}
+    - {command: [scan.scan_key_raw, nosuchkey], expect_difference: true, expect: {
+        error: "not found"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [scan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scan}

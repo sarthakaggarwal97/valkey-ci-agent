@@ -1,0 +1,73 @@
+extends: [valkey.liveness]
+id: proposed.module-external-memory
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_IncrExternalMemory/VM_DecrExternalMemory via infotest.so's info.setexternal
+    - INFO debug reporting, maxmemory OOM denial and eviction driven by module external
+    memory
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: accounting
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {maxmemory-policy: noeviction}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [info.setexternal, 321], expect_difference: true, expect: {equals: 321}}
+    - {command: [INFO, debug], compare: skip, expect: {contains: "used_memory_module_external:321"}}
+    - {command: [info.setexternal, -1], expect_difference: true, expect: {error: "invalid\
+          \ external memory value"}}
+    - {command: [info.setexternal, 0], expect_difference: true, expect: {equals: 0}}
+    - {command: [INFO, debug], compare: skip, expect: {contains: "used_memory_module_external:0"}}
+    - {command: [SET, base, v], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, 100mb], expect: {equals: OK}}
+    - {command: [info.setexternal, 1073741824], expect_difference: true, expect: {
+        equals: 1073741824}}
+    - {command: [SET, denied, v], expect_difference: true, expect: {error: "OOM"}}
+    - {command: [GET, base], expect: {equals: v}}
+    - {command: [info.setexternal, 0], expect_difference: true, expect: {equals: 0}}
+    - {command: [SET, allowed, v], expect: {equals: OK}}
+    - {command: [info.setexternal, 9223372036854775807], expect_difference: true,
+      expect: {equals: 9223372036854775807}}
+    - {command: [INFO, debug], compare: skip, expect: {contains: "used_memory_module_external:9223372036854775807"}}
+    - {command: [SET, denied2, v], expect_difference: true, expect: {error: "OOM"}}
+    - {command: [info.setexternal, 0], expect_difference: true, expect: {equals: 0}}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: [SET, final, v], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+- use: valkey.action.commands
+  id: evict
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {maxmemory-policy: allkeys-random}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [MSET, k1, v1, k2, v2, k3, v3], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 3}}
+    - {command: [CONFIG, SET, maxmemory, 100mb], expect: {equals: OK}}
+    - {command: [info.setexternal, 1073741824], expect_difference: true, expect: {
+        equals: 1073741824}}
+    - {command: [DBSIZE], wait_s: 10, expect_difference: true, expect: {equals: 0}}
+    - {command: [info.setexternal, 0], expect_difference: true, expect: {equals: 0}}
+    - {command: [SET, after, v], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [accounting.completed, evict.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: accounting}
+- {evidence_id: valkey.command.sequence, source: evict}

@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.path-hash-persistence
+deployment:
+  modes: [standalone]
+metadata:
+  description: Path hash data, including an emptied path-hash key and a binary path,
+    survives a restart from RDB (SAVE) or from a rewritten AOF (rewritePathHashObject
+    plus incremental replay)
+inputs:
+  properties:
+    appendonly: {type: string, enum: ['yes', 'no'], default: 'no'}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: {$ref: inputs.appendonly}, appendfsync: always, hash-max-listpack-entries: 4}
+    timeout_s: 30
+    commands:
+    - {command: [PHMSET, k, '', FIELDS, 1, rf, rv, a, FIELDS, 1, f, va, ab, FIELDS,
+        1, f, vab, abc, FIELDS, 1, f, vabc], expect_difference: true, expect: {equals: OK}}
+    - {command: [PHSET, k, big, FIELDS, 6, f1, '1', f2, '2', f3, '3', f4, '4', f5,
+        '5', f6, '6'], expect_difference: true, expect: {equals: OK}}
+    - {command: [PHSET, k, !!binary 'cAAx', FIELDS, 1, bf, bv], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [PHSET, e, solo, FIELDS, 1, f, v], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [PHDEL, e, solo], expect_difference: true, expect: {equals: 1}}
+    - {command: [BGREWRITEAOF], expect: {error: false}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 20, expect: {contains: 'aof_rewrite_in_progress:0'}}
+    - {command: [PHSET, k, abcd, FIELDS, 1, f, vabcd], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [PHDEL, k, abc, f], expect_difference: true, expect: {equals: 1}}
+    - {command: [DUMP, k], expect_difference: true, expect: {exists: true}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [PHCARD, k], expect_difference: true, expect: {equals: 6}}
+    - {command: [PHLONGEST, k, abcdzz], expect_difference: true, expect: {equals: abcd}}
+    - {command: [PHGET, k, '', rf], expect_difference: true, expect: {equals: [rv]}}
+    - {command: [PHGET, k, !!binary 'cAAx', bf], expect_difference: true, expect: {
+        equals: [bv]}}
+    - {command: [PHGETALL, k, big], expect_difference: true, expect: {error: false}}
+    - {command: [PHEXISTS, k, abc], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHGET, k, abcd, f], expect_difference: true, expect: {equals: [vabcd]}}
+    - {command: [EXISTS, e], expect_difference: true, expect: {equals: 1}}
+    - {command: [PHCARD, e], expect_difference: true, expect: {equals: 0}}
+    - {command: [TYPE, e], expect_difference: true, expect: {equals: pathhash}}
+    - {command: [PHSET, e, again, FIELDS, 1, f, v], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [PHCARD, e], expect_difference: true, expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

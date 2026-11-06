@@ -1,0 +1,40 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f26b1609e57757783536b6ac9a513115f4111e88",
+  "parent": "63f56bd16c838faffb9330c0e0bfa54a3459248c",
+  "pr": 4612,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix repl throttle read-handler and throttle_checked ordering, improve tcl tests (#4612)",
+  "date": "2026-09-14",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 4,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 16.5555,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-5b44ef9550c7",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'full-resync' returned ERROR: not judged: the preconditions were not recorded: valkey.replication.output-limit-logged from logs"
+    },
+    {
+      "scenario": "ai-bb118e36c83b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "no trustworthy verdict is possible; required components did not do their part outside an oracle or action, depend on one that did not, judged a deployment whose teardown failed, or were skipped: kill-replica"
+    }
+  ]
+}

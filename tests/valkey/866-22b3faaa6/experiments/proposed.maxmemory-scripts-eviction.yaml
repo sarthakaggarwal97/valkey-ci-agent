@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.maxmemory-scripts-eviction
+deployment:
+  modes: [standalone]
+metadata:
+  description: maxmemory-scripts evicts EVAL scripts over the limit - synchronously
+    at EVAL registration, asynchronously from the config time proc, and through the
+    maxmemory percentage hook - while SCRIPT LOAD scripts are spared
+components:
+- use: valkey.action.tools
+  id: evict
+  timeout_s: 600
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 120
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, SCRIPT, LOAD, "return 'loaded'"], expect: {
+        stdout: {contains: b534286061d4b9e4026607613b95c06c06015ae8}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, maxmemory-scripts, 1kb], expect_difference: true,
+      expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 450, -r, 1000000000, EVAL, "return\
+          \ '__rand_int__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'",
+        0], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, EVAL, "local i=redis.call('info','memory')\
+          \ local c=tonumber(string.match(i,'number_of_cached_scripts:(%d+)')) if\
+          \ c<400 then return 'EVICTED' else return 'FULL' end", 0], expect_difference: true,
+      expect: {stdout: {equals: "EVICTED\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, EVAL, "local i=redis.call('info','stats')\
+          \ local c=tonumber(string.match(i,'evicted_scripts:(%d+)')) if c>0 then\
+          \ return 'SOME' else return 'NONE' end", 0], expect_difference: true, expect: {
+        stdout: {equals: "SOME\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SCRIPT, EXISTS, b534286061d4b9e4026607613b95c06c06015ae8],
+      expect: {stdout: {contains: "1"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, maxmemory-scripts, 0], expect_difference: true,
+      expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SCRIPT, FLUSH, SYNC], expect: {stdout: {
+          equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 450, -r, 1000000000, EVAL, "return\
+          \ '__rand_int__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'",
+        0], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, maxmemory-scripts, 1kb], expect_difference: true,
+      expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, -r, 3, -i, 0.5, PING], expect: {stdout: {
+          contains: PONG}}}
+    - {tool: valkey-cli, args: [-p, $port, EVAL, "local i=redis.call('info','memory')\
+          \ local c=tonumber(string.match(i,'number_of_cached_scripts:(%d+)')) if\
+          \ c<400 then return 'EVICTED' else return 'FULL' end", 0], expect_difference: true,
+      expect: {stdout: {equals: "EVICTED\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SCRIPT, FLUSH, SYNC], expect: {stdout: {
+          equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, maxmemory-scripts, "1%"],
+      expect_difference: true, expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 450, -r, 1000000000, EVAL, "return\
+          \ '__rand_int__aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'",
+        0], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, EVAL, "local i=redis.call('info','memory')\
+          \ local c=tonumber(string.match(i,'number_of_cached_scripts:(%d+)')) if\
+          \ c<400 then return 'EVICTED' else return 'FULL' end", 0], expect: {stdout: {
+          equals: "FULL\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, maxmemory, 30mb], expect: {
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, -r, 3, -i, 0.5, PING], expect: {stdout: {
+          contains: PONG}}}
+    - {tool: valkey-cli, args: [-p, $port, EVAL, "local i=redis.call('info','memory')\
+          \ local c=tonumber(string.match(i,'number_of_cached_scripts:(%d+)')) if\
+          \ c<400 then return 'EVICTED' else return 'FULL' end", 0], expect_difference: true,
+      expect: {stdout: {equals: "EVICTED\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, maxmemory, 0], expect: {stdout: {
+          equals: "OK\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: evict}

@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.acl-role-config-rewrite
+deployment:
+  modes: [standalone]
+metadata:
+  description: Roles and role memberships round-trip through CONFIG REWRITE and a
+    restart, including a second rewrite that replaces existing role lines
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [ACL, SETROLE, beta, "~b:*", "+get"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [ACL, SETROLE, "alpha.Ops-2!", "~base:*", "+get", "(~a:* +set)"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [ACL, SETUSER, erin, on, ">erinpw", "+auth", "role=beta,alpha.Ops-2!"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ACL, ROLES], expect_difference: true, expect: {equals: ["alpha.Ops-2!",
+          beta]}}
+    - {command: [ACL, GETROLE, "alpha.Ops-2!"], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [ACL, GETUSER, erin], expect_difference: true, expect: {exists: true}}
+    - {connection: c2, command: [AUTH, erin, erinpw], expect_difference: true, expect: {
+        equals: OK}}
+    - {connection: c2, command: [SET, "a:1", v], expect: {equals: OK}}
+    - {connection: c2, command: [DEL, "b:1"], expect_difference: true, expect: {error: true}}
+    - {command: [ACL, SETROLE, gamma, "+ping"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, erin, "role=gamma,beta"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ACL, ROLES], expect_difference: true, expect: {equals: ["alpha.Ops-2!",
+          beta, gamma]}}
+    - {command: [ACL, GETUSER, erin], expect_difference: true, expect: {exists: true}}
+    - {connection: c2, command: [AUTH, erin, erinpw], expect_difference: true, expect: {
+        equals: OK}}
+    - {connection: c2, command: [PING], expect: {equals: PONG}}
+    - {connection: c2, command: [SET, "a:1", v2], expect_difference: true, expect: {
+        error: true}}
+    - {command: [ACL, DELROLE, "alpha.Ops-2!"], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [ACL, ROLES], expect_difference: true, expect: {equals: [beta, gamma]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

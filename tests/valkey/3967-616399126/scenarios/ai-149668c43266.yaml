@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c0739a2b4070..6163991268a4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-149668c43266
+seed: 1201
+experiment:
+  id: proposed.acl-role-config-rewrite
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

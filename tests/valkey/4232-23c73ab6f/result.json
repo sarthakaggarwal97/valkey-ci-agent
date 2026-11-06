@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "23c73ab6f20662a7d60ac71636930daf5ce4992b",
+  "parent": "3f9062ed54d56ec0e6b0cfb0037cebbd3726acdc",
+  "pr": 4232,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Bump minimum cmake version to 3.24 (#4232)",
+  "date": "2026-09-16",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2049,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a one-line build-system edit: it raises cmake_minimum_required from 3.10 to 3.24 in CMakeLists.txt. It alters no source code, no command behaviour, no replication/persistence path, and no replies; any build that compiles is byte-for-byte governed by the same sources as before. This is a build/CI change with no runtime behaviour change, so no scenario is needed."
+}

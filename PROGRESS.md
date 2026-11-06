@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-06T00:29+00:00.
+Updated 2026-11-06T00:32+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 233 | 2259 | #4506 (2026-09-16) | 231 | 33.3 |
+| valkey-io/valkey | 252 | 2240 | #4076 (2026-09-14) | 250 | 36.0 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 107 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 56 | 8.9 |
 | valkey-io/valkey-search | 147 | 521 | #1207 (2026-07-01) | 147 | 21.0 |
@@ -13,28 +13,28 @@ Updated 2026-11-06T00:29+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-05T22:45:05+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42113690922): 20 merge(s) tested, 9 without a code change.
+[2026-11-06T00:32:24+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42124125580): 20 merge(s) tested, 1 without a code change.
 
-- [valkey-io/valkey#3645](https://github.com/valkey-io/valkey/pull/3645) ([tests](tests/valkey/3645-f4cbd1c5e/)): fix: Reject module writes during client pause to prevent crash (#3645): 1 of 7 test(s) reached the change, coverage 25%; crash, fixed by #3645 (recorded); [crash, appeared after #3645](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/70); crash, introduced and since fixed (recorded)
-- [valkey-io/valkey#4777](https://github.com/valkey-io/valkey/pull/4777) ([tests](tests/valkey/4777-06050cb1f/)): Fix geohashGetLatDistance() when latitudes are equal (#4777): 2 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3491](https://github.com/valkey-io/valkey/pull/3491) ([tests](tests/valkey/3491-c79f17d25/)): zset: add in-place fast path for score updates in listpack encoding (#3491): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3157](https://github.com/valkey-io/valkey/pull/3157) ([tests](tests/valkey/3157-60f3944c1/)): Increase valkey-benchmark max latency bucket to 60 seconds (#3157): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#4745](https://github.com/valkey-io/valkey/pull/4745) ([tests](tests/valkey/4745-019ec0bc2/)): Remove duplicate pointer-key hashtable callbacks (#4745): declined: Pure refactor with no observable behaviour change. In bgiteration.c the removed pointerHash was byte-for-byte Thomas Wang's 64-bit mix, which is exactly what the new shared hashtablePointerHash computes (wangHash64), and the removed pointerCompare equals the hashtable's NULL-callback defau
-- [valkey-io/valkey#4750](https://github.com/valkey-io/valkey/pull/4750) ([tests](tests/valkey/4750-77b00b2dd/)): bgiteration: fix barrier item count for swap/flush during termination (#4750): declined: The fix removes a double-decrement of bgIterator.barrier_items that only occurs when queued SWAPDB/FLUSHDB barrier items are drained during iterator termination. Those barrier items are queued exclusively for non-consistent background iterators: handleSwapdb (bgiteration.c:1801) queues SWA
-- [valkey-io/valkey#4752](https://github.com/valkey-io/valkey/pull/4752) ([tests](tests/valkey/4752-504562458/)): Remove duplicate clientsCronTcpIsClosing() call in clientsCron (#4752): declined: The change deletes a redundant second call to clientsCronTcpIsClosing() in clientsCron(); the same function is still called first in the per-client check chain (server.c:1301), and none of the checks between the two call sites (query/output buffer resize, expensive-client tracking) can cha
-- [valkey-io/valkey#3798](https://github.com/valkey-io/valkey/pull/3798) ([tests](tests/valkey/3798-f2bcd083d/)): ZSTD Support for Streaming Compression  (#3798): 1 of 12 test(s) reached the change, coverage 90%
-- [valkey-io/valkey#4739](https://github.com/valkey-io/valkey/pull/4739) ([tests](tests/valkey/4739-27c68f14f/)): Fix valkey-check-aof detection of Valkey RDB base files (#4739): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4747](https://github.com/valkey-io/valkey/pull/4747) ([tests](tests/valkey/4747-eae50c20c/)): Regenerate commands.def for DELEX (#4747): 0 of 2 test(s) reached the change
-- [valkey-io/valkey#4607](https://github.com/valkey-io/valkey/pull/4607) ([tests](tests/valkey/4607-7945915f5/)): Add DELEX command with conditional predicates (#4607): 7 of 10 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4738](https://github.com/valkey-io/valkey/pull/4738) ([tests](tests/valkey/4738-11387e50c/)): Persist OPENSSL_PREFIX across builds (#4738): declined: The change is build-system only: a single line in src/Makefile that writes OPENSSL_PREFIX into .make-settings during 'make persist-settings' so incremental rebuilds remember the OpenSSL location. It alters no server, command, replication, persistence, or tool behaviour — given identical bu
-- [valkey-io/valkey#4704](https://github.com/valkey-io/valkey/pull/4704) ([tests](tests/valkey/4704-7b87fee26/)): Preserve expired but unreaped fields across listpack-to-hashtable conversion (#4704): 6 of 6 test(s) reached the change, coverage 100%; crash, fixed by #4704 (recorded)
-- [valkey-io/valkey#4712](https://github.com/valkey-io/valkey/pull/4712) ([tests](tests/valkey/4712-b4a976f68/)): Fix execGetKeys() dropping the first 256 keys past the static buffer (#4712): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4702](https://github.com/valkey-io/valkey/pull/4702) ([tests](tests/valkey/4702-00a8a1955/)): Attribute LZ4 codec context memory to client memory usage (#4702): 0 of 6 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4716](https://github.com/valkey-io/valkey/pull/4716) ([tests](tests/valkey/4716-e082696cf/)): Document VALKEYMODULE_OPTIONS_HANDLE_FORKLESS (#4716): declined: The diff touches only comments in src/module.c: it adds documentation for VALKEYMODULE_OPTIONS_HANDLE_FORKLESS above VM_SetModuleOptions and corrects a stale flag name (HANDLE_FORKLESS_SAVE -> HANDLE_FORKLESS) in another comment. No code, constant, or behaviour changes, so there is no path
-- [valkey-io/valkey#4714](https://github.com/valkey-io/valkey/pull/4714) ([tests](tests/valkey/4714-f93169d8b/)): Deflake BgIterationTest.createAndCleanup (#4714): declined: The change modifies only src/unit/test_bgiteration.cpp, loosening a timing assertion (runtime_ms < 5 to < 1000) in the BgIterationTest.createAndCleanup unit test to deflake it in CI. It is a test-only change with no effect on Valkey server behavior, commands, replication, persistence, or t
-- [valkey-io/valkey#4654](https://github.com/valkey-io/valkey/pull/4654) ([tests](tests/valkey/4654-5c24e5d20/)): [Bug Fix] Echo the rejected request epoch in FAILOVER_AUTH_NACK (#4654): 0 of 9 test(s) reached the change, coverage 64%, 1 skipped (required capability 'host' is unsupported)
-- [valkey-io/valkey#4709](https://github.com/valkey-io/valkey/pull/4709) ([tests](tests/valkey/4709-bf8031274/)): Regenerate commands.def for the path hash command tips (#4709): 0 of 2 test(s) reached the change
-- [valkey-io/valkey#4703](https://github.com/valkey-io/valkey/pull/4703) ([tests](tests/valkey/4703-72049a302/)): Report the real error when a reply schema fails validation (#4703): declined: The change modifies only utils/req-res-log-validator.py, a Python developer/test utility that validates reply-schema logs; it alters error reporting in that script, not any behaviour of valkey-server, replication, cluster, or the shipped tools. The fuzzer exercises real servers and Valkey 
+- [valkey-io/valkey#4506](https://github.com/valkey-io/valkey/pull/4506) ([tests](tests/valkey/4506-a84b2f5b9/)): Feature valkey path hash (#4506): 6 of 9 test(s) reached the change, coverage 85%
+- [valkey-io/valkey#4232](https://github.com/valkey-io/valkey/pull/4232) ([tests](tests/valkey/4232-23c73ab6f/)): Bump minimum cmake version to 3.24 (#4232): declined: The change is a one-line build-system edit: it raises cmake_minimum_required from 3.10 to 3.24 in CMakeLists.txt. It alters no source code, no command behaviour, no replication/persistence path, and no replies; any build that compiles is byte-for-byte governed by the same sources as before
+- [valkey-io/valkey#4664](https://github.com/valkey-io/valkey/pull/4664) ([tests](tests/valkey/4664-3f9062ed5/)): Report each server certificate against the config that loaded it (#4664): declined: The change is confined to src/tls.c and only alters how INFO tls attributes each server certificate's serial/expiry (tls_server_cert_serial, tls_server_alt_cert_serial and their expire-time fields) when dual certificates of different key algorithms are loaded, plus carrying that attributio
+- [valkey-io/valkey#4663](https://github.com/valkey-io/valkey/pull/4663) ([tests](tests/valkey/4663-d265ca949/)): Fixes to dual certs (#4663): declined: The only server-code change (src/tls.c) adds the alternate dual-cert key file to the TLS auto-reload change-detection metadata (tlsMaterialsMetadata, captureMetadata, metadataChanged), so a periodic background reload now notices when only the alt key file changed on disk. This path (metada
+- [valkey-io/valkey#4676](https://github.com/valkey-io/valkey/pull/4676) ([tests](tests/valkey/4676-d6415e766/)): Fix return types of three module API declarations to match definitions (#4676): declined: The change only corrects three function-pointer declarations in valkeymodule.h from void to int so they match the definitions in module.c, which already returned int (module.c:10480, 10751, 10765), and adds a doc comment. No executable server code changes: modules resolve these APIs by nam
+- [valkey-io/valkey#3853](https://github.com/valkey-io/valkey/pull/3853) ([tests](tests/valkey/3853-66f9618f4/)): Streaming Compression support for Replication (#3853): 0 of 11 test(s) reached the change, coverage 87%
+- [valkey-io/valkey#4403](https://github.com/valkey-io/valkey/pull/4403) ([tests](tests/valkey/4403-6225ee7c3/)): Add VM_ScanKeyRawBorrowed to allow scanning keys without allocating (#4403): 2 of 2 test(s) reached the change, coverage 93%
+- [valkey-io/valkey#866](https://github.com/valkey-io/valkey/pull/866) ([tests](tests/valkey/866-22b3faaa6/)): New maxmemory-scripts config to limit EVAL scripts memory, add DENYOOM flag to SCRIPT LOAD (#866): 4 of 4 test(s) reached the change, coverage 94%
+- [valkey-io/valkey#3967](https://github.com/valkey-io/valkey/pull/3967) ([tests](tests/valkey/3967-616399126/)): Add ACL role support (#3967): 7 of 7 test(s) reached the change, coverage 82%
+- [valkey-io/valkey#3459](https://github.com/valkey-io/valkey/pull/3459) ([tests](tests/valkey/3459-c0739a2b4/)): Fix missing signalModifiedKey calls for stream commands (#3459): 2 of 2 test(s) reached the change, coverage 88%
+- [valkey-io/valkey#2972](https://github.com/valkey-io/valkey/pull/2972) ([tests](tests/valkey/2972-ae2ab6bba/)): Add optional XX to SISMEMBER; return -1 if the key does not exist (#2972): 3 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#4665](https://github.com/valkey-io/valkey/pull/4665) ([tests](tests/valkey/4665-74793bd02/)): Check the SORT destination that is actually written (#4665): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#4425](https://github.com/valkey-io/valkey/pull/4425): to retry, 1 of 20 run(s) could not start: the run could not start: runner execution failed during deployment.provision: LocalDeploymentError: Instance valkey-0 failed to start within 30s (process output from /h
+- [valkey-io/valkey#3253](https://github.com/valkey-io/valkey/pull/3253) ([tests](tests/valkey/3253-6ae7eb488/)): Introduce INCREX command (#3253): 1 of 6 test(s) reached the change, coverage 80%
+- [valkey-io/valkey#4554](https://github.com/valkey-io/valkey/pull/4554) ([tests](tests/valkey/4554-cd79e02c1/)): zset bugfix - Fix btree score range resolution and prefix staleness (#4554): 2 of 2 test(s) reached the change, coverage 82%
+- [valkey-io/valkey#4497](https://github.com/valkey-io/valkey/pull/4497) ([tests](tests/valkey/4497-754d9f15b/)): zset bugfix - Fix lex range sentinel handling in the ordered index (#4497): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#4019](https://github.com/valkey-io/valkey/pull/4019) ([tests](tests/valkey/4019-0adf657af/)): Add `IFEQ`, `IFNE`, `XX`, and `NX` options to `EXEC` command (#4019): 4 of 4 test(s) reached the change, coverage 95%
+- [valkey-io/valkey#4005](https://github.com/valkey-io/valkey/pull/4005): to retry, 1 of 30 run(s) could not start: the run could not start: runner execution failed during deployment.provision: LocalDeploymentError: Instance valkey-0 failed to start within 30s (process output from /h
+- [valkey-io/valkey#4612](https://github.com/valkey-io/valkey/pull/4612) ([tests](tests/valkey/4612-f26b1609e/)): Fix repl throttle read-handler and throttle_checked ordering, improve tcl tests (#4612): 0 of 6 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#4128](https://github.com/valkey-io/valkey/pull/4128) ([tests](tests/valkey/4128-63f56bd16/)): Implement `VM_IncrExternalMemory` and `VM_DecrExternalMemory`  (#4128): 2 of 2 test(s) reached the change, coverage 80%
 
 ### valkey-io/valkey-bloom
 
@@ -73,10 +73,10 @@ Updated 2026-11-06T00:29+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 229 of 300 tested (76%)
-- Changed-line coverage: median 100% of 120 merge(s) measured, 7 under 50%
-- Recall: 68 parents flagged of 87 fix merges
-- Claude: $1823.65 in the last 24 hours, $1854.22 in the last 7 days, $1854.22 in all
+- Merges whose tests reached the change: 241 of 314 tested (77%)
+- Changed-line coverage: median 100% of 134 merge(s) measured, 7 under 50%
+- Recall: 71 parents flagged of 91 fix merges
+- Claude: $1915.39 in the last 24 hours, $1945.96 in the last 7 days, $1945.96 in all
 - Issues filed: 27
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
@@ -108,4 +108,5 @@ Updated 2026-11-06T00:29+00:00.
 
 ## Retries
 
-None.
+- [valkey-io/valkey#4425](https://github.com/valkey-io/valkey/pull/4425): attempt 1 of 3, 1 of 20 run(s) could not start: the run could not start: runner execution failed during deployment.provision: LocalDeploymentError: Instance valkey-0 failed to start within 30s (process output from /h
+- [valkey-io/valkey#4005](https://github.com/valkey-io/valkey/pull/4005): attempt 1 of 3, 1 of 30 run(s) could not start: the run could not start: runner execution failed during deployment.provision: LocalDeploymentError: Instance valkey-0 failed to start within 30s (process output from /h

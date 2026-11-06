@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ae2ab6bba849..c0739a2b4070.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e298e112ad03
+seed: 2
+experiment:
+  id: proposed.stream-watch-signal
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

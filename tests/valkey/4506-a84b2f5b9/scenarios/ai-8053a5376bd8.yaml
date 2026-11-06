@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 23c73ab6f206..a84b2f5b9ae2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8053a5376bd8
+seed: 108
+experiment:
+  id: proposed.path-hash-under-faults
+  inputs:
+    target: primary
+    loss_window_s: 2.5
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7700
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec

@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 22b3faaa6230..6225ee7c37ca.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-316ad50e5d57
+seed: 940031
+experiment:
+  id: proposed.scan-key-raw-borrowed
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

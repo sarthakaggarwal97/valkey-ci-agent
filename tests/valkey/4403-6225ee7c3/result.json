@@ -1,0 +1,33 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6225ee7c37ca099a84510bd8b3982efc3603f09e",
+  "parent": "22b3faaa623026ef9d343bf88a1c5b06edf5b0b6",
+  "pr": 4403,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add VM_ScanKeyRawBorrowed to allow scanning keys without allocating (#4403)",
+  "date": "2026-09-15",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 78,
+    "executed": 73,
+    "percent": 93,
+    "uncovered": [
+      "src/module.c:12334",
+      "src/module.c:12366",
+      "src/module.c:12367",
+      "src/module.c:12382",
+      "src/module.c:12383"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 2.9903,
+  "findings": [],
+  "recorded": []
+}

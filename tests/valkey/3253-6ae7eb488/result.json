@@ -1,0 +1,74 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6ae7eb4889b32d4763d25ce8f7aeb3091d225665",
+  "parent": "cd79e02c1cae0a22b59e3fd1a2c7c8efe79fe5b1",
+  "pr": 3253,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Introduce INCREX command (#3253)",
+  "date": "2026-09-14",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 1,
+  "hunted": 3,
+  "dropped": 3,
+  "recall": true,
+  "coverage": {
+    "lines": 135,
+    "executed": 108,
+    "percent": 80,
+    "uncovered": [
+      "src/t_hash.c:1717",
+      "src/t_hash.c:1975",
+      "src/t_string.c:356",
+      "src/t_string.c:822",
+      "src/t_string.c:827",
+      "src/t_string.c:831",
+      "src/t_string.c:849",
+      "src/t_string.c:850",
+      "src/t_string.c:851",
+      "src/t_string.c:864",
+      "src/t_string.c:865",
+      "src/t_string.c:875",
+      "src/t_string.c:876",
+      "src/t_string.c:879",
+      "src/t_string.c:880",
+      "src/t_string.c:884",
+      "src/t_string.c:885",
+      "src/t_string.c:888",
+      "src/t_string.c:889",
+      "src/t_string.c:890",
+      "src/t_string.c:891",
+      "src/t_string.c:899",
+      "src/t_string.c:900",
+      "src/t_string.c:901",
+      "src/t_string.c:902",
+      "src/t_string.c:915",
+      "src/t_string.c:916"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 5.984,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-5a84fc04d8a9",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: ValueError: Exceeds the limit (4300 digits) for integer string conversion: value has 4933 digits; use sys.set_int_max_str_digits() to increase the limit"
+    },
+    {
+      "scenario": "ai-048b07ac18f6",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: ValueError: Exceeds the limit (4300 digits) for integer string conversion: value has 4933 digits; use sys.set_int_max_str_digits() to increase the limit"
+    },
+    {
+      "scenario": "ai-8c6c44426b90",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: ValueError: Exceeds the limit (4300 digits) for integer string conversion: value has 4933 digits; use sys.set_int_max_str_digits() to increase the limit"
+    }
+  ]
+}

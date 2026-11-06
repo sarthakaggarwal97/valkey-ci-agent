@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 05a9c29c6253..74793bd02879.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-844b0faf0425
+seed: 2
+experiment:
+  id: proposed.sort-store-destination-keyspec
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

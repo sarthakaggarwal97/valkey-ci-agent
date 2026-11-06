@@ -1,0 +1,60 @@
+extends: [valkey.base]
+id: proposed.increx-under-resync
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: INCREX on the primary while a replica is killed and resyncing; the
+    replica must converge on the rewritten propagated state
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGSTOP], default: SIGKILL}
+components:
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-replica]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: increx
+  depends_on: [warm-up]
+  config:
+    instances: primary
+    timeout_s: 10
+    commands:
+    - {command: [DEL, 'zx:a', 'zx:f', 'zx:t', 'zx:nx', 'zx:xx'], expect: {min: 0}}
+    - {command: [INCREX, 'zx:a', BYINT, 5], expect: {equals: [5, 5]}}
+    - {command: [INCREX, 'zx:a', BYINT, 5], expect: {equals: [10, 5]}}
+    - {command: [INCREX, 'zx:f', BYFLOAT, 0.1], expect: {error: false}}
+    - {command: [INCREX, 'zx:f', BYFLOAT, 0.2], expect: {error: false}}
+    - {command: [INCREX, 'zx:t', EX, 1000, BYINT, 7], expect: {equals: [7, 7]}}
+    - {command: [SET, 'zx:nx', 3], expect: {equals: OK}}
+    - {command: [INCREX, 'zx:nx', NX], expect: {equals: [3, 0]}}
+    - {command: [INCREX, 'zx:xx', XX], expect: {equals: [0, 0]}}
+- use: valkey.action.commands
+  id: verify
+  depends_on: [increx]
+  timeout_s: 120
+  config:
+    instances: replicas
+    timeout_s: 60
+    commands:
+    - {command: [GET, 'zx:a'], wait_s: 30, expect: {equals: "10"}}
+    - {command: [GET, 'zx:f'], wait_s: 30, expect: {equals: "0.3"}}
+    - {command: [GET, 'zx:t'], wait_s: 30, expect: {equals: "7"}}
+    - {command: [TTL, 'zx:t'], expect: {min: 1, max: 1000}}
+    - {command: [GET, 'zx:nx'], wait_s: 30, expect: {equals: "3"}}
+    - {command: [EXISTS, 'zx:xx'], expect: {equals: 0}}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed, increx.completed, verify.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}
+- {evidence_id: valkey.command.sequence, source: increx}

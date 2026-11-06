@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.sort-store-destination-keyspec
+deployment:
+  modes: [standalone]
+metadata:
+  description: SORT keyspec extraction reports and ACL-checks the destination SORT
+    actually writes, even when it spells an option keyword
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sortkeys
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [COMMAND, GETKEYS, SORT, abc, STORE, by, STORE, def], expect_difference: true,
+      expect: {equals: [abc, def]}}
+    - {command: [COMMAND, GETKEYS, SORT, abc, STORE, get, STORE, def], expect_difference: true,
+      expect: {equals: [abc, def]}}
+    - {command: [COMMAND, GETKEYS, SORT, abc, STORE, limit, STORE, def], expect_difference: true,
+      expect: {equals: [abc, def]}}
+    - {command: [COMMAND, GETKEYS, SORT, abc, STORE, store, alpha], expect_difference: true,
+      expect: {equals: [abc, store]}}
+    - {command: [ACL, SETUSER, u, on, nopass, "~allowed:*", "~by", "~get", "~limit",
+        "~alpha", "+@all"], expect: {equals: OK}}
+    - {command: [RPUSH, "allowed:src", c, b, a], expect: {equals: 3}}
+    - {command: [ACL, DRYRUN, u, SORT, "allowed:src", ALPHA, STORE, by, STORE, "forbidden:dst"],
+      expect_difference: true, expect: {contains: "'forbidden:dst'"}}
+    - {command: [ACL, DRYRUN, u, SORT, "allowed:src", ALPHA, STORE, get, STORE, "forbidden:dst"],
+      expect_difference: true, expect: {contains: "'forbidden:dst'"}}
+    - {command: [ACL, DRYRUN, u, SORT, "allowed:src", ALPHA, STORE, limit, STORE,
+        "forbidden:dst"], expect_difference: true, expect: {contains: "'forbidden:dst'"}}
+    - {command: [ACL, DRYRUN, u, SORT, "allowed:src", STORE, store, alpha], expect_difference: true,
+      expect: {contains: "'store'"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sortkeys}

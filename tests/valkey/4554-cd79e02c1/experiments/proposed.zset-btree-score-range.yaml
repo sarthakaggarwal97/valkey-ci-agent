@@ -1,0 +1,160 @@
+extends: [valkey.liveness]
+id: proposed.zset-btree-score-range
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Btree zset range resolution compared against the parent build: exclusive and inclusive
+    score bounds landing inside duplicate-score runs that span several 61-item leaves
+    (ZCOUNT/ZREMRANGEBYSCORE over/under-count on the parent), and the deleteRangeCore
+    false-empty short-circuit that made ZREMRANGEBYLEX delete nothing when both boundary
+    leaves are locally untouched but middle leaves are fully in range.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zrange
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-ziplist-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - command: [ZADD, za, -5, a00, -5, a01, -5, a02, -5, a03, -5, a04, -5, a05, -5,
+        a06, -5, a07, -5, a08, -5, a09, -5, a10, -5, a11, -5, a12, -5, a13, -5, a14,
+        -5, a15, -5, a16, -5, a17, -5, a18, -5, a19, -5, a20, -5, a21, -5, a22, -5,
+        a23, -5, a24, -5, a25, -5, a26, -5, a27, -5, a28, -5, a29, -5, a30, -5, a31,
+        -5, a32, -5, a33, -5, a34, -5, a35, -5, a36, -5, a37, -5, a38, -5, a39, -5,
+        a40, -5, a41, -5, a42, -5, a43, -5, a44, -5, a45, -5, a46, -5, a47, -5, a48,
+        -5, a49, -5, a50, -5, a51, -5, a52, -5, a53, -5, a54, -5, a55, -5, a56, -5,
+        a57, -5, a58, -5, a59, -5, a60, -5, a61, -5, a62, -5, a63, -5, a64, -5, a65,
+        -5, a66, -5, a67, -5, a68, -5, a69]
+      expect: {equals: 70}
+    - {command: [OBJECT, ENCODING, za], compare: skip}
+    - {command: [ZCOUNT, za, "-inf", "+inf"], expect: {equals: 70}}
+    - {command: [ZCOUNT, za, "(-5", "+inf"], expect_difference: true, expect: {equals: 0}}
+    - {command: [ZCOUNT, za, "-inf", "(-5"], expect: {equals: 0}}
+    - {command: [ZREMRANGEBYSCORE, za, "(-5", "+inf"], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [ZCARD, za], expect_difference: true, expect: {equals: 70}}
+    - {command: [ZREMRANGEBYSCORE, za, -5, -5], expect_difference: true, expect: {
+        equals: 70}}
+    - {command: [ZCARD, za], expect: {equals: 0}}
+    - command: [ZADD, zb, 2, b00, 2, b01, 2, b02, 2, b03, 2, b04, 2, b05, 2, b06,
+        2, b07, 2, b08, 2, b09, 2, b10, 2, b11, 2, b12, 2, b13, 2, b14, 2, b15, 2,
+        b16, 2, b17, 2, b18, 2, b19, 2, b20, 2, b21, 2, b22, 2, b23, 2, b24, 2, b25,
+        2, b26, 2, b27, 2, b28, 2, b29, 2, b30, 2, b31, 2, b32, 2, b33, 2, b34, 2,
+        b35, 2, b36, 2, b37, 2, b38, 2, b39, 2, b40, 2, b41, 2, b42, 2, b43, 2, b44,
+        2, b45, 2, b46, 2, b47, 2, b48, 2, b49, 2, b50, 2, b51, 2, b52, 2, b53, 2,
+        b54, 2, b55, 2, b56, 2, b57, 2, b58, 2, b59, 2, b60, 2, b61, 2, b62, 2, b63,
+        2, b64, 2, b65, 2, b66, 2, b67, 2, b68, 2, b69]
+      expect: {equals: 70}
+    - command: [ZADD, zb, 4, c00, 4, c01, 4, c02, 4, c03, 4, c04, 4, c05, 4, c06,
+        4, c07, 4, c08, 4, c09, 4, c10, 4, c11, 4, c12, 4, c13, 4, c14, 4, c15, 4,
+        c16, 4, c17, 4, c18, 4, c19, 4, c20, 4, c21, 4, c22, 4, c23, 4, c24, 4, c25,
+        4, c26, 4, c27, 4, c28, 4, c29, 4, c30, 4, c31, 4, c32, 4, c33, 4, c34, 4,
+        c35, 4, c36, 4, c37, 4, c38, 4, c39, 4, c40, 4, c41, 4, c42, 4, c43, 4, c44,
+        4, c45, 4, c46, 4, c47, 4, c48, 4, c49, 4, c50, 4, c51, 4, c52, 4, c53, 4,
+        c54, 4, c55, 4, c56, 4, c57, 4, c58, 4, c59, 4, c60, 4, c61, 4, c62, 4, c63,
+        4, c64, 4, c65, 4, c66, 4, c67, 4, c68, 4, c69]
+      expect: {equals: 70}
+    - command: [ZADD, zb, 6, d00, 6, d01, 6, d02, 6, d03, 6, d04, 6, d05, 6, d06,
+        6, d07, 6, d08, 6, d09, 6, d10, 6, d11, 6, d12, 6, d13, 6, d14, 6, d15, 6,
+        d16, 6, d17, 6, d18, 6, d19, 6, d20, 6, d21, 6, d22, 6, d23, 6, d24, 6, d25,
+        6, d26, 6, d27, 6, d28, 6, d29, 6, d30, 6, d31, 6, d32, 6, d33, 6, d34, 6,
+        d35, 6, d36, 6, d37, 6, d38, 6, d39, 6, d40, 6, d41, 6, d42, 6, d43, 6, d44,
+        6, d45, 6, d46, 6, d47, 6, d48, 6, d49, 6, d50, 6, d51, 6, d52, 6, d53, 6,
+        d54, 6, d55, 6, d56, 6, d57, 6, d58, 6, d59, 6, d60, 6, d61, 6, d62, 6, d63,
+        6, d64, 6, d65, 6, d66, 6, d67, 6, d68, 6, d69]
+      expect: {equals: 70}
+    - {command: [ZCOUNT, zb, "-inf", "+inf"], expect: {equals: 210}}
+    - {command: [ZCOUNT, zb, 1, 3], expect: {equals: 70}}
+    - {command: [ZCOUNT, zb, 2, 4], expect_difference: true, expect: {equals: 140}}
+    - {command: [ZCOUNT, zb, "(2", "(6"], expect_difference: true, expect: {equals: 70}}
+    - {command: [ZCOUNT, zb, 4, 4], expect_difference: true, expect: {equals: 70}}
+    - {command: [ZCOUNT, zb, "(6", "+inf"], expect_difference: true, expect: {equals: 0}}
+    - {command: [ZCOUNT, zb, 6, "+inf"], expect: {equals: 70}}
+    - {command: [ZCOUNT, zb, "(3", "(4"], expect: {equals: 0}}
+    - {command: [ZCOUNT, zb, 6, 2], expect: {equals: 0}}
+    - {command: [ZCOUNT, zb, "(2", 2], expect: {equals: 0}}
+    - {command: [ZREMRANGEBYSCORE, zb, 4, 4], expect_difference: true, expect: {equals: 70}}
+    - {command: [ZCARD, zb], expect_difference: true, expect: {equals: 140}}
+    - {command: [ZCOUNT, zb, 4, 4], expect_difference: true, expect: {equals: 0}}
+    - {command: [ZREMRANGEBYSCORE, zb, "-inf", "+inf"], expect_difference: true, expect: {
+        equals: 140}}
+    - {command: [ZCARD, zb], expect: {equals: 0}}
+    - {command: [ZADD, zb, 3, x0, 3, x1, 5, y0], expect: {equals: 3}}
+    - {command: [ZCOUNT, zb, "(3", 5], expect: {equals: 1}}
+    - {command: [ZREMRANGEBYRANK, zb, 0, 1], expect: {equals: 2}}
+    - {command: [ZRANGE, zb, 0, -1], expect: {equals: [y0]}}
+    - command: [ZADD, zd, 7, e0, 7, e1, 7, e2, 7, e3, 7, e4, 7, e5, 7, e6, 7, e7,
+        7, e8, 7, e9]
+      expect: {equals: 10}
+    - {command: [ZCOUNT, zd, "(7", "+inf"], expect: {equals: 0}}
+    - {command: [ZCOUNT, zd, "-inf", "(7"], expect: {equals: 0}}
+    - {command: [ZREMRANGEBYSCORE, zd, "(7", "(7"], expect: {equals: 0}}
+    - {command: [ZCOUNT, zd, 7, 7], expect: {equals: 10}}
+    - {command: [ZCOUNT, nosuchkey, "-inf", "+inf"], expect: {equals: 0}}
+    - {command: [ZADD, zc, 0, ""], expect: {equals: 1}}
+    - command: [ZADD, zc, 0, m0001, 0, m0002, 0, m0003, 0, m0004, 0, m0005, 0, m0006,
+        0, m0007, 0, m0008, 0, m0009, 0, m0010, 0, m0011, 0, m0012, 0, m0013, 0, m0014,
+        0, m0015, 0, m0016, 0, m0017, 0, m0018, 0, m0019, 0, m0020, 0, m0021, 0, m0022,
+        0, m0023, 0, m0024, 0, m0025, 0, m0026, 0, m0027, 0, m0028, 0, m0029, 0, m0030,
+        0, m0031, 0, m0032, 0, m0033, 0, m0034, 0, m0035, 0, m0036, 0, m0037, 0, m0038,
+        0, m0039, 0, m0040, 0, m0041, 0, m0042, 0, m0043, 0, m0044, 0, m0045, 0, m0046,
+        0, m0047, 0, m0048, 0, m0049, 0, m0050, 0, m0051, 0, m0052, 0, m0053, 0, m0054,
+        0, m0055, 0, m0056, 0, m0057, 0, m0058, 0, m0059, 0, m0060, 0, m0061, 0, m0062,
+        0, m0063, 0, m0064, 0, m0065, 0, m0066, 0, m0067, 0, m0068, 0, m0069, 0, m0070,
+        0, m0071, 0, m0072, 0, m0073, 0, m0074, 0, m0075, 0, m0076, 0, m0077, 0, m0078,
+        0, m0079, 0, m0080, 0, m0081, 0, m0082, 0, m0083, 0, m0084, 0, m0085, 0, m0086,
+        0, m0087, 0, m0088, 0, m0089, 0, m0090, 0, m0091, 0, m0092, 0, m0093, 0, m0094,
+        0, m0095, 0, m0096, 0, m0097, 0, m0098, 0, m0099, 0, m0100]
+      expect: {equals: 100}
+    - command: [ZADD, zc, 0, m0101, 0, m0102, 0, m0103, 0, m0104, 0, m0105, 0, m0106,
+        0, m0107, 0, m0108, 0, m0109, 0, m0110, 0, m0111, 0, m0112, 0, m0113, 0, m0114,
+        0, m0115, 0, m0116, 0, m0117, 0, m0118, 0, m0119, 0, m0120, 0, m0121, 0, m0122,
+        0, m0123, 0, m0124, 0, m0125, 0, m0126, 0, m0127, 0, m0128, 0, m0129, 0, m0130,
+        0, m0131, 0, m0132, 0, m0133, 0, m0134, 0, m0135, 0, m0136, 0, m0137, 0, m0138,
+        0, m0139, 0, m0140, 0, m0141, 0, m0142, 0, m0143, 0, m0144, 0, m0145, 0, m0146,
+        0, m0147, 0, m0148, 0, m0149, 0, m0150, 0, m0151, 0, m0152, 0, m0153, 0, m0154,
+        0, m0155, 0, m0156, 0, m0157, 0, m0158, 0, m0159, 0, m0160, 0, m0161, 0, m0162,
+        0, m0163, 0, m0164, 0, m0165, 0, m0166, 0, m0167, 0, m0168, 0, m0169, 0, m0170,
+        0, m0171, 0, m0172, 0, m0173, 0, m0174, 0, m0175, 0, m0176, 0, m0177, 0, m0178,
+        0, m0179, 0, m0180, 0, m0181, 0, m0182, 0, m0183, 0, m0184, 0, m0185, 0, m0186,
+        0, m0187, 0, m0188, 0, m0189, 0, m0190, 0, m0191, 0, m0192, 0, m0193, 0, m0194,
+        0, m0195, 0, m0196, 0, m0197, 0, m0198, 0, m0199, 0, m0200]
+      expect: {equals: 100}
+    - command: [ZADD, zc, 0, m0201, 0, m0202, 0, m0203, 0, m0204, 0, m0205, 0, m0206,
+        0, m0207, 0, m0208, 0, m0209, 0, m0210, 0, m0211, 0, m0212, 0, m0213, 0, m0214,
+        0, m0215, 0, m0216, 0, m0217, 0, m0218, 0, m0219, 0, m0220, 0, m0221, 0, m0222,
+        0, m0223, 0, m0224, 0, m0225, 0, m0226, 0, m0227, 0, m0228, 0, m0229, 0, m0230,
+        0, m0231, 0, m0232, 0, m0233, 0, m0234, 0, m0235, 0, m0236, 0, m0237, 0, m0238,
+        0, m0239, 0, m0240, 0, m0241, 0, m0242, 0, m0243, 0, m0244, 0, m0245, 0, m0246,
+        0, m0247, 0, m0248, 0, m0249, 0, m0250, 0, m0251, 0, m0252, 0, m0253, 0, m0254,
+        0, m0255, 0, m0256, 0, m0257, 0, m0258, 0, m0259, 0, m0260, 0, m0261, 0, m0262,
+        0, m0263, 0, m0264, 0, m0265, 0, m0266, 0, m0267, 0, m0268, 0, m0269, 0, m0270,
+        0, m0271, 0, m0272, 0, m0273, 0, m0274, 0, m0275, 0, m0276, 0, m0277, 0, m0278,
+        0, m0279, 0, m0280, 0, m0281, 0, m0282, 0, m0283, 0, m0284, 0, m0285, 0, m0286,
+        0, m0287, 0, m0288, 0, m0289, 0, m0290, 0, m0291, 0, m0292, 0, m0293, 0, m0294,
+        0, m0295, 0, m0296, 0, m0297, 0, m0298, 0, m0299, 0, m0300]
+      expect: {equals: 100}
+    - {command: [ZLEXCOUNT, zc, "-", "+"], expect: {equals: 301}}
+    - {command: [ZREMRANGEBYLEX, zc, "[m0001", "[m0060"], expect: {equals: 60}}
+    - {command: [ZLEXCOUNT, zc, "(", "[m0121x"], expect: {equals: 61}}
+    - {command: [ZREMRANGEBYLEX, zc, "(", "[m0121x"], expect_difference: true, expect: {
+        equals: 61}}
+    - {command: [ZLEXCOUNT, zc, "(", "[m0121x"], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [ZCARD, zc], expect_difference: true, expect: {equals: 180}}
+    - {command: [ZRANGE, zc, 0, 3], expect_difference: true, expect: {equals: ["",
+          m0122, m0123, m0124]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [zrange.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zrange}

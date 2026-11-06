@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0adf657af9327f906430ab526e5cbe326ba5410a",
+  "parent": "f42c9ab3d8bdc371f1ad3d5a2a9ef1820a985516",
+  "pr": 4019,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add `IFEQ`, `IFNE`, `XX`, and `NX` options to `EXEC` command (#4019)",
+  "date": "2026-09-14",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 89,
+    "executed": 85,
+    "percent": 95,
+    "uncovered": [
+      "src/multi.c:288",
+      "src/multi.c:295",
+      "src/multi.c:296",
+      "src/multi.c:302"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 10.3898,
+  "findings": [],
+  "recorded": []
+}

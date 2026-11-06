@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.acl-role-commands
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL role lifecycle, name validation, role-granted permissions enforced
+    through the new selector iterator, compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [ACL, SETROLE, reader, "~r:*", "+@read"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [ACL, ROLES], expect_difference: true, expect: {equals: [reader]}}
+    - {command: [ACL, GETROLE, reader], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, GETROLE, nosuchrole], expect_difference: true, expect: {exists: false}}
+    - {command: [ACL, SETROLE, "", "+get"], expect_difference: true, expect: {error: "empty"}}
+    - {command: [ACL, SETROLE, "bad,name", "+get"], expect_difference: true, expect: {
+        error: "commas"}}
+    - {command: [ACL, SETROLE, 'bad"q', "+get"], expect_difference: true, expect: {
+        error: "quotes"}}
+    - {command: [ACL, SETROLE, "bad\tname", "+get"], expect_difference: true, expect: {
+        error: "printable"}}
+    - {command: [ACL, SETROLE, reader, on], expect_difference: true, expect: {error: "modifier"}}
+    - {command: [ACL, SETROLE, reader, ">pass"], expect_difference: true, expect: {
+        error: "modifier"}}
+    - {command: [ACL, SETROLE, reader, "role=reader"], expect_difference: true, expect: {
+        error: "modifier"}}
+    - {command: [ACL, SETROLE, multi, "~base:*", "+get", "(~extra:* +set)"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [ACL, SETUSER, alice, on, ">alicepw", "role=reader,multi,reader"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [ACL, SETUSER, bob, on, "role=missing"], expect_difference: true,
+      expect: {error: "does not exist"}}
+    - {command: [ACL, SETUSER, bob2, on, "role=reader,"], expect: {error: true}}
+    - {command: [ACL, GETUSER, alice], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, GETUSER, default], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, LIST], expect_difference: true, expect: {exists: true}}
+    - {connection: c2, command: [AUTH, alice, alicepw], expect_difference: true, expect: {
+        equals: OK}}
+    - {connection: c2, command: [GET, "r:1"]}
+    - {connection: c2, command: [SET, "r:1", v], expect_difference: true, expect: {
+        error: "no permissions"}}
+    - {connection: c2, command: [SET, "extra:1", v], expect: {equals: OK}}
+    - {connection: c2, command: [SET, "base:1", v], expect_difference: true, expect: {
+        error: true}}
+    - {connection: c2, command: [SUBSCRIBE, "blocked:1"], expect_difference: true,
+      expect: {error: "channels"}}
+    - {command: [ACL, DELROLE, reader], expect_difference: true, expect: {error: "assigned"}}
+    - {command: [ACL, SETUSER, alice, resetroles], expect_difference: true, expect: {
+        equals: OK}}
+    - {connection: c2, command: [GET, "r:2"], expect_difference: true, expect: {error: true}}
+    - {command: [ACL, DELROLE, reader, nosuchrole], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [ACL, ROLES], expect_difference: true, expect: {equals: [multi]}}
+    - {command: [ACL, DELROLE, multi], expect_difference: true, expect: {equals: 1}}
+    - {command: [ACL, ROLES], expect_difference: true, expect: {equals: []}}
+    - {command: [ACL, GETUSER, alice], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

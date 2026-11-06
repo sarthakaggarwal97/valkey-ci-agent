@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 23c73ab6f206..a84b2f5b9ae2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b9cd301d9400
+seed: 103
+experiment:
+  id: proposed.path-hash-persistence
+  inputs:
+    appendonly: 'no'
+deployment:
+  mode: standalone
+  base_port: 7200

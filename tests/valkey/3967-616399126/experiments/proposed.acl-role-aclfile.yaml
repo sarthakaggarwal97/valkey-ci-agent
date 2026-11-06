@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.acl-role-aclfile
+deployment:
+  modes: [standalone]
+metadata:
+  description: Roles written by ACL SAVE, reloaded by ACL LOAD (membership remap)
+    and by startup from the ACL file across a restart
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    server_config: {aclfile: users.acl}
+    files:
+      users.acl: "user default on nopass ~* &* +@all\nuser carol on >carolpw ~c:*\
+        \ +@read +auth\n"
+    commands:
+    - {command: [ACL, SETROLE, auditor, "~log:*", "+@read"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [ACL, SETROLE, zrole, "+ping"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, carol, "role=zrole,auditor"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [ACL, SAVE], expect: {equals: OK}}
+    - {command: [ACL, LOAD], expect: {equals: OK}}
+    - {command: [ACL, ROLES], expect_difference: true, expect: {equals: [auditor,
+          zrole]}}
+    - {command: [ACL, GETUSER, carol], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, DELROLE, auditor], expect_difference: true, expect: {error: "assigned"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ACL, ROLES], expect_difference: true, expect: {equals: [auditor,
+          zrole]}}
+    - {command: [ACL, GETUSER, carol], expect_difference: true, expect: {exists: true}}
+    - {connection: c2, command: [AUTH, carol, carolpw], expect: {equals: OK}}
+    - {connection: c2, command: [GET, "log:7"], expect_difference: true, expect: {
+        error: false}}
+    - {connection: c2, command: [GET, "c:7"]}
+    - {connection: c2, command: [SET, "log:1", v], expect: {error: true}}
+    - {command: [ACL, SETUSER, carol, resetroles], expect_difference: true, expect: {
+        equals: OK}}
+    - {connection: c2, command: [GET, "log:8"], expect: {error: true}}
+    - {command: [ACL, SAVE], expect: {equals: OK}}
+    - {command: [ACL, LOAD], expect: {equals: OK}}
+    - {command: [ACL, GETUSER, carol], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, DELROLE, auditor, zrole], expect_difference: true, expect: {
+        equals: 2}}
+    - {command: [ACL, SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ACL, ROLES], expect_difference: true, expect: {equals: []}}
+    - {command: [ACL, GETUSER, carol], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.sismember-xx
+deployment:
+  modes: [standalone]
+metadata:
+  description: SISMEMBER with the new optional XX token, replies compared against
+    the parent build (missing key returns -1, arity 3 -> -3)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: sismember
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 15
+    commands:
+    - {command: [SADD, myset, foo, bar, ""], expect: {equals: 3}}
+    - {command: [SISMEMBER, myset, foo], expect: {equals: 1}}
+    - {command: [SISMEMBER, myset, nonexist], expect: {equals: 0}}
+    - {command: [SISMEMBER, nokey, foo], expect: {equals: 0}}
+    - {command: [SISMEMBER, myset, ""], expect: {equals: 1}}
+    - {command: [SISMEMBER, myset, foo, XX], expect_difference: true, expect: {equals: 1}}
+    - {command: [SISMEMBER, myset, nonexist, XX], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [SISMEMBER, nokey, foo, XX], expect_difference: true, expect: {equals: -1}}
+    - {command: [SISMEMBER, nokey, foo, xx], expect_difference: true, expect: {equals: -1}}
+    - {command: [SISMEMBER, nokey, "", XX], expect_difference: true, expect: {equals: -1}}
+    - {command: [SISMEMBER, "", foo, XX], expect_difference: true, expect: {equals: -1}}
+    - {command: [SET, wrongtype, not-a-set], expect: {equals: OK}}
+    - {command: [SISMEMBER, wrongtype, foo, XX], expect_difference: true, expect: {
+        error: WRONGTYPE}}
+    - {command: [SISMEMBER, wrongtype, foo], expect: {error: WRONGTYPE}}
+    - {command: [SISMEMBER, myset, foo, XXY], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [SISMEMBER, myset, foo, XX, extra], expect_difference: true, expect: {
+        error: "syntax error"}}
+    - {command: [SADD, XX, XX], expect: {equals: 1}}
+    - {command: [SISMEMBER, XX, XX, XX], expect_difference: true, expect: {equals: 1}}
+    - {command: [SISMEMBER, XX, nope, XX], expect_difference: true, expect: {equals: 0}}
+    - {command: [SADD, volatile, m], expect: {equals: 1}}
+    - {command: [PEXPIRE, volatile, 1], expect: {equals: 1}}
+    - {command: [DEBUG, SLEEP, 0.1], expect: {equals: OK}}
+    - {command: [SISMEMBER, volatile, m, XX], expect_difference: true, expect: {equals: -1}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SISMEMBER, nokey2, foo, XX], expect_difference: true, expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [-1]}}
+    - {command: [COMMAND, GETKEYS, SISMEMBER, somekey, member, XX], expect_difference: true,
+      expect: {equals: [somekey]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [sismember.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sismember}

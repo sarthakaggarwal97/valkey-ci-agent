@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c0739a2b4070..6163991268a4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-40436a815d24
+seed: 1401
+experiment:
+  id: proposed.acl-role-pubsub-kill
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7600

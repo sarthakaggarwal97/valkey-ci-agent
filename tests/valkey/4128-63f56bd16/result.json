@@ -1,0 +1,34 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "63f56bd16c838faffb9330c0e0bfa54a3459248c",
+  "parent": "88a536033c883e334a433e592d6bd4da331f8817",
+  "pr": 4128,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Implement `VM_IncrExternalMemory` and `VM_DecrExternalMemory`  (#4128)",
+  "date": "2026-09-14",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 30,
+    "executed": 24,
+    "percent": 80,
+    "uncovered": [
+      "src/module.c:625",
+      "src/module.c:626",
+      "src/module.c:638",
+      "src/module.c:639",
+      "src/zmalloc.c:542",
+      "src/zmalloc.c:553"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 3.4679,
+  "findings": [],
+  "recorded": []
+}

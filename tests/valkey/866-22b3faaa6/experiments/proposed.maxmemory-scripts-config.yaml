@@ -1,0 +1,81 @@
+extends: [valkey.liveness]
+id: proposed.maxmemory-scripts-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: maxmemory-scripts config surface (memory and percent formats, bounds,
+    CONFIG GET, CONFIG REWRITE and restart) and the split EVAL/SCRIPT LOAD accounting
+    across promotion and SCRIPT FLUSH
+components:
+- use: valkey.action.commands
+  id: config
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, maxmemory-scripts], expect_difference: true, expect: {
+        equals: [maxmemory-scripts, "0"]}}
+    - {command: [CONFIG, SET, maxmemory-scripts, 100mb], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, maxmemory-scripts], expect_difference: true, expect: {
+        equals: [maxmemory-scripts, "104857600"]}}
+    - {command: [CONFIG, SET, maxmemory-scripts, "101%"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, maxmemory-scripts, "-5"], expect_difference: true, expect: {
+        error: true}}
+    - {command: [CONFIG, SET, maxmemory-scripts, "9223372036854775807"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-scripts, "100%"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, maxmemory-scripts], expect_difference: true, expect: {
+        equals: [maxmemory-scripts, "100%"]}}
+    - {command: [CONFIG, SET, maxmemory-scripts, "5%"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, maxmemory-scripts], expect_difference: true, expect: {
+        equals: [maxmemory-scripts, "5%"]}}
+    - {command: [EVAL, "return 1+1", 0], expect: {equals: 2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: accounting
+  depends_on: [config]
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, maxmemory-scripts, 10mb], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [EVAL, "return 1+1", 0], expect: {equals: 2}}
+    - {command: [EVAL, "return 'dump'", 0], expect: {equals: dump}}
+    - {command: [SCRIPT, LOAD, "return 'dump'"], expect: {equals: 4f5a49d7b18244a3b100d159b78b51474e23e081}}
+    - {command: [SCRIPT, LOAD, "return 'loaded'"], expect: {equals: b534286061d4b9e4026607613b95c06c06015ae8}}
+    - {command: [EVALSHA, b534286061d4b9e4026607613b95c06c06015ae8, 0], expect: {
+        equals: loaded}}
+    - {command: [SCRIPT, EXISTS, a27e7e8a43702b7046d4f6a7ccf5b60cef6b9bd9, 4f5a49d7b18244a3b100d159b78b51474e23e081,
+        b534286061d4b9e4026607613b95c06c06015ae8], expect: {equals: [1, 1, 1]}}
+    - {command: [SCRIPT, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [SCRIPT, EXISTS, a27e7e8a43702b7046d4f6a7ccf5b60cef6b9bd9, 4f5a49d7b18244a3b100d159b78b51474e23e081,
+        b534286061d4b9e4026607613b95c06c06015ae8], expect: {equals: [0, 0, 0]}}
+    - {command: [EVAL, "return 1+1", 0], expect: {equals: 2}}
+    - {command: [CONFIG, SET, maxmemory-scripts, 100], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [SCRIPT, EXISTS, a27e7e8a43702b7046d4f6a7ccf5b60cef6b9bd9], expect: {
+        equals: [1]}}
+    - {command: [CONFIG, SET, maxmemory-scripts, 0], expect_difference: true, expect: {
+        equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [config.completed, accounting.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: config}
+- {evidence_id: valkey.command.sequence, source: accounting}

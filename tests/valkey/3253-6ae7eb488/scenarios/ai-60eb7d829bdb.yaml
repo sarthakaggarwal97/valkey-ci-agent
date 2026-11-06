@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cd79e02c1cae..6ae7eb4889b3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-60eb7d829bdb
+seed: 32
+experiment:
+  id: proposed.increx-under-resync
+  inputs:
+    signal: SIGSTOP
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7500

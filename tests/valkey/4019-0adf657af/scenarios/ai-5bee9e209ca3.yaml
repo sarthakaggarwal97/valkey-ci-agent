@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f42c9ab3d8bd..0adf657af932.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5bee9e209ca3
+seed: 105
+experiment:
+  id: proposed.exec-conditions-replication-compare
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

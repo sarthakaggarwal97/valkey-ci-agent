@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.zset-lex-sentinel
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Lex range sentinel handling in the ordered index: the '-' min bound must include
+    an empty-string member in ZLEXCOUNT/ZREMRANGEBYLEX, and crossed sentinel bounds
+    ('+' as min or '-' as max) must yield empty results for ZRANGEBYLEX/ZREVRANGEBYLEX/ZRANGE
+    BYLEX/ZRANGESTORE instead of packing the sentinel bytes as an element bound.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lexsentinel
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ZADD, zs, 0, "", 0, a, 0, b, 0, c], expect: {equals: 4}}
+    - {command: [OBJECT, ENCODING, zs], compare: skip}
+    - {command: [ZLEXCOUNT, zs, "-", "+"], expect: {equals: 4}}
+    - {command: [ZLEXCOUNT, zs, "-", "[a"], expect_difference: true, expect: {equals: 2}}
+    - {command: [ZLEXCOUNT, zs, "-", "(a"], expect_difference: true, expect: {equals: 1}}
+    - {command: [ZLEXCOUNT, zs, "(", "+"], expect: {equals: 3}}
+    - {command: [ZLEXCOUNT, zs, "[", "+"], expect: {equals: 4}}
+    - {command: [ZRANGEBYLEX, zs, "-", "[a"], expect: {equals: ["", a]}}
+    - {command: [ZREMRANGEBYLEX, zs, "-", "[a"], expect_difference: true, expect: {
+        equals: 2}}
+    - {command: [ZRANGE, zs, 0, -1], expect_difference: true, expect: {equals: [b,
+          c]}}
+    - {command: [ZADD, zs, 0, ""], expect_difference: true, expect: {equals: 1}}
+    - {command: [ZREMRANGEBYLEX, zs, "-", "+"], expect_difference: true, expect: {
+        equals: 3}}
+    - {command: [EXISTS, zs], expect_difference: true, expect: {equals: 0}}
+    - {command: [ZADD, lex, 0, alpha, 0, bar, 0, cool, 0, down, 0, elephant, 0, foo,
+        0, great, 0, hill, 0, omega, 0, the, 0, zap, 0, zip], expect: {equals: 12}}
+    - {command: [ZRANGEBYLEX, lex, "+", "+"], expect_difference: true, expect: {equals: []}}
+    - {command: [ZRANGEBYLEX, lex, "+", "[zap"], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [ZRANGEBYLEX, lex, "+", "[zap", LIMIT, 1, 2], expect_difference: true,
+      expect: {equals: []}}
+    - {command: [ZREVRANGEBYLEX, lex, "-", "-"], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [ZREVRANGEBYLEX, lex, "-", "[c"], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [ZREVRANGEBYLEX, lex, "-", "[c", LIMIT, 1, 2], expect_difference: true,
+      expect: {equals: []}}
+    - {command: [ZRANGE, lex, "-", "[c", BYLEX, REV], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [ZRANGESTORE, dst, lex, "-", "[c", BYLEX, REV], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [EXISTS, dst], expect_difference: true, expect: {equals: 0}}
+    - {command: [ZRANGEBYLEX, lex, "[omega", "+"], expect: {equals: [omega, the, zap,
+          zip]}}
+    - {command: [ZLEXCOUNT, lex, "+", "[c"], expect: {equals: 0}}
+    - {command: [ZRANGE, lex, 0, -1], expect: {equals: [alpha, bar, cool, down, elephant,
+          foo, great, hill, omega, the, zap, zip]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [lexsentinel.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lexsentinel}

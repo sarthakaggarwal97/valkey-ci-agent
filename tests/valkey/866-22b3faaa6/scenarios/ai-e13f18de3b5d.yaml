@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6163991268a4..22b3faaa6230.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e13f18de3b5d
+seed: 11
+experiment:
+  id: proposed.maxmemory-scripts-eviction
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,118 @@
+extends: [valkey.liveness]
+id: proposed.path-hash-scan
+deployment:
+  modes: [standalone]
+metadata:
+  description: PHSCAN cursor codec and lookahead, PHPREFIXES COUNT circular buffer
+    and MAXPATHLEN, PHLONGEST, and PHDELPREFIX across the 256-path chunk boundary,
+    compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: scan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [PHMSET, k, '', FIELDS, 1, f, v0, a, FIELDS, 1, f, v1, ab, FIELDS,
+        1, f, v2, abc, FIELDS, 1, f, v3, abcd, FIELDS, 1, f, v4, b, FIELDS, 1, f,
+        v5], expect_difference: true, expect: {equals: OK}}
+    - {command: [PHCARD, k], expect_difference: true, expect: {equals: 6}}
+    - {command: [PHLONGEST, k, abcdzz], expect_difference: true, expect: {equals: abcd}}
+    - {command: [PHLONGEST, k, abcdzz, LENGTH], expect_difference: true, expect: {
+        equals: 4}}
+    - {command: [PHLONGEST, k, ab, FIELDS, 2, f, nof], expect_difference: true, expect: {
+        equals: [ab, [v2, null]]}}
+    - {command: [PHLONGEST, k, ''], expect_difference: true, expect: {equals: ''}}
+    - {command: [PHLONGEST, k, zzz], expect_difference: true, expect: {exists: false}}
+    - {command: [PHLONGEST, nokey, a], expect_difference: true, expect: {exists: false}}
+    - {command: [PHPREFIXES, k, abcdzz], expect_difference: true, expect: {equals: [
+          '', a, ab, abc, abcd]}}
+    - {command: [PHPREFIXES, k, abcdzz, LENGTHS], expect_difference: true, expect: {
+        equals: [0, 1, 2, 3, 4]}}
+    - {command: [PHPREFIXES, k, abcdzz, COUNT, 2], expect_difference: true, expect: {
+        equals: [abc, abcd]}}
+    - {command: [PHPREFIXES, k, abcdzz, COUNT, 2, LENGTHS], expect_difference: true,
+      expect: {equals: [3, 4]}}
+    - {command: [PHPREFIXES, k, abcdzz, MAXPATHLEN, 2], expect_difference: true, expect: {
+        equals: ['', a, ab]}}
+    - {command: [PHPREFIXES, k, abcdzz, MAXPATHLEN, 0], expect_difference: true, expect: {
+        equals: ['']}}
+    - {command: [PHPREFIXES, k, abcdzz, MAXPATHLEN, 1, COUNT, 1], expect_difference: true,
+      expect: {equals: [a]}}
+    - {command: [PHPREFIXES, k, ab, FIELDS, 1, f], expect_difference: true, expect: {
+        equals: [['', [v0]], [a, [v1]], [ab, [v2]]]}}
+    - {command: [PHPREFIXES, k, abcdzz, WITHVALUES], expect_difference: true, expect: {
+        error: false}}
+    - {command: [PHPREFIXES, k, abcdzz, COUNT, 0], expect_difference: true, expect: {
+        error: true}}
+    - {command: [PHPREFIXES, k, abcdzz, MAXPATHLEN, -1], expect_difference: true,
+      expect: {error: true}}
+    - {command: [PHPREFIXES, k, abcdzz, COUNT, 9223372036854775807], expect_difference: true,
+      expect: {equals: ['', a, ab, abc, abcd]}}
+    - {command: [PHPREFIXES, k, abcdzz, LENGTHS, LENGTHS], expect_difference: true,
+      expect: {error: syntax}}
+    - {command: [PHSCAN, k, 0, COUNT, 2], expect_difference: true, expect: {equals: [
+          '1:61', ['', a]]}}
+    - {command: [PHSCAN, k, '1:61', COUNT, 2], expect_difference: true, expect: {
+        equals: ['1:616263', [ab, abc]]}}
+    - {command: [PHSCAN, k, '1:616263', COUNT, 2], expect_difference: true, expect: {
+        equals: ['0', [abcd, b]]}}
+    - {command: [PHSCAN, k, 0, COUNT, 6], expect_difference: true, expect: {equals: [
+          '0', ['', a, ab, abc, abcd, b]]}}
+    - {command: [PHSCAN, k, 0, PREFIX, ab, COUNT, 1], expect_difference: true, expect: {
+        equals: ['1:6162', [ab]]}}
+    - {command: [PHSCAN, k, '1:6162', PREFIX, ab, COUNT, 10], expect_difference: true,
+      expect: {equals: ['0', [abc, abcd]]}}
+    - {command: [PHSCAN, k, 0, PREFIX, zz], expect_difference: true, expect: {equals: [
+          '0', []]}}
+    - {command: [PHSCAN, k, '1:61', PREFIX, b], expect_difference: true, expect: {
+        error: 'cursor does not belong'}}
+    - {command: [PHSCAN, k, '1:zz'], expect_difference: true, expect: {error: 'invalid
+          cursor'}}
+    - {command: [PHSCAN, k, '1:6'], expect_difference: true, expect: {error: 'invalid
+          cursor'}}
+    - {command: [PHSCAN, k, '3:61'], expect_difference: true, expect: {error: 'invalid
+          cursor'}}
+    - {command: [PHSCAN, k, ''], expect_difference: true, expect: {error: 'invalid
+          cursor'}}
+    - {command: [PHSCAN, k, 0, COUNT, 0], expect_difference: true, expect: {error: true}}
+    - {command: [PHSCAN, k, 0, COUNT, 1, COUNT, 2], expect_difference: true, expect: {
+        error: syntax}}
+    - {command: [SET, s, x], expect: {equals: OK}}
+    - {command: [PHSCAN, s, '1:zz'], expect_difference: true, expect: {error: 'invalid
+          cursor'}}
+    - {command: [PHSCAN, s, 0], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [PHSCAN, nokey, 0], expect_difference: true, expect: {equals: ['0',
+          []]}}
+    - {command: [PHSCAN, k, 0, WITHVALUES, COUNT, 3], expect_difference: true, expect: {
+        error: false}}
+    - {command: [EVAL, "for i=0,269 do redis.call('PHSET',KEYS[1],string.format('d%03d',i),'FIELDS','1','f','v')\
+          \ end return 'OK'", 1, k2], expect_difference: true, expect: {equals: OK}}
+    - {command: [PHCARD, k2], expect_difference: true, expect: {equals: 270}}
+    - {command: [PHSCAN, k2, 0, COUNT, 265], expect_difference: true, expect: {error: false}}
+    - {command: [PHSCAN, k2, '1:64323634', COUNT, 10], expect_difference: true, expect: {
+        equals: ['0', [d265, d266, d267, d268, d269]]}}
+    - {command: [PHDELPREFIX, k2, d], expect_difference: true, expect: {equals: 270}}
+    - {command: [PHCARD, k2], expect_difference: true, expect: {equals: 0}}
+    - {command: [EXISTS, k2], expect_difference: true, expect: {equals: 1}}
+    - {command: [PHDELPREFIX, k, ab], expect_difference: true, expect: {equals: 3}}
+    - {command: [PHPREFIXES, k, abcdzz], expect_difference: true, expect: {equals: [
+          '', a]}}
+    - {command: [PHDELPREFIX, k, ''], expect_difference: true, expect: {equals: 3}}
+    - {command: [PHCARD, k], expect_difference: true, expect: {equals: 0}}
+    - {command: [PHLONGEST, k, a], expect_difference: true, expect: {exists: false}}
+    - {command: [PHSCAN, k, 0], expect_difference: true, expect: {equals: ['0', []]}}
+    - {command: [PHDELPREFIX, nokey, x], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [scan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scan}

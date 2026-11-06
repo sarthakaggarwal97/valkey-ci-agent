@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.exec-conditions-aof-restart-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Conditional EXEC under AOF - only the queued commands of a committed
+    transaction (and the NX lazy-expire DEL) are persisted, and the AOF loads back
+    after a restart
+components:
+- use: valkey.action.commands
+  id: aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes", appendfsync: everysec}
+    timeout_s: 60
+    commands:
+    - {command: [SET, cond, value], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, k1, v1], expect: {equals: QUEUED}}
+    - {command: [EXEC, IFEQ, cond, value], expect_difference: true, expect: {equals: [
+          OK]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, k2, v2], expect: {equals: QUEUED}}
+    - {command: [EXEC, NX, cond], expect_difference: true, expect: {equals: null}}
+    - {command: [PSETEX, exp, 50, v], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.2], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, k3, v3], expect: {equals: QUEUED}}
+    - {command: [EXEC, NX, exp], expect_difference: true, expect: {equals: [OK]}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, k1], expect_difference: true, expect: {equals: v1}}
+    - {command: [GET, k2], expect: {exists: false}}
+    - {command: [GET, k3], expect_difference: true, expect: {equals: v3}}
+    - {command: [EXISTS, exp], expect: {equals: 0}}
+    - {command: [GET, cond], expect: {equals: value}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [aof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof}

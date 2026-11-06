@@ -1,0 +1,70 @@
+extends: [valkey.base]
+id: proposed.path-hash-under-faults
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Path hash data seeded on the deployment survives a SIGKILL of a replica
+    (resync ships RDB_TYPE_PATH_HASH) or of the primary (restart replays PHSET from
+    the AOF), under the key-value workload and the base oracles
+inputs:
+  properties:
+    target: {type: string, enum: [replica, primary], default: replica}
+    loss_window_s: {type: number, default: 2.5}
+components:
+- use: valkey.action.commands
+  id: ph-seed
+  config:
+    instances: primaries
+    timeout_s: 20
+    commands:
+    - {command: [PHMSET, 'ph:t', '', FIELDS, 1, rf, rv, a, FIELDS, 1, f, va, ab, FIELDS,
+        1, f, vab, abc, FIELDS, 1, f, vabc], expect: {equals: OK}}
+    - {command: [PHSET, 'ph:t', big, FIELDS, 5, f1, '1', f2, '2', f3, '3', f4, '4',
+        f5, '5'], expect: {equals: OK}}
+    - {command: [PHSET, 'ph:t', !!binary 'cAAx', FIELDS, 1, bf, bv], expect: {equals: OK}}
+    - {command: [PHSET, 'ph:e', solo, FIELDS, 1, f, v], expect: {equals: OK}}
+    - {command: [PHDEL, 'ph:e', solo], expect: {equals: 1}}
+    - {command: [BGREWRITEAOF], expect: {error: false}}
+- use: valkey.action.sleep
+  id: pre-kill
+  depends_on: [writes, ph-seed, kill]
+  config: {seconds: 3}
+- use: valkey.fault.process-signal
+  id: kill
+  config:
+    when_event: pre-kill.completed
+    instance: {$ref: inputs.target}
+    signal: SIGKILL
+    restart_mode: immediate
+- use: valkey.action.wait-event
+  id: recovered
+  depends_on: [pre-kill]
+  config: {event: kill.recovered, only_after: kill.injected, timeout_s: 90}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [recovered]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: ph-verify
+  depends_on: [settle]
+  config:
+    instances: all
+    timeout_s: 60
+    commands:
+    - {command: [PHCARD, 'ph:t'], wait_s: 45, expect: {equals: 6}}
+    - {command: [PHLONGEST, 'ph:t', abczz], expect: {equals: abc}}
+    - {command: [PHGET, 'ph:t', !!binary 'cAAx', bf], expect: {equals: [bv]}}
+    - {command: [PHGETALL, 'ph:t', big], expect: {error: false}}
+    - {command: [EXISTS, 'ph:e'], wait_s: 10, expect: {equals: 1}}
+    - {command: [PHCARD, 'ph:e'], expect: {equals: 0}}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_s: {$ref: inputs.loss_window_s}
+    loss_window_faults: [kill]
+required_events: [pre-kill.completed, kill.recovered]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill}
+- {evidence_id: valkey.command.sequence, source: ph-verify}
