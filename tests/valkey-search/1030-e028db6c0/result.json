@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "e028db6c06e2eadc8b604e67ee9bca3fbb3f4c30",
+  "parent": "3e3825c0195f752510123e4eabd6f57c2a29a585",
+  "pr": 1030,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Reimplement Numeric field for 3x space reduction (#1030)",
+  "date": "2026-07-14",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.6018,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-94adc91c7a8b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-cd82a1587939",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

@@ -1,0 +1,98 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-first-value
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE GROUPBY FIRST_VALUE reducer semantics (simple, BY ASC/DESC,
+    ties, nils, default output names) compared across the module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: firstvalue
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, n1, NUMERIC,
+        n2, NUMERIC, grp, TAG, t1, TAG], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", grp, g1, n1, "10", n2, "5", t1, apple], expect: {
+        equals: 4}}
+    - {command: [HSET, "doc:2", grp, g1, n1, "77", n2, "3", t1, banana], expect: {
+        equals: 4}}
+    - {command: [HSET, "doc:3", grp, g1, n1, "77", n2, "3", t1, banana], expect: {
+        equals: 4}}
+    - {command: [HSET, "doc:4", grp, g2, n1, "2147483648", n2, "-1", t1, big], expect: {
+        equals: 4}}
+    - {command: [HSET, "doc:5", grp, g2, n1, "4294967296", n2, "42", t1, bigger],
+      expect: {equals: 4}}
+    - {command: [HSET, "doc:6", grp, g3, n1, "6", t1, x], expect: {equals: 3}}
+    - {command: [HSET, "doc:7", grp, g3, n1, "7", t1, x], expect: {equals: 3}}
+    - {command: [HSET, "doc:8", grp, g4, n1, "99", t1, y], expect: {equals: 3}}
+    - {command: [HSET, "doc:9", grp, g4, n1, "55", n2, "7", t1, y], expect: {equals: 4}}
+    - {command: [HSET, "doc:10", grp, g5, n1, "123", n2, "1", t1, solo], expect: {
+        equals: 4}}
+    - {command: [HSET, "doc:11", grp, g6, n2, "1", t1, solo2], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, "0", "0"], wait_s: 30, expect: {equals: [
+          11]}}
+    - {command: [FT.AGGREGATE, idx, '@grp:{g1}', LOAD, "3", '@grp', '@n1', '@n2',
+        GROUPBY, "1", '@grp', REDUCE, FIRST_VALUE, "3", '@n1', BY, '@n2', AS, fv],
+      expect_difference: true, expect: {equals: [1, [grp, g1, fv, "77"]]}}
+    - {command: [FT.AGGREGATE, idx, '@grp:{g1}', LOAD, "3", '@grp', '@n1', '@n2',
+        GROUPBY, "1", '@grp', REDUCE, FIRST_VALUE, "4", '@n1', BY, '@n2', DESC, AS,
+        fv], expect_difference: true, expect: {equals: [1, [grp, g1, fv, "10"]]}}
+    - {command: [FT.AGGREGATE, idx, '@grp:{g1}', LOAD, "3", '@grp', '@n1', '@n2',
+        GROUPBY, "1", '@grp', REDUCE, first_value, "4", '@n1', by, '@n2', desc, as,
+        fv], expect_difference: true, expect: {equals: [1, [grp, g1, fv, "10"]]}}
+    - {command: [FT.AGGREGATE, idx, '@grp:{g1}', LOAD, "2", '@grp', '@t1', GROUPBY,
+        "1", '@grp', REDUCE, FIRST_VALUE, "4", '@t1', BY, '@t1', ASC, AS, fv], expect_difference: true,
+      expect: {equals: [1, [grp, g1, fv, apple]]}}
+    - {command: [FT.AGGREGATE, idx, '@grp:{g1}', LOAD, "2", '@grp', '@t1', GROUPBY,
+        "1", '@grp', REDUCE, FIRST_VALUE, "4", '@t1', BY, '@t1', DESC, AS, fv], expect_difference: true,
+      expect: {equals: [1, [grp, g1, fv, banana]]}}
+    - {command: [FT.AGGREGATE, idx, '@grp:{g2}', LOAD, "3", '@grp', '@n1', '@n2',
+        GROUPBY, "1", '@grp', REDUCE, FIRST_VALUE, "4", '@n1', BY, '@n2', ASC, AS,
+        fv], expect_difference: true, expect: {equals: [1, [grp, g2, fv, "2147483648"]]}}
+    - {command: [FT.AGGREGATE, idx, '@grp:{g2}', LOAD, "3", '@grp', '@n1', '@n2',
+        GROUPBY, "1", '@grp', REDUCE, FIRST_VALUE, "4", '@n1', BY, '@n2', DESC, AS,
+        fv], expect_difference: true, expect: {equals: [1, [grp, g2, fv, "4294967296"]]}}
+    - {command: [FT.AGGREGATE, idx, '@grp:{g3}', LOAD, "3", '@grp', '@n1', '@n2',
+        GROUPBY, "1", '@grp', REDUCE, FIRST_VALUE, "4", '@n1', BY, '@n2', ASC, AS,
+        fv], expect_difference: true, expect: {equals: [1, [grp, g3]]}}
+    - {command: [FT.AGGREGATE, idx, '@grp:{g4}', LOAD, "3", '@grp', '@n1', '@n2',
+        GROUPBY, "1", '@grp', REDUCE, FIRST_VALUE, "4", '@n1', BY, '@n2', ASC, AS,
+        fv], expect_difference: true, expect: {equals: [1, [grp, g4, fv, "55"]]}}
+    - {command: [FT.AGGREGATE, idx, '@grp:{g5}', LOAD, "3", '@grp', '@n1', '@n2',
+        GROUPBY, "1", '@grp', REDUCE, FIRST_VALUE, "1", '@n1', AS, fv], expect_difference: true,
+      expect: {equals: [1, [grp, g5, fv, "123"]]}}
+    - {command: [FT.AGGREGATE, idx, '@grp:{g6}', LOAD, "3", '@grp', '@n1', '@n2',
+        GROUPBY, "1", '@grp', REDUCE, FIRST_VALUE, "1", '@n1', AS, fv], expect_difference: true,
+      expect: {equals: [1, [grp, g6]]}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "3", '@grp', '@n1', '@n2', GROUPBY,
+        "1", '@grp', REDUCE, FIRST_VALUE, "4", '@n1', BY, '@n2', ASC, AS, fv, REDUCE,
+        COUNT, "0", AS, c, SORTBY, "2", '@grp', ASC], expect_difference: true, expect: {
+        equals: [6, [grp, g1, fv, "77", c, "3"], [grp, g2, fv, "2147483648", c, "2"],
+          [grp, g3, c, "2"], [grp, g4, fv, "55", c, "2"], [grp, g5, fv, "123", c,
+            "1"], [grp, g6, c, "1"]]}}
+    - {command: [FT.AGGREGATE, idx, '@grp:{g5}', LOAD, "2", '@grp', '@n1', GROUPBY,
+        "1", '@grp', REDUCE, FIRST_VALUE, "4", '@n1', BY, '@n1', ASC, REDUCE, FIRST_VALUE,
+        "1", '@n1'], expect_difference: true, expect: {equals: [1, [grp, g5, "FIRST_VALUE(@n1,@n1,ASC)",
+            "123", "FIRST_VALUE(@n1)", "123"]]}}
+    - {command: [FT.AGGREGATE, idx, '@grp:{g1}', LOAD, "3", '@grp', '@n1', '@n2',
+        GROUPBY, "1", '@grp', REDUCE, FIRST_VALUE, "4", '@n1', BY, '@n2', ASC, REDUCE,
+        FIRST_VALUE, "4", '@n1', BY, '@n2', DESC], expect_difference: true, expect: {
+        equals: [1, [grp, g1, "FIRST_VALUE(@n1,@n2,ASC)", "77", "FIRST_VALUE(@n1,@n2,DESC)",
+            "10"]]}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "2", '@grp', '@n1', GROUPBY, "1", '@grp',
+        REDUCE, NOSUCHRED, "1", '@n1', AS, x], expect: {error: "not found"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [firstvalue.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: firstvalue}

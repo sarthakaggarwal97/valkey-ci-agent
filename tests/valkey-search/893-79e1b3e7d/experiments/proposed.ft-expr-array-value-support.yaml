@@ -1,0 +1,84 @@
+extends: [valkey.liveness]
+id: proposed.ft-expr-array-value-support
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Compare FT.SEARCH SORTBY completeness (RequiresCompleteResults fix) and FT.AGGREGATE
+    &&/|| precedence across the array-value-type change and its parent module build,
+    with unmarked guards on the scalar expression paths the change edited
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: ft
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n1, NUMERIC,
+        t1, TAG], expect: {equals: OK}}
+    - {command: [HSET, "doc:0", n1, "0", t1, t17], expect: {equals: 2}}
+    - {command: [HSET, "doc:1", n1, "1", t1, t08], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", n1, "2", t1, t19], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", n1, "3", t1, t10], expect: {equals: 2}}
+    - {command: [HSET, "doc:4", n1, "4", t1, t02], expect: {equals: 2}}
+    - {command: [HSET, "doc:5", n1, "5", t1, t13], expect: {equals: 2}}
+    - {command: [HSET, "doc:6", n1, "6", t1, t04], expect: {equals: 2}}
+    - {command: [HSET, "doc:7", n1, "7", t1, t15], expect: {equals: 2}}
+    - {command: [HSET, "doc:8", n1, "8", t1, t06], expect: {equals: 2}}
+    - {command: [HSET, "doc:9", n1, "9", t1, t00], expect: {equals: 2}}
+    - {command: [HSET, "doc:10", n1, "10", t1, t01], expect: {equals: 2}}
+    - {command: [HSET, "doc:11", n1, "11", t1, t12], expect: {equals: 2}}
+    - {command: [HSET, "doc:12", n1, "12", t1, t03], expect: {equals: 2}}
+    - {command: [HSET, "doc:13", n1, "13", t1, t14], expect: {equals: 2}}
+    - {command: [HSET, "doc:14", n1, "14", t1, t05], expect: {equals: 2}}
+    - {command: [HSET, "doc:15", n1, "15", t1, t16], expect: {equals: 2}}
+    - {command: [HSET, "doc:16", n1, "16", t1, t07], expect: {equals: 2}}
+    - {command: [HSET, "doc:17", n1, "17", t1, t18], expect: {equals: 2}}
+    - {command: [HSET, "doc:18", n1, "18", t1, t09], expect: {equals: 2}}
+    - {command: [HSET, "doc:19", n1, "19", t1, t11], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@n1:[0 100]", LIMIT, 0, 0], wait_s: 60, expect: {
+        equals: [20]}}
+    - {command: [FT.SEARCH, idx, "@n1:[0 100]", SORTBY, t1, ASC, RETURN, 1, t1, LIMIT,
+        0, 2], expect_difference: true, expect: {equals: [20, "doc:9", [t1, t00],
+          "doc:10", [t1, t01]]}}
+    - {command: [FT.SEARCH, idx, "@n1:[0 100]", SORTBY, t1, DESC, RETURN, 1, t1, LIMIT,
+        0, 2], expect_difference: true, expect: {equals: [20, "doc:2", [t1, t19],
+          "doc:17", [t1, t18]]}}
+    - {command: [FT.SEARCH, idx, "@n1:[0 100]", SORTBY, t1, ASC, RETURN, 1, t1, LIMIT,
+        4, 2], expect_difference: true, expect: {equals: [20, "doc:6", [t1, t04],
+          "doc:14", [t1, t05]]}}
+    - {command: [FT.SEARCH, idx, "@n1:[0 100]", SORTBY, t1, ASC, WITHSORTKEYS, RETURN,
+        1, t1, LIMIT, 0, 2], expect_difference: true, expect: {equals: [20, "doc:9",
+          "#t00", [t1, t00], "doc:10", "#t01", [t1, t01]]}}
+    - {command: [FT.AGGREGATE, idx, "@n1:[5 5]", LOAD, 1, "@n1", APPLY, "1 || 0 &&\
+          \ 0", AS, prec, DIALECT, 2], expect_difference: true, expect: {equals: [
+          1, [n1, "5", prec, "1"]]}}
+    - {command: [FT.AGGREGATE, idx, "@n1:[0 1]", LOAD, 1, "@n1", FILTER, "@n1 == 0\
+          \ || @n1 == 1 && @n1 == 2", DIALECT, 2], expect_difference: true, expect: {
+        equals: [1, [n1, "0"]]}}
+    - {command: [FT.AGGREGATE, idx, "@n1:[5 5]", LOAD, 2, "@n1", "@t1", APPLY, "upper(@t1)",
+        AS, up, APPLY, "strlen(@t1)", AS, len, APPLY, 'contains(@t1, "t1")', AS, cnt,
+        APPLY, "substr(@t1, 0, 2)", AS, sub, DIALECT, 2], expect: {equals: [1, [n1,
+            "5", t1, t13, up, T13, len, "3", cnt, "1", sub, t1]]}}
+    - {command: [FT.AGGREGATE, idx, "@n1:[5 5]", LOAD, 1, "@n1", APPLY, "@n1 < 3",
+        AS, b, DIALECT, 2], expect: {equals: [1, [n1, "5", b, "0"]]}}
+    - {command: [FT.AGGREGATE, idx, "@n1:[5 5]", LOAD, 1, "@n1", APPLY, "@n1 / 0",
+        AS, dz, DIALECT, 2], expect: {equals: [1, [n1, "5", dz, "nan"]]}}
+    - {command: [FT.AGGREGATE, idx, "@n1:[0 100]", LOAD, 1, "@n1", SORTBY, 2, "@n1",
+        ASC, LIMIT, 0, 3, DIALECT, 2], expect: {equals: [3, [n1, "0"], [n1, "1"],
+          [n1, "2"]]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ft.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ft}

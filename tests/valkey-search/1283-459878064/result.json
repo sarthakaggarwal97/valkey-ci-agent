@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "459878064ffe58796293379a51558354e80fcb1e",
+  "parent": "7a7b94538620c6da7205bc2a39d9043ab5f6f3d7",
+  "pr": 1283,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix duplicate label handling (#1283)",
+  "date": "2026-08-05",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.7237,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change fixes HNSW duplicate-label handling in two paths, both unreachable by valkey-fuzzer. (1) The modify-path fix (vector_hnsw.cc ModifyRecordImpl dropping markDelete, and hnswalg.h addPoint reusing an existing label's slot) only changes behavior when allow_replace_deleted_ is true. That comes from search.hnsw-allow-replace-deleted, a .Dev() config that is Hidden+Immutable unless search.debug-mode yes, which is settable only via module load-time args; the fuzzer loads modules by bare path with no args, so the config stays at its default false. In default config both builds call updatePoi"
+}

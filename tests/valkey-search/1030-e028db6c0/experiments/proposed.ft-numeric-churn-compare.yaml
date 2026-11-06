@@ -1,0 +1,165 @@
+extends: [valkey.liveness]
+id: proposed.ft-numeric-churn-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: 72 distinct values inserted ascending then descending (both leaf-split
+    branches of the new B+-tree), shared-value bags, then staged multi-key deletions
+    that force leaf rotations, merges, and root collapse, range counts checked after
+    every stage, compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'd:', SCHEMA, n, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [HSET, 'd:1', n, 1], expect: {equals: 1}}
+    - {command: [HSET, 'd:2', n, 2], expect: {equals: 1}}
+    - {command: [HSET, 'd:3', n, 3], expect: {equals: 1}}
+    - {command: [HSET, 'd:4', n, 4], expect: {equals: 1}}
+    - {command: [HSET, 'd:5', n, 5], expect: {equals: 1}}
+    - {command: [HSET, 'd:6', n, 6], expect: {equals: 1}}
+    - {command: [HSET, 'd:7', n, 7], expect: {equals: 1}}
+    - {command: [HSET, 'd:8', n, 8], expect: {equals: 1}}
+    - {command: [HSET, 'd:9', n, 9], expect: {equals: 1}}
+    - {command: [HSET, 'd:10', n, 10], expect: {equals: 1}}
+    - {command: [HSET, 'd:11', n, 11], expect: {equals: 1}}
+    - {command: [HSET, 'd:12', n, 12], expect: {equals: 1}}
+    - {command: [HSET, 'd:13', n, 13], expect: {equals: 1}}
+    - {command: [HSET, 'd:14', n, 14], expect: {equals: 1}}
+    - {command: [HSET, 'd:15', n, 15], expect: {equals: 1}}
+    - {command: [HSET, 'd:16', n, 16], expect: {equals: 1}}
+    - {command: [HSET, 'd:17', n, 17], expect: {equals: 1}}
+    - {command: [HSET, 'd:18', n, 18], expect: {equals: 1}}
+    - {command: [HSET, 'd:19', n, 19], expect: {equals: 1}}
+    - {command: [HSET, 'd:20', n, 20], expect: {equals: 1}}
+    - {command: [HSET, 'd:21', n, 21], expect: {equals: 1}}
+    - {command: [HSET, 'd:22', n, 22], expect: {equals: 1}}
+    - {command: [HSET, 'd:23', n, 23], expect: {equals: 1}}
+    - {command: [HSET, 'd:24', n, 24], expect: {equals: 1}}
+    - {command: [HSET, 'd:25', n, 25], expect: {equals: 1}}
+    - {command: [HSET, 'd:26', n, 26], expect: {equals: 1}}
+    - {command: [HSET, 'd:27', n, 27], expect: {equals: 1}}
+    - {command: [HSET, 'd:28', n, 28], expect: {equals: 1}}
+    - {command: [HSET, 'd:29', n, 29], expect: {equals: 1}}
+    - {command: [HSET, 'd:30', n, 30], expect: {equals: 1}}
+    - {command: [HSET, 'd:31', n, 31], expect: {equals: 1}}
+    - {command: [HSET, 'd:32', n, 32], expect: {equals: 1}}
+    - {command: [HSET, 'd:33', n, 33], expect: {equals: 1}}
+    - {command: [HSET, 'd:34', n, 34], expect: {equals: 1}}
+    - {command: [HSET, 'd:35', n, 35], expect: {equals: 1}}
+    - {command: [HSET, 'd:36', n, 36], expect: {equals: 1}}
+    - {command: [HSET, 'd:72', n, 72], expect: {equals: 1}}
+    - {command: [HSET, 'd:71', n, 71], expect: {equals: 1}}
+    - {command: [HSET, 'd:70', n, 70], expect: {equals: 1}}
+    - {command: [HSET, 'd:69', n, 69], expect: {equals: 1}}
+    - {command: [HSET, 'd:68', n, 68], expect: {equals: 1}}
+    - {command: [HSET, 'd:67', n, 67], expect: {equals: 1}}
+    - {command: [HSET, 'd:66', n, 66], expect: {equals: 1}}
+    - {command: [HSET, 'd:65', n, 65], expect: {equals: 1}}
+    - {command: [HSET, 'd:64', n, 64], expect: {equals: 1}}
+    - {command: [HSET, 'd:63', n, 63], expect: {equals: 1}}
+    - {command: [HSET, 'd:62', n, 62], expect: {equals: 1}}
+    - {command: [HSET, 'd:61', n, 61], expect: {equals: 1}}
+    - {command: [HSET, 'd:60', n, 60], expect: {equals: 1}}
+    - {command: [HSET, 'd:59', n, 59], expect: {equals: 1}}
+    - {command: [HSET, 'd:58', n, 58], expect: {equals: 1}}
+    - {command: [HSET, 'd:57', n, 57], expect: {equals: 1}}
+    - {command: [HSET, 'd:56', n, 56], expect: {equals: 1}}
+    - {command: [HSET, 'd:55', n, 55], expect: {equals: 1}}
+    - {command: [HSET, 'd:54', n, 54], expect: {equals: 1}}
+    - {command: [HSET, 'd:53', n, 53], expect: {equals: 1}}
+    - {command: [HSET, 'd:52', n, 52], expect: {equals: 1}}
+    - {command: [HSET, 'd:51', n, 51], expect: {equals: 1}}
+    - {command: [HSET, 'd:50', n, 50], expect: {equals: 1}}
+    - {command: [HSET, 'd:49', n, 49], expect: {equals: 1}}
+    - {command: [HSET, 'd:48', n, 48], expect: {equals: 1}}
+    - {command: [HSET, 'd:47', n, 47], expect: {equals: 1}}
+    - {command: [HSET, 'd:46', n, 46], expect: {equals: 1}}
+    - {command: [HSET, 'd:45', n, 45], expect: {equals: 1}}
+    - {command: [HSET, 'd:44', n, 44], expect: {equals: 1}}
+    - {command: [HSET, 'd:43', n, 43], expect: {equals: 1}}
+    - {command: [HSET, 'd:42', n, 42], expect: {equals: 1}}
+    - {command: [HSET, 'd:41', n, 41], expect: {equals: 1}}
+    - {command: [HSET, 'd:40', n, 40], expect: {equals: 1}}
+    - {command: [HSET, 'd:39', n, 39], expect: {equals: 1}}
+    - {command: [HSET, 'd:38', n, 38], expect: {equals: 1}}
+    - {command: [HSET, 'd:37', n, 37], expect: {equals: 1}}
+    - {command: [HSET, 'd:10a', n, 10], expect: {equals: 1}}
+    - {command: [HSET, 'd:10b', n, 10], expect: {equals: 1}}
+    - {command: [HSET, 'd:20a', n, 20], expect: {equals: 1}}
+    - {command: [HSET, 'd:20b', n, 20], expect: {equals: 1}}
+    - {command: [HSET, 'd:30a', n, 30], expect: {equals: 1}}
+    - {command: [HSET, 'd:30b', n, 30], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 20, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, '@n:[-inf +inf]', LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [78]}}
+    - {command: [FT.SEARCH, idx, '@n:[10 10]', LIMIT, 0, 0], expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx, '@n:[1 36]', LIMIT, 0, 0], expect: {equals: [42]}}
+    - {command: [FT.SEARCH, idx, '@n:[37 72]', LIMIT, 0, 0], expect: {equals: [36]}}
+    - {command: [FT.SEARCH, idx, '@n:[(10 30]', LIMIT, 0, 0], expect: {equals: [24]}}
+    - {command: [FT.SEARCH, idx, '@n:[(36 (37]', LIMIT, 0, 0], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, '@n:[0.5 1.5]', LIMIT, 0, 0], expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idx, '@n:[35.5 37.5]', LIMIT, 0, 0], expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx, '-@n:[1 72]', LIMIT, 0, 0], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, '-@n:[10 (20]', LIMIT, 0, 0], expect: {equals: [
+          66]}}
+    - {command: [DEL, 'd:2', 'd:4', 'd:6', 'd:8', 'd:10', 'd:12', 'd:14', 'd:16',
+        'd:18', 'd:20', 'd:22', 'd:24', 'd:26', 'd:28', 'd:30', 'd:32', 'd:34', 'd:36',
+        'd:38', 'd:40', 'd:42', 'd:44', 'd:46', 'd:48', 'd:50', 'd:52', 'd:54', 'd:56',
+        'd:58', 'd:60', 'd:62', 'd:64', 'd:66', 'd:68', 'd:70', 'd:72'], expect: {
+        equals: 36}}
+    - {command: [FT.SEARCH, idx, '@n:[-inf +inf]', LIMIT, 0, 0], wait_s: 15, expect: {
+        equals: [42]}}
+    - {command: [FT.SEARCH, idx, '@n:[10 10]', LIMIT, 0, 0], expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, '@n:[1 36]', LIMIT, 0, 0], expect: {equals: [24]}}
+    - {command: [FT.SEARCH, idx, '@n:[37 72]', LIMIT, 0, 0], expect: {equals: [18]}}
+    - {command: [DEL, 'd:10a', 'd:10b', 'd:20a', 'd:20b', 'd:30a', 'd:30b'], expect: {
+        equals: 6}}
+    - {command: [FT.SEARCH, idx, '@n:[10 10]', LIMIT, 0, 0], wait_s: 15, expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idx, '@n:[-inf +inf]', LIMIT, 0, 0], expect: {equals: [
+          36]}}
+    - {command: [FT.SEARCH, idx, '@n:[9 11]', LIMIT, 0, 0], expect: {equals: [2]}}
+    - {command: [DEL, 'd:1', 'd:3', 'd:5', 'd:7', 'd:9', 'd:11', 'd:13', 'd:15', 'd:17',
+        'd:19', 'd:21', 'd:23', 'd:25', 'd:27', 'd:29', 'd:31', 'd:33', 'd:35'], expect: {
+        equals: 18}}
+    - {command: [FT.SEARCH, idx, '@n:[-inf +inf]', LIMIT, 0, 0], wait_s: 15, expect: {
+        equals: [18]}}
+    - {command: [FT.SEARCH, idx, '@n:[1 36]', LIMIT, 0, 0], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, '@n:[37 72]', LIMIT, 0, 0], expect: {equals: [18]}}
+    - {command: [FT.SEARCH, idx, '@n:[1 37]', LIMIT, 0, 0], expect: {equals: [1]}}
+    - {command: [DEL, 'd:37', 'd:39', 'd:41', 'd:43', 'd:45', 'd:47', 'd:49', 'd:51',
+        'd:53', 'd:55', 'd:57', 'd:59', 'd:61', 'd:63', 'd:65', 'd:67', 'd:69', 'd:71'],
+      expect: {equals: 18}}
+    - {command: [FT.SEARCH, idx, '@n:[-inf +inf]', LIMIT, 0, 0], wait_s: 15, expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idx, '-@n:[-inf +inf]', LIMIT, 0, 0], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, '@n:[37 37]', LIMIT, 0, 0], expect: {equals: [0]}}
+    - {command: [HSET, 'd:re1', n, 5], expect: {equals: 1}}
+    - {command: [HSET, 'd:re2', n, -5], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@n:[-inf +inf]', LIMIT, 0, 0], wait_s: 15, expect: {
+        equals: [2]}}
+    - {command: [FT.SEARCH, idx, '@n:[(-5 5]', LIMIT, 0, 0], expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, '@n:[-5 5]', NOCONTENT], expect: {equals: [2, 'd:re2',
+          'd:re1']}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a5233dfd94175bce6efa11b5cddb65bf4550ad0f",
+  "parent": "368131ee09558675c5a3a523b0eefadcda6b6c3b",
+  "pr": 946,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "feat: add First Value reducer to FT.Aggregate groupby stage (#946)",
+  "date": "2026-08-19",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 7.0596,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

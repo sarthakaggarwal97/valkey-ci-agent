@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.search-expr-nonfinite
+deployment:
+  modes: [standalone]
+metadata:
+  description: Date functions on a non-finite timestamp (exp(1000) overflows to +inf)
+    hit the (time_t) cast / gmtime_r UB on the parent; the change guards and returns
+    Nil
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: expr
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", n, 1], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, LIMIT, 0, 0], wait_s: 20, expect: {
+        contains: 1}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "year(exp(1000))", AS, r, LIMIT, 0,
+        10, DIALECT, 2], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "month(exp(1000))", AS, r, LIMIT,
+        0, 10, DIALECT, 2], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "hour(exp(1000))", AS, r, LIMIT, 0,
+        10, DIALECT, 2], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "dayofweek(exp(1000))", AS, r, LIMIT,
+        0, 10, DIALECT, 2], expect_difference: true, expect: {error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [expr.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: expr}

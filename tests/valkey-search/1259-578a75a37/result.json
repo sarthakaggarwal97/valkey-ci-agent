@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "578a75a376f571229c048f283c6dfddc48098703",
+  "parent": "320aec93ebab95c767a05c80345da7241477830a",
+  "pr": 1259,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix hardcoded db_num in metadata_manager.cc (#1259)",
+  "date": "2026-07-20",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 8.1322,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix is inside coordinator::MetadataManager::OnLoadingEnded, which only exists when valkey-search is started in cluster mode with the --use-coordinator module argument (valkey_search.cc:1185 creates the MetadataManager only under GetUseCoordinator() && IsCluster()). That option can only be enabled as a module command-line argument: it is built Hidden() (valkey_search_options.cc:144) and ModuleConfigManager::Init skips hidden entries (vmsdk module_config.cc:126), so it is never registered with Valkey and no server_config line or CONFIG SET can turn it on. The fuzzer loads modules by bare pat"
+}

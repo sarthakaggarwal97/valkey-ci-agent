@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 9e51a16eca58..87978b530ad6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f4a126a5fa22
+seed: 101
+experiment:
+  id: proposed.ft-prefilter-cosine-query-normalize
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

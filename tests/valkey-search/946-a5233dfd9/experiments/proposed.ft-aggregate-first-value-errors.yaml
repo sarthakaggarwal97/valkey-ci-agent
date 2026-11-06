@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-first-value-errors
+deployment:
+  modes: [standalone]
+metadata:
+  description: FIRST_VALUE parse-time error paths (bad nargs, missing BY, bad direction,
+    missing field) and a field literally named 'by', compared across the module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fverrors
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    commands:
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, "1", "e:", SCHEMA, n1, NUMERIC,
+        n2, NUMERIC, grp, TAG, by, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "e:1", grp, g1, n1, "10", n2, "5", by, "2"], expect: {equals: 4}}
+    - {command: [HSET, "e:2", grp, g1, n1, "20", n2, "1", by, "9"], expect: {equals: 4}}
+    - {command: [FT.SEARCH, idx2, "*", LIMIT, "0", "0"], wait_s: 30, expect: {equals: [
+          2]}}
+    - {command: [FT.AGGREGATE, idx2, "*", LOAD, "2", '@grp', '@n1', GROUPBY, "1",
+        '@grp', REDUCE, FIRST_VALUE, "0", AS, x], expect_difference: true, expect: {
+        error: "incorrect number of arguments"}}
+    - {command: [FT.AGGREGATE, idx2, "*", LOAD, "2", '@grp', '@n1', GROUPBY, "1",
+        '@grp', REDUCE, FIRST_VALUE, "2", '@n1', '@n2', AS, x], expect_difference: true,
+      expect: {error: "incorrect number of arguments"}}
+    - {command: [FT.AGGREGATE, idx2, "*", LOAD, "2", '@grp', '@n1', GROUPBY, "1",
+        '@grp', REDUCE, FIRST_VALUE, "5", '@n1', BY, '@n2', ASC, '@n1', AS, x], expect_difference: true,
+      expect: {error: "incorrect number of arguments"}}
+    - {command: [FT.AGGREGATE, idx2, "*", LOAD, "2", '@grp', '@n1', GROUPBY, "1",
+        '@grp', REDUCE, FIRST_VALUE, "3", '@n1', NOTBY, '@n2', AS, x], expect_difference: true,
+      expect: {error: "expected BY keyword"}}
+    - {command: [FT.AGGREGATE, idx2, "*", LOAD, "2", '@grp', '@n1', GROUPBY, "1",
+        '@grp', REDUCE, FIRST_VALUE, "4", '@n1', BY, '@n2', SIDEWAYS, AS, x], expect_difference: true,
+      expect: {error: "expected ASC or DESC"}}
+    - {command: [FT.AGGREGATE, idx2, "*", LOAD, "2", '@grp', '@n1', GROUPBY, "1",
+        '@grp', REDUCE, FIRST_VALUE, "4", '@n1', BY, '@n2', AS, x], expect_difference: true,
+      expect: {error: "expected ASC or DESC"}}
+    - {command: [FT.AGGREGATE, idx2, "*", LOAD, "2", '@grp', '@n1', GROUPBY, "1",
+        '@grp', REDUCE, FIRST_VALUE, "1"], expect_difference: true, expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx2, "*", LOAD, "3", '@grp', '@n1', '@by', GROUPBY,
+        "1", '@grp', REDUCE, FIRST_VALUE, "4", '@n1', BY, '@by', ASC, AS, x], expect_difference: true,
+      expect: {equals: [1, [grp, g1, x, "10"]]}}
+    - {command: [FT.AGGREGATE, idx2, "*", LOAD, "3", '@grp', '@n2', '@by', GROUPBY,
+        "1", '@grp', REDUCE, FIRST_VALUE, "4", '@by', BY, '@n2', DESC, AS, x], expect_difference: true,
+      expect: {equals: [1, [grp, g1, x, "2"]]}}
+    - {command: [FT.AGGREGATE, idx2, "*", LOAD, "2", '@grp', '@n1', GROUPBY, "1",
+        '@grp', REDUCE, MIN, "1", '@n1', AS, x], expect: {equals: [1, [grp, g1, x,
+            "10"]]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [fverrors.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fverrors}

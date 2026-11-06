@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 79e1b3e7de0a..6f297274cd48.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-72dc70a6580b
+seed: 4
+experiment:
+  id: proposed.search-expr-compat
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7300

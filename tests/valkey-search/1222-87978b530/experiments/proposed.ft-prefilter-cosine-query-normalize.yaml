@@ -1,0 +1,79 @@
+extends: [valkey.liveness]
+id: proposed.ft-prefilter-cosine-query-normalize
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    FT.SEARCH on a COSINE FLAT vector index with a filter takes the prefiltering execution
+    path (UsePreFiltering is always true for FLAT), where the parent build computed
+    distances against the raw, unnormalized query vector while stored vectors are
+    normalized at ingest. The fix normalizes the query in CalcBestMatchingPrefilteredKeys,
+    so the returned __vec_score values change (parent can return negative cosine distances).
+    Vectors are chosen so every expected score is exact in float32 (powers of two
+    and zeros), making %.12g score strings deterministic.
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, COSINE, tag, TAG, n, NUMERIC]
+      expect: {equals: OK}
+    - command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAA=", tag, a, n, 1]
+      expect: {equals: 3}
+    - command: [HSET, "doc:2", vec, !!binary "AAAAAAAAgD8=", tag, a, n, 2]
+      expect: {equals: 3}
+    - command: [HSET, "doc:3", vec, !!binary "AACAvwAAAAA=", tag, b, n, 3]
+      expect: {equals: 3}
+    - command: [FT.INFO, idx]
+      compare: skip
+    - command: [FT.SEARCH, idx, "*=>[KNN 3 @vec $q]", PARAMS, 2, q, !!binary "AACAQAAAAAA=",
+        NOCONTENT, DIALECT, 2]
+      wait_s: 30
+      expect: {contains: "doc:3"}
+    - command: [FT.SEARCH, idx, "@tag:{a}=>[KNN 1 @vec $q]", PARAMS, 2, q, !!binary "AACAQAAAAAA=",
+        RETURN, 1, __vec_score, DIALECT, 2]
+      expect_difference: true
+      expect: {equals: [1, "doc:1", ["__vec_score", "0"]]}
+    - command: [FT.SEARCH, idx, "@tag:{a}=>[KNN 2 @vec $q]", PARAMS, 2, q, !!binary "AACAQAAAAAA=",
+        RETURN, 1, __vec_score, DIALECT, 2]
+      expect_difference: true
+      expect: {equals: [2, "doc:1", ["__vec_score", "0"], "doc:2", ["__vec_score",
+            "1"]]}
+    - command: [FT.SEARCH, idx, "@tag:{a|b}=>[KNN 3 @vec $q]", PARAMS, 2, q, !!binary "AACAQAAAAAA=",
+        RETURN, 1, __vec_score, DIALECT, 2]
+      expect_difference: true
+      expect: {equals: [3, "doc:1", ["__vec_score", "0"], "doc:2", ["__vec_score",
+            "1"], "doc:3", ["__vec_score", "2"]]}
+    - command: [FT.SEARCH, idx, "@n:[1 2]=>[KNN 2 @vec $q]", PARAMS, 2, q, !!binary "AAAAwAAAAAA=",
+        RETURN, 1, __vec_score, DIALECT, 2]
+      expect_difference: true
+      expect: {equals: [2, "doc:2", ["__vec_score", "1"], "doc:1", ["__vec_score",
+            "2"]]}
+    - command: [FT.SEARCH, idx, "@tag:{b}=>[KNN 2 @vec $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAA=",
+        RETURN, 1, __vec_score, DIALECT, 2]
+      expect: {equals: [1, "doc:3", ["__vec_score", "1"]]}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [search.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}

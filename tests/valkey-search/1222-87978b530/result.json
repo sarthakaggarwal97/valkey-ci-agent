@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "87978b530ad6b18396f51d597e7b5ebb49e13106",
+  "parent": "9e51a16eca58887d02f7862313fff1396c5e9945",
+  "pr": 1222,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "The query vector is not normalized on the prefiltering query execution path (#1222)",
+  "date": "2026-07-06",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.754,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

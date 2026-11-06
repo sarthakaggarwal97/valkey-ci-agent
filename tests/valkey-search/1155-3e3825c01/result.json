@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "3e3825c0195f752510123e4eabd6f57c2a29a585",
+  "parent": "6f297274cd48118bd6b7b1169e38670daf741669",
+  "pr": 1155,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Revise handling of keys with fields with invalid values to match Redisearch (#1155)",
+  "date": "2026-07-10",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 4,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.8265,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-fff18d3fe9d2",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-84fc3608d076",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-86ad82f8c2e6",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    },
+    {
+      "scenario": "ai-74136fde2eaa",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "expect-disputed"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

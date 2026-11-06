@@ -1,0 +1,105 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-tolist
+deployment:
+  modes: [standalone]
+metadata:
+  description: TOLIST reducer for FT.AGGREGATE GROUPBY compared against the parent
+    module build - dedup, nil-skip, empty list, arity errors, APPLY vector broadcast
+    over the list, bool-in-array serialization, and SORTBY on list fields
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: tolist
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, val, NUMERIC,
+        grp, TAG, color, TAG], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", val, "10", grp, a, color, red], expect: {equals: 3}}
+    - {command: [HSET, "doc:2", val, "20", grp, a, color, blue], expect: {equals: 3}}
+    - {command: [HSET, "doc:3", val, "10", grp, a, color, red], expect: {equals: 3}}
+    - {command: [HSET, "doc:4", val, "20", grp, a, color, blue], expect: {equals: 3}}
+    - {command: [HSET, "doc:5", val, "30", grp, a, color, green], expect: {equals: 3}}
+    - {command: [HSET, "doc:6", val, "10", grp, a, color, red], expect: {equals: 3}}
+    - {command: [HSET, "doc:7", val, "99", grp, s, color, silver], expect: {equals: 3}}
+    - {command: [HSET, "doc:8", val, "7", grp, b], expect: {equals: 2}}
+    - {command: [HSET, "doc:9", val, "7", grp, b], expect: {equals: 2}}
+    - {command: [HSET, "doc:10", val, "7", grp, b], expect: {equals: 2}}
+    - {command: [HSET, "doc:11", grp, z], expect: {equals: 1}}
+    - {command: [HSET, "doc:12", val, "5", grp, z], expect: {equals: 2}}
+    - {command: [HSET, "doc:13", grp, e], expect: {equals: 1}}
+    - {command: [FT.AGGREGATE, idx, "@grp:{a}", LOAD, 2, "@val", "@grp", GROUPBY,
+        1, "@grp", REDUCE, COUNT, 0, AS, c], wait_s: 60, expect: {equals: [1, [grp,
+            a, c, "6"]]}}
+    - {command: [FT.AGGREGATE, idx, "@grp:{b}", LOAD, 2, "@val", "@grp", GROUPBY,
+        1, "@grp", REDUCE, COUNT, 0, AS, c], wait_s: 60, expect: {equals: [1, [grp,
+            b, c, "3"]]}}
+    - {command: [FT.AGGREGATE, idx, "@grp:{z}", LOAD, 2, "@val", "@grp", GROUPBY,
+        1, "@grp", REDUCE, COUNT, 0, AS, c], wait_s: 60, expect: {equals: [1, [grp,
+            z, c, "2"]]}}
+    - {command: [FT.AGGREGATE, idx, "@grp:{e}", LOAD, 2, "@val", "@grp", GROUPBY,
+        1, "@grp", REDUCE, COUNT, 0, AS, c], wait_s: 60, expect: {equals: [1, [grp,
+            e, c, "1"]]}}
+    - {command: [FT.AGGREGATE, idx, "@grp:{s}", LOAD, 2, "@val", "@grp", GROUPBY,
+        1, "@grp", REDUCE, COUNT, 0, AS, c], wait_s: 60, expect: {equals: [1, [grp,
+            s, c, "1"]]}}
+    - {command: [FT.AGGREGATE, idx, "@grp:{a}", LOAD, 2, "@val", "@grp", GROUPBY,
+        1, "@grp", REDUCE, COUNT_DISTINCT, 1, "@val", AS, cd], expect: {equals: [
+          1, [grp, a, cd, "3"]]}}
+    - {command: [FT.AGGREGATE, idx, "@grp:{s}", LOAD, 2, "@val", "@grp", GROUPBY,
+        1, "@grp", REDUCE, TOLIST, 1, "@val", AS, items], expect_difference: true,
+      expect: {equals: [1, [grp, s, items, ["99"]]]}}
+    - {command: [FT.AGGREGATE, idx, "@grp:{b}", LOAD, 2, "@val", "@grp", GROUPBY,
+        1, "@grp", REDUCE, TOLIST, 1, "@val", AS, items], expect_difference: true,
+      expect: {equals: [1, [grp, b, items, ["7"]]]}}
+    - {command: [FT.AGGREGATE, idx, "@grp:{a}", LOAD, 2, "@val", "@grp", GROUPBY,
+        1, "@grp", REDUCE, TOLIST, 1, "@val", AS, items, REDUCE, COUNT, 0, AS, cnt],
+      expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "@grp:{z}", LOAD, 2, "@val", "@grp", GROUPBY,
+        1, "@grp", REDUCE, TOLIST, 1, "@val", AS, items], expect_difference: true,
+      expect: {equals: [1, [grp, z, items, ["5"]]]}}
+    - {command: [FT.AGGREGATE, idx, "@grp:{e}", LOAD, 2, "@val", "@grp", GROUPBY,
+        1, "@grp", REDUCE, TOLIST, 1, "@val", AS, items], expect_difference: true,
+      expect: {equals: [1, [grp, e, items, []]]}}
+    - {command: [FT.AGGREGATE, idx, "@grp:{a}", LOAD, 2, "@color", "@grp", GROUPBY,
+        1, "@grp", REDUCE, TOLIST, 1, "@color", AS, cols], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "@grp:{s}", LOAD, 2, "@val", "@grp", GROUPBY,
+        1, "@grp", REDUCE, tOlIsT, 1, "@val", AS, items], expect_difference: true,
+      expect: {equals: [1, [grp, s, items, ["99"]]]}}
+    - {command: [FT.AGGREGATE, idx, "@grp:{b}", LOAD, 2, "@val", "@grp", GROUPBY,
+        1, "@grp", REDUCE, TOLIST, 1, "@val", AS, items, REDUCE, COUNT, 0, AS, cnt,
+        REDUCE, SUM, 1, "@val", AS, total], expect_difference: true, expect: {equals: [
+          1, [grp, b, items, ["7"], cnt, "3", total, "21"]]}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 2, "@val", "@grp", GROUPBY, 1, "@grp",
+        REDUCE, TOLIST, 0], expect_difference: true, expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 2, "@val", "@grp", GROUPBY, 1, "@grp",
+        REDUCE, TOLIST, 2, "@val", "@grp"], expect_difference: true, expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, "@grp:{b}", LOAD, 2, "@val", "@grp", GROUPBY,
+        1, "@grp", REDUCE, TOLIST, 1, "@val", AS, items, APPLY, "@items + 1", AS,
+        p1, APPLY, "100 - @items", AS, p2, APPLY, "@items + @items", AS, p3, APPLY,
+        "floor(@items)", AS, p4], expect_difference: true, expect: {equals: [1, [
+            grp, b, items, ["7"], p1, ["8"], p2, ["93"], p3, ["14"], p4, ["7"]]]}}
+    - {command: [FT.AGGREGATE, idx, "@grp:{s}", LOAD, 2, "@color", "@grp", GROUPBY,
+        1, "@grp", REDUCE, TOLIST, 1, "@color", AS, cl, APPLY, "upper(@cl)", AS, u,
+        APPLY, "strlen(@cl)", AS, sl, APPLY, 'startswith(@cl, "sil")', AS, sw], expect_difference: true,
+      expect: {equals: [1, [grp, s, cl, [silver], u, [SILVER], sl, ["6"], sw, [1]]]}}
+    - {command: [FT.AGGREGATE, idx, "@grp:{a}", LOAD, 2, "@val", "@color", GROUPBY,
+        1, "@color", REDUCE, TOLIST, 1, "@val", AS, items, SORTBY, 2, "@items", ASC],
+      expect_difference: true, expect: {equals: [3, [color, red, items, ["10"]], [
+            color, blue, items, ["20"]], [color, green, items, ["30"]]]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [tolist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tolist}

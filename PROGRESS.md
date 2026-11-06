@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-05T23:58+00:00.
+Updated 2026-11-06T00:21+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 233 | 2259 | #4506 (2026-09-16) | 231 | 33.3 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 107 | 15.6 |
-| valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 60 | 8.9 |
-| valkey-io/valkey-search | 125 | 543 | #946 (2026-08-19) | 125 | 17.9 |
+| valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 56 | 8.9 |
+| valkey-io/valkey-search | 147 | 521 | #1207 (2026-07-01) | 147 | 21.0 |
 
 ## Last runs
 
@@ -48,35 +48,35 @@ Updated 2026-11-05T23:58+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-05T21:29:24+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42079311522): 20 merge(s) tested, 5 without a code change.
+[2026-11-06T00:21:55+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42113110732): 20 merge(s) tested, 2 without a code change.
 
-- [valkey-io/valkey-search#1364](https://github.com/valkey-io/valkey-search/pull/1364) ([tests](tests/valkey-search/1364-bd6d2f238/)): fixing redis search divergence #4: sort key prefix always use #; strings should use $ (#1364): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1084](https://github.com/valkey-io/valkey-search/pull/1084) ([tests](tests/valkey-search/1084-9e8fec7e0/)): Implement Renaming in LOAD clause of FT.AGGREGATE (COMPATIBILTY) PLUS FIX JSON on LOAD clause (#1084): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1196](https://github.com/valkey-io/valkey-search/pull/1196) ([tests](tests/valkey-search/1196-6e38de5d7/)): Allow indexing the same field as both TEXT and TAG (#1195) (#1196): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1331](https://github.com/valkey-io/valkey-search/pull/1331) ([tests](tests/valkey-search/1331-0190919f1/)): Fix ThreadPool suspend/resume race with concurrent Resize (#1331): 0 of 5 test(s) reached the change
-- [valkey-io/valkey-search#1352](https://github.com/valkey-io/valkey-search/pull/1352) ([tests](tests/valkey-search/1352-bc55ab18c/)): fix breaking changes introduced in #1008 (#1352): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#949](https://github.com/valkey-io/valkey-search/pull/949) ([tests](tests/valkey-search/949-7296a5a1b/)): feat: add Random Sample reducer to FT.Aggregate groupby stage (#949): 3 of 3 test(s) reached the change
-- [valkey-io/valkey-search#1341](https://github.com/valkey-io/valkey-search/pull/1341) ([tests](tests/valkey-search/1341-7f04b7d6e/)): Implicitly load fields referenced by a pipeline stage (#919) (#1341): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1349](https://github.com/valkey-io/valkey-search/pull/1349) ([tests](tests/valkey-search/1349-e8f05bbd9/)): Fix HNSW load crash: remove incorrect max_level <= element_count check (#1349): 0 of 3 test(s) reached the change
-- [valkey-io/valkey-search#759](https://github.com/valkey-io/valkey-search/pull/759) ([tests](tests/valkey-search/759-3fe91fb61/)): Handle ipv6 in coordinator (#759): declined: The change only affects gRPC target-address formatting in the valkey-search coordinator, and no fuzzer scenario can reach it. (1) All three changed call sites run only when the coordinator is enabled: ValkeySearch::Startup creates the MetadataManager, client pool and fanout paths only unde
-- [valkey-io/valkey-search#1343](https://github.com/valkey-io/valkey-search/pull/1343) ([tests](tests/valkey-search/1343-b747be659/)): Fix aarch64 RDB compatibility integration tests (#1343): declined: The change only fixes the project's own integration-test harness and build scripts: it adds an aarch64 prebuilt 1.0.0 module fixture to a test zip and makes the Python RDB-compatibility test pick the fixture per architecture, moves AI-assistant skill docs, and corrects an inverted sanitize
-- [valkey-io/valkey-search#1075](https://github.com/valkey-io/valkey-search/pull/1075) ([tests](tests/valkey-search/1075-293b0f27a/)): Fix TAG indexing of non UTF-8 data (#1075): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1287](https://github.com/valkey-io/valkey-search/pull/1287) ([tests](tests/valkey-search/1287-74037e9df/)): Scoring: BM25STD for text, numeric and tag (#1287): 4 of 4 test(s) reached the change; [regressed-fix, the fix of #1287 regressed](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/68)
-- [valkey-io/valkey-search#1273](https://github.com/valkey-io/valkey-search/pull/1273) ([tests](tests/valkey-search/1273-6a5644a23/)): Fix FT.AGGREGATE alias re-use corrupting record state (#1251) (#1273): declined: no proposed test validated
-- [valkey-io/valkey-search#1316](https://github.com/valkey-io/valkey-search/pull/1316) ([tests](tests/valkey-search/1316-7005c00c8/)): introduce VectorRegistry for memory sharing (#1316): 6 of 6 test(s) reached the change; crash, fixed by #1316 (recorded)
-- [valkey-io/valkey-search#1232](https://github.com/valkey-io/valkey-search/pull/1232) ([tests](tests/valkey-search/1232-5662dc10c/)): Changing HNSWLib to store raw vectors (#1232): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1168](https://github.com/valkey-io/valkey-search/pull/1168) ([tests](tests/valkey-search/1168-0f3c267cd/)): Hnswlib templatized vectors (#1168): declined: no proposed test validated
-- [valkey-io/valkey-search#971](https://github.com/valkey-io/valkey-search/pull/971) ([tests](tests/valkey-search/971-cbad9d689/)): change ft.aggregate to generate the Reducer name the same as Redisearch (#971): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1267](https://github.com/valkey-io/valkey-search/pull/1267) ([tests](tests/valkey-search/1267-66d1c822f/)): Allow SORTBY on vector score in ascending order (#1267): 3 of 3 test(s) reached the change
-- [valkey-io/valkey-search@cae4fd2dbb14](https://github.com/valkey-io/valkey-search/commit/cae4fd2dbb14189dcd7326366e9ff203d58d1ae7) ([tests](tests/valkey-search/cae4fd2db/)): Revert "Fix indexing for zero-length keys (#1171)": 4 of 4 test(s) reached the change
-- [valkey-io/valkey-search#1264](https://github.com/valkey-io/valkey-search/pull/1264) ([tests](tests/valkey-search/1264-e415fe131/)): Fix numeric field precision loss in content materialization (#1264): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#946](https://github.com/valkey-io/valkey-search/pull/946) ([tests](tests/valkey-search/946-a5233dfd9/)): feat: add First Value reducer to FT.Aggregate groupby stage (#946): 3 of 3 test(s) reached the change
+- [valkey-io/valkey-search#1171](https://github.com/valkey-io/valkey-search/pull/1171) ([tests](tests/valkey-search/1171-1a2306b10/)): Fix indexing for zero-length keys (#1171): 3 of 3 test(s) reached the change; crash, introduced and since fixed (recorded)
+- [valkey-io/valkey-search#1281](https://github.com/valkey-io/valkey-search/pull/1281) ([tests](tests/valkey-search/1281-8fc3bbdc0/)): Lower per-field info definition log from WARNING to DEBUG (#1281): declined: The change only lowers the log level of a per-field 'Defined Info Field' diagnostic message from WARNING to DEBUG in vmsdk/src/info.cc. It alters no command behavior, replies, data, replication, or configuration — just server log verbosity, which the fuzzer's oracles do not observe. There 
+- [valkey-io/valkey-search#1265](https://github.com/valkey-io/valkey-search/pull/1265) ([tests](tests/valkey-search/1265-bb1f1c723/)): Fix replica reporting incorrect search_number_of_indexes after full sync (#1265): declined: no proposed test validated
+- [valkey-io/valkey-search#1230](https://github.com/valkey-io/valkey-search/pull/1230) ([tests](tests/valkey-search/1230-92efaa600/)): Fix SIGSEGV in LatencySampler when hdr_init fails (#1230): declined: The fix only changes behaviour when hdr_init fails inside LatencySampler::SubmitSample. In the shipped module every LatencySampler is constructed with hard-coded valid parameters (min=1ns, max=1s, precision=2 in src/metrics.h), so hdr_init can only fail on calloc returning NULL inside the 
+- [valkey-io/valkey-search#1283](https://github.com/valkey-io/valkey-search/pull/1283) ([tests](tests/valkey-search/1283-459878064/)): Fix duplicate label handling (#1283): declined: The change fixes HNSW duplicate-label handling in two paths, both unreachable by valkey-fuzzer. (1) The modify-path fix (vector_hnsw.cc ModifyRecordImpl dropping markDelete, and hnswalg.h addPoint reusing an existing label's slot) only changes behavior when allow_replace_deleted_ is true. 
+- [valkey-io/valkey-search#1172](https://github.com/valkey-io/valkey-search/pull/1172) ([tests](tests/valkey-search/1172-7a7b94538/)): Fix up test_skip_index_load.py (#1172): declined: The change modifies only a Python integration test (test_skip_index_load.py, refactored to use the test framework's create_server instead of raw subprocess) and a CI build script (scripts/common.rc, adding an ELF linker flag so ASAN sanitizer builds load libstdc++ early). No module source,
+- [valkey-io/valkey-search#1276](https://github.com/valkey-io/valkey-search/pull/1276) ([tests](tests/valkey-search/1276-53ae957fd/)): feat: overload protection - 2 mechanisms to prevent an ever growing query queue  (#1276): 4 of 4 test(s) reached the change
+- [valkey-io/valkey-search#932](https://github.com/valkey-io/valkey-search/pull/932) ([tests](tests/valkey-search/932-a1f2159c6/)): feat: add TOLIST reducer for FT.AGGREGATE GROUPBY stage (#932): 4 of 4 test(s) reached the change
+- [valkey-io/valkey-search#1259](https://github.com/valkey-io/valkey-search/pull/1259) ([tests](tests/valkey-search/1259-578a75a37/)): fix hardcoded db_num in metadata_manager.cc (#1259): declined: The fix is inside coordinator::MetadataManager::OnLoadingEnded, which only exists when valkey-search is started in cluster mode with the --use-coordinator module argument (valkey_search.cc:1185 creates the MetadataManager only under GetUseCoordinator() && IsCluster()). That option can only
+- [valkey-io/valkey-search#832](https://github.com/valkey-io/valkey-search/pull/832) ([tests](tests/valkey-search/832-320aec93e/)): Replace blocks with token field in json files (#832): declined: The change only rewrites the command-spec JSON metadata files (ft.aggregate.json, ft.create.json, ft.search.json) from nested pure-token blocks to the compact token-field notation. These files are documentation/metadata artifacts: they are not listed in any CMakeLists, not embedded in the 
+- [valkey-io/valkey-search#1030](https://github.com/valkey-io/valkey-search/pull/1030) ([tests](tests/valkey-search/1030-e028db6c0/)): Reimplement Numeric field for 3x space reduction (#1030): 0 of 4 test(s) reached the change
+- [valkey-io/valkey-search#1155](https://github.com/valkey-io/valkey-search/pull/1155) ([tests](tests/valkey-search/1155-3e3825c01/)): Revise handling of keys with fields with invalid values to match Redisearch (#1155): 1 of 5 test(s) reached the change
+- [valkey-io/valkey-search#1086](https://github.com/valkey-io/valkey-search/pull/1086) ([tests](tests/valkey-search/1086-6f297274c/)): Fix crashes in expression evaluation. Add compatibility fixes. (#1086): 6 of 6 test(s) reached the change; crash, fixed by #1086 (recorded)
+- [valkey-io/valkey-search#893](https://github.com/valkey-io/valkey-search/pull/893) ([tests](tests/valkey-search/893-79e1b3e7d/)): feat: Add array value type support to expression system (#893): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1231](https://github.com/valkey-io/valkey-search/pull/1231) ([tests](tests/valkey-search/1231-af1ca3ee8/)): Revise outdated text index comments (#1231): declined: The change only revises comments in rax_wrapper.h and text_index.h and deletes an unused private member (track_subtree_item_counts_) and its unused accessor (TrackSubtreeItemsCountEnabled) — a grep over the repository at the change shows no remaining references, so it was dead code. No run
+- [valkey-io/valkey-search#1226](https://github.com/valkey-io/valkey-search/pull/1226) ([tests](tests/valkey-search/1226-a9a8b9ad2/)): Handle kOneReplicaPerShard in GetTargetsForSlot for single-slot indexes (#1226): declined: no proposed test validated
+- [valkey-io/valkey-search#1222](https://github.com/valkey-io/valkey-search/pull/1222) ([tests](tests/valkey-search/1222-87978b530/)): The query vector is not normalized on the prefiltering query execution path (#1222): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1223](https://github.com/valkey-io/valkey-search/pull/1223) ([tests](tests/valkey-search/1223-9e51a16ec/)): Fixing debug mode compilation failure related to simsimd (#1223): declined: The change only adds `static` to three `inline` SIMD helper functions in vendored simsimd headers to fix a debug-mode (-O0) compilation/linkage failure. It changes symbol linkage, not any function body: distance and log2 computations, and thus all module commands and replies, are identical
+- [valkey-io/valkey-search#1187](https://github.com/valkey-io/valkey-search/pull/1187) ([tests](tests/valkey-search/1187-e8e94d700/)): RemoveSubscription improper destruction handling fix (#1187): declined: This is a replica-only crash fix on the diskless-RDB-load error path, and the valkey-fuzzer has no way to reach or demonstrate it. (1) The bug requires a diskless replica full sync (src/index_schema.cc:1614 LoadFromRDB -> LoadIndexExtension), which only happens over replication with at lea
 
 ## Totals
 
-- Merges whose tests reached the change: 221 of 291 tested (76%)
+- Merges whose tests reached the change: 229 of 300 tested (76%)
 - Changed-line coverage: median 100% of 120 merge(s) measured, 7 under 50%
-- Recall: 66 parents flagged of 85 fix merges
-- Claude: $1741.75 in the last 24 hours, $1765.75 in the last 7 days, $1765.75 in all
+- Recall: 68 parents flagged of 87 fix merges
+- Claude: $1823.65 in the last 24 hours, $1854.22 in the last 7 days, $1854.22 in all
 - Issues filed: 27
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41

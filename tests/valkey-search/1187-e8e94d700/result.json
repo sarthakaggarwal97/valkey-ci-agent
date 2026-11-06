@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "e8e94d70058813be888027bd95baf86766616340",
+  "parent": "49a585b709d318444aa3cb2a8119682f516e77e1",
+  "pr": 1187,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "RemoveSubscription improper destruction handling fix (#1187)",
+  "date": "2026-07-02",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.3601,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a replica-only crash fix on the diskless-RDB-load error path, and the valkey-fuzzer has no way to reach or demonstrate it. (1) The bug requires a diskless replica full sync (src/index_schema.cc:1614 LoadFromRDB -> LoadIndexExtension), which only happens over replication with at least two nodes; the module change must be tested through valkey.action.commands with modules/modules_parent (there is no compare_with, since Valkey is one pinned build on both sides), and that mode's multi-node topology (nodes/cluster) is documented as a compare_with feature only, so it cannot stand up a primar"
+}

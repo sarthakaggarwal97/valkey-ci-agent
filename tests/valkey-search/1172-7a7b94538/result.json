@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "7a7b94538620c6da7205bc2a39d9043ab5f6f3d7",
+  "parent": "53ae957fd739beb409b90571efba135fc353cbca",
+  "pr": 1172,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix up test_skip_index_load.py (#1172)",
+  "date": "2026-08-04",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3179,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only a Python integration test (test_skip_index_load.py, refactored to use the test framework's create_server instead of raw subprocess) and a CI build script (scripts/common.rc, adding an ELF linker flag so ASAN sanitizer builds load libstdc++ early). No module source, command behaviour, RDB load path, replication logic, or configuration of valkey-search changes, so there is no server-side behaviour for a fuzzer scenario to reach: this is a test/CI-only change that needs no scenario."
+}

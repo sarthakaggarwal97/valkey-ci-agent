@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a9a8b9ad2183e59c33b76dd6dd4f210990f42506",
+  "parent": "87978b530ad6b18396f51d597e7b5ebb49e13106",
+  "pr": 1226,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Handle kOneReplicaPerShard in GetTargetsForSlot for single-slot indexes (#1226)",
+  "date": "2026-07-06",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 7.4688,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

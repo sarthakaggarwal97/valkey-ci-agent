@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "af1ca3ee84e0d9401d70dffd2b637161296022ce",
+  "parent": "a9a8b9ad2183e59c33b76dd6dd4f210990f42506",
+  "pr": 1231,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Revise outdated text index comments (#1231)",
+  "date": "2026-07-07",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2488,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only revises comments in rax_wrapper.h and text_index.h and deletes an unused private member (track_subtree_item_counts_) and its unused accessor (TrackSubtreeItemsCountEnabled) \u2014 a grep over the repository at the change shows no remaining references, so it was dead code. No runtime behaviour, replies, persistence or concurrency semantics change, so no scenario is needed."
+}

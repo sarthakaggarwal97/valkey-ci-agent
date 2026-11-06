@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "92efaa60041305ef31b7e20cd6acef523dbd7212",
+  "parent": "459878064ffe58796293379a51558354e80fcb1e",
+  "pr": 1230,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix SIGSEGV in LatencySampler when hdr_init fails (#1230)",
+  "date": "2026-08-06",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.0572,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix only changes behaviour when hdr_init fails inside LatencySampler::SubmitSample. In the shipped module every LatencySampler is constructed with hard-coded valid parameters (min=1ns, max=1s, precision=2 in src/metrics.h), so hdr_init can only fail on calloc returning NULL inside the module process \u2014 a condition no installed fuzzer component can induce on a real server (maxmemory does not constrain libc allocations, and there is no allocation-fault injector). On the only reachable path (hdr_init succeeds) the change and its parent behave byte-identically, so a compared command sequence co"
+}

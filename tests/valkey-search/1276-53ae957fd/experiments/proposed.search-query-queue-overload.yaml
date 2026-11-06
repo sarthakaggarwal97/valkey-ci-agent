@@ -1,0 +1,71 @@
+extends: [valkey.liveness]
+id: proposed.search-query-queue-overload
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Overload protection admission check: the new search.max-query-queue-depth config
+    exists and is mutable at runtime, a forced queue-depth-exceeded condition rejects
+    FT.SEARCH and FT.AGGREGATE with 'Search query queue depth exceeded' before the
+    blocked client is created (no crash, no hang), 0 disables the check, and the 0/1/INT_MAX
+    boundaries behave.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: overload
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 15
+    commands:
+    - {command: ["FT.CREATE", "idx", "ON", "HASH", "PREFIX", "1", "d:", "SCHEMA",
+        "tag1", "TAG"], expect: {equals: OK}}
+    - {command: ["HSET", "d:1", "tag1", "common"], expect: {equals: 1}}
+    - {command: ["HSET", "d:2", "tag1", "common"], expect: {equals: 1}}
+    - {command: ["HSET", "d:3", "tag1", "rare"], expect: {equals: 1}}
+    - {command: ["FT.SEARCH", "idx", "@tag1:{common}", "LIMIT", "0", "0"], wait_s: 30,
+      expect: {equals: [2]}}
+    - {command: ["CONFIG", "SET", "search.max-query-queue-depth", "100"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: ["CONFIG", "SET", "search.max-query-queue-depth", "-1"], expect_difference: true,
+      expect: {error: true}}
+    - {command: ["FT._DEBUG", "CONTROLLED_VARIABLE", "SET", "ForceQueueDepthExceeded",
+        "yes"], expect_difference: true, expect: {equals: OK}}
+    - {command: ["FT.SEARCH", "idx", "@tag1:{common}", "LIMIT", "0", "0"], expect_difference: true,
+      expect: {error: "queue depth exceeded"}}
+    - {command: ["FT.AGGREGATE", "idx", "@tag1:{common}", "GROUPBY", "0", "REDUCE",
+        "COUNT", "0", "AS", "cnt"], expect_difference: true, expect: {error: "queue\
+          \ depth exceeded"}}
+    - {command: ["CONFIG", "SET", "search.max-query-queue-depth", "0"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: ["FT.SEARCH", "idx", "@tag1:{common}", "LIMIT", "0", "0"], expect: {
+        equals: [2]}}
+    - {command: ["FT._DEBUG", "CONTROLLED_VARIABLE", "SET", "ForceQueueDepthExceeded",
+        "no"], expect_difference: true, expect: {equals: OK}}
+    - {command: ["CONFIG", "SET", "search.max-query-queue-depth", "1"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: ["FT.SEARCH", "idx", "@tag1:{common}", "LIMIT", "0", "0"], expect: {
+        equals: [2]}}
+    - {command: ["CONFIG", "SET", "search.max-query-queue-depth", "2147483647"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: ["FT.SEARCH", "idx", "@tag1:{rare}", "LIMIT", "0", "0"], expect: {
+        equals: [1]}}
+    - {command: ["CONFIG", "SET", "search.max-query-queue-depth", "2147483648"], expect_difference: true,
+      expect: {error: true}}
+    - {command: ["FT._DEBUG", "CONTROLLED_VARIABLE", "SET", "ForceServerQueueDepthExceeded",
+        "yes"], expect_difference: true, expect: {equals: OK}}
+    - {command: ["FT.SEARCH", "idx", "@tag1:{common}", "LIMIT", "0", "0"], expect: {
+        equals: [2]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [overload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: overload}

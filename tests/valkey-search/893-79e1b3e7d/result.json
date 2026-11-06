@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "79e1b3e7de0a67b466e4530289799e15775a2148",
+  "parent": "af1ca3ee84e0d9401d70dffd2b637161296022ce",
+  "pr": 893,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "feat: Add array value type support to expression system (#893)",
+  "date": "2026-07-08",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 9.9181,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

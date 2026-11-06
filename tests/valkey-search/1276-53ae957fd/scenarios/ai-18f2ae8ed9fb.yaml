@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search a1f2159c6733..53ae957fd739.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-18f2ae8ed9fb
+seed: 1276004
+experiment:
+  id: proposed.search-query-queue-overload
+  inputs:
+    resp: 3
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

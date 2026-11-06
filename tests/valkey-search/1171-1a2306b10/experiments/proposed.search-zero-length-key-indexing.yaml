@@ -1,0 +1,77 @@
+extends: [valkey.liveness]
+id: proposed.search-zero-length-key-indexing
+deployment:
+  modes: [standalone]
+metadata:
+  description: A zero-length key is indexed by text and vector (HNSW and FLAT) indexes
+    via backfill and live keyspace notifications, updated, and un-indexed on DEL;
+    the parent build never indexes it
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zerokey
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [HSET, "", content, emptytoken], expect: {equals: 1}}
+    - {command: [HSET, "doc:1", content, othertoken], expect: {equals: 1}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "", SCHEMA, content, TEXT, NOSTEM],
+      expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, "@content:emptytoken", NOCONTENT], wait_s: 10, expect_difference: true,
+      expect: {equals: [1, ""]}}
+    - {command: [FT.SEARCH, idx, "@content:emptytoken"], expect_difference: true,
+      expect: {equals: [1, "", [content, emptytoken]]}}
+    - {command: [FT.SEARCH, idx, "@content:othertoken", NOCONTENT], expect: {equals: [
+          1, "doc:1"]}}
+    - {command: [HSET, "", content, livetoken], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@content:livetoken", NOCONTENT], wait_s: 10, expect_difference: true,
+      expect: {equals: [1, ""]}}
+    - {command: [FT.SEARCH, idx, "@content:emptytoken", NOCONTENT], wait_s: 10, expect: {
+        equals: [0]}}
+    - {command: [DEL, ""], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@content:livetoken", NOCONTENT], wait_s: 10, expect: {
+        equals: [0]}}
+    - {command: [FT.CREATE, vhnsw, ON, HASH, PREFIX, 1, "", SCHEMA, v, VECTOR, HNSW,
+        10, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, L2, M, 2, EF_CONSTRUCTION, 1],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, vflat, ON, HASH, PREFIX, 1, "", SCHEMA, v, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.INFO, vhnsw], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.INFO, vflat], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [HSET, "", v, !!binary "AACAPwAAAEAAAEBA"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, vhnsw, "*=>[KNN 1 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAAEAAAEBA",
+        NOCONTENT], wait_s: 10, expect_difference: true, expect: {equals: [1, ""]}}
+    - {command: [FT.SEARCH, vflat, "*=>[KNN 1 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAAEAAAEBA",
+        NOCONTENT], wait_s: 10, expect_difference: true, expect: {equals: [1, ""]}}
+    - {command: [HSET, "", v, !!binary "AACAQAAAoEAAAMBA"], expect: {equals: 0}}
+    - {command: [FT.SEARCH, vhnsw, "*=>[KNN 1 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAQAAAoEAAAMBA",
+        NOCONTENT], wait_s: 10, expect_difference: true, expect: {equals: [1, ""]}}
+    - {command: [DEL, ""], expect: {equals: 1}}
+    - {command: [FT.SEARCH, vhnsw, "*=>[KNN 1 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAQAAAoEAAAMBA",
+        NOCONTENT], wait_s: 10, expect: {equals: [0]}}
+    - {command: [HSET, "", v, !!binary "AACAPwAAAEAAAEBA"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, vhnsw, "*=>[KNN 1 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAAEAAAEBA",
+        NOCONTENT], wait_s: 10, expect_difference: true, expect: {equals: [1, ""]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [zerokey.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zerokey}

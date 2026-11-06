@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "6f297274cd48118bd6b7b1169e38670daf741669",
+  "parent": "79e1b3e7de0a67b466e4530289799e15775a2148",
+  "pr": 1086,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix crashes in expression evaluation. Add compatibility fixes. (#1086)",
+  "date": "2026-07-08",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 6,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.3247,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-c4d1cd593e15",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1086",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-a9fc2ddd86ab",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1086",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

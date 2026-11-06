@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "320aec93ebab95c767a05c80345da7241477830a",
+  "parent": "e028db6c06e2eadc8b604e67ee9bca3fbb3f4c30",
+  "pr": 832,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Replace blocks with token field in json files (#832)",
+  "date": "2026-07-15",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.5604,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewrites the command-spec JSON metadata files (ft.aggregate.json, ft.create.json, ft.search.json) from nested pure-token blocks to the compact token-field notation. These files are documentation/metadata artifacts: they are not listed in any CMakeLists, not embedded in the module binary, and no source file reads them; command parsing is implemented entirely in ft_*_parser.cc, which the diff does not touch, and the module never calls ValkeyModule_SetCommandInfo, so no server reply (COMMAND DOCS/INFO) or command behaviour can change. There is no reachable runtime behaviour to tes"
+}

@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.search-invalid-data-legacy-default
+deployment:
+  modes: [standalone]
+metadata:
+  description: Default (no emulate-release) behavior must be unchanged by the RecordResult
+    refactor - a bad field is treated as missing and the key's other fields stay indexed
+    - and the new App INFO counter compatibility-invalid_data_drops_key must exist
+    and be exposed on the change's build only.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC,
+        t, TAG, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:bad1", n, nope, t, common, v, !!binary "AACAPwAAAEA="],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:bad2", n, 5, t, common, v, !!binary "AACAPw=="], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:good1", n, 100, t, common, v, !!binary "AABAQAAAgEA="],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:good2", n, 150, t, common, v, !!binary "AACgQAAAwEA="],
+      expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, "@t:{common}", NOCONTENT, LIMIT, 0, 0], wait_s: 15,
+      expect: {equals: [4]}}
+    - {command: [FT.SEARCH, idx, "@n:[-inf inf]", NOCONTENT, LIMIT, 0, 0], wait_s: 10,
+      expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx, "-@n:[100 200]", NOCONTENT, LIMIT, 0, 0], wait_s: 10,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAAEA=",
+        DIALECT, 2, NOCONTENT, LIMIT, 0, 0], wait_s: 10, expect: {equals: [3]}}
+    - {command: [INFO, everything], expect_difference: true, expect: {contains: "compatibility-invalid_data_drops_key"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

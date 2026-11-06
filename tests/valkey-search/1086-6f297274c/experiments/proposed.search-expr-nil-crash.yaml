@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.search-expr-nil-crash
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE APPLY string functions on a Nil operand abort the parent
+    module (CHECK(false) in AsStringView/AsString); the change returns Nil
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: expr
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", n, 1], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, LIMIT, 0, 0], wait_s: 20, expect: {
+        contains: 1}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "strlen(floor('a'))", AS, r, LIMIT,
+        0, 10, DIALECT, 2], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "concat(floor('a'))", AS, r, LIMIT,
+        0, 10, DIALECT, 2], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "substr(floor('a'),0,1)", AS, r, LIMIT,
+        0, 10, DIALECT, 2], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "lower(floor('a'))", AS, r, LIMIT,
+        0, 10, DIALECT, 2], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "startswith(floor('a'),'x')", AS,
+        r, LIMIT, 0, 10, DIALECT, 2], expect_difference: true, expect: {error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [expr.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: expr}

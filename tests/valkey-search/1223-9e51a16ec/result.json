@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "9e51a16eca58887d02f7862313fff1396c5e9945",
+  "parent": "ef94489f3d430fe88853a0331c48eae9ffc62bfc",
+  "pr": 1223,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fixing debug mode compilation failure related to simsimd (#1223)",
+  "date": "2026-07-03",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2358,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds `static` to three `inline` SIMD helper functions in vendored simsimd headers to fix a debug-mode (-O0) compilation/linkage failure. It changes symbol linkage, not any function body: distance and log2 computations, and thus all module commands and replies, are identical on both builds. This is a build fix with no runtime behaviour change, so there is nothing a scenario could observe."
+}

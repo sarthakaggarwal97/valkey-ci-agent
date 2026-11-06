@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "8fc3bbdc02fd8e2a8e92381d415e95d09753bbf2",
+  "parent": "bb1f1c723122e078c45afab441ff81850783efbd",
+  "pr": 1281,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Lower per-field info definition log from WARNING to DEBUG (#1281)",
+  "date": "2026-08-12",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2094,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only lowers the log level of a per-field 'Defined Info Field' diagnostic message from WARNING to DEBUG in vmsdk/src/info.cc. It alters no command behavior, replies, data, replication, or configuration \u2014 just server log verbosity, which the fuzzer's oracles do not observe. There is no reachable behavioral difference to test, so no scenario is needed."
+}

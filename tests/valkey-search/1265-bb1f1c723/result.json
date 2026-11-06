@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "bb1f1c723122e078c45afab441ff81850783efbd",
+  "parent": "92efaa60041305ef31b7e20cd6acef523dbd7212",
+  "pr": 1265,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix replica reporting incorrect search_number_of_indexes after full sync (#1265)",
+  "date": "2026-08-10",
+  "unstable": "7836c5afe155c46d9093790b2e7f281d118b968c",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 10.3864,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}
