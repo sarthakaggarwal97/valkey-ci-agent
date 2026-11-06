@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey da9d58f1b42f..85d02f638880.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-978a42d71ea1
+seed: 4610
+experiment:
+  id: proposed.flush-badargs-during-forkless-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

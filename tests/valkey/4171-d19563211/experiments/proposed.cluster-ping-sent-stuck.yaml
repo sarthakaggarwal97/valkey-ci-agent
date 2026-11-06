@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.cluster-ping-sent-stuck
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    A lost PING must not leave a peer stuck in PFAIL when the peer's own PINGs keep
+    data_received fresh: after the drop filter clears, the fixed node reconnects the
+    link (ping outstanding past cluster-node-timeout) and clears the fail? flag, while
+    the parent never sends a new PING.
+components:
+- use: valkey.action.commands
+  id: pingstuck
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    server_config: {cluster-node-timeout: 1500}
+    resp: 2
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, NODES], node: 0, wait_s: 30, expect: {contains: "slave <node.0.id>"},
+      compare: skip}
+    - {command: [CONFIG, SET, cluster-node-timeout, 15000], node: 0, expect: {equals: OK}}
+    - {command: [DEBUG, DROP-CLUSTER-PACKET-FILTER, -2], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, NODES], node: 0, wait_s: 90, expect: {contains: "fail?"},
+      compare: skip}
+    - {command: [DEBUG, DROP-CLUSTER-PACKET-FILTER, 2], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, NODES], node: 1, wait_s: 30, expect: {contains: "master\
+          \ -"}, compare: skip}
+    - {command: [DEBUG, DROP-CLUSTER-PACKET-FILTER, -1], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, NODES], node: 0, wait_s: 90, expect: {contains: "slave <node.0.id>"},
+      expect_difference: true}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [pingstuck.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pingstuck}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bcc60f7132f7..e1126ce52381.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-349c8af944d7
+seed: 433202
+experiment:
+  id: proposed.benchmark-warmup-threads
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

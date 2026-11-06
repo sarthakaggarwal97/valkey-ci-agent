@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d19563211e8861f5493421e75c6e393eb1eae76a",
+  "parent": "12f93313122599abab5d97340afa3ad965d37760",
+  "pr": 4171,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix ping_sent getting stuck when peer traffic keeps link alive (#4171)",
+  "date": "2026-09-02",
+  "unstable": "11555f12218fcac53a385edb2c4282357d580b34",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 1,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 5,
+    "percent": 83,
+    "uncovered": [
+      "src/debug.c:660"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 5.1949,
+  "findings": [],
+  "recorded": []
+}

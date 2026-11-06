@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bb741667dd94..da9d58f1b42f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-52357b6b013e
+seed: 4610
+experiment:
+  id: proposed.debug-cluster-bus-link-flags
+  inputs: {}
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7100
+  server_config:
+    cluster-node-timeout: 5000

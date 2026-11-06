@@ -1,0 +1,24 @@
+extends: [valkey.liveness]
+id: proposed.debug-cluster-bus-link-flags
+deployment:
+  modes: [cluster]
+metadata:
+  description: DEBUG cluster-bus link/ping/reconnection flags accept any non-zero
+    int and engage the bus paths without crashing
+components:
+- use: valkey.action.commands
+  id: flags
+  config:
+    timeout_s: 15
+    commands:
+    - {command: [DEBUG, close-cluster-link-on-packet-drop, "2"], expect: {equals: OK}}
+    - {command: [DEBUG, drop-cluster-packet-filter, "-2"], expect: {equals: OK}}
+    - {command: [DEBUG, disable-cluster-random-ping, "2"], expect: {equals: OK}}
+    - {command: [DEBUG, disable-cluster-reconnection, "2"], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [flags]
+  config: {seconds: 3}
+required_events: [flags.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flags}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5c11f8cb999b..075b7d5cb35d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6fcfa6b26be2
+seed: 4588
+experiment:
+  id: proposed.scripts-mem-lru-accounting
+  inputs:
+    resp: 3
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

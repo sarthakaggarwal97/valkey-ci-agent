@@ -1,0 +1,144 @@
+extends: [valkey.liveness]
+id: proposed.scripts-mem-lru-accounting
+deployment:
+  modes: [standalone]
+metadata:
+  description: used_memory_scripts_eval counts the LRU SHA copies on the fixed build;
+    a Lua reader returns deltas across EVAL fills and SCRIPT LOAD promotions
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: mem
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - command: [EVAL, "local i=redis.call('INFO','memory') local m=tonumber(string.match(i,'used_memory_scripts_eval:(%d+)'))\
+          \ local b=tonumber(redis.call('GET',KEYS[1]) or 0) redis.call('SET',KEYS[1],m)\
+          \ return m-b", 1, base]
+      expect_difference: true
+      expect: {min: 1}
+    - {command: [EVAL, "return 1", 0], expect: {equals: 1}}
+    - {command: [EVAL, "return 2", 0], expect: {equals: 2}}
+    - {command: [EVAL, "return 3", 0], expect: {equals: 3}}
+    - {command: [EVAL, "return 4", 0], expect: {equals: 4}}
+    - {command: [EVAL, "return 5", 0], expect: {equals: 5}}
+    - {command: [EVAL, "return 6", 0], expect: {equals: 6}}
+    - {command: [EVAL, "return 7", 0], expect: {equals: 7}}
+    - {command: [EVAL, "return 8", 0], expect: {equals: 8}}
+    - {command: [EVAL, "return 9", 0], expect: {equals: 9}}
+    - {command: [EVAL, "return 10", 0], expect: {equals: 10}}
+    - {command: [EVAL, "return 11", 0], expect: {equals: 11}}
+    - {command: [EVAL, "return 12", 0], expect: {equals: 12}}
+    - {command: [EVAL, "return 13", 0], expect: {equals: 13}}
+    - {command: [EVAL, "return 14", 0], expect: {equals: 14}}
+    - {command: [EVAL, "return 15", 0], expect: {equals: 15}}
+    - {command: [EVAL, "return 16", 0], expect: {equals: 16}}
+    - {command: [EVAL, "return 17", 0], expect: {equals: 17}}
+    - {command: [EVAL, "return 18", 0], expect: {equals: 18}}
+    - {command: [EVAL, "return 19", 0], expect: {equals: 19}}
+    - {command: [EVAL, "return 20", 0], expect: {equals: 20}}
+    - {command: [EVAL, "return 21", 0], expect: {equals: 21}}
+    - {command: [EVAL, "return 22", 0], expect: {equals: 22}}
+    - {command: [EVAL, "return 23", 0], expect: {equals: 23}}
+    - {command: [EVAL, "return 24", 0], expect: {equals: 24}}
+    - {command: [EVAL, "return 25", 0], expect: {equals: 25}}
+    - {command: [EVAL, "return 26", 0], expect: {equals: 26}}
+    - {command: [EVAL, "return 27", 0], expect: {equals: 27}}
+    - {command: [EVAL, "return 28", 0], expect: {equals: 28}}
+    - {command: [EVAL, "return 29", 0], expect: {equals: 29}}
+    - {command: [EVAL, "return 30", 0], expect: {equals: 30}}
+    - {command: [EVAL, "return 31", 0], expect: {equals: 31}}
+    - {command: [EVAL, "return 32", 0], expect: {equals: 32}}
+    - {command: [EVAL, "return 33", 0], expect: {equals: 33}}
+    - {command: [EVAL, "return 34", 0], expect: {equals: 34}}
+    - {command: [EVAL, "return 35", 0], expect: {equals: 35}}
+    - {command: [EVAL, "return 36", 0], expect: {equals: 36}}
+    - {command: [EVAL, "return 37", 0], expect: {equals: 37}}
+    - {command: [EVAL, "return 38", 0], expect: {equals: 38}}
+    - {command: [EVAL, "return 39", 0], expect: {equals: 39}}
+    - {command: [EVAL, "return 40", 0], expect: {equals: 40}}
+    - {command: [EVAL, "return 41", 0], expect: {equals: 41}}
+    - {command: [EVAL, "return 42", 0], expect: {equals: 42}}
+    - {command: [EVAL, "return 43", 0], expect: {equals: 43}}
+    - {command: [EVAL, "return 44", 0], expect: {equals: 44}}
+    - {command: [EVAL, "return 45", 0], expect: {equals: 45}}
+    - {command: [EVAL, "return 46", 0], expect: {equals: 46}}
+    - {command: [EVAL, "return 47", 0], expect: {equals: 47}}
+    - {command: [EVAL, "return 48", 0], expect: {equals: 48}}
+    - {command: [EVAL, "return 49", 0], expect: {equals: 49}}
+    - {command: [EVAL, "return 50", 0], expect: {equals: 50}}
+    - command: [EVAL, "local i=redis.call('INFO','memory') local m=tonumber(string.match(i,'used_memory_scripts_eval:(%d+)'))\
+          \ local b=tonumber(redis.call('GET',KEYS[1]) or 0) redis.call('SET',KEYS[1],m)\
+          \ return m-b", 1, base]
+      expect_difference: true
+      expect: {min: 3000}
+    - {command: [SCRIPT, LOAD, "return 1"]}
+    - {command: [SCRIPT, LOAD, "return 2"]}
+    - {command: [SCRIPT, LOAD, "return 3"]}
+    - {command: [SCRIPT, LOAD, "return 4"]}
+    - {command: [SCRIPT, LOAD, "return 5"]}
+    - {command: [SCRIPT, LOAD, "return 6"]}
+    - {command: [SCRIPT, LOAD, "return 7"]}
+    - {command: [SCRIPT, LOAD, "return 8"]}
+    - {command: [SCRIPT, LOAD, "return 9"]}
+    - {command: [SCRIPT, LOAD, "return 10"]}
+    - {command: [SCRIPT, LOAD, "return 11"]}
+    - {command: [SCRIPT, LOAD, "return 12"]}
+    - {command: [SCRIPT, LOAD, "return 13"]}
+    - {command: [SCRIPT, LOAD, "return 14"]}
+    - {command: [SCRIPT, LOAD, "return 15"]}
+    - {command: [SCRIPT, LOAD, "return 16"]}
+    - {command: [SCRIPT, LOAD, "return 17"]}
+    - {command: [SCRIPT, LOAD, "return 18"]}
+    - {command: [SCRIPT, LOAD, "return 19"]}
+    - {command: [SCRIPT, LOAD, "return 20"]}
+    - {command: [SCRIPT, LOAD, "return 21"]}
+    - {command: [SCRIPT, LOAD, "return 22"]}
+    - {command: [SCRIPT, LOAD, "return 23"]}
+    - {command: [SCRIPT, LOAD, "return 24"]}
+    - {command: [SCRIPT, LOAD, "return 25"]}
+    - {command: [SCRIPT, LOAD, "return 26"]}
+    - {command: [SCRIPT, LOAD, "return 27"]}
+    - {command: [SCRIPT, LOAD, "return 28"]}
+    - {command: [SCRIPT, LOAD, "return 29"]}
+    - {command: [SCRIPT, LOAD, "return 30"]}
+    - {command: [SCRIPT, LOAD, "return 31"]}
+    - {command: [SCRIPT, LOAD, "return 32"]}
+    - {command: [SCRIPT, LOAD, "return 33"]}
+    - {command: [SCRIPT, LOAD, "return 34"]}
+    - {command: [SCRIPT, LOAD, "return 35"]}
+    - {command: [SCRIPT, LOAD, "return 36"]}
+    - {command: [SCRIPT, LOAD, "return 37"]}
+    - {command: [SCRIPT, LOAD, "return 38"]}
+    - {command: [SCRIPT, LOAD, "return 39"]}
+    - {command: [SCRIPT, LOAD, "return 40"]}
+    - {command: [SCRIPT, LOAD, "return 41"]}
+    - {command: [SCRIPT, LOAD, "return 42"]}
+    - {command: [SCRIPT, LOAD, "return 43"]}
+    - {command: [SCRIPT, LOAD, "return 44"]}
+    - {command: [SCRIPT, LOAD, "return 45"]}
+    - {command: [SCRIPT, LOAD, "return 46"]}
+    - {command: [SCRIPT, LOAD, "return 47"]}
+    - {command: [SCRIPT, LOAD, "return 48"]}
+    - {command: [SCRIPT, LOAD, "return 49"]}
+    - {command: [SCRIPT, LOAD, "return 50"]}
+    - command: [EVAL, "local i=redis.call('INFO','memory') local m=tonumber(string.match(i,'used_memory_scripts_eval:(%d+)'))\
+          \ local b=tonumber(redis.call('GET',KEYS[1]) or 0) redis.call('SET',KEYS[1],m)\
+          \ return m-b", 1, base]
+      expect_difference: true
+      expect: {max: -2000}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [mem.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mem}

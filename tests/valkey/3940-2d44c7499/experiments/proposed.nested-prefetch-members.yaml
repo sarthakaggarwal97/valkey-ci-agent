@@ -1,0 +1,112 @@
+extends: [valkey.liveness]
+id: proposed.nested-prefetch-members
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Nested prefetching of hash/zset/set inner hashtables under io-threads batching:
+    member lookups with short (<8 byte), empty, binary, keyword-like and wrong-type
+    members, hash-field TTL commands (member at argv[4]), non-embedded values, and
+    a two-key GEORADIUSBYMEMBER STORE batch, compared against the parent build and
+    replayed on 16 concurrent connections.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, minimum: 2, maximum: 12, default: 4}
+    prefetch_batch: {type: integer, minimum: 2, maximum: 128, default: 16}
+    concurrency: {type: integer, minimum: 0, maximum: 16, default: 16}
+components:
+- use: valkey.action.commands
+  id: members
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      io-threads: {$ref: inputs.io_threads}
+      io-threads-always-active: "yes"
+      prefetch-batch-max-size: {$ref: inputs.prefetch_batch}
+      hash-max-listpack-entries: 0
+      zset-max-listpack-entries: 0
+      set-max-listpack-entries: 0
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    checks:
+      concurrency: {$ref: inputs.concurrency}
+      replica: true
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2, "", empty-val, fields, keyword-val], expect: {
+        equals: 4}}
+    - {command: [OBJECT, ENCODING, h], compare: skip}
+    - {command: [HGET, h, f1], expect: {equals: v1}}
+    - {command: [HGET, h, ""], expect: {equals: empty-val}}
+    - {command: [HGET, h, fields], expect: {equals: keyword-val}}
+    - {command: [HGET, h, missing-field], expect: {equals: null}}
+    - {command: [HGET, no-such-key, f1], expect: {equals: null}}
+    - {command: [HMGET, h, f1, f2, "", nope], expect: {equals: [v1, v2, empty-val,
+          null]}}
+    - {command: [HEXISTS, h, f2], expect: {equals: 1}}
+    - {command: [HSTRLEN, h, f1], expect: {equals: 2}}
+    - {command: [HSETNX, h, f1, other], expect: {equals: 0}}
+    - {command: [HINCRBY, h, ctr, 7], expect: {equals: 7}}
+    - {command: [HINCRBYFLOAT, h, fctr, "1.5"], expect: {equals: "1.5"}}
+    - {command: [HSET, h, 12345, numval], expect: {equals: 1}}
+    - {command: [HGET, h, 12345], expect: {equals: numval}}
+    - {command: [HSET, h, !!binary 'YQBi', nul-val], expect: {equals: 1}}
+    - {command: [HGET, h, !!binary 'YQBi'], expect: {equals: nul-val}}
+    - {command: [HSET, h, ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff,
+        long-field-val], expect: {equals: 1}}
+    - {command: [HGET, h, ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff],
+      expect: {equals: long-field-val}}
+    - {command: [HDEL, h, f1, missing-field], expect: {equals: 1}}
+    - {command: [HGET, h, f1], expect: {equals: null}}
+    - {command: [HEXPIRE, h, 100, FIELDS, 1, f2], expect: {equals: [1]}}
+    - {command: [HPERSIST, h, FIELDS, 1, f2], expect: {equals: [1]}}
+    - {command: [HTTL, h, FIELDS, 2, f2, absent], expect: {equals: [-1, -2]}}
+    - {command: [HEXPIRETIME, h, FIELDS, 1, f2], expect: {equals: [-1]}}
+    - {command: [HGETDEL, h, FIELDS, 1, fields], expect: {equals: [keyword-val]}}
+    - {command: [HSET, bigh, bigf, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      expect: {equals: 1}}
+    - {command: [HGET, bigh, bigf], expect: {contains: xxxxxxxx}}
+    - {command: [ZADD, z, 1, a, 2, bb, 3, ccc, 4, dddd, 5, eeeee, 6, ffffff, 7, ggggggg,
+        8, hhhhhhhh], expect: {equals: 8}}
+    - {command: [ZSCORE, z, a], expect: null}
+    - {command: [ZSCORE, z, ggggggg], expect: null}
+    - {command: [ZSCORE, z, absent-member], expect: {equals: null}}
+    - {command: [ZMSCORE, z, a, bb, nope], expect: null}
+    - {command: [ZINCRBY, z, 10, a], expect: null}
+    - {command: [ZRANK, z, bb], expect: {equals: 1}}
+    - {command: [ZREVRANK, z, hhhhhhhh], expect: {equals: 0}}
+    - {command: [ZREM, z, ccc, nope], expect: {equals: 1}}
+    - {command: [ZSCORE, z, ""], expect: {equals: null}}
+    - {command: [ZADD, z, 9, ""], expect: {equals: 1}}
+    - {command: [ZSCORE, z, ""], expect: null}
+    - {command: [SADD, s, "", m1, m2, !!binary 'YQBi'], expect: {equals: 4}}
+    - {command: [SISMEMBER, s, ""], expect: {equals: 1}}
+    - {command: [SISMEMBER, s, absent], expect: {equals: 0}}
+    - {command: [SMISMEMBER, s, m1, nope, !!binary 'YQBi'], expect: {equals: [1, 0,
+          1]}}
+    - {command: [SREM, s, m1, nope], expect: {equals: 1}}
+    - {command: [HGET, z, a], expect: {error: WRONGTYPE}}
+    - {command: [ZSCORE, h, f2], expect: {error: WRONGTYPE}}
+    - {command: [SISMEMBER, h, f2], expect: {error: WRONGTYPE}}
+    - {command: [HGET, s, m2], expect: {error: WRONGTYPE}}
+    - {command: [ZSCORE, s, m2], expect: {error: WRONGTYPE}}
+    - {command: [GEOADD, geo, 13.361389, 38.115556, Palermo, 15.087269, 37.502669,
+        Catania], expect: {equals: 2}}
+    - {command: [GEODIST, geo, Palermo, Catania], expect: {equals: "166274.1516"}}
+    - {command: [GEODIST, geo, Palermo, nowhere], expect: {equals: null}}
+    - {command: [GEOHASH, geo, Palermo, nowhere], expect: null}
+    - {command: [GEOPOS, geo, Catania], expect: null}
+    - {command: [GEORADIUSBYMEMBER, geo, Palermo, 200, km, ASC], expect: {equals: [
+          Palermo, Catania]}}
+    - {command: [GEORADIUSBYMEMBER_RO, geo, Palermo, 1, km], expect: {equals: [Palermo]}}
+    - {command: [GEORADIUSBYMEMBER, geo, Palermo, 200, km, STORE, geodst], expect: {
+        equals: 2}}
+    - {command: [ZRANGE, geodst, 0, -1], compare: unordered, expect: null}
+    - {command: [HSET, FIELDS, FIELDS, FIELDS], expect: {equals: 1}}
+    - {command: [HGET, FIELDS, FIELDS], expect: {equals: FIELDS}}
+    - {command: [HSET, tmp, only, v], expect: {equals: 1}}
+    - {command: [HDEL, tmp, only], expect: {equals: 1}}
+    - {command: [HGET, tmp, only], expect: {equals: null}}
+required_events: [members.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: members}

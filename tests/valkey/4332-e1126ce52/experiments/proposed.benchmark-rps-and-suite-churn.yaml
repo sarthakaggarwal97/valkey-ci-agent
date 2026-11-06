@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-rps-and-suite-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark batched completion counting under --rps pacing (termination
+    depends on the showThroughput residue flush while clients pause), then the full
+    default test suite, which creates, folds and frees per-thread histograms once
+    per test
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 300
+    runs:
+    - {tool: valkey-benchmark, args: [--help], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "per-thread streams are seeded"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --threads, 4, -c, 16, --rps, 2000,
+        -n, 4000, -t, set, -r, 20, --seed, 9], compare: skip, expect: {exit: {equals: 0},
+        stdout: {contains: "4000 requests completed"}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect: {stdout: {equals: "20\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, FLUSHALL], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --threads, 4, -c, 16, -n, 1000, -r,
+        100, --seed, 11], compare: skip, expect: {exit: {equals: 0}, stdout: {contains: "1000\
+            \ requests completed"}}}
+required_events: [bench.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

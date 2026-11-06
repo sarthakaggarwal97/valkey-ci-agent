@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-warmup-threads
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark --warmup with --threads crosses the warmup boundary
+    where one thread resets every thread's latency histograms and the batched completion
+    counters while the others record, in both duration mode and count mode
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 120
+    runs:
+    - {tool: valkey-benchmark, args: [--help], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "of pre-warmup completions may carry\
+            \ into the counted"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --threads, 4, -c, 16, --warmup, 1,
+        --duration, 2, -t, set, -r, 50, --seed, 7], compare: skip, expect: {exit: {
+          equals: 0}, stdout: {contains: "requests completed in"}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect: {stdout: {equals: "50\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, FLUSHALL], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --threads, 4, -c, 16, --warmup, 1,
+        -n, 20000, -t, set, -r, 50, --seed, 8], compare: skip, expect: {exit: {equals: 0},
+        stdout: {contains: "requests completed in"}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect: {stdout: {equals: "50\n"}}}
+required_events: [bench.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

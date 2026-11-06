@@ -1,0 +1,141 @@
+extends: [valkey.liveness]
+id: proposed.batched-multikey-lookup
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    HMGET, SMISMEMBER and ZMSCORE take a new batched hashtable lookup when the collection
+    is hashtable/btree encoded and more than one field is asked (valkey#4017). The
+    change intends no reply difference, so every command is unmarked and the replies
+    must match the parent's serial lookups exactly: batch boundaries (1, 16, 17, 33
+    keys), duplicate and missing members, empty strings, wrong types, missing keys,
+    integer members at 2^31/2^32/ INT64, inf/-inf/large-double scores, long zset members
+    (non-TYPE5 sds for the lookup-key marking), expired hash fields (the batch path
+    must honour validateEntry), and the batch path inside MULTI/EXEC.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    max_listpack_entries:
+      type: integer
+      enum: [0, 8]
+      default: 0
+      description: listpack threshold for hash/set/zset; 0 forces hashtable/btree
+        from the first insert, 8 makes large collections convert mid-sequence while
+        small ones stay on the serial listpack path
+components:
+- use: valkey.action.commands
+  id: batched
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      hash-max-listpack-entries: {$ref: inputs.max_listpack_entries}
+      set-max-listpack-entries: {$ref: inputs.max_listpack_entries}
+      zset-max-listpack-entries: {$ref: inputs.max_listpack_entries}
+      set-max-intset-entries: 0
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [HSET, h, f01, v01, f02, v02, f03, v03, f04, v04, f05, v05, f06, v06,
+        f07, v07, f08, v08, f09, v09, f10, v10, f11, v11, f12, v12, f13, v13, f14,
+        v14, f15, v15, f16, v16, f17, v17, f18, v18, f19, v19, f20, v20], expect: {
+        equals: 20}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: hashtable}}
+    - {command: [HMGET, h, f01], expect: {equals: [v01]}}
+    - {command: [HMGET, h, f01, f02, f03, f04, f05, f06, f07, f08, f09, f10, f11,
+        f12, f13, f14, f15, f16], expect: {equals: [v01, v02, v03, v04, v05, v06,
+          v07, v08, v09, v10, v11, v12, v13, v14, v15, v16]}}
+    - {command: [HMGET, h, f01, f02, f03, f04, f05, f06, f07, f08, f09, f10, f11,
+        f12, f13, f14, f15, f16, f17], expect: {equals: [v01, v02, v03, v04, v05,
+          v06, v07, v08, v09, v10, v11, v12, v13, v14, v15, v16, v17]}}
+    - {command: [HMGET, h, nope, f01, nope, f01, f04, nope], expect: {exists: true}}
+    - {command: [HMGET, h, f01, f02, f03, f04, f05, f06, f07, f08, f09, f10, f11,
+        f12, f13, f14, f15, f16, x01, x02, x03, x04, x05, x06, x07, x08, x09, x10,
+        x11, x12, x13, x14, x15, x16, f20], expect: {exists: true}}
+    - {command: [HMGET, h, f01, f01, f01, f01, f01, f01, f01, f01, f01, f01, f01,
+        f01, f01, f01, f01, f01], expect: {equals: [v01, v01, v01, v01, v01, v01,
+          v01, v01, v01, v01, v01, v01, v01, v01, v01, v01]}}
+    - {command: [HSET, h, "", emptyval], expect: {equals: 1}}
+    - {command: [HMGET, h, "", f01, nope], expect: {exists: true}}
+    - {command: [SET, str, scalar], expect: {equals: OK}}
+    - {command: [HMGET, str, a, b], expect: {error: WRONGTYPE}}
+    - {command: [HMGET, nosuchkey, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p,
+        q], expect: {exists: true}}
+    - {command: [HDEL, h, f02, f04, f06, f08, f10, f12, f14, f16, f18, f20], expect: {
+        equals: 10}}
+    - {command: [HMGET, h, f01, f02, f03, f04, f05, f06, f07, f08, f09, f10, f11,
+        f12, f13, f14, f15, f16, f17, f18, f19, f20], expect: {exists: true}}
+    - {command: [HSET, hsmall, a, 1, b, 2], expect: {equals: 2}}
+    - {command: [HMGET, hsmall, a, b, nope], expect: {exists: true}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [HSET, hx, e01, s, e02, s, e03, s, e04, s, e05, s, e06, s, e07, s,
+        e08, s, k01, w, k02, w, k03, w, k04, w, k05, w, k06, w, k07, w, k08, w, k09,
+        w, k10, w], expect: {equals: 18}}
+    - {command: [HPEXPIRE, hx, 30, FIELDS, 8, e01, e02, e03, e04, e05, e06, e07, e08],
+      expect: {equals: [1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [DEBUG, SLEEP, 0.2], expect: {equals: OK}}
+    - {command: [HMGET, hx, e01, k01, e02, k02, e03, k03, e04, k04, e05, k05, e06,
+        k06, e07, k07, e08, k08, k09, k10], expect: {exists: true}}
+    - {command: [HMGET, hx, e01, e02], expect: {exists: true}}
+    - {command: [HGET, hx, e01], expect: {exists: true}}
+    - {command: [EXISTS, hx], expect: {equals: 1}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 1], expect: {equals: OK}}
+    - {command: [SADD, s, m01, m02, m03, m04, m05, m06, m07, m08, m09, m10, m11, m12,
+        m13, m14, m15, m16, m17, m18, m19, m20], expect: {equals: 20}}
+    - {command: [OBJECT, ENCODING, s], expect: {equals: hashtable}}
+    - {command: [SMISMEMBER, s, m01], expect: {equals: [1]}}
+    - {command: [SMISMEMBER, s, m01, m02, m03, m04, m05, m06, m07, m08, x01, x02,
+        x03, x04, x05, x06, x07, x08], expect: {equals: [1, 1, 1, 1, 1, 1, 1, 1, 0,
+          0, 0, 0, 0, 0, 0, 0]}}
+    - {command: [SMISMEMBER, s, m01, m02, m03, m04, m05, m06, m07, m08, m09, m10,
+        m11, m12, m13, m14, m15, m16, m17], expect: {equals: [1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [SMISMEMBER, s, m01, m02, m03, m04, m05, m06, m07, m08, m09, m10,
+        m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, x01, x02, x03, x04, x05,
+        x06, x07, x08, x09, x10, x11, x12, m01], expect: {equals: [1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 1]}}
+    - {command: [SADD, s, ""], expect: {equals: 1}}
+    - {command: [SMISMEMBER, s, "", m01, nope], expect: {equals: [1, 1, 0]}}
+    - {command: [SMISMEMBER, s, nope, nope, nope], expect: {equals: [0, 0, 0]}}
+    - {command: [SMISMEMBER, nosuchset, a, b, c], expect: {equals: [0, 0, 0]}}
+    - {command: [SMISMEMBER, str, a, b], expect: {error: WRONGTYPE}}
+    - {command: [SADD, si, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9], expect: {equals: 10}}
+    - {command: [SMISMEMBER, si, 1, 10, 11, 2147483648, 4294967296, 9223372036854775807,
+        -1, 0, 3, 4, 5, 2], expect: {equals: [1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1]}}
+    - {command: [ZADD, z, 1, m01, 2, m02, 3, m03, 4, m04, 5, m05, 6, m06, 7, m07,
+        8, m08, 9, m09, 10, m10, 11, m11, 12, m12, 13, m13, 14, m14, 15, m15, 16,
+        m16, 17, m17, 18, m18, 19, m19, 20, m20], expect: {equals: 20}}
+    - {command: [OBJECT, ENCODING, z], expect: {in: [btree, skiplist]}}
+    - {command: [ZMSCORE, z, m01], expect: {exists: true}}
+    - {command: [ZMSCORE, z, m01, m02, m03, m04, m05, m06, m07, m08, m09, m10, m11,
+        m12, m13, m14, m15, m16, m17], expect: {exists: true}}
+    - {command: [ZMSCORE, z, m01, m01, nope, m01, nope, m01, m01, m01, m01, m01, m01,
+        m01, m01, m01, m01, m01], expect: {exists: true}}
+    - {command: [ZMSCORE, z, m01, m02, m03, m04, m05, m06, m07, m08, m09, m10, m11,
+        m12, m13, m14, m15, m16, m17, m18, m19, m20, x01, x02, x03, x04, x05, x06,
+        x07, x08, x09, x10, x11, x12, m01], expect: {exists: true}}
+    - {command: [ZADD, z, 7.5, ""], expect: {equals: 1}}
+    - {command: [ZMSCORE, z, "", m02], expect: {exists: true}}
+    - {command: [ZADD, z, 100, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      expect: {equals: 1}}
+    - {command: [ZMSCORE, z, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+        m01, nope], expect: {exists: true}}
+    - {command: [ZADD, z2, inf, a, -inf, b, 1.5, c, 9007199254740993, d, 5, e, 6,
+        f, 7, g, 8, h, 9, i, 10, j], expect: {equals: 10}}
+    - {command: [ZMSCORE, z2, a, b, c, d, e, f, g, h, i, j, nope], expect: {exists: true}}
+    - {command: [ZMSCORE, nosuchzset, p, q, r], expect: {exists: true}}
+    - {command: [ZMSCORE, str, a, b], expect: {error: WRONGTYPE}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HMGET, h, f01, f03, nope], expect: {equals: QUEUED}}
+    - {command: [SMISMEMBER, s, m01, x01], expect: {equals: QUEUED}}
+    - {command: [ZMSCORE, z, m01, m02, nope], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [batched.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: batched}

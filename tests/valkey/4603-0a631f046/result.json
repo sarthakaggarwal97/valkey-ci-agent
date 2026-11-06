@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0a631f046c228d9b4cbd9d8cf44cb68ee7e8bafc",
+  "parent": "acba5ddd06912cd83edd4e9c6c341fe275365c32",
+  "pr": 4603,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "revert typo config change (#4603)",
+  "date": "2026-09-03",
+  "unstable": "11555f12218fcac53a385edb2c4282357d580b34",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2087,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only .config/typos.toml, the configuration of the typos spell-check CI linter (replacing broad acronym ignore regexes with an explicit allowlist). It touches no server, tool, or test code, so there is no runtime behaviour to test and no scenario is needed."
+}

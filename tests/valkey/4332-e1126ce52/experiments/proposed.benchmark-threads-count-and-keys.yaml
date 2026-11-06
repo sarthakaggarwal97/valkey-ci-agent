@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-threads-count-and-keys
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark per-thread completion batching still reports exact
+    final counts in count mode (single-threaded, multi-threaded, pipelined, and tiny
+    -n below the flush batch), and the thread-local rand62 still covers the -r keyspace,
+    measured by DBSIZE
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 120
+    runs:
+    - {tool: valkey-benchmark, args: [--help], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "accounting is batched per thread"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 10000, -r, 100, -t, set, --seed,
+        42], compare: skip, expect: {exit: {equals: 0}, stdout: {contains: "10000\
+            \ requests completed"}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect: {exit: {equals: 0}, stdout: {
+          equals: "100\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, FLUSHALL], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --threads, 4, -c, 32, -n, 10000,
+        -r, 100, -t, set, --seed, 42], compare: skip, expect: {exit: {equals: 0},
+        stdout: {contains: "10000 requests completed"}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect: {stdout: {equals: "100\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, FLUSHALL], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --threads, 4, -c, 16, -P, 16, -n,
+        9984, -r, 100, -t, set, --seed, 43], compare: skip, expect: {exit: {equals: 0},
+        stdout: {contains: "9984 requests completed"}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect: {stdout: {equals: "100\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --threads, 4, -c, 16, -n, 100, -t,
+        ping], compare: skip, expect: {exit: {equals: 0}, stdout: {contains: "100\
+            \ requests completed"}}}
+required_events: [bench.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

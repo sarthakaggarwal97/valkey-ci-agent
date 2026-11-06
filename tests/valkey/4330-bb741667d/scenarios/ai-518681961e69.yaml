@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1dbf1938b4d4..bb741667dd94.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-518681961e69
+seed: 7101
+experiment:
+  id: proposed.syncslots-finish-non-migration-client
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

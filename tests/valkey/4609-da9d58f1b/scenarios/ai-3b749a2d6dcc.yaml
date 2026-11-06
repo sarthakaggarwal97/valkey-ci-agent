@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bb741667dd94..da9d58f1b42f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3b749a2d6dcc
+seed: 202
+experiment:
+  id: proposed.debug-slotmigration-prevent-failover-flag
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

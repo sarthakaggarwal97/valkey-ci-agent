@@ -1,0 +1,47 @@
+extends: [valkey.base]
+id: proposed.flush-badargs-during-forkless-fault
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Invalid FLUSHDB/FLUSHALL during a forkless save on a live deployment
+    with a replica killed mid-save; replies stay in sync, no acknowledged write lost,
+    no crash
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-replica]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: flushes
+  depends_on: [warm-up]
+  config:
+    instances: primary
+    resp: 2
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, POPULATE, 20000], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {error: false}}
+    - {command: [FLUSHALL, ASYNC, EXTRA], expect: {error: "syntax"}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [FLUSHDB, nosync], expect: {error: "syntax"}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [ECHO, still-in-sync], expect: {equals: still-in-sync}}
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: flushes.started
+    instance: replica
+    signal: SIGKILL
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [flushes]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [flushes.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flushes}
+- {evidence_id: valkey.fault.injected, source: kill-replica}

@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.syncslots-finish-non-migration-client
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTER SYNCSLOTS FINISH from a non-migration client is rejected instead
+    of driving the slot-import state machine
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: finish
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CLUSTER, SYNCSLOTS, FINISH, STATE, failed, NAME, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb],
+      node: 1, expect_difference: true, expect: {error: "should only be used by slot\
+          \ migration clients"}}
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+        SLOTSRANGE, 16383, 16383], node: 1, connection: job, expect: {equals: OK}}
+    - {command: [CLUSTER, SYNCSLOTS, FINISH, STATE, success, NAME, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      node: 1, expect_difference: true, expect: {error: "should only be used by slot\
+          \ migration clients"}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: finish}

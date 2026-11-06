@@ -1,0 +1,46 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "351eb0c361023128bc8514dc5dc1be354f6f8a41",
+  "parent": "075b7d5cb35d137d29469c4b530f5eccbba9ba1e",
+  "pr": 4595,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Tear down repl throttler when the last replica disconnects (#4595)",
+  "date": "2026-09-03",
+  "unstable": "11555f12218fcac53a385edb2c4282357d580b34",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 8.058,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-60622ed5e332",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'full-resync' returned ERROR: not judged: the preconditions were not recorded: valkey.replication.output-limit-logged from logs"
+    },
+    {
+      "scenario": "ai-2b4f0f0dd9ec",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'full-resync' returned ERROR: not judged: the preconditions were not recorded: valkey.replication.output-limit-logged from logs"
+    },
+    {
+      "scenario": "ai-31ee9c254468",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'teardown' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (INFO throttling)"
+    }
+  ]
+}

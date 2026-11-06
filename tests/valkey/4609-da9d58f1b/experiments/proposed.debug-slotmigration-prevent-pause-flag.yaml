@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.debug-slotmigration-prevent-pause-flag
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    DEBUG SLOTMIGRATION PREVENT-PAUSE 2 must set the 1-bit flag. On the fixed build
+    the slot export sticks forever before the failover pause; on the parent atoi("2")
+    is truncated to 0 in the bitfield, the pause is allowed and the migration completes,
+    handing the slots to the target.
+components:
+- use: valkey.action.commands
+  id: prevent-pause
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    timeout_s: 120
+    commands:
+    - {command: [SET, bar, v1], node: 0, expect: {equals: OK}}
+    - {command: [DEBUG, SLOTMIGRATION, PREVENT-PAUSE, 2], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 8000, NODE, "<node.1.id>"],
+      node: 0, expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 8], node: 2, expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 5061, 5061, NODE, "<node.1.id>"],
+      node: 0, expect_difference: true, expect: {error: "already migrating"}}
+    - {command: [GET, bar], node: 0, expect_difference: true, expect: {equals: v1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [prevent-pause.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: prevent-pause}

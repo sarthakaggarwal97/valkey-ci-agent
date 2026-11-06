@@ -1,0 +1,50 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5c11f8cb999bf5e8404413d00b3183824d3173ab",
+  "parent": "0413e37ae49a534647ba804f0c92dc1e3977891f",
+  "pr": 4017,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize HMGET, SMISMEMBER and ZMSCORE with batched hashtable lookup (#4017)",
+  "date": "2026-09-02",
+  "unstable": "11555f12218fcac53a385edb2c4282357d580b34",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 113,
+    "executed": 110,
+    "percent": 97,
+    "uncovered": [
+      "src/t_set.c:737",
+      "src/t_zset.c:3126",
+      "src/t_zset.c:3138"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 4.5348,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-14f123d9a3e9",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'batched' returned ERROR: expectations both builds violate alike, so they are not about the change: 23 (HGET hx e01)"
+    },
+    {
+      "scenario": "ai-f1f1333e7c26",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'batched' returned ERROR: expectations both builds violate alike, so they are not about the change: 23 (HGET hx e01)"
+    },
+    {
+      "scenario": "ai-964e2fc3fc0c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'batched' returned ERROR: expectations both builds violate alike, so they are not about the change: 23 (HGET hx e01)"
+    }
+  ]
+}

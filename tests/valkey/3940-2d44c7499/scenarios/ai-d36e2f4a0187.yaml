@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 05df39db5afc..2d44c749967d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d36e2f4a0187
+seed: 940001
+experiment:
+  id: proposed.nested-prefetch-members
+  inputs:
+    resp: 2
+    io_threads: 4
+    prefetch_batch: 16
+    concurrency: 16
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

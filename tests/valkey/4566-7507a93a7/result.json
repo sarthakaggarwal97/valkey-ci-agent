@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7507a93a793a80962180a70b3f612674201096f5",
+  "parent": "a1471664f1ea9be8d89c7078dbb065604180ffd7",
+  "pr": 4566,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Include module version in module load log message (#4566)",
+  "date": "2026-09-01",
+  "unstable": "11555f12218fcac53a385edb2c4282357d580b34",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.236,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits the text of two serverLog NOTICE messages printed when a module loads, adding the module version to the log line. It does not alter any command reply, module behaviour, data structure, replication, or persistence path, so there is no observable behaviour for an experiment to compare or an oracle to judge; no scenario is needed."
+}

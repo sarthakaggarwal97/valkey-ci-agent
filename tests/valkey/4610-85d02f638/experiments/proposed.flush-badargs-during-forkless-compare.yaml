@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.flush-badargs-during-forkless-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FLUSHDB/FLUSHALL with invalid args during a forkless save replied the
+    syntax error twice on the parent, desyncing the connection; the next reply on
+    that connection shows it
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flush
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      bgsave-default-method: forkless
+      forkless-infrastructure-enabled: "yes"
+      rdb-key-save-delay: 500
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FLUSHALL, ASYNC, EXTRA], expect: {error: "syntax"}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [DEBUG, POPULATE, 20000], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {error: false}}
+    - {command: [FLUSHALL, ASYNC, EXTRA], expect: {error: "syntax"}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    - {command: [FLUSHDB, nosync], connection: c2, expect: {error: "syntax"}}
+    - {command: [GET, nosuchkey], connection: c2, expect_difference: true, expect: {
+        equals: null}}
+    - {command: [FLUSHALL, SYNC], connection: c3, expect: {equals: OK}}
+    - {command: [DBSIZE], connection: c3, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [flush.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flush}

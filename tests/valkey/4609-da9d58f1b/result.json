@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "da9d58f1b42fa19ae50931545806b7d2e6cb5feb",
+  "parent": "bb741667dd94ed98725883c00841ad98379f37cb",
+  "pr": 4609,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "improper int to bit-flag conversion (#4609)",
+  "date": "2026-09-04",
+  "unstable": "11555f12218fcac53a385edb2c4282357d580b34",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 2,
+    "percent": 33,
+    "uncovered": [
+      "src/debug.c:659",
+      "src/debug.c:660",
+      "src/debug.c:663",
+      "src/debug.c:666"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 5.2362,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-many-threads
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark with 16 threads, where the batched completion lag
+    (batch times threads) exceeds a small -n so termination and the exact final count
+    rest entirely on the per-thread timer flush and the post-join residue flush and
+    histogram fold
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 120
+    runs:
+    - {tool: valkey-benchmark, args: [--help], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "accounting is batched per thread"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --threads, 16, -c, 64, -n, 20000,
+        -r, 100, -t, set, --seed, 13], compare: skip, expect: {exit: {equals: 0},
+        stdout: {contains: "20000 requests completed"}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect: {stdout: {equals: "100\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, FLUSHALL], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --threads, 16, -c, 16, -n, 200, -t,
+        set, -r, 100], compare: skip, expect: {exit: {equals: 0}, stdout: {contains: "200\
+            \ requests completed"}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect: {exit: {equals: 0}, stdout: {
+          min: 1, max: 100}}}
+required_events: [bench.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

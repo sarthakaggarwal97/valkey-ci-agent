@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "205fde3d3dab11eda18acdd42f3219af2ecb759c",
+  "parent": "7507a93a793a80962180a70b3f612674201096f5",
+  "pr": 4362,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix test_reclaimFilePageCache to avoid tmpfs (#4362)",
+  "date": "2026-09-01",
+  "unstable": "11555f12218fcac53a385edb2c4282357d580b34",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2177,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only fixes an inverted GTEST_SKIP condition in the C++ unit test TestReclaimFilePageCache (src/unit/test_util.cpp), making the test skip on tmpfs-backed /tmp where fadvise(FADV_DONTNEED) is a no-op. It is a test/CI-only fix with no change to any Valkey server, command, replication, persistence or tool behaviour, so no fuzzer scenario can reach it and none is needed."
+}

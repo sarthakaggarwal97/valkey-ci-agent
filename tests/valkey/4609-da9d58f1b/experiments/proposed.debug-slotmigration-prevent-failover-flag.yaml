@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.debug-slotmigration-prevent-failover-flag
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    DEBUG SLOTMIGRATION PREVENT-FAILOVER 2 must set the 1-bit flag on the import node.
+    On the fixed build the import sticks at failover-granted and the source keeps
+    exporting; on the parent atoi("2") is truncated to 0, the failover is performed
+    and the target takes ownership of the slots.
+components:
+- use: valkey.action.commands
+  id: prevent-failover
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    timeout_s: 120
+    commands:
+    - {command: [SET, bar, v1], node: 0, expect: {equals: OK}}
+    - {command: [DEBUG, SLOTMIGRATION, PREVENT-FAILOVER, 2], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 8000, NODE, "<node.1.id>"],
+      node: 0, expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 4], node: 2, expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 5061, 5061, NODE, "<node.1.id>"],
+      node: 0, expect_difference: true, expect: {error: "already migrating"}}
+    - {command: [GET, bar], node: 1, expect_difference: true, expect: {error: "MOVED"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [prevent-failover.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: prevent-failover}

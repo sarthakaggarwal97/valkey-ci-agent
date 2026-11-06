@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 12f933131225..d19563211e88.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0ca44a5287f5
+seed: 4171
+experiment:
+  id: proposed.cluster-ping-sent-stuck
+deployment:
+  mode: standalone
+  base_port: 7000

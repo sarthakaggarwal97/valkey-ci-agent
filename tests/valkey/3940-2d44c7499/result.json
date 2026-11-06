@@ -1,0 +1,65 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2d44c749967d1a18138d56e6137a93da2d698976",
+  "parent": "05df39db5afc82f37b983d17710ac577d4ef9746",
+  "pr": 3940,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Nested prefetching for hash and zset inner hashtables (#3940)",
+  "date": "2026-09-09",
+  "unstable": "11555f12218fcac53a385edb2c4282357d580b34",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 67,
+    "executed": 61,
+    "percent": 91,
+    "uncovered": [
+      "src/memory_prefetch.c:62",
+      "src/memory_prefetch.c:185",
+      "src/memory_prefetch.c:186",
+      "src/memory_prefetch.c:202",
+      "src/memory_prefetch.c:203",
+      "src/memory_prefetch.c:250"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 5.025,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-d36e2f4a0187",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'members' returned ERROR: expectations both builds violate alike, so they are not about the change: 34 (ZRANK z bb), 35 (ZREVRANK z hhhhhhhh)"
+    },
+    {
+      "scenario": "ai-9b18dd2fbd71",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'members' returned ERROR: expectations both builds violate alike, so they are not about the change: 34 (ZRANK z bb), 35 (ZREVRANK z hhhhhhhh)"
+    },
+    {
+      "scenario": "ai-4353f5a89369",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'members' returned ERROR: expectations both builds violate alike, so they are not about the change: 34 (ZRANK z bb), 35 (ZREVRANK z hhhhhhhh)"
+    },
+    {
+      "scenario": "ai-b2ec1ac72fb1",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'members' returned ERROR: expectations both builds violate alike, so they are not about the change: 34 (ZRANK z bb), 35 (ZREVRANK z hhhhhhhh)"
+    },
+    {
+      "scenario": "ai-70d8223a110c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'members' returned ERROR: expectations both builds violate alike, so they are not about the change: 34 (ZRANK z bb), 35 (ZREVRANK z hhhhhhhh)"
+    }
+  ]
+}

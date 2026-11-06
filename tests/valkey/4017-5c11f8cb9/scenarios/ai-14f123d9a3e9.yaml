@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0413e37ae49a..5c11f8cb999b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-14f123d9a3e9
+seed: 417001
+experiment:
+  id: proposed.batched-multikey-lookup
+  inputs:
+    resp: 2
+    max_listpack_entries: 0
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

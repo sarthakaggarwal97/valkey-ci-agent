@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "85d02f6388805948a638c8f3375db63a9800b8d9",
+  "parent": "da9d58f1b42fa19ae50931545806b7d2e6cb5feb",
+  "pr": 4610,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix duplicate reply on FLUSHDB/FLUSHALL with invalid args in forkless (#4610)",
+  "date": "2026-09-05",
+  "unstable": "11555f12218fcac53a385edb2c4282357d580b34",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 8,
+    "executed": 8,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.0345,
+  "findings": [],
+  "recorded": []
+}

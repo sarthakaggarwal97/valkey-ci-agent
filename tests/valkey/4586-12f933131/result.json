@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "12f93313122599abab5d97340afa3ad965d37760",
+  "parent": "1cca6d619ebccaaa708ef1b866202ce7f37ca1f9",
+  "pr": 4586,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "tests/rdma: improve diagnostics for sporadic connection failures (#4586)",
+  "date": "2026-09-01",
+  "unstable": "11555f12218fcac53a385edb2c4282357d580b34",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3727,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is diagnostics-only: a CI workflow tweak (always run dmesg), reworded serverLog error messages in src/rdma.c that add strerror()/error codes without altering any branch condition, return value, or behaviour, and expanded fatal diagnostics in the standalone RDMA test harness (tests/rdma/rdma-test.c), which is not shipped server code. No command reply, replication, persistence, or connection behaviour changes. Moreover the RDMA transport requires an RDMA device (rxe) and root privileges, which the fuzzer's throwaway local servers do not have, so the touched code paths are unreachable "
+}

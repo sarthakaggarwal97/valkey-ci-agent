@@ -1,0 +1,58 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "075b7d5cb35d137d29469c4b530f5eccbba9ba1e",
+  "parent": "5c11f8cb999bf5e8404413d00b3183824d3173ab",
+  "pr": 4587,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix scripts_mem accounting for LRU script SHA copies (#4587)",
+  "date": "2026-09-03",
+  "unstable": "11555f12218fcac53a385edb2c4282357d580b34",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 12,
+    "executed": 11,
+    "percent": 91,
+    "uncovered": [
+      "src/eval.c:366"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 4.2726,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 51 (EVAL local i=redis.call('INFO','memory') local m=tonumber(string.match(i,'used_memory_scripts_eval:(%d+)')) local b=tonumber(redis.call('GET',KEYS[1]) or 0) redis.call('SET',KEYS[1],m) return m-b 1 base) replies otherwise with server_config {\"hash-max-listpack-entries\":",
+      "scenario": "ai-97e0c26a70f4",
+      "seed": 4587,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #4587",
+      "fingerprint": "bcbaf402384d8906768a",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/73"
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 51 (EVAL local i=redis.call('INFO','memory') local m=tonumber(string.match(i,'used_memory_scripts_eval:(%d+)')) local b=tonumber(redis.call('GET',KEYS[1]) or 0) redis.call('SET',KEYS[1],m) return m-b 1 base) replies otherwise with server_config {\"hash-max-listpack-entries\":",
+      "scenario": "ai-6fcfa6b26be2",
+      "seed": 4588,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #4587",
+      "fingerprint": "bcbaf402384d8906768a",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/73"
+    }
+  ],
+  "recorded": []
+}
