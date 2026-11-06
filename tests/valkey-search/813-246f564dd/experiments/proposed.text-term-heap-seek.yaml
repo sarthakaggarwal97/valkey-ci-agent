@@ -1,0 +1,77 @@
+extends: [valkey.liveness]
+id: proposed.text-term-heap-seek
+deployment:
+  modes: [standalone]
+metadata:
+  description: SeekForwardKey laggard-drain in TermIterator compared across builds
+    - AND intersections of interleaved prefix expansions, and a NOOFFSETS index exercising
+    the require_positions=false key-heap-only path
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seek
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, sidx, ON, HASH, PREFIX, 1, 's:', SCHEMA, t, TEXT], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, nidx, ON, HASH, PREFIX, 1, 's:', NOOFFSETS, SCHEMA, t,
+        TEXT], expect: {equals: OK}}
+    - {command: [FT.INFO, sidx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.INFO, nidx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [HSET, 's:01', t, 'aa1 common'], expect: {equals: 1}}
+    - {command: [HSET, 's:02', t, 'bb1 filler'], expect: {equals: 1}}
+    - {command: [HSET, 's:03', t, 'aa2 filler'], expect: {equals: 1}}
+    - {command: [HSET, 's:04', t, 'bb2 common'], expect: {equals: 1}}
+    - {command: [HSET, 's:05', t, 'aa3 bb3'], expect: {equals: 1}}
+    - {command: [HSET, 's:06', t, 'aa4 filler'], expect: {equals: 1}}
+    - {command: [HSET, 's:07', t, 'bb4 filler'], expect: {equals: 1}}
+    - {command: [HSET, 's:08', t, 'aa5 bb5 common'], expect: {equals: 1}}
+    - {command: [HSET, 's:09', t, 'aa6 filler'], expect: {equals: 1}}
+    - {command: [HSET, 's:10', t, 'bb6 filler'], expect: {equals: 1}}
+    - {command: [HSET, 's:11', t, 'aa7 bb7'], expect: {equals: 1}}
+    - {command: [HSET, 's:12', t, 'bb8 filler'], expect: {equals: 1}}
+    - {command: [HSET, 's:13', t, 'aa8 filler'], expect: {equals: 1}}
+    - {command: [HSET, 's:14', t, 'common filler'], expect: {equals: 1}}
+    - {command: [HSET, 's:15', t, 'aa1 bb1'], expect: {equals: 1}}
+    - {command: [HSET, 's:16', t, 'edge filler'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, sidx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          16]}}
+    - {command: [FT.SEARCH, nidx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          16]}}
+    - {command: [FT.SEARCH, sidx, 'aa*', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, sidx, 'bb*', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, sidx, 'aa* bb*', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, sidx, 'aa* common', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, sidx, 'aa* bb* common', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, sidx, 'aa* zzz', LIMIT, 0, 0], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, nidx, 'aa*', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, nidx, 'aa* bb*', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, nidx, 'aa* common', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, nidx, 'aa* bb* common', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, nidx, '"aa1 common"', NOCONTENT], expect: {error: offsets}}
+    - {command: [FT.SEARCH, sidx, '"aa1 common"', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, sidx, '"aa5 bb5"', NOCONTENT], compare: unordered}
+    - {command: [DEL, 's:08'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, sidx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          15]}}
+    - {command: [FT.SEARCH, nidx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          15]}}
+    - {command: [FT.SEARCH, sidx, 'aa* bb* common', LIMIT, 0, 0], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, nidx, 'aa* bb* common', LIMIT, 0, 0], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, sidx, 'aa* bb*', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [seek.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seek}

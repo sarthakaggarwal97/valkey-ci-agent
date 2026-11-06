@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5fe1676e8ad03345e6d9818744097fbef4a10005",
+  "parent": "f837b9ef07cd2ce9334ddd03a19bf5a861221bef",
+  "pr": 760,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix: add null check for thread_monitor_ in GetAvgCPUPercentage (#760)",
+  "date": "2026-02-22",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.6615,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in _ZN5vmsdk13ThreadMonitor22GetThreadCPUPercentageEv",
+      "scenario": "ai-af6c93e943c2",
+      "seed": 760201,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #760",
+      "fingerprint": "5ccc0e3dd360fdbd4145",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in _ZN5vmsdk13ThreadMonitor22GetThreadCPUPercentageEv",
+      "scenario": "ai-f497a615c54d",
+      "seed": 760202,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #760",
+      "fingerprint": "5ccc0e3dd360fdbd4145",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

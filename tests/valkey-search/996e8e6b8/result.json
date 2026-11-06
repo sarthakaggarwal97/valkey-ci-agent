@@ -1,0 +1,65 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "996e8e6b8e02451106cee6a26eaf5e1ce3b0e546",
+  "parent": "bc32b356ba56765abc21e0e9a5734fb07ee01959",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Merge pull request #830 from BCathcart/brennan-text-subtree-key-count-follow-up",
+  "date": "2026-03-02",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 9.0304,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak",
+      "scenario": "ai-227e7ba52990",
+      "seed": 8301,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates 996e8e6b8e02, since fixed",
+      "fingerprint": "badc8ded22447957f884",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak",
+      "scenario": "ai-3d19447aa67b",
+      "seed": 8302,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates 996e8e6b8e02, since fixed",
+      "fingerprint": "badc8ded22447957f884",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak",
+      "scenario": "ai-1a02c62103bb",
+      "seed": 8303,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates 996e8e6b8e02, since fixed",
+      "fingerprint": "badc8ded22447957f884",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

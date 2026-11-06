@@ -1,0 +1,167 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "246f564ddd980059e70ec6b5e4beee6cd96281cf",
+  "parent": "ba2265deeaf2342773782882a44449edf6e18fa3",
+  "pr": 813,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Using \"Min Heap\" approach for TermIterator (#813)",
+  "date": "2026-02-25",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 12.0521,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-1ed35c39ee1e",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'merge' returned ERROR: expectations both builds violate alike, so they are not about the change: 10 (FT.SEARCH idx * LIMIT 0 0), 26 (FT.SEARCH idx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-1ed35c39ee1e",
+      "build": "unstable",
+      "seed": 813001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1ed35c39ee1e",
+      "build": "unstable",
+      "seed": 813002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1ed35c39ee1e",
+      "build": "unstable",
+      "seed": 813003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-4e9acd66470a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'merge' returned ERROR: expectations both builds violate alike, so they are not about the change: 10 (FT.SEARCH idx * LIMIT 0 0), 26 (FT.SEARCH idx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-4e9acd66470a",
+      "build": "unstable",
+      "seed": 813002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-4e9acd66470a",
+      "build": "unstable",
+      "seed": 813003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-4e9acd66470a",
+      "build": "unstable",
+      "seed": 813004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b7b89cb0142d",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'positions' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (FT.SEARCH pidx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-b7b89cb0142d",
+      "build": "unstable",
+      "seed": 813003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b7b89cb0142d",
+      "build": "unstable",
+      "seed": 813004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b7b89cb0142d",
+      "build": "unstable",
+      "seed": 813005,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-421567490b79",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'positions' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (FT.SEARCH pidx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-421567490b79",
+      "build": "unstable",
+      "seed": 813004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-421567490b79",
+      "build": "unstable",
+      "seed": 813005,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-421567490b79",
+      "build": "unstable",
+      "seed": 813006,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2037f6dbce8c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seek' returned ERROR: expectations both builds violate alike, so they are not about the change: 20 (FT.SEARCH sidx * LIMIT 0 0), 21 (FT.SEARCH nidx * LIMIT 0 0), 36 (FT.SEARCH sidx * LIMIT 0 0), 37 (FT.SEARCH nidx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-2037f6dbce8c",
+      "build": "unstable",
+      "seed": 813005,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2037f6dbce8c",
+      "build": "unstable",
+      "seed": 813006,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2037f6dbce8c",
+      "build": "unstable",
+      "seed": 813007,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-af58501191c8",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seek' returned ERROR: expectations both builds violate alike, so they are not about the change: 20 (FT.SEARCH sidx * LIMIT 0 0), 21 (FT.SEARCH nidx * LIMIT 0 0), 36 (FT.SEARCH sidx * LIMIT 0 0), 37 (FT.SEARCH nidx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-af58501191c8",
+      "build": "unstable",
+      "seed": 813006,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-af58501191c8",
+      "build": "unstable",
+      "seed": 813007,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-af58501191c8",
+      "build": "unstable",
+      "seed": 813008,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

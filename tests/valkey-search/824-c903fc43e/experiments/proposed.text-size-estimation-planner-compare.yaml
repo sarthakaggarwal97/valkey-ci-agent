@@ -1,0 +1,144 @@
+extends: [valkey.liveness]
+id: proposed.text-size-estimation-planner-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Text EstimateSize (term/prefix/suffix/fuzzy) now drives the pre-filter vs inline
+    decision for hybrid HNSW queries, with the new search.prefiltering-threshold-ratio
+    config and rax subtree_items tracking through inserts, deletes and node splits.
+    The parent estimates 0 for every text predicate, so it always pre-filters; the
+    INFO counters are the oracle.
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 240
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, SCHEMA, content, TEXT, NOSTEM, WITHSUFFIXTRIE,
+        vec, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [HSET, 'doc:0', content, 'common wcommon pcommon0 rare prare0 zebrax
+          twodocs threedocs', vec, !!binary 'AACAPwAAAAA='], expect: {equals: 2}}
+    - {command: [HSET, 'doc:1', content, 'common wcommon pcommon1 twodocs threedocs',
+        vec, !!binary 'AACAPwAAAAA='], expect: {equals: 2}}
+    - {command: [HSET, 'doc:2', content, 'common wcommon pcommon2 threedocs', vec,
+        !!binary 'AACAPwAAAAA='], expect: {equals: 2}}
+    - {command: [HSET, 'doc:3', content, 'common wcommon pcommon3', vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:4', content, 'common wcommon pcommon4', vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:5', content, 'common wcommon pcommon5', vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:6', content, 'common wcommon pcommon6', vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:7', content, 'common wcommon pcommon7', vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:8', content, 'common wcommon pcommon8', vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:9', content, 'common wcommon pcommon9', vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:10', content, 'common wcommon pcommon10', vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:11', content, 'common wcommon pcommon11', vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:12', content, 'common wcommon pcommon12', vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:13', content, 'common wcommon pcommon13', vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:14', content, 'common wcommon pcommon14', vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:15', content, 'common wcommon pcommon15', vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:16', content, 'common wcommon pcommon16', vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:17', content, 'common wcommon pcommon17', vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:18', content, 'common wcommon pcommon18', vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:19', content, 'common wcommon pcommon19', vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, '@content:common', NOCONTENT, LIMIT, 0, 25], wait_s: 30,
+      compare: unordered, expect: {contains: 20}}
+    - {command: [CONFIG, SET, 'search.prefiltering-threshold-ratio', '0.1'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, 'search.prefiltering-threshold-ratio'], expect_difference: true,
+      expect: {contains: '0.1'}}
+    - {command: [CONFIG, SET, 'search.prefiltering-threshold-ratio', '1.5'], expect_difference: true,
+      expect: {error: 'between'}}
+    - {command: [CONFIG, SET, 'search.prefiltering-threshold-ratio', 'abc'], expect_difference: true,
+      expect: {error: 'valid number'}}
+    - {command: [FT.SEARCH, idx, '@content:rare=>[KNN 5 @vec $v]', PARAMS, 2, v, !!binary 'AACAPwAAAAA=',
+        NOCONTENT], expect: {equals: [1, 'doc:0']}}
+    - {command: [FT.SEARCH, idx, '@content:common=>[KNN 25 @vec $v]', PARAMS, 2, v,
+        !!binary 'AACAPwAAAAA=', NOCONTENT, LIMIT, 0, 25], compare: skip, expect: {
+        contains: 20}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_query_prefiltering_requests_cnt:1'}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_inline_filtering_requests_count:1'}}
+    - {command: [FT.SEARCH, idx, '@content:twodocs=>[KNN 5 @vec $v]', PARAMS, 2, v,
+        !!binary 'AACAPwAAAAA=', NOCONTENT], compare: skip, expect: {contains: 2}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_query_prefiltering_requests_cnt:2'}}
+    - {command: [FT.SEARCH, idx, '@content:threedocs=>[KNN 5 @vec $v]', PARAMS, 2,
+        v, !!binary 'AACAPwAAAAA=', NOCONTENT], compare: skip, expect: {contains: 3}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_inline_filtering_requests_count:2'}}
+    - {command: [FT.SEARCH, idx, '@content:pcommon*=>[KNN 25 @vec $v]', PARAMS, 2,
+        v, !!binary 'AACAPwAAAAA=', NOCONTENT, LIMIT, 0, 25], compare: skip, expect: {
+        contains: 20}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_inline_filtering_requests_count:3'}}
+    - {command: [FT.SEARCH, idx, '@content:prare*=>[KNN 5 @vec $v]', PARAMS, 2, v,
+        !!binary 'AACAPwAAAAA=', NOCONTENT], expect: {equals: [1, 'doc:0']}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_query_prefiltering_requests_cnt:3'}}
+    - {command: [FT.SEARCH, idx, '@content:*brax=>[KNN 5 @vec $v]', PARAMS, 2, v,
+        !!binary 'AACAPwAAAAA=', NOCONTENT], expect: {equals: [1, 'doc:0']}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_query_prefiltering_requests_cnt:4'}}
+    - {command: [FT.SEARCH, idx, '@content:*ommon=>[KNN 25 @vec $v]', PARAMS, 2, v,
+        !!binary 'AACAPwAAAAA=', NOCONTENT, LIMIT, 0, 25], compare: skip, expect: {
+        contains: 20}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_inline_filtering_requests_count:4'}}
+    - {command: [FT.SEARCH, idx, '@content:%rarf%=>[KNN 5 @vec $v]', PARAMS, 2, v,
+        !!binary 'AACAPwAAAAA=', NOCONTENT], expect: {equals: [1, 'doc:0']}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_inline_filtering_requests_count:5'}}
+    - {command: [CONFIG, SET, 'search.prefiltering-threshold-ratio', '0'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@content:rare=>[KNN 5 @vec $v]', PARAMS, 2, v, !!binary 'AACAPwAAAAA=',
+        NOCONTENT], expect: {equals: [1, 'doc:0']}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_inline_filtering_requests_count:6'}}
+    - {command: [FT.SEARCH, idx, '@content:nosuchterm=>[KNN 5 @vec $v]', PARAMS, 2,
+        v, !!binary 'AACAPwAAAAA=', NOCONTENT], expect: {equals: [0]}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_query_prefiltering_requests_cnt:5'}}
+    - {command: [DEL, 'doc:2', 'doc:3', 'doc:4', 'doc:5', 'doc:6', 'doc:7', 'doc:8',
+        'doc:9', 'doc:10', 'doc:11', 'doc:12', 'doc:13', 'doc:14', 'doc:15', 'doc:16',
+        'doc:17', 'doc:18', 'doc:19'], expect: {equals: 18}}
+    - {command: [FT.SEARCH, idx, '@content:common', NOCONTENT, LIMIT, 0, 25], wait_s: 30,
+      compare: unordered, expect: {contains: 2}}
+    - {command: [FT.SEARCH, idx, '@content:common=>[KNN 5 @vec $v]', PARAMS, 2, v,
+        !!binary 'AACAPwAAAAA=', NOCONTENT], compare: skip, expect: {contains: 2}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_inline_filtering_requests_count:7'}}
+    - {command: [CONFIG, SET, 'search.prefiltering-threshold-ratio', '1.0'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@content:common=>[KNN 5 @vec $v]', PARAMS, 2, v,
+        !!binary 'AACAPwAAAAA=', NOCONTENT], compare: skip, expect: {contains: 2}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_query_prefiltering_requests_cnt:6'}}
+    - {command: [FT.SEARCH, idx, '@content:prare*=>[KNN 5 @vec $v]', PARAMS, 2, v,
+        !!binary 'AACAPwAAAAA=', NOCONTENT], expect: {equals: [1, 'doc:0']}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_query_prefiltering_requests_cnt:7'}}
+    - {command: [HSET, 'doc:20', content, 'pcom', vec, !!binary 'AACAPwAAAAA='], expect: {
+        equals: 2}}
+    - {command: [FT.SEARCH, idx, '@content:pcom', NOCONTENT, LIMIT, 0, 5], wait_s: 15,
+      expect: {equals: [1, 'doc:20']}}
+    - {command: [FT.SEARCH, idx, '@content:pcommon*=>[KNN 5 @vec $v]', PARAMS, 2,
+        v, !!binary 'AACAPwAAAAA=', NOCONTENT], compare: skip, expect: {contains: 2}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_query_prefiltering_requests_cnt:8'}}
+    - {command: [FT.SEARCH, idx, '@content:pcom*=>[KNN 5 @vec $v]', PARAMS, 2, v,
+        !!binary 'AACAPwAAAAA=', NOCONTENT], compare: skip, expect: {contains: 3}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_query_prefiltering_requests_cnt:9'}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

@@ -1,0 +1,87 @@
+extends: [valkey.liveness]
+id: proposed.text-postings-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Text postings metadata and position queries after the FlatPositionMap
+    serialization move, compared across module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: text
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", NOSTOPWORDS, SCHEMA,
+        f1, TEXT, NOSTEM, f2, TEXT, NOSTEM], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", f1, "alpha beta alpha common", f2, "beta gamma common"],
+      expect: {equals: 2}}
+    - {command: [HSET, "doc:2", f1, "delta common", f2, "delta common"], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:3", f1, "alpha beta gamma delta epsilon common"], expect: {
+        equals: 1}}
+    - {command: [FT.SEARCH, idx, common, LIMIT, "0", "0"], wait_s: 30, expect: {equals: [
+          3]}}
+    - {command: [FT.INFO, idx], compare: skip, wait_s: 30, expect: {contains: 17}}
+    - {command: [FT.SEARCH, idx, '@f1:"alpha beta alpha"', NOCONTENT], expect: {equals: [
+          1, "doc:1"]}}
+    - {command: [FT.SEARCH, idx, '"beta gamma"', LIMIT, "0", "0"], expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx, '@f1:"beta gamma"', NOCONTENT], expect: {equals: [
+          1, "doc:3"]}}
+    - {command: [FT.SEARCH, idx, "beta alpha", SLOP, "0", INORDER, LIMIT, "0", "0"],
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, '@f2:delta', LIMIT, "0", "0"], expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idx, '@f1:delta', LIMIT, "0", "0"], expect: {equals: [
+          2]}}
+    - {command: [DEL, "doc:3"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, epsilon, LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [FT.INFO, idx], compare: skip, wait_s: 30, expect: {contains: 11}}
+    - {command: [HSET, "doc:2", f1, zeta], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, zeta, LIMIT, "0", "0"], wait_s: 30, expect: {equals: [
+          1]}}
+    - {command: [FT.INFO, idx], compare: skip, wait_s: 30, expect: {contains: 10}}
+    - {command: [FT.SEARCH, idx, '@f2:"delta common"', NOCONTENT], expect: {equals: [
+          1, "doc:2"]}}
+    - {command: [DEL, "doc:1", "doc:2"], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, common, LIMIT, "0", "0"], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [HSET, "doc:7", f1, "omega omega omega omega"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, omega, LIMIT, "0", "0"], wait_s: 30, expect: {equals: [
+          1]}}
+    - {command: [HSET, "doc:8", f1, ""], expect: {equals: 1}}
+    - {command: [HSET, "doc:9", f1, "... !!!"], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], compare: skip, wait_s: 30, expect: {contains: 4}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, "1", "sdoc:", NOSTOPWORDS, SCHEMA,
+        s, TEXT, NOSTEM, WITHSUFFIXTRIE], expect: {equals: OK}}
+    - {command: [HSET, "sdoc:1", s, "running walking"], expect: {equals: 1}}
+    - {command: [HSET, "sdoc:2", s, ring], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx2, '@s:*ing', LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [2]}}
+    - {command: [FT.SEARCH, idx2, '@s:*king', NOCONTENT], expect: {equals: [1, "sdoc:1"]}}
+    - {command: [FT.SEARCH, idx2, '@s:runn*', NOCONTENT], expect: {equals: [1, "sdoc:1"]}}
+    - {command: [FT.CREATE, idx3, ON, HASH, PREFIX, "1", "ndoc:", NOSTOPWORDS, SCHEMA,
+        t1, TEXT, NOSTEM, t2, TEXT, NOSTEM, t3, TEXT, NOSTEM, t4, TEXT, NOSTEM, t5,
+        TEXT, NOSTEM, t6, TEXT, NOSTEM, t7, TEXT, NOSTEM, t8, TEXT, NOSTEM, t9, TEXT,
+        NOSTEM], expect: {equals: OK}}
+    - {command: [HSET, "ndoc:1", t1, "w w", t2, w, t3, w, t4, w, t5, w, t6, w, t7,
+        w, t8, w, t9, w], expect: {equals: 9}}
+    - {command: [FT.SEARCH, idx3, '@t9:w', NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "ndoc:1"]}}
+    - {command: [FT.SEARCH, idx3, '@t1:"w w"', NOCONTENT], expect: {equals: [1, "ndoc:1"]}}
+    - {command: [FT.INFO, idx3], compare: skip, wait_s: 30, expect: {contains: 10}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [text.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: text}

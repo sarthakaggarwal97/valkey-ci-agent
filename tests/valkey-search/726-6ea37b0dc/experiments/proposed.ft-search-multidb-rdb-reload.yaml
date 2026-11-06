@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-multidb-rdb-reload
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH in a non-zero DB survives SAVE and restart; the parent replays
+    the RDB key list against DB 0, deleting keys missing there and ingesting same-named
+    DB 0 keys into the DB 1 index
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: multidb
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    server_config: {cluster-databases: "16"}
+    timeout_s: 60
+    commands:
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "p:", SCHEMA, name, TAG, price,
+        NUMERIC, vec, VECTOR, FLAT, "6", TYPE, FLOAT32, DIM, "4", DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [HSET, "p:k0", name, tag1, price, "100", vec, !!binary 'AACAPwAAAAAAAAAAAAAAAA=='],
+      expect: {equals: 3}}
+    - {command: [HSET, "p:k1", name, tag1, price, "200", vec, !!binary 'AAAAAAAAgD8AAAAAAAAAAA=='],
+      expect: {equals: 3}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [HSET, "p:k0", name, decoy, price, "9999", vec, !!binary 'AACAPwAAAAAAAAAAAAAAAA=='],
+      expect: {equals: 3}}
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@name:{tag1}", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [2]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@name:{tag1}", LIMIT, "0", "0"], wait_s: 30, expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "@price:[100 200]", LIMIT, "0", "0"], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "@name:{decoy}", LIMIT, "0", "0"], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $v]", PARAMS, "2", v, !!binary 'AACAPwAAAAAAAAAAAAAAAA==',
+        NOCONTENT, LIMIT, "0", "10"], compare: unordered, expect_difference: true,
+      expect: {contains: "p:k1"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [multidb.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: multidb}

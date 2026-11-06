@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.search-cpu-null-monitor
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO search right after a thread-pool resize must not crash on a freshly-created
+    thread whose CPU monitor is not yet initialized
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cpu
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, search.reader-threads, "2"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, "2"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.reader-threads, "1024"], expect: {equals: OK}}
+    - {command: [INFO, search], compare: skip, expect: {contains: "search_used_read_cpu"}}
+    - {command: [CONFIG, SET, search.writer-threads, "1024"], expect: {equals: OK}}
+    - {command: [INFO, search], compare: skip}
+    - {command: [CONFIG, SET, search.reader-threads, "2"]}
+    - {command: [CONFIG, SET, search.reader-threads, "1024"]}
+    - {command: [INFO, search], compare: skip}
+    - {command: [CONFIG, SET, search.writer-threads, "2"]}
+    - {command: [CONFIG, SET, search.writer-threads, "1024"]}
+    - {command: [INFO, search], compare: skip}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cpu}

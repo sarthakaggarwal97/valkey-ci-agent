@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a2354e47ea119eab8c0e319bef06900591ae65e0",
+  "parent": "b8dff62fd171d737497bdad1e5c3a88e61b469ca",
+  "pr": 845,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Improve text.cc locking (#845)",
+  "date": "2026-03-04",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 7.0486,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

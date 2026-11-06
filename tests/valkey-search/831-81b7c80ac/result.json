@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "81b7c80ac5a2d630b671e80993b03b898a4cfbe6",
+  "parent": "996e8e6b8e02451106cee6a26eaf5e1ce3b0e546",
+  "pr": 831,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix crash due to lazy expiration in the middle of Search commands (#831)",
+  "date": "2026-03-02",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.9553,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

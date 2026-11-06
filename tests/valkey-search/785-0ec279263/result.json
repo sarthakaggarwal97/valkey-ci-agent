@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "0ec2792634ab277f09c569e7851aa22d29b709d3",
+  "parent": "7e36ed730d4daa068bcf75066e35d176cd5f2d01",
+  "pr": 785,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix unexpected vk-search flag in RDB after dropped all indexs (#785)",
+  "date": "2026-02-24",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 10.1453,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix only changes DoesGlobalMetadataContainEntry in src/coordinator/metadata_manager.cc, reached solely through MetadataManager::GetSectionsCount and SaveMetadata, the RDB aux-section callbacks of the coordinator's global-metadata manager. That manager is constructed only when the module starts in cluster mode with the --use-coordinator module argument (valkey_search.cc:1156); use-coordinator is a Hidden module config that ModuleConfigManager::Init never registers with Valkey, so it cannot be set via server_config or CONFIG SET, only as a word after the module path on the loadmodule directi"
+}

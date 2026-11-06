@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-06T19:39+00:00.
+Updated 2026-11-06T19:57+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 406 | 2092 | #4275 (2026-07-27) | 227 | 58.0 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 1 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
-| valkey-io/valkey-search | 281 | 387 | #851 (2026-03-04) | 181 | 40.1 |
+| valkey-io/valkey-search | 309 | 359 | #797 (2026-02-20) | 209 | 44.1 |
 
 ## Last runs
 
@@ -48,35 +48,35 @@ Updated 2026-11-06T19:39+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-06T17:00:04+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42221340802): 20 merge(s) tested, 6 without a code change.
+[2026-11-06T19:57:04+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42257567208): 20 merge(s) tested, 8 without a code change.
 
-- [valkey-io/valkey-search#904](https://github.com/valkey-io/valkey-search/pull/904) ([tests](tests/valkey-search/904-0e8a35959/)): fix: prevent infinite drain loop in forked BGSave child process (#904): 0 of 1 test(s) reached the change; check, predates #904, since fixed (recorded)
-- [valkey-io/valkey-search#901](https://github.com/valkey-io/valkey-search/pull/901) ([tests](tests/valkey-search/901-2cf5844ae/)): Update to oom flags on search commands and fix error propagation in coordinator / iscancelled cases (#901): 3 of 3 test(s) reached the change
-- [valkey-io/valkey-search@125b077a3f00](https://github.com/valkey-io/valkey-search/commit/125b077a3f0080dd85d83f5b00984a9f90351951) ([tests](tests/valkey-search/125b077a3/)): Merge pull request #892 from bandalgomsu/gh-729: 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#811](https://github.com/valkey-io/valkey-search/pull/811) ([tests](tests/valkey-search/811-8cc37f6da/)): Drop indexes on test teardown (#811): declined: The diff's only code change is inside a test-only branch of the InfoIndexPartition gRPC handler that runs solely when the debug controlled variable ForceRemoteFailCount is non-zero. Setting it requires FT._DEBUG, which is disabled (replies 'unknown command') unless the module is loaded wit
-- [valkey-io/valkey-search#885](https://github.com/valkey-io/valkey-search/pull/885) ([tests](tests/valkey-search/885-e87e5767f/)): Fix Limit of 64 text indexes isn't detected at creation time (#885): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#887](https://github.com/valkey-io/valkey-search/pull/887) ([tests](tests/valkey-search/887-f8bb344af/)): update snowball compilation check to see if lto_supported (#887): declined: The change only modifies third_party/snowball/CMakeLists.txt to gate LTO behind a check_ipo_supported probe (replacing an unconditional -flto with INTERPROCEDURAL_OPTIMIZATION plus -fno-fat-lto-objects when supported) while keeping -O3 and -w. It is a build/CI compilation-flags change with
-- [valkey-io/valkey-search#878](https://github.com/valkey-io/valkey-search/pull/878) ([tests](tests/valkey-search/878-c2a46b4be/)): Simplify text size estimation for non-vector queries (#878): 0 of 3 test(s) reached the change; crash, predates #878, since fixed (recorded)
-- [valkey-io/valkey-search#822](https://github.com/valkey-io/valkey-search/pull/822) ([tests](tests/valkey-search/822-44fb9193b/)): test: add comprehensive timeout coverage for all search execution paths (#822): 0 of 2 test(s) reached the change
-- [valkey-io/valkey-search#826](https://github.com/valkey-io/valkey-search/pull/826) ([tests](tests/valkey-search/826-c6f5ec55e/)): Make the build of snowball stemmer use optimal compile flags (#826): declined: The change only adds -O3 -flto to the compile flags of the vendored snowball stemmer in third_party/snowball/CMakeLists.txt. No source code, command behaviour, reply, index format, or config changes: it is a build/performance change with no intended behaviour change, so there is nothing fo
-- [valkey-io/valkey-search#876](https://github.com/valkey-io/valkey-search/pull/876) ([tests](tests/valkey-search/876-84cd483ed/)): Improve Evaluator Locking (#876): 0 of 3 test(s) reached the change
-- [valkey-io/valkey-search#874](https://github.com/valkey-io/valkey-search/pull/874) ([tests](tests/valkey-search/874-ce3baefd2/)): Use vector for storing stem variants (#874): 0 of 2 test(s) reached the change
-- [valkey-io/valkey-search#875](https://github.com/valkey-io/valkey-search/pull/875) ([tests](tests/valkey-search/875-92645864c/)): Add 10k tag filter test and Change prefiltering-threshold-ratio and text-rax-target-mutex-pool-size to Dev configs (#875): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#872](https://github.com/valkey-io/valkey-search/pull/872) ([tests](tests/valkey-search/872-5ffd58559/)): Removed multiple reverse_token string allocations from MutateTarget() (#872): 2 of 2 test(s) reached the change; crash, introduced and since fixed (recorded); crash, introduced and since fixed (recorded); [regressed-fix, the fix of #872 regressed](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/82)
-- [valkey-io/valkey-search#862](https://github.com/valkey-io/valkey-search/pull/862) ([tests](tests/valkey-search/862-7c138ea16/)): Remove upper bound check for stemmed_length (#862): declined: The removed clause `stemmed_length <= word.length()` is unreachable for the only supported stemmer language (English). GetStemmer() always builds the English Snowball stemmer (GetLanguageString returns "english" and CHECK-fails otherwise; LANGUAGE_FIELD is rejected). Every slice_from_s in 
-- [valkey-io/valkey-search#853](https://github.com/valkey-io/valkey-search/pull/853) ([tests](tests/valkey-search/853-ee6c9c5fe/)): Refactor Lexer::Tokenize / Stem / Normalize - reduce string allocations (#853): 0 of 4 test(s) reached the change
-- [valkey-io/valkey-search#855](https://github.com/valkey-io/valkey-search/pull/855) ([tests](tests/valkey-search/855-fa3ee82d3/)): raxMutate() optimization (#855): declined: no proposed test validated
-- [valkey-io/valkey-search#843](https://github.com/valkey-io/valkey-search/pull/843) ([tests](tests/valkey-search/843-7d674fcfa/)): Index locking optimization during ingestion. (#843): 5 of 5 test(s) reached the change; crash, introduced and since fixed (recorded)
-- [valkey-io/valkey-search#856](https://github.com/valkey-io/valkey-search/pull/856) ([tests](tests/valkey-search/856-ed4dcc5e5/)): Remove incomplete metrics and incomplete NestedMemoryScope usage (#856): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#763](https://github.com/valkey-io/valkey-search/pull/763) ([tests](tests/valkey-search/763-8b208870b/)): Add fanout-data-uniformity config (#763): 3 of 3 test(s) reached the change
-- [valkey-io/valkey-search#821](https://github.com/valkey-io/valkey-search/pull/821) ([tests](tests/valkey-search/821-9effed130/)): Add config to limit keys from pre-content fetching phase (#821): 3 of 3 test(s) reached the change
+- [valkey-io/valkey-search#851](https://github.com/valkey-io/valkey-search/pull/851) ([tests](tests/valkey-search/851-0e5a1707a/)): Using absl::btree_map for PositionMap (#851): declined: The change only swaps the transient per-token PositionMap (and the matching FlatPositionMap::Create parameter) from std::map<Position, FieldMask> to absl::btree_map<Position, FieldMask>. Both are ordered maps over uint32_t with identical comparator, iteration order, size() and try_emplace 
+- [valkey-io/valkey-search#726](https://github.com/valkey-io/valkey-search/pull/726) ([tests](tests/valkey-search/726-6ea37b0dc/)): Multi DB tests in CME/CMD for FT.SEARCH (#726): 0 of 3 test(s) reached the change
+- [valkey-io/valkey-search#846](https://github.com/valkey-io/valkey-search/pull/846) ([tests](tests/valkey-search/846-5a3fc51d6/)): Support GetSerializationRange in Aggregation (#846): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#845](https://github.com/valkey-io/valkey-search/pull/845) ([tests](tests/valkey-search/845-a2354e47e/)): Improve text.cc locking (#845): 0 of 3 test(s) reached the change
+- [valkey-io/valkey-search#839](https://github.com/valkey-io/valkey-search/pull/839) ([tests](tests/valkey-search/839-b8dff62fd/)): Quick fix/ perf improvement for Field Mask Create (#839): declined: The change replaces the heap-allocated virtual FieldMask class hierarchy with a plain 16-byte value struct. Every production call site was checked: SetField keeps the same bounds CHECK and bit semantics; CountSetFields returns the same counts for all field counts 1-64 (the old single-field
+- [valkey-io/valkey-search#818](https://github.com/valkey-io/valkey-search/pull/818) ([tests](tests/valkey-search/818-86cb04971/)): Fix TSAN build for integration tests (#818): declined: The change modifies only build/CI scripts (build.sh and scripts/common.rc): it sets TSAN_OPTIONS instead of LSAN_OPTIONS for thread-sanitizer CI builds, adds a TSAN-specific third-party build directory, and sed-patches Valkey core sources during sanitizer CI builds. No module source code c
+- [valkey-io/valkey-search#831](https://github.com/valkey-io/valkey-search/pull/831) ([tests](tests/valkey-search/831-81b7c80ac/)): Fix crash due to lazy expiration in the middle of Search commands (#831): 0 of 4 test(s) reached the change
+- [valkey-io/valkey-search@996e8e6b8e02](https://github.com/valkey-io/valkey-search/commit/996e8e6b8e02451106cee6a26eaf5e1ce3b0e546) ([tests](tests/valkey-search/996e8e6b8/)): Merge pull request #830 from BCathcart/brennan-text-subtree-key-count-follow-up: 0 of 3 test(s) reached the change; crash, predates 996e8e6b8e02, since fixed (recorded)
+- [valkey-io/valkey-search#837](https://github.com/valkey-io/valkey-search/pull/837) ([tests](tests/valkey-search/837-bc32b356b/)): Serialize position map before lock context (#837): 0 of 3 test(s) reached the change
+- [valkey-io/valkey-search#828](https://github.com/valkey-io/valkey-search/pull/828) ([tests](tests/valkey-search/828-35643b20b/)): Bump to rc2 (#828): declined: The change only edits the MODULE_RELEASE_STAGE macro in src/version.h from "rc1" to "rc2". A repo-wide search shows this macro is defined but never referenced anywhere else in valkey-search: module registration uses kModuleVersion (unchanged at 1.2.0), and RDB serialization and coordinator
+- [valkey-io/valkey-search#824](https://github.com/valkey-io/valkey-search/pull/824) ([tests](tests/valkey-search/824-c903fc43e/)): Text Size Estimation (#824): 1 of 1 test(s) reached the change
+- [valkey-io/valkey-search#813](https://github.com/valkey-io/valkey-search/pull/813) ([tests](tests/valkey-search/813-246f564dd/)): Using "Min Heap" approach for TermIterator (#813): 0 of 6 test(s) reached the change
+- [valkey-io/valkey-search#793](https://github.com/valkey-io/valkey-search/pull/793) ([tests](tests/valkey-search/793-ba2265dee/)): Fix mutation sequence number timing bug (#793): 0 of 3 test(s) reached the change; crash, fixed by #793 (recorded)
+- [valkey-io/valkey-search#803](https://github.com/valkey-io/valkey-search/pull/803) ([tests](tests/valkey-search/803-037b4b725/)): Remove Unused Variables And Add `UnusedVar` Helper Template (#803): declined: The change only removes dead local variables (lexer.cc, proximity.cc, test files) and marks still-performed loads as [[maybe_unused]] (index_schema.cc keeps the LoadObject<bool>() call, so the serialization stream is consumed identically). No command reply, indexing, persistence, or replic
+- [valkey-io/valkey-search#806](https://github.com/valkey-io/valkey-search/pull/806) ([tests](tests/valkey-search/806-406e1e3eb/)): Add multi/lua integration tests with search commands (#806): declined: no proposed test validated
+- [valkey-io/valkey-search#799](https://github.com/valkey-io/valkey-search/pull/799) ([tests](tests/valkey-search/799-da45def0d/)): Address unsolved text path in PreFilter Evaluators (#799): 2 of 2 test(s) reached the change; crash, fixed by #799 (recorded); crash, fixed by #799 (recorded)
+- [valkey-io/valkey-search#810](https://github.com/valkey-io/valkey-search/pull/810) ([tests](tests/valkey-search/810-358b848b1/)): Sanitize module logging: DEBUG logs (#810): declined: The change only sanitizes DEBUG-level log message text: it wraps user-controlled strings in vmsdk::config::RedactIfNeeded(), an inline helper that returns either the unchanged string_view or the constant '*redacted*' based on the pre-existing search.hide-user-data-from-log config, and move
+- [valkey-io/valkey-search#785](https://github.com/valkey-io/valkey-search/pull/785) ([tests](tests/valkey-search/785-0ec279263/)): Fix unexpected vk-search flag in RDB after dropped all indexs (#785): declined: The fix only changes DoesGlobalMetadataContainEntry in src/coordinator/metadata_manager.cc, reached solely through MetadataManager::GetSectionsCount and SaveMetadata, the RDB aux-section callbacks of the coordinator's global-metadata manager. That manager is constructed only when the modul
+- [valkey-io/valkey-search#804](https://github.com/valkey-io/valkey-search/pull/804) ([tests](tests/valkey-search/804-7e36ed730/)): Increase max value for ef-runtime and ef-construction (#804): 3 of 3 test(s) reached the change
+- [valkey-io/valkey-search#760](https://github.com/valkey-io/valkey-search/pull/760) ([tests](tests/valkey-search/760-5fe1676e8/)): fix: add null check for thread_monitor_ in GetAvgCPUPercentage (#760): 0 of 2 test(s) reached the change; crash, fixed by #760 (recorded)
 
 ## Totals
 
-- Merges whose tests reached the change: 334 of 458 tested (73%)
+- Merges whose tests reached the change: 338 of 470 tested (72%)
 - Changed-line coverage: median 100% of 207 merge(s) measured, 10 under 50%
-- Recall: 100 parents flagged of 139 fix merges
-- Claude: $1630.49 in the last 24 hours, $3077.63 in the last 7 days, $3077.63 in all
+- Recall: 102 parents flagged of 142 fix merges
+- Claude: $1726.98 in the last 24 hours, $3174.13 in the last 7 days, $3174.13 in all
 - Issues filed: 36
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41

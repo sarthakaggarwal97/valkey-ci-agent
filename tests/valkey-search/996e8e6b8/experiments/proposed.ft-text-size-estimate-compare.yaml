@@ -1,0 +1,123 @@
+extends: [valkey.liveness]
+id: proposed.ft-text-size-estimate-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Compare FT.SEARCH prefix/suffix/fuzzy/phrase/negation/hybrid-KNN replies across
+    the change and parent builds of valkey-search, on a text-only schema (size estimation
+    falls back to tracked key count; parent reads untracked subtree counts of 0) and
+    an HNSW+text schema (subtree item counts tracked, now uint64 in raxNode). Inserts
+    with shared prefixes force rax node splits, deletes force trims/merges, and a
+    SAVE plus restart re-runs SetTextSizeEstimationConditions on the RDB load path.
+    The change is planner-internal, so no reply may differ between the builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: ftsearch
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 240
+    commands:
+    - {command: [FT.CREATE, idx_text, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, t1, TEXT,
+        WITHSUFFIXTRIE, t2, TEXT, g, TAG], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_vec, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, t1, TEXT,
+        WITHSUFFIXTRIE, v, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', t1, 'apple applied', t2, 'running fast', g, red, v,
+        !!binary 'AACAPwAAAAA='], expect: {equals: 4}}
+    - {command: [HSET, 'doc:2', t1, 'application apply', t2, 'jumping high', g, blue,
+        v, !!binary 'AAAAAAAAgD8='], expect: {equals: 4}}
+    - {command: [HSET, 'doc:3', t1, 'apricot banana', t2, 'running slow', g, red,
+        v, !!binary 'AACAPwAAgD8='], expect: {equals: 4}}
+    - {command: [HSET, 'doc:4', t1, 'appetite apple', t2, 'singing loud', g, blue,
+        v, !!binary 'AACAPwAAAAA='], expect: {equals: 4}}
+    - {command: [FT.SEARCH, idx_text, '@t1:app*', LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [3]}}
+    - {command: [FT.SEARCH, idx_text, '@t1:banana', LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx_vec, '@t1:app*', LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [3]}}
+    - {command: [FT.INFO, idx_text], compare: skip}
+    - {command: [FT.INFO, idx_vec], compare: skip}
+    - {command: [FT.SEARCH, idx_text, '@t1:app*', NOCONTENT, LIMIT, 0, 10], compare: unordered,
+      expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx_text, '@t1:*ple', NOCONTENT, LIMIT, 0, 10], compare: unordered,
+      expect: {contains: 'doc:4'}}
+    - {command: [FT.SEARCH, idx_vec, '@t1:app*', NOCONTENT, LIMIT, 0, 10], compare: unordered,
+      expect: {contains: 'doc:2'}}
+    - {command: [FT.SEARCH, idx_vec, '@t1:*ple', NOCONTENT, LIMIT, 0, 10], compare: unordered,
+      expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx_text, '%aple%', NOCONTENT, LIMIT, 0, 10], compare: unordered,
+      expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx_text, '@t1:banana', NOCONTENT], expect: {equals: [
+          1, 'doc:3']}}
+    - {command: [FT.SEARCH, idx_text, '@t1:"apple applied"', NOCONTENT], expect: {
+        equals: [1, 'doc:1']}}
+    - {command: [FT.SEARCH, idx_text, '@g:{red} @t1:app*', NOCONTENT], expect: {equals: [
+          1, 'doc:1']}}
+    - {command: [FT.SEARCH, idx_text, '@t1:app* -@t1:banana', NOCONTENT, LIMIT, 0,
+        10], compare: unordered, expect: {contains: 'doc:4'}}
+    - {command: [FT.SEARCH, idx_text, '@t1:*'], expect: {error: true}}
+    - {command: [FT.SEARCH, idx_text, '@t2:*ing'], expect: {error: true}}
+    - {command: [FT.SEARCH, idx_vec, '(@t1:app*)=>[KNN 10 @v $B]', PARAMS, 2, B, !!binary 'AACAPwAAAAA=',
+        DIALECT, 2, NOCONTENT, LIMIT, 0, 20], compare: unordered, expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx_vec, '(@t1:*ple)=>[KNN 10 @v $B]', PARAMS, 2, B, !!binary 'AACAPwAAAAA=',
+        DIALECT, 2, NOCONTENT, LIMIT, 0, 20], compare: unordered, expect: {contains: 'doc:4'}}
+    - {command: [HSET, 'doc:10', t1, 'zaa zaaa'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:11', t1, 'zaab zaabb'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:12', t1, 'zab zabc'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:13', t1, 'zb zba'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx_vec, '@t1:z*', LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [4]}}
+    - {command: [FT.SEARCH, idx_vec, '@t1:za*', NOCONTENT, LIMIT, 0, 10], compare: unordered,
+      expect: {contains: 'doc:12'}}
+    - {command: [FT.SEARCH, idx_vec, '@t1:zaa*', LIMIT, 0, 0], expect: {equals: [
+          2]}}
+    - {command: [DEL, 'doc:11'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx_vec, '@t1:zaa*', LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx_vec, '@t1:za*', NOCONTENT, LIMIT, 0, 10], compare: unordered,
+      expect: {contains: 'doc:10'}}
+    - {command: [DEL, 'doc:1'], expect: {equals: 1}}
+    - {command: [DEL, 'doc:4'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx_vec, '@t1:app*', LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx_vec, '@t1:*ple', LIMIT, 0, 0], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx_text, '@t1:app*', LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx_text, '@t1:*ple', LIMIT, 0, 0], expect: {equals: [
+          0]}}
+    - {command: [HSET, 'doc:1', t1, 'apple applied', t2, 'running fast', g, red, v,
+        !!binary 'AACAPwAAAAA='], expect: {equals: 4}}
+    - {command: [FT.SEARCH, idx_vec, '@t1:app*', LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [2]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true}
+    - {command: [FT.SEARCH, idx_vec, '@t1:app*', LIMIT, 0, 0], wait_s: 60, expect: {
+        equals: [2]}}
+    - {command: [FT.SEARCH, idx_text, '@t1:app*', LIMIT, 0, 0], wait_s: 60, expect: {
+        equals: [2]}}
+    - {command: [FT.SEARCH, idx_text, '@t1:*ple', NOCONTENT, LIMIT, 0, 10], compare: unordered,
+      expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx_vec, '@t1:*ple', NOCONTENT, LIMIT, 0, 10], compare: unordered,
+      expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx_vec, '(@t1:app*)=>[KNN 10 @v $B]', PARAMS, 2, B, !!binary 'AACAPwAAAAA=',
+        DIALECT, 2, NOCONTENT, LIMIT, 0, 20], compare: unordered, expect: {contains: 'doc:2'}}
+    - {command: [FT.SEARCH, idx_vec, '@t1:zaa*', LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [1]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ftsearch.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftsearch}

@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.text-ingest-lifecycle-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Text index add/modify/remove lifecycle including invalid-UTF-8 staging
+    failures, replies compared across the text.cc locking change
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: text
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, body, TEXT,
+        WITHSUFFIXTRIE, title, TEXT, NOSTEM], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", body, "running jumping", title, "alphadoc memo"],
+      expect: {equals: 2}}
+    - {command: [HSET, "doc:2", body, "coding walking", title, "betadoc memo"], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:3", body, "reading scribbling", title, "gammadoc memo"],
+      expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@body:*ing", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [3]}}
+    - {command: [FT.SEARCH, idx, "@body:running", NOCONTENT], compare: unordered,
+      expect: {contains: "doc:1"}}
+    - {command: [HSET, "doc:1", body, "swimming diving"], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@body:swimming", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx, "@body:running", LIMIT, "0", "0"], expect: {equals: [
+          0]}}
+    - {command: [HSET, "doc:2", body, !!binary "YmFk/w=="], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@body:coding", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@title:betadoc", LIMIT, "0", "0"], expect: {equals: [
+          1]}}
+    - {command: [HSET, "doc:2", body, "coding studying"], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@body:coding", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [1]}}
+    - {command: [HSET, "doc:4", body, !!binary "YmFk/w==", title, "deltadoc memo"],
+      expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@title:deltadoc", LIMIT, "0", "0"], wait_s: 30,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, "@body:deltadoc", LIMIT, "0", "0"], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, "@body:*ing", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [3]}}
+    - {command: [DEL, "doc:1"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@body:swimming", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@body:*ding", LIMIT, "0", "0"], expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx, "@body:stud*", LIMIT, "0", "0"], expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idx, "@body:scribbling", NOCONTENT], compare: unordered,
+      expect: {contains: "doc:3"}}
+    - {command: [FT.INFO, idx], compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [text.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: text}

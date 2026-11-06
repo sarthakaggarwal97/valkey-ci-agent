@@ -1,0 +1,103 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-serialization-range
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    FT.AGGREGATE with a leading LIMIT stage now derives the query-phase limit/offset
+    from GetSerializationRange and trims the search results before the aggregation
+    stages run; the parent always fed complete results into the pipeline. Compares
+    replies across the two module builds at offset boundaries (offset inside, at and
+    beyond the matched set, offset+count at INT64/UINT64 overflow), LIMIT-before-GROUPBY,
+    stage orderings that must keep the All range, and the KNN offset-vs-k interaction.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC,
+        t, TAG], expect: {equals: OK}}
+    - {command: [HSET, "doc:00", n, 0, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:01", n, 1, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:02", n, 2, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:03", n, 3, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:04", n, 4, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:05", n, 5, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:06", n, 6, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:07", n, 7, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:08", n, 8, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:09", n, 9, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:10", n, 10, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:11", n, 11, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:12", n, 12, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:13", n, 13, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:14", n, 14, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:15", n, 15, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:16", n, 16, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:17", n, 17, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:18", n, 18, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:19", n, 19, t, a], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@n:[0 19]", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [20]}}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 19]", LIMIT, 0, 5], expect: {equals: [
+          5, [], [], [], [], []]}}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 19]", LIMIT, 0, 0], expect: {equals: [
+          0]}}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 19]", LIMIT, 25, 5], expect: {equals: [
+          0]}}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 19]", LIMIT, 15, 10], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 19]", LIMIT, 10, 10], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 19]", LIMIT, 3, 20], expect_difference: true,
+      expect: {equals: [14, [], [], [], [], [], [], [], [], [], [], [], [], [], []]}}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 19]", LIMIT, 1, "9223372036854775807"],
+      expect_difference: true, expect: {equals: [18, [], [], [], [], [], [], [], [],
+          [], [], [], [], [], [], [], [], [], []]}}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 19]", LIMIT, 1, "18446744073709551615"],
+      expect_difference: true, expect: {equals: [18, [], [], [], [], [], [], [], [],
+          [], [], [], [], [], [], [], [], [], []]}}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 19]", LIMIT, 12, 8, GROUPBY, 1, "@t", REDUCE,
+        COUNT, 0, AS, c], expect_difference: true, expect: {equals: [0]}}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 19]", LOAD, 1, "@n", FILTER, "@n >= 16",
+        SORTBY, 2, "@n", ASC], expect: {equals: [4, [n, "16"], [n, "17"], [n, "18"],
+          [n, "19"]]}}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 19]", LOAD, 1, "@n", SORTBY, 2, "@n", DESC,
+        MAX, 3], expect: {equals: [3, [n, "19"], [n, "18"], [n, "17"]]}}
+    - {command: [FT.CREATE, idxv, ON, HASH, PREFIX, 1, "vec:", SCHEMA, v, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "vec:01", v, !!binary "AACAPwAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "vec:02", v, !!binary "AAAAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "vec:03", v, !!binary "AABAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "vec:04", v, !!binary "AACAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "vec:05", v, !!binary "AAKAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "vec:06", v, !!binary "AAMAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "vec:07", v, !!binary "AAOAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "vec:08", v, !!binary "AAAAQQAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "vec:09", v, !!binary "AAEAQQAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "vec:10", v, !!binary "AAIAQQAAAAA="], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idxv, "*=>[KNN 10 @v $B]", PARAMS, 2, B, !!binary "AAAAAAAAAAA=",
+        DIALECT, 2, LIMIT, 0, 0], wait_s: 30, expect: {equals: [10]}}
+    - {command: [FT.AGGREGATE, idxv, "*=>[KNN 10 @v $B]", PARAMS, 2, B, !!binary "AAAAAAAAAAA=",
+        DIALECT, 2, LIMIT, 0, 5]}
+    - {command: [FT.AGGREGATE, idxv, "*=>[KNN 10 @v $B]", PARAMS, 2, B, !!binary "AAAAAAAAAAA=",
+        DIALECT, 2, LIMIT, 5, 10], expect_difference: true, expect: {equals: [0]}}
+    - {command: [FT.AGGREGATE, idxv, "*=>[KNN 10 @v $B]", PARAMS, 2, B, !!binary "AAAAAAAAAAA=",
+        DIALECT, 2, LIMIT, 9, 5], expect_difference: true, expect: {equals: [0]}}
+    - {command: [FT.AGGREGATE, idxv, "*=>[KNN 10 @v $B]", PARAMS, 2, B, !!binary "AAAAAAAAAAA=",
+        DIALECT, 2, LIMIT, 10, 5], expect: {equals: [0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

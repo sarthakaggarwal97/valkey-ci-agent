@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "35643b20b38a4bce31ec49f9b3da08c364e31bdf",
+  "parent": "c903fc43e520306069ed85d5976c34a4494ed78d",
+  "pr": 828,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Bump to rc2 (#828)",
+  "date": "2026-02-26",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5639,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits the MODULE_RELEASE_STAGE macro in src/version.h from \"rc1\" to \"rc2\". A repo-wide search shows this macro is defined but never referenced anywhere else in valkey-search: module registration uses kModuleVersion (unchanged at 1.2.0), and RDB serialization and coordinator metadata versioning use kModuleVersion and the kRelease* constants, also unchanged. No command reply, INFO output, persisted data or wire format depends on the edited string, so there is no behaviour to exercise and no scenario is needed."
+}

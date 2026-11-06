@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "037b4b7251f5a56156443ca1c2ad0d0a9bf3d8ee",
+  "parent": "9f51bded96d062f6ec295f06d5b66ee7cc99cbef",
+  "pr": 803,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Remove Unused Variables And Add `UnusedVar` Helper Template (#803)",
+  "date": "2026-02-25",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4018,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only removes dead local variables (lexer.cc, proximity.cc, test files) and marks still-performed loads as [[maybe_unused]] (index_schema.cc keeps the LoadObject<bool>() call, so the serialization stream is consumed identically). No command reply, indexing, persistence, or replication behavior differs between the parent and the change; the remaining hunks touch unit tests only. A compared sequence could not show any difference, so no scenario is needed."
+}

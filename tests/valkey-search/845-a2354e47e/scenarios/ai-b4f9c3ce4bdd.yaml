@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search b8dff62fd171..a2354e47ea11.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b4f9c3ce4bdd
+seed: 2202
+experiment:
+  id: proposed.text-concurrent-ingest-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7100

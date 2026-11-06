@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "358b848b1465c5d45c031cdee46f67b8de05a789",
+  "parent": "0ec2792634ab277f09c569e7851aa22d29b709d3",
+  "pr": 810,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Sanitize module logging: DEBUG logs (#810)",
+  "date": "2026-02-24",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6545,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only sanitizes DEBUG-level log message text: it wraps user-controlled strings in vmsdk::config::RedactIfNeeded(), an inline helper that returns either the unchanged string_view or the constant '*redacted*' based on the pre-existing search.hide-user-data-from-log config, and moves one NOTICE log line behind absl::call_once so it prints once per FLUSHDB instead of unconditionally. No command reply, RDB/AOF format, replication, indexing, or query behavior changes \u2014 only server-log text at DEBUG level, which no fuzzer oracle (reply comparison, ledger, deployment state, liveness) can obs"
+}

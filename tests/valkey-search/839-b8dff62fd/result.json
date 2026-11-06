@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "b8dff62fd171d737497bdad1e5c3a88e61b469ca",
+  "parent": "e1423d0147e032df74920e8f1391c0e55e155030",
+  "pr": 839,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Quick fix/ perf improvement for Field Mask Create (#839)",
+  "date": "2026-03-03",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.1968,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change replaces the heap-allocated virtual FieldMask class hierarchy with a plain 16-byte value struct. Every production call site was checked: SetField keeps the same bounds CHECK and bit semantics; CountSetFields returns the same counts for all field counts 1-64 (the old single-field constant-1 path is matched because SetField is always called right after construction); GetMask returns the same integer the old AsUint64 did in the only context where it is read (FlatPositionMap::Create encodes masks only when num_text_fields > 1, where both implementations return the raw mask). The encoded"
+}

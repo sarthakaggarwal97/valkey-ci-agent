@@ -1,0 +1,85 @@
+extends: [valkey.liveness]
+id: proposed.text-backfill-churn-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Backfill of many pre-existing docs, delete churn, and index drop/recreate
+    over the moved FlatPositionMap serialization, compared across module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [HSET, "bdoc:1", f, "common term1 grp0"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:2", f, "common term2 grp1"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:3", f, "common term3 grp2"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:4", f, "common term4 grp0"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:5", f, "common term5 grp1"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:6", f, "common term6 grp2"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:7", f, "common term7 grp0"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:8", f, "common term8 grp1"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:9", f, "common term9 grp2"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:10", f, "common term10 grp0"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:11", f, "common term11 grp1"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:12", f, "common term12 grp2"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:13", f, "common term13 grp0"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:14", f, "common term14 grp1"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:15", f, "common term15 grp2"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:16", f, "common term16 grp0"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:17", f, "common term17 grp1"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:18", f, "common term18 grp2"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:19", f, "common term19 grp0"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:20", f, "common term20 grp1"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:21", f, "common term21 grp2"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:22", f, "common term22 grp0"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:23", f, "common term23 grp1"], expect: {equals: 1}}
+    - {command: [HSET, "bdoc:24", f, "common term24 grp2"], expect: {equals: 1}}
+    - {command: [FT.CREATE, bidx, ON, HASH, PREFIX, "1", "bdoc:", NOSTOPWORDS, SCHEMA,
+        f, TEXT, NOSTEM], expect: {equals: OK}}
+    - {command: [FT.SEARCH, bidx, common, LIMIT, "0", "0"], wait_s: 60, expect: {
+        equals: [24]}}
+    - {command: [FT.INFO, bidx], compare: skip, wait_s: 30, expect: {contains: 72}}
+    - {command: [FT.SEARCH, bidx, '@f:grp1', LIMIT, "0", "0"], expect: {equals: [
+          8]}}
+    - {command: [FT.SEARCH, bidx, '@f:"common term7"', NOCONTENT], expect: {equals: [
+          1, "bdoc:7"]}}
+    - {command: [FT.SEARCH, bidx, '@f:term1*', LIMIT, "0", "0"], expect: {equals: [
+          11]}}
+    - {command: [FT.SEARCH, bidx, '@f:term2*', LIMIT, "0", "0"], expect: {equals: [
+          6]}}
+    - {command: [DEL, "bdoc:1", "bdoc:2", "bdoc:3", "bdoc:4", "bdoc:5", "bdoc:6",
+        "bdoc:7", "bdoc:8", "bdoc:9", "bdoc:10", "bdoc:11", "bdoc:12"], expect: {
+        equals: 12}}
+    - {command: [FT.SEARCH, bidx, common, LIMIT, "0", "0"], wait_s: 60, expect: {
+        equals: [12]}}
+    - {command: [FT.INFO, bidx], compare: skip, wait_s: 30, expect: {contains: 36}}
+    - {command: [FT.SEARCH, bidx, '@f:grp0', LIMIT, "0", "0"], expect: {equals: [
+          4]}}
+    - {command: [FT.DROPINDEX, bidx], expect: {equals: OK}}
+    - {command: [FT.CREATE, bidx, ON, HASH, PREFIX, "1", "bdoc:", NOSTOPWORDS, SCHEMA,
+        f, TEXT, NOSTEM], expect: {equals: OK}}
+    - {command: [FT.SEARCH, bidx, common, LIMIT, "0", "0"], wait_s: 60, expect: {
+        equals: [12]}}
+    - {command: [FT.INFO, bidx], compare: skip, wait_s: 30, expect: {contains: 36}}
+    - {command: [FT.SEARCH, bidx, '@f:"common term18"', NOCONTENT], expect: {equals: [
+          1, "bdoc:18"]}}
+    - {command: [DEL, "bdoc:13", "bdoc:14", "bdoc:15", "bdoc:16", "bdoc:17", "bdoc:18",
+        "bdoc:19", "bdoc:20", "bdoc:21", "bdoc:22", "bdoc:23", "bdoc:24"], expect: {
+        equals: 12}}
+    - {command: [FT.SEARCH, bidx, common, LIMIT, "0", "0"], wait_s: 60, expect: {
+        equals: [0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

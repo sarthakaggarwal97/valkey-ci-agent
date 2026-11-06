@@ -1,0 +1,90 @@
+extends: [valkey.liveness]
+id: proposed.text-concurrent-ingest-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Concurrent text ingestion with many writer threads, backfill racing
+    modifies, deletes and staging failures, settled index compared across the locking
+    change
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [CONFIG, SET, search.writer-threads, "8"], expect: {equals: OK}}
+    - {command: [HSET, "d:1", body, "zephyr running", title, staticnote], expect: {
+        equals: 2}}
+    - {command: [HSET, "d:2", body, "zephyr jumping", title, staticnote], expect: {
+        equals: 2}}
+    - {command: [HSET, "d:3", body, "zephyr walking", title, staticnote], expect: {
+        equals: 2}}
+    - {command: [HSET, "d:4", body, "zephyr coding", title, staticnote], expect: {
+        equals: 2}}
+    - {command: [HSET, "d:5", body, "zephyr reading", title, staticnote], expect: {
+        equals: 2}}
+    - {command: [HSET, "d:6", body, "zephyr writing", title, staticnote], expect: {
+        equals: 2}}
+    - {command: [HSET, "d:7", body, "zephyr swimming", title, staticnote], expect: {
+        equals: 2}}
+    - {command: [HSET, "d:8", body, "zephyr diving", title, staticnote], expect: {
+        equals: 2}}
+    - {command: [HSET, "d:9", body, "zephyr surfing", title, staticnote], expect: {
+        equals: 2}}
+    - {command: [HSET, "d:10", body, "zephyr testing", title, staticnote], expect: {
+        equals: 2}}
+    - {command: [HSET, "d:11", body, "zephyr debugging", title, staticnote], expect: {
+        equals: 2}}
+    - {command: [HSET, "d:12", body, "zephyr speaking", title, staticnote], expect: {
+        equals: 2}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "d:", SCHEMA, body, TEXT,
+        WITHSUFFIXTRIE, title, TEXT], expect: {equals: OK}}
+    - {command: [HSET, "d:1", body, "quartz sprinting"], expect: {equals: 0}}
+    - {command: [HSET, "d:2", body, "quartz gliding"], expect: {equals: 0}}
+    - {command: [HSET, "d:3", body, "quartz floating"], expect: {equals: 0}}
+    - {command: [DEL, "d:7"], expect: {equals: 1}}
+    - {command: [HSET, "d:13", body, "zephyr blinking", title, staticnote], expect: {
+        equals: 2}}
+    - {command: [HSET, "d:4", body, "quartz drifting"], expect: {equals: 0}}
+    - {command: [HSET, "d:9", body, !!binary "YmFk/w=="], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@body:zephyr", LIMIT, "0", "0"], compare: skip}
+    - {command: [HSET, "d:14", body, "zephyr clapping", title, staticnote], expect: {
+        equals: 2}}
+    - {command: [DEL, "d:8"], expect: {equals: 1}}
+    - {command: [HSET, "d:5", body, "quartz spinning"], expect: {equals: 0}}
+    - {command: [HSET, "d:15", body, "zephyr snoring", title, staticnote], expect: {
+        equals: 2}}
+    - {command: [HSET, "d:6", body, "quartz twisting"], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@body:*ing", LIMIT, "0", "0"], compare: skip}
+    - {command: [HSET, "d:16", body, "zephyr yawning", title, staticnote], expect: {
+        equals: 2}}
+    - {command: [HSET, "d:9", body, "quartz mumbling"], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@body:quartz", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [7]}}
+    - {command: [FT.SEARCH, idx, "@body:zephyr", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [7]}}
+    - {command: [FT.SEARCH, idx, "@title:staticnote", LIMIT, "0", "0"], wait_s: 30,
+      expect: {equals: [14]}}
+    - {command: [FT.SEARCH, idx, "@body:*ing", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [14]}}
+    - {command: [FT.SEARCH, idx, "@body:quartz", NOCONTENT, LIMIT, "0", "20"], compare: unordered,
+      expect: {contains: "d:9"}}
+    - {command: [FT.SEARCH, idx, "@body:zephyr", NOCONTENT, LIMIT, "0", "20"], compare: unordered,
+      expect: {contains: "d:13"}}
+    - {command: [FT.SEARCH, idx, "@body:mumbling", LIMIT, "0", "0"], expect: {equals: [
+          1]}}
+    - {command: [FT.INFO, idx], compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "0e5a1707a20dd235139cc438d741142e27627da5",
+  "parent": "7f260912a29c5b81e9eae6d0dea48bfcda484197",
+  "pr": 851,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Using absl::btree_map for PositionMap (#851)",
+  "date": "2026-03-04",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.9178,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only swaps the transient per-token PositionMap (and the matching FlatPositionMap::Create parameter) from std::map<Position, FieldMask> to absl::btree_map<Position, FieldMask>. Both are ordered maps over uint32_t with identical comparator, iteration order, size() and try_emplace semantics, so the serialized FlatPositionMap bytes, the metadata counters, and every FT.SEARCH reply are unchanged. The one semantic difference between the containers, iterator/reference invalidation on insert, is unreached: the only mutation site (text_index.cc:204) uses the try_emplace iterator immediately "
+}

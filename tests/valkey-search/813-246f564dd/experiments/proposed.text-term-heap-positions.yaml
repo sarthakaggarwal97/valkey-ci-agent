@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.text-term-heap-positions
+deployment:
+  modes: [standalone]
+metadata:
+  description: Position-heap iteration in TermIterator compared across builds - exact
+    phrases, SLOP and INORDER proximity, repeated tokens, and stem variants tied at
+    equal positions in different fields (field-mask aggregation)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: positions
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, pidx, ON, HASH, PREFIX, 1, 'p:', SCHEMA, title, TEXT,
+        body, TEXT], expect: {equals: OK}}
+    - {command: [FT.INFO, pidx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [HSET, 'p:1', title, 'runs quick', body, 'running slow'], expect: {
+        equals: 2}}
+    - {command: [HSET, 'p:2', title, 'alpha beta gamma delta', body, 'delta gamma
+          beta alpha'], expect: {equals: 2}}
+    - {command: [HSET, 'p:3', title, 'tok bok tok bok tok', body, 'bok tok bok'],
+      expect: {equals: 2}}
+    - {command: [HSET, 'p:4', title, 'alpha gamma', body, 'beta delta'], expect: {
+        equals: 2}}
+    - {command: [HSET, 'p:5', title, 'jumped over jumping logs', body, 'the stone
+          jumped far'], expect: {equals: 2}}
+    - {command: [HSET, 'p:6', title, 'runs quick runs', body, 'quick running'], expect: {
+        equals: 2}}
+    - {command: [HSET, 'p:7', body, 'tok bok tok bok tok bok tok bok tok'], expect: {
+        equals: 1}}
+    - {command: [FT.SEARCH, pidx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          7]}}
+    - {command: [FT.SEARCH, pidx, '"alpha beta"', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"beta alpha"', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"alpha gamma"', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"alpha gamma"', SLOP, 1, NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"alpha delta"', SLOP, 2, NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"delta alpha"', SLOP, 3, INORDER, NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"alpha beta gamma"', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"tok bok"', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"bok tok"', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"tok bok tok"', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"bok tok bok"', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"tok tok"', SLOP, 1, NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"tok bok"', INORDER, NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"bok bok"', SLOP, 2, NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"jumped logs"', SLOP, 2, NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"jumping logs"', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"jumped logs"', SLOP, 2, VERBATIM, NOCONTENT],
+      compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"running quick"', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"quick running"', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '"runs quick"', INORDER, NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '@title:"runs quick"', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, pidx, '@body:"tok bok"', NOCONTENT], compare: unordered}
+    - {command: [HSET, 'p:3', title, bok], expect: {equals: 0}}
+    - {command: [FT.SEARCH, pidx, '@title:tok', LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, pidx, '"tok bok"', NOCONTENT], compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [positions.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: positions}

@@ -1,0 +1,59 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5a3fc51d62f3c1612013bf533880d98d436327f4",
+  "parent": "a2354e47ea119eab8c0e319bef06900591ae65e0",
+  "pr": 846,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Support GetSerializationRange in Aggregation (#846)",
+  "date": "2026-03-04",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.265,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-3fa6f7960e31",
+      "build": "unstable",
+      "seed": 84601,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3fa6f7960e31",
+      "build": "unstable",
+      "seed": 84602,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3fa6f7960e31",
+      "build": "unstable",
+      "seed": 84603,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-7a60c7f74dfb",
+      "build": "unstable",
+      "seed": 84602,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-7a60c7f74dfb",
+      "build": "unstable",
+      "seed": 84603,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-7a60c7f74dfb",
+      "build": "unstable",
+      "seed": 84604,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

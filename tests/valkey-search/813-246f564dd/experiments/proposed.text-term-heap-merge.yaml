@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.text-term-heap-merge
+deployment:
+  modes: [standalone]
+metadata:
+  description: Key-heap union merge in TermIterator compared across builds - term
+    with stem variants, prefix/suffix/fuzzy expansions, empty results, and postings
+    mutation between searches
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: merge
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, title, TEXT,
+        WITHSUFFIXTRIE, body, TEXT], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [HSET, 'doc:01', title, 'running fast', body, 'the worker runs'],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:02', title, 'runs quick', body, 'running slow'], expect: {
+        equals: 2}}
+    - {command: [HSET, 'doc:03', title, 'work world', body, 'jumped jumping'], expect: {
+        equals: 2}}
+    - {command: [HSET, 'doc:04', title, 'worth worst', body, 'word worm'], expect: {
+        equals: 2}}
+    - {command: [HSET, 'doc:05', title, 'worker working', body, 'runner jogging'],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:06', title, 'worse worldly', body, 'runs work'], expect: {
+        equals: 2}}
+    - {command: [HSET, 'doc:07', title, 'tok bok tok bok', body, 'zig zag zig'], expect: {
+        equals: 2}}
+    - {command: [HSET, 'doc:08', title, unique, body, single], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          8]}}
+    - {command: [FT.SEARCH, idx, running, NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, idx, running, VERBATIM, NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@title:runs', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@body:running', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, idx, jump, NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, idx, jumped, NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, idx, 'wor*', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, idx, 'jum*', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, idx, '*ing', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, idx, '*ok', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, idx, '%runz%', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, idx, '%%wrk%%', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, idx, zzzmissing, LIMIT, 0, 0], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, 'qqq*', LIMIT, 0, 0], expect: {equals: [0]}}
+    - {command: [DEL, 'doc:04'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          7]}}
+    - {command: [FT.SEARCH, idx, 'wor*', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [HSET, 'doc:01', title, 'walked walking'], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, '@title:walking', LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx, running, NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, idx, '*ing', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [HDEL, 'doc:07', title], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '*ok', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, '@body:zig', NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [merge.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: merge}

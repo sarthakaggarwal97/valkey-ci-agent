@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 037b4b7251f5..ba2265deeaf2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e08c98450dd5
+seed: 2202
+experiment:
+  id: proposed.search-seqnum-delete-race
+  inputs:
+    resp: 3
+    concurrency: 12
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

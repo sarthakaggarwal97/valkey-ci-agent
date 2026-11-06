@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.search-seqnum-delete-race
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH reads per-key mutation sequence numbers while concurrent
+    DELs of indexed keys erase them on the async writer thread; the fix holds the
+    time-sliced reader lock across the populate step so no search aborts
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    concurrency: {type: integer, minimum: 1, maximum: 16, default: 12}
+components:
+- use: valkey.action.commands
+  id: seqrace
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    checks: {concurrency: {$ref: inputs.concurrency}}
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TAG, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", t, a, n, 1], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", t, a, n, 2], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", t, a, n, 3], expect: {equals: 2}}
+    - {command: [HSET, "doc:4", t, a, n, 4], expect: {equals: 2}}
+    - {command: [HSET, "doc:5", t, a, n, 5], expect: {equals: 2}}
+    - {command: [HSET, "doc:6", t, a, n, 6], expect: {equals: 2}}
+    - {command: [HSET, "doc:7", t, a, n, 7], expect: {equals: 2}}
+    - {command: [HSET, "doc:8", t, a, n, 8], expect: {equals: 2}}
+    - {command: [HSET, "doc:9", t, a, n, 9], expect: {equals: 2}}
+    - {command: [HSET, "doc:10", t, a, n, 10], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", NOCONTENT, LIMIT, 0, 100], wait_s: 5, expect: {
+        contains: "doc:10"}, compare: skip}
+    - {command: [DEL, "doc:1"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", NOCONTENT, LIMIT, 0, 100], compare: skip}
+    - {command: [DEL, "doc:2"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", NOCONTENT, LIMIT, 0, 100], compare: skip}
+    - {command: [HSET, "doc:1", t, a, n, 1], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", NOCONTENT, LIMIT, 0, 100], compare: skip}
+    - {command: [DEL, "doc:3"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", NOCONTENT, LIMIT, 0, 100], compare: skip}
+    - {command: [DEL, "doc:4"], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", t, a, n, 2], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", NOCONTENT, LIMIT, 0, 100], compare: skip}
+    - {command: [DEL, "doc:5"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", NOCONTENT, LIMIT, 0, 100], compare: skip}
+    - {command: [DEL, "doc:6"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", NOCONTENT, LIMIT, 0, 100], compare: skip}
+    - {command: [HSET, "doc:3", t, a, n, 3], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@t:{a}", NOCONTENT, LIMIT, 0, 100], compare: skip}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seqrace}

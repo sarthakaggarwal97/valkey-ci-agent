@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 4b74aed284e0..c903fc43e520.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a14bbb08529c
+seed: 101
+experiment:
+  id: proposed.text-size-estimation-planner-compare
+deployment:
+  mode: standalone
+  base_port: 7000

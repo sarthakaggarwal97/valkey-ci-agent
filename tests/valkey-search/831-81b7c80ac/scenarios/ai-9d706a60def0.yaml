@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 996e8e6b8e02..81b7c80ac5a2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9d706a60def0
+seed: 1003
+experiment:
+  id: proposed.search-return-lazy-expire
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

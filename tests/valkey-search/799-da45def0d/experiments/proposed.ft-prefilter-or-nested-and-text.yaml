@@ -1,0 +1,99 @@
+extends: [valkey.liveness]
+id: proposed.ft-prefilter-or-nested-and-text
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    FT.SEARCH queries whose AND contains an OR with a text-bearing AND child. The
+    parent's prefilter and inline evaluators skip that text and return false positives;
+    the fixed build propagates from_or and evaluates it.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftsearch
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [HSET, 'hash:00', title, plum, body, 'cat slow loud shark ocean eagle
+          tomato', color, green, price, '21'], expect: {equals: 4}}
+    - {command: [HSET, 'hash:01', title, 'kiwi peach apple chair orange door orange
+          melon chair', body, lettuce, color, green, price, '8'], expect: {equals: 4}}
+    - {command: [HSET, 'hash:02', title, plum, body, 'river cat slow build eagle fast
+          dog', color, brown, price, '40'], expect: {equals: 4}}
+    - {command: [HSET, 'hash:03', title, banana, body, 'quick brown fox jumps', color,
+        red, price, '15'], expect: {equals: 4}}
+    - {command: [HSET, 'hash:04', title, grape, body, 'lazy dog sleeps', color, blue,
+        price, '25'], expect: {equals: 4}}
+    - {command: [HSET, 'hash:05', body, 'alpha gamma delta', price, '50'], expect: {
+        equals: 2}}
+    - {command: [HSET, 'hash:06', body, 'gamma delta', price, '50'], expect: {equals: 2}}
+    - {command: [HSET, 'hash:07', body, alpha, price, '50'], expect: {equals: 2}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, '1', 'hash:', SCHEMA, title, TEXT,
+        NOSTEM, body, TEXT, NOSTEM, color, TAG, price, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@price:[0 +inf]', LIMIT, '0', '0', DIALECT, '2'],
+      wait_s: 60, expect: {equals: [8]}}
+    - {command: [FT.SEARCH, idx, '@color:{green} cat slow loud @price:[10 30] shark',
+        LIMIT, '0', '0', DIALECT, '2'], expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, '@price:[40 60] alpha (@price:[100 200] | beta |
+          (gamma delta))', DIALECT, '2', NOCONTENT], expect_difference: true, compare: unordered,
+      expect: {equals: [1, 'hash:05']}}
+    - {command: [FT.SEARCH, idx, '@price:[40 60] alpha (@price:[100 200] | beta |
+          (gamma delta))', LIMIT, '0', '0', DIALECT, '2'], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, '@price:[40 60] alpha (@color:{purple} | (delta @price:[45
+          55]))', DIALECT, '2', NOCONTENT], expect_difference: true, compare: unordered,
+      expect: {equals: [1, 'hash:05']}}
+    - {command: [FT.SEARCH, idx, '@price:[40 60] alpha (@price:[100 200] | (@color:{purple}
+          | (gamma delta)))', LIMIT, '0', '0', DIALECT, '2'], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, 'alpha @price:[40 60] (@price:[100 200] | (delta
+          gamma))', INORDER, LIMIT, '0', '0', DIALECT, '2'], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, '@price:[40 60] alpha -beta (@price:[100 200] | (gamma
+          delta))', DIALECT, '2', NOCONTENT], expect: {equals: [1, 'hash:05']}}
+    - {command: [HSET, 'vf:05', embedding, !!binary 'AAAAPwAAAD8AAAAAAAAAAA==', body,
+        'alpha gamma delta', price, '50'], expect: {equals: 3}}
+    - {command: [HSET, 'vf:06', embedding, !!binary 'mpmZPjMzMz8AAAAAAAAAAA==', body,
+        'gamma delta', price, '50'], expect: {equals: 3}}
+    - {command: [HSET, 'vf:07', embedding, !!binary 'zcxMPs3MTD8AAAAAAAAAAA==', body,
+        alpha, price, '50'], expect: {equals: 3}}
+    - {command: [HSET, 'vh:05', embedding, !!binary 'AAAAPwAAAD8AAAAAAAAAAA==', body,
+        'alpha gamma delta', price, '50'], expect: {equals: 3}}
+    - {command: [HSET, 'vh:06', embedding, !!binary 'mpmZPjMzMz8AAAAAAAAAAA==', body,
+        'gamma delta', price, '50'], expect: {equals: 3}}
+    - {command: [HSET, 'vh:07', embedding, !!binary 'zcxMPs3MTD8AAAAAAAAAAA==', body,
+        alpha, price, '50'], expect: {equals: 3}}
+    - {command: [FT.CREATE, idxf, ON, HASH, PREFIX, '1', 'vf:', SCHEMA, embedding,
+        VECTOR, FLAT, '6', TYPE, FLOAT32, DIM, '4', DISTANCE_METRIC, COSINE, body,
+        TEXT, NOSTEM, price, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxh, ON, HASH, PREFIX, '1', 'vh:', SCHEMA, embedding,
+        VECTOR, HNSW, '6', TYPE, FLOAT32, DIM, '4', DISTANCE_METRIC, COSINE, body,
+        TEXT, NOSTEM, price, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idxf, '@price:[0 +inf]', LIMIT, '0', '0', DIALECT, '2'],
+      wait_s: 60, expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idxh, '@price:[0 +inf]', LIMIT, '0', '0', DIALECT, '2'],
+      wait_s: 60, expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idxf, '(@price:[40 60] alpha (@price:[100 200] | (gamma
+          delta)))=>[KNN 2 @embedding $vec]', PARAMS, '2', vec, !!binary 'AACAPwAAAAAAAAAAAAAAAA==',
+        DIALECT, '2', NOCONTENT], expect_difference: true, compare: unordered, expect: {
+        equals: [1, 'vf:05']}}
+    - {command: [FT.SEARCH, idxh, '(@price:[40 60] alpha (@price:[100 200] | (gamma
+          delta)))=>[KNN 2 @embedding $vec]', PARAMS, '2', vec, !!binary 'AACAPwAAAAAAAAAAAAAAAA==',
+        DIALECT, '2', NOCONTENT], expect_difference: true, compare: unordered, expect: {
+        equals: [1, 'vh:05']}}
+    - {command: [FT.SEARCH, idxf, '(alpha)=>[KNN 2 @embedding $vec]', PARAMS, '2',
+        vec, !!binary 'AACAPwAAAAAAAAAAAAAAAA==', DIALECT, '2', NOCONTENT], expect: {
+        equals: [2, 'vf:05', 'vf:07']}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ftsearch.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftsearch}
