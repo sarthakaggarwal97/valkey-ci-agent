@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4b723ba7a9d62c7c6f4a7369ed15c7253ac2dece",
+  "parent": "b2a8911c751f36678411ef77af1fc1090ce525ab",
+  "pr": 4086,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Avoid refreshing daylight-saving info on every event-loop wakeup (#4086)",
+  "date": "2026-07-06",
+  "unstable": "a77ca2249f2cbf56737dec2aca7a223b1ded2a83",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4206,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure performance change with no externally observable behaviour: the diff only changes how often server.daylight_active is refreshed via localtime_r (every event-loop wakeup before, once per second in serverCron plus whileBlockedCron after). That flag is used solely to render DST in log timestamps; the cached time itself (unixtime/mstime/ustime, LRU/LFU clock) is still updated on every wakeup via updateCachedTime(0), so command replies, expiry, replication, persistence and failover are untouched. The worst case is a log timestamp with a stale DST offset for up to a second around a timezone tra"
+}

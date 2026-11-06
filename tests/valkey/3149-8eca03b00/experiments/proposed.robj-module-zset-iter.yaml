@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.robj-module-zset-iter
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module sorted-set API (add/incrby/rem/rangebylex/members) over robj
+    accessors, replies equivalent across builds in both zset encodings
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    zset_max_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: zmod
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    server_config:
+      zset-max-listpack-entries: {$ref: inputs.zset_max_listpack_entries}
+    commands:
+    - {command: [zset.add, z, 3, c], expect: {equals: OK}}
+    - {command: [zset.add, z, 1, a], expect: {equals: OK}}
+    - {command: [zset.add, z, 2, b], expect: {equals: OK}}
+    - {command: [zset.add, z, 5, e], expect: {equals: OK}}
+    - {command: [zset.add, z, 4, d], expect: {equals: OK}}
+    - {command: [zset.incrby, z, a, 10], expect: {exists: true}}
+    - {command: [zset.members, z], compare: unordered}
+    - {command: [zset.rangebylex, z, "-", "+"], expect: {exists: true}}
+    - {command: [zset.rangebylex, z, "[b", "[d"], expect: {exists: true}}
+    - {command: [zset.revrangebylex, z, "+", "-"], expect: {exists: true}}
+    - {command: [zset.revrangebylex, z, "(e", "[b"], expect: {exists: true}}
+    - {command: [zset.rem, z, c], expect: {equals: 1}}
+    - {command: [zset.rem, z, nope], expect: {equals: 0}}
+    - {command: [zset.members, z], compare: unordered}
+    - {command: [SET, s, hello], expect: {equals: OK}}
+    - {command: [zset.add, s, 1, x], expect: {error: true}}
+    - {command: [zset.incrby, s, x, 1], expect: {error: true}}
+    - {command: [zset.rem, s, x], expect: {error: true}}
+    - {command: [zset.rangebylex, s, "-", "+"], expect: {error: true}}
+    - {command: [zset.rem, missing, x], expect: {equals: 0}}
+    - {command: [ZADD, z2, 7, g, 8, h], expect: {equals: 2}}
+    - {command: [zset.members, z2], compare: unordered}
+    - {command: [zset.incrby, z2, g, 100], expect: {exists: true}}
+    - {command: [zset.rangebylex, z2, "-", "+"], expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [zmod.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zmod}

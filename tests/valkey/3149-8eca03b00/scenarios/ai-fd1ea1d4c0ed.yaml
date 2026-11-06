@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ac61c11d0cd0..8eca03b005c3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fd1ea1d4c0ed
+seed: 102
+experiment:
+  id: proposed.robj-aof-format-rewrite
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

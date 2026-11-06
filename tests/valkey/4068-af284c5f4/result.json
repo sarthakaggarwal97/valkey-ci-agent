@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "af284c5f45257b7e5138b74377cc1d309c3ed55f",
+  "parent": "58cba3be7591e772ad4bcdbb779a4cf306d98235",
+  "pr": 4068,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix sentinel failover coordinated segfault when old leader's client is disconnected (#4068)",
+  "date": "2026-07-01",
+  "unstable": "a77ca2249f2cbf56737dec2aca7a223b1ded2a83",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2875,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a NULL-check in sentinelKillClients in src/sentinel.c, code that executes only inside a Valkey Sentinel process during a coordinated failover (SENTINEL FAILOVER ... COORDINATED) when the Sentinel's command link to the old primary is disconnected. The fuzzer cannot reach this code: its only deployment modes are standalone and cluster, no installed experiment or component starts a Sentinel process (valkey-server --sentinel), valkey.action.commands' private servers are ordinary servers on which SENTINEL commands do not exist, valkey.action.tools runs only the four client tools, and "
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a77ca2249f2cbf56737dec2aca7a223b1ded2a83",
+  "parent": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "pr": 5310,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Correct the `since` version on SISMEMBER XX to 9.2.0 (#5310)",
+  "date": "2026-11-06",
+  "unstable": "a77ca2249f2cbf56737dec2aca7a223b1ded2a83",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 0.8754,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

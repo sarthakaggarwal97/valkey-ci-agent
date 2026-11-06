@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 51543c01f132..aa940b6f4565.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-182383cb2a46
+seed: 7301
+experiment:
+  id: proposed.repl-frame-batching
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,28 @@
+extends: [valkey.liveness]
+id: proposed.stream-shared-nack-restore
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE of a stream whose two consumers' local PELs both reference
+    the same global-PEL NACK (shared NACK across consumers) is rejected as a corrupt
+    RDB on the change, while the parent loads it
+components:
+- use: valkey.action.commands
+  id: restore
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 2
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, set-skip-checksum-validation, "1"], expect: {equals: OK}}
+    - {command: [RESTORE, mystream, "0", !!binary "FQAAAAAAAAAAAAEBZwAAAAEAAAAAAAAAAQAAAAAAAAABAAAAAAAAAAABAgJjMQAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAQJjMgAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAEAAAAAAAAAAVAAAAAAAAAAAAA="],
+      expect_difference: true, expect: {error: "Bad data format"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [restore.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore}

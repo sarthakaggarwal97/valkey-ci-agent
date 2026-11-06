@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.stream-shared-nack
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE of a stream whose global PEL NACK is claimed by two consumers
+    (a shared NACK) is rejected as corrupt by the fixed build but silently accepted
+    by the parent
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: restore
+  config:
+    compare_with: {$ref: inputs.parent}
+    server_config: {enable-debug-command: yes}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, set-skip-checksum-validation, "1"], expect: {equals: OK}}
+    - command: [RESTORE, mystream, "0", !!binary "DwEQAAAAAAAAAAEAAAAAAAAAATY2AAAADwACAQABAQGFZmllbGQGAAECAQABAAGGdmFsdWUxBwQBAgEBAQABhnZhbHVlMgcEAf8CAgEBB215Z3JvdXACAQEAAAAAAAAAAQAAAAAAAAABmzZjip0BAAABAgVBbGljZZs2Y4qdAQAAAQAAAAAAAAEAAAAAAAAAAQEDQm9imzZjip0BAAABAAAAAAAAAAEAAAAAAAAAAQkAAAAAAAAAAAA="]
+      expect_difference: true
+      expect: {error: "Bad data format"}
+    - {command: [EXISTS, mystream], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore}

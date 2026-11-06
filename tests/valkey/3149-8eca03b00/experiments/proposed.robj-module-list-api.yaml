@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.robj-module-list-api
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module List API (VM_ListPush/Get/Set/Insert/Delete, VM_ValueLength,
+    VM_KeyType, list iterator free) via tests/modules/list.so over listpack and quicklist
+    encodings, compared with the parent build and module
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: modlist
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      list-max-listpack-size: 4
+    commands:
+    - {command: [RPUSH, k, a, b, c], expect: {equals: 3}}
+    - {command: [list.getall, k], expect: {equals: [a, b, c]}}
+    - {command: [list.getall, k, REVERSE], expect: {equals: [c, b, a]}}
+    - {command: [list.get, k, 0], expect: {equals: a}}
+    - {command: [list.get, k, -1], expect: {equals: c}}
+    - {command: [list.get, k, 9], expect: {error: "index out of bounds"}}
+    - {command: [list.set, k, 1, B], expect: {equals: OK}}
+    - {command: [LRANGE, k, 0, -1], expect: {equals: [a, B, c]}}
+    - {command: [list.insert, k, 0, x], expect: {equals: OK}}
+    - {command: [list.insert, k, -1, y], expect: {equals: OK}}
+    - {command: [LRANGE, k, 0, -1], expect: {equals: [x, a, B, c, y]}}
+    - {command: [list.edit, k, kdr, W]}
+    - {command: [LRANGE, k, 0, -1], expect: {equals: [x, W, c, y]}}
+    - {command: [RPUSH, k, e5, e6, e7, e8], expect: {equals: 8}}
+    - {command: [list.getall, k], expect: {equals: [x, W, c, y, e5, e6, e7, e8]}}
+    - {command: [list.delete, k, 0], expect: {equals: OK}}
+    - {command: [list.get, k, 0], expect: {equals: W}}
+    - {command: [RPUSH, k2, solo], expect: {equals: 1}}
+    - {command: [list.delete, k2, 0], expect: {equals: OK}}
+    - {command: [EXISTS, k2], expect: {equals: 0}}
+    - {command: [SET, s, v], expect: {equals: OK}}
+    - {command: [list.getall, s], expect: {error: "WRONGTYPE"}}
+    - {command: [list.get, s, 0], expect: {error: "WRONGTYPE"}}
+    - {command: [list.set, s, 0, v], expect: {error: "WRONGTYPE"}}
+    - {command: [list.insert, s, 0, v], expect: {error: "WRONGTYPE"}}
+    - {command: [list.delete, s, 0], expect: {error: "WRONGTYPE"}}
+    - {command: [list.getall, nokey], expect: {error: "WRONGTYPE"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modlist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modlist}

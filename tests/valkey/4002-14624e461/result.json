@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "14624e461a78dd82657cc422d65915d42f7491c2",
+  "parent": "eefa8927dc2ba7bb9edf62f9288d155e74df59ff",
+  "pr": 4002,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize modules dict iteration with early return when empty (#4002)",
+  "date": "2026-07-01",
+  "unstable": "a77ca2249f2cbf56737dec2aca7a223b1ded2a83",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6507,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds early returns when the modules dict is empty, in front of loops that iterate it. For every touched function the early return yields exactly what the zero-iteration loop already produced: NULL from the type lookups (the byID cache cannot be populated while the dict is empty, since modules exporting types cannot unload), 1/C_OK from the vacuous all-modules checks, 0 bytes from rdbSaveModulesAux, the unchanged info sds from modulesCollectInfo and genModulesInfoString, an empty array from addReplyLoadedModules (the old code emitted addReplyArrayLen(c, dictSize(modules)) == 0),"
+}

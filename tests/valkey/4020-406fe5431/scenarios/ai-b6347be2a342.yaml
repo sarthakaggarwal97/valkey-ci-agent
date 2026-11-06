@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 14624e461a78..406fe5431ea5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b6347be2a342
+seed: 7001
+experiment:
+  id: proposed.cluster-slotmgmt-on-replica
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "eefa8927dc2ba7bb9edf62f9288d155e74df59ff",
+  "parent": "5b690cefd6cad707a748879c2bab6b72e18efcb7",
+  "pr": 4073,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "fix: Reject corrupt stream RDB with shared NACK across consumers (#4073)",
+  "date": "2026-06-30",
+  "unstable": "a77ca2249f2cbf56737dec2aca7a223b1ded2a83",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 1,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 4.974,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: 21155:S 06 Nov 2026 22:22:31.526 # Terminating server after rdb file reading failure.",
+      "scenario": "ai-7293b3c9aaf4",
+      "seed": 7001,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #4073",
+      "fingerprint": "396c2b1ecb15f5ca6eb1",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/84"
+    }
+  ],
+  "recorded": []
+}

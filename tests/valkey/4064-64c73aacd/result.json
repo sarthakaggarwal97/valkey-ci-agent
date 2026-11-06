@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "64c73aacdeaf7c6078cdc526495526468909bc2e",
+  "parent": "8eca03b005c3b9298366b9ccffe72c1e68c58e59",
+  "pr": 4064,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Log certificate errors in isCertValid (OpenSSL 4.0 only) (#4064)",
+  "date": "2026-07-01",
+  "unstable": "a77ca2249f2cbf56737dec2aca7a223b1ded2a83",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.307,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters server log messages inside isCertValid (src/tls.c): when X509_check_certificate_times() fails it now logs a specific message for an invalid notBefore/notAfter field instead of a numeric error code. The function returns false in exactly the same cases as before, so TLS acceptance/rejection behaviour, command replies, replication and persistence are all unchanged. The code is also gated to OpenSSL >= 4.0 builds. A log-wording-only change is not observable by the fuzzer's oracles (replies, ledger, deployment state, liveness), so no scenario is needed."
+}

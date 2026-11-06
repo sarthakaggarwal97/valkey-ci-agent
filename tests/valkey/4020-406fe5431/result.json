@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "406fe5431ea555c09d3ca2f3283dfa4a3c944254",
+  "parent": "14624e461a78dd82657cc422d65915d42f7491c2",
+  "pr": 4020,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix assert with CLUSTER REPLICATE for replicas that own slots (#4020)",
+  "date": "2026-07-01",
+  "unstable": "a77ca2249f2cbf56737dec2aca7a223b1ded2a83",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 9,
+    "executed": 9,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.3449,
+  "findings": [],
+  "recorded": []
+}

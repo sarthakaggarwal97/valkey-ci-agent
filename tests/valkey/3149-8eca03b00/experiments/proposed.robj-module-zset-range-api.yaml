@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.robj-module-zset-range-api
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module zset API (VM_ZsetAdd/Incrby/Rem, lex range iteration, ScanKey,
+    ValueLength, KeyType, moduleDelKeyIfEmpty) on listpack and skiplist encodings,
+    each core build loading its own build of tests/modules/zset.so
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zsetapi
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [zset.add, k, 1.5, a], expect: {equals: OK}}
+    - {command: [zset.add, k, 2.5, b], expect: {equals: OK}}
+    - {command: [zset.add, k, 3.5, c], expect: {equals: OK}}
+    - {command: [TYPE, k], expect: {equals: zset}}
+    - {command: [OBJECT, ENCODING, k], compare: skip}
+    - {command: [zset.incrby, k, b, 10]}
+    - {command: [zset.rangebylex, k, "-", "+"], expect: {equals: [a, b, c]}}
+    - {command: [zset.revrangebylex, k, "-", "+"], expect: {equals: [c, b, a]}}
+    - {command: [zset.rangebylex, k, "[a", "[b"], expect: {equals: [a, b]}}
+    - {command: [zset.rangebylex, k, "-", "a"], expect: {error: "invalid range"}}
+    - {command: [zset.members, k], compare: unordered, expect: {error: false}}
+    - {command: [SET, str, hello], expect: {equals: OK}}
+    - {command: [zset.add, str, 1, x], expect: {error: "ZsetAdd failed"}}
+    - {command: [zset.incrby, str, x, 1], expect: {error: "ZsetIncrby failed"}}
+    - {command: [zset.rem, str, x], expect: {error: "ZsetRem failed"}}
+    - {command: [zset.rangebylex, str, "-", "+"], expect: {error: "WRONGTYPE"}}
+    - {command: [zset.members, str], expect: {error: "WRONGTYPE"}}
+    - {command: [zset.rangebylex, nosuchkey, "-", "+"], expect: {error: "WRONGTYPE"}}
+    - {command: [zset.rem, k, missing], expect: {equals: 0}}
+    - {command: [CONFIG, SET, zset-max-listpack-entries, 0], expect: {equals: OK}}
+    - {command: [zset.add, big, 1, a], expect: {equals: OK}}
+    - {command: [zset.add, big, 2, b], expect: {equals: OK}}
+    - {command: [zset.add, big, 3, c], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, big], compare: skip}
+    - {command: [zset.rangebylex, big, "-", "+"], expect: {equals: [a, b, c]}}
+    - {command: [zset.revrangebylex, big, "-", "+"], expect: {equals: [c, b, a]}}
+    - {command: [zset.members, big], compare: unordered, expect: {error: false}}
+    - {command: [zset.incrby, big, b, 2.5]}
+    - {command: [zset.rem, big, a], expect: {equals: 1}}
+    - {command: [zset.rem, big, b], expect: {equals: 1}}
+    - {command: [zset.rem, big, c], expect: {equals: 1}}
+    - {command: [EXISTS, big], expect: {equals: 0}}
+    - {command: [zset.rem, k, a], expect: {equals: 1}}
+    - {command: [zset.rem, k, b], expect: {equals: 1}}
+    - {command: [zset.rem, k, c], expect: {equals: 1}}
+    - {command: [EXISTS, k], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [zsetapi.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zsetapi}

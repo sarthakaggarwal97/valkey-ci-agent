@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5bcc9f7440d78976e6bdf5804d7dc74338313d95",
+  "parent": "4b723ba7a9d62c7c6f4a7369ed15c7253ac2dece",
+  "pr": 4098,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Validate node ID when decoding open slots RDB aux field (#4098)",
+  "date": "2026-07-06",
+  "unstable": "a77ca2249f2cbf56737dec2aca7a223b1ded2a83",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.6988,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters clusterDecodeOpenSlotsAuxField, which returns early unless RDBFLAGS_REPLICATION is set, so it runs solely during a live full sync and never for an RDB file, DEBUG RELOAD, or valkey-check-rdb. The aux field's only producer is clusterEncodeOpenSlotsAuxField, which always emits each open slot's node->name as exactly 40 valid hex bytes plus a ',' delimiter (and CLUSTER SETSLOT IMPORTING/MIGRATING only accepts already-known nodes), so every reachable decode receives a well-formed node ID that both builds accept byte-for-byte identically. The added verifyClusterNodeId rejectio"
+}

@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.cluster-slotmgmt-on-replica
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTER ADDSLOTS/DELSLOTS/ADDSLOTSRANGE/DELSLOTSRANGE/FLUSHSLOTS are
+    rejected on a replica (a replica owning slots crashed on CLUSTER REPLICATE)
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slotmgmt
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, DELSLOTSRANGE, 100, 102], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, wait_s: 30, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, ADDSLOTS, 100], node: 1, expect_difference: true, expect: {
+        error: "only with primaries"}}
+    - {command: [CLUSTER, ADDSLOTSRANGE, 101, 102], node: 1, expect_difference: true,
+      expect: {error: "only with primaries"}}
+    - {command: [CLUSTER, DELSLOTS, 101], node: 1, expect_difference: true, expect: {
+        error: "only with primaries"}}
+    - {command: [CLUSTER, DELSLOTSRANGE, 100, 100], node: 1, expect_difference: true,
+      expect: {error: "only with primaries"}}
+    - {command: [CLUSTER, FLUSHSLOTS], node: 1, expect_difference: true, expect: {
+        error: "only with primaries"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotmgmt}

@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.robj-aof-format-rewrite
+deployment:
+  modes: [standalone]
+metadata:
+  description: AOF rewrite in AOF format (aof-use-rdb-preamble no) over every object
+    type and encoding, reloaded across a restart, compared with the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aofrw
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      appendonly: "yes"
+      aof-use-rdb-preamble: "no"
+      list-max-listpack-size: 4
+      hash-max-listpack-entries: 4
+      set-max-listpack-entries: 4
+      set-max-intset-entries: 4
+      zset-max-listpack-entries: 4
+    commands:
+    - {command: [SET, str1, hello], expect: {equals: OK}}
+    - {command: [SET, strint, "12345"], expect: {equals: OK}}
+    - {command: [SET, strexp, v, EX, "10000"], expect: {equals: OK}}
+    - {command: [RPUSH, lsmall, a, b, c], expect: {equals: 3}}
+    - {command: [RPUSH, lbig, e1, e2, e3, e4, e5, e6, e7, e8], expect: {equals: 8}}
+    - {command: [SADD, sint, "1", "2", "3"], expect: {equals: 3}}
+    - {command: [SADD, slp, a, b, ""], expect: {equals: 3}}
+    - {command: [SADD, sbig, m1, m2, m3, m4, m5, m6], expect: {equals: 6}}
+    - {command: [ZADD, zsmall, "1", a, "2", b], expect: {equals: 2}}
+    - {command: [ZADD, zbig, "1", m1, "2", m2, "3", m3, "4", m4, "5", m5, "6", m6],
+      expect: {equals: 6}}
+    - {command: [HSET, hsmall, f1, v1, f2, ""], expect: {equals: 2}}
+    - {command: [HSET, hbig, f1, v1, f2, v2, f3, v3, f4, v4, f5, v5, f6, v6], expect: {
+        equals: 6}}
+    - {command: [XADD, st, "1-1", f, v1], expect: {equals: "1-1"}}
+    - {command: [XADD, st, "1-2", f, v2], expect: {equals: "1-2"}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {error: false}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, str1], expect: {equals: hello}}
+    - {command: [GET, strint], expect: {equals: "12345"}}
+    - {command: [PTTL, strexp], compare: skip, expect: {min: 1}}
+    - {command: [LRANGE, lsmall, 0, -1], expect: {equals: [a, b, c]}}
+    - {command: [LRANGE, lbig, 0, -1], expect: {equals: [e1, e2, e3, e4, e5, e6, e7,
+          e8]}}
+    - {command: [SMEMBERS, sint], compare: unordered}
+    - {command: [SMEMBERS, slp], compare: unordered}
+    - {command: [SMEMBERS, sbig], compare: unordered}
+    - {command: [ZRANGE, zsmall, 0, -1], expect: {equals: [a, b]}}
+    - {command: [ZRANGE, zbig, 0, -1], expect: {equals: [m1, m2, m3, m4, m5, m6]}}
+    - {command: [ZRANGE, zbig, 0, -1, WITHSCORES]}
+    - {command: [HGETALL, hsmall], compare: unordered-pairs}
+    - {command: [HGETALL, hbig], compare: unordered-pairs}
+    - {command: [HLEN, hbig], expect: {equals: 6}}
+    - {command: [XRANGE, st, "-", "+"], expect: {equals: [["1-1", [f, v1]], ["1-2",
+            [f, v2]]]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [aofrw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofrw}

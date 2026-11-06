@@ -1,0 +1,122 @@
+extends: [valkey.liveness]
+id: proposed.robj-accessor-equivalence
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    The robj accessor refactor (#3149) rewrote type/encoding/refcount/lru access in
+    aof.c, rdb.c, db.c, object.c, t_hash.c and friends, and added a new assert in
+    objectGetVal for embedded-value objects. This sequence drives every object type
+    through encoding conversions, embedded-value strings with expires, hash field
+    TTLs with volatile-item tracking, LFU/LRU metadata, SORT BY hash patterns, and
+    an RDB SAVE plus restart, comparing every reply against the parent build. Any
+    difference or crash is a regression in the supposedly-equivalent accessors.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: robj
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      list-max-listpack-size: 4
+      hash-max-listpack-entries: 4
+      set-max-listpack-entries: 4
+      set-max-intset-entries: 4
+      zset-max-listpack-entries: 4
+    commands:
+    - {command: [SET, s1, 12345], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, s1], compare: skip}
+    - {command: [INCR, s1], expect: {equals: 12346}}
+    - {command: [APPEND, s1, xyz], expect: {equals: 8}}
+    - {command: [GET, s1], expect: {equals: "12346xyz"}}
+    - {command: [SET, s2, short, EX, 10000], expect: {equals: OK}}
+    - {command: [GETRANGE, s2, 1, 3], expect: {equals: hor}}
+    - {command: [APPEND, s2, "-tail"], expect: {equals: 10}}
+    - {command: [GET, s2], expect: {equals: "short-tail"}}
+    - {command: [TTL, s2], compare: skip}
+    - {command: [SETRANGE, s3, 5, xyz], expect: {equals: 8}}
+    - {command: [STRLEN, s3], expect: {equals: 8}}
+    - {command: [SET, n, 9223372036854775806], expect: {equals: OK}}
+    - {command: [INCR, n], expect: {equals: 9223372036854775807}}
+    - {command: [INCR, n], expect: {error: "increment or decrement would overflow"}}
+    - {command: [SET, shared, 100], expect: {equals: OK}}
+    - {command: [OBJECT, REFCOUNT, shared], expect: {min: 1}}
+    - {command: [RPUSH, l, a, b, c], expect: {equals: 3}}
+    - {command: [LSET, l, 0, aa], expect: {equals: OK}}
+    - {command: [LRANGE, l, 0, -1], expect: {equals: [aa, b, c]}}
+    - {command: [RPUSH, l, d, e, f, g], expect: {equals: 7}}
+    - {command: [LTRIM, l, 1, 5], expect: {equals: OK}}
+    - {command: [LINSERT, l, BEFORE, c, cc], expect: {equals: 6}}
+    - {command: [LREM, l, 1, cc], expect: {equals: 1}}
+    - {command: [LRANGE, l, 0, -1], expect: {equals: [b, c, d, e, f]}}
+    - {command: [SADD, si, 1, 2, 3], expect: {equals: 3}}
+    - {command: [SADD, si, abc, def], expect: {equals: 2}}
+    - {command: [SMEMBERS, si], compare: unordered}
+    - {command: [SCARD, si], expect: {equals: 5}}
+    - {command: [SREM, si, 1], expect: {equals: 1}}
+    - {command: [SISMEMBER, si, abc], expect: {equals: 1}}
+    - {command: [SADD, is2, 7, 8], expect: {equals: 2}}
+    - {command: [SMEMBERS, is2], compare: unordered}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HEXPIRE, h, 10000, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HTTL, h, FIELDS, 1, f1], compare: skip}
+    - {command: [HPERSIST, h, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HEXPIRE, h, 10000, FIELDS, 1, f2], expect: {equals: [1]}}
+    - {command: [EXPIRE, h, 10000], expect: {equals: 1}}
+    - {command: [HSET, h, f3, v3, f4, v4, f5, v5], expect: {equals: 3}}
+    - {command: [HDEL, h, f3], expect: {equals: 1}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HSET, fields, fields, fields], expect: {equals: 1}}
+    - {command: [HEXPIRE, fields, 10000, FIELDS, 1, fields], expect: {equals: [1]}}
+    - {command: [HGET, fields, fields], expect: {equals: fields}}
+    - {command: [HSET, h2, a, b], expect: {equals: 1}}
+    - {command: [HEXPIRE, h2, 10000, FIELDS, 1, a], expect: {equals: [1]}}
+    - {command: [DEL, h2], expect: {equals: 1}}
+    - {command: [ZADD, z, 1, a, 2, b, 3, c], expect: {equals: 3}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES]}
+    - {command: [ZADD, z, 4, d, 5, e], expect: {equals: 2}}
+    - {command: [ZINCRBY, z, 2.5, a], expect: {exists: true}}
+    - {command: [ZRANGEBYSCORE, z, 2, 4], expect: {equals: [b, c, a, d]}}
+    - {command: [XADD, st, 1-1, f, v], expect: {equals: "1-1"}}
+    - {command: [XADD, st, 2-2, f2, v2], expect: {equals: "2-2"}}
+    - {command: [XLEN, st], expect: {equals: 2}}
+    - {command: [XRANGE, st, "-", "+"], expect: {exists: true}}
+    - {command: [RPUSH, mylist, 3, 1, 2], expect: {equals: 3}}
+    - {command: [HSET, w_1, score, 10], expect: {equals: 1}}
+    - {command: [HSET, w_2, score, 5], expect: {equals: 1}}
+    - {command: [HSET, w_3, score, 1], expect: {equals: 1}}
+    - {command: [SORT, mylist, BY, "w_*->score"], expect: {equals: ["3", "2", "1"]}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-lfu], expect: {equals: OK}}
+    - {command: [OBJECT, FREQ, s1], compare: skip}
+    - {command: [GET, s1], expect: {equals: "12346xyz"}}
+    - {command: [CONFIG, SET, maxmemory-policy, noeviction], expect: {equals: OK}}
+    - {command: [OBJECT, IDLETIME, s1], compare: skip}
+    - {command: [DEBUG, DIGEST], expect: {exists: true}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true}
+    - {command: [DBSIZE], expect: {equals: 16}}
+    - {command: [GET, s2], expect: {equals: "short-tail"}}
+    - {command: [TTL, s2], compare: skip}
+    - {command: [LRANGE, l, 0, -1], expect: {equals: [b, c, d, e, f]}}
+    - {command: [SMEMBERS, si], compare: unordered}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HTTL, h, FIELDS, 1, f2], compare: skip}
+    - {command: [ZRANGEBYSCORE, z, 2, 4], expect: {equals: [b, c, a, d]}}
+    - {command: [XLEN, st], expect: {equals: 2}}
+    - {command: [DEBUG, DIGEST], expect: {exists: true}}
+    - {command: [HEXPIRE, h, 10000, FIELDS, 1, f4], expect: {equals: [1]}}
+    - {command: [DEL, h], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [robj.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: robj}

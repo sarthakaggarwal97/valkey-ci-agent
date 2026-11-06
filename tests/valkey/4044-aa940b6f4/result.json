@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "aa940b6f456544491d1b8c5427cb1fbda0f21628",
+  "parent": "51543c01f132aa794511229475dbbec505218311",
+  "pr": 4044,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Batch RESP frame in replicationFeedReplicas (#4044)",
+  "date": "2026-07-02",
+  "unstable": "a77ca2249f2cbf56737dec2aca7a223b1ded2a83",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 26,
+    "executed": 26,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.2051,
+  "findings": [],
+  "recorded": []
+}

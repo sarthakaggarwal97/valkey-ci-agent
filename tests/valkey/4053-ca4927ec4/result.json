@@ -1,0 +1,36 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ca4927ec44afebfab08b98799f94af4cf939ab21",
+  "parent": "debe5c500907f015885d0c45c93e77f444514f59",
+  "pr": 4053,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize sendBulkToReplica to reduce lseek syscalls (#4053)",
+  "date": "2026-07-04",
+  "unstable": "a77ca2249f2cbf56737dec2aca7a223b1ded2a83",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 9,
+    "executed": 1,
+    "percent": 11,
+    "uncovered": [
+      "src/replication.c:1781",
+      "src/replication.c:1782",
+      "src/replication.c:1783",
+      "src/replication.c:1784",
+      "src/replication.c:1795",
+      "src/replication.c:1796",
+      "src/replication.c:1797",
+      "src/replication.c:1798"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 7.0792,
+  "findings": [],
+  "recorded": []
+}

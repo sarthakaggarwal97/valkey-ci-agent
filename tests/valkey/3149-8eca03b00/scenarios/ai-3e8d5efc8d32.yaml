@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ac61c11d0cd0..8eca03b005c3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3e8d5efc8d32
+seed: 310602
+experiment:
+  id: proposed.robj-accessor-equivalence
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

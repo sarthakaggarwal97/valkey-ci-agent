@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.debug-help-text
+deployment:
+  modes: [standalone]
+metadata:
+  description: DEBUG HELP lists SET-DISABLE-DENY-SCRIPTS and the corrected DELAY-RDB-CLIENT-FREE-SECONDS
+    entry, and both subcommands still dispatch
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: help
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, HELP], expect_difference: true, expect: {contains: "SET-DISABLE-DENY-SCRIPTS"}}
+    - {command: [DEBUG, HELP], expect_difference: true, expect: {contains: "DELAY-RDB-CLIENT-FREE-SECONDS"}}
+    - {command: [DEBUG, SET-DISABLE-DENY-SCRIPTS, 1], expect: {equals: OK}}
+    - {command: [DEBUG, SET-DISABLE-DENY-SCRIPTS, 0], expect: {equals: OK}}
+    - {command: [DEBUG, DELAY-RDB-CLIENT-FREE-SECONDS, 1], expect: {equals: OK}}
+    - {command: [DEBUG, DELAY-RDB-CLIENT-FREE-SECONDS, 0], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [help.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: help}

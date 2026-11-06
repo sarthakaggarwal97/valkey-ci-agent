@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ac61c11d0cd0..8eca03b005c3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4a6724053dde
+seed: 7001
+experiment:
+  id: proposed.robj-module-zset-iter
+  inputs:
+    resp: 2
+    zset_max_listpack_entries: 128
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

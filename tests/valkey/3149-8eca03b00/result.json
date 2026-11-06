@@ -1,0 +1,162 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8eca03b005c3b9298366b9ccffe72c1e68c58e59",
+  "parent": "ac61c11d0cd0b772c204c56ecf170119aababf99",
+  "pr": 3149,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Preparations to make serverObject (robj) opaque (#3149)",
+  "date": "2026-07-01",
+  "unstable": "a77ca2249f2cbf56737dec2aca7a223b1ded2a83",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 21,
+  "proven": 0,
+  "hunted": 18,
+  "dropped": 3,
+  "recall": true,
+  "coverage": {
+    "lines": 325,
+    "executed": 192,
+    "percent": 59,
+    "uncovered": [
+      "src/aof.c:2385",
+      "src/debug.c:269",
+      "src/debug.c:1160",
+      "src/debug.c:1161",
+      "src/debug.c:1162",
+      "src/module.c:796",
+      "src/module.c:811",
+      "src/module.c:830",
+      "src/module.c:4267",
+      "src/module.c:4343",
+      "src/module.c:4369",
+      "src/module.c:4388",
+      "src/module.c:4587",
+      "src/module.c:4591",
+      "src/module.c:4612",
+      "src/module.c:4676",
+      "src/module.c:4734",
+      "src/module.c:4744",
+      "src/module.c:4768",
+      "src/module.c:4833",
+      "src/module.c:4871",
+      "src/module.c:4875",
+      "src/module.c:4993",
+      "src/module.c:5021",
+      "src/module.c:5054",
+      "src/module.c:5074",
+      "src/module.c:5091",
+      "src/module.c:5102",
+      "src/module.c:5113",
+      "src/module.c:5127",
+      "src/module.c:5129",
+      "src/module.c:5175",
+      "src/module.c:5189",
+      "src/module.c:5192",
+      "src/module.c:5232",
+      "src/module.c:5234",
+      "src/module.c:5243",
+      "src/module.c:5259",
+      "src/module.c:5262",
+      "src/module.c:5293",
+      "src/module.c:5321",
+      "src/module.c:5324",
+      "src/module.c:5355",
+      "src/module.c:5395",
+      "src/module.c:5402",
+      "src/module.c:5478",
+      "src/module.c:5586",
+      "src/module.c:5679",
+      "src/module.c:5754",
+      "src/module.c:5825"
+    ],
+    "rounds": 3
+  },
+  "cost_usd": 26.3648,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: Unknown list encoding #t_list.c:135",
+      "scenario": "ai-b4eede812472",
+      "seed": 301,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #3149",
+      "fingerprint": "a5bfe274ecc7da4263ec",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/85"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: Unknown list encoding #t_list.c:135",
+      "scenario": "ai-76a6c0f658da",
+      "seed": 302,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #3149",
+      "fingerprint": "a5bfe274ecc7da4263ec",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/85"
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-59f508ee857b",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported"
+    },
+    {
+      "scenario": "ai-d7e8dd793313",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: command 28 (BLPOP blkey 0 on connection blk) got no reply: TimeoutError: Timeout reading from /tmp/vfc-6ryh1op7/s.sock"
+    },
+    {
+      "scenario": "ai-7c3fc9359b17",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: command 28 (BLPOP blkey 0 on connection blk) got no reply: TimeoutError: Timeout reading from /tmp/vfc-4sqwrzx_/s.sock"
+    },
+    {
+      "scenario": "ai-1331714cf4c8",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'zsetapi' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (zset.add k 1.5 a), 1 (zset.add k 2.5 b), 2 (zset.add k 3.5 c), 3 (TYPE k), 5 (zset.incrby k b 10), 6 (zset.rangebylex k - +), 7 (zset."
+    },
+    {
+      "scenario": "ai-48885618b1c3",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'zsetapi' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (zset.add k 1.5 a), 1 (zset.add k 2.5 b), 2 (zset.add k 3.5 c), 3 (TYPE k), 5 (zset.incrby k b 10), 6 (zset.rangebylex k - +), 7 (zset."
+    },
+    {
+      "scenario": "ai-4a6724053dde",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'zmod' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (zset.add z 3 c), 1 (zset.add z 1 a), 2 (zset.add z 2 b), 3 (zset.add z 5 e), 4 (zset.add z 4 d), 5 (zset.incrby z a 10), 6 (zset.members "
+    },
+    {
+      "scenario": "ai-34f2beb64a22",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'zmod' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (zset.add z 3 c), 1 (zset.add z 1 a), 2 (zset.add z 2 b), 3 (zset.add z 5 e), 4 (zset.add z 4 d), 5 (zset.incrby z a 10), 6 (zset.members "
+    },
+    {
+      "scenario": "ai-0a56304e28cb",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'zmod' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (zset.add z 3 c), 1 (zset.add z 1 a), 2 (zset.add z 2 b), 3 (zset.add z 5 e), 4 (zset.add z 4 d), 5 (zset.incrby z a 10), 6 (zset.members "
+    },
+    {
+      "scenario": "ai-1ae2e54b228e",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'zmod' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (zset.add z 3 c), 1 (zset.add z 1 a), 2 (zset.add z 2 b), 3 (zset.add z 5 e), 4 (zset.add z 4 d), 5 (zset.incrby z a 10), 6 (zset.members "
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8d7e713d31a7973f17c95307df0727ecd2efe3c6",
+  "parent": "5bcc9f7440d78976e6bdf5804d7dc74338313d95",
+  "pr": 3581,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add libbacktrace fallback for stack traces on musl/Alpine (#3581)",
+  "date": "2026-07-06",
+  "unstable": "a77ca2249f2cbf56737dec2aca7a223b1ded2a83",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.9711,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a libbacktrace stack-trace fallback gated behind the USE_LIBBACKTRACE compile-time macro, which defaults to 'no' in the Makefile and is set only for musl/Alpine builds the fuzzer does not produce. On the standard glibc build the fuzzer compiles, HAVE_EXECINFO is defined and every code path is identical to before, so all the new code is compiled out. The only behaviour it can change (and only on Alpine) is the text format of stack traces in the crash/watchdog/assertion log; it alters no command reply, stored data, replication/failover path, or RDB/AOF content, and no instal"
+}

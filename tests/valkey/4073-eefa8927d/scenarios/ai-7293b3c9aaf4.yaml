@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5b690cefd6ca..eefa8927dc2b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7293b3c9aaf4
+seed: 7001
+experiment:
+  id: proposed.stream-shared-nack-restore
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

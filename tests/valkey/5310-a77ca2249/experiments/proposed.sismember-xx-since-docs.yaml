@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.sismember-xx-since-docs
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS SISMEMBER reports the XX option since 9.2.0 (was 9.1.0),
+    while SISMEMBER XX behavior is unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, DOCS, SISMEMBER], expect_difference: true, expect: {contains: "9.2.0"}}
+    - {command: [SADD, s, a], expect: {equals: 1}}
+    - {command: [SISMEMBER, s, a], expect: {equals: 1}}
+    - {command: [SISMEMBER, s, a, XX], expect: {equals: 1}}
+    - {command: [SISMEMBER, s, b, XX], expect: {equals: 0}}
+    - {command: [SISMEMBER, nosuchkey, a, XX], expect: {equals: -1}}
+    - {command: [SISMEMBER, nosuchkey, a], expect: {equals: 0}}
+    - {command: [SISMEMBER, s, a, b], expect: {error: "syntax"}}
+    - {command: [SISMEMBER, s, XX, XX], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

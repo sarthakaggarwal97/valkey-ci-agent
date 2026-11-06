@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.robj-scan-bitops-debug-encodings
+deployment:
+  modes: [standalone]
+metadata:
+  description: objectGetType/objectGetEncoding paths in scan callbacks, int-encoded
+    bitops, DEBUG LISTPACK/QUICKLIST/HTSTATS-KEY, and the blocked-client type check,
+    compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: paths
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      hash-max-listpack-entries: 3
+      zset-max-listpack-entries: 3
+      set-max-listpack-entries: 2
+      set-max-intset-entries: 2
+      list-max-listpack-size: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SET, intkey, 123456789], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, intkey], compare: skip}
+    - {command: [BITCOUNT, intkey]}
+    - {command: [BITPOS, intkey, 1]}
+    - {command: [GETBIT, intkey, 5]}
+    - {command: [BITCOUNT, intkey, 1, 3]}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HSCAN, h, 0], expect: {error: false}}
+    - {command: [HSCAN, h, 0, NOVALUES], expect: {error: false}}
+    - {command: [HSCAN, h, 0, MATCH, "f*"], expect: {error: false}}
+    - {command: [DEBUG, LISTPACK, h], expect: {error: false}}
+    - {command: [DEBUG, QUICKLIST, h], expect: {error: "Not a quicklist"}}
+    - {command: [DEBUG, HTSTATS-KEY, h], expect: {error: "hash table"}}
+    - {command: [HSET, bigh, a, 1, b, 2, c, 3, d, 4, e, 5], expect: {equals: 5}}
+    - {command: [HSCAN, bigh, 0, COUNT, 100], compare: skip, expect: {error: false}}
+    - {command: [HSCAN, bigh, 0, NOVALUES, COUNT, 100], compare: skip, expect: {error: false}}
+    - {command: [HSCAN, bigh, 0, MATCH, "nomatch*", COUNT, 100], compare: skip, expect: {
+        error: false}}
+    - {command: [HLEN, bigh], expect: {equals: 5}}
+    - {command: [DEBUG, HTSTATS-KEY, bigh], compare: skip, expect: {error: false}}
+    - {command: [DEBUG, LISTPACK, bigh], expect: {error: "Not a listpack"}}
+    - {command: [DEBUG, DIGEST-VALUE, bigh]}
+    - {command: [ZADD, z, 1, a, 2, b, 3, c, 4, d], expect: {equals: 4}}
+    - {command: [ZSCAN, z, 0, COUNT, 100], compare: skip, expect: {error: false}}
+    - {command: [DEBUG, HTSTATS-KEY, z], compare: skip, expect: {error: false}}
+    - {command: [DEBUG, DIGEST-VALUE, z]}
+    - {command: [ZADD, zs, 1, a, 2, b], expect: {equals: 2}}
+    - {command: [ZSCAN, zs, 0], expect: {error: false}}
+    - {command: [SADD, s, x, y, zz, w], expect: {equals: 4}}
+    - {command: [SSCAN, s, 0, COUNT, 100], compare: skip, expect: {error: false}}
+    - {command: [DEBUG, HTSTATS-KEY, s], compare: skip, expect: {error: false}}
+    - {command: [RPUSH, biglist, a, b, c, d, e], expect: {equals: 5}}
+    - {command: [DEBUG, QUICKLIST, biglist], expect: {error: false}}
+    - {command: [DEBUG, QUICKLIST, biglist, 1], expect: {error: false}}
+    - {command: [DEBUG, DIGEST-VALUE, biglist]}
+    - {raw: "BLPOP bl 0\r\n", connection: blocker}
+    - {command: [LPUSH, bl, hello], expect: {equals: 1}}
+    - {command: [DEBUG, SLEEP, 0.2], expect: {equals: OK}}
+    - {read: true, connection: blocker}
+    - {command: [EXISTS, bl], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [paths.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: paths}
