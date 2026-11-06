@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.search-text-minversion-rdb-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: A TEXT index raises the search module's RDB min version to 1.2.0; SAVE
+    then restart must reload the index on the new build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: text-rdb
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {save: "3600 1"}
+    timeout_s: 60
+    commands:
+    - {command: [MODULE, LIST], expect_difference: true, expect: {contains: "66048"}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, title, TEXT,
+        category, TAG, price, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", title, "hello world", category, a, price, 10], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:2", title, "hello there", category, b, price, 20], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:3", title, "goodbye world", category, a, price, 30], expect: {
+        equals: 3}}
+    - {command: [FT.SEARCH, idx, "@title:hello", NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: "doc:1"}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "item:", SCHEMA, category,
+        TAG, price, NUMERIC], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT._LIST], wait_s: 30, compare: unordered, expect: {contains: idx}}
+    - {command: [FT.SEARCH, idx, "@title:hello", NOCONTENT], wait_s: 60, compare: unordered,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx, "@category:{a}", NOCONTENT], wait_s: 60, compare: unordered,
+      expect: {contains: "doc:3"}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: "3"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [text-rdb.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: text-rdb}

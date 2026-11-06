@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.ft-hashtag-index-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.CREATE hash-tagged index names with matching tagged prefixes, the
+    new parser error branches, and the tagged index lifecycle, compared across the
+    two module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: hashtag
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, "idx{shard0}", SCHEMA, price, NUMERIC], expect_difference: true,
+      expect: {error: "PREFIX parameter is required for hash-tagged indexes"}}
+    - {command: [FT.CREATE, "idx{shard0}", PREFIX, "1", "doc:{shard2}", SCHEMA, price,
+        NUMERIC], expect_difference: true, expect: {error: "All PREFIX arguments must\
+          \ contain the same hash tag as the index"}}
+    - {command: [FT.CREATE, "idx{shard0}", PREFIX, "1", "doc:", SCHEMA, price, NUMERIC],
+      expect_difference: true, expect: {error: "All PREFIX arguments must contain\
+          \ the same hash tag as the index"}}
+    - {command: [FT.CREATE, "idx{shard0}", PREFIX, "1", "doc:{}", SCHEMA, price, NUMERIC],
+      expect_difference: true, expect: {error: "same hash tag"}}
+    - {command: [FT.CREATE, plain, PREFIX, "1", "p{x}", SCHEMA, price, NUMERIC], expect: {
+        error: "PREFIX argument(s) must not contain a hash tag"}}
+    - {command: [FT.CREATE, plain, PREFIX, "1", "plain:", SCHEMA, price, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, "idx{shard0}", PREFIX, "2", "doc:{shard0}", "agg:{shard0}",
+        SCHEMA, price, NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [HSET, "doc:{shard0}:1", price, "10"], expect: {equals: 1}}
+    - {command: [HSET, "doc:{shard0}:2", price, "20"], expect: {equals: 1}}
+    - {command: [HSET, "doc:{shard0}:3", price, "30"], expect: {equals: 1}}
+    - {command: [HSET, "doc:{shard0}:4", price, "40"], expect: {equals: 1}}
+    - {command: [HSET, "agg:{shard0}:5", price, "50"], expect: {equals: 1}}
+    - {command: [FT.INFO, "idx{shard0}"], expect_difference: true, expect: {error: false}}
+    - {command: [FT.SEARCH, "idx{shard0}", "@price:[0 100]", LIMIT, "0", "0"], wait_s: 30,
+      expect_difference: true, expect: {equals: [5]}}
+    - {command: [FT.SEARCH, "idx{shard0}", "@price:[0 100]"], compare: unordered,
+      expect_difference: true, expect: {error: false}}
+    - {command: [FT._LIST], compare: unordered, expect_difference: true, expect: {
+        contains: "idx{shard0}"}}
+    - {command: [FT.DROPINDEX, "idx{shard0}"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, "multi{a}{b}", PREFIX, "1", "m:{a}x{b}", SCHEMA, price,
+        NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, "empty{}", PREFIX, "1", "e:", SCHEMA, price, NUMERIC],
+      expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [hashtag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hashtag}

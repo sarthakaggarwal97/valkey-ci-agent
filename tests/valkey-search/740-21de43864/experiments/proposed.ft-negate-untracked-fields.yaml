@@ -1,0 +1,82 @@
+extends: [valkey.liveness]
+id: proposed.ft-negate-untracked-fields
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Keys missing an indexed field are inserted into the per-index untracked set (IndexSchema::ProcessKeyspaceNotification
+    -> IndexBase::UnTrack), so negate queries return them. Compared against the parent
+    module build, where such keys are invisible to negate queries. Also churns field
+    add/HDEL/DEL to stress the new CHECK(!tracked) invariant in UnTrack.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_max_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: negate
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {hash-max-listpack-entries: {$ref: inputs.hash_max_listpack_entries}}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC,
+        t, TAG, txt, TEXT, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", n, 5, t, red, txt, "hello world", v, !!binary "AACAPwAAAAA="],
+      expect: {equals: 4}}
+    - {command: [HSET, "doc:2", t, blue, v, !!binary "AAAAAAAAgD8="], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", n, 7, txt, "green things"], expect: {equals: 2}}
+    - {command: [HSET, "doc:4", other, x], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:{red}", NOCONTENT], wait_s: 30, expect: {contains: "doc:1"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "@t:{blue}", NOCONTENT], wait_s: 30, expect: {contains: "doc:2"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "@n:[7 7]", NOCONTENT], wait_s: 30, expect: {contains: "doc:3"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "@txt:hello", NOCONTENT], wait_s: 30, expect: {contains: "doc:1"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "-@n:[0 10]", NOCONTENT], expect_difference: true,
+      expect: {contains: "doc:2"}, compare: unordered}
+    - {command: [FT.SEARCH, idx, "-@t:{red|blue}", NOCONTENT], expect_difference: true,
+      expect: {contains: "doc:3"}, compare: unordered}
+    - {command: [FT.SEARCH, idx, "-@txt:hello", NOCONTENT], expect: {contains: "doc:2"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "(-@n:[0 10])=>[KNN 2 @v $BV]", NOCONTENT, PARAMS,
+        2, BV, !!binary "AACAPwAAAAA=", DIALECT, 2], expect_difference: true, expect: {
+        contains: "doc:2"}, compare: unordered}
+    - {command: [HSET, "doc:2", n, 3], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@n:[3 3]", NOCONTENT], wait_s: 30, expect: {contains: "doc:2"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "-@n:[0 10]", NOCONTENT], expect_difference: true,
+      expect: {contains: "doc:4"}, compare: unordered}
+    - {command: [HDEL, "doc:3", n], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@n:[7 7]", NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, "-@n:[0 10]", NOCONTENT], expect_difference: true,
+      expect: {contains: "doc:4"}, compare: unordered}
+    - {command: [DEL, "doc:4"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "-@n:[0 10]", NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:3"]}}
+    - {command: [HSET, "doc:9", other, 1], expect: {equals: 1}}
+    - {command: [HSET, "doc:9", n, 1], expect: {equals: 1}}
+    - {command: [HSET, "doc:9", other2, 2], expect: {equals: 1}}
+    - {command: [HDEL, "doc:9", n], expect: {equals: 1}}
+    - {command: [HSET, "doc:9", n, 2], expect: {equals: 1}}
+    - {command: [DEL, "doc:9"], expect: {equals: 1}}
+    - {command: [HSET, "doc:9", t, z], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:{z}", NOCONTENT], wait_s: 30, expect: {contains: "doc:9"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "-@n:[0 10]", NOCONTENT], expect_difference: true,
+      expect: {contains: "doc:9"}, compare: unordered}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [negate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: negate}

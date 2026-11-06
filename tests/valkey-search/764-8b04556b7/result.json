@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "8b04556b7189189d947788025df86858473492da",
+  "parent": "154b80cfc448cbbda2a31c1757f00e9168f0db93",
+  "pr": 764,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix for handling trailing punctuations in query (#764)",
+  "date": "2026-02-17",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.114,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

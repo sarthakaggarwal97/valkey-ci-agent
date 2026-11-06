@@ -1,0 +1,108 @@
+extends: [valkey.liveness]
+id: proposed.text-search-iterator-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH over every text predicate type (term, exact, stem/NOSTEM
+    masks, prefix, suffix, fuzzy, proximity with SLOP/INORDER, negation, text+tag
+    AND/OR) compared between the module build that removes the EntriesFetcher allocation
+    and its parent, including deletes and updates so iterators run over mutated postings
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: text
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, content, TEXT,
+        WITHSUFFIXTRIE, title, TEXT, NOSTEM, t, TAG], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', content, 'running fox', title, 'walked lane', t, a],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:2', content, 'runs fast', title, 'jogging lane', t, a],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:3', content, 'run now', title, 'sprint lane', t, a], expect: {
+        equals: 3}}
+    - {command: [HSET, 'doc:4', content, 'runner street', title, 'running', t, b],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:5', content, 'jumped high', title, 'runs', t, b], expect: {
+        equals: 3}}
+    - {command: [HSET, 'doc:6', content, 'quick brown fox', title, 'colors', t, b],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:7', content, 'brown quick fox', title, 'colors', t, b],
+      expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          7]}}
+    - {command: [FT.SEARCH, idx, '@content:running', LIMIT, 0, 0], expect: {equals: [
+          3]}}
+    - {command: [FT.SEARCH, idx, '@content:running', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@content:"running"', LIMIT, 0, 0], expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idx, '@title:running', LIMIT, 0, 0], expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idx, 'running', LIMIT, 0, 0], expect: {equals: [4]}}
+    - {command: [FT.SEARCH, idx, 'running', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@content:run*', LIMIT, 0, 0], expect: {equals: [
+          4]}}
+    - {command: [FT.SEARCH, idx, '@content:*ing', LIMIT, 0, 0], expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idx, '@content:%runz%', LIMIT, 0, 0], expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx, '@content:(quick brown)', LIMIT, 0, 0], expect: {
+        equals: [2]}}
+    - {command: [FT.SEARCH, idx, '@content:(quick brown)', SLOP, 0, INORDER, LIMIT,
+        0, 0], expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, '@content:(quick brown)', SLOP, 0, INORDER, NOCONTENT],
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, '@content:"quick brown"', LIMIT, 0, 0], expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx, '-@content:running', LIMIT, 0, 0], expect: {equals: [
+          4]}}
+    - {command: [FT.SEARCH, idx, '-@content:running', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '(@content:running | @t:{b})', LIMIT, 0, 0], expect: {
+        equals: [7]}}
+    - {command: [FT.SEARCH, idx, '(@content:run* | @t:{a})', LIMIT, 0, 0], expect: {
+        equals: [4]}}
+    - {command: [FT.SEARCH, idx, '(@content:*ing | @t:{b})', LIMIT, 0, 0], expect: {
+        equals: [5]}}
+    - {command: [FT.SEARCH, idx, '(@content:%runz% | @t:{b})', LIMIT, 0, 0], expect: {
+        equals: [6]}}
+    - {command: [FT.SEARCH, idx, '@content:running @t:{a}', LIMIT, 0, 0], expect: {
+        equals: [3]}}
+    - {command: [FT.SEARCH, idx, '@content:zzz', LIMIT, 0, 0], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, '@content:zzz*', LIMIT, 0, 0], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, '@content:*zzz', LIMIT, 0, 0], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, '@content:%zzzzq%', LIMIT, 0, 0], expect: {equals: [
+          0]}}
+    - {command: [DEL, 'doc:1'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@content:running', LIMIT, 0, 0], wait_s: 15, expect: {
+        equals: [2]}}
+    - {command: [FT.SEARCH, idx, '@content:"running"', LIMIT, 0, 0], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, '@content:*ing', LIMIT, 0, 0], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, '@content:run*', LIMIT, 0, 0], expect: {equals: [
+          3]}}
+    - {command: [FT.SEARCH, idx, '-@content:running', LIMIT, 0, 0], expect: {equals: [
+          4]}}
+    - {command: [HSET, 'doc:5', content, 'walking slowly'], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, '@content:*ing', LIMIT, 0, 0], wait_s: 15, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx, 'running', LIMIT, 0, 0], expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx, '@content:%runz%', LIMIT, 0, 0], expect: {equals: [
+          2]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [text.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: text}

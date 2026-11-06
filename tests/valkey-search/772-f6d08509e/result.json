@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "f6d08509eeac4159a40f6cddf17c576e674ed68a",
+  "parent": "921a95408ccd8bfc60cc9694dbb7db14f1f76280",
+  "pr": 772,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add VERBATIM to FT AGGREGATE (#772)",
+  "date": "2026-02-17",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 8.2353,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

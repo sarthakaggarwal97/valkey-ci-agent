@@ -1,0 +1,65 @@
+extends: [valkey.liveness]
+id: proposed.search-index-key-info-race
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH reads index_key_info_ on reader threads while writer threads
+    mutate it during indexing; the parent's unsynchronized read may crash or read
+    a torn value
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.reader-threads, "16"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, "16"], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", n, "1", t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", n, "2", t, b], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", n, "3", t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:4", n, "4", t, b], expect: {equals: 2}}
+    - {command: [HSET, "doc:5", n, "5", t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:6", n, "6", t, b], expect: {equals: 2}}
+    - {command: [HSET, "doc:7", n, "7", t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:8", n, "8", t, b], expect: {equals: 2}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, n, NUMERIC,
+        t, TAG], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@n:[-inf +inf]", NOCONTENT, LIMIT, "0", "1000"],
+      compare: skip}
+    - {command: [HSET, "doc:9", n, "9", t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:10", n, "10", t, b], expect: {equals: 2}}
+    - {command: [HSET, "doc:11", n, "11", t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:12", n, "12", t, b], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@n:[-inf +inf]", NOCONTENT, LIMIT, "0", "1000"],
+      compare: skip}
+    - {command: [HSET, "doc:13", n, "13", t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:14", n, "14", t, b], expect: {equals: 2}}
+    - {command: [HSET, "doc:15", n, "15", t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:16", n, "16", t, b], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@t:{a|b}", NOCONTENT, LIMIT, "0", "1000"], compare: skip}
+    - {command: [DEL, "doc:1", "doc:2", "doc:3", "doc:4"], expect: {equals: 4}}
+    - {command: [FT.SEARCH, idx, "@n:[-inf +inf]", NOCONTENT, LIMIT, "0", "1000"],
+      compare: skip}
+    - {command: [HSET, "doc:9", n, "99"], expect: {equals: 0}}
+    - {command: [HSET, "doc:10", n, "100"], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@n:[-inf +inf]", NOCONTENT, LIMIT, "0", "1000"],
+      compare: skip}
+    - {command: [FT.SEARCH, idx, "@t:{a}", NOCONTENT, LIMIT, "0", "1000"], compare: skip}
+    - {command: [DEL, "doc:5", "doc:6"], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@n:[-inf +inf]", NOCONTENT, LIMIT, "0", "1000"],
+      compare: skip}
+    - {command: [FT.INFO, idx], compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

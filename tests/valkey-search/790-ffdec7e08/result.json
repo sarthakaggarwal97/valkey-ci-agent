@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ffdec7e08cab37dd0b901ed53d753f987b1dc5de",
+  "parent": "a876eed5fa3546abfbcc146c8461330de8e200c8",
+  "pr": 790,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Bump version to module 1.2 and add check for GetMinVersion (#790)",
+  "date": "2026-02-19",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.3223,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

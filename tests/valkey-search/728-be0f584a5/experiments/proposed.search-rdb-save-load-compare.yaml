@@ -1,0 +1,76 @@
+extends: [valkey.liveness]
+id: proposed.search-rdb-save-load-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The change rewrites logging inside IndexSchema::RDBSave and LoadFromRDB (per-attribute
+    lines demoted to DEBUG, new attribute-count NOTICE lines, redacted index names)
+    and in the OnLoadingEnded stale-entry scan. Save a multi-attribute index, restart
+    the server, and verify the index schema and its documents load and serve queries
+    identically on both builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hide: {type: string, enum: ["yes", "no"], default: "yes"}
+components:
+- use: valkey.action.commands
+  id: roundtrip
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - command: [CONFIG, SET, search.hide-user-data-from-log, {$ref: inputs.hide}]
+      expect_difference: true
+      expect: {equals: OK}
+    - command: [CONFIG, REWRITE]
+      expect: {equals: OK}
+    - command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, vec, VECTOR,
+        FLAT, "10", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2, INITIAL_CAP, "1",
+        BLOCK_SIZE, "1024", tagf, TAG, numf, NUMERIC]
+      expect: {equals: OK}
+    - command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAA=", tagf, hello, numf, "1"]
+      expect: {equals: 3}
+    - command: [HSET, "doc:2", vec, !!binary "AAAAAAAAgD8=", tagf, world, numf, "2"]
+      expect: {equals: 3}
+    - command: [HSET, "doc:3", vec, !!binary "AACAPwAAgD8=", tagf, there, numf, "3"]
+      expect: {equals: 3}
+    - command: [FT.SEARCH, idx, "@tagf:{hello}", NOCONTENT]
+      wait_s: 30
+      compare: unordered
+      expect: {contains: "doc:1"}
+    - command: [FT.SEARCH, idx, "@tagf:{there}", NOCONTENT]
+      wait_s: 30
+      compare: unordered
+      expect: {contains: "doc:3"}
+    - command: [SAVE]
+      expect: {equals: OK}
+    - restart: true
+      expect: {equals: OK}
+    - command: [FT._LIST]
+      wait_s: 30
+      compare: unordered
+      expect: {contains: idx}
+    - command: [FT.SEARCH, idx, "@tagf:{world}", NOCONTENT]
+      wait_s: 30
+      compare: unordered
+      expect: {contains: "doc:2"}
+    - command: [FT.SEARCH, idx, "*=>[KNN 3 @vec $BLOB]", NOCONTENT, PARAMS, "2", BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, "2"]
+      wait_s: 30
+      compare: unordered
+      expect: {contains: "doc:3"}
+    - command: [FT.INFO, idx]
+      compare: skip
+    - command: [FT.DROPINDEX, idx]
+      expect: {equals: OK}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [roundtrip.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: roundtrip}

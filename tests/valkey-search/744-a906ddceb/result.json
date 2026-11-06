@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a906ddceb0ff21314192dacb2342e792ea9ea216",
+  "parent": "26f0b9c9ce4d24f957bc83cf00ab49ea06a26443",
+  "pr": 744,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add attribute data to FT.INFO PRIMARY and CLUSTER mode (#744)",
+  "date": "2026-02-16",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.3628,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

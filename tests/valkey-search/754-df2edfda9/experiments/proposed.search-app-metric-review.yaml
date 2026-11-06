@@ -1,0 +1,195 @@
+extends: [valkey.liveness]
+id: proposed.search-app-metric-review
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    FT.INFO term-metric renames (num_terms, total_term_occurrences, total_postings
+    dropped) and INFO App->Dev metric demotions, compared across the change's and
+    the parent's build of the valkey-search module on one Valkey build.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: metrics
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, desc, TEXT]
+      expect: {equals: OK}
+    - command: [HSET, "doc:1", desc, "hello world wonder words"]
+      expect: {equals: 1}
+    - command: [HSET, "doc:2", desc, "hello wonder great words again"]
+      expect: {equals: 1}
+    - command: [HSET, "doc:3", desc, "unique tokens flow here hello"]
+      expect: {equals: 1}
+    - command:
+      - EVAL
+      - "local r = redis.call('FT.INFO', ARGV[1]) for i=1,#r do if r[i]=='num_docs'\
+        \ then return r[i+1] end end return -1"
+      - "0"
+      - idx
+      wait_s: 30
+      expect: {equals: 3}
+    - command: [FT.SEARCH, idx, "@desc:hello", NOCONTENT]
+      compare: unordered
+    - command: [FT.INFO, idx]
+      expect_difference: true
+      expect: {exists: true}
+    - command:
+      - EVAL
+      - "local r = redis.call('FT.INFO', ARGV[1]) for i=1,#r do if r[i]==ARGV[2] then\
+        \ return 1 end end return 0"
+      - "0"
+      - idx
+      - num_terms
+      expect_difference: true
+      expect: {equals: 1}
+    - command:
+      - EVAL
+      - "local r = redis.call('FT.INFO', ARGV[1]) for i=1,#r do if r[i]==ARGV[2] then\
+        \ return 1 end end return 0"
+      - "0"
+      - idx
+      - total_term_occurrences
+      expect_difference: true
+      expect: {equals: 1}
+    - command:
+      - EVAL
+      - "local r = redis.call('FT.INFO', ARGV[1]) for i=1,#r do if r[i]==ARGV[2] then\
+        \ return 1 end end return 0"
+      - "0"
+      - idx
+      - num_unique_terms
+      expect_difference: true
+      expect: {equals: 0}
+    - command:
+      - EVAL
+      - "local r = redis.call('FT.INFO', ARGV[1]) for i=1,#r do if r[i]==ARGV[2] then\
+        \ return 1 end end return 0"
+      - "0"
+      - idx
+      - num_total_terms
+      expect_difference: true
+      expect: {equals: 0}
+    - command:
+      - EVAL
+      - "local r = redis.call('FT.INFO', ARGV[1]) for i=1,#r do if r[i]==ARGV[2] then\
+        \ return 1 end end return 0"
+      - "0"
+      - idx
+      - total_postings
+      expect_difference: true
+      expect: {equals: 0}
+    - command:
+      - EVAL
+      - "local r = redis.call('FT.INFO', ARGV[1]) for i=1,#r do if r[i]==ARGV[2] then\
+        \ return r[i+1] end end return -1"
+      - "0"
+      - idx
+      - num_terms
+      expect_difference: true
+      expect: {min: 5}
+    - command: [FT.CREATE, idxv, ON, HASH, PREFIX, "1", "v:", SCHEMA, vec, VECTOR,
+        FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2]
+      expect: {equals: OK}
+    - command:
+      - EVAL
+      - "local r = redis.call('FT.INFO', ARGV[1]) for i=1,#r do if r[i]==ARGV[2] then\
+        \ return 1 end end return 0"
+      - "0"
+      - idxv
+      - total_term_occurrences
+      expect_difference: true
+      expect: {equals: 1}
+    - command:
+      - EVAL
+      - "local r = redis.call('FT.INFO', ARGV[1]) for i=1,#r do if r[i]==ARGV[2] then\
+        \ return r[i+1] end end return -1"
+      - "0"
+      - idxv
+      - num_terms
+      expect_difference: true
+      expect: {equals: 0}
+    - command:
+      - EVAL
+      - "local s = redis.call('INFO', 'everything') if string.find(s, ARGV[1], 1,\
+        \ true) then return 1 end return 0"
+      - "0"
+      - search_string_interning_memory_bytes
+      expect_difference: true
+      expect: {equals: 0}
+    - command:
+      - EVAL
+      - "local s = redis.call('INFO', 'everything') if string.find(s, ARGV[1], 1,\
+        \ true) then return 1 end return 0"
+      - "0"
+      - search_string_interning_memory_human
+      expect_difference: true
+      expect: {equals: 0}
+    - command:
+      - EVAL
+      - "local s = redis.call('INFO', 'everything') if string.find(s, ARGV[1], 1,\
+        \ true) then return 1 end return 0"
+      - "0"
+      - search_info_fanout_retry_count
+      expect_difference: true
+      expect: {equals: 0}
+    - command:
+      - EVAL
+      - "local s = redis.call('INFO', 'everything') if string.find(s, ARGV[1], 1,\
+        \ true) then return 1 end return 0"
+      - "0"
+      - search_info_fanout_fail_count
+      expect_difference: true
+      expect: {equals: 0}
+    - command:
+      - EVAL
+      - "local s = redis.call('INFO', 'everything') if string.find(s, ARGV[1], 1,\
+        \ true) then return 1 end return 0"
+      - "0"
+      - search_pause_handle_cluster_message_round_count
+      expect_difference: true
+      expect: {equals: 0}
+    - command:
+      - EVAL
+      - "local s = redis.call('INFO', 'everything') if string.find(s, ARGV[1], 1,\
+        \ true) then return 1 end return 0"
+      - "0"
+      - search_string_interning_store_size
+      expect: {equals: 1}
+    - command: [CONFIG, SET, search.info-developer-visible, "yes"]
+      expect: {equals: OK}
+    - command:
+      - EVAL
+      - "local s = redis.call('INFO', 'everything') if string.find(s, ARGV[1], 1,\
+        \ true) then return 1 end return 0"
+      - "0"
+      - search_string_interning_memory_bytes
+      expect: {equals: 1}
+    - command:
+      - EVAL
+      - "local s = redis.call('INFO', 'everything') if string.find(s, ARGV[1], 1,\
+        \ true) then return 1 end return 0"
+      - "0"
+      - search_info_fanout_retry_count
+      expect: {equals: 1}
+    - command:
+      - EVAL
+      - "local s = redis.call('INFO', 'everything') if string.find(s, ARGV[1], 1,\
+        \ true) then return 1 end return 0"
+      - "0"
+      - search_pause_handle_cluster_message_round_count
+      expect: {equals: 1}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [metrics.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: metrics}

@@ -1,0 +1,180 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "be0f584a547399af164937275cef66882e703800",
+  "parent": "aa4832d46b7bc724eea88a289e2b9efd80da315e",
+  "pr": 728,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Sanitize module logging  (#728)",
+  "date": "2026-02-18",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 6,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 8.5662,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-9ba3ed34bd4f",
+      "seed": 7281,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #728, since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-10851fc9aa72",
+      "seed": 7282,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #728, since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-4c32b00086fa",
+      "seed": 7283,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #728, since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-21f395b2d132",
+      "seed": 7284,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #728, since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-ea4448931e76",
+      "seed": 7285,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #728, since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-8a174aa98eb2",
+      "seed": 7286,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #728, since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-9ba3ed34bd4f",
+      "build": "unstable",
+      "seed": 7281,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-9ba3ed34bd4f",
+      "build": "unstable",
+      "seed": 7282,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-9ba3ed34bd4f",
+      "build": "unstable",
+      "seed": 7283,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-10851fc9aa72",
+      "build": "unstable",
+      "seed": 7282,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-10851fc9aa72",
+      "build": "unstable",
+      "seed": 7283,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-10851fc9aa72",
+      "build": "unstable",
+      "seed": 7284,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-21f395b2d132",
+      "build": "unstable",
+      "seed": 7284,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-21f395b2d132",
+      "build": "unstable",
+      "seed": 7285,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-21f395b2d132",
+      "build": "unstable",
+      "seed": 7286,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8a174aa98eb2",
+      "build": "unstable",
+      "seed": 7286,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8a174aa98eb2",
+      "build": "unstable",
+      "seed": 7287,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8a174aa98eb2",
+      "build": "unstable",
+      "seed": 7288,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

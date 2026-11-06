@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ff60845fc72721fc089e99348134fc85f8ade2bc",
+  "parent": "2e0ed17af34db906c9fbd1ff0aa9de574b628f8b",
+  "pr": 774,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Quick fix for unwanted concurrency on index_key_info_ (#774)",
+  "date": "2026-02-17",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.2598,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

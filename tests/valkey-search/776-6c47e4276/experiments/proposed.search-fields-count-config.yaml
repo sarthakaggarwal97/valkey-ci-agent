@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.search-fields-count-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: search.max-search-result-fields-count is registered under its own name
+    and caps FT.SEARCH result content fields; on the parent the misnamed duplicate
+    registration left the config unknown and the cap untunable
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: search-config
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, GET, search.max-search-result-fields-count], expect_difference: true,
+      expect: {contains: "500"}}
+    - {command: [CONFIG, GET, search.max-search-result-record-size], expect: {contains: "5242880"}}
+    - {command: [CONFIG, SET, search.max-search-result-fields-count, "1"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.max-search-result-fields-count], expect_difference: true,
+      expect: {contains: "1"}}
+    - {command: [HSET, "doc:1", category, red, a, "1", b, "2"], expect: {equals: 3}}
+    - {command: [HSET, "doc:2", category, red, a, "3", b, "4"], expect: {equals: 3}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, category,
+        TAG, a, NUMERIC, b, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, "@category:{red}", NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx, "@category:{red}", RETURN, "2", a, b], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [CONFIG, SET, search.max-search-result-fields-count, "2"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@category:{red}", SORTBY, a, RETURN, "2", a, b],
+      expect: {contains: "doc:2"}}
+    - {command: [CONFIG, SET, search.max-search-result-fields-count, "1001"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.max-search-result-fields-count, "1000"], expect_difference: true,
+      expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [search-config.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search-config}

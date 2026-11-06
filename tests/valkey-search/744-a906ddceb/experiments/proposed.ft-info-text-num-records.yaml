@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.ft-info-text-num-records
+deployment:
+  modes: [standalone]
+metadata:
+  description: Text attribute key tracking (new tracked_keys_) now feeds FT.INFO num_records,
+    and a failed text modify shifts the failure from the add counter to the modify
+    counter; compared across the change and its parent on one Valkey build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: ftinfo
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [HSET, "doc:1", title, "hello world", body, "greetings earth"], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:2", title, "valkey rocks"], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", title, ""], expect: {equals: 1}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, title, TEXT,
+        body, TEXT], expect: {equals: OK}}
+    - {command: [FT.INFO, idx, PRIMARY], expect: {error: "not valid in this configuration"}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, expect_difference: true}
+    - {command: [FT.SEARCH, idx, "@title:hello", NOCONTENT], compare: unordered, wait_s: 15,
+      expect: {contains: "doc:1"}}
+    - {command: [HSET, "doc:2", title, "updated terms"], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@title:updated", NOCONTENT], compare: unordered,
+      wait_s: 15, expect: {contains: "doc:2"}}
+    - {command: [FT.SEARCH, idx, "@title:valkey", NOCONTENT], compare: unordered,
+      wait_s: 15, expect: {equals: [0]}}
+    - {command: [HSET, "doc:1", title, !!binary "/w=="], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@title:hello", NOCONTENT], compare: unordered, wait_s: 15,
+      expect: {equals: [0]}}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {contains: hash_indexing_failures}}
+    - {command: [DEL, "doc:2"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@title:updated", NOCONTENT], compare: unordered,
+      wait_s: 15, expect: {equals: [0]}}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {contains: num_records}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ftinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftinfo}

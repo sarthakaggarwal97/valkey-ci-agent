@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "aa4832d46b7bc724eea88a289e2b9efd80da315e",
+  "parent": "8b04556b7189189d947788025df86858473492da",
+  "pr": 747,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add THIRD_PARTY_LICENSES file (#747)",
+  "date": "2026-02-17",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2518,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds a THIRD_PARTY_NOTICES license file and nothing else: no source, build, or configuration file is modified, so no runtime behaviour of the valkey-search module can change. There is no path for a scenario to reach."
+}

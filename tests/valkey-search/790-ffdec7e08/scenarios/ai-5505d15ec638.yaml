@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search a876eed5fa35..ffdec7e08cab.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5505d15ec638
+seed: 101
+experiment:
+  id: proposed.search-text-minversion-rdb-roundtrip
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

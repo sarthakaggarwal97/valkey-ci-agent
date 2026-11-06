@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "7328c42cd0cc205f861863bb9259c6e77945ac88",
+  "parent": "fa3ae057cfe1fe1837a2e23885ebfa142d4ac621",
+  "pr": 753,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add unit test 'pagination_offset_exceeds_remaining' (#753)",
+  "date": "2026-02-13",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2338,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds only a new parameterized unit test case ('pagination_offset_exceeds_remaining') to testing/ft_search_test.cc, asserting the already-existing LIMIT offset/count reply behaviour of FT.SEARCH's SendReply path. No production source is touched: no command handling, reply encoding, indexing, replication or persistence code changes between the parent and the change, so both module builds behave identically at runtime and there is no changed path for a scenario to reach."
+}

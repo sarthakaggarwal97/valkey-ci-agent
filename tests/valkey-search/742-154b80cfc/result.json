@@ -1,0 +1,71 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "154b80cfc448cbbda2a31c1757f00e9168f0db93",
+  "parent": "6c47e4276d4520b02296cd59378e42f9813fb10b",
+  "pr": 742,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Restructure Content Fetching to match key blocking semantics (#742)",
+  "date": "2026-02-17",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.2692,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-25254ae48348",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'search' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (FT.SEARCH idx * NOCONTENT)"
+    },
+    {
+      "scenario": "ai-25254ae48348",
+      "build": "unstable",
+      "seed": 1,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-25254ae48348",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-25254ae48348",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e0c17a963a29",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'search' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (FT.SEARCH idx * NOCONTENT)"
+    },
+    {
+      "scenario": "ai-e0c17a963a29",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e0c17a963a29",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e0c17a963a29",
+      "build": "unstable",
+      "seed": 4,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

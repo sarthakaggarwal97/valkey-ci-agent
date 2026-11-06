@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.search-text-fetcher-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: Composed multi-term FT.SEARCH text queries leak an EntriesFetcher per
+    term on the parent build (search.cc BuildTextIterator kText leaf)
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: text
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, content, TEXT,
+        NOSTEM], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", content, "common alpha beta gamma delta"], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:2", content, "common alpha beta zeta eta"], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:3", content, "common gamma delta theta iota"], expect: {
+        equals: 1}}
+    - {command: [FT.SEARCH, idx, "@content:common", NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: 3}}
+    - {command: [FT.SEARCH, idx, "alpha beta", NOCONTENT], compare: unordered, expect: {
+        contains: 2}}
+    - {command: [FT.SEARCH, idx, "gamma delta", NOCONTENT], compare: unordered, expect: {
+        contains: 2}}
+    - {command: [FT.SEARCH, idx, "common alpha beta", NOCONTENT], compare: unordered,
+      expect: {contains: 2}}
+    - {command: [FT.SEARCH, idx, "common gamma delta", NOCONTENT], compare: unordered,
+      expect: {contains: 2}}
+    - {command: [FT.SEARCH, idx, "alpha beta gamma delta", NOCONTENT], compare: unordered,
+      expect: {contains: 1}}
+    - {command: [FT.SEARCH, idx, "@content:\"alpha beta\"", NOCONTENT], compare: unordered,
+      expect: {contains: 2}}
+    - {command: [FT.SEARCH, idx, "@content:\"gamma delta\"", NOCONTENT], compare: unordered,
+      expect: {contains: 2}}
+    - {command: [FT.SEARCH, idx, "@content:\"common alpha beta\"", NOCONTENT], compare: unordered,
+      expect: {contains: 2}}
+    - {command: [FT.SEARCH, idx, "common alph* bet*", NOCONTENT], compare: unordered,
+      expect: {contains: 2}}
+    - {command: [FT.SEARCH, idx, "common gamm* delt*", NOCONTENT], compare: unordered,
+      expect: {contains: 2}}
+    - {command: [FT.SEARCH, idx, "@content:\"common alpha beta\"", NOCONTENT], compare: unordered,
+      expect: {contains: 2}}
+    - {command: [FT.SEARCH, idx, "alpha beta gamma delta", NOCONTENT], compare: unordered,
+      expect: {contains: 1}}
+    - {command: [FT.SEARCH, idx, "common gamma delta theta iota", NOCONTENT], compare: unordered,
+      expect: {contains: 1}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [text.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: text}

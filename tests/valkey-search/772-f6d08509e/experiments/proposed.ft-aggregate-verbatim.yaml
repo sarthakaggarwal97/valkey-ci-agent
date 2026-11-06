@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-verbatim
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE accepts VERBATIM (exact-term, no stemming) on the change;
+    the parent rejects it as an unexpected argument
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, title, TEXT,
+        year, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", title, "running fast", year, "2001"], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", title, "he runs", year, "2002"], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", title, "a long run", year, "2003"], expect: {equals: 2}}
+    - {command: [HSET, "doc:4", title, "unrelated words", year, "2004"], expect: {
+        equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.AGGREGATE, idx, running, LOAD, 1, title, SORTBY, 2, "@title",
+        ASC], wait_s: 30, expect: {equals: [3, [title, "a long run"], [title, "he\
+              \ runs"], [title, "running fast"]]}}
+    - {command: [FT.AGGREGATE, idx, run, LOAD, 1, title, SORTBY, 2, "@title", ASC],
+      wait_s: 30, expect: {equals: [3, [title, "a long run"], [title, "he runs"],
+          [title, "running fast"]]}}
+    - {command: [FT.AGGREGATE, idx, running, GROUPBY, 0, REDUCE, COUNT, 0, AS, c],
+      expect: {equals: [1, [c, "3"]]}}
+    - {command: [FT.AGGREGATE, idx, running, LOAD, 1, title, VERBATIM], expect_difference: true,
+      expect: {equals: [1, [title, "running fast"]]}}
+    - {command: [FT.AGGREGATE, idx, run, VERBATIM, LOAD, 1, title], expect_difference: true,
+      expect: {equals: [1, [title, "a long run"]]}}
+    - {command: [FT.AGGREGATE, idx, running, LOAD, 1, title, verbatim], expect_difference: true,
+      expect: {equals: [1, [title, "running fast"]]}}
+    - {command: [FT.AGGREGATE, idx, running, VERBATIM, VERBATIM, LOAD, 1, title],
+      expect_difference: true, expect: {equals: [1, [title, "running fast"]]}}
+    - {command: [FT.AGGREGATE, idx, running, TIMEOUT, 10000, VERBATIM, LOAD, 1, title],
+      expect_difference: true, expect: {equals: [1, [title, "running fast"]]}}
+    - {command: [FT.AGGREGATE, idx, running, VERBATIM, GROUPBY, 0, REDUCE, COUNT,
+        0, AS, c], expect_difference: true, expect: {equals: [1, [c, "1"]]}}
+    - {command: [FT.AGGREGATE, idx, '"running fast"', VERBATIM, LOAD, 1, title], expect_difference: true,
+      expect: {equals: [1, [title, "running fast"]]}}
+    - {command: [FT.AGGREGATE, idx, "runn*", VERBATIM, LOAD, 1, title], expect_difference: true,
+      expect: {equals: [1, [title, "running fast"]]}}
+    - {command: [FT.AGGREGATE, idx, running, VERBATIM, BOGUS], expect_difference: true,
+      expect: {error: "BOGUS"}}
+    - {command: [FT.AGGREGATE, idx, unrelated, LOAD, 1, VERBATIM]}
+    - {command: [FT.SEARCH, idx, running, VERBATIM, RETURN, 1, title], expect: null}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.ft-trailing-punctuation
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH queries with trailing or non-reserved punctuation after a
+    parsed operation, compared across the module change and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftquery
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx1, ON, HASH, SCHEMA, content, TEXT, NOSTEM, WITHSUFFIXTRIE,
+        content2, TEXT, NOSTEM], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', content, 'I am going to a concert', content2, 'racing
+          car'], expect: {equals: 2}}
+    - {command: [HSET, 'doc:2', content, 'word1 word2 word3'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:12', content, 'I am going to a race', content2, 'Driver
+          drove the car?'], expect: {equals: 2}}
+    - {command: [FT.INFO, idx1], wait_s: 15, compare: skip, expect: {contains: 3}}
+    - {command: [FT.SEARCH, idx1, concert, NOCONTENT], compare: unordered, expect: {
+        contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx1, 'con*+', NOCONTENT], expect_difference: true, compare: unordered,
+      expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx1, 'con*!!!', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx1, '@content:con*+!!', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx1, '*cert+', NOCONTENT], expect_difference: true, compare: unordered,
+      expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx1, 'con*+ (racing)', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx1, 'con*+ @content2:racing=', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx1, 'con*+ | word1!!', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:2'}}
+    - {command: [FT.SEARCH, idx1, 'car?', NOCONTENT], expect_difference: true, compare: unordered,
+      expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx1, 'driv*+', RETURN, 1, content2], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:12'}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ftquery.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftquery}

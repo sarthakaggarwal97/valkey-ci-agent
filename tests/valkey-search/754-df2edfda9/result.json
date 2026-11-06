@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "df2edfda902297a08abf494f2047c1adae2ca648",
+  "parent": "a906ddceb0ff21314192dacb2342e792ea9ea216",
+  "pr": 754,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "app metric review changes (#754)",
+  "date": "2026-02-16",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 10.0053,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-f89c3166f726",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'metrics' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (EVAL local r = redis.call('FT.INFO', ARGV[1]) for i=1,#r do if r[i]=='num_docs' then return r[i+1] end end return -1 0 idx), 7 (EVAL l"
+    },
+    {
+      "scenario": "ai-a5ab77457aed",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'metrics' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (EVAL local r = redis.call('FT.INFO', ARGV[1]) for i=1,#r do if r[i]=='num_docs' then return r[i+1] end end return -1 0 idx), 7 (EVAL l"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

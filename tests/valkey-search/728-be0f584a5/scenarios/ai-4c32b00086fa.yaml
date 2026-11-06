@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search aa4832d46b7b..be0f584a5473.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4c32b00086fa
+seed: 7283
+experiment:
+  id: proposed.search-log-redaction-compare
+  inputs:
+    resp: 2
+    hide: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

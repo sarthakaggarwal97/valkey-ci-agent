@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search aa4832d46b7b..be0f584a5473.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ea4448931e76
+seed: 7285
+experiment:
+  id: proposed.search-rdb-save-load-compare
+  inputs:
+    resp: 2
+    hide: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

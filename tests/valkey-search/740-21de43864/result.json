@@ -1,0 +1,120 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "21de43864d484840966e4c2246ba6c128b31b2f3",
+  "parent": "ff60845fc72721fc089e99348134fc85f8ade2bc",
+  "pr": 740,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "untrack missing fields to properly support negate queries (#740)",
+  "date": "2026-02-17",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 9.2413,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-4f52f2c28a06",
+      "seed": 740001,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-6bb811cd530c",
+      "seed": 740002,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-31a57396009a",
+      "seed": 740003,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-4f52f2c28a06",
+      "build": "unstable",
+      "seed": 740001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-4f52f2c28a06",
+      "build": "unstable",
+      "seed": 740002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-4f52f2c28a06",
+      "build": "unstable",
+      "seed": 740003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6bb811cd530c",
+      "build": "unstable",
+      "seed": 740002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6bb811cd530c",
+      "build": "unstable",
+      "seed": 740003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6bb811cd530c",
+      "build": "unstable",
+      "seed": 740004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-31a57396009a",
+      "build": "unstable",
+      "seed": 740003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-31a57396009a",
+      "build": "unstable",
+      "seed": 740004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-31a57396009a",
+      "build": "unstable",
+      "seed": 740005,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

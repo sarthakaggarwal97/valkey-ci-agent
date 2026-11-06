@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "bf70d73275929820152ce97f5f447febd800bfdc",
+  "parent": "be0f584a547399af164937275cef66882e703800",
+  "pr": 782,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Enhance overview description, correct aggregation (#782)",
+  "date": "2026-02-18",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.7905,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only documentation: markdown files under docs/ and the src/commands/*.json command-specification files. The JSON specs are not compiled, embedded, or loaded by the module (src/commands/CMakeLists.txt lists only .cc/.h sources; no source or build rule references the .json files; commands are registered via vmsdk::CreateCommand without these specs), so the module binary and every command's runtime behavior, replies, parsing, and COMMAND output are identical between the change and its parent. There is no behavior to compare or stress, so no scenario is needed."
+}

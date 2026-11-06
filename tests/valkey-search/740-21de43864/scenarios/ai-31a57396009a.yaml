@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search ff60845fc727..21de43864d48.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-31a57396009a
+seed: 740003
+experiment:
+  id: proposed.ft-negate-untracked-fields
+  inputs:
+    resp: 2
+    hash_max_listpack_entries: 0
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

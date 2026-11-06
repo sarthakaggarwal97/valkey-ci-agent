@@ -1,0 +1,85 @@
+extends: [valkey.liveness]
+id: proposed.search-rdb-v2-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: Save and reload valkey-search indexes through the new default V2 RDB
+    format (key list, mutation queue, MULTI/EXEC queue, backfill flag), compared against
+    the parent whose default is V1
+components:
+- use: valkey.action.commands
+  id: rdbv2
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: 2
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, search.rdb-write-v2], expect_difference: true, expect: {
+        equals: [search.rdb-write-v2, 'yes']}}
+    - {command: [CONFIG, GET, search.rdb-read-v2], expect_difference: true, expect: {
+        equals: [search.rdb-read-v2, 'yes']}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, t, TAG, n, NUMERIC,
+        v, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, empty, ON, HASH, PREFIX, 1, 'none:', SCHEMA, s, TAG],
+      expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', t, 'all,red', n, 1, v, !!binary 'AACAPwAAAAA='], expect: {
+        equals: 3}}
+    - {command: [HSET, 'doc:2', t, 'all,red', n, 2, v, !!binary 'AAAAAAAAgD8='], expect: {
+        equals: 3}}
+    - {command: [HSET, 'doc:3', t, 'all,blue', n, 3, v, !!binary 'AABAQAAAQEA='],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:4', t, 'all,blue', n, 4, v, !!binary 'AAAAQAAAAAA='],
+      expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, '@t:{all}', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          4]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@t:{all}', LIMIT, 0, 0], wait_s: 60, expect: {equals: [
+          4]}}
+    - {command: [FT.SEARCH, idx, '@n:[2 3]', LIMIT, 0, 0], expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @v $vec]', PARAMS, 2, vec, !!binary 'AACAPwAAAAA=',
+        NOCONTENT], expect: {equals: [2, 'doc:1', 'doc:4']}}
+    - {command: [HSET, 'doc:5', t, all, n, 5, v, !!binary 'AAAQQQAAEEE='], expect: {
+        equals: 3}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@t:{all}', LIMIT, 0, 0], wait_s: 60, expect: {equals: [
+          5]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, 'doc:6', t, all, n, 6, v, !!binary 'AACAPwAAgD8='], expect: {
+        equals: QUEUED}}
+    - {command: [HSET, 'doc:7', t, all, n, 7, v, !!binary 'AAAAQAAAgD8='], expect: {
+        equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [3, 3]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@t:{all}', LIMIT, 0, 0], wait_s: 60, expect: {equals: [
+          7]}}
+    - {command: [CONFIG, SET, search.drain-mutation-queue-on-save, 'yes'], expect: {
+        equals: OK}}
+    - {command: [HSET, 'doc:8', t, all, n, 8, v, !!binary 'AABAQAAAAAA='], expect: {
+        equals: 3}}
+    - {command: [HSET, 'pre:1', p, x], expect: {equals: 1}}
+    - {command: [HSET, 'pre:2', p, x], expect: {equals: 1}}
+    - {command: [HSET, 'pre:3', p, x], expect: {equals: 1}}
+    - {command: [HSET, 'pre:4', p, x], expect: {equals: 1}}
+    - {command: [FT.CREATE, idx3, ON, HASH, PREFIX, 1, 'pre:', SCHEMA, p, TAG], expect: {
+        equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@t:{all}', LIMIT, 0, 0], wait_s: 60, expect: {equals: [
+          8]}}
+    - {command: [FT.SEARCH, idx3, '@p:{x}', LIMIT, 0, 0], wait_s: 60, expect: {equals: [
+          4]}}
+    - {command: [FT._LIST], compare: unordered}
+    - {command: [FT.INFO, idx], compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [rdbv2.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rdbv2}

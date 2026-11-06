@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "c7c21976a0e30e9d4e4890fce53018412f34feb3",
+  "parent": "63eeaf926da160c4941d58e3c335a1c3bdc20844",
+  "pr": 794,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "FlatPosiitonMap::ReadCounts Optimization (#794)",
+  "date": "2026-02-20",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6608,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change replaces memcpy-based little-endian count reads in FlatPositionMap::ReadCounts with an equivalent byte-wise ReadVarUint loop and deduplicates that helper out of PositionIterator into an anonymous namespace. On the little-endian platform the fuzzer runs on, the new decode computes bit-identical values from the same bytes (memcpy into a zero-initialized uint32_t of the low N bytes equals the shift-or loop), reads the same number of bytes, and the writer (WriteCounts) is unchanged; the structure is in-memory only, never serialized to RDB or the wire, so no cross-platform decode path ex"
+}
