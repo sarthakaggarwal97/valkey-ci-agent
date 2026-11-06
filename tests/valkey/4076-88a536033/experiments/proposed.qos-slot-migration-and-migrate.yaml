@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.qos-slot-migration-and-migrate
+deployment:
+  modes: [standalone]
+metadata:
+  description: MIGRATE and CLUSTER MIGRATESLOTS run over the new high-priority connections
+    on a two-node cluster, with an event-loop resize while priority connections are
+    registered; replies and migrated data compared across builds
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    server_config: {maxclients: 1024}
+    timeout_s: 90
+    commands:
+    - {command: [CONFIG, SET, priority-preemptive-poll-interval-us, "500"], node: 0,
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxclients, "4096"], node: 0, expect: {equals: OK}}
+    - {command: [SET, foo, bar], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{foo}x", v2], node: 0, expect: {equals: OK}}
+    - {command: [SET, bar, v3], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "5061", IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "5061", MIGRATING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [MIGRATE, "<node.1.host>", "<node.1.port>", bar, "0", "5000"], node: 0,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "5061", NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "5061", NODE, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [GET, bar], node: 1, expect: {equals: v3}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, "8192", "16383", NODE, "<node.1.id>"],
+      node: 0, expect: {equals: OK}}
+    - {command: [GET, foo], node: 1, wait_s: 60, expect: {equals: bar}}
+    - {command: [GET, "{foo}x"], node: 1, expect: {equals: v2}}
+    - {command: [CONFIG, SET, maxclients, "8192"], node: 0, expect: {equals: OK}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [migrate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

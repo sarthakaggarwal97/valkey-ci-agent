@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "11a74cf243f006d1a22cc832ea2251c24e0a855f",
+  "parent": "7bf7daa53046cd3853574786c896da70c8b23296",
+  "pr": 4531,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix deadlock when a blocking command is followed by a partial pipelined command (#4531)",
+  "date": "2026-08-28",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 3,
+  "recall": false,
+  "coverage": {
+    "lines": 6,
+    "executed": 4,
+    "percent": 66,
+    "uncovered": [
+      "src/networking.c:4279",
+      "src/networking.c:4289"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 7.4947,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-b528739bfd73",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-3dcd84134bd9",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    }
+  ]
+}

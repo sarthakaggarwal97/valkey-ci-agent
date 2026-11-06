@@ -1,0 +1,55 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a1471664f1ea9be8d89c7078dbb065604180ffd7",
+  "parent": "9ab664158a2da52bd2624676ea3f68124eba36e1",
+  "pr": 3708,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add server-side hot key detection (#3708)",
+  "date": "2026-09-01",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 3,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 323,
+    "executed": 303,
+    "percent": 93,
+    "uncovered": [
+      "src/cluster.c:1226",
+      "src/cluster_legacy.c:7889",
+      "src/object.c:1719",
+      "src/space_saving.c:155",
+      "src/space_saving.c:156",
+      "src/space_saving.c:157",
+      "src/space_saving.c:158",
+      "src/space_saving.c:159",
+      "src/space_saving.c:160",
+      "src/space_saving.c:161",
+      "src/space_saving.c:162",
+      "src/space_saving.c:165",
+      "src/space_saving.c:166",
+      "src/space_saving.c:170",
+      "src/space_saving.c:171",
+      "src/space_saving.c:172",
+      "src/space_saving.c:173",
+      "src/space_saving.c:174",
+      "src/space_saving.c:196",
+      "src/space_saving.c:197"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 5.3812,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-15fdc20f3335",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'purge' returned ERROR: expectations both builds violate alike, so they are not about the change: 22 (EXEC)"
+    }
+  ]
+}

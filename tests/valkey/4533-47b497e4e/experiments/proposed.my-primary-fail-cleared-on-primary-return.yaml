@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.my-primary-fail-cleared-on-primary-return
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: >
+    Freeze a primary past the FAIL quorum while every replica has cluster-replica-no-failover
+    set, so its replica sets MY_PRIMARY_FAIL but nobody takes over the slots. When
+    the primary resumes, still a voting primary serving its slots, the FAIL-undo-after-timeout
+    branch of clearNodeFailureIfNeeded must clear the replica's stale flag.
+inputs:
+  properties:
+    warm_up_s: {type: number, default: 2}
+    pause_s: {type: number, default: 12}
+    settle_s: {type: number, default: 30}
+components:
+- use: valkey.fault.process-signal
+  id: freeze-primary
+  config:
+    when_event: warm-up.completed
+    instance: valkey-0
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.pause_s}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [freeze-primary]
+  config: {seconds: {$ref: inputs.warm_up_s}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: {$ref: inputs.settle_s}}
+- use: valkey.oracle.deployment-state
+  id: deployment-state
+  config:
+    validation: {stabilization_wait: 3, validation_timeout: 120}
+required_events: [settle.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: freeze-primary}
+- {evidence_id: valkey.deployment.validated, source: deployment-state}

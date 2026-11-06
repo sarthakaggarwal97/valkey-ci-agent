@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 351eb0c36102..acba5ddd0691.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-86b887225bec
+seed: 11005
+experiment:
+  id: valkey.forkless-save-crash
+  inputs:
+    stable_keys: 4000
+    key_save_delay_us: 800
+    kill_delay_s: 0.1
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7400

@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.blocking-then-partial-pipeline
+deployment:
+  modes: [standalone]
+metadata:
+  description: A partial pipelined command after a blocking command completes on unblock
+    instead of deadlocking
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: blkpartial
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {connection: blk, raw: "*3\r\n$5\r\nBLPOP\r\n$6\r\nmylist\r\n$1\r\n0\r\n"}
+    - {command: [PING], expect: {equals: PONG}}
+    - {connection: blk, raw: "*3\r\n$3\r\nSET\r\n$3\r\n"}
+    - {command: [PING], expect: {equals: PONG}}
+    - {connection: blk, raw: "key\r\n$5\r\nvalue\r\n"}
+    - {command: [RPUSH, mylist, item], expect: {equals: 1}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [GET, key], expect_difference: true, expect: {equals: value}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: blkpartial}

@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9ab664158a2d..a1471664f1ea.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-15fdc20f3335
+seed: 9003
+experiment:
+  id: proposed.hotkeys-cluster-purge
+deployment:
+  mode: standalone
+  base_port: 7200

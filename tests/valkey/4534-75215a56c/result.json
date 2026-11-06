@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "75215a56cb9fbf1b8aeb20a596204b0cda7929af",
+  "parent": "11a74cf243f006d1a22cc832ea2251c24e0a855f",
+  "pr": 4534,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix RDMA UAF: connection freed inside callHandler (#4534)",
+  "date": "2026-08-31",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6164,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to src/rdma.c (a use-after-free fix in the RDMA connection type: callHandler return-value check in connRdmaEventHandler, unlinking from pending_list in connRdmaClose, and iterator-safe traversal in rdmaProcessPendingData). This code only runs when Valkey is built with BUILD_RDMA, listens on an RDMA port, and a client connects over RDMA transport, which requires RDMA hardware or a root-configured soft-RoCE device. The fuzzer has no RDMA support: no installed component, experiment, fault, or workload opens RDMA connections (all use TCP/unix sockets), so no scenario or prop"
+}

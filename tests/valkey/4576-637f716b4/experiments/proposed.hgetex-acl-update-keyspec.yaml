@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.hgetex-acl-update-keyspec
+deployment:
+  modes: [standalone]
+metadata:
+  description: HGETEX gained the UPDATE key-spec flag, so a read-only (%R~) ACL grant
+    must no longer allow it to mutate field TTLs or delete fields via a past EXAT
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hgetex-acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [ACL, SETUSER, ro, on, nopass, "%R~h*", "+@all"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, rw, on, nopass, "%RW~h*", "+@all"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, wo, on, nopass, "%W~h*", "+@all"], expect: {equals: OK}}
+    - {command: [COMMAND, GETKEYSANDFLAGS, HGETEX, h, FIELDS, 1, f1], expect_difference: true,
+      expect: {contains: update}}
+    - {command: [ACL, DRYRUN, ro, HGETEX, h, FIELDS, 1, f1], expect_difference: true,
+      expect: {contains: "no permissions"}}
+    - {connection: u, command: [AUTH, ro, x], expect: {equals: OK}}
+    - {connection: u, command: [HGETEX, h, FIELDS, 1, f1], expect_difference: true,
+      expect: {error: "NOPERM"}}
+    - {connection: u, command: [HGETEX, h, EX, 100, FIELDS, 1, f1], expect_difference: true,
+      expect: {error: "NOPERM"}}
+    - {connection: u, command: [HGETEX, h, EXAT, 1, FIELDS, 1, f1], expect_difference: true,
+      expect: {error: "NOPERM"}}
+    - {connection: u, command: [HGETEX, h, PERSIST, FIELDS, 1, f1], expect_difference: true,
+      expect: {error: "NOPERM"}}
+    - {command: [HGET, h, f1], expect_difference: true, expect: {equals: v1}}
+    - {command: [HTTL, h, FIELDS, 1, f1], expect_difference: true, expect: {equals: [
+          -1]}}
+    - {command: [HLEN, h], expect_difference: true, expect: {equals: 2}}
+    - {connection: u, command: [AUTH, wo, x], expect: {equals: OK}}
+    - {connection: u, command: [HGETEX, h, EX, 100, FIELDS, 1, f1], expect: {error: "NOPERM"}}
+    - {connection: u, command: [AUTH, rw, x], expect: {equals: OK}}
+    - {connection: u, command: [HGETEX, h, EX, 1000, FIELDS, 1, f1], expect_difference: true,
+      expect: {equals: [v1]}}
+    - {command: [HGET, h, f2], expect: {equals: v2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [hgetex-acl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hgetex-acl}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 98f91521245b..ed9dc9fa82c6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3bd913cf1ad1
+seed: 980102
+experiment:
+  id: proposed.dual-channel-repl-input-bytes
+  inputs:
+    resp: 3
+    diskless_load: on-empty-db
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

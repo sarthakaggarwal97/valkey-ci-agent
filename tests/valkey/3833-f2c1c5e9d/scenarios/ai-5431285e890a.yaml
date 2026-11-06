@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f1addd8f393b..f2c1c5e9dece.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5431285e890a
+seed: 1
+experiment:
+  id: proposed.debug-failover-overrides
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  base_port: 7000

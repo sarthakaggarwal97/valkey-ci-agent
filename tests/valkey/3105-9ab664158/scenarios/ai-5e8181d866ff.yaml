@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 47b497e4e39a..9ab664158a2d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5e8181d866ff
+seed: 31052
+experiment:
+  id: proposed.set-ifne-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

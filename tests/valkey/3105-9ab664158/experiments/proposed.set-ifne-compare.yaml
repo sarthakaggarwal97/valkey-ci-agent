@@ -1,0 +1,96 @@
+extends: [valkey.liveness]
+id: proposed.set-ifne-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: SET IFNE sets only when the current value differs; GET, expiration,
+    wrong-type and conditional-exclusivity paths compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ifne
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, foo, initial], expect: {equals: OK}}
+    - {command: [SET, foo, v2, IFNE, wrong], expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, foo], expect_difference: true, expect: {equals: v2}}
+    - {command: [SET, foo, v3, IFNE, v2], expect_difference: true, expect: {equals: null}}
+    - {command: [GET, foo], expect_difference: true, expect: {equals: v2}}
+    - {command: [SET, foo, v4, ifne, zzz], expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, foo], expect_difference: true, expect: {equals: v4}}
+    - {command: [SET, miss, mv, IFNE, anything], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [GET, miss], expect_difference: true, expect: {equals: mv}}
+    - {command: [SET, gk, old], expect: {equals: OK}}
+    - {command: [SET, gk, new, IFNE, old, GET], expect_difference: true, expect: {
+        equals: old}}
+    - {command: [GET, gk], expect: {equals: old}}
+    - {command: [SET, gk, new, IFNE, wrong, GET], expect_difference: true, expect: {
+        equals: old}}
+    - {command: [GET, gk], expect_difference: true, expect: {equals: new}}
+    - {command: [SET, gm, val, GET, IFNE, x], expect_difference: true, expect: {equals: null}}
+    - {command: [GET, gm], expect_difference: true, expect: {equals: val}}
+    - {command: [SADD, s1, member], expect: {equals: 1}}
+    - {command: [SET, s1, v, IFNE, x], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [SET, s1, v, IFNE, x, GET], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [TYPE, s1], expect: {equals: set}}
+    - {command: [SET, ek, a], expect: {equals: OK}}
+    - {command: [SET, ek, b, IFNE, a, EX, 100], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [TTL, ek], compare: skip, expect: {min: 95, max: 100}}
+    - {command: [SET, ek, c, IFNE, zzz, KEEPTTL], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [TTL, ek], compare: skip, expect: {min: 90, max: 100}}
+    - {command: [GET, ek], expect_difference: true, expect: {equals: c}}
+    - {command: [SET, pk, x], expect: {equals: OK}}
+    - {command: [SET, pk, y, IFNE, zzz, PXAT, 1], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [EXISTS, pk], expect_difference: true, expect: {equals: 0}}
+    - {command: [SET, c1, v, NX, IFNE, x], expect: {error: "syntax error"}}
+    - {command: [SET, c1, v, IFNE, x, NX], expect: {error: "syntax error"}}
+    - {command: [SET, c1, v, XX, IFNE, x], expect: {error: "syntax error"}}
+    - {command: [SET, c1, v, IFNE, x, XX], expect: {error: "syntax error"}}
+    - {command: [SET, c1, v, IFEQ, a, IFNE, b], expect: {error: "syntax error"}}
+    - {command: [SET, c1, v, IFNE, a, IFEQ, b], expect: {error: "syntax error"}}
+    - {command: [SET, c1, v, IFNE, a, IFNE, b], expect: {error: "syntax error"}}
+    - {command: [SET, c1, v, IFNE], expect: {error: "syntax error"}}
+    - {command: [SET, r1, v, NX, NX], expect: {equals: OK}}
+    - {command: [SET, r1, v2, XX, XX], expect: {equals: OK}}
+    - {command: [SET, r1, v3, NX, XX], expect: {error: "syntax error"}}
+    - {command: [SET, q1, a], expect: {equals: OK}}
+    - {command: [SET, q1, b, IFEQ, a], expect: {equals: OK}}
+    - {command: [GET, q1], expect: {equals: b}}
+    - {command: [SET, q1, c, IFEQ, zzz], expect: {equals: null}}
+    - {command: [SET, q1, c, IFEQ, b, NX], expect: {error: "syntax error"}}
+    - {command: [SET, e1, ""], expect: {equals: OK}}
+    - {command: [SET, e1, x, IFNE, ""], expect_difference: true, expect: {equals: null}}
+    - {command: [SET, e1, "", IFNE, nonempty], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [GET, e1], expect: {equals: ""}}
+    - {command: [SET, n1, 12345], expect: {equals: OK}}
+    - {command: [SET, n1, 99, IFNE, 12345], expect_difference: true, expect: {equals: null}}
+    - {command: [GET, n1], expect: {equals: "12345"}}
+    - {command: [SET, n1, 500, IFNE, "0500"], expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, n1], expect_difference: true, expect: {equals: "500"}}
+    - {command: [SET, n2, 9223372036854775807], expect: {equals: OK}}
+    - {command: [SET, n2, x, IFNE, 9223372036854775807], expect_difference: true,
+      expect: {equals: null}}
+    - {command: [SET, b1, !!binary "AAEC"], expect: {equals: OK}}
+    - {command: [SET, b1, z, IFNE, !!binary "AAEC"], expect_difference: true, expect: {
+        equals: null}}
+    - {command: [SET, IFNE, v, IFNE, v], expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, IFNE], expect_difference: true, expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ifne.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ifne}

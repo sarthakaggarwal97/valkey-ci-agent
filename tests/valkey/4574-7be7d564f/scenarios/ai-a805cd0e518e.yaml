@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 597114d0b1f6..7be7d564ff0b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a805cd0e518e
+seed: 3
+experiment:
+  id: proposed.ldb-flush-stale-lua
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

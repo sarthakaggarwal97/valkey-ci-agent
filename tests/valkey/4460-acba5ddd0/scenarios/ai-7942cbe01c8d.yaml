@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 351eb0c36102..acba5ddd0691.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7942cbe01c8d
+seed: 11009
+experiment:
+  id: valkey.snapshot-equivalence
+  inputs:
+    operations: 3000
+    stable_keys: 1000
+    mutation_rate: 2000
+deployment:
+  mode: standalone
+  base_port: 7800
+  server_config:
+    forkless-infrastructure-enabled: 'yes'
+    bgsave-default-method: forkless

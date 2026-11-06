@@ -1,0 +1,58 @@
+extends: [valkey.base]
+id: proposed.repl-throttle-disable
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Disable repl-throttling-enabled while clients are throttled behind
+    a SIGSTOPped replica; the throttler must deregister, drain its queue, and release
+    the clients cleanly
+inputs:
+  properties:
+    pause_s: {type: number, minimum: 1, maximum: 60, default: 7}
+startup_overlays:
+- overlay_id: throttle-on
+  server_config:
+    repl-throttling-enabled: "yes"
+    client-output-buffer-limit: "replica 0 256kb 120"
+components:
+- use: valkey.fault.process-signal
+  id: stall-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.pause_s}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, stall-replica]
+  config: {seconds: 2}
+- use: valkey.action.poll
+  id: wait-activated
+  depends_on: [warm-up]
+  config:
+    instances: primaries
+    section: throttling
+    field: repl_throttle_activation_events
+    predicate: {min: 1}
+    timeout_s: 20
+- use: valkey.action.sleep
+  id: hold
+  depends_on: [wait-activated]
+  config: {seconds: 1}
+- use: valkey.action.commands
+  id: disable-throttle
+  depends_on: [hold]
+  config:
+    instances: primaries
+    commands:
+    - {command: [CONFIG, SET, repl-throttling-enabled, "no"], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [disable-throttle]
+  config: {seconds: 6}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: stall-replica}
+- {evidence_id: valkey.poll.satisfied, source: wait-activated}
+- {evidence_id: valkey.command.sequence, source: disable-throttle}

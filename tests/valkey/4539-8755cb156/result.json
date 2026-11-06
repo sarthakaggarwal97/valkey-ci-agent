@@ -1,0 +1,58 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8755cb156f05a51b7fe832956eece025b017d990",
+  "parent": "637f716b4b523e22e1f24e2aa6065c3f112305fc",
+  "pr": 4539,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove the static compression buffer, over-allocate instead (#4539)",
+  "date": "2026-08-31",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 4,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 7.1853,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-8dc95dbd3024",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during capability.probe: RunnerError: capability 'build' returned ERROR: default deployment config: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 16 >>> 'forkless-infrastructure-enabled \"yes\""
+    },
+    {
+      "scenario": "ai-007058cd3755",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during capability.probe: RunnerError: capability 'build' returned ERROR: default deployment config: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 16 >>> 'forkless-infrastructure-enabled \"yes\""
+    },
+    {
+      "scenario": "ai-893f6bbbc305",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported"
+    },
+    {
+      "scenario": "ai-e0dab1b78439",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'lzf' returned ERROR: expectations both builds violate alike, so they are not about the change: 15 (GETRANGE bound-min 8190 8194)"
+    },
+    {
+      "scenario": "ai-cee7835b1555",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during capability.probe: RunnerError: capability 'build' returned ERROR: default deployment config: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 16 >>> 'forkless-infrastructure-enabled \"yes\""
+    }
+  ]
+}

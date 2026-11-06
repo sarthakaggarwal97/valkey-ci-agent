@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.debug-failover-overrides
+deployment:
+  modes: [standalone]
+metadata:
+  description: The change adds DEBUG CLUSTER-FAILOVER-DELAY and DEBUG CLUSTER-FAILOVER-EPOCH;
+    the parent answers an unknown-subcommand error, the change accepts valid values
+    and validates arguments
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.commands
+  id: debug-overrides
+  config:
+    compare_with: {$ref: inputs.parent}
+    server_config: {enable-debug-command: "yes"}
+    timeout_s: 15
+    commands:
+    - {command: [DEBUG, CLUSTER-FAILOVER-DELAY, 100], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [DEBUG, CLUSTER-FAILOVER-DELAY, 0], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [DEBUG, CLUSTER-FAILOVER-DELAY, -1], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [DEBUG, CLUSTER-FAILOVER-DELAY, -2], expect_difference: true, expect: {
+        error: "delay-ms must be -1"}}
+    - {command: [DEBUG, CLUSTER-FAILOVER-DELAY, 2147483648], expect_difference: true,
+      expect: {error: "not an integer or out of range"}}
+    - {command: [DEBUG, CLUSTER-FAILOVER-EPOCH, 5], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [DEBUG, CLUSTER-FAILOVER-EPOCH, 9223372036854775807], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DEBUG, CLUSTER-FAILOVER-EPOCH, -1], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [DEBUG, CLUSTER-FAILOVER-EPOCH, -2], expect_difference: true, expect: {
+        error: "epoch must be -1"}}
+    - {command: [DEBUG, CLUSTER-FAILOVER-EPOCH, notanumber], expect_difference: true,
+      expect: {error: "not an integer or out of range"}}
+    - {command: [DEBUG, CLUSTER-FAILOVER-DELAY], expect: {error: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [debug-overrides.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: debug-overrides}

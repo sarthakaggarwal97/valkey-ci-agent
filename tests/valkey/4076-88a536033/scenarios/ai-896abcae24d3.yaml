@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 089321adf5a7..88a536033c88.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-896abcae24d3
+seed: 11
+experiment:
+  id: proposed.qos-slot-migration-and-migrate
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

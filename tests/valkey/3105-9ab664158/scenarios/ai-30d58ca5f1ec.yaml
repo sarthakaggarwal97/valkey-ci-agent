@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 47b497e4e39a..9ab664158a2d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-30d58ca5f1ec
+seed: 31053
+experiment:
+  id: proposed.set-ifne-replication
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 351eb0c36102..acba5ddd0691.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ecfa9baff3f9
+seed: 11010
+experiment:
+  id: proposed.bgsave-forkless-options
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7900

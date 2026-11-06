@@ -1,0 +1,144 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "acba5ddd06912cd83edd4e9c6c341fe275365c32",
+  "parent": "351eb0c361023128bc8514dc5dc1be354f6f8a41",
+  "pr": 4460,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Forkless Save (#4460)",
+  "date": "2026-09-03",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 16,
+  "proven": 2,
+  "hunted": 10,
+  "dropped": 6,
+  "recall": true,
+  "coverage": {
+    "lines": 1855,
+    "executed": 1166,
+    "percent": 62,
+    "uncovered": [
+      "src/aof.c:968",
+      "src/aof.c:2601",
+      "src/aof.c:2671",
+      "src/bgiteration.c:49",
+      "src/bgiteration.c:51",
+      "src/bgiteration.c:52",
+      "src/bgiteration.c:53",
+      "src/bgiteration.c:54",
+      "src/bgiteration.c:59",
+      "src/bgiteration.c:60",
+      "src/bgiteration.c:62",
+      "src/bgiteration.c:64",
+      "src/bgiteration.c:65",
+      "src/bgiteration.c:66",
+      "src/bgiteration.c:67",
+      "src/bgiteration.c:72",
+      "src/bgiteration.c:73",
+      "src/bgiteration.c:75",
+      "src/bgiteration.c:77",
+      "src/bgiteration.c:80",
+      "src/bgiteration.c:86",
+      "src/bgiteration.c:90",
+      "src/bgiteration.c:91",
+      "src/bgiteration.c:92",
+      "src/bgiteration.c:93",
+      "src/bgiteration.c:97",
+      "src/bgiteration.c:98",
+      "src/bgiteration.c:102",
+      "src/bgiteration.c:103",
+      "src/bgiteration.c:104",
+      "src/bgiteration.c:105",
+      "src/bgiteration.c:106",
+      "src/bgiteration.c:107",
+      "src/bgiteration.c:108",
+      "src/bgiteration.c:110",
+      "src/bgiteration.c:111",
+      "src/bgiteration.c:112",
+      "src/bgiteration.c:118",
+      "src/bgiteration.c:122",
+      "src/bgiteration.c:123",
+      "src/bgiteration.c:124",
+      "src/bgiteration.c:125",
+      "src/bgiteration.c:129",
+      "src/bgiteration.c:130",
+      "src/bgiteration.c:134",
+      "src/bgiteration.c:135",
+      "src/bgiteration.c:136",
+      "src/bgiteration.c:138",
+      "src/bgiteration.c:139",
+      "src/bgiteration.c:168"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 8.2069,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: blocked.c:109 '!(isReplicatedClient(c) && btype != BLOCKED_MODULE && btype != BLOCKED_POSTPONE)' is not true",
+      "scenario": "ai-2c757d869027",
+      "seed": 11006,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "dc96a69550eef06e216f",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: blocked.c:109 '!(isReplicatedClient(c) && btype != BLOCKED_MODULE && btype != BLOCKED_POSTPONE)' is not true",
+      "scenario": "ai-e0dd32573448",
+      "seed": 11007,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "dc96a69550eef06e216f",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-1082f2268147",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'stop-automatic-saves' returned ERROR: CONFIG SET save : 0/1 replies matched, 1 unanswered"
+    },
+    {
+      "scenario": "ai-b5c4e8b4642d",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'save-started' returned ERROR: bgsave.save-started observed 0/1 times before timeout"
+    },
+    {
+      "scenario": "ai-dfee7a21b9e4",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'save-started' returned ERROR: bgsave.save-started observed 0/1 times before timeout"
+    },
+    {
+      "scenario": "ai-4f274a448dba",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'save-started' returned ERROR: bgsave.save-started observed 0/1 times before timeout"
+    },
+    {
+      "scenario": "ai-2ede25c0b9aa",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'save-started' returned ERROR: bgsave.save-started observed 0/1 times before timeout"
+    },
+    {
+      "scenario": "ai-050ef2998b9e",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'save-started' returned ERROR: bgsave.save-started observed 0/1 times before timeout"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 089321adf5a7..88a536033c88.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-70c1ccb5febd
+seed: 102
+experiment:
+  id: proposed.qos-config-and-client-flags
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

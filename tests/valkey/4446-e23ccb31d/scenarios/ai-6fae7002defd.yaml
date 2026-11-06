@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 75215a56cb9f..e23ccb31db50.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6fae7002defd
+seed: 101
+experiment:
+  id: proposed.acl-digest-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

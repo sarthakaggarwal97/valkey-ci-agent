@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.cluster-link-established-counters
+deployment:
+  modes: [standalone]
+metadata:
+  description: Per-direction cluster link established counters appear in CLUSTER INFO,
+    reset with CONFIG RESETSTAT, and grow when links re-establish
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: links
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [CLUSTER, INFO], wait_s: 60, compare: skip, expect: {contains: "cluster_known_nodes:2"}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 60, compare: skip, expect: {contains: "cluster_known_nodes:2"}}
+    - {command: [CLUSTER, INFO], wait_s: 60, compare: skip, expect: {contains: "cluster_state:ok"}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 60, compare: skip, expect: {contains: "cluster_state:ok"}}
+    - {command: [CLUSTER, INFO], expect_difference: true, expect: {contains: "total_cluster_links_established_inbound:"}}
+    - {command: [INFO, everything], compare: skip, expect: {contains: "total_cluster_links_established_outbound:"}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "total_cluster_links_established_inbound:0"}}
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "total_cluster_links_established_outbound:0"}}
+    - {command: [DEBUG, CLUSTERLINK, KILL, ALL, "<node.1.id>"], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], wait_s: 30, compare: skip, expect: {contains: "total_cluster_links_established_outbound:1"}}
+    - {command: [CLUSTER, INFO], wait_s: 30, compare: skip, expect: {contains: "total_cluster_links_established_inbound:1"}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, compare: skip, expect: {contains: "total_cluster_links_established_inbound:1"}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, compare: skip, expect: {contains: "total_cluster_links_established_outbound:1"}}
+    - {command: [CLUSTER, INFO], wait_s: 30, compare: skip, expect: {contains: "cluster_state:ok"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: links}

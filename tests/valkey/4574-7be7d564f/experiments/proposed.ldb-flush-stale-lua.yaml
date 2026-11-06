@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.ldb-flush-stale-lua
+deployment:
+  modes: [standalone]
+metadata:
+  description: Debug session after SCRIPT FLUSH ASYNC must dispatch against the recreated
+    Lua state
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ldb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SCRIPT, DEBUG, SYNC], connection: a, expect: {equals: OK}}
+    - {command: [EVAL, "return 'hello'", 0], connection: a, expect: {contains: "Stopped\
+          \ at"}}
+    - {raw: "*2\r\n$6\r\nserver\r\n$4\r\nping\r\n", connection: a, expect: {contains: "PONG"}}
+    - {raw: "*1\r\n$8\r\ncontinue\r\n", connection: a}
+    - {command: [SCRIPT, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, SYNC], connection: b, expect: {equals: OK}}
+    - {command: [EVAL, "return 'hello'", 0], connection: b, expect: {contains: "Stopped\
+          \ at"}}
+    - {raw: "*2\r\n$6\r\nserver\r\n$4\r\nping\r\n", connection: b, expect_difference: true,
+      expect: {contains: "PONG"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ldb}

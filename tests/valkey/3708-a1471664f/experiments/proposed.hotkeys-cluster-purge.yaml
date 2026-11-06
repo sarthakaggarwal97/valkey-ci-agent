@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.hotkeys-cluster-purge
+deployment:
+  modes: [standalone]
+metadata:
+  description: Hot-key purge on CLUSTER DELSLOTS (keyHashSlot over tracked keys, empty
+    key name included), FLUSHALL and CLUSTER RESET on a one-node cluster, compared
+    against the parent build
+components:
+- use: valkey.action.commands
+  id: purge
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    timeout_s: 120
+    commands:
+    - {command: [CONFIG, SET, hotkeys-top-k, 10], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, hotkeys-sampling-percentage, 100], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, hotkeys-window-seconds, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SET, foo, v], expect: {equals: OK}}
+    - {command: [SET, bar, v], expect: {equals: OK}}
+    - {command: [SET, "", v], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, foo], expect: {equals: QUEUED}}
+    - {command: [GET, foo], expect: {equals: QUEUED}}
+    - {command: [GET, foo], expect: {equals: QUEUED}}
+    - {command: [GET, foo], expect: {equals: QUEUED}}
+    - {command: [GET, foo], expect: {equals: QUEUED}}
+    - {command: [GET, foo], expect: {equals: QUEUED}}
+    - {command: [GET, bar], expect: {equals: QUEUED}}
+    - {command: [GET, bar], expect: {equals: QUEUED}}
+    - {command: [GET, bar], expect: {equals: QUEUED}}
+    - {command: [GET, bar], expect: {equals: QUEUED}}
+    - {command: [GET, bar], expect: {equals: QUEUED}}
+    - {command: [GET, bar], expect: {equals: QUEUED}}
+    - {command: [GET, ""], expect: {equals: QUEUED}}
+    - {command: [GET, ""], expect: {equals: QUEUED}}
+    - {command: [GET, ""], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {error: false}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect: {equals: 1}}
+    - {command: [HOTKEYS, GET], wait_s: 15, expect_difference: true, expect: {contains: foo}}
+    - {command: [CONFIG, SET, hotkeys-window-seconds, 300], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, DELSLOTS, 12182], expect: {equals: OK}}
+    - {command: [HOTKEYS, GET], expect_difference: true, expect: {contains: bar}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [HOTKEYS, GET], expect_difference: true, expect: {equals: []}}
+    - {command: [CLUSTER, RESET, SOFT], expect: {equals: OK}}
+    - {command: [HOTKEYS, GET], expect_difference: true, expect: {equals: []}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [purge.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: purge}

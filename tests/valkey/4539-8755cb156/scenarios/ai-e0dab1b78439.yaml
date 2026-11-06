@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 637f716b4b52..8755cb156f05.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e0dab1b78439
+seed: 4539
+experiment:
+  id: proposed.rdb-lzf-compress-buffer
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

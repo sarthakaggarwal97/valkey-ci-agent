@@ -1,0 +1,49 @@
+extends: [valkey.base]
+id: proposed.repl-throttle-stall
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: SIGSTOP a replica under writes with repl-throttling-enabled; the steady-state
+    throttle must activate and throttle commands, and the deployment must converge
+    with no acknowledged write lost
+inputs:
+  properties:
+    pause_s: {type: number, minimum: 1, maximum: 60, default: 5}
+    settle_s: {type: number, minimum: 1, maximum: 60, default: 8}
+    cob_limit: {type: string, default: "replica 0 256kb 120"}
+startup_overlays:
+- overlay_id: throttle-on
+  server_config:
+    repl-throttling-enabled: "yes"
+    client-output-buffer-limit: {$ref: inputs.cob_limit}
+components:
+- use: valkey.observer.info
+  id: throttle-info
+  config:
+    instances: primaries
+    sections: [throttling]
+    interval_s: 0.1
+    expectations:
+    - {evidence_id: valkey.throttle.activated, field: repl_throttle_activation_events,
+      min: 1, required: true}
+    - {evidence_id: valkey.throttle.commands-throttled, field: repl_throttle_total_commands,
+      min: 1, required: true}
+- use: valkey.fault.process-signal
+  id: stall-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.pause_s}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, throttle-info, stall-replica]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: {$ref: inputs.settle_s}}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: stall-replica}

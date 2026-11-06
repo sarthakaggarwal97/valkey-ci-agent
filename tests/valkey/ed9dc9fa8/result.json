@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ed9dc9fa82c6134bb6c14e73ba20966e92441fcd",
+  "parent": "98f91521245b8ca20523616e3243799ca5d1a08e",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Count dual-channel rdb-channel bytes in replication input stats",
+  "date": "2026-09-11",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.8471,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 8 (EVAL_RO local s = redis.call('INFO','stats') local v = tonumber(string.match(s,'total_net_repl_input_bytes:(%d+)')) if v and v > 65536 then return 1 else return 0 end 0 on node 1) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size",
+      "scenario": "ai-c2e2126b140f",
+      "seed": 980101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by ed9dc9fa82c6",
+      "fingerprint": "fb46cc52fa0f7654eb5d",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

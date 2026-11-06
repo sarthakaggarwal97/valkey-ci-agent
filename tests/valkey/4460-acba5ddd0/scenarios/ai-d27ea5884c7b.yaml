@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 351eb0c36102..acba5ddd0691.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d27ea5884c7b
+seed: 11003
+experiment:
+  id: valkey.forkless-save-cancel
+  inputs:
+    stable_keys: 6000
+    mutable_keys: 300
+    key_save_delay_us: 1000
+    cancel_delay_s: 0.15
+deployment:
+  mode: standalone
+  base_port: 7200

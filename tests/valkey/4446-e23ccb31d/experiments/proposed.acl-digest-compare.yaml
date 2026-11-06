@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.acl-digest-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL DIGEST reply, arity, permissions and acl_string cache churn, compared
+    with the parent build which lacks the subcommand
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: digest
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {error: false}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {error: false}}
+    - {command: [ACL, DIGEST, extra], expect_difference: true, expect: {error: "wrong\
+          \ number of arguments"}}
+    - {command: [ACL, SETUSER, alice, on, ">alicepass", "~key:*", "&chan:*", "+@read"],
+      expect: {equals: OK}}
+    - {command: [ACL, GETUSER, alice]}
+    - {command: [ACL, SETUSER, hashuser, on, "#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "~*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, GETUSER, hashuser]}
+    - {command: [AUTH, alice, alicepass], expect: {equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {error: "no permissions"}}
+    - {command: [AUTH, default, ""], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, alice, "+acl|digest"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [AUTH, alice, alicepass], expect: {equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {error: false}}
+    - {command: [AUTH, default, ""], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, digesttwin1, on, ">twinpass", "~twin:*", "+get"], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, digesttwin2, on, ">twinpass", "~twin:*", "+get"], expect: {
+        equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {error: false}}
+    - {command: [ACL, LIST], compare: unordered}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {error: false}}
+    - {command: [ACL, SETUSER, digesttwin1, resetkeys, "~other:*"], expect: {equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {error: false}}
+    - {command: [ACL, LIST], compare: unordered}
+    - {command: [ACL, DELUSER, digesttwin1, digesttwin2], expect: {equals: 2}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {error: false}}
+    - {command: [ACL, SETUSER, digest, on, ">pw", "~digest*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, multi, on, ">pw", "(~a:* +get)", "(~b:* +set)"], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, rep, on, ">pw", "~k*", "~k*", "~k*", "+get", "+get"],
+      expect: {equals: OK}}
+    - {command: [ACL, SETUSER, bare], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, big, on, ">pw", "~p00:*", "~p01:*", "~p02:*", "~p03:*",
+        "~p04:*", "~p05:*", "~p06:*", "~p07:*", "~p08:*", "~p09:*", "&c0:*", "&c1:*",
+        "+@all", "-@dangerous"], expect: {equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {error: false}}
+    - {command: [ACL, LIST], compare: unordered}
+    - {command: [ACL, USERS], compare: unordered}
+    - {command: [ACL, DELUSER, digest, multi, rep, bare, big, alice, hashuser], expect: {
+        equals: 7}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {error: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [digest.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: digest}

@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.ldb-print-uaf
+deployment:
+  modes: [standalone]
+metadata:
+  description: Debugger 'print ARGV' must not double-free the logged value
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ldb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SCRIPT, DEBUG, SYNC], connection: dbg, expect: {equals: OK}}
+    - {command: [EVAL, "return 'hello'", 1, somekey, somearg], connection: dbg, expect: {
+        contains: "Stopped at"}}
+    - {raw: "*2\r\n$5\r\nprint\r\n$4\r\nARGV\r\n", connection: dbg, expect_difference: true,
+      expect: {contains: "somearg"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ldb}

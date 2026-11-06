@@ -1,0 +1,66 @@
+extends: [valkey.liveness]
+id: proposed.reconfigure-under-failed-new-primary
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: >
+    Freeze primary valkey-0 until its replica valkey-1 is promoted, then freeze valkey-1
+    until the cluster marks it FAIL, and resume valkey-0 while its successor is still
+    FAIL. valkey-0 is reconfigured as a replica of a FAIL node, so clusterSetPrimary
+    must set MY_PRIMARY_FAIL on it; when valkey-1 resumes, the FAIL undo on the voting
+    primary must clear the flag again. The cluster must converge with no crash afterwards.
+inputs:
+  properties:
+    warm_up_s: {type: number, default: 2}
+    old_primary_pause_s: {type: number, default: 20}
+    hold_s: {type: number, default: 4}
+    new_primary_pause_s: {type: number, default: 14}
+    promotion_timeout_s: {type: number, default: 30}
+    settle_s: {type: number, default: 30}
+components:
+- use: valkey.fault.process-signal
+  id: freeze-old-primary
+  config:
+    when_event: warm-up.completed
+    instance: valkey-0
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.old_primary_pause_s}
+- use: valkey.fault.process-signal
+  id: freeze-new-primary
+  config:
+    when_event: hold.completed
+    instance: valkey-1
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.new_primary_pause_s}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [freeze-old-primary, freeze-new-primary]
+  config: {seconds: {$ref: inputs.warm_up_s}}
+- use: valkey.action.poll
+  id: wait-promotion
+  depends_on: [warm-up]
+  config:
+    instances: valkey-1
+    section: replication
+    field: role
+    predicate: {equals: master}
+    timeout_s: {$ref: inputs.promotion_timeout_s}
+- use: valkey.action.sleep
+  id: hold
+  depends_on: [wait-promotion]
+  config: {seconds: {$ref: inputs.hold_s}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [hold]
+  config: {seconds: {$ref: inputs.settle_s}}
+- use: valkey.oracle.deployment-state
+  id: deployment-state
+  config:
+    validation: {stabilization_wait: 3, validation_timeout: 120}
+required_events: [settle.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: freeze-old-primary}
+- {evidence_id: valkey.fault.injected, source: freeze-new-primary}
+- {evidence_id: valkey.poll.satisfied, source: wait-promotion}
+- {evidence_id: valkey.deployment.validated, source: deployment-state}

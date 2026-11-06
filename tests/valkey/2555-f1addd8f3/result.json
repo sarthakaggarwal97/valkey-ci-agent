@@ -1,0 +1,52 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f1addd8f393b14b7968644a1ee9174a69c9e4a49",
+  "parent": "8d34678c8fb797d5e9f017420ce7ee0ac64b08bb",
+  "pr": 2555,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use BIO thread for cluster config saving in cluster-config-save-behavior best-effort mode (#2555)",
+  "date": "2026-09-01",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 83,
+    "executed": 72,
+    "percent": 86,
+    "uncovered": [
+      "src/bio.c:331",
+      "src/bio.c:332",
+      "src/bio.c:334",
+      "src/bio.c:336",
+      "src/cluster_legacy.c:1191",
+      "src/cluster_legacy.c:1192",
+      "src/cluster_legacy.c:1220",
+      "src/cluster_legacy.c:7054",
+      "src/cluster_legacy.c:7055",
+      "src/debug.c:1130",
+      "src/debug.c:1131"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 3.8834,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-993f0d8e047c",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'election-safety' returned ERROR: cannot check that 2 election winner(s) reached quorum: no 'Failover auth ACK' line was published as 'cluster.vote.acked' (Valkey logs them since 9.2)"
+    },
+    {
+      "scenario": "ai-69c665c1598b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'election-safety' returned ERROR: cannot check that 2 election winner(s) reached quorum: no 'Failover auth ACK' line was published as 'cluster.vote.acked' (Valkey logs them since 9.2)"
+    }
+  ]
+}

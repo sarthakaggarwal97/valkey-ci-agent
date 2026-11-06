@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.slot-migration-ack-io-threads
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Slot migration export under active IO threads: a long snapshot (rdb-key-save-delay
+    over many keys) while the target sends CLUSTER SYNCSLOTS ACK every second on the
+    same connection the main thread writes snapshot bytes to via connWrite(). The
+    candidate must keep ACK reads on the main thread (the #4559 guard), finish the
+    migration, hand the slots over, and never crash. No expect_difference marks: the
+    fix changes scheduling, not replies, and the parent's race is nondeterministic.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    populate_keys: {type: integer, minimum: 1000, maximum: 100000, default: 12000}
+    populate_size: {type: integer, minimum: 1, maximum: 4096, default: 16}
+    key_save_delay_us: {type: integer, minimum: 0, maximum: 2000, default: 500}
+    io_threads: {type: integer, minimum: 2, maximum: 9, default: 8}
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config:
+      io-threads: {$ref: inputs.io_threads}
+      io-threads-always-active: "yes"
+      rdb-key-save-delay: {$ref: inputs.key_save_delay_us}
+    commands:
+    - {command: [SET, foo, before-snapshot], expect: {equals: OK}}
+    - {command: [SET, hello, seed-value], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, {$ref: inputs.populate_keys}, "key:", {$ref: inputs.populate_size}],
+      expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 16383, NODE, <node.1.id>],
+      expect: {equals: OK}}
+    - {command: [SET, bar, during-snapshot], expect: {equals: OK}}
+    - {command: [SET, churn1, v1], expect: {equals: OK}}
+    - {command: [SET, churn2, v2], expect: {equals: OK}}
+    - {command: [SET, churn3, v3], expect: {equals: OK}}
+    - {command: [SET, churn4, v4], expect: {equals: OK}}
+    - {command: [GET, foo], expect: {equals: before-snapshot}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], compare: skip}
+    - {command: [GET, foo], wait_s: 180, expect: {error: "MOVED"}}
+    - {command: [GET, foo], node: 1, wait_s: 30, expect: {equals: before-snapshot}}
+    - {command: [GET, bar], node: 1, expect: {equals: during-snapshot}}
+    - {command: [GET, hello], node: 1, expect: {equals: seed-value}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 1, expect: {equals: 1}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 0, expect: {equals: 0}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 1, compare: skip}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [migrate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

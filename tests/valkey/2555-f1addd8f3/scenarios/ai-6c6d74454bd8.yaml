@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8d34678c8fb7..f1addd8f393b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6c6d74454bd8
+seed: 2
+experiment:
+  id: proposed.cluster-config-save-bio
+  inputs:
+    save_behavior: sync
+deployment:
+  mode: standalone
+  base_port: 7100

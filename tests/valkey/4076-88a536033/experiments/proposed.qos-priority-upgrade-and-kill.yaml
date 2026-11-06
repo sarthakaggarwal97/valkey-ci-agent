@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.qos-priority-upgrade-and-kill
+deployment:
+  modes: [standalone]
+metadata:
+  description: A slot-import client is upgraded to high priority on a live connection
+    (cross-multiplexer event migration), is visible to CLIENT KILL FLAGS H, and killing
+    it cleans the priority multiplexer up, compared against the parent build
+components:
+- use: valkey.action.commands
+  id: upgrade
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+        SLOTSRANGE, 16383, 16383], node: 1, connection: job, expect: {equals: OK}}
+    - {command: [CLIENT, KILL, FLAGS, H], node: 1, expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [SET, foo, bar], node: 0, expect: {equals: OK}}
+    - {command: [GET, foo], node: 0, expect: {equals: bar}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [upgrade.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: upgrade}

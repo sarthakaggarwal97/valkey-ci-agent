@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.rdb-lzf-compress-buffer
+deployment:
+  modes: [standalone]
+metadata:
+  description: Per-string LZF compression buffer exercised at the 8 KB boundary via
+    DUMP and a SAVE/restart reload, replies compared across builds
+components:
+- use: valkey.action.commands
+  id: lzf
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {rdbcompression: lzf}
+    timeout_s: 30
+    commands:
+    - {command: [SET, s21, aaaaaaaaaaaaaaaaaaaaa], expect: {equals: OK}}
+    - {command: [SET, r24, "aZ3#qP9$wE5^rT7&yU1*iO2!"], expect: {equals: OK}}
+    - {command: [SETRANGE, bound-min, 8194, x], expect: {equals: 8195}}
+    - {command: [SETRANGE, bound-over, 8195, x], expect: {equals: 8196}}
+    - {command: [SETRANGE, huge, 1048575, x], expect: {equals: 1048576}}
+    - {command: [DUMP, s21], expect: {exists: true}}
+    - {command: [DUMP, r24], expect: {exists: true}}
+    - {command: [DUMP, bound-min], expect: {exists: true}}
+    - {command: [DUMP, bound-over], expect: {exists: true}}
+    - {command: [DUMP, huge], expect: {exists: true}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, s21], expect: {equals: aaaaaaaaaaaaaaaaaaaaa}}
+    - {command: [GET, r24], expect: {equals: "aZ3#qP9$wE5^rT7&yU1*iO2!"}}
+    - {command: [STRLEN, bound-min], expect: {equals: 8195}}
+    - {command: [GETRANGE, bound-min, 8190, 8194], expect: {equals: !!binary 'AAAAAHg='}}
+    - {command: [STRLEN, bound-over], expect: {equals: 8196}}
+    - {command: [STRLEN, huge], expect: {equals: 1048576}}
+    - {command: [SETRANGE, bound-min, 4000, Y], expect: {equals: 8195}}
+    - {command: [DUMP, bound-min], expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [lzf.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lzf}

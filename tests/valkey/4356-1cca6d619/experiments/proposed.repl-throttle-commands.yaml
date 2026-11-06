@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.repl-throttle-commands
+deployment:
+  modes: [standalone]
+metadata:
+  description: New repl-throttling-enabled config, INFO Throttling section, CLIENT
+    LIST 'h' flag, and the pending_command refactor's blocking paths, compared across
+    builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, repl-throttling-enabled], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [CONFIG, SET, repl-throttling-enabled, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [INFO, throttling], expect_difference: true, expect: {contains: "total_throttled_commands:0"}}
+    - {command: [INFO, debug], expect_difference: true, expect: {contains: "repl_throttle_more_events:"}}
+    - {command: [CLIENT, LIST, FLAGS, h], expect_difference: true, expect: {error: false}}
+    - {command: [CONFIG, SET, repl-throttling-enabled, "no"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [RPUSH, warm, a, b], expect: {equals: 2}}
+    - {connection: blk, command: [BLPOP, bk, 5]}
+    - {command: [GET, no-such-key], expect: {exists: false}}
+    - {command: [LPUSH, bk, v1], expect: {equals: 1}}
+    - {command: [LLEN, bk], expect: {equals: 0}}
+    - {connection: blk, read: true, expect: {equals: [bk, v1]}}
+    - {connection: blk, command: [BLMOVE, src, dst, LEFT, RIGHT, 5]}
+    - {command: [GET, no-such-key], expect: {exists: false}}
+    - {command: [RPUSH, src, x1], expect: {equals: 1}}
+    - {command: [LRANGE, dst, 0, -1], wait_s: 5, expect: {equals: [x1]}}
+    - {connection: blk, read: true, expect: {equals: x1}}
+    - {command: [BLPOP, nokey, 0.1], expect: {exists: false}}
+    - {command: [BRPOPLPUSH, nokey, nokey2, 0.1], expect: {exists: false}}
+    - {command: [WAIT, 0, 0], expect: {equals: 0}}
+    - {command: [WAIT, 1, 100], expect: {equals: 0}}
+    - {command: [CLIENT, PAUSE, 150, WRITE], expect: {equals: OK}}
+    - {command: [SET, paused-key, v1], expect: {equals: OK}}
+    - {command: [GET, paused-key], expect: {equals: v1}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [BLPOP, mk, 0], expect: {equals: QUEUED}}
+    - {command: [SET, inmulti, "1"], expect: {equals: QUEUED}}
+    - {command: [EXEC]}
+    - {command: [EXEC], expect: {error: true}}
+    - {command: [GET, inmulti], expect: {equals: "1"}}
+    - {command: [XADD, st, "*", f, v], compare: skip}
+    - {command: [XREAD, BLOCK, 100, STREAMS, st, "$"], expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

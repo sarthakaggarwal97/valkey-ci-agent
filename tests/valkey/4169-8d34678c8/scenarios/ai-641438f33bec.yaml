@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 279b07f9e664..8d34678c8fb7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-641438f33bec
+seed: 41692
+experiment:
+  id: proposed.cluster-link-established-counters
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

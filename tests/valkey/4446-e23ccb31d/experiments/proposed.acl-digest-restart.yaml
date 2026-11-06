@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.acl-digest-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL DIGEST over users loaded from an aclfile, across ACL LOAD, ACL
+    SAVE and a restart, compared with the parent build
+components:
+- use: valkey.action.commands
+  id: digest-restart
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {aclfile: users.acl}
+    files:
+      users.acl: "user default on nopass ~* &* +@all\nuser alice on >alicepass ~key:*\
+        \ &chan:* +@all\nuser bob on >bobpass allkeys allchannels allcommands\n"
+    timeout_s: 30
+    commands:
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {error: false}}
+    - {command: [ACL, LOAD], expect: {equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {error: false}}
+    - {command: [ACL, SETUSER, carol, on, ">carolpass", "~carol:*", "+@write"], expect: {
+        equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {error: false}}
+    - {command: [ACL, SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {error: false}}
+    - {command: [ACL, GETUSER, alice]}
+    - {command: [ACL, LIST], compare: unordered}
+    - {command: [ACL, DELUSER, carol], expect: {equals: 1}}
+    - {command: [ACL, DIGEST], expect_difference: true, expect: {error: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [digest-restart.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: digest-restart}

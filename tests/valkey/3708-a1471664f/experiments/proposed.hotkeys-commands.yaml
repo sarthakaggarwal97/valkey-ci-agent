@@ -1,0 +1,103 @@
+extends: [valkey.liveness]
+id: proposed.hotkeys-commands
+deployment:
+  modes: [standalone]
+metadata:
+  description: HOTKEYS command surface, config boundaries, window reporting, manager
+    lifecycle and purge on FLUSHALL/FLUSHDB, compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hotkeys
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [CONFIG, GET, hotkeys-top-k], expect_difference: true, expect: {contains: hotkeys-top-k}}
+    - {command: [HOTKEYS, GET], expect_difference: true, expect: {equals: []}}
+    - {command: [HOTKEYS, RESET], expect_difference: true, expect: {equals: OK}}
+    - {command: [HOTKEYS, HELP], expect_difference: true, expect: {error: false}}
+    - {command: [HOTKEYS], expect_difference: true, expect: {error: "wrong number\
+          \ of arguments"}}
+    - {command: [HOTKEYS, NOSUCH], expect_difference: true, expect: {error: "subcommand"}}
+    - {command: [HOTKEYS, GET, extra], expect_difference: true, expect: {error: "wrong\
+          \ number of arguments"}}
+    - {command: [CONFIG, SET, hotkeys-top-k, 1001], expect_difference: true, expect: {
+        error: true}}
+    - {command: [CONFIG, SET, hotkeys-sampling-percentage, 0], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, hotkeys-sampling-percentage, 101], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, hotkeys-window-seconds, 301], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, hotkeys-top-k, 3], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, hotkeys-sampling-percentage, 100], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, hotkeys-window-seconds, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SET, hot, v], expect: {equals: OK}}
+    - {command: [SET, "", v], expect: {equals: OK}}
+    - {command: [SET, fields, v], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, hot], expect: {equals: QUEUED}}
+    - {command: [GET, hot], expect: {equals: QUEUED}}
+    - {command: [GET, hot], expect: {equals: QUEUED}}
+    - {command: [GET, hot], expect: {equals: QUEUED}}
+    - {command: [GET, hot], expect: {equals: QUEUED}}
+    - {command: [GET, hot], expect: {equals: QUEUED}}
+    - {command: [DEL, hot], expect: {equals: QUEUED}}
+    - {command: [SET, hot, v2], expect: {equals: QUEUED}}
+    - {command: [GET, hot], expect: {equals: QUEUED}}
+    - {command: [GET, hot], expect: {equals: QUEUED}}
+    - {command: [GET, hot], expect: {equals: QUEUED}}
+    - {command: [GET, hot], expect: {equals: QUEUED}}
+    - {command: [GET, ""], expect: {equals: QUEUED}}
+    - {command: [GET, ""], expect: {equals: QUEUED}}
+    - {command: [GET, ""], expect: {equals: QUEUED}}
+    - {command: [GET, ""], expect: {equals: QUEUED}}
+    - {command: [GET, fields], expect: {equals: QUEUED}}
+    - {command: [GET, fields], expect: {equals: QUEUED}}
+    - {command: [GET, fields], expect: {equals: QUEUED}}
+    - {command: [GET, fields], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {error: false}}
+    - {command: [HOTKEYS, GET], wait_s: 15, expect_difference: true, expect: {contains: hot}}
+    - {command: [INFO, hotkeys], expect_difference: true, expect: {contains: hotkeys_last_window_samples}}
+    - {command: [CONFIG, SET, hotkeys-window-seconds, 300], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [HOTKEYS, GET], expect_difference: true, expect: {equals: []}}
+    - {command: [CONFIG, SET, hotkeys-top-k, 0], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [HOTKEYS, GET], expect_difference: true, expect: {equals: []}}
+    - {command: [HOTKEYS, RESET], expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, SET, hotkeys-top-k, 1000], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, hotkeys-sampling-percentage, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SET, a, v], expect: {equals: OK}}
+    - {command: [GET, a], expect: {equals: v}}
+    - {command: [GET, a], expect: {equals: v}}
+    - {command: [CONFIG, SET, hotkeys-top-k, 1], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [HOTKEYS, GET], expect_difference: true, expect: {equals: []}}
+    - {command: [SELECT, 5], expect: {equals: OK}}
+    - {command: [CONFIG, SET, hotkeys-sampling-percentage, 100], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SET, dbk, v], expect: {equals: OK}}
+    - {command: [GET, dbk], expect: {equals: v}}
+    - {command: [GET, dbk], expect: {equals: v}}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [HOTKEYS, GET], expect_difference: true, expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [hotkeys.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hotkeys}

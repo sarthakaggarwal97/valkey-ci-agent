@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.qos-io-threads-lifecycle
+deployment:
+  modes: [standalone]
+metadata:
+  description: Grow and shrink io-threads and maxclients at runtime with the QoS dual
+    event loop active, crossing the 9-thread SPMC/SPSC poll boundary and tearing threads
+    down to one, replies compared across builds
+components:
+- use: valkey.action.commands
+  id: iothreads
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {io-threads: 4, maxclients: 1024}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, priority-preemptive-poll-interval-us, "0"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "100000"], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 100000}}
+    - {command: [CONFIG, SET, io-threads, "10"], expect: {equals: OK}}
+    - {command: [MGET, "key:1", "key:2", "key:3", "key:4"], expect: {equals: ["value:1",
+          "value:2", "value:3", "value:4"]}}
+    - {command: [CONFIG, SET, maxclients, "8192"], expect: {equals: OK}}
+    - {command: [GET, "key:99999"], expect: {equals: "value:99999"}}
+    - {command: [CONFIG, SET, io-threads, "1"], expect: {equals: OK}}
+    - {command: [GET, "key:5"], expect: {equals: "value:5"}}
+    - {command: [CONFIG, SET, priority-preemptive-poll-interval-us, "1"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "8"], expect: {equals: OK}}
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [MGET, "key:10", "key:11", "key:12", k1], expect: {equals: ["value:10",
+          "value:11", "value:12", v1]}}
+    - {command: [CONFIG, SET, io-threads, "1"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [iothreads.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: iothreads}

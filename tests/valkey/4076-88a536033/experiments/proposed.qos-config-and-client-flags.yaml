@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.qos-config-and-client-flags
+deployment:
+  modes: [standalone]
+metadata:
+  description: New priority-preemptive-poll-interval-us config bounds and the CLIENT
+    LIST/KILL H flag filter, compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: qos
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, priority-preemptive-poll-interval-us, "0"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, priority-preemptive-poll-interval-us, "2147483647"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, SET, priority-preemptive-poll-interval-us, "-1"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, priority-preemptive-poll-interval-us, "2147483648"],
+      expect_difference: true, expect: {error: true}}
+    - {command: [CONFIG, SET, priority-preemptive-poll-interval-us, "12345"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, priority-preemptive-poll-interval-us], expect_difference: true,
+      expect: {contains: "12345"}}
+    - {command: [CLIENT, LIST, FLAGS, H], expect_difference: true, expect: {error: false}}
+    - {command: [CLIENT, KILL, FLAGS, H], expect_difference: true, expect: {equals: 0}}
+    - {command: [CLIENT, KILL, NOT-FLAGS, H, ID, "99999"], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [qos.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: qos}

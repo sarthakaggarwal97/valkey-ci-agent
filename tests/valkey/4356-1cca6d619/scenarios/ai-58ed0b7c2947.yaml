@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 205fde3d3dab..1cca6d619ebc.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-58ed0b7c2947
+seed: 43605
+experiment:
+  id: proposed.repl-throttle-disable
+  inputs:
+    pause_s: 7
+    mutation_rate: 800
+    value_size: 1024
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7400

@@ -1,0 +1,82 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e23ccb31db50b7e26c667901eca5966b462f9ff9",
+  "parent": "75215a56cb9fbf1b8aeb20a596204b0cda7929af",
+  "pr": 4446,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add ACL DIGEST command (#4446)",
+  "date": "2026-08-31",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 27,
+    "executed": 27,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.2808,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-6fae7002defd",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6fae7002defd",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6fae7002defd",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c857ecbc8c01",
+      "build": "unstable",
+      "seed": 202,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c857ecbc8c01",
+      "build": "unstable",
+      "seed": 203,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c857ecbc8c01",
+      "build": "unstable",
+      "seed": 204,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5a7818074dd3",
+      "build": "unstable",
+      "seed": 303,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5a7818074dd3",
+      "build": "unstable",
+      "seed": 304,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5a7818074dd3",
+      "build": "unstable",
+      "seed": 305,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

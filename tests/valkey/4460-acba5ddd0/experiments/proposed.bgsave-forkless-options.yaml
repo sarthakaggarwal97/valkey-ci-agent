@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.bgsave-forkless-options
+deployment:
+  modes: [standalone]
+metadata:
+  description: BGSAVE option parsing, forkless config gating, and the new persistence
+    INFO fields compared across the change and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bgsave-options
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [BGSAVE, CANCEL], expect: {error: "not in progress or scheduled"}}
+    - {command: [BGSAVE, SCHEDULE, CANCEL], expect_difference: true, expect: {error: "Cancel\
+          \ cannot be combined"}}
+    - {command: [BGSAVE, CANCEL, SCHEDULE], expect_difference: true, expect: {error: "Cancel\
+          \ cannot be combined"}}
+    - {command: [BGSAVE, BOGUS], expect: {error: "syntax"}}
+    - {command: [CONFIG, SET, bgsave-default-method, forkless], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, bgsave-default-method, fork], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, forkless-infrastructure-enabled, yes], expect_difference: true,
+      expect: {error: true}}
+    - {command: [INFO, persistence], expect_difference: true, expect: {contains: "rdb_current_bgsave_type:none"}}
+    - {command: [BGSAVE, SCHEDULE, SCHEDULE], expect_difference: true, expect: {equals: "Background\
+          \ saving started"}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bgsave-options.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bgsave-options}

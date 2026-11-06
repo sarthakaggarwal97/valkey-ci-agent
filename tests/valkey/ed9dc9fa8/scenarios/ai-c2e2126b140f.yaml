@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 98f91521245b..ed9dc9fa82c6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c2e2126b140f
+seed: 980101
+experiment:
+  id: proposed.dual-channel-repl-input-bytes
+  inputs:
+    resp: 2
+    diskless_load: swapdb
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

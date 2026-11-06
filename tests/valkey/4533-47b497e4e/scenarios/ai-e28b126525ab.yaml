@@ -1,0 +1,21 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a9963f495d51..47b497e4e39a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e28b126525ab
+seed: 303
+experiment:
+  id: proposed.reconfigure-under-failed-new-primary
+  inputs:
+    warm_up_s: 2
+    old_primary_pause_s: 30
+    hold_s: 6
+    new_primary_pause_s: 20
+    promotion_timeout_s: 40
+    settle_s: 40
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    cluster-node-timeout: 5000
+    cluster-ping-interval: 1000

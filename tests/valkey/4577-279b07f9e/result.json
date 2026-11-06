@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "279b07f9e664a2fb25d6fdded6a82d7c98014dc3",
+  "parent": "8755cb156f05a51b7fe832956eece025b017d990",
+  "pr": 4577,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Compare the certificate CN over its whole length (#4577)",
+  "date": "2026-08-31",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2056,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters tlsGetPeerUser() CN matching for TLS client-certificate authentication (tls-auth-clients-user CN): it compares the certificate CN over its full length so an embedded NUL can no longer truncate 'Client-only\\0attacker' into the user 'Client-only'. Exercising it requires a TLS listener with tls-auth-clients-user=CN and a client that presents an X.509 client certificate with an embedded NUL in its CN. No installed component presents a client certificate or performs a TLS client handshake (valkey.action.commands and valkey.action.tools use plain connections), and none can min"
+}

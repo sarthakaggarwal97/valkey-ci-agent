@@ -1,0 +1,182 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7be7d564ff0b27b20df8debab78822e4a4d57a62",
+  "parent": "597114d0b1f6731df93c42c3d530b4f94354b5d9",
+  "pr": 4574,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix script debugger uaf (#4574)",
+  "date": "2026-08-31",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.0199,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "hang: command 0 (SCRIPT DEBUG SYNC on connection dbg) on connection 0 of 4 got no reply, and the server answered no PING within 15s",
+      "scenario": "ai-83034ad91cca",
+      "seed": 1,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #4574",
+      "fingerprint": "d6cfa6f19046dcd02ec1",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/75"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in scriptingEngineDebuggerFlushLogs",
+      "scenario": "ai-83034ad91cca",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4574",
+      "fingerprint": "66a315e038ede7745482",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-use-after-free",
+      "scenario": "ai-a42b204911d4",
+      "seed": 2,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #4574",
+      "fingerprint": "80d79339943dd8f93790",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/61"
+    },
+    {
+      "rule": "check",
+      "detail": "hang: command 0 (SCRIPT DEBUG SYNC on connection dbg) on connection 0 of 4 got no reply, and the server answered no PING within 15s",
+      "scenario": "ai-a42b204911d4",
+      "seed": 2,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "d6cfa6f19046dcd02ec1",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in scriptingEngineDebuggerFlushLogs",
+      "scenario": "ai-a42b204911d4",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4574",
+      "fingerprint": "66a315e038ede7745482",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "hang: command 3 (raw \"*1\\r\\n$8\\r\\ncontinue\\r\\n\" on connection a) on connection 0 of 4 got no reply, and the server answered no PING within 15s",
+      "scenario": "ai-a805cd0e518e",
+      "seed": 3,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #4574",
+      "fingerprint": "09b5b6e0b489248d4b3c",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/76"
+    },
+    {
+      "rule": "check",
+      "detail": "hang: command 4 (SCRIPT FLUSH ASYNC) on connection 0 of 4 got no reply, and the server answered no PING within 15s",
+      "scenario": "ai-a805cd0e518e",
+      "seed": 3,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "fb824f93a7d771d2641c",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-a805cd0e518e",
+      "seed": 3,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4574",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "hang: command 3 (raw \"*1\\r\\n$8\\r\\ncontinue\\r\\n\" on connection a) on connection 0 of 4 got no reply, and the server answered no PING within 15s",
+      "scenario": "ai-a0fec480362d",
+      "seed": 4,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #4574",
+      "fingerprint": "09b5b6e0b489248d4b3c",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/76"
+    },
+    {
+      "rule": "check",
+      "detail": "hang: command 6 (EVAL return 'hello' 0 on connection b) on connection 0 of 4 got no reply, and the server answered no PING within 15s",
+      "scenario": "ai-a0fec480362d",
+      "seed": 4,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "1a9808416cc0f091f847",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-a0fec480362d",
+      "seed": 4,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4574",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

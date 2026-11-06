@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.cluster-config-save-bio
+deployment:
+  modes: [standalone]
+metadata:
+  description: Best-effort cluster config saves go through the BIO thread; CLUSTER
+    INFO reports save status, DEBUG BIO-DRAIN waits for the queue, and bumped epochs
+    survive drains, runtime mode switches and a restart
+inputs:
+  properties:
+    save_behavior:
+      type: string
+      enum: [sync, best-effort]
+      default: best-effort
+      description: cluster-config-save-behavior at startup
+components:
+- use: valkey.action.commands
+  id: bio-save
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    server_config:
+      cluster-config-save-behavior: {$ref: inputs.save_behavior}
+      enable-debug-command: yes
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, INFO], expect_difference: true, expect: {contains: "cluster_config_save_status:ok"}}
+    - {command: [CONFIG, SET, cluster-config-save-behavior, best-effort], expect: {
+        equals: OK}}
+    - {command: [CLUSTER, BUMPEPOCH], expect: {equals: "BUMPED 1"}}
+    - {command: [DEBUG, BIO-DRAIN, BIO_CLUSTER_SAVE], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, INFO], expect_difference: true, expect: {contains: "cluster_config_save_status:ok"}}
+    - {command: [CLUSTER, SAVECONFIG], expect: {equals: OK}}
+    - {command: [CLUSTER, BUMPEPOCH], expect: {equals: "BUMPED 2"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], expect_difference: true, expect: {contains: "cluster_current_epoch:2"}}
+    - {command: [CONFIG, SET, cluster-config-save-behavior, best-effort], expect: {
+        equals: OK}}
+    - {command: [CLUSTER, BUMPEPOCH], expect: {equals: "BUMPED 3"}}
+    - {command: [CONFIG, SET, cluster-config-save-behavior, sync], expect: {equals: OK}}
+    - {command: [CLUSTER, BUMPEPOCH], expect: {equals: "BUMPED 4"}}
+    - {command: [CLUSTER, SAVECONFIG], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], expect_difference: true, expect: {contains: "cluster_current_epoch:4"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bio-save.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bio-save}

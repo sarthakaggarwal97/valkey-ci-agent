@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a9963f495d51130871c31417ceb65af8c40365d0",
+  "parent": "f2c1c5e9dece9ec51818327b31bbcb6a9499233f",
+  "pr": 4571,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Bump fast-uri to 3.1.6 in reply-schema-linter to clear CVEs (#4571)",
+  "date": "2026-09-01",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.213,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only bumps the fast-uri npm dependency (3.1.0 to 3.1.6) in utils/reply-schema-linter/package-lock.json, a Node.js lint tool run in CI to validate command reply schemas. No Valkey server code, command behaviour, replication/persistence path, or shipped tool (valkey-cli, valkey-benchmark, valkey-check-rdb/aof) is touched, so no fuzzer scenario can reach the change and none is needed."
+}

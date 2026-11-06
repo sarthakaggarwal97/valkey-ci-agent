@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "637f716b4b523e22e1f24e2aa6065c3f112305fc",
+  "parent": "7be7d564ff0b27b20df8debab78822e4a4d57a62",
+  "pr": 4576,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add missing UPDATE key spec for HGETEX command (#4576)",
+  "date": "2026-08-31",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.4984,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

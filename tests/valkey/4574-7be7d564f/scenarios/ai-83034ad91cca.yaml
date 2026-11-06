@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 597114d0b1f6..7be7d564ff0b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-83034ad91cca
+seed: 1
+experiment:
+  id: proposed.ldb-print-uaf
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

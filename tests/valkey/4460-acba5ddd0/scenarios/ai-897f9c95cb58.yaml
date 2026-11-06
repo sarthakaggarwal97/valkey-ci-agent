@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 351eb0c36102..acba5ddd0691.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-897f9c95cb58
+seed: 11001
+experiment:
+  id: valkey.forkless-save
+  inputs:
+    stable_keys: 5000
+    mutable_keys: 800
+    mutation_rate: 1500
+    value_size: 1024
+    key_save_delay_us: 800
+deployment:
+  mode: standalone
+  base_port: 7000

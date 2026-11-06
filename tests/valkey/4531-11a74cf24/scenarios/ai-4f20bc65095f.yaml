@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7bf7daa53046..11a74cf243f0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4f20bc65095f
+seed: 4531
+experiment:
+  id: proposed.blocking-then-partial-pipeline
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
