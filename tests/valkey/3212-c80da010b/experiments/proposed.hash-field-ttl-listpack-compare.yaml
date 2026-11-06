@@ -1,0 +1,122 @@
+extends: [valkey.liveness]
+id: proposed.hash-field-ttl-listpack-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Hash field TTLs on listpack-encoded hashes - encoding retention, expire
+    conditions, lazy expiry, conversion with TTL carry, and RDB HASH_2 roundtrip,
+    compared with the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hfe
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 128, hash-max-listpack-value: 64}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3, f4, v4], expect: {equals: 4}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: listpack}}
+    - {command: [HEXPIREAT, h, 33277742400, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [OBJECT, ENCODING, h], expect_difference: true, expect: {equals: listpack}}
+    - {command: [HPEXPIREAT, h, 33277742400001, FIELDS, 2, f2, f3], expect: {equals: [
+          1, 1]}}
+    - {command: [HPEXPIRETIME, h, FIELDS, 4, f1, f2, f3, f4], expect: {equals: [33277742400000,
+          33277742400001, 33277742400001, -1]}}
+    - {command: [HEXPIREAT, h, 33277742300, XX, FIELDS, 1, f1], expect: {equals: [
+          1]}}
+    - {command: [HEXPIREAT, h, 33277742400, GT, FIELDS, 1, f1], expect: {equals: [
+          1]}}
+    - {command: [HEXPIREAT, h, 100, GT, FIELDS, 1, f1], expect: {equals: [0]}}
+    - {command: [HEXPIREAT, h, 33277742400, NX, FIELDS, 2, f1, f4], expect: {equals: [
+          0, 1]}}
+    - {command: [HPERSIST, h, FIELDS, 2, f1, f4], expect: {equals: [1, 1]}}
+    - {command: [HPERSIST, h, FIELDS, 1, f1], expect: {equals: [-1]}}
+    - {command: [HTTL, h, FIELDS, 1, nosuch], expect: {equals: [-2]}}
+    - {command: [HSET, h, f2, v2b], expect: {equals: 0}}
+    - {command: [HPEXPIRETIME, h, FIELDS, 1, f2], expect: {equals: [-1]}}
+    - {command: [HSETEX, h, PXAT, 33277742400002, FIELDS, 1, f5, v5], expect: {equals: 1}}
+    - {command: [HSETEX, h, KEEPTTL, FIELDS, 1, f5, v5b], expect: {equals: 1}}
+    - {command: [HPEXPIRETIME, h, FIELDS, 1, f5], expect: {equals: [33277742400002]}}
+    - {command: [HGETEX, h, EXAT, 33277742401, FIELDS, 1, f3], expect: {equals: [
+          v3]}}
+    - {command: [HPEXPIRETIME, h, FIELDS, 1, f3], expect: {equals: [33277742401000]}}
+    - {command: [HGETEX, h, PERSIST, FIELDS, 1, f3], expect: {equals: [v3]}}
+    - {command: [HGETDEL, h, FIELDS, 1, f5], expect: {equals: [v5b]}}
+    - {command: [HEXPIREAT, h, 1, FIELDS, 1, f4], expect: {equals: [2]}}
+    - {command: [HEXISTS, h, f4], expect: {equals: 0}}
+    - {command: [HSET, h, '', ev], expect: {equals: 1}}
+    - {command: [HEXPIREAT, h, 33277742400, FIELDS, 1, ''], expect: {equals: [1]}}
+    - {command: [HPEXPIRETIME, h, FIELDS, 1, ''], expect: {equals: [33277742400000]}}
+    - {command: [HSET, h, f6, v6], expect: {equals: 1}}
+    - {command: [HPEXPIRE, h, 80, FIELDS, 1, f6], expect: {equals: [1]}}
+    - {command: [DEBUG, SLEEP, 0.25], expect: {equals: OK}}
+    - {command: [HEXISTS, h, f6], expect: {equals: 0}}
+    - {command: [HDEL, h, f6], expect: {equals: 0}}
+    - {command: [HLEN, h], compare: skip}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HKEYS, h], compare: unordered}
+    - {command: [HRANDFIELD, h, 100], compare: unordered}
+    - {command: [HSCAN, h, 0], compare: skip}
+    - {command: [HSCAN, h, 0, NOVALUES], compare: skip}
+    - {command: [HSET, hh, k, v], expect: {equals: 1}}
+    - {command: [HPEXPIRE, hh, 80, FIELDS, 1, k], expect: {equals: [1]}}
+    - {command: [DEBUG, SLEEP, 0.25], expect: {equals: OK}}
+    - {command: [HSETEX, hh, FXX, KEEPTTL, FIELDS, 1, k, v2], expect: {equals: 0}}
+    - {command: [HSETEX, hh, FNX, PXAT, 33277742400000, FIELDS, 1, k, vv], expect: {
+        equals: 1}}
+    - {command: [HGET, hh, k], expect: {equals: vv}}
+    - {command: [HPEXPIRETIME, hh, FIELDS, 1, k], expect: {equals: [33277742400000]}}
+    - {command: [HSET, h2, g1, w1, g2, w2], expect: {equals: 2}}
+    - {command: [HPEXPIREAT, h2, 33277742400000, FIELDS, 1, g1], expect: {equals: [
+          1]}}
+    - {command: [OBJECT, ENCODING, h2], expect_difference: true, expect: {equals: listpack}}
+    - {command: [HSET, h2, big, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, h2], expect: {equals: hashtable}}
+    - {command: [HPEXPIRETIME, h2, FIELDS, 1, g1], expect: {equals: [33277742400000]}}
+    - {command: [HSET, h3, a, 1, b, 2], expect: {equals: 2}}
+    - {command: [HPEXPIRE, h3, 150, FIELDS, 1, a], expect: {equals: [1]}}
+    - {command: [HSET, h3, big, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      expect: {equals: 1}}
+    - {command: [DEBUG, SLEEP, 0.4], expect: {equals: OK}}
+    - {command: [HEXISTS, h3, a], expect: {equals: 0}}
+    - {command: [HGETALL, h3], compare: unordered-pairs}
+    - {command: [HSETEX, h7, PXAT, 33277742400000, FIELDS, 2, p, vp, q, vq], expect: {
+        equals: 1}}
+    - {command: [HDEL, h7, p], expect: {equals: 1}}
+    - {command: [HPERSIST, h7, FIELDS, 1, q], expect: {equals: [1]}}
+    - {command: [OBJECT, ENCODING, h7], expect_difference: true, expect: {equals: listpack}}
+    - {command: [HEXPIRETIME, h7, FIELDS, 1, q], expect: {equals: [-1]}}
+    - {command: [HSET, fields, FIELDS, fv], expect: {equals: 1}}
+    - {command: [HEXPIREAT, fields, 33277742400, FIELDS, 1, FIELDS], expect: {equals: [
+          1]}}
+    - {command: [HEXPIRETIME, fields, FIELDS, 1, FIELDS], expect: {equals: [33277742400]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, h], expect_difference: true, expect: {equals: listpack}}
+    - {command: [HPEXPIRETIME, h, FIELDS, 4, f1, f2, f3, ''], expect: {equals: [-1,
+          -1, -1, 33277742400000]}}
+    - {command: [HEXISTS, h, f6], expect: {equals: 0}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [OBJECT, ENCODING, h2], expect: {equals: hashtable}}
+    - {command: [HPEXPIRETIME, h2, FIELDS, 1, g1], expect: {equals: [33277742400000]}}
+    - {command: [OBJECT, ENCODING, hh], expect_difference: true, expect: {equals: listpack}}
+    - {command: [HPEXPIRETIME, hh, FIELDS, 1, k], expect: {equals: [33277742400000]}}
+    - {command: [OBJECT, ENCODING, h7], expect: {equals: listpack}}
+    - {command: [HGETALL, h7], compare: unordered-pairs}
+    - {command: [OBJECT, ENCODING, fields], expect_difference: true, expect: {equals: listpack}}
+    - {command: [HEXPIRETIME, fields, FIELDS, 1, FIELDS], expect: {equals: [33277742400]}}
+    - {command: [HGETALL, h3], compare: unordered-pairs}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [hfe.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hfe}

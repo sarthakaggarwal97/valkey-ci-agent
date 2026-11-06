@@ -1,0 +1,77 @@
+extends: [valkey.base]
+id: proposed.compressed-fullsync-interrupt
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Force a full sync (DEBUG CHANGE-REPL-ID + dropped links) on a primary
+    slowed by rdb-key-save-delay, SIGKILL the primary mid-transfer and restart it;
+    the replicas must treat the cut stream as recoverable truncation (not fatal corruption),
+    resync after the restart, and lose no acknowledged write outside the fsync window
+inputs:
+  properties:
+    save_delay_us: {type: integer, minimum: 0, maximum: 100000, default: 2000}
+    stable_keys: {default: 4000}
+    mid_transfer_s: {type: number, minimum: 0, maximum: 60, default: 3}
+startup_overlays:
+- overlay_id: slow-save
+  selector: primaries
+  server_config:
+    rdb-key-save-delay: {$ref: inputs.save_delay_us}
+- overlay_id: debug-enabled
+  server_config:
+    enable-debug-command: "local"
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: change-replid
+  depends_on: [warm-up]
+  config:
+    instances: primaries
+    commands:
+    - {command: [DEBUG, CHANGE-REPL-ID], expect: {equals: OK}}
+- use: valkey.action.commands
+  id: drop-links
+  depends_on: [change-replid]
+  config:
+    instances: primaries
+    commands:
+    - {command: [CLIENT, KILL, TYPE, replica], expect: {min: 1}}
+- use: valkey.fault.process-signal
+  id: kill-primary
+  config:
+    when_event: mid-transfer.completed
+    instance: primary
+    signal: SIGKILL
+    restart: true
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: mid-transfer
+  depends_on: [drop-links, kill-primary]
+  config: {seconds: {$ref: inputs.mid_transfer_s}}
+- use: valkey.action.wait-event
+  id: primary-back
+  depends_on: [mid-transfer]
+  config: {event: kill-primary.recovered, only_after: kill-primary.injected, timeout_s: 90}
+- use: valkey.action.poll
+  id: links-up
+  depends_on: [primary-back]
+  config:
+    instances: replicas
+    section: replication
+    field: master_link_status
+    predicate: {equals: up}
+    timeout_s: 120
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_s: 2.5
+    loss_window_faults: [kill-primary]
+    converge_timeout_s: 120
+required_events: [mid-transfer.completed, kill-primary.recovered]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-primary}

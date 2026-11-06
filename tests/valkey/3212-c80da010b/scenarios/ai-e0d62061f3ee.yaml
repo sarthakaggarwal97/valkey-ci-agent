@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 202a4805816e..c80da010b57e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e0d62061f3ee
+seed: 7201
+experiment:
+  id: proposed.hash-field-ttl-listpack-set-paths
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200
+  server_config:
+    hash-max-listpack-entries: 128
+    hash-max-listpack-value: 64

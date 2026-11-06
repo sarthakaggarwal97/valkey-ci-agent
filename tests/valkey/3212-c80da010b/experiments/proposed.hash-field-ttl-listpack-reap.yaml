@@ -1,0 +1,22 @@
+extends: [valkey.liveness]
+id: proposed.hash-field-ttl-listpack-reap
+deployment:
+  modes: [standalone]
+metadata:
+  description: Lazy and active expiry of a listpack hash field, reaping the pair and
+    clearing the volatile-count header
+components:
+- use: valkey.action.commands
+  id: reap
+  config:
+    timeout_s: 40
+    commands:
+    - {command: [HSET, h, f1, v1, keep, v2], expect: {equals: 2}}
+    - {command: [HPEXPIRE, h, 50, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HGET, h, f1], wait_s: 5, expect: {exists: false}}
+    - {command: [HLEN, h], wait_s: 30, expect: {equals: 1}}
+    - {command: [HGET, h, keep], expect: {equals: v2}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: listpack}}
+required_events: [reap.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reap}

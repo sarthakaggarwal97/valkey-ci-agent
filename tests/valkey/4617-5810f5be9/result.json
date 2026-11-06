@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5810f5be96d94198fb3b4c6c03f41914b4561ba3",
+  "parent": "da91ccd12f2961575102aea1f1020985debefb9f",
+  "pr": 4617,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove duplicate c->flag.blocked check (#4617)",
+  "date": "2026-09-14",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2167,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change removes a redundant `!c->flag.blocked` check inside a block that is only entered when `!c->flag.blocked` already holds (the enclosing `if (update_command_stats && !c->flag.blocked)` in call() in src/server.c). The inner condition's truth value is unchanged in every reachable state, so command latency histogram updates occur in exactly the same cases on both builds. This is a no-op refactor with no observable behaviour change, so no scenario is needed."
+}

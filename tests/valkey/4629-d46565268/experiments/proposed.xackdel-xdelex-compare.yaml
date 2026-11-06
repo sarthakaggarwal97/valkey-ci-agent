@@ -1,0 +1,174 @@
+extends: [valkey.liveness]
+id: proposed.xackdel-xdelex-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: XACKDEL/XDELEX semantics, parser boundaries, heap path, WATCH signaling
+    and XDEL/XACK regressions compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: xdelx
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [XADD, s1, '1-1', f, v], expect: {equals: '1-1'}}
+    - {command: [XADD, s1, '2-2', f, v], expect: {equals: '2-2'}}
+    - {command: [XADD, s1, '3-3', f, v], expect: {equals: '3-3'}}
+    - {command: [XGROUP, CREATE, s1, g1, '0'], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g1, c1, COUNT, 2, STREAMS, s1, '>']}
+    - {command: [XDELEX, s1, KEEPREF, IDS, 2, '1-1', '99-99'], expect_difference: true,
+      expect: {equals: [1, -1]}}
+    - {command: [XLEN, s1], expect_difference: true, expect: {equals: 2}}
+    - {command: [XPENDING, s1, g1], expect: {equals: [2, '1-1', '2-2', [[c1, '2']]]}}
+    - {command: [XDELEX, s1, DELREF, IDS, 1, '1-1'], expect_difference: true, expect: {
+        equals: [-1]}}
+    - {command: [XPENDING, s1, g1], expect_difference: true, expect: {equals: [1,
+          '2-2', '2-2', [[c1, '1']]]}}
+    - {command: [XDELEX, s1, DELREF, IDS, 1, '2-2'], expect_difference: true, expect: {
+        equals: [1]}}
+    - {command: [XPENDING, s1, g1, '-', '+', 10], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [XLEN, s1], expect_difference: true, expect: {equals: 1}}
+    - {command: [XADD, s2, '1-1', f, v], expect: {equals: '1-1'}}
+    - {command: [XGROUP, CREATE, s2, ga, '0'], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s2, gb, '0'], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, ga, ca, COUNT, 1, STREAMS, s2, '>']}
+    - {command: [XREADGROUP, GROUP, gb, cb, COUNT, 1, STREAMS, s2, '>']}
+    - {command: [XDELEX, s2, ACKED, IDS, 1, '1-1'], expect_difference: true, expect: {
+        equals: [2]}}
+    - {command: [XACK, s2, ga, '1-1'], expect: {equals: 1}}
+    - {command: [XDELEX, s2, ACKED, IDS, 1, '1-1'], expect_difference: true, expect: {
+        equals: [2]}}
+    - {command: [XACK, s2, gb, '1-1'], expect: {equals: 1}}
+    - {command: [XDELEX, s2, ACKED, IDS, 1, '1-1'], expect_difference: true, expect: {
+        equals: [1]}}
+    - {command: [XLEN, s2], expect_difference: true, expect: {equals: 0}}
+    - {command: [XADD, s3, '1-1', f, v], expect: {equals: '1-1'}}
+    - {command: [XADD, s3, '5-5', f, v], expect: {equals: '5-5'}}
+    - {command: [XGROUP, CREATE, s3, g, '0'], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g, c, COUNT, 10, STREAMS, s3, '>']}
+    - {command: [XGROUP, SETID, s3, g, '1-1'], expect: {equals: OK}}
+    - {command: [XDELEX, s3, ACKED, IDS, 1, '5-5'], expect_difference: true, expect: {
+        equals: [2]}}
+    - {command: [XACK, s3, g, '5-5'], expect: {equals: 1}}
+    - {command: [XDELEX, s3, ACKED, IDS, 1, '5-5'], expect_difference: true, expect: {
+        equals: [2]}}
+    - {command: [XGROUP, SETID, s3, g, '5-5'], expect: {equals: OK}}
+    - {command: [XDELEX, s3, ACKED, IDS, 1, '5-5'], expect_difference: true, expect: {
+        equals: [1]}}
+    - {command: [XLEN, s3], expect_difference: true, expect: {equals: 1}}
+    - {command: [XADD, s4, '1-1', f, v], expect: {equals: '1-1'}}
+    - {command: [XADD, s4, '2-2', f, v], expect: {equals: '2-2'}}
+    - {command: [XGROUP, CREATE, s4, g1, '0'], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s4, g2, '0'], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g1, c, COUNT, 2, STREAMS, s4, '>']}
+    - {command: [XREADGROUP, GROUP, g2, c, COUNT, 2, STREAMS, s4, '>']}
+    - {command: [XACKDEL, s4, g1, IDS, 1, '1-1'], expect_difference: true, expect: {
+        equals: [1]}}
+    - {command: [XPENDING, s4, g2], expect: {equals: [2, '1-1', '2-2', [[c, '2']]]}}
+    - {command: [XPENDING, s4, g1], expect_difference: true, expect: {equals: [1,
+          '2-2', '2-2', [[c, '1']]]}}
+    - {command: [XACKDEL, s4, g1, ACKED, IDS, 1, '2-2'], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [XACKDEL, s4, g1, ACKED, IDS, 1, '2-2'], expect_difference: true,
+      expect: {equals: [-1]}}
+    - {command: [XACKDEL, s4, g2, DELREF, IDS, 2, '1-1', '2-2'], expect_difference: true,
+      expect: {equals: [1, 1]}}
+    - {command: [XLEN, s4], expect_difference: true, expect: {equals: 0}}
+    - {command: [XPENDING, s4, g2, '-', '+', 10], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [XACKDEL, s4, g2, DELREF, IDS, 1, '7-7'], expect_difference: true,
+      expect: {equals: [-1]}}
+    - {command: [XDELEX, nosuch, IDS, 2, '1-1', '2-2'], expect_difference: true, expect: {
+        equals: [-1, -1]}}
+    - {command: [XACKDEL, nosuch, g, ACKED, IDS, 1, '1-1'], expect_difference: true,
+      expect: {equals: [-1]}}
+    - {command: [XADD, s5, '1-1', f, v], expect: {equals: '1-1'}}
+    - {command: [XACKDEL, s5, nogroup, IDS, 1, '1-1'], expect_difference: true, expect: {
+        equals: [-1]}}
+    - {command: [SET, str, v], expect: {equals: OK}}
+    - {command: [XDELEX, str, IDS, 1, '1-1'], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [XACKDEL, str, g, IDS, 1, '1-1'], expect_difference: true, expect: {
+        error: WRONGTYPE}}
+    - {command: [XDELEX, s5, BADMODE, IDS, 1, '1-1'], expect_difference: true, expect: {
+        error: 'syntax error'}}
+    - {command: [XDELEX, s5, KEEPREF, NOIDS, 1, '1-1'], expect_difference: true, expect: {
+        error: 'syntax error'}}
+    - {command: [XDELEX, s5, IDS, 0, '1-1'], expect_difference: true, expect: {error: 'positive
+          integer'}}
+    - {command: [XDELEX, s5, IDS, -9223372036854775808, '1-1'], expect_difference: true,
+      expect: {error: 'positive integer'}}
+    - {command: [XDELEX, s5, IDS, 9223372036854775807, '1-1'], expect_difference: true,
+      expect: {error: 'syntax error'}}
+    - {command: [XDELEX, s5, IDS, '18446744073709551616', '1-1'], expect_difference: true,
+      expect: {error: 'positive integer'}}
+    - {command: [XDELEX, s5, IDS, 1, '1-1', '2-2'], expect_difference: true, expect: {
+        error: 'syntax error'}}
+    - {command: [XDELEX, s5, IDS, 1, not-an-id], expect_difference: true, expect: {
+        error: 'Invalid stream ID'}}
+    - {command: [XACKDEL, s5, g1], expect_difference: true, expect: {error: 'wrong
+          number of arguments'}}
+    - {command: [XADD, IDS, '1-1', f, v], expect: {equals: '1-1'}}
+    - {command: [XDELEX, IDS, IDS, 1, '1-1'], expect_difference: true, expect: {equals: [
+          1]}}
+    - {command: [XADD, s6, '1-1', f, v], expect: {equals: '1-1'}}
+    - {command: [XGROUP, CREATE, s6, KEEPREF, '0'], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, KEEPREF, c, COUNT, 1, STREAMS, s6, '>']}
+    - {command: [XACKDEL, s6, KEEPREF, KEEPREF, IDS, 1, '1-1'], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [XADD, s7, '1-1', f, v], expect: {equals: '1-1'}}
+    - {command: [XADD, s7, '2-2', f, v], expect: {equals: '2-2'}}
+    - {command: [XADD, s7, '3-3', f, v], expect: {equals: '3-3'}}
+    - {command: [XGROUP, CREATE, s7, g, '0'], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g, c, COUNT, 3, STREAMS, s7, '>']}
+    - {command: [XACKDEL, s7, g, DELREF, IDS, 12, '1-1', '2-2', '3-3', '1-1', '2-2',
+        '9-9', '10-10', '11-11', '12-12', '13-13', '14-14', '1-1'], expect_difference: true,
+      expect: {equals: [1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {command: [XLEN, s7], expect_difference: true, expect: {equals: 0}}
+    - {command: [XADD, s7, '15-15', f, v], expect: {equals: '15-15'}}
+    - {command: [XDELEX, s7, IDS, 1, '15-15'], expect_difference: true, expect: {
+        equals: [1]}}
+    - {command: [XADD, s8, '1-1', f, v], expect: {equals: '1-1'}}
+    - {command: [XADD, s8, '2-2', f, v], expect: {equals: '2-2'}}
+    - {command: [XDELEX, s8, ACKED, IDS, 10, '1-1', '2-2', '3-3', '4-4', '5-5', '6-6',
+        '7-7', '8-8', '9-9', '1-1'], expect_difference: true, expect: {equals: [1,
+          1, -1, -1, -1, -1, -1, -1, -1, -1]}}
+    - {command: [XADD, s9, '1-1', f, v], expect: {equals: '1-1'}}
+    - {command: [XADD, s9, '2-2', f, v], expect: {equals: '2-2'}}
+    - {command: [XADD, s9, '3-3', f, v], expect: {equals: '3-3'}}
+    - {command: [XGROUP, CREATE, s9, g, '0'], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g, c, COUNT, 3, STREAMS, s9, '>']}
+    - {command: [XACK, s9, g, '1-1', '1-1', '2-2'], expect: {equals: 2}}
+    - {command: [XDEL, s9, '1-1', '1-1', '2-2', '9-9'], expect: {equals: 2}}
+    - {command: [XDEL, nokey, '1-1'], expect: {equals: 0}}
+    - {command: [XDEL, s9, bad-id], expect: {error: 'Invalid stream ID'}}
+    - {command: [XLEN, s9], expect: {equals: 1}}
+    - {command: [XINFO, STREAM, s9]}
+    - {command: [XADD, s10, '1-1', f, v], expect: {equals: '1-1'}}
+    - {command: [XGROUP, CREATE, s10, g, '0'], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g, c, COUNT, 1, STREAMS, s10, '>']}
+    - {command: [XDELEX, s10, KEEPREF, IDS, 1, '1-1'], expect_difference: true, expect: {
+        equals: [1]}}
+    - {command: [WATCH, s10], expect: {equals: OK}}
+    - {command: [XDELEX, s10, DELREF, IDS, 1, '1-1'], expect_difference: true, expect: {
+        equals: [-1]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, probe, 1], expect: {equals: QUEUED}}
+    - {command: [EXEC], compare: skip}
+    - {command: [EXISTS, probe], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [xdelx.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: xdelx}

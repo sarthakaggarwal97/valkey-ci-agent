@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ed9dc9fa82c6..4be324e8878f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7c1cf9cbaa87
+seed: 105
+experiment:
+  id: proposed.compressed-fullsync-interrupt
+  inputs:
+    save_delay_us: 2000
+    stable_keys: 4000
+    mid_transfer_s: 4
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7400
+  server_config:
+    rdbcompression: lz4
+    repl-diskless-sync: 'no'
+    repl-diskless-load: swapdb

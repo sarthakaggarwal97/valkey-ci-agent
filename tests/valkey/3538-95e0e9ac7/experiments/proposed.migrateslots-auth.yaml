@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.migrateslots-auth
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CLUSTER MIGRATESLOTS AUTH migrates slots to password-protected targets, overrides
+    primaryuser/primaryauth, mixes explicit AUTH and primaryauth fallback per target
+    in one command, and rejects malformed AUTH groups; compared against the parent
+    build, which rejects the AUTH token.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 300
+    commands:
+    - {command: [SET, a, v1], expect: {equals: OK}}
+    - {command: [SET, b, v2], expect: {equals: OK}}
+    - {command: [SET, c, v3], expect: {equals: OK}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [PING], node: 2, expect: {equals: PONG}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 0, NODE, "<node.1.id>", AUTH],
+      expect: {error: "syntax error"}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 0, NODE, "<node.1.id>", AUTH,
+        onlyuser], expect: {error: "syntax error"}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 0, NODE, "<node.1.id>", AUTH,
+        u, p, AUTH, u, p], expect: {error: "syntax error"}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], expect: {equals: []}}
+    - {command: [CONFIG, SET, requirepass, pw1], node: 1, expect: {equals: OK}}
+    - {command: [CONFIG, SET, requirepass, pw2], node: 2, expect: {equals: OK}}
+    - {command: [CONFIG, SET, primaryuser, wronguser], expect: {equals: OK}}
+    - {command: [CONFIG, SET, primaryauth, wrongpass], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 15495, 15495, NODE, "<node.1.id>",
+        auth, default, pw1], expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, a], node: 1, wait_s: 20, expect_difference: true, expect: {
+        equals: v1}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 15495], wait_s: 20, expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [CONFIG, SET, primaryuser, ""], expect: {equals: OK}}
+    - {command: [CONFIG, SET, primaryauth, pw2], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 3300, 3300, NODE, "<node.1.id>",
+        AUTH, default, pw1, SLOTSRANGE, 7365, 7365, NODE, "<node.2.id>"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [GET, b], node: 1, wait_s: 20, expect_difference: true, expect: {
+        equals: v2}}
+    - {command: [GET, c], node: 2, wait_s: 20, expect_difference: true, expect: {
+        equals: v3}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [migrate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

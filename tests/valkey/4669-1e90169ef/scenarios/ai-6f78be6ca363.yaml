@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5810f5be96d9..1e90169efd9c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6f78be6ca363
+seed: 4669
+experiment:
+  id: proposed.hash2-midlistpack-ttl
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

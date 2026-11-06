@@ -1,0 +1,98 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4be324e8878fb0332353ad4886fa3940dbd23f91",
+  "parent": "ed9dc9fa82c6134bb6c14e73ba20966e92441fcd",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Streaming Compression support for fullsync",
+  "date": "2026-09-11",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 18,
+  "proven": 0,
+  "hunted": 13,
+  "dropped": 5,
+  "recall": false,
+  "coverage": {
+    "lines": 167,
+    "executed": 128,
+    "percent": 76,
+    "uncovered": [
+      "src/rdb.c:168",
+      "src/rdb.c:169",
+      "src/rdb.c:170",
+      "src/rdb.c:171",
+      "src/rdb.c:1571",
+      "src/rdb.c:1572",
+      "src/rdb.c:1584",
+      "src/rdb.c:1585",
+      "src/rdb.c:1852",
+      "src/rdb.c:3403",
+      "src/rdb.c:4075",
+      "src/rdb.c:4077",
+      "src/rdb.c:4079",
+      "src/rdb.c:4270",
+      "src/replication.c:2574",
+      "src/replication.c:2579",
+      "src/replication.c:2580",
+      "src/replication.c:2582",
+      "src/replication.c:2583",
+      "src/replication.c:2605",
+      "src/replication.c:2606",
+      "src/replication.c:2607",
+      "src/replication.c:2609",
+      "src/replication.c:2611",
+      "src/replication.c:2613",
+      "src/replication.c:2625",
+      "src/replication.c:2626",
+      "src/replication.c:2632",
+      "src/replication.c:2637",
+      "src/replication.c:3241",
+      "src/rio.c:235",
+      "src/rio.c:251",
+      "src/rio.c:254",
+      "src/rio.c:267",
+      "src/rio.c:281",
+      "src/rio.c:303",
+      "src/rio.c:304",
+      "src/rio.c:305",
+      "src/rio.c:306"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 13.0405,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-f186feae58f7",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported"
+    },
+    {
+      "scenario": "ai-2bcc9733aa69",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported"
+    },
+    {
+      "scenario": "ai-9aa29a12fb3f",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported"
+    },
+    {
+      "scenario": "ai-3b1c22ee57dc",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported"
+    },
+    {
+      "scenario": "ai-7ae59ca6b7e1",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported"
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+extends: [valkey.base]
+id: proposed.compressed-fullsync-primary-crash
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Kill the primary once to force a streaming-compressed full resync,
+    then kill it again mid-transfer; the replica must treat the mid-frame EOF as recoverable
+    truncation (resync), never as corruption (fatal abort), and converge after the
+    restart.
+inputs:
+  properties:
+    run_before_s: {type: number, minimum: 0.5, maximum: 30, default: 2}
+    mid_sync_delay_s: {type: number, minimum: 0, maximum: 30, default: 1.5}
+    settle_s: {type: number, minimum: 0, maximum: 60, default: 3}
+components:
+- use: valkey.action.sleep
+  id: run-first
+  depends_on: [writes]
+  config:
+    seconds: {$ref: inputs.run_before_s}
+- use: valkey.fault.process-signal
+  id: first-kill
+  config:
+    instance: primary
+    signal: SIGKILL
+    restart: true
+    restart_mode: immediate
+    when_event: run-first.completed
+- use: valkey.action.wait-event
+  id: first-recovered
+  depends_on: [run-first]
+  config:
+    event: first-kill.recovered
+    only_after: first-kill.injected
+    timeout_s: 90
+- use: valkey.action.sleep
+  id: resync-window
+  depends_on: [first-recovered]
+  config:
+    seconds: {$ref: inputs.mid_sync_delay_s}
+- use: valkey.fault.process-signal
+  id: second-kill
+  config:
+    instance: primary
+    signal: SIGKILL
+    restart: true
+    restart_mode: immediate
+    when_event: resync-window.completed
+- use: valkey.action.wait-event
+  id: second-recovered
+  depends_on: [resync-window]
+  config:
+    event: second-kill.recovered
+    only_after: second-kill.injected
+    timeout_s: 90
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [second-recovered]
+  config:
+    seconds: {$ref: inputs.settle_s}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    loss_window_s: 2.5
+    loss_window_faults: [first-kill, second-kill]
+    converge_timeout_s: 120
+required_events: [run-first.completed, first-kill.recovered, second-kill.recovered,
+  settle.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: first-kill}
+- {evidence_id: valkey.fault.injected, source: second-kill}

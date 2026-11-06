@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "03a7447bd8da49e6c601ce069136abb9cd943e4f",
+  "parent": "13c66b82e1fbfdf28189645af03cbd9f6c091aaf",
+  "pr": 3717,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add support for secondary certificates (#3717)",
+  "date": "2026-09-11",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 7,
+    "executed": 5,
+    "percent": 71,
+    "uncovered": [
+      "src/server.c:6448",
+      "src/server.c:6449"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 8.0669,
+  "findings": [],
+  "recorded": []
+}

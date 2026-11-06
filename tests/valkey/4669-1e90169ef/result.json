@@ -1,0 +1,40 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1e90169efd9c21e016e2de4d4a7461b1859ac841",
+  "parent": "5810f5be96d94198fb3b4c6c03f41914b4561ba3",
+  "pr": 4669,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Track field TTLs in the volatile set when a HASH_2 load converts mid-listpack (#4669)",
+  "date": "2026-09-14",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 1,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 7.7684,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-6f78be6ca363",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (OBJECT ENCODING myhash)"
+    },
+    {
+      "scenario": "ai-f1a9ad627777",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (OBJECT ENCODING myhash)"
+    }
+  ]
+}

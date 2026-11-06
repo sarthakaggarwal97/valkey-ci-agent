@@ -1,0 +1,101 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "95e0e9ac7f3a3e7f5963756cad8fb0f9f86ae77b",
+  "parent": "d46565268d95da6dd3305b33d183168de49c670d",
+  "pr": 3538,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add AUTH options to CLUSTER MIGRATESLOTS (#3538)",
+  "date": "2026-09-10",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 60,
+    "executed": 58,
+    "percent": 96,
+    "uncovered": [
+      "src/cluster_migrateslots.c:1311",
+      "src/cluster_migrateslots.c:1312"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 5.0886,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "hang: command 4 (PING on node 2) on connection 3 of 4 got no reply, and the server answered no PING within 300s",
+      "scenario": "ai-a93c1235afba",
+      "seed": 102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "535fe5e4f9d26fa0ac24",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (COMMANDLOG GET -1 slow) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[[2,1793927798,48,[\"CLUSTER\",\"MIGRATESLOTS\",\"SLOTSRANGE",
+      "scenario": "ai-84d6f3ae476e",
+      "seed": 103,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "51cc69c4cf0a3dc23e23",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (COMMANDLOG GET -1 slow) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[[2,1793927654,12,[\"CLUSTER\",\"MIGRATESLOTS\",\"SLOTSRANGE",
+      "scenario": "ai-84d6f3ae476e",
+      "seed": 103,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "e3679c8be7e7dce4db8d",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (COMMANDLOG GET -1 slow) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[[2,1793928116,20,[\"CLUSTER\",\"MIGRATESLOTS\",\"SLOTSRANGE",
+      "scenario": "ai-b514d5a65a89",
+      "seed": 104,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "960f220f2ae627b265cd",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (COMMANDLOG GET -1 slow) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[[2,1793927973,10,[\"CLUSTER\",\"MIGRATESLOTS\",\"SLOTSRANGE",
+      "scenario": "ai-b514d5a65a89",
+      "seed": 104,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "0d957eb186c5ecb1dcaa",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

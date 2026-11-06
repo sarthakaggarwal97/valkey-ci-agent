@@ -1,0 +1,27 @@
+extends: [valkey.liveness]
+id: proposed.hash-field-ttl-listpack-convert
+deployment:
+  modes: [standalone]
+metadata:
+  description: A volatile listpack hash grown past hash-max-listpack-entries converts
+    to hashtable carrying its field TTLs
+components:
+- use: valkey.action.commands
+  id: convert
+  config:
+    timeout_s: 20
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: listpack}}
+    - {command: [HEXPIRE, h, 10000, FIELDS, 2, f1, f2], expect: {equals: [1, 1]}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: listpack}}
+    - {command: [HSET, h, f4, v4, f5, v5], expect: {equals: 2}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: hashtable}}
+    - {command: [HTTL, h, FIELDS, 1, f1], expect: {exists: true}}
+    - {command: [HTTL, h, FIELDS, 1, f4], expect: {equals: [-1]}}
+    - {command: [HGET, h, f1], expect: {equals: v1}}
+    - {command: [HPERSIST, h, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HTTL, h, FIELDS, 1, f1], expect: {equals: [-1]}}
+required_events: [convert.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: convert}

@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.hash2-midlistpack-ttl
+deployment:
+  modes: [standalone]
+metadata:
+  description: A HASH_2 load that converts a half-built listpack mid-loop must keep
+    carried-over field TTLs in the volatile set, so a later save still picks the TTL-capable
+    RDB type instead of dropping the expiry
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    server_config: {hash-max-listpack-entries: 128, hash-max-listpack-value: 64}
+    timeout_s: 20
+    commands:
+    - {command: [HSET, myhash, a, b, cc, dd], expect: {equals: 2}}
+    - {command: [HEXPIRE, myhash, "1000", FIELDS, "1", a], expect: {equals: [1]}}
+    - {command: [OBJECT, ENCODING, myhash], compare: skip, expect: {equals: listpack}}
+    - {command: [CONFIG, SET, hash-max-listpack-value, "1"], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, myhash], compare: skip, expect: {equals: hashtable}}
+    - {command: [HGET, myhash, a], expect: {equals: b}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HPERSIST, myhash, FIELDS, "1", a], expect_difference: true, expect: {
+        equals: [1]}}
+    - {command: [HGET, myhash, a], expect: {equals: b}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

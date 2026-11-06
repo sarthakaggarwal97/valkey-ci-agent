@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.hash-field-ttl-listpack-live
+deployment:
+  modes: [standalone]
+metadata:
+  description: Field-TTL ops on a listpack-encoded hash (attach/refresh/persist/delete
+    and volatile HRANDFIELD) stay correct and crash-free
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ops
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: listpack}}
+    - {command: [HEXPIRE, h, 1000, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HEXPIRE, h, 500, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HEXPIRE, h, 2000, FIELDS, 2, f2, f3], expect: {equals: [1, 1]}}
+    - {command: [HTTL, h, FIELDS, 1, f1], expect: {exists: true}}
+    - {command: [HGET, h, f1], expect: {equals: v1}}
+    - {command: [HGETALL, h], expect: {exists: true}}
+    - {command: [HRANDFIELD, h], expect: {in: [f1, f2, f3]}}
+    - {command: [HRANDFIELD, h, 2], expect: {exists: true}}
+    - {command: [HRANDFIELD, h, 5, WITHVALUES], expect: {exists: true}}
+    - {command: [HRANDFIELD, h, -4, WITHVALUES], expect: {exists: true}}
+    - {command: [HPERSIST, h, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HTTL, h, FIELDS, 1, f1], expect: {equals: [-1]}}
+    - {command: [HDEL, h, f2], expect: {equals: 1}}
+    - {command: [HLEN, h], expect: {equals: 2}}
+    - {command: [HPEXPIREAT, h, 99999999999999, FIELDS, 1, f3], expect: {equals: [
+          1]}}
+    - {command: [HGET, h, ""], expect: {exists: false}}
+    - {command: [HSET, h, fields, keyword], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: listpack}}
+required_events: [ops.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ops}

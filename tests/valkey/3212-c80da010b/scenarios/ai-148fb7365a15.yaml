@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 202a4805816e..c80da010b57e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-148fb7365a15
+seed: 1004
+experiment:
+  id: proposed.hash-field-ttl-rdb-roundtrip
+  inputs:
+    rdbcompression: zstd
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

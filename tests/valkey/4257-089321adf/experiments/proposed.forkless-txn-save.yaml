@@ -1,0 +1,94 @@
+extends: [valkey.base, valkey.forkless]
+id: proposed.forkless-txn-save
+deployment:
+  modes: [standalone]
+metadata:
+  description: MULTI/EXEC and EVAL writes during a slow forkless save, where alsoPropagate
+    feeds the background iterator but also_propagate stays empty, so the new combined
+    pending-work gate decides whether propagatePendingCommands (which closes the iterator's
+    open MULTI) still runs
+components:
+- use: valkey.observer.info
+  id: info
+  config:
+    instances: primaries
+    sections: [persistence]
+    interval_s: 0.05
+    on_events: [bgsave.save-started, bgsave.save-completed]
+    expectations:
+    - {evidence_id: valkey.forkless.in-progress, field: rdb_current_bgsave_type, equals: forkless,
+      when: during, required: true}
+    - {evidence_id: valkey.persistence.last-status-ok, field: rdb_last_bgsave_status,
+      equals: ok, when: final}
+    - {evidence_id: valkey.persistence.idle-after, field: rdb_bgsave_in_progress,
+      equals: 0, when: final}
+- use: valkey.observer.log
+  id: logs
+  config:
+    instances: primaries
+    expect:
+    - {evidence_id: valkey.forkless.log-started, pattern: 'Beginning forklessSaveToDisk',
+      required: true}
+    forbidden:
+    - {pattern: 'forkless-save: (forkless )?save failed'}
+    - {pattern: 'Falling back to fork-based save'}
+- use: valkey.action.bgsave
+  id: bgsave
+  depends_on: [writes, info, logs]
+  config: {instances: primaries, expect: ok, expect_type: forkless}
+- use: valkey.action.commands
+  id: txn
+  config:
+    timeout_s: 90
+    commands:
+    - {command: [INFO, persistence], wait_s: 60, expect: {contains: 'rdb_bgsave_in_progress:1'}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, 'tx:a', a1], expect: {equals: QUEUED}}
+    - {command: [SET, 'tx:b', b1], expect: {equals: QUEUED}}
+    - {command: [INCR, 'tx:c'], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK, 1]}}
+    - {command: [SET, 'tx:p', p1], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, 'tx:a', a2], expect: {equals: QUEUED}}
+    - {command: [SET, 'tx:b', b2], expect: {equals: QUEUED}}
+    - {command: [INCR, 'tx:c'], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK, 2]}}
+    - {command: [EVAL, "return server.call('SET', KEYS[1], ARGV[1])", 1, 'tx:e', e1],
+      expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, 'tx:a', a3], expect: {equals: QUEUED}}
+    - {command: [INCR, 'tx:c'], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, 3]}}
+    - {command: [SET, 'tx:p', p2], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, 'tx:a', a4], expect: {equals: QUEUED}}
+    - {command: [INCR, 'tx:c'], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, 4]}}
+    - {command: [EVAL, "server.call('SET', KEYS[1], 'x') server.call('INCR', KEYS[2])\
+          \ return 1", 2, 'tx:e2', 'tx:c2'], expect: {equals: 1}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, 'tx:b', b5], expect: {equals: QUEUED}}
+    - {command: [INCR, 'tx:c'], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, 5]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [DEL, 'tx:b'], expect: {equals: QUEUED}}
+    - {command: [INCR, 'tx:c'], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [1, 6]}}
+    - {command: [SET, 'tx:p', p3], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, 'tx:a', a7], expect: {equals: QUEUED}}
+    - {command: [INCR, 'tx:c'], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, 7]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, 'tx:a', a8], expect: {equals: QUEUED}}
+    - {command: [INCR, 'tx:c'], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, 8]}}
+    - {command: [GET, 'tx:c'], expect: {equals: '8'}}
+    - {command: [GET, 'tx:c2'], expect: {equals: '1'}}
+- use: valkey.oracle.rdb-snapshot
+  id: snapshot
+  depends_on: [bgsave]
+  config: {bgsave: bgsave, workload: writes}
+required_events: [writes.seeded, bgsave.save-started, bgsave.save-completed, txn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: txn}

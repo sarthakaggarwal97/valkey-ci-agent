@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.hash-field-ttl-rdb-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: RDB save/reload of a listpack hash with field TTLs uses the HASH_2
+    triplet path and restores the listpack encoding
+inputs:
+  properties:
+    rdbcompression: {type: string, enum: [no, yes, lzf, lz4, zstd], default: yes}
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rdbrt
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config:
+      appendonly: "no"
+      hash-max-listpack-entries: 128
+      hash-max-listpack-value: 64
+      rdbcompression: {$ref: inputs.rdbcompression}
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [HEXPIRE, h, 100000, FIELDS, 2, f1, f2], expect: {equals: [1, 1]}}
+    - {command: [OBJECT, ENCODING, h], expect_difference: true, expect: {equals: listpack}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, h], expect_difference: true, expect: {equals: listpack}}
+    - {command: [HLEN, h], expect: {equals: 3}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HGET, h, f3], expect: {equals: v3}}
+    - {command: [HTTL, h, FIELDS, 2, f1, f2], compare: skip, expect: {exists: true}}
+    - {command: [HTTL, h, FIELDS, 1, f3], expect: {equals: [-1]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [rdbrt.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rdbrt}

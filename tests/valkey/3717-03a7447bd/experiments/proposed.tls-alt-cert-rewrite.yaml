@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.tls-alt-cert-rewrite
+deployment:
+  modes: [standalone]
+metadata:
+  description: Secondary TLS certificate options persist across CONFIG REWRITE and
+    a restart on the change
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: altrewrite
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, tls-alt-cert-file, /etc/valkey/alt.crt, tls-alt-key-file,
+        /etc/valkey/alt.key], expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, tls-alt-cert-file], expect_difference: true, expect: {
+        contains: "/etc/valkey/alt.crt"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [altrewrite.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: altrewrite}

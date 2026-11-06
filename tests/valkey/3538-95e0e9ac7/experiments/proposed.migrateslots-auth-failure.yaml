@@ -1,0 +1,65 @@
+extends: [valkey.liveness]
+id: proposed.migrateslots-auth-failure
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CLUSTER MIGRATESLOTS AUTH failure handling: credentials redacted in the command
+    log, wrong and empty passwords and a username literally named "auth" fail the
+    export job cleanly without moving the slot, and the refactored replicationSendAuth
+    still links a cluster replica using an ACL primaryuser/primaryauth over a dual-channel
+    full sync.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: authfail
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 300
+    commands:
+    - {command: [SET, a, v1], expect: {equals: OK}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [CONFIG, SET, commandlog-execution-slower-than, 0], expect: {equals: OK}}
+    - {command: [COMMANDLOG, RESET, slow], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 0, NODE, notavalidnodename,
+        AUTH, hunteruser, hunterpass], expect: {error: "Invalid node name"}}
+    - {command: [CONFIG, SET, commandlog-execution-slower-than, 10000], expect: {
+        equals: OK}}
+    - {command: [COMMANDLOG, GET, -1, slow], expect_difference: true, expect: {contains: "(redacted)"}}
+    - {command: [CONFIG, SET, requirepass, pw1], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 15495, 15495, NODE, "<node.1.id>",
+        AUTH, default, wrongpass], expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], wait_s: 20, expect_difference: true,
+      expect: {contains: "Failed to AUTH"}}
+    - {command: [GET, a], expect: {equals: v1}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 0, NODE, "<node.1.id>", AUTH,
+        default, ""], expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 1, 1, NODE, "<node.1.id>", AUTH,
+        auth, auth], expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 15495], expect: {equals: 1}}
+    - {command: [CONFIG, SET, requirepass, ""], node: 1, expect: {equals: OK}}
+    - {command: [ACL, SETUSER, repluser, on, ">rpw", "~*", "&*", "+@all"], expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, dual-channel-replication-enabled, "yes"], expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, dual-channel-replication-enabled, "yes"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, primaryuser, repluser], node: 1, expect: {equals: OK}}
+    - {command: [CONFIG, SET, primaryauth, rpw], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [authfail.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: authfail}

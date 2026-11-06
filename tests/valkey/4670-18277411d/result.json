@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "18277411d6ef7955240f915711e536b859cca4a5",
+  "parent": "1e90169efd9c21e016e2de4d4a7461b1859ac841",
+  "pr": 4670,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reject repeated CLUSTER SYNCSLOTS ESTABLISH on the same connection (#4670)",
+  "date": "2026-09-14",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.929,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:3966 'c->repl_data->reploff > prev_offset' is not true",
+      "scenario": "ai-c963a7b816b9",
+      "seed": 7001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4670",
+      "fingerprint": "d29c516a460bfe278c13",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:3966 'c->repl_data->reploff > prev_offset' is not true",
+      "scenario": "ai-e0a0a4b1a718",
+      "seed": 7101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4670",
+      "fingerprint": "d29c516a460bfe278c13",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

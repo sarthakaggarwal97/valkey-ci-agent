@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "13c66b82e1fbfdf28189645af03cbd9f6c091aaf",
+  "parent": "4be324e8878fb0332353ad4886fa3940dbd23f91",
+  "pr": 3522,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fail fast on empty CA directory at TLS config load (#3522)",
+  "date": "2026-09-11",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.0456,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change makes loadCaCertDir (src/tls.c) fail TLS context creation when tls-ca-cert-dir opens but contains no loadable CA certs. Reaching it requires a BUILD_TLS build plus a currently-valid server cert/key and CA material loaded before the changed function runs, and active TLS (tls-port/tls-replication/tls-cluster). The fuzzer has no TLS fragment, no cert-provisioning component, and no cert fixtures; the local provider rejects tls-port in server_config, so no installed experiment reaches this config-load path and it cannot be composed from installed components (valkey.action.commands cannot"
+}

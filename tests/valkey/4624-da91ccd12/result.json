@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "da91ccd12f2961575102aea1f1020985debefb9f",
+  "parent": "03a7447bd8da49e6c601ce069136abb9cd943e4f",
+  "pr": 4624,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix double-promotion compilation error in test_util.cpp (#4624)",
+  "date": "2026-09-11",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2028,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change touches only the unit test file src/unit/test_util.cpp, changing a NaN-producing literal from double (0.0/0.0) to long double (0.0L/0.0L) to fix a double-promotion compilation error in the test build. No server, command, replication, persistence, or tool code is modified, so there is no runtime behaviour for a fuzzer scenario to reach."
+}

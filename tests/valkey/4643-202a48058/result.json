@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "202a4805816e2b4333c72dd9982510db087088ba",
+  "parent": "f9f1b3ee3db1c9091ab9b1ff90adce3b3e71db56",
+  "pr": 4643,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "bgiteration: fix unit-test feed deadlock under slow execution (#4643)",
+  "date": "2026-09-10",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.786,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is test-infrastructure only. The single C hunk makes bgIteration_feedIterators_task ignore its time budget when called with eventLoop == NULL, and the only NULL-eventLoop callers are the unit-test helper bgIteration_feedIterators() and the main-thread branch of bgIteratorRead, which exists solely for unit tests: the one production consumer of bgIteratorRead (the forkless-save processor in forkless.c) runs on a background thread and asserts !onServerMainThread(), so it never reaches that branch. In a live server the task is always driven by the ae timer with server.el non-NULL, where"
+}

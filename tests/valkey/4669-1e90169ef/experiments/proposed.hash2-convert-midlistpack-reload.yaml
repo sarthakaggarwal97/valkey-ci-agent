@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.hash2-convert-midlistpack-reload
+deployment:
+  modes: [standalone]
+metadata:
+  description: A HASH_2 reload that converts a half-built listpack mid-loop must register
+    the carried-over volatile fields, so their TTLs survive the next save/reload
+components:
+- use: valkey.action.commands
+  id: roundtrip
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 40
+    commands:
+    - {command: [HSET, h, a, x, b, y, z, w], expect: {equals: 3}}
+    - {command: [HPEXPIRE, h, 100000000, FIELDS, 2, a, b], expect: {equals: [1, 1]}}
+    - {command: [OBJECT, ENCODING, h], compare: skip}
+    - {command: [CONFIG, SET, hash-max-listpack-value, 1], expect: {equals: OK}}
+    - {command: [HSET, h, z, ww], expect: {equals: 0}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, h], compare: skip}
+    - {command: [HGET, h, z], expect: {equals: ww}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HGET, h, z], expect: {equals: ww}}
+    - {command: [HPERSIST, h, FIELDS, 2, a, b], expect_difference: true, expect: {
+        equals: [1, 1]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [roundtrip.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: roundtrip}

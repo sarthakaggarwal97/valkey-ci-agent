@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.tls-alt-cert-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: Secondary TLS certificate config options and INFO fields exist on the
+    change but not the parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: altcfg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, GET, tls-alt-cert-file], expect_difference: true, expect: {
+        contains: "tls-alt-cert-file"}}
+    - {command: [CONFIG, GET, tls-alt-key-file], expect_difference: true, expect: {
+        contains: "tls-alt-key-file"}}
+    - {command: [CONFIG, GET, tls-alt-key-file-pass], expect_difference: true, expect: {
+        contains: "tls-alt-key-file-pass"}}
+    - {command: [CONFIG, SET, tls-alt-cert-file, /etc/valkey/alt.crt, tls-alt-key-file,
+        /etc/valkey/alt.key], expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, tls-alt-cert-file], expect_difference: true, expect: {
+        contains: "/etc/valkey/alt.crt"}}
+    - {command: [CONFIG, SET, tls-alt-key-file-pass, s3cr3t], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [INFO, tls], expect_difference: true, expect: {contains: "tls_server_alt_cert_serial"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [altcfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: altcfg}

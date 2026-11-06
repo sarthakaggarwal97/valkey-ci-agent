@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2f3bcead223f..f9f1b3ee3db1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b6e3d3c675df
+seed: 4872
+experiment:
+  id: proposed.module-global-defrag-churn
+  inputs:
+    run_s: 8
+    cycle_min: 40
+    mutable_keys: 500
+    mutation_rate: 1500
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

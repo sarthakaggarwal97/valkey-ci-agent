@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.module-postexec-jobs
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module post-execution-unit jobs (ValkeyModule_AddPostNotificationJob)
+    must still fire through the new moduleHasPostExecUnitJobs gate, after plain writes,
+    after MULTI/EXEC, and after a read-only GET that lazily expires a key
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: jobs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, string_x, '1'], expect: {equals: OK}}
+    - {command: [GET, 'string_changed{string_x}'], expect: {equals: '1'}}
+    - {command: [GET, string_total], expect: {equals: '1'}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, string_y, a], expect: {equals: QUEUED}}
+    - {command: [SET, string_y, b], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK]}}
+    - {command: [GET, 'string_changed{string_y}'], expect: {equals: '2'}}
+    - {command: [GET, string_total], expect: {equals: '3'}}
+    - {command: [SET, exp1, gone, PX, 40], expect: {equals: OK}}
+    - {command: [GET, exp1], wait_s: 10, expect: {exists: false}}
+    - {command: [GET, expired], wait_s: 10, expect: {equals: '1'}}
+    - {command: [SET, string_x, '2'], expect: {equals: OK}}
+    - {command: [GET, 'string_changed{string_x}'], expect: {equals: '2'}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [jobs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: jobs}

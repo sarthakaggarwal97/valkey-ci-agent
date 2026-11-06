@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 202a4805816e..c80da010b57e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c98a40e79e80
+seed: 3
+experiment:
+  id: proposed.hash-field-ttl-listpack-reap
+deployment:
+  mode: standalone
+  base_port: 7200

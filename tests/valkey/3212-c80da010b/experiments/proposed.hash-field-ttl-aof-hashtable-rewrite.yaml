@@ -1,0 +1,22 @@
+extends: [valkey.liveness]
+id: proposed.hash-field-ttl-aof-hashtable-rewrite
+deployment:
+  modes: [standalone]
+metadata:
+  description: AOF rewrite of a hashtable-encoded hash with field TTLs exercises the
+    volatile-count walk
+components:
+- use: valkey.action.commands
+  id: rewrite
+  config:
+    timeout_s: 20
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: hashtable}}
+    - {command: [HEXPIRE, h, 100000, FIELDS, 2, f1, f2], expect: {equals: [1, 1]}}
+    - {command: [BGREWRITEAOF], expect: {contains: "Background"}}
+    - {command: [HTTL, h, FIELDS, 1, f1], wait_s: 10, expect: {exists: true}}
+    - {command: [HGET, h, f1], expect: {equals: v1}}
+required_events: [rewrite.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rewrite}

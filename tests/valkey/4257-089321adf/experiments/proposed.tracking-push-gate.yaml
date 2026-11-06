@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.tracking-push-gate
+deployment:
+  modes: [standalone]
+metadata:
+  description: Tracking self-invalidations and self-publish pushes must still be flushed
+    by the new combined afterCommand gate, alone and after MULTI/EXEC, on a server
+    where nothing else is pending
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 3}
+components:
+- use: valkey.action.commands
+  id: pushes
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {connection: trk, command: [CLIENT, TRACKING, 'ON'], expect: {equals: OK}}
+    - {connection: trk, command: [SET, k1, v1], expect: {equals: OK}}
+    - {connection: trk, command: [GET, k1], expect: {equals: v1}}
+    - {connection: trk, command: [SET, k1, v2], expect: {equals: OK}}
+    - {connection: trk, read: true, expect: {exists: true}}
+    - {connection: trk, command: [GET, k1], expect: {equals: v2}}
+    - {connection: trk, command: [MULTI], expect: {equals: OK}}
+    - {connection: trk, command: [SET, k1, v3], expect: {equals: QUEUED}}
+    - {connection: trk, command: [SET, k1, v4], expect: {equals: QUEUED}}
+    - {connection: trk, command: [EXEC], expect: {equals: [OK, OK]}}
+    - {connection: trk, read: true, expect: {exists: true}}
+    - {connection: trk, command: [GET, k1], expect: {equals: v4}}
+    - {connection: trk, command: [FLUSHALL], expect: {equals: OK}}
+    - {connection: trk, read: true, expect: {exists: true}}
+    - {connection: trk, command: [CLIENT, TRACKING, 'OFF'], expect: {equals: OK}}
+    - {connection: pub, command: [SUBSCRIBE, ch], expect: {exists: true}}
+    - {connection: pub, command: [PUBLISH, ch, m1], expect: {equals: 1}}
+    - {connection: pub, read: true, expect: {exists: true}}
+    - {connection: pub, command: [MULTI], expect: {equals: OK}}
+    - {connection: pub, command: [PUBLISH, ch, m2], expect: {equals: QUEUED}}
+    - {connection: pub, command: [PUBLISH, ch, m3], expect: {equals: QUEUED}}
+    - {connection: pub, command: [EXEC], expect: {equals: [1, 1]}}
+    - {connection: pub, read: true, expect: {exists: true}}
+    - {command: [GET, k1], expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [pushes.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pushes}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1e90169efd9c..18277411d6ef.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e0a0a4b1a718
+seed: 7101
+experiment:
+  id: proposed.syncslots-repeated-establish
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: cluster
+  base_port: 7100

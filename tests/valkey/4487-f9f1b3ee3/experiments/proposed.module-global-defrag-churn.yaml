@@ -1,0 +1,43 @@
+extends: [valkey.base]
+id: proposed.module-global-defrag-churn
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Aggressive active defrag runs continuously while keys churn, with or
+    without a module loaded; every defrag cycle must complete its module-globals stage
+    (logged as "Active defrag done") and no instance may crash
+inputs:
+  properties:
+    run_s: {type: number, minimum: 2, maximum: 60, default: 10}
+    cycle_min: {type: integer, minimum: 1, maximum: 75, default: 25}
+startup_overlays:
+- overlay_id: defrag-aggressive
+  server_config:
+    activedefrag: "yes"
+    active-defrag-ignore-bytes: "1"
+    active-defrag-threshold-lower: "0"
+    active-defrag-cycle-min: {$ref: inputs.cycle_min}
+    active-defrag-cycle-max: "80"
+    loglevel: verbose
+components:
+- use: valkey.capability.build-probe
+  id: defrag-support
+  config:
+    startup_config: {activedefrag: "yes"}
+- use: valkey.observer.log
+  id: logs
+  config:
+    instances: primaries
+    expect:
+    - {evidence_id: valkey.defrag.started-logged, pattern: "Starting active defrag",
+      required: true}
+    - {evidence_id: valkey.defrag.cycle-done-logged, pattern: "Active defrag done",
+      required: true}
+- use: valkey.action.sleep
+  id: run
+  depends_on: [writes]
+  config:
+    seconds: {$ref: inputs.run_s}
+required_events: [run.completed]
+required_evidence:
+- {evidence_id: valkey.defrag.cycle-done-logged, source: logs}

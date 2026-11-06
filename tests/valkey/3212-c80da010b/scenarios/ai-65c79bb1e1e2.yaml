@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 202a4805816e..c80da010b57e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-65c79bb1e1e2
+seed: 102
+experiment:
+  id: proposed.hash-field-ttl-listpack-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.hash-field-ttl-listpack-set-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: Listpack-encoded hash keeps field TTLs in place, exercising attach-TTL-to-existing-field
+    and the ignore-TTL force-delete bracket
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [HSET, h, f1, v1], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: listpack}}
+    - {command: [HSETEX, h, PXAT, "99999999999999", FIELDS, 1, f1, v1b], expect: {
+        equals: 1}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: listpack}}
+    - {command: [HGET, h, f1], expect: {equals: v1b}}
+    - {command: [HTTL, h, FIELDS, 1, f1], expect: {exists: true}}
+    - {command: [HSETEX, h, PXAT, "1", FIELDS, 1, f1, vx], expect: {equals: 1}}
+    - {command: [HEXISTS, h, f1], expect: {equals: 0}}
+    - {command: [HSET, h, f2, v2], expect: {equals: 1}}
+    - {command: [HEXPIRE, h, 1000, FIELDS, 1, f2], expect: {equals: [1]}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: listpack}}
+    - {command: [HTTL, h, FIELDS, 1, f2], expect: {exists: true}}
+    - {command: [HGET, h, f2], expect: {equals: v2}}
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

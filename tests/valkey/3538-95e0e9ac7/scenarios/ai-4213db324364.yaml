@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d46565268d95..95e0e9ac7f3a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4213db324364
+seed: 101
+experiment:
+  id: proposed.migrateslots-auth
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

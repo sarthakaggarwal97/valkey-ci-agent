@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 13c66b82e1fb..03a7447bd8da.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c1d72ce70a1e
+seed: 3
+experiment:
+  id: proposed.tls-alt-cert-rewrite
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

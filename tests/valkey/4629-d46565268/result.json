@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d46565268d95da6dd3305b33d183168de49c670d",
+  "parent": "c80da010b57ee578246ea30173306cd5ae12364f",
+  "pr": 4629,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Implement XACKDEL and XDELEX command (#4629)",
+  "date": "2026-09-10",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 5,
+  "hunted": 5,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 194,
+    "executed": 192,
+    "percent": 98,
+    "uncovered": [
+      "src/t_stream.c:3763",
+      "src/t_stream.c:3764"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 7.1718,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-dde2837ef593",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "no trustworthy verdict is possible; required components did not do their part outside an oracle or action, depend on one that did not, judged a deployment whose teardown failed, or were skipped: kill-replica"
+    },
+    {
+      "scenario": "ai-9f9e64532fbb",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "no trustworthy verdict is possible; required components did not do their part outside an oracle or action, depend on one that did not, judged a deployment whose teardown failed, or were skipped: kill-replica"
+    }
+  ]
+}

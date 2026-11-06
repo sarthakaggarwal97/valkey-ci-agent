@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "98f91521245b8ca20523616e3243799ca5d1a08e",
+  "parent": "95e0e9ac7f3a3e7f5963756cad8fb0f9f86ae77b",
+  "pr": 4653,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix XPENDING reply schema for empty pending lists (#4653)",
+  "date": "2026-09-11",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2448,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits the reply_schema metadata in src/commands/xpending.json to document the existing [0, null, null, null] summary reply that XPENDING already returns for an empty pending list. No C code changes: the server's runtime reply for XPENDING is identical on both builds, and reply schemas are only compiled in under the LOG_REQ_RES test build flag, not exposed via COMMAND DOCS in normal builds. There is no behaviour a scenario could observe differing between the parent and the change."
+}
