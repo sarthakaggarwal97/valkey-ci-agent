@@ -1,0 +1,41 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0adff5c1a580..21c0d49a0b56.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-15ad1be22671
+seed: 7001
+experiment:
+  id: valkey.cluster-chaos
+  inputs:
+    keys_per_slot: 8
+    waves:
+    - - op: failover
+        shard: 0
+        force: true
+      - op: failover
+        shard: 1
+        force: true
+        delay_s: 0.5
+      - op: failover
+        shard: 2
+        force: true
+        delay_s: 1.0
+    - - op: kill
+        target: primary
+        signal: SIGKILL
+      - op: failover
+        shard: 0
+        force: true
+        delay_s: 0.5
+    - - op: failover
+        shard: 1
+        force: true
+      - op: failover
+        shard: 2
+        force: true
+        delay_s: 0.5
+    validation:
+      blocking_on_failure: true
+deployment:
+  mode: cluster
+  primaries: 4
+  replicas_per_primary: 2
+  base_port: 7000

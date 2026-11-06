@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.zset-btree-rangedel-structure-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Leaf-aligned range deletions on 2- and 3-level btree zsets that empty
+    boundary subtree children (freeEmptyNodeAlreadyUnlinked) and hit untouched-boundary
+    and empty-range edges, compared with the parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rangedel
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    server_config:
+      zset-max-listpack-entries: 0
+    commands:
+    - {command: [EVAL, "local n=tonumber(ARGV[1]) for i=0,n-1 do redis.call('ZADD',\
+          \ KEYS[1], i, string.format('m%06d', i)) end return redis.call('ZCARD',\
+          \ KEYS[1])", 1, z2, 8000], expect: {equals: 8000}}
+    - {command: [OBJECT, ENCODING, z2], expect_difference: true, expect: {equals: btree}}
+    - {command: [ZREMRANGEBYRANK, z2, 61, 3720], expect: {equals: 3660}}
+    - {command: [ZCARD, z2], expect: {equals: 4340}}
+    - {command: [ZREMRANGEBYSCORE, z2, "(3720", 5000], expect: {equals: 1280}}
+    - {command: [ZREMRANGEBYSCORE, z2, "(20.5", "(21.5"], expect: {equals: 1}}
+    - {command: [ZREMRANGEBYSCORE, z2, "(21.2", "(21.8"], expect: {equals: 0}}
+    - {command: [ZREMRANGEBYRANK, z2, -59, -1], expect: {equals: 59}}
+    - {command: [ZREMRANGEBYRANK, z2, 0, 50], expect: {equals: 51}}
+    - {command: [ZCARD, z2], expect: {equals: 2949}}
+    - {command: [ZRANGE, z2, 0, 99, WITHSCORES]}
+    - {command: [ZRANGE, z2, -100, -1, WITHSCORES]}
+    - {command: [EVAL, "local n=tonumber(ARGV[1]) for i=0,n-1 do redis.call('ZADD',\
+          \ KEYS[1], i, string.format('m%06d', i)) end return redis.call('ZCARD',\
+          \ KEYS[1])", 1, z1b, 3000], expect: {equals: 3000}}
+    - {command: [ZREMRANGEBYRANK, z1b, 61, 2927], expect: {equals: 2867}}
+    - {command: [ZCARD, z1b], expect: {equals: 133}}
+    - {command: [ZREMRANGEBYRANK, z1b, 5, 10], expect: {equals: 6}}
+    - {command: [ZRANGE, z1b, 0, -1, WITHSCORES]}
+    - {command: [EVAL, "local n=tonumber(ARGV[1]) for i=0,n-1 do redis.call('ZADD',\
+          \ KEYS[1], 0, string.format('m%06d', i)) end return redis.call('ZCARD',\
+          \ KEYS[1])", 1, z3, 2000], expect: {equals: 2000}}
+    - {command: [OBJECT, ENCODING, z3], expect_difference: true, expect: {equals: btree}}
+    - {command: [ZREMRANGEBYLEX, z3, "[m000061", "[m001890"], expect: {equals: 1830}}
+    - {command: [ZREMRANGEBYLEX, z3, "(m000005", "(m000010"], expect: {equals: 4}}
+    - {command: [ZREMRANGEBYLEX, z3, "-", "[m000004"], expect: {equals: 5}}
+    - {command: [ZREMRANGEBYLEX, z3, "[m001995", "+"], expect: {equals: 5}}
+    - {command: [ZREMRANGEBYLEX, z3, "(m000200", "(m000201"], expect: {equals: 0}}
+    - {command: [ZCARD, z3], expect: {equals: 156}}
+    - {command: [ZRANGEBYLEX, z3, "-", "+"]}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [rangedel.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rangedel}

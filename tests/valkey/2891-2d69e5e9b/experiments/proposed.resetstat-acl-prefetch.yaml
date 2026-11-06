@@ -1,0 +1,66 @@
+extends: [valkey.liveness]
+id: proposed.resetstat-acl-prefetch
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG RESETSTAT zeroes the acl_access_denied_* counters (and prefetch
+    stats); the parent build keeps them, and counting resumes after the reset
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, enum: [1, 4], default: 1}
+components:
+- use: valkey.action.commands
+  id: resetstat
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {io-threads: {$ref: inputs.io_threads}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - command: [EVAL, &id001 "local i=redis.call('INFO','stats') local function g(f)\
+          \ return tonumber(string.match(i, f .. ':(%d+)')) end return {g('acl_access_denied_auth'),\
+          \ g('acl_access_denied_cmd'), g('acl_access_denied_key'), g('acl_access_denied_channel')}",
+        "0"]
+      expect: {equals: [0, 0, 0, 0]}
+    - command: [ACL, SETUSER, limited, on, ">secret", "~allowed:*", resetchannels,
+        "&chan:ok", "+get", "+set", "+subscribe"]
+      expect: {equals: OK}
+    - command: [AUTH, limited, wrongpass]
+      expect: {error: WRONGPASS}
+    - connection: c2
+      command: [AUTH, limited, secret]
+      expect: {equals: OK}
+    - connection: c2
+      command: [GET, "forbidden:key"]
+      expect: {error: NOPERM}
+    - connection: c2
+      command: [DEL, "allowed:x"]
+      expect: {error: NOPERM}
+    - connection: c2
+      command: [SUBSCRIBE, "chan:denied"]
+      expect: {error: NOPERM}
+    - command: [EVAL, *id001, "0"]
+      expect: {equals: [1, 1, 1, 1]}
+    - command: [CONFIG, RESETSTAT]
+      expect: {equals: OK}
+    - command: [EVAL, *id001, "0"]
+      expect_difference: true
+      expect: {equals: [0, 0, 0, 0]}
+    - command: [AUTH, limited, stillwrong]
+      expect: {error: WRONGPASS}
+    - connection: c2
+      command: [GET, "forbidden:again"]
+      expect: {error: NOPERM}
+    - command: [EVAL, *id001, "0"]
+      expect_difference: true
+      expect: {equals: [1, 0, 1, 0]}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [resetstat.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: resetstat}

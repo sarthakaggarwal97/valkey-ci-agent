@@ -1,0 +1,78 @@
+extends: [valkey.liveness]
+id: proposed.cluster-replica-priority-debug
+deployment:
+  modes: [standalone]
+metadata:
+  description: DEBUG CLUSTERLINK KILL direction and error paths and DEBUG CLUSTER-REPLICA-PRIORITY
+    lookups in handleDebugClusterCommand, compared across builds in and out of cluster
+    mode
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: debug-cluster
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [DEBUG, CLUSTERLINK, KILL, TO, "0123456789abcdef0123456789abcdef01234567"],
+      expect: {error: "Unknown node"}}
+    - {command: [DEBUG, CLUSTERLINK, KILL, ALL, "<node.0.id>"], expect: {error: "myself"}}
+    - {command: [DEBUG, CLUSTERLINK, KILL, TO, "<node.1.id>"], wait_s: 30, expect: {
+        equals: OK}}
+    - {command: [DEBUG, CLUSTERLINK, KILL, FROM, "<node.1.id>"], expect: {equals: OK}}
+    - {command: [DEBUG, CLUSTERLINK, KILL, ALL, "<node.1.id>"], expect: {equals: OK}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, "0123456789abcdef0123456789abcdef01234567"],
+      expect_difference: true, expect: {error: "Unknown node"}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, "<node.1.id>"], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [CONFIG, SET, cluster-replica-priority, "42"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, "<node.0.id>"], expect_difference: true,
+      expect: {equals: 42}}
+    - {command: [CONFIG, SET, cluster-replica-priority, "2147483647"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, "<node.0.id>"], expect_difference: true,
+      expect: {equals: 2147483647}}
+    - {command: [CONFIG, SET, cluster-replica-priority, "4294967295"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY], expect: {error: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: debug-standalone
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, CLUSTERLINK, KILL, TO, "0123456789abcdef0123456789abcdef01234567"],
+      expect: {error: "cluster mode"}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, "0123456789abcdef0123456789abcdef01234567"],
+      expect_difference: true, expect: {error: "cluster mode"}}
+    - {command: [DEBUG, NOT-A-REAL-SUBCOMMAND], expect_difference: true, expect: {
+        error: "cluster mode"}}
+    - {command: [CONFIG, SET, cluster-replica-priority, "7"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, cluster-replica-priority], expect_difference: true,
+      expect: {contains: "7"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [debug-cluster.completed, debug-standalone.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: debug-cluster}
+- {evidence_id: valkey.command.sequence, source: debug-standalone}

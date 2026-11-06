@@ -1,0 +1,34 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fd3d2f929664306ae56e8cfa3b135e8afebc6015",
+  "parent": "be0a7cbd2b653df60a6184343b5ef124494d0eee",
+  "pr": 2204,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add cluster-replica-priority to allow better ranking in auto failover (#2204)",
+  "date": "2026-08-10",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 4,
+  "hunted": 6,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 56,
+    "executed": 56,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 7.7611,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-91dbcd996b71",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'election-safety' returned ERROR: cannot check that 2 election winner(s) reached quorum: no 'Failover auth ACK' line was published as 'cluster.vote.acked' (Valkey logs them since 9.2)"
+    }
+  ]
+}

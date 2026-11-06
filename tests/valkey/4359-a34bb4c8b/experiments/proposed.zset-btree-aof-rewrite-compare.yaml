@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.zset-btree-aof-rewrite-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: AOF rewrite of btree-encoded sorted sets with aof-use-rdb-preamble
+    off, reloaded across a restart, compared with the parent's skiplist rewrite
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aofrw
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    server_config:
+      appendonly: "yes"
+      appendfsync: everysec
+      aof-use-rdb-preamble: "no"
+      zset-max-listpack-entries: 0
+    commands:
+    - {command: [EVAL, "for i=0,499 do redis.call('ZADD', KEYS[1], i, string.format('m%06d',\
+          \ i)) end return redis.call('ZCARD', KEYS[1])", 1, zbig], expect: {equals: 500}}
+    - {command: [ZADD, zspecial, inf, pinf, "-inf", ninf, 0, zero, "3.0e300", big,
+        "-3.0e300", neg, "1e-300", tiny, "2.5", frac], expect: {equals: 7}}
+    - {command: [ZADD, zone, "1.5", only], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, zbig], expect_difference: true, expect: {equals: btree}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {error: false}}
+    - {command: [INFO, persistence], wait_s: 60, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [INFO, persistence], compare: skip, expect: {contains: "aof_last_bgrewrite_status:ok"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ZCARD, zbig], expect: {equals: 500}}
+    - {command: [ZRANGE, zbig, 0, -1, WITHSCORES]}
+    - {command: [ZCARD, zspecial], expect: {equals: 7}}
+    - {command: [ZRANGE, zspecial, 0, -1, WITHSCORES]}
+    - {command: [ZSCORE, zspecial, pinf]}
+    - {command: [ZSCORE, zspecial, ninf]}
+    - {command: [ZSCORE, zspecial, tiny]}
+    - {command: [ZCARD, zone], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, zbig], expect_difference: true, expect: {equals: btree}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [aofrw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofrw}

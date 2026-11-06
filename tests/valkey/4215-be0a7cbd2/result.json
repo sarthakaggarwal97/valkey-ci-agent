@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "be0a7cbd2b653df60a6184343b5ef124494d0eee",
+  "parent": "8ee7b372fad7acb757a3b62f22e35a1a903a72f9",
+  "pr": 4215,
+  "pr_repo": "valkey-io/valkey",
+  "subject": " valkey-benchmark: reject empty command sequence before connecting (#4215)",
+  "date": "2026-08-10",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 64,
+    "executed": 60,
+    "percent": 93,
+    "uncovered": [
+      "src/valkey-benchmark.c:2405",
+      "src/valkey-benchmark.c:2406",
+      "src/valkey-benchmark.c:2449",
+      "src/valkey-benchmark.c:2450"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 2.8212,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: LeakSanitizer: detected",
+      "scenario": "ai-57c54f967146",
+      "seed": 4215,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #4215",
+      "fingerprint": "407cf7f564b273e3887a",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/81"
+    }
+  ],
+  "recorded": []
+}

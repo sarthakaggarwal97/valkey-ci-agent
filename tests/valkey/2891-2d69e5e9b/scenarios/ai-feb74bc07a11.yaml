@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b2fb0e13f5b4..2d69e5e9b7c2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-feb74bc07a11
+seed: 303
+experiment:
+  id: proposed.resetstat-acl-prefetch
+  inputs:
+    resp: 2
+    io_threads: 4
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

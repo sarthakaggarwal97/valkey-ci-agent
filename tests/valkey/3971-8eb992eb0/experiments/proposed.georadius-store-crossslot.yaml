@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.georadius-store-crossslot
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: GEORADIUS duplicate STORE cross-slot routing checks the last destination
+    key
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: geo
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [GEOADD, "geo{x}", 13.361389, 38.115556, Palermo], expect: {equals: 1}}
+    - {command: [GEORADIUS, "geo{x}", 13.361389, 38.115556, 500, km, STORE, "a{x}"],
+      expect: {equals: 1}}
+    - {command: [GEORADIUS, "geo{x}", 13.361389, 38.115556, 500, km, STORE, "a{x}",
+        STORE, "b{y}"], expect_difference: true, expect: {error: "CROSSSLOT"}}
+    - {command: [GEORADIUS, "geo{x}", 13.361389, 38.115556, 500, km, STOREDIST, "a{x}",
+        STOREDIST, "b{y}"], expect_difference: true, expect: {error: "CROSSSLOT"}}
+    - {command: [GEORADIUSBYMEMBER, "geo{x}", Palermo, 500, km, STORE, "a{x}", STORE,
+        "b{y}"], expect_difference: true, expect: {error: "CROSSSLOT"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: geo}

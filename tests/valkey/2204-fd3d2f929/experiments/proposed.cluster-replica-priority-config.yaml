@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.cluster-replica-priority-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: cluster-replica-priority config bounds, CONFIG REWRITE across a restart,
+    and the DEBUG dispatch change on a non-cluster server, compared with the parent
+    build
+components:
+- use: valkey.action.commands
+  id: cfg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes"}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, GET, cluster-replica-priority], expect_difference: true,
+      expect: {equals: [cluster-replica-priority, "0"]}}
+    - {command: [CONFIG, SET, cluster-replica-priority, 10], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-replica-priority, 2147483647], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-replica-priority, 2147483648], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, cluster-replica-priority, -1], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, cluster-replica-priority, ""], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, cluster-replica-priority], expect_difference: true,
+      expect: {equals: [cluster-replica-priority, "2147483647"]}}
+    - {command: [DEBUG, TOTALLY-BOGUS-SUBCOMMAND], expect_difference: true, expect: {
+        error: "cluster mode"}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, 0123456789abcdef0123456789abcdef01234567],
+      expect_difference: true, expect: {error: "cluster mode"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [cfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cfg}

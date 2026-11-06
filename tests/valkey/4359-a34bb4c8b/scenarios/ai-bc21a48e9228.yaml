@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ee7f288057e5..a34bb4c8b911.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-bc21a48e9228
+seed: 502
+experiment:
+  id: proposed.zset-deployment-faults
+  inputs:
+    target: primary
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7900
+  server_config:
+    zset-max-listpack-entries: '0'
+    appendonly: 'yes'
+    appendfsync: everysec

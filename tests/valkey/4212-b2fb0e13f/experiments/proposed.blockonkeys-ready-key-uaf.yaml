@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.blockonkeys-ready-key-uaf
+deployment:
+  modes: [standalone]
+metadata:
+  description: Serving a blocked-on-keys client whose reply kills a successor waiter
+    must not UAF the ready-key iterator
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: uaf
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {raw: "blockonkeys.block_kill_successor race first\r\n", connection: w1}
+    - {raw: "blockonkeys.block_kill_successor race second\r\n", connection: w2}
+    - {command: [blockonkeys.signal_ready, race], expect_difference: true, expect: {
+        equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: uaf}

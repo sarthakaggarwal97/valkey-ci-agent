@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 114e415b6c6d..49d7d96fb70f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7fa7e9b632f5
+seed: 4162
+experiment:
+  id: proposed.xtrim-maxlen-zero-exact
+  inputs:
+    resp: 3
+    node_max_entries: 3
+    appendonly: 'yes'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

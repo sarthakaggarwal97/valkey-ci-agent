@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.eviction-deferred-free
+deployment:
+  modes: [standalone]
+metadata:
+  description: A protected client that can only be freed asynchronously must not cause
+    over-eviction of other clients
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cmds
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    server_config:
+      maxmemory-clients: "0"
+      min-io-threads-avoid-copy-reply: "0"
+      min-string-size-avoid-copy-reply: "0"
+      min-string-size-avoid-copy-reply-threaded: "0"
+    commands:
+    - {command: [CLIENT, SETNAME, control], expect: {equals: OK}}
+    - {command: [CLIENT, "NO-EVICT", on], expect: {equals: OK}}
+    - {connection: big, raw: "*2\r\n$2097152\r\n"}
+    - {connection: s0, raw: "*2\r\n$204800\r\n"}
+    - {connection: s1, raw: "*2\r\n$204800\r\n"}
+    - {command: [DEBUG, "PROTECT-CLIENT", "2"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-clients, "1048576"], expect: {equals: OK}}
+    - {command: [CLIENT, LIST], connection: main, wait_s: 10, compare: skip, expect_difference: true,
+      expect: {contains: "name=s0"}}
+    - {command: [CLIENT, LIST], connection: main, wait_s: 10, compare: skip, expect_difference: true,
+      expect: {contains: "name=s1"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [cmds.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cmds}

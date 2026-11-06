@@ -1,0 +1,94 @@
+extends: [valkey.liveness]
+id: proposed.zset-btree-active-defrag-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active defrag over fragmented btree zsets, then verify the hashtable
+    and ordered index still agree member by member
+inputs:
+  properties:
+    max_scan_fields: {type: integer, enum: [1, 1000000], default: 1}
+components:
+- use: valkey.action.commands
+  id: defrag
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 2
+    timeout_s: 150
+    server_config:
+      zset-max-listpack-entries: 0
+      active-defrag-ignore-bytes: 1
+      active-defrag-threshold-lower: 0
+      active-defrag-cycle-min: 50
+      active-defrag-cycle-max: 99
+      active-defrag-max-scan-fields: {$ref: inputs.max_scan_fields}
+      enable-debug-command: "yes"
+    commands:
+    - command:
+      - EVAL
+      - |
+        local pad=string.rep('x',80)
+        for i=0,19999 do
+          local m=pad..string.format('%06d',i)
+          redis.call('ZADD','frag',i,m)
+          redis.call('ZADD','frag2',i,m)
+        end
+        return redis.call('ZCARD','frag')+redis.call('ZCARD','frag2')
+      - "0"
+      expect: {equals: 40000}
+    - command:
+      - EVAL
+      - |
+        local pad=string.rep('x',80)
+        for i=0,19999 do
+          local m=pad..string.format('%06d',i)
+          if i%10~=0 then redis.call('ZREM','frag',m) end
+          if i%20~=3 then redis.call('ZREM','frag2',m) end
+        end
+        return redis.call('ZCARD','frag')+redis.call('ZCARD','frag2')
+      - "0"
+      expect: {equals: 3000}
+    - command: [CONFIG, SET, activedefrag, "yes"]
+      expect: {equals: OK}
+    - command:
+      - EVAL
+      - |
+        local info=redis.call('INFO','stats')
+        local h=tonumber(string.match(info,'active_defrag_key_hits:(%d+)')) or 0
+        local m=tonumber(string.match(info,'active_defrag_key_misses:(%d+)')) or 0
+        if h+m>=6 then return 1 end
+        return 0
+      - "0"
+      wait_s: 60
+      expect: {equals: 1}
+    - command: [CONFIG, SET, activedefrag, "no"]
+      expect: {equals: OK}
+    - command: [ZCARD, frag]
+      expect: {equals: 2000}
+    - command: [ZCARD, frag2]
+      expect: {equals: 1000}
+    - command:
+      - EVAL
+      - |
+        local pad=string.rep('x',80)
+        local bad=0
+        for i=0,19999,10 do
+          local m=pad..string.format('%06d',i)
+          local s=redis.call('ZSCORE','frag',m)
+          if not s or tonumber(s)~=i then bad=bad+1 end
+          if redis.call('ZRANK','frag',m)~=i/10 then bad=bad+1 end
+        end
+        return bad
+      - "0"
+      expect: {equals: 0}
+    - command: [ZRANGE, frag, 0, 10, WITHSCORES]
+      expect: {exists: true}
+    - command: [DEBUG, DIGEST-VALUE, frag, frag2]
+      expect: {error: false}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [defrag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: defrag}

@@ -1,0 +1,85 @@
+extends: [valkey.liveness]
+id: proposed.xtrim-maxlen-zero-exact
+deployment:
+  modes: [standalone]
+metadata:
+  description: Exact XTRIM/XADD MAXLEN 0 takes the new whole-rax free path; deleted
+    count, stream metadata, consumer groups and persistence must match the parent's
+    trim loop
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    node_max_entries: {type: integer, default: 3}
+    appendonly: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: xtrim
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      stream-node-max-entries: {$ref: inputs.node_max_entries}
+      appendonly: {$ref: inputs.appendonly}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [XADD, s, 1-1, f, v], expect: {equals: 1-1}}
+    - {command: [XADD, s, 2-1, f, v], expect: {equals: 2-1}}
+    - {command: [XADD, s, 3-1, f, v], expect: {equals: 3-1}}
+    - {command: [XADD, s, 4-1, f, v], expect: {equals: 4-1}}
+    - {command: [XADD, s, 5-1, f, v], expect: {equals: 5-1}}
+    - {command: [XDEL, s, 2-1], expect: {equals: 1}}
+    - {command: [XINFO, STREAM, s]}
+    - {command: [XTRIM, s, MAXLEN, "=", 0], expect: {equals: 4}}
+    - {command: [EXISTS, s], expect: {equals: 1}}
+    - {command: [XLEN, s], expect: {equals: 0}}
+    - {command: [XRANGE, s, "-", "+"], expect: {equals: []}}
+    - {command: [XINFO, STREAM, s]}
+    - {command: [XTRIM, s, MAXLEN, "=", 0], expect: {equals: 0}}
+    - {command: [XADD, s, 3-1, f, v], expect: {error: "equal or smaller"}}
+    - {command: [XADD, s, 6-1, f, v], expect: {equals: 6-1}}
+    - {command: [XLEN, s], expect: {equals: 1}}
+    - {command: [XRANGE, s, "-", "+"]}
+    - {command: [XTRIM, s, MAXLEN, 0], expect: {equals: 1}}
+    - {command: [XLEN, s], expect: {equals: 0}}
+    - {command: [XTRIM, s, MAXLEN, "=", 0, LIMIT, 100], expect: {error: "without the\
+          \ special ~"}}
+    - {command: [XTRIM, s, MAXLEN, "=", -1], expect: {error: "must be >= 0"}}
+    - {command: [XTRIM, nosuchkey, MAXLEN, "=", 0], expect: {equals: 0}}
+    - {command: [XADD, cg, 1-1, f, v], expect: {equals: 1-1}}
+    - {command: [XADD, cg, 2-1, f, v], expect: {equals: 2-1}}
+    - {command: [XADD, cg, 3-1, f, v], expect: {equals: 3-1}}
+    - {command: [XGROUP, CREATE, cg, g, 0], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g, alice, COUNT, 10, STREAMS, cg, ">"]}
+    - {command: [XTRIM, cg, MAXLEN, "=", 0], expect: {equals: 3}}
+    - {command: [XPENDING, cg, g]}
+    - {command: [XREADGROUP, GROUP, g, alice, COUNT, 10, STREAMS, cg, 0]}
+    - {command: [XAUTOCLAIM, cg, g, bob, 0, 0]}
+    - {command: [XPENDING, cg, g]}
+    - {command: [XADD, cg, 4-1, f, v], expect: {equals: 4-1}}
+    - {command: [XREADGROUP, GROUP, g, bob, COUNT, 10, STREAMS, cg, ">"]}
+    - {command: [XPENDING, cg, g]}
+    - {command: [XADD, ax, MAXLEN, "=", 0, 7-7, f, v], expect: {equals: 7-7}}
+    - {command: [XLEN, ax], expect: {equals: 0}}
+    - {command: [EXISTS, ax], expect: {equals: 1}}
+    - {command: [XINFO, STREAM, ax]}
+    - {command: [XADD, ap, 1-1, f, v], expect: {equals: 1-1}}
+    - {command: [XADD, ap, 2-1, f, v], expect: {equals: 2-1}}
+    - {command: [XTRIM, ap, MAXLEN, "~", 0], expect: {equals: 2}}
+    - {command: [XTRIM, ap, MAXLEN, "~", 0, LIMIT, 0], expect: {equals: 0}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [EXISTS, s], expect: {equals: 1}}
+    - {command: [XLEN, s], expect: {equals: 0}}
+    - {command: [XINFO, STREAM, s]}
+    - {command: [XPENDING, cg, g]}
+    - {command: [XADD, s, 7-1, f, v], expect: {equals: 7-1}}
+    - {command: [XLEN, s], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [xtrim.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: xtrim}

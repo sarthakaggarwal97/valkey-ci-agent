@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.eviction-protected-defer
+deployment:
+  modes: [standalone]
+metadata:
+  description: A protected (deferred-free) client under maxmemory-clients must not
+    cause other clients to be over-evicted
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: evict
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    server_config: {maxmemory-clients: "0", enable-debug-command: "yes"}
+    timeout_s: 20
+    commands:
+    - {command: [CLIENT, NO-EVICT, "on"], expect: {equals: OK}}
+    - {command: [CLIENT, SETNAME, control], expect: {equals: OK}}
+    - {command: [SETRANGE, big, 3000000, x], connection: big, expect: {equals: 3000001}}
+    - {command: [CLIENT, SETNAME, bigclient], connection: big, expect: {equals: OK}}
+    - {command: [DEBUG, PROTECT-CLIENT, "2"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-clients, "200k"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CLIENT, NO-EVICT, "off"], connection: big, expect: {equals: OK}}
+    - {command: [SET, probe, v], connection: probe, expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [PING], connection: probe, expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [evict.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evict}

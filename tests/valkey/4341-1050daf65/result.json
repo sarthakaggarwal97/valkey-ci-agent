@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1050daf65ba5827ba9e1372bc801663eeef81b01",
+  "parent": "26f44a2e18a1a8465e10222fee20be119bb573c5",
+  "pr": 4341,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add unit test coverage for vsetMemUsage(), vsetClear() and vsetIsValid() (#4341)",
+  "date": "2026-08-06",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.248,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds C++ unit tests (test_vset.cpp) and a build-system tweak restricting -fno-var-tracking-assignments to GCC for the unit-test target. No server, replication, persistence, command, or tool code changes: there is no runtime behaviour a scenario could exercise or compare."
+}

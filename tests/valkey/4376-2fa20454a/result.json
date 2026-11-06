@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2fa20454ab71638b6388812383b2fa6e993db66d",
+  "parent": "fd3d2f929664306ae56e8cfa3b135e8afebc6015",
+  "pr": 4376,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix re-entry into processPendingCommandAndInputBuffer on blocked clients (#4376)",
+  "date": "2026-08-10",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.8431,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

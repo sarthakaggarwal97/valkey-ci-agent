@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.zset-btree-persistence-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: ZSETs with empty, long and infinite-score members saved to RDB and
+    rewritten to AOF, restarted and read back, on B+ tree and skiplist builds
+inputs:
+  properties:
+    appendonly: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: persist
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: {$ref: inputs.appendonly}, zset-max-listpack-entries: 2,
+      enable-debug-command: "yes"}
+    timeout_s: 120
+    commands:
+    - {command: [ZADD, p, 1, a, 2, b, 3, c, -1, d, inf, top, "-inf", bottom, 2, "",
+        1.5, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww],
+      expect: {equals: 8}}
+    - {command: [OBJECT, ENCODING, p], expect_difference: true, expect: {equals: btree}}
+    - {command: [ZADD, q, 0, m1, 0, m2, 0, m3, 0, m4, 0, m5, 0, m6], expect: {equals: 6}}
+    - {command: [ZINCRBY, p, 1, a]}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {error: false}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ZCARD, p], expect: {equals: 8}}
+    - {command: [ZRANGE, p, 0, -1], expect: {equals: [bottom, d, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww,
+          "", a, b, c, top]}}
+    - {command: [OBJECT, ENCODING, p], expect_difference: true, expect: {equals: btree}}
+    - {command: [ZSCORE, p, top]}
+    - {command: [ZREM, p, d], expect: {equals: 1}}
+    - {command: [ZADD, p, GT, 5, b], expect: {equals: 0}}
+    - {command: [ZREMRANGEBYRANK, q, 0, 1], expect: {equals: 2}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ZCARD, p], expect: {equals: 7}}
+    - {command: [ZRANGE, p, 0, -1, WITHSCORES]}
+    - {command: [ZSCORE, p, b]}
+    - {command: [ZRANGEBYLEX, q, "-", "+"], expect: {equals: [m3, m4, m5, m6]}}
+    - {command: [OBJECT, ENCODING, q], expect_difference: true, expect: {equals: btree}}
+    - {command: [DEBUG, DIGEST-VALUE, p, q]}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [persist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: persist}

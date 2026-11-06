@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-rps-zombie-timers
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark in threaded rps mode drains all its event-loop timers;
+    the parent NULL-derefs earliest timer, the fixed build exits cleanly
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    threads: {type: integer, default: 4}
+    rps: {type: integer, default: 50}
+    requests: {type: integer, default: 300}
+    clients: {type: integer, default: 50}
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: inputs.parent}
+    server: true
+    timeout_s: 90
+    ignore: ['.+']
+    runs:
+    - tool: valkey-benchmark
+      args: [-p, $port, --threads, {$ref: inputs.threads}, --rps, {$ref: inputs.rps},
+        -n, {$ref: inputs.requests}, -c, {$ref: inputs.clients}, -t, set]
+      expect_difference: true
+      expect: {exit: {equals: 0}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

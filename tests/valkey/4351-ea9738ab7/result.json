@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ea9738ab7f051d1583a7a953c464d78d3dd583fd",
+  "parent": "0afdf6a4d3f9d7998d1265bdbda5b36a1982453b",
+  "pr": 4351,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix NULL deref in usUntilEarliestTimer when all time events are deleted (#4351)",
+  "date": "2026-08-11",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.309,
+  "findings": [],
+  "recorded": []
+}

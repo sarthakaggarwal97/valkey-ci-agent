@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-empty-sequence
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    valkey-benchmark rejects an empty or malformed command sequence with "Invalid
+    command sequence" and exit 1 before connecting (even against a closed port), while
+    trailing separators, repeat counts, __data__ placeholders and -x stdin arguments
+    still run.
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 10, '--', INCR, foo, ';', '10000'],
+      expect_difference: true, expect: {exit: {equals: 1}, stderr: {contains: "Invalid\
+            \ command sequence"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 10, '--', INCR, foo, ';', ';',
+        INCR, bar], expect_difference: true, expect: {exit: {equals: 1}, stderr: {
+          contains: "Invalid command sequence"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 10, '--', ';'], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "Invalid command sequence"}}}
+    - {tool: valkey-benchmark, args: [-p, 1, '--', '10000'], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "Invalid command sequence"}}}
+    - {tool: valkey-benchmark, args: [-p, 1, '--', '10000', ';', INCR, foo], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "Invalid command sequence"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 4, '--', INCR, trailkey, ';'],
+      compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, trailkey], expect: {exit: {equals: 0},
+        stdout: {equals: "4\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 8, '--', '2', SET, seqkey, seqval,
+        ';', GET, seqkey], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, seqkey], expect: {exit: {equals: 0},
+        stdout: {equals: "seqval\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 2, -d, 16, '--', SET, datakey,
+        'v:__data__'], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 2, -x, '--', SET, stdinkey],
+      stdin: payload, compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, stdinkey], expect: {exit: {equals: 0},
+        stdout: {equals: "payload\n"}}}
+required_events: [bench.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

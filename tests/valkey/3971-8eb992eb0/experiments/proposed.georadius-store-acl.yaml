@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.georadius-store-acl
+deployment:
+  modes: [standalone]
+metadata:
+  description: GEORADIUS/GEORADIUSBYMEMBER key extraction and ACL use the last STORE/STOREDIST
+    destination, not the first decoy
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: geo
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [COMMAND, GETKEYS, georadius, src, 0, 0, 1, km, STORE, a, STORE, b],
+      expect_difference: true, expect: {equals: [src, b]}}
+    - {command: [COMMAND, GETKEYS, georadius, src, 0, 0, 1, km, STOREDIST, a, STOREDIST,
+        b], expect_difference: true, expect: {equals: [src, b]}}
+    - {command: [COMMAND, GETKEYS, georadius, src, 0, 0, 1, km, STORE, a, STOREDIST,
+        b], expect_difference: true, expect: {equals: [src, b]}}
+    - {command: [COMMAND, GETKEYS, georadiusbymember, src, member, 1, km, STORE, a,
+        STORE, b], expect_difference: true, expect: {equals: [src, b]}}
+    - {command: [COMMAND, GETKEYS, georadius, src, 0, 0, 1, km, STORE, dst], expect: {
+        equals: [src, dst]}}
+    - {command: [ACL, SETUSER, geotest, on, ">pw", +georadius, +georadiusbymember,
+        "%R~geo:*", "%W~scratch:*"], expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, geotest, GEORADIUS, "geo:src", 0, 0, 1, km, STORE, "scratch:ok",
+        STORE, "protected:dst"], expect_difference: true, expect: {contains: "protected:dst"}}
+    - {command: [ACL, DRYRUN, geotest, GEORADIUS, "geo:src", 0, 0, 1, km, STORE, "protected:dst",
+        STORE, "scratch:ok"], expect_difference: true, expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, geotest, GEORADIUSBYMEMBER, "geo:src", member, 1, km,
+        STORE, "scratch:ok", STORE, "protected:dst"], expect_difference: true, expect: {
+        contains: "protected:dst"}}
+    - {command: [GEOADD, "geo:src", 13.361389, 38.115556, Palermo], expect: {equals: 1}}
+    - {command: [SET, "protected:dst", sentinel], expect: {equals: OK}}
+    - {command: [AUTH, geotest, pw], connection: u, expect: {equals: OK}}
+    - {command: [GEORADIUS, "geo:src", 13.361389, 38.115556, 500, km, STORE, "scratch:ok"],
+      connection: u, expect: {equals: 1}}
+    - {command: [GEORADIUS, "geo:src", 13.361389, 38.115556, 500, km, STORE, "scratch:ok",
+        STORE, "protected:dst"], connection: u, expect_difference: true, expect: {
+        error: "NOPERM"}}
+    - {command: [GET, "protected:dst"], expect_difference: true, expect: {equals: sentinel}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: geo}

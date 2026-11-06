@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8eb992eb09467a4e628a694cba93915a816658b3",
+  "parent": "a34bb4c8b91108e0d61d07428b1be478b902bdd7",
+  "pr": 3971,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix GEORADIUS STORE ACL bypass via duplicate options (#3971)",
+  "date": "2026-08-11",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.2152,
+  "findings": [],
+  "recorded": []
+}

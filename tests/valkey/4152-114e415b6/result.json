@@ -1,0 +1,48 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "114e415b6c6dca149dd55eb7a4ee34a8b6e93ee8",
+  "parent": "2dfee30cf542115ab22411afc0533119c94902e9",
+  "pr": 4152,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Account for deferred client frees during eviction (#4152)",
+  "date": "2026-08-06",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 9,
+    "executed": 2,
+    "percent": 22,
+    "uncovered": [
+      "src/networking.c:6649",
+      "src/networking.c:6651",
+      "src/networking.c:6652",
+      "src/networking.c:6657",
+      "src/networking.c:6659",
+      "src/networking.c:6664",
+      "src/networking.c:6665"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 4.2558,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-c30869dc2853",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'evict' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (DEBUG PROTECT-CLIENT 2)"
+    },
+    {
+      "scenario": "ai-a216c8af30e4",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'evict' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (DEBUG PROTECT-CLIENT 2)"
+    }
+  ]
+}

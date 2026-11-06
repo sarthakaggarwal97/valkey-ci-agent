@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ee7f288057e5..a34bb4c8b911.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-049f54a0eeaf
+seed: 101
+experiment:
+  id: proposed.zset-btree-ops-compare
+  inputs:
+    resp: 2
+    zmax: 0
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

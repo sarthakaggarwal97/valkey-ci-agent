@@ -1,0 +1,66 @@
+extends: [valkey.liveness]
+id: proposed.zset-btree-ops-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Core ZSET command semantics compared between the B+ tree build and
+    the skiplist parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    zmax: {type: integer, minimum: 0, maximum: 128, default: 0}
+components:
+- use: valkey.action.commands
+  id: ops
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: {$ref: inputs.zmax}, enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [ZADD, z, 1, a, 2, b, 3, c, 2, bb, 2, "", 1.5, mid], expect: {equals: 6}}
+    - {command: [ZADD, z, 0, a], expect: {equals: 0}}
+    - {command: [OBJECT, ENCODING, z], expect_difference: true, expect: {equals: btree}}
+    - {command: [ZCARD, z], expect: {equals: 6}}
+    - {command: [ZRANK, z, bb], expect: {equals: 4}}
+    - {command: [ZREVRANK, z, a], expect: {equals: 5}}
+    - {command: [ZRANGE, z, 0, -1], expect: {equals: [a, mid, "", b, bb, c]}}
+    - {command: [ZRANGE, z, "(1", "+inf", BYSCORE, LIMIT, 1, 2], expect: {equals: [
+          "", b]}}
+    - {command: [ZRANGE, z, 3, "(1", BYSCORE, REV], expect: {equals: [c, bb, b, "",
+          mid]}}
+    - {command: [ZSCORE, z, ""]}
+    - {command: [ZMSCORE, z, a, nosuch, c]}
+    - {command: [ZCOUNT, z, "(2", "+inf"], expect: {equals: 1}}
+    - {command: [ZADD, lex, 0, a, 0, aa, 0, ab, 0, b, 0, c, 0, d, 0, ""], expect: {
+        equals: 7}}
+    - {command: [ZRANGEBYLEX, lex, "-", "+"], expect: {equals: ["", a, aa, ab, b,
+          c, d]}}
+    - {command: [ZRANGEBYLEX, lex, "(a", "[b"], expect: {equals: [aa, ab, b]}}
+    - {command: [ZRANGEBYLEX, lex, "[", "(b"], expect: {equals: ["", a, aa, ab]}}
+    - {command: [ZREVRANGEBYLEX, lex, "[b", "(a"], expect: {equals: [b, ab, aa]}}
+    - {command: [ZLEXCOUNT, lex, "-", "+"], expect: {equals: 7}}
+    - {command: [ZREMRANGEBYLEX, lex, "[aa", "[ab"], expect: {equals: 2}}
+    - {command: [ZPOPMIN, z, 2]}
+    - {command: [ZPOPMAX, z]}
+    - {command: [ZINCRBY, z, 2.5, b]}
+    - {command: [ZADD, z, GT, CH, 10, bb, 1, ""], expect: {equals: 1}}
+    - {command: [ZUNIONSTORE, dest, 2, z, lex, WEIGHTS, 2, 0.5], expect: {equals: 6}}
+    - {command: [ZRANGE, dest, 0, -1, WITHSCORES]}
+    - {command: [ZRANK, dest, ""], expect: {equals: 3}}
+    - {command: [ZINTERCARD, 2, z, lex], expect: {equals: 2}}
+    - {command: [ZDIFF, 2, lex, z], expect: {equals: [a, c, d]}}
+    - {command: [ZRANGESTORE, dst2, lex, 1, 3], expect: {equals: 3}}
+    - {command: [ZRANGE, dst2, 0, -1], expect: {equals: [a, b, c]}}
+    - {command: [ZREMRANGEBYRANK, z, 0, 0], expect: {equals: 1}}
+    - {command: [ZREMRANGEBYSCORE, z, "-inf", "+inf"], expect: {equals: 2}}
+    - {command: [EXISTS, z], expect: {equals: 0}}
+    - {command: [DEBUG, DIGEST-VALUE, lex, dest]}
+    - {command: [ZSCAN, lex, 0, COUNT, 100], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [ops.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ops}

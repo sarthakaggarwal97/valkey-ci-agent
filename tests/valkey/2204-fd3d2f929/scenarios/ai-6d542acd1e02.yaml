@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey be0a7cbd2b65..fd3d2f929664.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6d542acd1e02
+seed: 220401
+experiment:
+  id: proposed.cluster-replica-priority-debug
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000
+  replicas_per_primary: 0

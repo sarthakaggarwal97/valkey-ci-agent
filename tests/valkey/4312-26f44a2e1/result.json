@@ -1,0 +1,44 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "26f44a2e18a1a8465e10222fee20be119bb573c5",
+  "parent": "21c0d49a0b5664004dad46ef429e23bf43191e9b",
+  "pr": 4312,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix signed overflow in vset bucket-timestamp rounding  (#4312)",
+  "date": "2026-08-06",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 1,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 10,
+    "executed": 9,
+    "percent": 90,
+    "uncovered": [
+      "src/vset.c:893"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 3.037,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: vset.c:1151 'target_bucket_ts < bucket_ts' is not true",
+      "scenario": "ai-caeda880a2d1",
+      "seed": 41201,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4312",
+      "fingerprint": "d1effe908a948f2e2474",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

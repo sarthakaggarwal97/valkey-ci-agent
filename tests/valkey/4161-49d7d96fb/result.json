@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "49d7d96fb70ffcef72c794e1c9a332de8b66f51a",
+  "parent": "114e415b6c6dca149dd55eb7a4ee34a8b6e93ee8",
+  "pr": 4161,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize exact XTRIM MAXLEN zero (#4161)",
+  "date": "2026-08-06",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 8,
+    "executed": 8,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.5942,
+  "findings": [],
+  "recorded": []
+}

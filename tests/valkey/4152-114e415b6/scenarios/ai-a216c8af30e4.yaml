@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2dfee30cf542..114e415b6c6d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a216c8af30e4
+seed: 7100
+experiment:
+  id: proposed.eviction-protected-defer
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

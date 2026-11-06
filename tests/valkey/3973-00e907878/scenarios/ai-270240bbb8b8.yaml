@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ea9738ab7f05..00e90787870a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-270240bbb8b8
+seed: 1102
+experiment:
+  id: proposed.reset-clears-import-source
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

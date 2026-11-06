@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "21c0d49a0b5664004dad46ef429e23bf43191e9b",
+  "parent": "0adff5c1a5809c80dcbe13b4a49ecc8aec33f97d",
+  "pr": 4091,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix crash when processing heartbeat from a node with no local role (#4091)",
+  "date": "2026-08-06",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 3,
+  "recall": false,
+  "coverage": {
+    "lines": 14,
+    "executed": 5,
+    "percent": 35,
+    "uncovered": [
+      "src/cluster_legacy.c:4263",
+      "src/cluster_legacy.c:4346",
+      "src/cluster_legacy.c:4351",
+      "src/cluster_legacy.c:4352",
+      "src/cluster_legacy.c:4353",
+      "src/cluster_legacy.c:4357",
+      "src/cluster_legacy.c:4358",
+      "src/cluster_legacy.c:4359",
+      "src/cluster_legacy.c:4360"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 6.2121,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-81f603d3c5a0",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'election-safety' returned ERROR: cannot check that 2 election winner(s) reached quorum: no 'Failover auth ACK' line was published as 'cluster.vote.acked' (Valkey logs them since 9.2)"
+    },
+    {
+      "scenario": "ai-eaf8304a9511",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'election-safety' returned ERROR: cannot check that 2 election winner(s) reached quorum: no 'Failover auth ACK' line was published as 'cluster.vote.acked' (Valkey logs them since 9.2)"
+    },
+    {
+      "scenario": "ai-52752c95d049",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'election-safety' returned ERROR: cannot check that 2 election winner(s) reached quorum: no 'Failover auth ACK' line was published as 'cluster.vote.acked' (Valkey logs them since 9.2)"
+    }
+  ]
+}

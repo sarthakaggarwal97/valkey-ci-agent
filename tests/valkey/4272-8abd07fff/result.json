@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8abd07fff268f70f3bf676fad929d687d632968f",
+  "parent": "b713c6acf29feaa6023644565e69a912843b4690",
+  "pr": 4272,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix slow-clocksource check for HW monotonic clock and non-x86 advisories (#4272)",
+  "date": "2026-08-11",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.9378,
+  "findings": [],
+  "recorded": [],
+  "reason": "The entire diff is confined to checkClocksource() in src/syscheck.c, which is only executed by the 'valkey-server --check-system' diagnostic subcommand (server.c:7611). It is never called during normal server startup, by any command, or by any of the four tools valkey.action.tools can run (valkey-cli, valkey-benchmark, valkey-check-rdb, valkey-check-aof), so no installed or writable experiment can invoke it. The change only alters the subcommand's console output: it skips the timing test when a hardware monotonic clock is in use, and rewrites the advisory text (suggesting a sysfs-derived alter"
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8ee7b372fad7acb757a3b62f22e35a1a903a72f9",
+  "parent": "dad4b1e662c220a2ee8acfe329959a3bacd1e7c9",
+  "pr": 4307,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix VLA stack overflow in TLS writev after write failure (#4307)",
+  "date": "2026-08-10",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.9689,
+  "findings": [],
+  "recorded": [],
+  "reason": "The only behavioral change is the fix to the VLA stack overflow in src/tls.c connTLSWritev, reachable solely on a TLS client connection after a forced TLS write failure followed by a large scatter/gather reply (connTLSWritev is the TLS connection type's writev; plain/unix connections use the untouched connSocketWritev). The fuzzer has no TLS transport: every client it opens is plain TCP (valkey.Valkey, the key-value workload, command actions) or a unix socket (valkey.action.commands and private servers), none of which enter connTLSWritev; there is no TLS-capable component and no certificate pr"
+}

@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.zset-btree-boundaries-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Adversarial ZSET inputs on the B+ tree - empty members, sds type boundaries,
+    inf/NaN scores, INT64 ranks, repeated args, keyword keys, grow-shrink churn
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: edge
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 0, enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [ZADD, b, "9007199254740993", p53, inf, pinf, "-inf", ninf, 0, zero,
+        "1e308", huge, "-1.0e-308", tiny], expect: {equals: 6}}
+    - {command: [ZSCORE, b, p53]}
+    - {command: [ZADD, b, "-0", zero], expect: {equals: 0}}
+    - {command: [ZSCORE, b, zero]}
+    - {command: [ZADD, b, nan, bad], expect: {error: true}}
+    - {command: [ZINCRBY, b, "-inf", pinf], expect: {error: NaN}}
+    - {command: [ZADD, b, 1, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, 2, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb],
+      expect: {equals: 2}}
+    - {command: [ZRANK, b, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa], expect: {equals: 3}}
+    - {command: [ZADD, b, 7, ""], expect: {equals: 1}}
+    - {command: [ZRANK, b, ""], expect: {equals: 5}}
+    - {command: [ZREVRANK, b, ninf], expect: {equals: 8}}
+    - {command: [ZRANGEBYSCORE, b, "(-inf", "(+inf"], expect: {equals: [tiny, zero,
+          aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, "", p53,
+          huge]}}
+    - {command: [ZCOUNT, b, "-inf", "+inf"], expect: {equals: 9}}
+    - {command: [ZRANGE, b, 0, "2147483648"]}
+    - {command: [ZRANGEBYSCORE, b, "-inf", "+inf", LIMIT, "2147483647", "2147483647"],
+      expect: {equals: []}}
+    - {command: [ZADD, WITHSCORES, 1, LIMIT, 2, BYSCORE], expect: {equals: 2}}
+    - {command: [ZRANGE, WITHSCORES, 0, -1, WITHSCORES]}
+    - {command: [ZADD, r, 1, m, 2, m, 3, m], expect: {equals: 1}}
+    - {command: [ZRANK, r, m], expect: {equals: 0}}
+    - {command: [ZADD, r, XX, GT, CH, 5, m], expect: {equals: 1}}
+    - {command: [ZADD, r, NX, 9, m], expect: {equals: 0}}
+    - {command: [ZADD, r, INCR, 2.5, m]}
+    - {command: [SET, str, v], expect: {equals: OK}}
+    - {command: [ZADD, str, 1, m], expect: {error: WRONGTYPE}}
+    - {command: [ZRANGEBYSCORE, str, "-inf", "+inf"], expect: {error: WRONGTYPE}}
+    - {command: [ZADD, f, 1, f01, 2, f02, 3, f03, 4, f04, 5, f05, 6, f06, 7, f07,
+        8, f08, 9, f09, 10, f10, 11, f11, 12, f12, 13, f13, 14, f14, 15, f15, 16,
+        f16, 17, f17, 18, f18, 19, f19, 20, f20, 21, f21, 22, f22, 23, f23, 24, f24],
+      expect: {equals: 24}}
+    - {command: [OBJECT, ENCODING, f], expect_difference: true, expect: {equals: btree}}
+    - {command: [ZREMRANGEBYRANK, f, 1, -2], expect: {equals: 22}}
+    - {command: [ZRANGE, f, 0, -1], expect: {equals: [f01, f24]}}
+    - {command: [ZADD, f, 5, g1, 6, g2, 7, g3], expect: {equals: 3}}
+    - {command: [ZREMRANGEBYSCORE, f, "-inf", "+inf"], expect: {equals: 5}}
+    - {command: [EXISTS, f], expect: {equals: 0}}
+    - {command: [ZADD, f, 1, x], expect: {equals: 1}}
+    - {command: [ZREMRANGEBYRANK, b, "-9223372036854775808", "-9223372036854775807"]}
+    - {command: [BZPOPMIN, b, rr, 0.05]}
+    - {command: [DEBUG, DIGEST-VALUE, r]}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [edge.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: edge}

@@ -1,0 +1,64 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b2fb0e13f5b4c8c2fb63dcfc2c37a067a0d6d20b",
+  "parent": "49d7d96fb70ffcef72c794e1c9a332de8b66f51a",
+  "pr": 4212,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix/ready key blocked client uaf (#4212)",
+  "date": "2026-08-07",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 18,
+    "executed": 18,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.1513,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-a825fc2e4bd7",
+      "build": "unstable",
+      "seed": 1,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a825fc2e4bd7",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a825fc2e4bd7",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-30b680a0f100",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-30b680a0f100",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-30b680a0f100",
+      "build": "unstable",
+      "seed": 4,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

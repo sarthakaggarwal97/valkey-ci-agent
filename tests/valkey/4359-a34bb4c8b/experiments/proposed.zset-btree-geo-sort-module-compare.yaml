@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.zset-btree-geo-sort-module-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: GEO search and store, SORT on zsets, ZSCAN, and the module ZsetRange
+    iterator API over the B+ tree, compared with the skiplist parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: geo
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {zset-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [GEOADD, geo, 13.361389, 38.115556, Palermo, 15.087269, 37.502669,
+        Catania, 2.349014, 48.864716, Paris], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, geo], expect_difference: true, expect: {equals: btree}}
+    - {command: [GEOADD, geo, XX, CH, 13.361389, 38.0, Palermo], expect: {equals: 1}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, 15, 37, BYRADIUS, 100, km, ASC], expect: {
+        equals: [Catania]}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, 15, 37, BYRADIUS, 500, km, ASC, WITHCOORD,
+        WITHDIST, WITHHASH]}
+    - {command: [GEORADIUS, geo, 15, 37, 500, km, STORE, gdest], expect: {equals: 2}}
+    - {command: [OBJECT, ENCODING, gdest], expect_difference: true, expect: {equals: btree}}
+    - {command: [ZRANGE, gdest, 0, -1, WITHSCORES]}
+    - {command: [GEOSEARCHSTORE, gdest2, geo, FROMMEMBER, Palermo, BYBOX, 9000, 9000,
+        km, ASC, COUNT, 10, STOREDIST], expect: {equals: 3}}
+    - {command: [ZRANGE, gdest2, 0, -1], expect: {equals: [Palermo, Catania, Paris]}}
+    - {command: [GEOPOS, geo, Palermo, missing]}
+    - {command: [GEODIST, geo, Palermo, Catania, km]}
+    - {command: [ZADD, s, 3, c, 1, a, 2, b], expect: {equals: 3}}
+    - {command: [SORT, s, ALPHA], expect: {equals: [a, b, c]}}
+    - {command: [SORT, s, BY, nosort, LIMIT, 0, 2], expect: {equals: [a, b]}}
+    - {command: [SORT, s, ALPHA, STORE, sdest], expect: {equals: 3}}
+    - {command: [LRANGE, sdest, 0, -1], expect: {equals: [a, b, c]}}
+    - {command: [ZSCAN, geo, 0, MATCH, "Pa*", COUNT, 1000], compare: skip}
+    - {command: [ZSCAN, geo, 0, COUNT, 1000], compare: skip}
+    - {command: [zset.add, mk, 1.5, alpha], expect: {equals: OK}}
+    - {command: [zset.add, mk, 2, beta], expect: {equals: OK}}
+    - {command: [zset.add, mk, 2, ""], expect: {equals: OK}}
+    - {command: [zset.incrby, mk, beta, 3]}
+    - {command: [zset.rangebylex, mk, "-", "+"], expect: {equals: [alpha, "", beta]}}
+    - {command: [zset.revrangebylex, mk, "-", "+"], expect: {equals: [beta, "", alpha]}}
+    - {command: [zset.members, mk], compare: unordered}
+    - {command: [zset.rem, mk, alpha], expect: {equals: 1}}
+    - {command: [zset.rem, mk, nosuch], expect: {equals: 0}}
+    - {command: [zset.rangebylex, mk, "[a", "[z"], expect: {equals: [beta]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [geo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: geo}

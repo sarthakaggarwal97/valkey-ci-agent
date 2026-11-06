@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a34bb4c8b911..8eb992eb0946.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b4a576fcd5b8
+seed: 101
+experiment:
+  id: proposed.georadius-store-acl
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.vset-bucket-ts-llong-max
+deployment:
+  modes: [standalone]
+metadata:
+  description: HPEXPIREAT at exactly LLONG_MAX must keep every field in the TTL index
+    and survive a later HDEL
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 0}
+    timeout_s: 20
+    commands:
+    - {command: [HSET, myhash, f1, v, f2, v, f3, v, f4, v, f5, v, f6, v, f7, v, f8,
+        v, f9, v, f10, v, f11, v, f12, v, f13, v, f14, v, f15, v, f16, v, f17, v,
+        f18, v, f19, v, f20, v, f21, v, f22, v, f23, v, f24, v, f25, v, f26, v, f27,
+        v, f28, v, f29, v, f30, v, f31, v, f32, v, f33, v, f34, v, f35, v, f36, v,
+        f37, v, f38, v, f39, v, f40, v, f41, v, f42, v, f43, v, f44, v, f45, v, f46,
+        v, f47, v, f48, v, f49, v, f50, v, f51, v, f52, v, f53, v, f54, v, f55, v,
+        f56, v, f57, v, f58, v, f59, v, f60, v, f61, v, f62, v, f63, v, f64, v, f65,
+        v, f66, v, f67, v, f68, v, f69, v, f70, v, f71, v, f72, v, f73, v, f74, v,
+        f75, v, f76, v, f77, v, f78, v, f79, v, f80, v, f81, v, f82, v, f83, v, f84,
+        v, f85, v, f86, v, f87, v, f88, v, f89, v, f90, v, f91, v, f92, v, f93, v,
+        f94, v, f95, v, f96, v, f97, v, f98, v, f99, v, f100, v, f101, v, f102, v,
+        f103, v, f104, v, f105, v, f106, v, f107, v, f108, v, f109, v, f110, v, f111,
+        v, f112, v, f113, v, f114, v, f115, v, f116, v, f117, v, f118, v, f119, v,
+        f120, v, f121, v, f122, v, f123, v, f124, v, f125, v, f126, v, f127, v, f128,
+        v], expect: {equals: 128}}
+    - {command: [HPEXPIREAT, myhash, "9223372036854775807", FIELDS, 128, f1, f2, f3,
+        f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19,
+        f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30, f31, f32, f33, f34,
+        f35, f36, f37, f38, f39, f40, f41, f42, f43, f44, f45, f46, f47, f48, f49,
+        f50, f51, f52, f53, f54, f55, f56, f57, f58, f59, f60, f61, f62, f63, f64,
+        f65, f66, f67, f68, f69, f70, f71, f72, f73, f74, f75, f76, f77, f78, f79,
+        f80, f81, f82, f83, f84, f85, f86, f87, f88, f89, f90, f91, f92, f93, f94,
+        f95, f96, f97, f98, f99, f100, f101, f102, f103, f104, f105, f106, f107, f108,
+        f109, f110, f111, f112, f113, f114, f115, f116, f117, f118, f119, f120, f121,
+        f122, f123, f124, f125, f126, f127, f128], expect: {contains: 1}}
+    - {command: [HLEN, myhash], expect: {equals: 128}}
+    - {command: [HDEL, myhash, f1], expect_difference: true, expect: {equals: 1}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    - {command: [HLEN, myhash], expect_difference: true, expect: {equals: 127}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

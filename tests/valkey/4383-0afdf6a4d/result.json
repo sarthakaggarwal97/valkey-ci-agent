@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0afdf6a4d3f9d7998d1265bdbda5b36a1982453b",
+  "parent": "8abd07fff268f70f3bf676fad929d687d632968f",
+  "pr": 4383,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Tests: Add subject alternative names to the TLS test certificates (#4383)",
+  "date": "2026-08-11",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2253,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only test infrastructure: tests/unit/tls.tcl (the TCL test suite's TLS client setup) and utils/gen-test-certs.sh (the script that generates self-signed test certificates with added subjectAltName extensions). No Valkey server, command, replication, persistence, or tool code changes, so there is no behaviour difference between the builds for a scenario to reach."
+}

@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.reset-clears-import-source
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESET clears the import-source client flag, so a reset connection loses
+    visibility of logically expired keys under import-mode, like a fresh client
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reset-import
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, import-mode, yes], expect: {equals: OK}}
+    - {command: [SET, foo1, "1", PX, "1"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [CLIENT, IMPORT-SOURCE, ON], expect: {equals: OK}}
+    - {command: [GET, foo1], expect: {equals: "1"}}
+    - {command: [RESET], expect: {equals: RESET}}
+    - {command: [TTL, foo1], expect_difference: true, expect: {equals: -2}}
+    - {command: [GET, foo1], expect_difference: true, expect: {exists: false}}
+    - {command: [EXISTS, foo1], expect_difference: true, expect: {equals: 0}}
+    - {command: [CLIENT, IMPORT-SOURCE, ON], expect: {equals: OK}}
+    - {command: [GET, foo1], expect: {equals: "1"}}
+    - {command: [CLIENT, IMPORT-SOURCE, OFF], expect: {equals: OK}}
+    - {command: [GET, foo1], expect: {exists: false}}
+    - {command: [CONFIG, SET, import-mode, no], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [reset-import.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reset-import}

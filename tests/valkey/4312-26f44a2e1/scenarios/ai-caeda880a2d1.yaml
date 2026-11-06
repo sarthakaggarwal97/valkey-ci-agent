@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 21c0d49a0b56..26f44a2e18a1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-caeda880a2d1
+seed: 41201
+experiment:
+  id: proposed.vset-bucket-ts-overflow-split
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

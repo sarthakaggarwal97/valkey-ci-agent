@@ -1,0 +1,66 @@
+extends: [valkey.base]
+id: proposed.zset-deployment-faults
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Seed B+ tree ZSETs on a live deployment, SIGKILL the primary (AOF reload)
+    or a replica (full resync carrying zset RDB), and verify the zsets after recovery
+inputs:
+  properties:
+    target: {type: string, enum: [primary, replica], default: replica}
+components:
+- use: valkey.fault.process-signal
+  id: kill
+  config:
+    when_event: warm.completed
+    instance: {$ref: inputs.target}
+    signal: SIGKILL
+    restart_mode: immediate
+- use: valkey.action.commands
+  id: seed
+  config:
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, zset-max-listpack-entries, "0"], expect: {equals: OK}}
+    - {command: [ZADD, "zf:a", 1, a01, 2, a02, 3, a03, 4, a04, 5, a05, 6, a06, 7,
+        a07, 8, a08, 9, a09, 10, a10, 11, a11, 12, a12, 13, a13, 14, a14, 15, a15,
+        16, a16, 17, a17, 18, a18, 19, a19, 20, a20, 21, a21, 22, a22, 23, a23, 24,
+        a24], expect: {equals: 24}}
+    - {command: [ZADD, "zf:b", "-inf", low, inf, high, 2, "", 2, m1, 2, m2, 1.5, wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww],
+      expect: {equals: 6}}
+    - {command: [ZADD, "zf:lex", 0, l01, 0, l02, 0, l03, 0, l04, 0, l05, 0, l06, 0,
+        l07, 0, l08, 0, l09, 0, l10, 0, l11, 0, l12], expect: {equals: 12}}
+    - {command: [BGREWRITEAOF], expect: {error: false}}
+- use: valkey.action.sleep
+  id: warm
+  depends_on: [writes, seed, kill]
+  config: {seconds: 3}
+- use: valkey.action.wait-event
+  id: rec
+  depends_on: [warm]
+  config: {event: kill.recovered, only_after: kill.injected, timeout_s: 120}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [rec]
+  config: {seconds: 3}
+- use: valkey.action.commands
+  id: verify
+  depends_on: [settle]
+  config:
+    timeout_s: 120
+    commands:
+    - {command: [ZCARD, "zf:a"], wait_s: 60, expect: {equals: 24}}
+    - {command: [ZRANK, "zf:a", a12], expect: {equals: 11}}
+    - {command: [ZCARD, "zf:b"], expect: {equals: 6}}
+    - {command: [ZRANGE, "zf:b", 0, 0], expect: {equals: [low]}}
+    - {command: [ZSCORE, "zf:b", ""], expect: {equals: "2"}}
+    - {command: [ZRANGEBYLEX, "zf:lex", "-", "+"], expect: {equals: [l01, l02, l03,
+          l04, l05, l06, l07, l08, l09, l10, l11, l12]}}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [seed.completed, warm.completed, kill.recovered]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill}
+- {evidence_id: valkey.command.sequence, source: verify}

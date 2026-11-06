@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0afdf6a4d3f9..ea9738ab7f05.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d703ceb1b2e2
+seed: 1003
+experiment:
+  id: proposed.benchmark-rps-zombie-timers
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    threads: 4
+    rps: 100
+    requests: 600
+    clients: 200
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

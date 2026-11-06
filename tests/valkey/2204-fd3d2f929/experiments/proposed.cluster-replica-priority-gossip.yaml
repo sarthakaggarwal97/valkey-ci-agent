@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.cluster-replica-priority-gossip
+deployment:
+  modes: [standalone]
+metadata:
+  description: cluster-replica-priority propagates over the new cluster bus ping extension,
+    resets to 0 when the sender stops advertising it, and DEBUG CLUSTERLINK KILL with
+    an unknown direction no longer sends a stray +OK
+components:
+- use: valkey.action.commands
+  id: gossip
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    server_config: {enable-debug-command: "yes"}
+    timeout_s: 300
+    commands:
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, "<node.0.id>"], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [CONFIG, SET, cluster-replica-priority, 7], node: 1, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, "<node.1.id>"], wait_s: 20, expect_difference: true,
+      expect: {equals: 7}}
+    - {command: [CONFIG, SET, cluster-replica-priority, 2147483647], node: 2, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, "<node.2.id>"], wait_s: 20, expect_difference: true,
+      expect: {equals: 2147483647}}
+    - {command: [CONFIG, SET, cluster-replica-priority, 0], node: 1, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, "<node.1.id>"], wait_s: 20, expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [DEBUG, CLUSTERLINK, KILL, sideways, "<node.1.id>"], connection: lk,
+      expect: {error: "Unknown direction"}}
+    - {command: [PING], connection: lk, expect_difference: true, expect: {equals: PONG}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 0], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [gossip.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: gossip}

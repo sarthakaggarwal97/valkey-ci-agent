@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2d69e5e9b7c27d3a49cef67aa61ad306d107bfd1",
+  "parent": "b2fb0e13f5b4c8c2fb63dcfc2c37a067a0d6d20b",
+  "pr": 2891,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reset prefetch and ACL stats via CONFIG RESETSTAT (#2891)",
+  "date": "2026-08-08",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 8,
+    "executed": 8,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.5608,
+  "findings": [],
+  "recorded": []
+}

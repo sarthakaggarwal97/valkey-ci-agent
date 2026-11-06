@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ee7f288057e5..a34bb4c8b911.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a5d49b4a1fc3
+seed: 501
+experiment:
+  id: proposed.zset-deployment-faults
+  inputs:
+    target: replica
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7800
+  server_config:
+    zset-max-listpack-entries: '0'
