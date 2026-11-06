@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "44fb9193b52ea3468d27f704890c48d683856be0",
+  "parent": "c6f5ec55eed46ab0f6af68a63ec944006e6101e6",
+  "pr": 822,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "test: add comprehensive timeout coverage for all search execution paths (#822)",
+  "date": "2026-03-10",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 14.1484,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-2cbf48d46ae6",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'agg' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (FT.CREATE idx ON HASH PREFIX 1 doc:{t}: SCHEMA n NUMERIC tag TAG txt TEXT), 2 (FT.CREATE vidx ON HASH PREFIX 1 vdoc:{t}: SCHEMA v VECTOR F"
+    },
+    {
+      "scenario": "ai-9995a86f749f",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'agg' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (FT.CREATE idx ON HASH PREFIX 1 doc:{t}: SCHEMA n NUMERIC tag TAG txt TEXT), 2 (FT.CREATE vidx ON HASH PREFIX 1 vdoc:{t}: SCHEMA v VECTOR F"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

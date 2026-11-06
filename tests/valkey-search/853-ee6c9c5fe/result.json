@@ -1,0 +1,83 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ee6c9c5fe0a0252dc2653293280a6925fa30e616",
+  "parent": "fa3ee82d3dafbc794bd08bfe2e929256762c3ce4",
+  "pr": 853,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Refactor Lexer::Tokenize / Stem / Normalize - reduce string allocations (#853)",
+  "date": "2026-03-06",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 8.8755,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-3de212c3ec28",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'tokenize' returned ERROR: expectations both builds violate alike, so they are not about the change: 20 (FT._DEBUG TEXTINFO idx LEXER The QUICK-brown.. Fox!! x123 TR\u00c8S hello\\-world), 21 (FT._DEBUG TEXTINFO idx LEXER AAAAAAAAAAAAAAAAAAAAA"
+    },
+    {
+      "scenario": "ai-3de212c3ec28",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3de212c3ec28",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3de212c3ec28",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a07975a779d3",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'tokenize' returned ERROR: expectations both builds violate alike, so they are not about the change: 20 (FT._DEBUG TEXTINFO idx LEXER The QUICK-brown.. Fox!! x123 TR\u00c8S hello\\-world), 21 (FT._DEBUG TEXTINFO idx LEXER AAAAAAAAAAAAAAAAAAAAA"
+    },
+    {
+      "scenario": "ai-a07975a779d3",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a07975a779d3",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a07975a779d3",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-606a056570c9",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'queryparse' returned ERROR: expectations both builds violate alike, so they are not about the change: 21 (FT.SEARCH idx @a:%% NOCONTENT), 29 (FT.SEARCH idx the NOCONTENT), 30 (FT.SEARCH idx @a:\"\" NOCONTENT), 31 (FT.SEARCH idx @a:... NOC"
+    },
+    {
+      "scenario": "ai-93d65a6d1df6",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'queryparse' returned ERROR: expectations both builds violate alike, so they are not about the change: 21 (FT.SEARCH idx @a:%% NOCONTENT), 29 (FT.SEARCH idx the NOCONTENT), 30 (FT.SEARCH idx @a:\"\" NOCONTENT), 31 (FT.SEARCH idx @a:... NOC"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

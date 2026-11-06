@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.ft-denyoom-oom-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH and FT.AGGREGATE gain the denyoom flag; under maxmemory pressure
+    the change rejects them with OOM (directly and at MULTI queue time) where the
+    parent still returns results
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: oom
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [HSET, "vec:1", vector, !!binary "AACAPwAAAEAAAEBA", category, red],
+      expect: {equals: 2}}
+    - {command: [HSET, "vec:2", vector, !!binary "AAAAAAAAgD8AAABA", category, red],
+      expect: {equals: 2}}
+    - {command: [HSET, "vec:3", vector, !!binary "AABAQAAAgEAAAKBA", category, blue],
+      expect: {equals: 2}}
+    - {command: [HSET, "vec:4", vector, !!binary "AAAAAAAAAAAAAAAA", category, blue],
+      expect: {equals: 2}}
+    - {command: [FT.CREATE, idx, SCHEMA, vector, VECTOR, HNSW, "6", TYPE, FLOAT32,
+        DIM, "3", DISTANCE_METRIC, L2, category, TAG], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vector $qv]", NOCONTENT, PARAMS, "2",
+        qv, !!binary "AACAPwAAAEAAAEBA"], compare: unordered, expect: {exists: true}}
+    - {command: [COMMAND, INFO, FT.SEARCH], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, INFO, FT.AGGREGATE], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [CONFIG, SET, maxmemory, "1"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vector $qv]", NOCONTENT, PARAMS, "2",
+        qv, !!binary "AACAPwAAAEAAAEBA"], expect_difference: true, expect: {error: "command\
+          \ not allowed when used memory"}}
+    - {command: [FT.AGGREGATE, idx, "@category:{red}", GROUPBY, "1", "@category",
+        REDUCE, COUNT, "0", AS, cnt], expect_difference: true, expect: {error: "command\
+          \ not allowed when used memory"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vector $qv]", NOCONTENT, PARAMS, "2",
+        qv, !!binary "AACAPwAAAEAAAEBA"], expect_difference: true, expect: {error: "command\
+          \ not allowed when used memory"}}
+    - {command: [EXEC], expect_difference: true, expect: {error: "EXECABORT"}}
+    - {command: [CONFIG, SET, maxmemory, "0"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vector $qv]", NOCONTENT, PARAMS, "2",
+        qv, !!binary "AACAPwAAAEAAAEBA"], compare: unordered, expect: {exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [oom.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: oom}

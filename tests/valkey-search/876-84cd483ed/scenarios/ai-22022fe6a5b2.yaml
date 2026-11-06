@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search ce3baefd2c00..84cd483edb95.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-22022fe6a5b2
+seed: 8762
+experiment:
+  id: proposed.text-evaluator-locking
+  inputs:
+    resp: 3
+    concurrency: 8
+deployment:
+  mode: standalone
+  base_port: 7100

@@ -1,0 +1,74 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "c2a46b4becf965ba58d6809bde23b1f250a705e8",
+  "parent": "44fb9193b52ea3468d27f704890c48d683856be0",
+  "pr": 878,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Simplify text size estimation for non-vector queries (#878)",
+  "date": "2026-03-10",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.4129,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak",
+      "scenario": "ai-39430f19dd72",
+      "seed": 878003,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #878, since fixed",
+      "fingerprint": "badc8ded22447957f884",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-d17cf993d3ab",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ftcmp' returned ERROR: expectations both builds violate alike, so they are not about the change: 8 (FT.SEARCH idx * NOCONTENT LIMIT 0 0), 9 (FT.SEARCH idx2 * NOCONTENT LIMIT 0 0), 27 (FT.SEARCH idx (@t:hello @tg:{red})=>[KNN 2 @v $B] NO"
+    },
+    {
+      "scenario": "ai-0e65b0c98719",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ftcmp' returned ERROR: expectations both builds violate alike, so they are not about the change: 8 (FT.SEARCH idx * NOCONTENT LIMIT 0 0), 9 (FT.SEARCH idx2 * NOCONTENT LIMIT 0 0), 27 (FT.SEARCH idx (@t:hello @tg:{red})=>[KNN 2 @v $B] NO"
+    },
+    {
+      "scenario": "ai-39430f19dd72",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ftrestart' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (FT.SEARCH idx * NOCONTENT LIMIT 0 0), 10 (FT.SEARCH idx * NOCONTENT LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-39430f19dd72",
+      "build": "unstable",
+      "seed": 878003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-39430f19dd72",
+      "build": "unstable",
+      "seed": 878004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-39430f19dd72",
+      "build": "unstable",
+      "seed": 878005,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

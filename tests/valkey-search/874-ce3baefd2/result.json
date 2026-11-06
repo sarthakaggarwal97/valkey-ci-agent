@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ce3baefd2c0033b19babcc77ea92fac01e33eaa0",
+  "parent": "411d10ddef01de1086b29895a743471d458578ce",
+  "pr": 874,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Use vector for storing stem variants (#874)",
+  "date": "2026-03-09",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.3181,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-3aba4bee7d7d",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'stem' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (CONFIG SET search.debug-mode yes), 11 (FT._DEBUG TEXTINFO idx STEM connect), 12 (FT._DEBUG TEXTINFO idx STEM run), 13 (FT._DEBUG TEXTINFO"
+    },
+    {
+      "scenario": "ai-21929385dc74",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'stem' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (CONFIG SET search.debug-mode yes), 11 (FT._DEBUG TEXTINFO idx STEM connect), 12 (FT._DEBUG TEXTINFO idx STEM run), 13 (FT._DEBUG TEXTINFO"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

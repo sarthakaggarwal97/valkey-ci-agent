@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "92645864c998e8bf49a9c95a952be17f31fb73b7",
+  "parent": "5ffd5855988eb453400c72d52e04fa821e68e8f1",
+  "pr": 875,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add 10k tag filter test and Change prefiltering-threshold-ratio and text-rax-target-mutex-pool-size to Dev configs (#875)",
+  "date": "2026-03-09",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.2216,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

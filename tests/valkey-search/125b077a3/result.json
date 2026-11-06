@@ -1,0 +1,71 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "125b077a3f0080dd85d83f5b00984a9f90351951",
+  "parent": "b2fd1a6b6336d47bb2d7d6bc24a80b1128912d49",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Merge pull request #892 from bandalgomsu/gh-729",
+  "date": "2026-03-11",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.8909,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-d4d8d6c4beda",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'tagprefix' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (FT.SEARCH idx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-d4d8d6c4beda",
+      "build": "unstable",
+      "seed": 892201,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d4d8d6c4beda",
+      "build": "unstable",
+      "seed": 892202,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d4d8d6c4beda",
+      "build": "unstable",
+      "seed": 892203,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-99b1dc37e2c1",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'tagprefix' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (FT.SEARCH idx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-99b1dc37e2c1",
+      "build": "unstable",
+      "seed": 892302,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-99b1dc37e2c1",
+      "build": "unstable",
+      "seed": 892303,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-99b1dc37e2c1",
+      "build": "unstable",
+      "seed": 892304,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

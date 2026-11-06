@@ -1,0 +1,97 @@
+extends: [valkey.liveness]
+id: proposed.ft-text-metrics-removed
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The removed search_used_text_memory INFO fields are gone on the change and still
+    present on the parent, and full-text ingest, update, delete, phrase and suffix
+    queries answer the same after the NestedMemoryScope removal
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ft
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, search.info-developer-visible, yes], expect: {equals: OK}}
+    - {command: [EVAL, "local s = redis.call('INFO','search') if string.find(s,'search_used_text_memory_bytes',1,true)\
+          \ then return 1 end return 0", 0], expect_difference: true, expect: {equals: 0}}
+    - {command: [EVAL, "local s = redis.call('INFO','search') if string.find(s,'search_used_text_memory_human',1,true)\
+          \ then return 1 end return 0", 0], expect_difference: true, expect: {equals: 0}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, desc, TEXT],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, desc, TEXT,
+        WITHSUFFIXTRIE], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', desc, 'the quick brown fox jumps over the lazy dog'],
+      expect: {equals: 1}}
+    - {command: [HSET, 'doc:2', desc, 'a quick silver racing machine wins the championship'],
+      expect: {equals: 1}}
+    - {command: [HSET, 'doc:3', desc, 'unique sentinel alpha running jumping swimming'],
+      expect: {equals: 1}}
+    - {command: [HSET, 'doc:4', desc, 'phrase matching requires exact ordering of
+          wonderful words'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:5', desc, ''], expect: {equals: 1}}
+    - {command: [HSET, 'doc:6', desc, 'poplog reflective incrementally compiled environment'],
+      expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@desc:fox', NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx, '@desc:championship', NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: 'doc:2'}}
+    - {command: [FT.SEARCH, idx, '@desc:sentinel', NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: 'doc:3'}}
+    - {command: [FT.SEARCH, idx, '@desc:wonderful', NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: 'doc:4'}}
+    - {command: [FT.SEARCH, idx, '@desc:poplog', NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: 'doc:6'}}
+    - {command: [FT.SEARCH, idx2, '@desc:poplog', NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: 'doc:6'}}
+    - {command: [FT.SEARCH, idx, '@desc:"quick brown fox"', NOCONTENT], expect: {
+        equals: [1, 'doc:1']}}
+    - {command: [FT.SEARCH, idx, '@desc:"brown quick"', NOCONTENT], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, '@desc:jump*', NOCONTENT], compare: unordered, expect: {
+        contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx2, '@desc:*ing', NOCONTENT], compare: unordered, expect: {
+        contains: 'doc:3'}}
+    - {command: [EVAL, "local s = redis.call('INFO','search') if string.find(s,'search_used_text_memory_bytes',1,true)\
+          \ then return 1 end return 0", 0], expect_difference: true, expect: {equals: 0}}
+    - {command: [DEL, 'doc:3'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@desc:sentinel', NOCONTENT], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idx2, '@desc:swimming', NOCONTENT], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [HSET, 'doc:1', desc, 'completely different content now'], expect: {
+        equals: 0}}
+    - {command: [FT.SEARCH, idx, '@desc:fox', NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, '@desc:completely', NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: 'doc:1'}}
+    - {command: [HSET, 'doc:2', desc, 'alpha beta gamma'], expect: {equals: 0}}
+    - {command: [HSET, 'doc:2', desc, 'delta epsilon zeta'], expect: {equals: 0}}
+    - {command: [DEL, 'doc:2'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:2', desc, 'eta theta iota'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@desc:theta', NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: 'doc:2'}}
+    - {command: [FT.INFO, idx], compare: skip, expect: {exists: true}}
+    - {command: [DEL, 'doc:1', 'doc:2', 'doc:4', 'doc:5', 'doc:6'], expect: {equals: 5}}
+    - {command: [FT.SEARCH, idx, '@desc:theta', NOCONTENT], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [EVAL, "local s = redis.call('INFO','search') if string.find(s,'search_used_text_memory_bytes',1,true)\
+          \ then return 1 end return 0", 0], expect_difference: true, expect: {equals: 0}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, idx2], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ft.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ft}

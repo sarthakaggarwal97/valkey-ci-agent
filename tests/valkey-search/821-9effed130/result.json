@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "9effed130fb28be47c0d13ffc49db7383d181843",
+  "parent": "0e5a1707a20dd235139cc438d741142e27627da5",
+  "pr": 821,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add config to limit keys from pre-content fetching phase (#821)",
+  "date": "2026-03-04",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 8.6465,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

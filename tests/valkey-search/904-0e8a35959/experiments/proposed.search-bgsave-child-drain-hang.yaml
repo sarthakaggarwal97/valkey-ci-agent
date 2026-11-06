@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.search-bgsave-child-drain-hang
+deployment:
+  modes: [standalone]
+metadata:
+  description: BGSAVE with a non-empty frozen mutation queue and drain-on-save enabled
+    must not hang the forked child
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "parent commit module build, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bgsave
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 40
+    commands:
+    - {command: [CONFIG, SET, search.writer-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.drain-mutation-queue-on-save, yes], expect: {
+        equals: OK}}
+    - {command: ["ft._debug", PAUSEPOINT, SET, block_mutation_queue], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC,
+        t, TAG], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", n, 1, t, a], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:2", n, 2, t, b], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:3", n, 3, t, c], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [2, 2, 2]}}
+    - {command: [BGSAVE], expect: {error: false}}
+    - {command: [BGSAVE], wait_s: 15, expect_difference: true, expect: {error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bgsave.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bgsave}

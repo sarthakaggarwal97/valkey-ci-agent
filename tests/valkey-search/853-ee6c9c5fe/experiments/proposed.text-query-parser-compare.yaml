@@ -1,0 +1,77 @@
+extends: [valkey.liveness]
+id: proposed.text-query-parser-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Filter parser quoted/unquoted token paths after the in-place normalize
+    refactor - term, phrase, fuzzy, prefix/suffix/infix wildcards, NOSTEM and error
+    branches compared across the two module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: queryparse
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, a, TEXT, WITHSUFFIXTRIE,
+        b, TEXT, NOSTEM], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', a, 'Driver drove the car', b, 'running quickly'],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:2', a, 'Carl Weathers drove the huge boxcar', b, internationalization],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:3', a, "tr\xE8s bien monde", b, jumped], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, '@a:car', NOCONTENT], wait_s: 30, expect: {equals: [
+          1, 'doc:1']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@a:boxcar', NOCONTENT], wait_s: 30, expect: {equals: [
+          1, 'doc:2']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@a:monde', NOCONTENT], wait_s: 30, expect: {equals: [
+          1, 'doc:3']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@b:quickly', NOCONTENT], wait_s: 30, expect: {equals: [
+          1, 'doc:1']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@b:internationalization', NOCONTENT], wait_s: 30,
+      expect: {equals: [1, 'doc:2']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@b:jumped', NOCONTENT], wait_s: 30, expect: {equals: [
+          1, 'doc:3']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@a:"Carl Weathers"', NOCONTENT], expect: {equals: [
+          1, 'doc:2']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@a:"DROVE"', NOCONTENT], expect: {contains: 2},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "@a:\"TR\xC8S\"", NOCONTENT], expect: {equals: [
+          1, 'doc:3']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@a:drivers', NOCONTENT], expect: {equals: [1, 'doc:1']},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, '@a:dro*', NOCONTENT], expect: {contains: 2}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@a:CAR*', NOCONTENT], expect: {contains: 2}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@a:*car', NOCONTENT], expect: {contains: 2}, compare: unordered}
+    - {command: [FT.SEARCH, idx, "@a:*\xE8s", NOCONTENT], expect: {equals: [1, 'doc:3']},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, '@a:*ove*', NOCONTENT], expect: {error: Unsupported}}
+    - {command: [FT.SEARCH, idx, '@a:*', NOCONTENT], expect: {error: true}}
+    - {command: [FT.SEARCH, idx, '@a:%car%', NOCONTENT], expect: {contains: 2}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@a:%%', NOCONTENT], expect: {error: 'Empty fuzzy
+          token'}}
+    - {command: [FT.SEARCH, idx, '@a:%car%%', NOCONTENT], expect: {error: 'Invalid
+          fuzzy'}}
+    - {command: [FT.SEARCH, idx, "@a:%tr\xE9s%", NOCONTENT], compare: unordered}
+    - {command: [CONFIG, SET, search.fuzzy-max-distance, '10'], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@a:%%%%%%%%%%z%%%%%%%%%%', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@b:run', NOCONTENT], expect: {equals: [0]}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@b:running', NOCONTENT], expect: {equals: [1, 'doc:1']},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, '@b:jump', NOCONTENT], expect: {equals: [0]}, compare: unordered}
+    - {command: [FT.SEARCH, idx, the, NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@a:""', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@a:...', NOCONTENT], compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [queryparse.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: queryparse}

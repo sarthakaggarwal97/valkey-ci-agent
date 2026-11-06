@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search ed4dcc5e59a5..7d674fcfa047.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-25ce4c409bea
+seed: 505
+experiment:
+  id: proposed.text-ingestion-locking-compare
+  inputs:
+    pool_size: '256'
+    writer_threads: '1'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

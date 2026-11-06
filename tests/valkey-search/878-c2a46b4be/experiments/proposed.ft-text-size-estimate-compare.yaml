@@ -1,0 +1,117 @@
+extends: [valkey.liveness]
+id: proposed.ft-text-size-estimate-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    FT.SEARCH text size-estimation paths compared across the change. Non-vector term/prefix/suffix/fuzzy
+    queries now estimate with GetTrackedKeyCount; KNN queries keep the exact term
+    count and always-on subtree item counts (including on a FLAT-only schema, where
+    the parent never tracked counts); deletes now unconditionally SUBTRACT subtree
+    counts. Replies must stay identical on both builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftcmp
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, t, TEXT, WITHSUFFIXTRIE,
+        tg, TAG, n, NUMERIC, v, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, 'item:', SCHEMA, t, TEXT, v,
+        VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', t, 'hello world', tg, red, n, 1, v, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 4}}
+    - {command: [HSET, 'doc:2', t, 'hello valkey', tg, blue, n, 2, v, !!binary 'AAAAAAAAgD8='],
+      expect: {equals: 4}}
+    - {command: [HSET, 'doc:3', t, 'help wanted', tg, red, n, 3, v, !!binary 'AACAPwAAgD8='],
+      expect: {equals: 4}}
+    - {command: [HSET, 'doc:4', t, 'yellow mellow', tg, blue, n, 4, v, !!binary 'AAAAQAAAAAA='],
+      expect: {equals: 4}}
+    - {command: [HSET, 'item:1', t, 'hello flatland', v, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 2}}
+    - {command: [HSET, 'item:2', t, 'goodbye flatland', v, !!binary 'AAAAAAAAgD8='],
+      expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, '*', NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [4]}}
+    - {command: [FT.SEARCH, idx2, '*', NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [2]}}
+    - {command: [FT.SEARCH, idx, '@t:hello', NOCONTENT, LIMIT, 0, 0], expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx, '@t:hello', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:hel*', NOCONTENT, LIMIT, 0, 0], expect: {equals: [
+          3]}}
+    - {command: [FT.SEARCH, idx, '@t:hel*', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:*llo', NOCONTENT, LIMIT, 0, 0], expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx, '@t:*llo', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:%%helo%%', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:hello @tg:{red}', NOCONTENT, LIMIT, 0, 0], expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx, '@t:hello | @n:[3 4]', NOCONTENT, LIMIT, 0, 0], expect: {
+        equals: [4]}}
+    - {command: [FT.SEARCH, idx, '-@t:hello', NOCONTENT, LIMIT, 0, 0], expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx, '@t:hello @t:world', NOCONTENT, LIMIT, 0, 0], expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx, '@t:"hello world"', NOCONTENT, LIMIT, 0, 0], expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx, '(@t:hello)=>[KNN 2 @v $B]', NOCONTENT, LIMIT, 0,
+        0, PARAMS, 2, B, !!binary 'AACAPwAAAAA=', DIALECT, 2], expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx, '(@t:hel*)=>[KNN 3 @v $B]', NOCONTENT, LIMIT, 0,
+        0, PARAMS, 2, B, !!binary 'AACAPwAAAAA=', DIALECT, 2], expect: {equals: [
+          3]}}
+    - {command: [FT.SEARCH, idx, '(@t:hel*)=>[KNN 3 @v $B]', NOCONTENT, PARAMS, 2,
+        B, !!binary 'AACAPwAAAAA=', DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, '(@t:*llo)=>[KNN 2 @v $B]', NOCONTENT, LIMIT, 0,
+        0, PARAMS, 2, B, !!binary 'AACAPwAAAAA=', DIALECT, 2], expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx, '(@t:%%helo%%)=>[KNN 3 @v $B]', NOCONTENT, PARAMS,
+        2, B, !!binary 'AACAPwAAAAA=', DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, '(@t:hello @tg:{red})=>[KNN 2 @v $B]', NOCONTENT,
+        LIMIT, 0, 0, PARAMS, 2, B, !!binary 'AACAPwAAAAA=', DIALECT, 2], expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx2, '(@t:hel*)=>[KNN 2 @v $B]', NOCONTENT, LIMIT, 0,
+        0, PARAMS, 2, B, !!binary 'AACAPwAAAAA=', DIALECT, 2], expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idx2, '@t:*land', NOCONTENT], expect: {error: true}}
+    - {command: [FT.SEARCH, idx, '@t:('], expect: {error: true}}
+    - {command: [DEL, 'doc:2'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:3', t, 'goodbye world'], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, '@t:hel*', NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx, '@t:hello', NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, '@t:*llo', NOCONTENT, LIMIT, 0, 0], expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idx, '@t:world', NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, '(@t:hel*)=>[KNN 3 @v $B]', NOCONTENT, LIMIT, 0,
+        0, PARAMS, 2, B, !!binary 'AACAPwAAAAA=', DIALECT, 2], expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idx, '(@t:*llo)=>[KNN 3 @v $B]', NOCONTENT, LIMIT, 0,
+        0, PARAMS, 2, B, !!binary 'AACAPwAAAAA=', DIALECT, 2], expect: {equals: [
+          1]}}
+    - {command: [DEL, 'doc:1', 'doc:3', 'doc:4'], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, '*', NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idx, '@t:hello', NOCONTENT, LIMIT, 0, 0], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, '(@t:hel*)=>[KNN 2 @v $B]', NOCONTENT, LIMIT, 0,
+        0, PARAMS, 2, B, !!binary 'AACAPwAAAAA=', DIALECT, 2], expect: {equals: [
+          0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ftcmp.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftcmp}

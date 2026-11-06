@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "2cf5844ae6fc4d1e272c4d6861621075f2cb1271",
+  "parent": "125b077a3f0080dd85d83f5b00984a9f90351951",
+  "pr": 901,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Update to oom flags on search commands and fix error propagation in coordinator / iscancelled cases (#901)",
+  "date": "2026-03-12",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 11.9501,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

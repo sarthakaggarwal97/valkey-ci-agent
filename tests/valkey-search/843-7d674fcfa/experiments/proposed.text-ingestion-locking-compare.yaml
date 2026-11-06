@@ -1,0 +1,148 @@
+extends: [valkey.liveness]
+id: proposed.text-ingestion-locking-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Concurrent full-text ingestion (backfill, streaming adds, updates, deletes to
+    empty words, re-adds, index recreate) across the rax-target mutex-pool locking
+    change, FT.SEARCH results compared with the parent module build.
+inputs:
+  properties:
+    pool_size:
+      type: string
+      enum: ["1", "2", "256", "65536"]
+      default: "256"
+    writer_threads:
+      type: string
+      enum: ["1", "8", "16", "32"]
+      default: "8"
+components:
+- use: valkey.action.commands
+  id: ingest
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: 2
+    timeout_s: 90
+    commands:
+    - {command: [CONFIG, SET, search.writer-threads, {$ref: inputs.writer_threads}],
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.text-rax-target-mutex-pool-size, {$ref: inputs.pool_size}],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [HSET, 'd:0', t, 'running fast track', b, alpha], expect: {equals: 2}}
+    - {command: [HSET, 'd:1', t, 'running fast track', b, alpha], expect: {equals: 2}}
+    - {command: [HSET, 'd:2', t, 'running fast track', b, alpha], expect: {equals: 2}}
+    - {command: [HSET, 'd:3', t, 'running fast track', b, alpha], expect: {equals: 2}}
+    - {command: [HSET, 'd:4', t, 'running fast track', b, alpha], expect: {equals: 2}}
+    - {command: [HSET, 'd:5', t, 'running fast track', b, alpha], expect: {equals: 2}}
+    - {command: [HSET, 'd:6', t, 'running fast track', b, alpha], expect: {equals: 2}}
+    - {command: [HSET, 'd:7', t, 'running fast track', b, alpha], expect: {equals: 2}}
+    - {command: [HSET, 'd:8', t, 'running fast track', b, alpha], expect: {equals: 2}}
+    - {command: [HSET, 'd:9', t, 'running fast track', b, alpha], expect: {equals: 2}}
+    - {command: [HSET, 'd:10', t, 'runner jumped high', b, beta], expect: {equals: 2}}
+    - {command: [HSET, 'd:11', t, 'runner jumped high', b, beta], expect: {equals: 2}}
+    - {command: [HSET, 'd:12', t, 'runner jumped high', b, beta], expect: {equals: 2}}
+    - {command: [HSET, 'd:13', t, 'runner jumped high', b, beta], expect: {equals: 2}}
+    - {command: [HSET, 'd:14', t, 'runner jumped high', b, beta], expect: {equals: 2}}
+    - {command: [HSET, 'd:15', t, 'runner jumped high', b, beta], expect: {equals: 2}}
+    - {command: [HSET, 'd:16', t, 'runner jumped high', b, beta], expect: {equals: 2}}
+    - {command: [HSET, 'd:17', t, 'runner jumped high', b, beta], expect: {equals: 2}}
+    - {command: [HSET, 'd:18', t, 'runner jumped high', b, beta], expect: {equals: 2}}
+    - {command: [HSET, 'd:19', t, 'runner jumped high', b, beta], expect: {equals: 2}}
+    - {command: [HSET, 'd:20', t, 'walking slowly data track'], expect: {equals: 1}}
+    - {command: [HSET, 'd:21', t, 'walking slowly data track'], expect: {equals: 1}}
+    - {command: [HSET, 'd:22', t, 'walking slowly data track'], expect: {equals: 1}}
+    - {command: [HSET, 'd:23', t, 'walking slowly data track'], expect: {equals: 1}}
+    - {command: [HSET, 'd:24', t, 'walking slowly data track'], expect: {equals: 1}}
+    - {command: [HSET, 'd:25', t, 'walking slowly data track'], expect: {equals: 1}}
+    - {command: [HSET, 'd:26', t, 'walking slowly data track'], expect: {equals: 1}}
+    - {command: [HSET, 'd:27', t, 'walking slowly data track'], expect: {equals: 1}}
+    - {command: [HSET, 'd:28', t, 'walking slowly data track'], expect: {equals: 1}}
+    - {command: [HSET, 'd:29', t, 'walking walking slowly data track track'], expect: {
+        equals: 1}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'd:', SCHEMA, t, TEXT, WITHSUFFIXTRIE,
+        b, TEXT, NOSTEM], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 60, expect: {equals: [
+          30]}}
+    - {command: [FT.SEARCH, idx, '@t:running', LIMIT, 0, 0], expect: {equals: [10]}}
+    - {command: [FT.SEARCH, idx, '@t:run*', LIMIT, 0, 0], expect: {equals: [20]}}
+    - {command: [FT.SEARCH, idx, '@t:*ing', LIMIT, 0, 0], expect: {equals: [20]}}
+    - {command: [FT.SEARCH, idx, '@t:track', LIMIT, 0, 0], expect: {equals: [20]}}
+    - {command: [FT.SEARCH, idx, '@t:jumped', LIMIT, 0, 0], expect: {equals: [10]}}
+    - {command: [FT.SEARCH, idx, '@t:"fast"', LIMIT, 0, 0], expect: {equals: [10]}}
+    - {command: [FT.SEARCH, idx, '@b:alpha', LIMIT, 0, 0], expect: {equals: [10]}}
+    - {command: [FT.SEARCH, idx, '@t:walking', NOCONTENT], compare: unordered, expect: {
+        contains: 'd:20'}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, 'd:30', t, 'jumping track w0']}
+    - {command: [HSET, 'd:31', t, 'jumping track w1']}
+    - {command: [HSET, 'd:32', t, 'jumping track w2']}
+    - {command: [HSET, 'd:33', t, 'jumping track w3']}
+    - {command: [HSET, 'd:34', t, 'jumping track w4']}
+    - {command: [HSET, 'd:35', t, 'jumping track w5']}
+    - {command: [HSET, 'd:36', t, 'jumping track w6']}
+    - {command: [HSET, 'd:37', t, 'jumping track w7']}
+    - {command: [HSET, 'd:38', t, 'jumping track w8']}
+    - {command: [HSET, 'd:39', t, 'jumping track w9']}
+    - {command: [HSET, 'd:40', t, 'jumping track w10']}
+    - {command: [HSET, 'd:41', t, 'jumping track w11']}
+    - {command: [HSET, 'd:42', t, 'jumping track w12']}
+    - {command: [HSET, 'd:43', t, 'jumping track w13']}
+    - {command: [HSET, 'd:44', t, 'jumping track w14 pneumonoultramicroscopicsilicovolcanoconiosislongword']}
+    - {command: [EXEC], expect: {exists: true}}
+    - {command: [HSET, 'd:0', t, 'swimming cold'], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, '@t:*ing', LIMIT, 0, 0], compare: skip}
+    - {command: [HSET, 'd:1', t, 'swimming cold'], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, '@t:run*', LIMIT, 0, 0], compare: skip}
+    - {command: [HSET, 'd:2', t, 'swimming cold'], expect: {equals: 0}}
+    - {command: [HSET, 'd:3', t, 'swimming cold'], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, '@t:jump', LIMIT, 0, 0], compare: skip}
+    - {command: [HSET, 'd:4', t, 'swimming cold'], expect: {equals: 0}}
+    - {command: [HSET, 'd:45', t, ''], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@t:swimming', LIMIT, 0, 0], wait_s: 60, expect: {
+        equals: [5]}}
+    - {command: [FT.SEARCH, idx, '@t:jumping', LIMIT, 0, 0], wait_s: 60, expect: {
+        equals: [15]}}
+    - {command: [FT.SEARCH, idx, '@t:track', LIMIT, 0, 0], expect: {equals: [30]}}
+    - {command: [FT.SEARCH, idx, '@t:*ing', LIMIT, 0, 0], expect: {equals: [35]}}
+    - {command: [FT.SEARCH, idx, '@t:run*', LIMIT, 0, 0], expect: {equals: [15]}}
+    - {command: [FT.SEARCH, idx, '@t:jump', LIMIT, 0, 0], expect: {equals: [25]}}
+    - {command: [FT.SEARCH, idx, '@b:alpha', LIMIT, 0, 0], expect: {equals: [10]}}
+    - {command: [DEL, 'd:5', 'd:6', 'd:7', 'd:8', 'd:9'], expect: {equals: 5}}
+    - {command: [FT.SEARCH, idx, '@t:running', LIMIT, 0, 0], compare: skip}
+    - {command: [DEL, 'd:10', 'd:11', 'd:12', 'd:13', 'd:14'], expect: {equals: 5}}
+    - {command: [FT.SEARCH, idx, '@t:run*', LIMIT, 0, 0], compare: skip}
+    - {command: [FT.SEARCH, idx, '@t:running', LIMIT, 0, 0], wait_s: 60, expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idx, '@b:beta', LIMIT, 0, 0], wait_s: 60, expect: {equals: [
+          5]}}
+    - {command: [FT.SEARCH, idx, '@t:run*', LIMIT, 0, 0], expect: {equals: [5]}}
+    - {command: [FT.SEARCH, idx, '@t:*ing', LIMIT, 0, 0], expect: {equals: [30]}}
+    - {command: [FT.SEARCH, idx, '@t:track', LIMIT, 0, 0], expect: {equals: [25]}}
+    - {command: [FT.SEARCH, idx, '@t:jump', LIMIT, 0, 0], expect: {equals: [20]}}
+    - {command: [FT.SEARCH, idx, '@b:alpha', LIMIT, 0, 0], expect: {equals: [5]}}
+    - {command: [HSET, 'd:50', t, 'running fast'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@t:running', LIMIT, 0, 0], wait_s: 60, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx, '@t:run*', LIMIT, 0, 0], expect: {equals: [6]}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'd:', SCHEMA, t, TEXT, WITHSUFFIXTRIE,
+        b, TEXT, NOSTEM], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@t:track', LIMIT, 0, 0], wait_s: 60, expect: {equals: [
+          25]}}
+    - {command: [FT.SEARCH, idx, '@t:running', LIMIT, 0, 0], wait_s: 60, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx, '@t:swimming', LIMIT, 0, 0], wait_s: 60, expect: {
+        equals: [5]}}
+    - {command: [FT.SEARCH, idx, '@t:run*', LIMIT, 0, 0], expect: {equals: [6]}}
+    - {command: [FT.SEARCH, idx, '@t:*ing', LIMIT, 0, 0], expect: {equals: [31]}}
+    - {command: [FT.SEARCH, idx, '@b:alpha', LIMIT, 0, 0], expect: {equals: [5]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ingest.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ingest}

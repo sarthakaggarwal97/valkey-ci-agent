@@ -1,0 +1,73 @@
+extends: [valkey.liveness]
+id: proposed.ft-text-estimate-restart-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Index with HNSW vector and suffix-trie text field saved to RDB and reloaded across
+    a restart, then queried. The change removed the SetTextSizeEstimationConditions
+    call from IndexSchema::LoadFromRDB (subtree item counts are now always maintained),
+    so after reload and backfill the non-vector and KNN-filtered text queries, and
+    a delete that decrements the rebuilt subtree counts, must reply as the parent
+    does.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftrestart
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, t, TEXT, WITHSUFFIXTRIE,
+        tg, TAG, v, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2],
+      expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', t, 'hello world', tg, red, v, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:2', t, 'hello valkey', tg, blue, v, !!binary 'AAAAAAAAgD8='],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:3', t, 'help wanted', tg, red, v, !!binary 'AACAPwAAgD8='],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:4', t, 'yellow mellow', tg, blue, v, !!binary 'AAAAQAAAAAA='],
+      expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, '*', NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [4]}}
+    - {command: [FT.SEARCH, idx, '@t:hel*', NOCONTENT, LIMIT, 0, 0], expect: {equals: [
+          3]}}
+    - {command: [FT.SEARCH, idx, '(@t:hel*)=>[KNN 3 @v $B]', NOCONTENT, LIMIT, 0,
+        0, PARAMS, 2, B, !!binary 'AACAPwAAAAA=', DIALECT, 2], expect: {equals: [
+          3]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '*', NOCONTENT, LIMIT, 0, 0], wait_s: 60, expect: {
+        equals: [4]}}
+    - {command: [FT.SEARCH, idx, '@t:hello', NOCONTENT, LIMIT, 0, 0], expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx, '@t:hel*', NOCONTENT, LIMIT, 0, 0], expect: {equals: [
+          3]}}
+    - {command: [FT.SEARCH, idx, '@t:*llo', NOCONTENT, LIMIT, 0, 0], expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx, '@t:hel*', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '(@t:hel*)=>[KNN 3 @v $B]', NOCONTENT, LIMIT, 0,
+        0, PARAMS, 2, B, !!binary 'AACAPwAAAAA=', DIALECT, 2], expect: {equals: [
+          3]}}
+    - {command: [FT.SEARCH, idx, '(@t:*llo)=>[KNN 2 @v $B]', NOCONTENT, LIMIT, 0,
+        0, PARAMS, 2, B, !!binary 'AACAPwAAAAA=', DIALECT, 2], expect: {equals: [
+          2]}}
+    - {command: [DEL, 'doc:3'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@t:hel*', NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [2]}}
+    - {command: [FT.SEARCH, idx, '(@t:hel*)=>[KNN 3 @v $B]', NOCONTENT, LIMIT, 0,
+        0, PARAMS, 2, B, !!binary 'AACAPwAAAAA=', DIALECT, 2], expect: {equals: [
+          2]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ftrestart.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftrestart}

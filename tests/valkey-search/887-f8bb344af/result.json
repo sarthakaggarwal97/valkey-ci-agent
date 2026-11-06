@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "f8bb344afcca2e70f744d462c1561e41b83c5d02",
+  "parent": "c2a46b4becf965ba58d6809bde23b1f250a705e8",
+  "pr": 887,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "update snowball compilation check to see if lto_supported (#887)",
+  "date": "2026-03-10",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.243,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only modifies third_party/snowball/CMakeLists.txt to gate LTO behind a check_ipo_supported probe (replacing an unconditional -flto with INTERPROCEDURAL_OPTIMIZATION plus -fno-fat-lto-objects when supported) while keeping -O3 and -w. It is a build/CI compilation-flags change with no behaviour change: no command, reply, indexing, replication or persistence path differs between the builds, so a compared sequence would find no marked difference and no fault scenario can reach it. No scenario is needed."
+}

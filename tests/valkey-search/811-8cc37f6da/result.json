@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "8cc37f6da2dcf973504ec0b8885d3831a71c3663",
+  "parent": "e87e5767fdc1ff56d13049ef97cd115c4e806cfd",
+  "pr": 811,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Drop indexes on test teardown (#811)",
+  "date": "2026-03-10",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.9608,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff's only code change is inside a test-only branch of the InfoIndexPartition gRPC handler that runs solely when the debug controlled variable ForceRemoteFailCount is non-zero. Setting it requires FT._DEBUG, which is disabled (replies 'unknown command') unless the module is loaded with the '--debug-mode yes' module argument; that argument cannot be passed through the fuzzer (modules load by bare path, and loadmodule config values cannot carry module arguments, and search.debug-mode is a hidden, unregistered config unreachable via CONFIG SET or a config file). With ForceRemoteFailCount at "
+}

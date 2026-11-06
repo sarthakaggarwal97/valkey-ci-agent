@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.tag-prefix-min-length-error
+deployment:
+  modes: [standalone]
+metadata:
+  description: A tag-filter prefix term of length <= 2 (d*, *) now makes FT.SEARCH
+    and FT.AGGREGATE reply an error instead of silently matching nothing
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: tagprefix
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TAG, SEPARATOR,
+        ","], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", t, disagree], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", t, disappear], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", t, "blue,abuse"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          3]}}
+    - {command: [FT.SEARCH, idx, "@t:{dis*}", NOCONTENT], compare: unordered, expect: {
+        exists: true}}
+    - {command: [FT.SEARCH, idx, "@t:{ab*}", NOCONTENT], compare: unordered, expect: {
+        exists: true}}
+    - {command: [FT.SEARCH, idx, "@t:{d*}", NOCONTENT], expect_difference: true, expect: {
+        error: "too short for prefix wildcard"}}
+    - {command: [FT.SEARCH, idx, "@t:{*}", NOCONTENT], expect_difference: true, expect: {
+        error: "too short for prefix wildcard"}}
+    - {command: [FT.SEARCH, idx, "@t:{blue|d*}", NOCONTENT], expect_difference: true,
+      expect: {error: "too short for prefix wildcard"}}
+    - {command: [FT.SEARCH, idx, "-@t:{a*}", NOCONTENT], expect_difference: true,
+      expect: {error: "too short for prefix wildcard"}}
+    - {command: [FT.SEARCH, idx, "@t:{ a* }", NOCONTENT], expect_difference: true,
+      expect: {error: "too short for prefix wildcard"}}
+    - {command: [FT.AGGREGATE, idx, "@t:{d*}"], expect_difference: true, expect: {
+        error: "too short for prefix wildcard"}}
+    - {command: [FT.SEARCH, idx, "@t:{d**}", NOCONTENT], expect: {error: "ends with\
+          \ multiple"}}
+    - {command: [FT.SEARCH, idx, "@t:{blue}", NOCONTENT], expect: {equals: [1, "doc:3"]}}
+    - {command: [FT.SEARCH, idx, "@t:{dis*}", LIMIT, 0, 0], expect: {equals: [2]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [tagprefix.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tagprefix}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search bc4139791ee1..ed4dcc5e59a5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-374ac33eb79f
+seed: 202
+experiment:
+  id: proposed.ft-text-metrics-removed
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

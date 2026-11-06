@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-timeout-stage-check
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The change adds a cancellation check before every FT.AGGREGATE stage (ExecuteAggregationStages
+    in ft_aggregate.cc). With enable-partial-results on (the default), an aggregate
+    whose timeout already expired now answers "Aggregate operation cancelled due to
+    timeout", where the parent still ran all stages on the partial result set and
+    answered an array. TIMEOUT 0 makes the token's deadline already passed, and 5000
+    matching documents guarantee the token's 100-call poll window trips during the
+    search phase, so the new stage check is the only behavioural difference. The sequence
+    also walks the new BACKGROUND_PAUSEPOINT sites (entries fetcher, prefilter evaluation,
+    term stem, prefix, fuzzy and composed predicate loops) with debug mode off, where
+    each is a global-mutex touch per key that must not deadlock, crash or change replies.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:{t}:", SCHEMA, n, NUMERIC,
+        tag, TAG, txt, TEXT], expect: {equals: OK}}
+    - {command: [EVAL, "for i=0,4999 do redis.call('HSET','doc:{t}:'..i,'n',i,'tag','t'..(i%10),'txt','running\
+          \ runner runs word word'..i) end return 1", 0], expect: {equals: 1}}
+    - {command: [FT.CREATE, vidx, ON, HASH, PREFIX, 1, "vdoc:{t}:", SCHEMA, v, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, L2, n, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [EVAL, "for i=0,4999 do redis.call('HSET','vdoc:{t}:'..i,'v',struct.pack('<fff',i,i,i),'n',i)\
+          \ end return 1", 0], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@n:[0 5000]", NOCONTENT, LIMIT, 0, 1], wait_s: 60,
+      expect: {contains: 5000}}
+    - {command: [FT.SEARCH, vidx, "@n:[0 5000]", NOCONTENT, LIMIT, 0, 1], wait_s: 60,
+      expect: {contains: 5000}}
+    - {command: [FT.SEARCH, idx, "-@txt:notexist @txt:word* @n:[0 500]", NOCONTENT,
+        LIMIT, 0, 1]}
+    - {command: [FT.SEARCH, idx, "-@txt:notexist @txt:%wird% @n:[0 500]", NOCONTENT,
+        LIMIT, 0, 1]}
+    - {command: [FT.SEARCH, idx, "-@n:[-inf 0] @txt:ran", NOCONTENT, LIMIT, 0, 1]}
+    - {command: [FT.SEARCH, idx, "(@txt:word* | @tag:{t1}) @n:[0 500]", NOCONTENT,
+        LIMIT, 0, 1]}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 49]", LOAD, 1, "@n", SORTBY, 2, "@n", ASC,
+        LIMIT, 0, 5, TIMEOUT, 60000]}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 5000]", TIMEOUT, 0, LOAD, 1, "@n", SORTBY,
+        2, "@n", DESC], expect_difference: true, expect: {error: "Aggregate operation\
+          \ cancelled due to timeout"}}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 5000]", TIMEOUT, 0, GROUPBY, 1, "@n", REDUCE,
+        COUNT, 0], expect_difference: true, expect: {error: "Aggregate operation cancelled\
+          \ due to timeout"}}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 5000]", TIMEOUT, 0, LOAD, 1, "@n", APPLY,
+        "@n*2", AS, d2, FILTER, "@d2 > 0"], expect_difference: true, expect: {error: "Aggregate\
+          \ operation cancelled due to timeout"}}
+    - {command: [FT.AGGREGATE, vidx, "*=>[KNN 10 @v $BLOB]", PARAMS, 2, BLOB, !!binary 'AAIgQQAAIEEAACBB',
+        TIMEOUT, 0, LOAD, 1, "@n", SORTBY, 2, "@n", DESC], expect_difference: true,
+      expect: {error: "Aggregate operation cancelled due to timeout"}}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 9]", LOAD, 1, "@n", SORTBY, 2, "@n", ASC,
+        TIMEOUT, 60000]}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

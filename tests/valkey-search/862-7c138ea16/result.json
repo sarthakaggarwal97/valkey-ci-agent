@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "7c138ea16138a33c4fe803dad45d8f67f31a0fdb",
+  "parent": "71ef6514764d1333942a94b63aa994aae34f3b34",
+  "pr": 862,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Remove upper bound check for stemmed_length (#862)",
+  "date": "2026-03-06",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.9226,
+  "findings": [],
+  "recorded": [],
+  "reason": "The removed clause `stemmed_length <= word.length()` is unreachable for the only supported stemmer language (English). GetStemmer() always builds the English Snowball stemmer (GetLanguageString returns \"english\" and CHECK-fails otherwise; LANGUAGE_FIELD is rejected). Every slice_from_s in stem_UTF_8_english.c replaces a matched region with an equal-or-shorter string, and all other operations are deletions, so the stemmer's output byte-length never exceeds its input; multibyte UTF-8 tails can't match the ASCII suffix tables. sb_stemmer_stem resets z->l to the input size on each call (via SN_set"
+}

@@ -1,0 +1,94 @@
+extends: [valkey.liveness]
+id: proposed.text-tokenize-stem-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: In-place Tokenize/Stem/Normalize refactor - ingestion tokens, stem
+    tree build and delete-path maintenance compared across the two module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: tokenize
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, t, TEXT], expect: {
+        equals: OK}}
+    - {command: [HSET, 'doc:1', t, 'Running fast'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:2', t, 'he RUNS daily'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:3', t, 'the jumps'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:4', t, "TR\xC8S Bien Gr\xF6\xDFe"], expect: {equals: 1}}
+    - {command: [HSET, 'doc:5', t, 'hello\-world x123'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:6', t, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+          sixsentinel'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:7', t, 'the and is of'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:8', t, ''], expect: {equals: 1}}
+    - {command: [HSET, 'doc:9', t, !!binary '/v8='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:10', t, finalsentinel], expect: {equals: 1}}
+    - {command: [HSET, 'doc:11', t, 'dup dup dup dup dup'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@t:fast', NOCONTENT], wait_s: 30, expect: {equals: [
+          1, 'doc:1']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:daily', NOCONTENT], wait_s: 30, expect: {equals: [
+          1, 'doc:2']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:jumps', NOCONTENT], wait_s: 30, expect: {equals: [
+          1, 'doc:3']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:bien', NOCONTENT], wait_s: 30, expect: {equals: [
+          1, 'doc:4']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:x123', NOCONTENT], wait_s: 30, expect: {equals: [
+          1, 'doc:5']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:sixsentinel', NOCONTENT], wait_s: 30, expect: {
+        equals: [1, 'doc:6']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:finalsentinel', NOCONTENT], wait_s: 30, expect: {
+        equals: [1, 'doc:10']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:dup', NOCONTENT], wait_s: 30, expect: {equals: [
+          1, 'doc:11']}, compare: unordered}
+    - {command: [FT._DEBUG, TEXTINFO, idx, LEXER, "The QUICK-brown.. Fox!! x123 TR\xC8\
+          S hello\\-world"], expect: {equals: [quick, brown, fox, x123, "tr\xE8s",
+          hello-world]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, LEXER, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'],
+      expect: {equals: [aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, LEXER, "AAAAAA BB\xC8BB CCCC \xC9\xC9\xC9\
+          \xC9\xC9\xC9\xC9\xC9\xC9\xC9\xC9\xC9 dd"], expect: {equals: [aaaaaa, "bb\xE8\
+            bb", cccc, "\xE9\xE9\xE9\xE9\xE9\xE9\xE9\xE9\xE9\xE9\xE9\xE9", dd]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, LEXER, '...!!! ,,,'], expect: {equals: []}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, LEXER, !!binary '/w=='], expect: {error: 'Invalid
+          UTF-8'}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, run], expect: {equals: [running,
+          runs]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, STEM, jump], expect: {equals: [[jump, [
+              jumps]]]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, STEM, run], expect: {exists: true}, compare: skip}
+    - {command: [FT.SEARCH, idx, running, NOCONTENT], expect: {contains: 2}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:run', NOCONTENT], expect: {contains: 2}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:"RUNS"', NOCONTENT], expect: {equals: [1, 'doc:2']},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:"Running"', NOCONTENT], expect: {equals: [1,
+          'doc:1']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, "TR\xC8S", NOCONTENT], expect: {equals: [1, 'doc:4']},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "@t:Gr\xF6\xDFe", NOCONTENT], expect: {equals: [
+          1, 'doc:4']}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:hello\-world', NOCONTENT], expect: {equals: [
+          1, 'doc:5']}, compare: unordered}
+    - {command: [DEL, 'doc:1'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@t:running', NOCONTENT], wait_s: 30, expect: {equals: [
+          1, 'doc:2']}, compare: unordered}
+    - {command: [FT._DEBUG, TEXTINFO, idx, STEM, run], expect: {equals: [[run, [runs]]]}}
+    - {command: [DEL, 'doc:3'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@t:jumps', NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}, compare: unordered}
+    - {command: [FT._DEBUG, TEXTINFO, idx, STEM, jump], expect: {equals: []}}
+    - {command: [FT.INFO, idx], compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [tokenize.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tokenize}

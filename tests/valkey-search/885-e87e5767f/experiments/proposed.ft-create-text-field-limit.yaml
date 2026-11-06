@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.ft-create-text-field-limit
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.CREATE with more than 64 TEXT fields is rejected at creation time
+    on the fixed build, where the parent accepted it and left an index that aborts
+    on first indexing
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftcreate
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx64, ON, HASH, SCHEMA, f1, TEXT, f2, TEXT, f3, TEXT,
+        f4, TEXT, f5, TEXT, f6, TEXT, f7, TEXT, f8, TEXT, f9, TEXT, f10, TEXT, f11,
+        TEXT, f12, TEXT, f13, TEXT, f14, TEXT, f15, TEXT, f16, TEXT, f17, TEXT, f18,
+        TEXT, f19, TEXT, f20, TEXT, f21, TEXT, f22, TEXT, f23, TEXT, f24, TEXT, f25,
+        TEXT, f26, TEXT, f27, TEXT, f28, TEXT, f29, TEXT, f30, TEXT, f31, TEXT, f32,
+        TEXT, f33, TEXT, f34, TEXT, f35, TEXT, f36, TEXT, f37, TEXT, f38, TEXT, f39,
+        TEXT, f40, TEXT, f41, TEXT, f42, TEXT, f43, TEXT, f44, TEXT, f45, TEXT, f46,
+        TEXT, f47, TEXT, f48, TEXT, f49, TEXT, f50, TEXT, f51, TEXT, f52, TEXT, f53,
+        TEXT, f54, TEXT, f55, TEXT, f56, TEXT, f57, TEXT, f58, TEXT, f59, TEXT, f60,
+        TEXT, f61, TEXT, f62, TEXT, f63, TEXT, f64, TEXT], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxmix, ON, HASH, SCHEMA, f1, TEXT, f2, TEXT, f3, TEXT,
+        f4, TEXT, f5, TEXT, f6, TEXT, f7, TEXT, f8, TEXT, f9, TEXT, f10, TEXT, f11,
+        TEXT, f12, TEXT, f13, TEXT, f14, TEXT, f15, TEXT, f16, TEXT, f17, TEXT, f18,
+        TEXT, f19, TEXT, f20, TEXT, f21, TEXT, f22, TEXT, f23, TEXT, f24, TEXT, f25,
+        TEXT, f26, TEXT, f27, TEXT, f28, TEXT, f29, TEXT, f30, TEXT, f31, TEXT, f32,
+        TEXT, f33, TEXT, f34, TEXT, f35, TEXT, f36, TEXT, f37, TEXT, f38, TEXT, f39,
+        TEXT, f40, TEXT, f41, TEXT, f42, TEXT, f43, TEXT, f44, TEXT, f45, TEXT, f46,
+        TEXT, f47, TEXT, f48, TEXT, f49, TEXT, f50, TEXT, f51, TEXT, f52, TEXT, f53,
+        TEXT, f54, TEXT, f55, TEXT, f56, TEXT, f57, TEXT, f58, TEXT, f59, TEXT, f60,
+        TEXT, f61, TEXT, f62, TEXT, f63, TEXT, f64, TEXT, t1, TAG, t2, TAG], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idx65, ON, HASH, SCHEMA, f1, TEXT, f2, TEXT, f3, TEXT,
+        f4, TEXT, f5, TEXT, f6, TEXT, f7, TEXT, f8, TEXT, f9, TEXT, f10, TEXT, f11,
+        TEXT, f12, TEXT, f13, TEXT, f14, TEXT, f15, TEXT, f16, TEXT, f17, TEXT, f18,
+        TEXT, f19, TEXT, f20, TEXT, f21, TEXT, f22, TEXT, f23, TEXT, f24, TEXT, f25,
+        TEXT, f26, TEXT, f27, TEXT, f28, TEXT, f29, TEXT, f30, TEXT, f31, TEXT, f32,
+        TEXT, f33, TEXT, f34, TEXT, f35, TEXT, f36, TEXT, f37, TEXT, f38, TEXT, f39,
+        TEXT, f40, TEXT, f41, TEXT, f42, TEXT, f43, TEXT, f44, TEXT, f45, TEXT, f46,
+        TEXT, f47, TEXT, f48, TEXT, f49, TEXT, f50, TEXT, f51, TEXT, f52, TEXT, f53,
+        TEXT, f54, TEXT, f55, TEXT, f56, TEXT, f57, TEXT, f58, TEXT, f59, TEXT, f60,
+        TEXT, f61, TEXT, f62, TEXT, f63, TEXT, f64, TEXT, f65, TEXT], expect_difference: true,
+      expect: {error: "cannot exceed 64"}}
+    - {command: [FT._LIST], expect_difference: true, compare: unordered, expect: {
+        equals: [idx64, idxmix]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftcreate}

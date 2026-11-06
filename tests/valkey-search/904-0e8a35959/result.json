@@ -1,0 +1,37 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "0e8a359590d4e50f6803198a1c9f8caa43ef00cc",
+  "parent": "2cf5844ae6fc4d1e272c4d6861621075f2cb1271",
+  "pr": 904,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix: prevent infinite drain loop in forked BGSave child process (#904)",
+  "date": "2026-03-13",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.2818,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "hang: command 9 (BGSAVE) on connection 0 of 4 got no reply, and the server answered no PING within 40s",
+      "scenario": "ai-db32258c10ee",
+      "seed": 904,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #904, since fixed",
+      "fingerprint": "001cd188e1a3df4d0626",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

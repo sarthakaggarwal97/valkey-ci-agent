@@ -1,0 +1,85 @@
+extends: [valkey.liveness]
+id: proposed.search-suffix-trie-mutate
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The change makes TextIndex::MutateTarget() insert into the suffix trie only when
+    a precomputed reverse_word is supplied, and CommitKeyData computes it only for
+    suffix-eligible tokens, while DeleteKeyData still computes it from the schema-level
+    with_suffix_trie_ flag. This compares suffix-search results and the delete path
+    for a token shared between a WITHSUFFIXTRIE field and a plain TEXT field, in both
+    a plain schema (item_count_op NONE) and an HNSW-bearing schema (subtree item-count
+    tracking on, so the delete path runs SUBTRACT against a suffix-trie word the change
+    never inserted).
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: suffix
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tsuf, TEXT,
+        WITHSUFFIXTRIE, NOSTEM, tplain, TEXT, NOSTEM], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", tplain, zebrafox], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@tplain:zebrafox", NOCONTENT], wait_s: 30, expect: {
+        contains: "doc:1"}}
+    - {command: [HSET, "doc:2", tsuf, zebrafox], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@tsuf:zebrafox", NOCONTENT], wait_s: 30, expect: {
+        contains: "doc:2"}}
+    - {command: [FT.SEARCH, idx, "@tsuf:*ebrafox", NOCONTENT], expect_difference: true,
+      expect: {equals: [1, "doc:2"]}}
+    - {command: [FT.SEARCH, idx, "*ebrafox", NOCONTENT], expect_difference: true,
+      expect: {equals: [1, "doc:2"]}}
+    - {command: [HSET, "doc:3", tsuf, plumquat], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@tsuf:plumquat", NOCONTENT], wait_s: 30, expect: {
+        contains: "doc:3"}}
+    - {command: [FT.SEARCH, idx, "@tsuf:*lumquat", NOCONTENT], expect: {equals: [
+          1, "doc:3"]}}
+    - {command: [HSET, "doc:4", tsuf, grapplevine], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@tsuf:grapplevine", NOCONTENT], wait_s: 30, expect: {
+        contains: "doc:4"}}
+    - {command: [HSET, "doc:5", tplain, grapplevine], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@tplain:grapplevine", NOCONTENT], wait_s: 30, expect: {
+        contains: "doc:5"}}
+    - {command: [FT.SEARCH, idx, "@tsuf:*applevine", NOCONTENT], expect: {equals: [
+          1, "doc:4"]}}
+    - {command: [DEL, "doc:1"], expect: {equals: 1}}
+    - {command: [DEL, "doc:2"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@tplain:zebrafox", NOCONTENT], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [FT.CREATE, idxv, ON, HASH, PREFIX, 1, "v:", SCHEMA, tsuf, TEXT, WITHSUFFIXTRIE,
+        NOSTEM, tplain, TEXT, NOSTEM, vec, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 4,
+        DISTANCE_METRIC, COSINE], expect: {equals: OK}}
+    - {command: [HSET, "v:1", tplain, mumblecore], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idxv, "@tplain:mumblecore", NOCONTENT], wait_s: 30, expect: {
+        contains: "v:1"}}
+    - {command: [DEL, "v:1"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idxv, "@tplain:mumblecore", NOCONTENT], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [HSET, "v:2", tplain, driftwoodx], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idxv, "@tplain:driftwoodx", NOCONTENT], wait_s: 30, expect: {
+        contains: "v:2"}}
+    - {command: [HSET, "v:3", tsuf, driftwoodx], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idxv, "@tsuf:driftwoodx", NOCONTENT], wait_s: 30, expect: {
+        contains: "v:3"}}
+    - {command: [FT.SEARCH, idxv, "@tsuf:*riftwoodx", NOCONTENT], expect_difference: true,
+      expect: {equals: [1, "v:3"]}}
+    - {command: [DEL, "v:2"], expect: {equals: 1}}
+    - {command: [DEL, "v:3"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idxv, "@tplain:driftwoodx", NOCONTENT], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [suffix.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: suffix}

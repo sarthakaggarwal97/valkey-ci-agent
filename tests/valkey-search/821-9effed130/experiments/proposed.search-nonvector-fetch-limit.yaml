@@ -1,0 +1,130 @@
+extends: [valkey.liveness]
+id: proposed.search-nonvector-fetch-limit
+deployment:
+  modes: [standalone]
+metadata:
+  description: search.max-nonvector-search-results-fetched caps non-vector FT.SEARCH
+    fetching on the solved, prefiltered, text and union-dedup paths at 5, 0 and UINT32_MAX,
+    increments the dev counter, and leaves vector prefilter queries uncapped
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, price, NUMERIC,
+        category, TAG, description, TEXT]
+      expect: {equals: OK}
+    - {command: [HSET, "doc:0", price, 10, category, cat0, description, "product laptop\
+          \ model0"], expect: {equals: 3}}
+    - {command: [HSET, "doc:1", price, 11, category, cat1, description, "product laptop\
+          \ model1"], expect: {equals: 3}}
+    - {command: [HSET, "doc:2", price, 12, category, cat0, description, "product laptop\
+          \ model2"], expect: {equals: 3}}
+    - {command: [HSET, "doc:3", price, 13, category, cat1, description, "product laptop\
+          \ model3"], expect: {equals: 3}}
+    - {command: [HSET, "doc:4", price, 14, category, cat0, description, "product laptop\
+          \ model4"], expect: {equals: 3}}
+    - {command: [HSET, "doc:5", price, 15, category, cat1, description, "product laptop\
+          \ model5"], expect: {equals: 3}}
+    - {command: [HSET, "doc:6", price, 16, category, cat0, description, "product laptop\
+          \ model6"], expect: {equals: 3}}
+    - {command: [HSET, "doc:7", price, 17, category, cat1, description, "product laptop\
+          \ model7"], expect: {equals: 3}}
+    - {command: [HSET, "doc:8", price, 18, category, cat0, description, "product laptop\
+          \ model8"], expect: {equals: 3}}
+    - {command: [HSET, "doc:9", price, 19, category, cat1, description, "product laptop\
+          \ model9"], expect: {equals: 3}}
+    - {command: [HSET, "doc:10", price, 20, category, cat0, description, "product\
+          \ laptop model10"], expect: {equals: 3}}
+    - {command: [HSET, "doc:11", price, 21, category, cat1, description, "product\
+          \ laptop model11"], expect: {equals: 3}}
+    - {command: [HSET, "doc:12", price, 22, category, cat0, description, "product\
+          \ laptop model12"], expect: {equals: 3}}
+    - {command: [HSET, "doc:13", price, 23, category, cat1, description, "product\
+          \ laptop model13"], expect: {equals: 3}}
+    - {command: [HSET, "doc:14", price, 24, category, cat0, description, "product\
+          \ laptop model14"], expect: {equals: 3}}
+    - {command: [HSET, "doc:15", price, 25, category, cat1, description, "product\
+          \ laptop model15"], expect: {equals: 3}}
+    - {command: [HSET, "doc:16", price, 26, category, cat0, description, "product\
+          \ laptop model16"], expect: {equals: 3}}
+    - {command: [HSET, "doc:17", price, 27, category, cat1, description, "product\
+          \ laptop model17"], expect: {equals: 3}}
+    - {command: [HSET, "doc:18", price, 28, category, cat0, description, "product\
+          \ laptop model18"], expect: {equals: 3}}
+    - {command: [HSET, "doc:19", price, 29, category, cat1, description, "product\
+          \ laptop model19"], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, "@price:[0 +inf]", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [20]}}
+    - {command: [FT.SEARCH, idx, "@description:laptop", LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [20]}}
+    - {command: [CONFIG, SET, search.info-developer-visible, yes], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.max-nonvector-search-results-fetched, 5], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@price:[0 +inf]", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [5]}}
+    - {command: [FT.SEARCH, idx, "@category:{cat0} @price:[0 +inf]", LIMIT, 0, 0],
+      expect_difference: true, expect: {equals: [5]}}
+    - {command: [FT.SEARCH, idx, "@description:laptop", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [5]}}
+    - {command: [FT.SEARCH, idx, "@description:laptop @price:[0 +inf]", LIMIT, 0,
+        0], expect_difference: true, expect: {equals: [5]}}
+    - {command: [FT.SEARCH, idx, "(@category:{cat0})|(@price:[10 15])", LIMIT, 0,
+        0], expect_difference: true, expect: {equals: [5]}}
+    - {command: [FT.SEARCH, idx, "(@description:laptop)|(@category:{cat0})", LIMIT,
+        0, 0], expect_difference: true, expect: {equals: [5]}}
+    - {command: [FT.SEARCH, idx, "@price:[0 +inf]", LIMIT, 0, 100, NOCONTENT], expect_difference: true,
+      expect: {contains: 5}}
+    - {command: [FT.SEARCH, idx, "@category:{cat0} @price:[0 +inf]", LIMIT, 0, 100],
+      expect_difference: true, expect: {contains: 5}}
+    - {command: [FT.SEARCH, idx, "@price:[0 +inf]", LIMIT, 3, 20, NOCONTENT], expect_difference: true,
+      expect: {contains: 5}}
+    - {command: [INFO, search], expect_difference: true, expect: {contains: search_nonvector_results_fetched_limited_count}}
+    - {command: [CONFIG, SET, search.max-nonvector-search-results-fetched, 0], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@price:[0 +inf]", LIMIT, 0, 10], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@category:{cat0} @price:[0 +inf]", LIMIT, 0, 10],
+      expect_difference: true, expect: {equals: [0]}}
+    - {command: [CONFIG, SET, search.max-nonvector-search-results-fetched, 4294967295],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@price:[0 +inf]", LIMIT, 0, 0], expect: {equals: [
+          20]}}
+    - command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "v:", SCHEMA, vec, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, category, TAG, color, TAG]
+      expect: {equals: OK}
+    - {command: [HSET, "v:a", vec, !!binary "AACAPwAAAAA=", category, red, color,
+        red], expect: {equals: 3}}
+    - {command: [HSET, "v:b", vec, !!binary "AAAAAAAAgD8=", category, red, color,
+        red], expect: {equals: 3}}
+    - {command: [HSET, "v:c", vec, !!binary "AACAPwAAgD8=", category, red, color,
+        red], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx2, "@category:{red}", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [3]}}
+    - {command: [CONFIG, SET, search.max-nonvector-search-results-fetched, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx2, "@category:{red}", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx2, "(@category:{red})=>[KNN 2 @vec $BLOB]", PARAMS,
+        2, BLOB, !!binary "AACAPwAAAAA=", NOCONTENT], wait_s: 30, expect: {equals: [
+          2, "v:a", "v:c"]}}
+    - {command: [FT.SEARCH, idx2, "((@category:{red})|(@color:{red}))=>[KNN 2 @vec\
+          \ $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAAAA=", NOCONTENT], expect: {
+        equals: [2, "v:a", "v:c"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [search.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}

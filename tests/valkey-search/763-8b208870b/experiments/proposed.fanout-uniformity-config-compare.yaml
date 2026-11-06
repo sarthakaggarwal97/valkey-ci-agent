@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.fanout-uniformity-config-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    The change adds two Dev-gated module configs (fanout-data-uniformity, fanout-uniformity-min-index-size)
+    and changes the default of SearchParameters::RequiresCompleteResults to sortby_parameter.has_value().
+    The coordinator fanout math itself is gated behind --use-coordinator, a module
+    argument the harness cannot pass, so this sequence pins the reachable surface
+    on both builds: registration, defaults, range limits and debug-mode gating of
+    the new configs (marked), and non-vector FT.SEARCH SORTBY/LIMIT/offset replies
+    that flow through the changed RequiresCompleteResults default and SearchResult
+    trimming (unmarked, must stay identical).
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: fanout
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, search.fanout-data-uniformity], expect_difference: true,
+      expect: {exists: true}, compare: unordered-pairs}
+    - {command: [CONFIG, GET, search.fanout-uniformity-min-index-size], expect_difference: true,
+      expect: {exists: true}, compare: unordered-pairs}
+    - {command: [CONFIG, SET, search.fanout-data-uniformity, 50], expect_difference: true,
+      expect: {error: "debug-mode"}}
+    - {command: [CONFIG, SET, search.fanout-uniformity-min-index-size, 0], expect_difference: true,
+      expect: {error: "debug-mode"}}
+    - {command: [CONFIG, SET, search.fanout-data-uniformity, 101], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.fanout-uniformity-min-index-size, 4294967296],
+      expect_difference: true, expect: {error: true}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC,
+        t, TAG], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", n, 1, t, alpha], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", n, 2, t, alpha], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", n, 3, t, alpha], expect: {equals: 2}}
+    - {command: [HSET, "doc:4", n, 4, t, beta], expect: {equals: 2}}
+    - {command: [HSET, "doc:5", n, 5, t, beta], expect: {equals: 2}}
+    - {command: [HSET, "doc:6", n, 6, t, beta], expect: {equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: 12}, compare: skip}
+    - {command: [FT.SEARCH, idx, "@n:[1 6]", SORTBY, n, ASC, LIMIT, 0, 3, NOCONTENT],
+      expect: {equals: [6, "doc:1", "doc:2", "doc:3"]}}
+    - {command: [FT.SEARCH, idx, "@n:[1 6]", SORTBY, n, DESC, LIMIT, 2, 2, NOCONTENT],
+      expect: {equals: [6, "doc:4", "doc:3"]}}
+    - {command: [FT.SEARCH, idx, "@n:[1 6]", SORTBY, n, ASC, LIMIT, 10, 5, NOCONTENT],
+      expect: {equals: [6]}}
+    - {command: [FT.SEARCH, idx, "@n:[1 6]", LIMIT, 0, 0, NOCONTENT], expect: {equals: [
+          6]}}
+    - {command: [FT.SEARCH, idx, "@t:{alpha}", NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, "@t:{beta}", LIMIT, 1, 1, NOCONTENT], compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [fanout.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fanout}

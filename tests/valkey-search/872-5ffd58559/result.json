@@ -1,0 +1,79 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5ffd5855988eb453400c72d52e04fa821e68e8f1",
+  "parent": "e2803e7ac7e49a67278adfd4c8299fb77ec6a536",
+  "pr": 872,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Removed multiple reverse_token string allocations from MutateTarget() (#872)",
+  "date": "2026-03-09",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.5065,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: unknown-crash (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server+0x27766f) (BuildId: 82bc5fb7058ea03df00008755d3bab49d6485924) in __asan_memcpy",
+      "scenario": "ai-68c040f6b006",
+      "seed": 72001,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "3e7345c8dafcf1a68e2b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in _ZNK13valkey_search11IndexSchema24InTrackedMutationRecordsERKNS_17InternedStringPtrERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE",
+      "scenario": "ai-68c040f6b006",
+      "seed": 72001,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "2369c16498509559fab9",
+      "issue": null
+    },
+    {
+      "rule": "regressed-fix",
+      "detail": "regressed fix: the change of valkey-io/valkey-search#872 no longer shows on dd28a1246728 (commands suffix 5, suffix 6, suffix 27)",
+      "scenario": "ai-68c040f6b006",
+      "seed": 72001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "the fix of #872 regressed",
+      "fingerprint": "23842ba4aaa3571180d6",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/82"
+    },
+    {
+      "rule": "regressed-fix",
+      "detail": "regressed fix: the change of valkey-io/valkey-search#872 no longer shows on dd28a1246728 (commands suffix 5, suffix 6, suffix 27)",
+      "scenario": "ai-85106e2881b4",
+      "seed": 72002,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "the fix of #872 regressed",
+      "fingerprint": "23842ba4aaa3571180d6",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/82"
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

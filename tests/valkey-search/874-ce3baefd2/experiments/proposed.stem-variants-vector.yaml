@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.stem-variants-vector
+deployment:
+  modes: [standalone]
+metadata:
+  description: "Stem variants stored as a vector: dedup of repeated words across fields,\
+    \ swap-and-pop deletion, InlinedVector overflow past 4 variants, and the suffix-trie\
+    \ gating change (per-token flag -> schema-level flag), compared across the two\
+    \ module builds"
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: stem
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.debug-mode, yes], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, f1, TEXT,
+        WITHSUFFIXTRIE, f2, TEXT], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", f1, "running alpha", f2, zomega], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", f1, "runs happily"], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", f1, "happiness jumping"], expect: {equals: 1}}
+    - {command: [HSET, "doc:4", f1, "jumping jumping jumped", f2, jumping], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:7", f1, "connected connecting connection connections connects"],
+      expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: 5}, compare: skip}
+    - {command: [FT.SEARCH, idx, "@f1:run", NOCONTENT], wait_s: 30, expect: {contains: "doc:2"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "@f1:jump", NOCONTENT], wait_s: 15, expect: {contains: "doc:4"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "@f1:connect", NOCONTENT], wait_s: 15, expect: {
+        equals: [1, "doc:7"]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, STEM, connect], compare: skip}
+    - {command: [FT._DEBUG, TEXTINFO, idx, STEM, run], compare: skip}
+    - {command: [FT._DEBUG, TEXTINFO, idx, SUFFIX, agemoz], expect_difference: true,
+      expect: {contains: agemoz}}
+    - {command: [CONFIG, SET, search.max-term-expansions, "1"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@f1:jump", NOCONTENT], compare: skip}
+    - {command: [CONFIG, SET, search.max-term-expansions, "200"], expect: {equals: OK}}
+    - {command: [DEL, "doc:1"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@f1:alpha", NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, SUFFIX, agemoz], expect: {contains: ylippah}}
+    - {command: [DEL, "doc:7"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@f1:connect", NOCONTENT], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@f1:run", NOCONTENT], wait_s: 15, expect: {equals: [
+          1, "doc:2"]}}
+    - {command: [DEL, "doc:2"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@f1:run", NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [DEL, "doc:3"], expect: {equals: 1}}
+    - {command: [DEL, "doc:4"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@f1:jump", NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [HSET, "doc:8", f1, running], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@f1:run", NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:8"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [stem.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: stem}

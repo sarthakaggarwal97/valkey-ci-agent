@@ -1,0 +1,62 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "7d674fcfa0474a4d2b6a913ecd8b5aba2584411e",
+  "parent": "ed4dcc5e59a55a82c0d755fdf2cef020daf5b7c3",
+  "pr": 843,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Index locking optimization during ingestion. (#843)",
+  "date": "2026-03-05",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 5,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 6.1547,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in _ZNK13valkey_search11IndexSchema24InTrackedMutationRecordsERKNS_17InternedStringPtrERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE",
+      "scenario": "ai-869f3b70cb5c",
+      "seed": 202,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "e91de74136928025afbf",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-0ec0a8bc21d6",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ingest' returned ERROR: expectations both builds violate alike, so they are not about the change: 33 (FT.SEARCH idx * LIMIT 0 0), 69 (FT.SEARCH idx @t:jumping LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-6450eca3b137",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ingest' returned ERROR: expectations both builds violate alike, so they are not about the change: 33 (FT.SEARCH idx * LIMIT 0 0), 69 (FT.SEARCH idx @t:jumping LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-1a3952de6329",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ingest' returned ERROR: expectations both builds violate alike, so they are not about the change: 33 (FT.SEARCH idx * LIMIT 0 0), 69 (FT.SEARCH idx @t:jumping LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-25ce4c409bea",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ingest' returned ERROR: expectations both builds violate alike, so they are not about the change: 33 (FT.SEARCH idx * LIMIT 0 0), 69 (FT.SEARCH idx @t:jumping LIMIT 0 0)"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

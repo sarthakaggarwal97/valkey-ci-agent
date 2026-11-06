@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.text-evaluator-locking
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: FT.SEARCH text-index evaluator paths under concurrent index mutations,
+    replies compared across the two module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    concurrency: {type: integer, minimum: 0, maximum: 16, default: 8}
+components:
+- use: valkey.action.commands
+  id: tsearch
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    checks: {concurrency: {$ref: inputs.concurrency}}
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, content, TEXT,
+        embedding, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2, n,
+        NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", content, "hello world alpha", embedding, !!binary "AACAPwAAAAAAAAAAAAAAAA==",
+        n, 1], expect: {equals: 3}}
+    - {command: [HSET, "doc:2", content, "hello world beta", embedding, !!binary "AACAPwAAAAAAAAAAAAAAAA==",
+        n, 2], expect: {equals: 3}}
+    - {command: [HSET, "doc:3", content, "hello there gamma", embedding, !!binary "AACAPwAAAAAAAAAAAAAAAA==",
+        n, 3], expect: {equals: 3}}
+    - {command: [HSET, "doc:4", content, "world delta hello", embedding, !!binary "AACAPwAAAAAAAAAAAAAAAA==",
+        n, 4], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, "@content:hello", NOCONTENT], wait_s: 15, compare: unordered,
+      expect: {contains: 4}}
+    - {command: [FT.SEARCH, idx, "@content:world @n:[1 2]", NOCONTENT], compare: unordered,
+      expect: {contains: 2}}
+    - {command: [FT.SEARCH, idx, "(@content:hello)=>[KNN 4 @embedding $vec]", NOCONTENT,
+        PARAMS, 2, vec, !!binary "AACAPwAAAAAAAAAAAAAAAA==", DIALECT, 2], compare: unordered,
+      expect: {contains: 4}}
+    - {command: [HSET, "doc:1", content, "hello world alpha updated"], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@content:updated", NOCONTENT], wait_s: 15, compare: unordered,
+      expect: {contains: 1}}
+    - {command: [HDEL, "doc:4", content], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@content:hello", NOCONTENT], wait_s: 15, compare: unordered,
+      expect: {contains: 3}}
+    - {command: [FT.SEARCH, idx, "(@content:hello)=>[KNN 4 @embedding $vec]", NOCONTENT,
+        PARAMS, 2, vec, !!binary "AACAPwAAAAAAAAAAAAAAAA==", DIALECT, 2], compare: unordered,
+      expect: {contains: 3}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tsearch}
