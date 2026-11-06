@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.search-rdb-load-string-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: Reload a search index RDB (long key names in the V2 keys extension)
+    and compare the module's used_memory delta across builds, exposing the LoadString
+    leak on the parent
+components:
+- use: valkey.action.commands
+  id: reload-leak
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {save: ""}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TAG], expect: {
+        equals: OK}}
+    - command: [EVAL, "local n=0 for i=1,1000 do redis.call('HSET','doc:'..string.rep('x',12000)..i,'t','hello')\
+          \ n=n+1 end return n", "0"]
+      expect: {equals: 1000}
+    - {command: [FT.SEARCH, idx, "@t:{hello}", LIMIT, 0, 0], wait_s: 60, expect: {
+        contains: 1000}}
+    - command: [EVAL, "local i=redis.call('INFO','everything') local m=string.match(i,'_used_memory_bytes:(%d+)')\
+          \ redis.call('SET','baseline',m) return 'OK'", "0"]
+      expect: {equals: OK}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@t:{hello}", LIMIT, 0, 0], wait_s: 60, expect: {
+        contains: 1000}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@t:{hello}", LIMIT, 0, 0], wait_s: 60, expect: {
+        contains: 1000}}
+    - command: [EVAL, "local i=redis.call('INFO','everything') local m=tonumber(string.match(i,'_used_memory_bytes:(%d+)'))\
+          \ local b=tonumber(redis.call('GET','baseline')) local d=m-b if d<0 then\
+          \ d=0 end return math.floor(d/2097152)", "0"]
+      expect_difference: true
+      expect: {max: 1}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [reload-leak.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload-leak}

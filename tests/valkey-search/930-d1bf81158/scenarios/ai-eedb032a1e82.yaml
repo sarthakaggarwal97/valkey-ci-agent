@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search f85c179b3ee2..d1bf811586c5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-eedb032a1e82
+seed: 7200
+experiment:
+  id: proposed.search-drain-mutation-queue-save-restore
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    save_drain: 'yes'
+    cluster: true
+deployment:
+  mode: standalone
+  base_port: 7200

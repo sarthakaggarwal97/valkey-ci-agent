@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "b9325e8331293effe8430e8588d022a5d9efd5f2",
+  "parent": "7e9d0d6ea3d8acd3bcce39dd77243f44126cb7a0",
+  "pr": 909,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add history entries for text indexing and search support in v1.2.0 (#909)",
+  "date": "2026-03-16",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.211,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds \"history\" entries (\"1.2.0\", \"Added Text Indexing and Search support\") to four command-documentation JSON files (src/commands/ft.aggregate.json, ft.create.json, ft.info.json, ft.search.json). These files are not consumed by the build: src/commands/CMakeLists.txt compiles only .cc/.h sources, and no code, script, or CI step in the repository reads or embeds them, so the compiled module is behaviorally identical to its parent. There is no runtime path to reach \u2014 no command reply, indexing, replication, or persistence behavior changes \u2014 so no fuzzer scenario can observe a diff"
+}

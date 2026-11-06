@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.search-drain-mutation-queue-save-restore
+deployment:
+  modes: [standalone]
+metadata:
+  description: A valkey-search index survives a synchronous SAVE and a restart-reload
+    while the mutation queue drains with ValkeyModule_Yield
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "parent commit module build, {$ref: artifacts.module_parent.path}"
+    save_drain: {type: string, enum: ["yes", "no"], default: "yes"}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: drain
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    cluster: {$ref: inputs.cluster}
+    server_config: {save: "", appendonly: "no"}
+    timeout_s: 90
+    commands:
+    - {command: [CONFIG, SET, search.drain-mutation-queue-on-save, {$ref: inputs.save_drain}],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC,
+        t, TAG], expect: {equals: OK}}
+    - {command: [HSET, "doc:0", n, 0, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:1", n, 1, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", n, 2, t, b], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", n, 3, t, b], expect: {equals: 2}}
+    - {command: [HSET, "doc:4", n, 4, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:5", n, 5, t, b], expect: {equals: 2}}
+    - {command: [HSET, "doc:6", n, 6, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:7", n, 7, t, b], expect: {equals: 2}}
+    - {command: [HSET, "doc:8", n, 8, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:9", n, 9, t, b], expect: {equals: 2}}
+    - {command: [HSET, "doc:10", n, 10, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:11", n, 11, t, b], expect: {equals: 2}}
+    - {command: [HSET, "doc:12", n, 12, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:13", n, 13, t, b], expect: {equals: 2}}
+    - {command: [HSET, "doc:14", n, 14, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:15", n, 15, t, b], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 20, expect: {equals: [
+          16]}, compare: unordered}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 20, expect: {equals: [
+          16]}, compare: unordered}
+    - {command: [FT.INFO, idx], compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: drain}

@@ -1,0 +1,64 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "4fb4b5fee53dda03aee90917e9f7b30d5c7dd3f7",
+  "parent": "4293fddfdeb5899ae8b6fee9a8002638e3d3aad7",
+  "pr": 871,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Reducing mutation queue growth during restore (#871)",
+  "date": "2026-03-17",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 2,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 9.503,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-9d63e069ebd7",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #871, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-ef6135498870",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #871, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-9d63e069ebd7",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'restore' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (EVAL local t=redis.call('CONFIG','GET','search.max-mutation-queue-size-on-restore') if #t==0 then return 'absent' end return t[2] 0)"
+    },
+    {
+      "scenario": "ai-ef6135498870",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'restore' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (EVAL local t=redis.call('CONFIG','GET','search.max-mutation-queue-size-on-restore') if #t==0 then return 'absent' end return t[2] 0)"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

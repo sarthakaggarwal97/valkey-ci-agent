@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "e7b9d6359e8834d2ca812bc954bc56724e34dfa5",
+  "parent": "d427588a270dfc7907ccdd562ed057b53711806f",
+  "pr": 911,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Change search.hide-user-data-from-log config to Dev and remove total_indexing_time (unimplemented metric) (#911)",
+  "date": "2026-03-16",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 6.226,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-96f2a25517b0",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'devcfg' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (EVAL local r = redis.call('FT.INFO', ARGV[1]) for i=1,#r,2 do if r[i]=='num_docs' then return r[i+1] end end return -1 0 idx), 7 (EVAL "
+    },
+    {
+      "scenario": "ai-405508bbce85",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'devcfg' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (EVAL local r = redis.call('FT.INFO', ARGV[1]) for i=1,#r,2 do if r[i]=='num_docs' then return r[i+1] end end return -1 0 idx), 7 (EVAL "
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

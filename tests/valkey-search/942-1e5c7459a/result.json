@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "1e5c7459abc58c1063b51d7d2f92c23f980e1960",
+  "parent": "6362bc1b08c4a607130f4f1a9f50e815928d7a06",
+  "pr": 942,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Skip building unit test files for integration test workflows (#942)",
+  "date": "2026-03-31",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2524,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only touches build tooling: CMakeLists.txt renames the BUILD_TESTS option to BUILD_UNIT_TESTS, build.sh passes the renamed flag and allows CMAKE_EXTRA_ARGS from the environment, and ci/build_ubuntu.sh disables unit-test compilation when a CI run executes integration tests only. No source file of the module (src/, vmsdk/, third_party usage) is modified, so the built libsearch.so and every command, reply, indexing path and persistence path are identical between the change and its parent. There is no runtime behaviour a scenario could reach or differentiate, so no scenario is needed."
+}

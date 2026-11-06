@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-slot-ownership
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH/FT.AGGREGATE must drop local index hits whose slot the node
+    does not own (ghost results on an importing node mid slot-migration), while still
+    serving every slot it does own
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slotcheck
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, KEYSLOT, "d:{foo}:1"], expect: {equals: 12182}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, t, TAG], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, t, TAG], node: 1,
+      expect: {equals: OK}}
+    - {command: [HSET, "d:{foo}:1", t, red], expect: {equals: 1}}
+    - {command: [HSET, "d:{bar}:1", t, blue], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:{red}"], wait_s: 30, expect: {contains: "d:{foo}:1"}}
+    - {command: [FT.SEARCH, idx, "@t:{blue}"], wait_s: 30, expect: {contains: "d:{bar}:1"}}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, MIGRATING, "<node.1.id>"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@t:{red}"], wait_s: 30, expect: {equals: [1, "d:{foo}:1",
+          [t, red]]}}
+    - {command: [MIGRATE, "<node.1.host>", "<node.1.port>", "d:{foo}:1", 0, 5000],
+      expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 3], node: 1, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@t:{red}"], node: 1, expect_difference: true, expect: {
+        equals: [0]}}
+    - {command: [FT.AGGREGATE, idx, "@t:{red}", LOAD, 1, "@t"], node: 1, expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.1.id>"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@t:{red}"], node: 1, wait_s: 30, expect: {equals: [
+          1, "d:{foo}:1", [t, red]]}}
+    - {command: [FT.SEARCH, idx, "@t:{blue}"], wait_s: 30, expect: {equals: [1, "d:{bar}:1",
+          [t, blue]]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [slotcheck.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotcheck}

@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.search-cleanup-config-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: search-result-background-cleanup default flipped to no; FT.SEARCH return_attributes/score_as
+    cleanup paths compared across the two module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, GET, search.search-result-background-cleanup], expect_difference: true,
+      expect: {contains: 'no'}}
+    - {command: [HSET, 'doc:1', v, !!binary 'AAAAAAAAAAA=', tag, red, n, 1], expect: {
+        equals: 3}}
+    - {command: [HSET, 'doc:2', v, !!binary 'AACAPwAAAAA=', tag, blue, n, 2], expect: {
+        equals: 3}}
+    - {command: [HSET, 'doc:3', v, !!binary 'AAAAAAAAgD8=', tag, red, n, 3], expect: {
+        equals: 3}}
+    - {command: [HSET, 'doc:4', v, !!binary 'AACAPwAAgD8=', tag, green, n, 4], expect: {
+        equals: 3}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, tag, TAG, n, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, '@n:[4 4]', NOCONTENT], wait_s: 20, expect: {contains: 'doc:4'},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 4 @v $q AS dist]', PARAMS, 2, q, !!binary 'AACAPgAAAAA=',
+        DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 4 @v $q AS dist]', PARAMS, 2, q, !!binary 'AACAPgAAAAA=',
+        DIALECT, 2, RETURN, 2, dist, tag], compare: unordered}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 4 @v $q AS dist]', PARAMS, 2, q, !!binary 'AACAPgAAAAA=',
+        DIALECT, 2, RETURN, 3, tag, AS, color], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@tag:{red}', NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@tag:{red}', LIMIT, 0, 0], compare: unordered}
+    - {command: [CONFIG, SET, search.search-result-background-cleanup, 'yes'], expect: {
+        equals: OK}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 4 @v $q AS dist]', PARAMS, 2, q, !!binary 'AACAPgAAAAA=',
+        DIALECT, 2, RETURN, 2, dist, n], compare: unordered}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @v $q AS dist]', PARAMS, 2, q, !!binary 'AACAPgAAAAA=',
+        DIALECT, 2, NOCONTENT], compare: unordered}
+    - {command: [CONFIG, SET, search.search-result-background-cleanup, 'no'], expect: {
+        equals: OK}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 4 @v $q AS dist]', PARAMS, 2, q, !!binary 'AACAPgAAAAA=',
+        DIALECT, 2, RETURN, 2, dist, tag], compare: unordered}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@n:[1 2]', NOCONTENT]}
+    - {command: [EXEC], compare: skip}
+    - {command: [HSET, 'doc:5', v, !!binary 'AACAPwAAgD8=', tag, red, n, 5], expect: {
+        equals: 3}}
+    - {command: [FT.SEARCH, idx, '@n:[5 5]', NOCONTENT], wait_s: 20, expect: {contains: 'doc:5'},
+      compare: unordered}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@tag:{red}'], expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [search.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}

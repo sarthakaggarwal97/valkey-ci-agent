@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "03f66fa8168d8f63dd66418f2e66617df23bd9e5",
+  "parent": "d1bf811586c5ab71ecffccc96d57e4aa3b1934a2",
+  "pr": 931,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Improve test output (#931)",
+  "date": "2026-03-26",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2771,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only build.sh (build/test-runner script: ICU build output redirected to a log file with failure tails, and per-test output files so only the failed test's output is dumped) and removes std::cout debug prints from unit tests in testing/coordinator/metadata_manager_test.cc. No module source that runs inside a Valkey server is touched, so there is no runtime behaviour \u2014 no command, reply, indexing, persistence or replication path \u2014 for a scenario to reach. This is a build/CI and test-output change with no behaviour change."
+}

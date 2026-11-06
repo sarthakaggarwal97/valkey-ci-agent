@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "dcc1214f1cf3f251fc3a67096c87cf195193663a",
+  "parent": "1e5c7459abc58c1063b51d7d2f92c23f980e1960",
+  "pr": 939,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Shorten grpc timeout (#939)",
+  "date": "2026-03-31",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 1,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 8.4002,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

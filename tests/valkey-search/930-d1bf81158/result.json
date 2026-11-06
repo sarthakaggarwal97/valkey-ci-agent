@@ -1,0 +1,95 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "d1bf811586c5ab71ecffccc96d57e4aa3b1934a2",
+  "parent": "f85c179b3ee2cd9048db2780c4f00085bdbe3a3e",
+  "pr": 930,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Adding yield during mutation queue drainage for save and restore (#930)",
+  "date": "2026-03-26",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.4318,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-c8ac64026772",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'drain' returned ERROR: expectations both builds violate alike, so they are not about the change: 18 (FT.SEARCH idx * LIMIT 0 0), 21 (FT.SEARCH idx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-c8ac64026772",
+      "build": "unstable",
+      "seed": 7000,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c8ac64026772",
+      "build": "unstable",
+      "seed": 7001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c8ac64026772",
+      "build": "unstable",
+      "seed": 7002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-754b887d3f7d",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'drain' returned ERROR: expectations both builds violate alike, so they are not about the change: 18 (FT.SEARCH idx * LIMIT 0 0), 21 (FT.SEARCH idx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-754b887d3f7d",
+      "build": "unstable",
+      "seed": 7100,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-754b887d3f7d",
+      "build": "unstable",
+      "seed": 7101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-754b887d3f7d",
+      "build": "unstable",
+      "seed": 7102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-eedb032a1e82",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'drain' returned ERROR: expectations both builds violate alike, so they are not about the change: 18 (FT.SEARCH idx * LIMIT 0 0), 21 (FT.SEARCH idx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-eedb032a1e82",
+      "build": "unstable",
+      "seed": 7200,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-eedb032a1e82",
+      "build": "unstable",
+      "seed": 7201,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-eedb032a1e82",
+      "build": "unstable",
+      "seed": 7202,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

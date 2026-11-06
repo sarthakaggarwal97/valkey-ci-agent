@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.coordinator-query-timeout-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: The coordinator-query-timeout-secs default moved from 120 to 25 while
+    its 1..3600 bounds and explicit-set behaviour are unchanged
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+components:
+- use: valkey.action.commands
+  id: cfg
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, search.coordinator-query-timeout-secs], expect_difference: true,
+      expect: {equals: [search.coordinator-query-timeout-secs, "25"]}}
+    - {command: [CONFIG, SET, search.coordinator-query-timeout-secs, "0"], expect: {
+        error: true}}
+    - {command: [CONFIG, SET, search.coordinator-query-timeout-secs, "3601"], expect: {
+        error: true}}
+    - {command: [CONFIG, SET, search.coordinator-query-timeout-secs, "1"], expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, search.coordinator-query-timeout-secs, "3600"], expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, search.coordinator-query-timeout-secs, "120"], expect: {
+        equals: OK}}
+    - {command: [CONFIG, GET, search.coordinator-query-timeout-secs], expect: {equals: [
+          search.coordinator-query-timeout-secs, "120"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [cfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cfg}

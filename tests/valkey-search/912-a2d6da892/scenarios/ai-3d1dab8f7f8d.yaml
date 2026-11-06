@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search e7b9d6359e88..a2d6da892413.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3d1dab8f7f8d
+seed: 912001
+experiment:
+  id: proposed.search-rdb-load-string-leak
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

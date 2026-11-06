@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ef1f6193a612ab81b12e9d19cc6bb1e94f8cf3da",
+  "parent": "03f66fa8168d8f63dd66418f2e66617df23bd9e5",
+  "pr": 926,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Allow replacement of deleted hnsw elements (#926)",
+  "date": "2026-03-26",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 2,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 4.0299,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

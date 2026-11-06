@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.hnsw-incid-rdb-reload-default
+deployment:
+  modes: [standalone]
+metadata:
+  description: Delete the highest-labeled HNSW vectors, SAVE, restart, and insert
+    again with the default config, exercising the inc_id-from-max-label fix in LoadTrackedKeys
+    against the parent's tracked-id maximum
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 1, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:0", v, !!binary "AAAAAA=="], expect: {equals: 1}}
+    - {command: [HSET, "doc:1", v, !!binary "AACAPw=="], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", v, !!binary "AAAAQA=="], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", v, !!binary "AABAQA=="], expect: {equals: 1}}
+    - {command: [HSET, "doc:4", v, !!binary "AACAQA=="], expect: {equals: 1}}
+    - {command: [HSET, "doc:5", v, !!binary "AACgQA=="], expect: {equals: 1}}
+    - {command: [HSET, "doc:6", v, !!binary "AADAQA=="], expect: {equals: 1}}
+    - {command: [HSET, "doc:7", v, !!binary "AADgQA=="], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 20 @v $q]", PARAMS, 2, q, !!binary "AABIQg==",
+        NOCONTENT], wait_s: 30, compare: unordered, expect: {contains: 8}}
+    - {command: [HSET, "doc:8", v, !!binary "AAAAQQ=="], expect: {equals: 1}}
+    - {command: [HSET, "doc:9", v, !!binary "AAAQQQ=="], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 20 @v $q]", PARAMS, 2, q, !!binary "AABIQg==",
+        NOCONTENT], wait_s: 30, compare: unordered, expect: {contains: 10}}
+    - {command: [DEL, "doc:8"], expect: {equals: 1}}
+    - {command: [DEL, "doc:9"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 20 @v $q]", PARAMS, 2, q, !!binary "AABIQg==",
+        NOCONTENT], wait_s: 30, compare: unordered, expect: {contains: 8}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 20 @v $q]", PARAMS, 2, q, !!binary "AABIQg==",
+        NOCONTENT], wait_s: 60, compare: unordered, expect: {contains: 8}}
+    - {command: [HSET, "doc:n0", v, !!binary "AADIQg=="], expect: {equals: 1}}
+    - {command: [HSET, "doc:n1", v, !!binary "AADKQg=="], expect: {equals: 1}}
+    - {command: [HSET, "doc:n2", v, !!binary "AADMQg=="], expect: {equals: 1}}
+    - {command: [HSET, "doc:n3", v, !!binary "AADOQg=="], expect: {equals: 1}}
+    - {command: [HSET, "doc:n4", v, !!binary "AADQQg=="], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 20 @v $q]", PARAMS, 2, q, !!binary "AABIQg==",
+        NOCONTENT], wait_s: 30, compare: unordered, expect: {contains: 13}}
+    - {command: [DEL, "doc:0"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 20 @v $q]", PARAMS, 2, q, !!binary "AABIQg==",
+        NOCONTENT], wait_s: 30, compare: unordered, expect: {contains: 12}}
+    - {command: [HSET, "doc:9", v, !!binary "AAAQQQ=="], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 20 @v $q]", PARAMS, 2, q, !!binary "AABIQg==",
+        NOCONTENT], wait_s: 30, compare: unordered, expect: {contains: 13}}
+    - {command: [CONFIG, SET, search.hnsw-allow-replace-deleted, yes], expect_difference: true,
+      expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

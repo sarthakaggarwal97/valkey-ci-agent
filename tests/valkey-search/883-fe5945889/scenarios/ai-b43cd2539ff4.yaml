@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search c4fb75f92613..fe5945889548.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b43cd2539ff4
+seed: 8831
+experiment:
+  id: proposed.search-shutdown-schema-cleanup
+  inputs:
+    resp: 2
+    appendonly: 'no'
+    populate_keys: 150000
+deployment:
+  mode: standalone
+  base_port: 7000

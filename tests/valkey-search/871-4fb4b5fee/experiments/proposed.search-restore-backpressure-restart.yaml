@@ -1,0 +1,124 @@
+extends: [valkey.liveness]
+id: proposed.search-restore-backpressure-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    RDB save/restore of a search index across two restarts of a private server, first
+    with the default mutation-queue limit (no backpressure) and then with search.max-mutation-queue-size-on-restore
+    1 (backpressure on every batch), compared against the parent module build. Marks
+    the new config and the new rdb_restore_* INFO fields, and checks the restored
+    index answers the same queries as the parent's.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: restore
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 300
+    commands:
+    - {command: [CONFIG, SET, search.info-developer-visible, "yes"], expect: {equals: OK}}
+    - command:
+      - EVAL
+      - "local t=redis.call('CONFIG','GET','search.max-mutation-queue-size-on-restore')\
+        \ if #t==0 then return 'absent' end return t[2]"
+      - 0
+      expect_difference: true
+      expect: {equals: "10000"}
+    - {command: [FT.CREATE, idx, "ON", HASH, PREFIX, 1, "doc:", SCHEMA, "t", TAG,
+        "n", NUMERIC, "v", VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 8, DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - command:
+      - EVAL
+      - "for i=1,2000 do local v=struct.pack('<ffffffff',i,i,i,i,i,i,i,i) redis.call('HSET','doc:'..i,'t','tag'..(i%10),'n',tostring(i),'v',v)\
+        \ end return 'OK'"
+      - 0
+      expect: {equals: OK}
+    - command:
+      - EVAL
+      - "local r=redis.call('FT.SEARCH','idx','@n:[0 +inf]','NOCONTENT','LIMIT','0','0')\
+        \ return r[1]"
+      - 0
+      wait_s: 90
+      expect: {equals: 2000}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - command:
+      - EVAL
+      - "local r=redis.call('FT.SEARCH','idx','@n:[0 +inf]','NOCONTENT','LIMIT','0','0')\
+        \ return r[1]"
+      - 0
+      wait_s: 120
+      expect: {equals: 2000}
+    - command:
+      - EVAL
+      - "local s=redis.call('INFO','search') local v=string.match(s,'rdb_restore_backpressure_wait_cycles:(%d+)')\
+        \ if v==nil then return 'absent' elseif v=='0' then return 'zero' else return\
+        \ 'positive' end"
+      - 0
+      expect_difference: true
+      expect: {equals: zero}
+    - command:
+      - EVAL
+      - "local s=redis.call('INFO','search') local v=string.match(s,'rdb_restore_in_progress:(%d+)')\
+        \ if v==nil then return 'absent' end return v"
+      - 0
+      expect_difference: true
+      expect: {equals: "0"}
+    - command:
+      - EVAL
+      - "local s=redis.call('INFO','search') local v=string.match(s,'rdb_current_index_keys_restored_percent:([%d%.eE%+%-]+)')\
+        \ if v==nil then return 'absent' end if tonumber(v)==100 then return 'complete'\
+        \ end return 'partial'"
+      - 0
+      expect_difference: true
+      expect: {equals: complete}
+    - {command: [CONFIG, SET, search.max-mutation-queue-size-on-restore, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - command:
+      - EVAL
+      - "local r=redis.call('FT.SEARCH','idx','@n:[0 +inf]','NOCONTENT','LIMIT','0','0')\
+        \ return r[1]"
+      - 0
+      wait_s: 180
+      expect: {equals: 2000}
+    - command:
+      - EVAL
+      - "local s=redis.call('INFO','search') local v=string.match(s,'rdb_restore_backpressure_wait_cycles:(%d+)')\
+        \ if v==nil then return 'absent' elseif v=='0' then return 'zero' else return\
+        \ 'positive' end"
+      - 0
+      expect_difference: true
+      expect: {equals: positive}
+    - command:
+      - EVAL
+      - "local s=redis.call('INFO','search') local v=string.match(s,'rdb_current_index_keys_restored_percent:([%d%.eE%+%-]+)')\
+        \ if v==nil then return 'absent' end if tonumber(v)==100 then return 'complete'\
+        \ end return 'partial'"
+      - 0
+      expect_difference: true
+      expect: {equals: complete}
+    - command:
+      - EVAL
+      - "local r=redis.call('FT.SEARCH','idx','@t:{tag5}','NOCONTENT','LIMIT','0','300')\
+        \ table.remove(r,1) table.sort(r) return r"
+      - 0
+      expect: {contains: "doc:5"}
+    - {command: [HGET, "doc:1500", "t"], expect: {equals: tag0}}
+    - {command: [HSTRLEN, "doc:1500", "v"], expect: {equals: 32}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [restore.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore}

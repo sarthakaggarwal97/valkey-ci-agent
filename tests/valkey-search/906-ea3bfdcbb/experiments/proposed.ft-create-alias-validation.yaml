@@ -1,0 +1,77 @@
+extends: [valkey.liveness]
+id: proposed.ft-create-alias-validation
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.CREATE rejects attribute aliases containing punctuation, explicit
+    or defaulted from the identifier; valid aliases still create, index and search
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: alias
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idxa, ON, HASH, SCHEMA, f1, AS, "al]ias", NUMERIC], expect_difference: true,
+      expect: {error: "contains invalid character"}}
+    - {command: [FT.CREATE, idxb, ON, HASH, SCHEMA, f1, AS, "al[ias", NUMERIC], expect_difference: true,
+      expect: {error: "contains invalid character"}}
+    - {command: [FT.CREATE, idxc, ON, HASH, SCHEMA, f1, AS, "al{ias", NUMERIC], expect_difference: true,
+      expect: {error: "contains invalid character"}}
+    - {command: [FT.CREATE, idxd, ON, HASH, SCHEMA, f1, AS, "al}ias", NUMERIC], expect_difference: true,
+      expect: {error: "contains invalid character"}}
+    - {command: [FT.CREATE, idxe, ON, HASH, SCHEMA, f1, AS, "ali:as", NUMERIC], expect_difference: true,
+      expect: {error: "contains invalid character"}}
+    - {command: [FT.CREATE, idxf, ON, HASH, SCHEMA, f1, AS, "ali;as", NUMERIC], expect_difference: true,
+      expect: {error: "contains invalid character"}}
+    - {command: [FT.CREATE, idxg, ON, HASH, SCHEMA, f1, AS, "ali$as", NUMERIC], expect_difference: true,
+      expect: {error: "contains invalid character"}}
+    - {command: [FT.CREATE, idxh, ON, HASH, SCHEMA, f1, AS, "$", NUMERIC], expect_difference: true,
+      expect: {error: "contains invalid character"}}
+    - {command: [FT.CREATE, idxi, ON, HASH, SCHEMA, f1, AS, "a-b", NUMERIC], expect_difference: true,
+      expect: {error: "contains invalid character"}}
+    - {command: [FT.CREATE, idxj, ON, HASH, SCHEMA, f1, AS, "a@b", TAG], expect_difference: true,
+      expect: {error: "contains invalid character"}}
+    - {command: [FT.CREATE, idxk, ON, HASH, SCHEMA, f1, AS, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,",
+        NUMERIC], expect_difference: true, expect: {error: "contains invalid character"}}
+    - {command: [FT.CREATE, idximp, ON, HASH, PREFIX, 1, "imp:", SCHEMA, "user:age",
+        NUMERIC], expect_difference: true, expect: {error: "contains invalid character"}}
+    - {command: [FT.CREATE, idxm, ON, HASH, SCHEMA, good1, NUMERIC, f2, AS, "ba,d",
+        TAG], expect_difference: true, expect: {error: "contains invalid character"}}
+    - {command: [FT.CREATE, idxt, ON, HASH, SCHEMA, f1, AS, "a;b", NOTATYPE], expect_difference: true,
+      expect: {error: "contains invalid character"}}
+    - {command: [FT.CREATE, idxv, ON, HASH, SCHEMA, emb, AS, "e$mb", VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect_difference: true, expect: {
+        error: "contains invalid character"}}
+    - {command: [FT.CREATE, idxok, ON, HASH, PREFIX, 1, "doc:", SCHEMA, "f:1", AS,
+        f1alias, NUMERIC, "t$", AS, tag_alias, TAG], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxu8, ON, HASH, PREFIX, 1, "u8:", SCHEMA, f1, AS, "h\xC3\
+          \xA9llo", NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxsp, ON, HASH, PREFIX, 1, "sp:", SCHEMA, f1, AS, "a\
+          \ b", NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxnul, ON, HASH, PREFIX, 1, "nu:", SCHEMA, f1, AS, "",
+        NUMERIC]}
+    - {command: [FT._LIST], expect_difference: true, expect: {contains: idxok}}
+    - {command: [FT.INFO, idxa], expect_difference: true, expect: {error: true}}
+    - {command: [HSET, "doc:1", "f:1", 5, "t$", hello], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", "f:1", 15, "t$", world], expect: {equals: 2}}
+    - {command: [FT.INFO, idxok], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idxok, "@f1alias:[0 10]", NOCONTENT], compare: unordered,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idxok, "@tag_alias:{world}", NOCONTENT], compare: unordered,
+      expect: {contains: "doc:2"}}
+    - {command: [FT.SEARCH, idximp, "*", NOCONTENT], expect_difference: true, expect: {
+        error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [alias.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: alias}

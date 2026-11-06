@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "4293fddfdeb5899ae8b6fee9a8002638e3d3aad7",
+  "parent": "a2d6da8924134a28eb62c3f32d66d3274949281e",
+  "pr": 913,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Mark ft info metrics as Dev configs (#913)",
+  "date": "2026-03-17",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.3493,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

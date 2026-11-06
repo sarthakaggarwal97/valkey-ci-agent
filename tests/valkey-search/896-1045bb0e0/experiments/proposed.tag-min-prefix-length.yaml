@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.tag-min-prefix-length
+deployment:
+  modes: [standalone]
+metadata:
+  description: search.tag-min-prefix-length dynamically controls TAG wildcard prefix
+    validation in FT.SEARCH, with range checks at 0, -1 and UINT_MAX
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: tagcfg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, color, TAG],
+      expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', color, blue], expect: {equals: 1}}
+    - {command: [HSET, 'doc:2', color, black], expect: {equals: 1}}
+    - {command: [HSET, 'doc:3', color, green], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@color:{blue}', NOCONTENT], wait_s: 30, expect: {
+        equals: [1, 'doc:1']}}
+    - {command: [FT.SEARCH, idx, '@color:{black}', NOCONTENT], wait_s: 30, expect: {
+        equals: [1, 'doc:2']}}
+    - {command: [FT.SEARCH, idx, '@color:{green}', NOCONTENT], wait_s: 30, expect: {
+        equals: [1, 'doc:3']}}
+    - {command: [FT.SEARCH, idx, '@color:{bl*}', NOCONTENT], compare: unordered, expect: {
+        error: false}}
+    - {command: [FT.SEARCH, idx, '@color:{b*}', NOCONTENT], expect: {error: 'too short
+          for prefix wildcard'}}
+    - {command: [FT.SEARCH, idx, '@color:{b**}', NOCONTENT], expect: {error: 'ends
+          with multiple'}}
+    - {command: [CONFIG, SET, search.tag-min-prefix-length, '1'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@color:{g*}', NOCONTENT], expect_difference: true,
+      expect: {equals: [1, 'doc:3']}}
+    - {command: [CONFIG, SET, search.tag-min-prefix-length, '0'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@color:{*}', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {error: false}}
+    - {command: [CONFIG, SET, search.tag-min-prefix-length, '3'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@color:{bl*}', NOCONTENT], expect_difference: true,
+      expect: {error: 'too short for prefix wildcard'}}
+    - {command: [FT.SEARCH, idx, '@color:{bl*|green}', NOCONTENT], expect_difference: true,
+      expect: {error: 'too short for prefix wildcard'}}
+    - {command: [FT.SEARCH, idx, '@color:{blu*}', NOCONTENT], expect: {equals: [1,
+          'doc:1']}}
+    - {command: [CONFIG, SET, search.tag-min-prefix-length, '-1'], expect_difference: true,
+      expect: {error: 'between 0 and 4294967295'}}
+    - {command: [CONFIG, SET, search.tag-min-prefix-length, '4294967295'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@color:{blu*}', NOCONTENT], expect_difference: true,
+      expect: {error: 'too short for prefix wildcard'}}
+    - {command: [FT.SEARCH, idx, '@color:{blue}', NOCONTENT], expect: {equals: [1,
+          'doc:1']}}
+    - {command: [CONFIG, SET, search.tag-min-prefix-length, '4294967296'], expect_difference: true,
+      expect: {error: '4294967295'}}
+    - {command: [CONFIG, SET, search.tag-min-prefix-length, '2'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@color:{b*}', NOCONTENT], expect: {error: 'too short
+          for prefix wildcard'}}
+    - {command: [FT.SEARCH, idx, '@color:{bl*}', NOCONTENT], compare: unordered, expect: {
+        error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tagcfg}

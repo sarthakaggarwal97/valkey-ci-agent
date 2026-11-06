@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.search-shutdown-schema-cleanup
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Graceful restarts of a server whose SHUTDOWN event now deletes all index schemas:
+    with populated schemas, with a keyspace-wide backfill in flight, and with empty
+    schemas (the early-return branch). The shutdown save must still carry the aux
+    schemas, the restarted server must restore indexes and their vectors, and the
+    shutdown itself must not crash, hang, or leak, compared against the parent module
+    build.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    appendonly: {type: string, enum: ["yes", "no"], default: "no"}
+    populate_keys: {type: integer, minimum: 0, maximum: 1000000, default: 1000}
+components:
+- use: valkey.action.commands
+  id: shutdown-cycle
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config:
+      save: "3600 1"
+      appendonly: {$ref: inputs.appendonly}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, primary_index, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t,
+        TAG, n, NUMERIC, v, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", t, x, n, 1, v, !!binary "AACAPwAAAAA="], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:2", t, x, n, 2, v, !!binary "AAAAAAAAgD8="], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:3", t, y, n, 3, v, !!binary "AACAPwAAgD8="], expect: {
+        equals: 3}}
+    - {command: [FT.SEARCH, primary_index, "@t:{x}", NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [2]}}
+    - {command: [DEBUG, POPULATE, {$ref: inputs.populate_keys}], expect: {equals: OK}}
+    - {command: [FT.CREATE, scan_index, ON, HASH, SCHEMA, f, TAG], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT._LIST], compare: unordered, wait_s: 30, expect: {contains: primary_index}}
+    - {command: [FT._LIST], compare: unordered, expect: {contains: scan_index}}
+    - {command: [FT.SEARCH, primary_index, "@t:{x}", NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, primary_index, "*=>[KNN 10 @v $BLOB]", PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          3]}}
+    - {command: [FT.DROPINDEX, primary_index], expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, scan_index], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    - {command: [FT.CREATE, primary_index, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t,
+        TAG], expect: {equals: OK}}
+    - {command: [FT.SEARCH, primary_index, "@t:{y}", NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [1]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [shutdown-cycle.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shutdown-cycle}

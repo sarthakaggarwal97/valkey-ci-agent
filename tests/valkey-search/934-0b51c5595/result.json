@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "0b51c5595eaa1698bfe3424a1dfbc5314340c9b9",
+  "parent": "ef1f6193a612ab81b12e9d19cc6bb1e94f8cf3da",
+  "pr": 934,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add memory reservation based on mutation queue (#934)",
+  "date": "2026-03-27",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 6.7661,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-1262fdd5f252",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'weights' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (FT.SEARCH idx *)"
+    },
+    {
+      "scenario": "ai-61680954e127",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'weights' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (FT.SEARCH idx *)"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

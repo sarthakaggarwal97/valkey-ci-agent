@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "de0bb244db58519bda3f4f6ed638512934f0f280",
+  "parent": "2c45f4413fc1978bb91d6895f37b247a3563ec3c",
+  "pr": 921,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Slot Ownership check (#921)",
+  "date": "2026-03-24",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 9.2815,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

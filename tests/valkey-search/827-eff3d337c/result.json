@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "eff3d337c421d03660eaebc93f353d439f75674c",
+  "parent": "4fb4b5fee53dda03aee90917e9f7b30d5c7dd3f7",
+  "pr": 827,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "adding the commented out tests (#827)",
+  "date": "2026-03-18",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2822,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits valkey-search's own Python integration test suite (testing/integration/stability_test.py): it re-enables three previously commented-out stability test cases (text/tag/numeric with backfill, coordinator and replica) and turns on background ftcreate/ftdropindex/flushdb intervals and failover testing in the existing cases. No module source, build, or configuration file changes; the compiled module at the change commit is byte-for-byte functionally identical to the parent's. There is no runtime behaviour to reach or compare, so no fuzzer scenario can exercise anything this co"
+}

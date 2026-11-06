@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.search-mutation-weight
+deployment:
+  modes: [standalone]
+metadata:
+  description: New search.mutation-weight-* configs and per-mutation weighted buffer
+    allocation across the two module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: weights
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, GET, search.mutation-weight-vector], expect_difference: true,
+      expect: {contains: "130"}}
+    - {command: [CONFIG, GET, search.mutation-weight-text], expect_difference: true,
+      expect: {contains: "550"}}
+    - {command: [CONFIG, GET, search.mutation-weight-numeric], expect_difference: true,
+      expect: {contains: "430"}}
+    - {command: [CONFIG, GET, search.mutation-weight-tag], expect_difference: true,
+      expect: {contains: "330"}}
+    - {command: [CONFIG, SET, search.mutation-weight-vector, "200"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, txt, TEXT, num, NUMERIC,
+        tg, TAG], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAgD8=", txt, "hello world",
+        num, 42, tg, "a,b,c"], expect: {equals: 4}}
+    - {command: [HSET, "doc:1", num, 99, txt, ""], expect: {equals: 0}}
+    - {command: [HDEL, "doc:1", vec], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*"], wait_s: 10, compare: skip, expect: {contains: "doc:1"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [weights.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: weights}

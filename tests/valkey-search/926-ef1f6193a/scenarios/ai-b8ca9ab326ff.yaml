@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 03f66fa8168d..ef1f6193a612.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b8ca9ab326ff
+seed: 9262
+experiment:
+  id: proposed.hnsw-allow-replace-deleted-lifecycle
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

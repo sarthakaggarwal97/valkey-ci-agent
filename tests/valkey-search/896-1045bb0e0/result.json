@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "1045bb0e074ae80366641dfacc1bcf4013f1352f",
+  "parent": "82e1c3aef021f9b28522ab42081d03e52e67c2d2",
+  "pr": 896,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Implement configuration for TAG wildcard minimum prefix length (#896)",
+  "date": "2026-03-15",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.0498,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.search-devconfig-info-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: search.hide-user-data-from-log refuses CONFIG SET without search.debug-mode,
+    and total_indexing_time is gone from INFO SEARCH, compared with the parent module
+    build across a restart
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: devcfg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, "ON", HASH, PREFIX, "1", "doc:", SCHEMA, color, TAG],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", color, red], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", color, blue], expect: {equals: 1}}
+    - {command: [EVAL, "local r = redis.call('FT.INFO', ARGV[1]) for i=1,#r,2 do if\
+          \ r[i]=='num_docs' then return r[i+1] end end return -1", "0", idx], wait_s: 30,
+      expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@color:{red}"], compare: unordered}
+    - {command: [CONFIG, GET, search.hide-user-data-from-log]}
+    - {command: [CONFIG, SET, search.hide-user-data-from-log, "no"], expect_difference: true,
+      expect: {error: "debug-mode"}}
+    - {command: [EVAL, "return redis.call('CONFIG','GET',ARGV[1])[2]", "0", search.hide-user-data-from-log],
+      expect_difference: true, expect: {equals: "yes"}}
+    - {command: [CONFIG, SET, search.hide-user-data-from-log, "yes"], expect_difference: true,
+      expect: {error: "debug-mode"}}
+    - {command: [EVAL, "if string.find(redis.call('INFO','SEARCH'), ARGV[1], 1, true)\
+          \ then return 1 else return 0 end", "0", total_indexing_time], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [EVAL, "if string.find(redis.call('INFO','SEARCH'), ARGV[1], 1, true)\
+          \ then return 1 else return 0 end", "0", total_indexed_documents], expect: {
+        equals: 1}}
+    - {command: [INFO, SEARCH], compare: skip}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.hide-user-data-from-log, "no"], expect_difference: true,
+      expect: {error: "debug-mode"}}
+    - {command: [EVAL, "return redis.call('CONFIG','GET',ARGV[1])[2]", "0", search.hide-user-data-from-log],
+      expect_difference: true, expect: {equals: "yes"}}
+    - {command: [EVAL, "if string.find(redis.call('INFO','SEARCH'), ARGV[1], 1, true)\
+          \ then return 1 else return 0 end", "0", total_indexing_time], expect_difference: true,
+      expect: {equals: 0}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [devcfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: devcfg}
