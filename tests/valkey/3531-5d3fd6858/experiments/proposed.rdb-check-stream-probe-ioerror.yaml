@@ -1,0 +1,25 @@
+extends: [valkey.liveness]
+id: proposed.rdb-check-stream-probe-ioerror
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-rdb stream-reader probe I/O error and short plain files,
+    compared with the parent build
+components:
+- use: valkey.action.tools
+  id: check-rdb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files:
+      empty-db2.rdb: !!binary 'UkVESVMwMDA5/gL/AAAAAAAAAAA='
+      tiny.bin: "R"
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - {tool: valkey-check-rdb, args: ["."], expect_difference: true, expect: {exit: {
+          equals: 1}, stdout: {contains: "Failed to inspect RDB stream metadata"}}}
+    - {tool: valkey-check-rdb, args: [empty-db2.rdb], expect: {exit: {equals: 0},
+        stdout: {contains: "RDB looks OK"}}}
+    - {tool: valkey-check-rdb, args: [tiny.bin], expect: {exit: {equals: 1}, stdout: {
+          contains: "Unexpected EOF reading RDB file"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check-rdb}

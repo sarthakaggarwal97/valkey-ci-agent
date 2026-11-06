@@ -1,0 +1,29 @@
+extends: [valkey.liveness]
+id: proposed.cluster-receiver-register-oob
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Registering a module receiver for cluster message type 255 does not
+    read or write past the receiver array
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module.path}]
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [test.register_receiver], expect: {equals: OK}}
+    - {command: [PING], wait_s: 5, expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reg}

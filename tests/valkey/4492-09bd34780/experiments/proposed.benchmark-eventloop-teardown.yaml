@@ -1,0 +1,24 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-eventloop-teardown
+deployment:
+  modes: [standalone]
+metadata:
+  description: Multi-threaded valkey-benchmark creates and deletes one event loop
+    per thread, exercising aeApiCreate, aeApiPoll, and aeDeleteEventLoop -> aeApiFree
+    on both builds
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 120
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, --threads, 3, -c, 32, -n, 6000, -t,
+        "set,get", -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --threads, 2, -c, 8, -n, 2000, -t,
+        ping, -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {exit: {equals: 0}, stdout: {
+          equals: "PONG\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

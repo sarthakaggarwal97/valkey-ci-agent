@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 413f6c32a063..5d4f9d670957.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c0741bbfd809
+seed: 101
+experiment:
+  id: proposed.active-expire-dirty-counter
+  inputs:
+    resp: 2
+    lazyfree: 'no'
+deployment:
+  mode: standalone
+  base_port: 7000

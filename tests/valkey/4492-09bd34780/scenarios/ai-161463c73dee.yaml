@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 382a134959b7..09bd347803ee.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-161463c73dee
+seed: 105
+experiment:
+  id: proposed.benchmark-eventloop-teardown
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

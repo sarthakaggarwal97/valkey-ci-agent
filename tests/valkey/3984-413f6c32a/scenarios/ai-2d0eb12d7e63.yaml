@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5d3fd6858640..413f6c32a063.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2d0eb12d7e63
+seed: 1
+experiment:
+  id: proposed.aof-load-acl-bypass
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

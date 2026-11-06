@@ -1,0 +1,50 @@
+extends: [valkey.base]
+id: proposed.active-expire-churn-under-kill
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Kill and restart the primary while active expire is deleting thousands
+    of TTL keys and hash fields (both reclaim branches), with AOF on and a replica
+    attached; the new asserts, the propagated DELs/HDELs and the dirty accounting
+    must survive recovery with no acknowledged write lost
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+components:
+- use: valkey.fault.process-signal
+  id: kill-primary
+  config:
+    when_event: churn.completed
+    instance: primary
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.commands
+  id: seed-ttl
+  depends_on: [writes, kill-primary]
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "for i=1,5000 do redis.call('SET','exp:'..i,'v','PX',50+(i%1000))\
+          \ end return 1", "0"], expect: {equals: 1}}
+    - {command: [EVAL, "for i=1,300 do local k='hexp:'..i redis.call('HSET',k,'f1','v','f2','v','keep','v')\
+          \ redis.call('HPEXPIRE',k,50+(i%500),'FIELDS',2,'f1','f2') end return 1",
+        "0"], expect: {equals: 1}}
+    - {command: [EVAL, "for i=1,300 do local k='hdel:'..i redis.call('HSET',k,'f1','v','f2','v')\
+          \ redis.call('HPEXPIRE',k,50+(i%500),'FIELDS',2,'f1','f2') end return 1",
+        "0"], expect: {equals: 1}}
+- use: valkey.action.sleep
+  id: churn
+  depends_on: [seed-ttl]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [churn]
+  config: {seconds: 5}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [seed-ttl.completed, churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seed-ttl}
+- {evidence_id: valkey.fault.injected, source: kill-primary}

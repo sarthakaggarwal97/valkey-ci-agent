@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "eda518abf470fd33915d2f15e68385b514c16317",
+  "parent": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "pr": 5251,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix CLUSTER GETSLOTMIGRATIONS reply schema (#5251)",
+  "date": "2026-11-06",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3905,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only src/commands/cluster-getslotmigrations.json, the reply-schema metadata: it renames the documented field 'link_name' to 'name' and documents the existing 'remaining_repl_size' field. The server's actual reply in clusterCommandGetSlotMigrations (cluster_migrateslots.c) already emits 'name' and 'remaining_repl_size' and is untouched; reply schemas are documentation/validation metadata not compiled into normal builds, so no runtime behaviour differs between the parent and head builds and no scenario can observe the change."
+}

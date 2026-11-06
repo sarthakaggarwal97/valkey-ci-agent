@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "917de6ac19a63d7c9aa5d57b8151e4d07c424862",
+  "parent": "1e7a8f3105eefa85bf43c7361dbe9bc87b5327bd",
+  "pr": 4267,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Log EXEC in commandlog (#4267)",
+  "date": "2026-08-13",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.468,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

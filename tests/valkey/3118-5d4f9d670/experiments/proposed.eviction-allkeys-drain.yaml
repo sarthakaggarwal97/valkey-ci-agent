@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.eviction-allkeys-drain
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    An allkeys-* policy with maxmemory below the server's baseline must evict the
+    entire 50k keyspace through dbGenericDelete, running the new serverAssert on every
+    eviction - including hashes whose fields active field-expiry is reaping concurrently
+    and keys whose TTL already lapsed - until the database is empty, synchronously
+    or via lazyfree.
+inputs:
+  properties:
+    policy:
+      type: string
+      enum: [allkeys-lru, allkeys-random]
+      default: allkeys-random
+    lazyfree:
+      type: string
+      enum: ["yes", "no"]
+      default: "no"
+components:
+- use: valkey.action.commands
+  id: drain
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      maxmemory-policy: {$ref: inputs.policy}
+      lazyfree-lazy-eviction: {$ref: inputs.lazyfree}
+      lazyfree-lazy-expire: {$ref: inputs.lazyfree}
+    timeout_s: 180
+    commands:
+    - {command: [DEBUG, POPULATE, 50000], expect: {equals: OK}}
+    - {command: [SET, s1, v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, dead, v, PX, 10], expect: {equals: OK}}
+    - {command: [HSET, h1, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HPEXPIRE, h1, 50, FIELDS, 2, f1, f2], expect: {equals: [1, 1]}}
+    - {command: [HSET, h2, g1, w1, g2, w2, g3, w3], expect: {equals: 3}}
+    - {command: [HEXPIRE, h2, 10000, FIELDS, 3, g1, g2, g3], expect: {equals: [1,
+          1, 1]}}
+    - {command: [CONFIG, SET, maxmemory, 1], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [DBSIZE], wait_s: 60, expect: {equals: 0}}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: [SET, after, v], expect: {equals: OK}}
+    - {command: [GET, after], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [drain.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: drain}

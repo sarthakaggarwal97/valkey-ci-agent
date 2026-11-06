@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.aof-load-acl-bypass
+deployment:
+  modes: [standalone]
+metadata:
+  description: A MULTI/EXEC block in the AOF is fully replayed on restart even when
+    the default user has lost command and key permissions; the parent silently drops
+    the transaction's writes at EXEC's ACL re-check
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aofacl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes", appendfsync: always, aclfile: users.acl}
+    files: {users.acl: "user default on nopass ~* &* +@all"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SET, outside-tx, "1"], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, inside-tx-a, "2"], expect: {equals: QUEUED}}
+    - {command: [SET, inside-tx-b, "3"], expect: {equals: QUEUED}}
+    - {command: [RPUSH, "secret:list", x], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK, 1]}}
+    - {command: [ACL, SETUSER, default, -set, resetkeys, "~meta:*"], expect: {equals: OK}}
+    - {command: [ACL, SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ACL, SETUSER, default, +set, "~*"], expect: {equals: OK}}
+    - {command: [GET, outside-tx], expect: {equals: "1"}}
+    - {command: [GET, inside-tx-a], expect_difference: true, expect: {equals: "2"}}
+    - {command: [GET, inside-tx-b], expect_difference: true, expect: {equals: "3"}}
+    - {command: [LLEN, "secret:list"], expect_difference: true, expect: {equals: 1}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 4}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [aofacl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofacl}

@@ -1,0 +1,37 @@
+extends: [valkey.base]
+id: proposed.maxclients-eventloop-resize
+deployment:
+  modes: [standalone]
+metadata:
+  description: Grow maxclients under writes so the polling backend resizes, and verify
+    the server keeps serving
+inputs:
+  properties:
+    first_maxclients: {type: integer, minimum: 128, maximum: 65536, default: 2048}
+    second_maxclients: {type: integer, minimum: 128, maximum: 65536, default: 4096}
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: resize
+  depends_on: [warm-up]
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, maxclients, "{$ref: inputs.first_maxclients}"], expect: {
+        equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, maxclients, "{$ref: inputs.second_maxclients}"], expect: {
+        equals: OK}}
+    - {command: [CONFIG, GET, maxclients], expect: {exists: true}}
+    - {command: [SET, resize-probe, ok], expect: {equals: OK}}
+    - {command: [GET, resize-probe], expect: {equals: ok}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [resize]
+  config: {seconds: 3}
+required_events: [resize.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: resize}

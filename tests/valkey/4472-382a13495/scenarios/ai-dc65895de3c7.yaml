@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 52a98359dc50..382a134959b7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-dc65895de3c7
+seed: 4721
+experiment:
+  id: proposed.blocked-clients-rotation
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

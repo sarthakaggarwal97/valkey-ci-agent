@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 413f6c32a063..5d4f9d670957.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5d12438a6f76
+seed: 303
+experiment:
+  id: proposed.active-expire-churn-under-kill
+  inputs:
+    signal: SIGKILL
+    mutation_rate: 500
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec
+    lazyfree-lazy-expire: 'no'
+    hz: 100

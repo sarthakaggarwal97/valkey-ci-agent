@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.rdb-compression-lz4-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: rdbcompression bool-to-enum config change and LZ4 whole-stream SAVE/reload
+    across restarts, compared with the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    rdbchecksum: {type: string, enum: ["yes", "no"], default: "yes"}
+components:
+- use: valkey.action.commands
+  id: roundtrip
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      rdbchecksum: {$ref: inputs.rdbchecksum}
+      save: ""
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, rdbcompression, lzf], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, rdbcompression, "no"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, rdbcompression, "yes"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, rdbcompression, lz4], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, GET, rdbcompression], expect_difference: true, expect: {
+        equals: [rdbcompression, lz4]}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {command: [SETRANGE, big, 65535, x], expect: {equals: 65536}}
+    - {command: [SET, empty, ""], expect: {equals: OK}}
+    - {command: [SET, tiny, abc], expect: {equals: OK}}
+    - {command: [RPUSH, biglist, compress-me-compress-me, compress-me-compress-me,
+        compress-me-compress-me, compress-me-compress-me, compress-me-compress-me,
+        compress-me-compress-me, compress-me-compress-me, compress-me-compress-me],
+      expect: {equals: 8}}
+    - {command: [HSET, fields, fields, fields], expect: {equals: 1}}
+    - {command: [SET, i64max, "9223372036854775807"], expect: {equals: OK}}
+    - {command: [DUMP, big], compare: skip, expect: {exists: true}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, rdbcompression], expect_difference: true, expect: {
+        equals: [rdbcompression, lz4]}}
+    - {command: [STRLEN, big], expect: {equals: 65536}}
+    - {command: [GET, empty], expect: {equals: ""}}
+    - {command: [GET, tiny], expect: {equals: abc}}
+    - {command: [LRANGE, biglist, 0, -1], expect: {equals: [compress-me-compress-me,
+          compress-me-compress-me, compress-me-compress-me, compress-me-compress-me,
+          compress-me-compress-me, compress-me-compress-me, compress-me-compress-me,
+          compress-me-compress-me]}}
+    - {command: [HGETALL, fields], compare: unordered-pairs, expect: {equals: [fields,
+          fields]}}
+    - {command: [GET, i64max], expect: {equals: "9223372036854775807"}}
+    - {command: [DBSIZE], expect: {equals: 6}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [STRLEN, big], expect: {equals: 65536}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [roundtrip.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: roundtrip}

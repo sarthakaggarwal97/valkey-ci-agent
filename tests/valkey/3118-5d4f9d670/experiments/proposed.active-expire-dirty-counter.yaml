@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.active-expire-dirty-counter
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active expire of TTL keys and of hash fields (including the delete-whole-key
+    branch) now increments server.dirty, visible as rdb_changes_since_last_save
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    lazyfree: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: dirty
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      save: ""
+      lazyfree-lazy-expire: {$ref: inputs.lazyfree}
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    commands:
+    - {command: [SET, k1, v, PX, 80], expect: {equals: OK}}
+    - {command: [SET, k2, v, PX, 80], expect: {equals: OK}}
+    - {command: [SET, k3, v, PX, 80], expect: {equals: OK}}
+    - {command: [SET, anchor, v], expect: {equals: OK}}
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3, keep, v], expect: {equals: 4}}
+    - {command: [HSET, h2, g1, v, g2, v], expect: {equals: 2}}
+    - {command: [HPEXPIRE, h, "100", FIELDS, "3", f1, f2, f3], expect: {equals: [
+          1, 1, 1]}}
+    - {command: [HPEXPIRE, h2, "100", FIELDS, "2", g1, g2], expect: {equals: [1, 1]}}
+    - {command: [DBSIZE], wait_s: 60, expect: {equals: 2}}
+    - {command: [HLEN, h], wait_s: 60, expect: {equals: 1}}
+    - {command: [EVAL, "local s=redis.call('INFO','persistence') return tonumber(string.match(s,'rdb_changes_since_last_save:(%d+)'))",
+        "0"], expect_difference: true, expect: {equals: 22}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [dirty.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dirty}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "52a98359dc503ece3df0a7eba8435abffc034901",
+  "parent": "94f61e4491e6c4422cb85d1a78d0437213b36fc0",
+  "pr": 4459,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix ORDERBY truncation in CLUSTER SLOT-STATS comparators (#4459)",
+  "date": "2026-08-24",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.3518,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix only changes CLUSTER SLOT-STATS ORDERBY output when two slots' ordering statistic (key-count, cpu-usec, network-bytes-in/out) differ by roughly 2^31 or more, since the bug was a uint64_t subtraction truncated to int in the qsort comparators; below that threshold both the parent and fixed comparators order identically. Producing such a difference requires ~2 billion keys in a slot, ~35 CPU-minutes of slot activity, or ~2 GB of per-slot network bytes, none of which a throwaway fuzzer run can generate, and there is no DEBUG/config hook to inject slot-stat values. A compared command sequen"
+}

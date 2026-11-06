@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2d7f3d9fde2e..5d3fd6858640.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b0e304558098
+seed: 110
+experiment:
+  id: valkey.aof-durability
+  inputs:
+    rdbcompression: lz4
+deployment:
+  mode: standalone
+  base_port: 7900

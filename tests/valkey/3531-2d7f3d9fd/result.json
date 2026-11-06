@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2d7f3d9fde2e5352b64e04cd786831f65a7f2dbf",
+  "parent": "4669926ecf1d1a90b700d0ff4c164f0b98325b8e",
+  "pr": 3531,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Vendor LZ4 1.10.0 (#3531)",
+  "date": "2026-08-17",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4321,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only vendors the LZ4 1.10.0 sources into deps/lz4/ and adds them to the deps build (deps/Makefile, deps/CMakeLists.txt), plus README, LICENSE, REUSE.toml and typos.toml updates. No file under src/ references LZ4: the server, tools and tests neither compile nor link the new library, and no command, persistence, or replication code path calls into it. It is a build/vendoring-only change with no reachable runtime behaviour difference, so no scenario can exercise it."
+}

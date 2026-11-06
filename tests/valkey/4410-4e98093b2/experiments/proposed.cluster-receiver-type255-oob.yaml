@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.cluster-receiver-type255-oob
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: A module receiver for cluster message type 255 registers and dispatches
+    with no out-of-bounds access
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: recv
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module.path}]
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [test.register_receiver], node: 1, expect: {equals: OK}}
+    - {command: [test.register_receiver], node: 0, expect: {equals: OK}}
+    - {command: [test.send_msg_uaf], node: 0, expect: {equals: OK}}
+    - {command: [PING], node: 1, wait_s: 5, expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: recv}

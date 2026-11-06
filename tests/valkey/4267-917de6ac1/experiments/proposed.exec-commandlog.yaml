@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.exec-commandlog
+deployment:
+  modes: [standalone]
+metadata:
+  description: EXEC is now logged in the slow commandlog with the whole transaction's
+    duration, and in the large-reply commandlog with the transaction's cumulative
+    output; below-threshold transactions still log nothing
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: execlog
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, commandlog-execution-slower-than, "100000"], expect: {
+        equals: OK}}
+    - {command: [COMMANDLOG, RESET, SLOW], expect: {equals: OK}}
+    - {command: [EXEC], expect: {error: "without MULTI"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.2"], expect: {equals: QUEUED}}
+    - {command: [EXEC]}
+    - {command: [COMMANDLOG, LEN, SLOW], expect_difference: true, expect: {equals: 2}}
+    - {command: [SLOWLOG, LEN], expect_difference: true, expect: {equals: 2}}
+    - {command: [COMMANDLOG, GET, "-1", SLOW], compare: skip}
+    - {command: [COMMANDLOG, RESET, SLOW], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.03"], expect: {equals: QUEUED}}
+    - {command: [DEBUG, SLEEP, "0.03"], expect: {equals: QUEUED}}
+    - {command: [DEBUG, SLEEP, "0.03"], expect: {equals: QUEUED}}
+    - {command: [DEBUG, SLEEP, "0.03"], expect: {equals: QUEUED}}
+    - {command: [DEBUG, SLEEP, "0.03"], expect: {equals: QUEUED}}
+    - {command: [DEBUG, SLEEP, "0.03"], expect: {equals: QUEUED}}
+    - {command: [DEBUG, SLEEP, "0.03"], expect: {equals: QUEUED}}
+    - {command: [DEBUG, SLEEP, "0.03"], expect: {equals: QUEUED}}
+    - {command: [DEBUG, SLEEP, "0.03"], expect: {equals: QUEUED}}
+    - {command: [DEBUG, SLEEP, "0.03"], expect: {equals: QUEUED}}
+    - {command: [EXEC]}
+    - {command: [COMMANDLOG, LEN, SLOW], expect_difference: true, expect: {equals: 1}}
+    - {command: [SLOWLOG, RESET], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, foo, bar], expect: {equals: QUEUED}}
+    - {command: [GET, foo], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, bar]}}
+    - {command: [SLOWLOG, LEN], expect: {equals: 0}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [EXEC], expect: {equals: []}}
+    - {command: [COMMANDLOG, LEN, SLOW], expect: {equals: 0}}
+    - {command: [CONFIG, SET, commandlog-reply-larger-than, "100"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, "100"], expect: {equals: OK}}
+    - {command: [COMMANDLOG, RESET, LARGE-REPLY], expect: {equals: OK}}
+    - {command: [COMMANDLOG, RESET, LARGE-REQUEST], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, bigk, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      expect: {equals: QUEUED}}
+    - {command: [GET, bigk], expect: {equals: QUEUED}}
+    - {command: [EXEC]}
+    - {command: [COMMANDLOG, LEN, LARGE-REPLY], expect_difference: true, expect: {
+        equals: 2}}
+    - {command: [COMMANDLOG, LEN, LARGE-REQUEST], expect: {equals: 0}}
+    - {command: [COMMANDLOG, GET, "-1", LARGE-REPLY], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [execlog.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: execlog}

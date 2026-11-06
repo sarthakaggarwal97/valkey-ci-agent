@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cd62903549593e362e176a1b6debae8a7efbde63",
+  "parent": "a3c5f440e8b056dc1a699363abaec13bce5695d1",
+  "pr": 4415,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix signal mask parsing on 32-bit systems (#4415)",
+  "date": "2026-08-15",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6757,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a 32-bit-only correctness fix with no observable effect on the 64-bit servers the fuzzer runs. The widened type (unsigned long -> unsigned long long) and 1L -> 1ULL shift only matter where `unsigned long` is 32 bits; on a 64-bit (x86_64) build `unsigned long` is already 64 bits, so parsing the 64-bit signal mask, the overflow check, and the mask bit test all behave identically before and after the change. The affected function `string2ull_base16_async_signal_safe` is an internal, async-signal-safe helper reached only from `is_thread_ready_to_signal` -> `get_ready_to_signal_threads_tids"
+}

@@ -1,0 +1,45 @@
+extends: [valkey.base]
+id: proposed.io-poll-replica-churn
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Kill or pause a replica while IO-thread poll offload runs, so connection
+    teardown and resync churn aeApiAddEvent/aeApiDelEvent masks while an IO thread
+    polls
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGSTOP], default: SIGKILL}
+components:
+- use: valkey.observer.info
+  id: iostats
+  config:
+    instances: primary
+    sections: [stats]
+    interval_s: 0.1
+    expectations:
+    - {evidence_id: valkey.io.poll-offloaded, field: io_threaded_poll_processed, min: 1,
+      required: true}
+- use: valkey.fault.process-signal
+  id: churn-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+    pause_s: 2
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, iostats, churn-replica]
+  config: {seconds: 3}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 4}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: churn-replica}
+- {evidence_id: valkey.io.poll-offloaded, source: iostats}

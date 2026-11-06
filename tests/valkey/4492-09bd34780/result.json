@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "09bd347803ee1a7b2713dd9ac414276ea01718c6",
+  "parent": "382a134959b7a437df9b56133624f2cc1408768e",
+  "pr": 4492,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Refactor internal AE polling API to not pass aeEventLoop to backends (#4492)",
+  "date": "2026-08-25",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 11,
+  "proven": 0,
+  "hunted": 11,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 13,
+    "executed": 13,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 15.1814,
+  "findings": [],
+  "recorded": []
+}

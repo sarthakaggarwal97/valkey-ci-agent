@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.eviction-volatile-targets
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Under a volatile-* maxmemory policy, eviction must delete exactly the volatile
+    keys - a plain string, hashes with HEXPIREd and already-expired fields, a key
+    whose TTL already lapsed - and the new serverAssert on dbGenericDelete's return
+    in performEvictions must not fire, with synchronous or lazyfree deletion.
+inputs:
+  properties:
+    policy:
+      type: string
+      enum: [volatile-lru, volatile-ttl, volatile-random]
+      default: volatile-lru
+    lazyfree:
+      type: string
+      enum: ["yes", "no"]
+      default: "no"
+components:
+- use: valkey.action.commands
+  id: evict
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      maxmemory-policy: {$ref: inputs.policy}
+      lazyfree-lazy-eviction: {$ref: inputs.lazyfree}
+      lazyfree-lazy-expire: {$ref: inputs.lazyfree}
+    timeout_s: 120
+    commands:
+    - {command: [DEBUG, POPULATE, 50000], expect: {equals: OK}}
+    - {command: [SET, vols, volatile-string-payload], expect: {equals: OK}}
+    - {command: [EXPIRE, vols, 10000], expect: {equals: 1}}
+    - {command: [HSET, bigh, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [HEXPIRE, bigh, 10000, FIELDS, 2, f1, f2], expect: {equals: [1, 1]}}
+    - {command: [EXPIRE, bigh, 10000], expect: {equals: 1}}
+    - {command: [HSET, reaph, a, 1, b, 2], expect: {equals: 2}}
+    - {command: [HPEXPIRE, reaph, 50, FIELDS, 2, a, b], expect: {equals: [1, 1]}}
+    - {command: [EXPIRE, reaph, 10000], expect: {equals: 1}}
+    - {command: [SET, deadk, v, PX, 10], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, 1], expect: {equals: OK}}
+    - {command: [SET, trigger, v], expect: {error: "OOM"}}
+    - {command: [EXISTS, vols], wait_s: 15, expect: {equals: 0}}
+    - {command: [EXISTS, bigh], wait_s: 15, expect: {equals: 0}}
+    - {command: [EXISTS, reaph], wait_s: 15, expect: {equals: 0}}
+    - {command: [EXISTS, deadk], wait_s: 15, expect: {equals: 0}}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: [SET, trigger, v], expect: {equals: OK}}
+    - {command: [EXISTS, "key:0"], expect: {equals: 1}}
+    - {command: [DBSIZE], expect: {equals: 50001}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [evict.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evict}

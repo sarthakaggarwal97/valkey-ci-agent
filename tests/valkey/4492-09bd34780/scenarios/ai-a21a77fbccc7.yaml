@@ -1,0 +1,19 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 382a134959b7..09bd347803ee.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a21a77fbccc7
+seed: 102
+experiment:
+  id: proposed.io-poll-offload-maxclients-grow
+  inputs:
+    mutation_rate: 4000
+    value_size: 256
+    run_before_resize_s: 4
+    run_after_resize_s: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
+  server_config:
+    maxclients: 128
+    io-threads: 12
+    io-threads-always-active: 'yes'

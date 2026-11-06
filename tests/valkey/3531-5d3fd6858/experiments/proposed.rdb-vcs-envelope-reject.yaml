@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.rdb-vcs-envelope-reject
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-rdb rejects malformed VCS streaming-compression RDB envelopes,
+    and the rejection differs from the parent build which has no VCS probe
+components:
+- use: valkey.action.tools
+  id: check
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files:
+      bad-version.rdb: !!binary 'VkNTAgEAAQ=='
+      bad-codec.rdb: !!binary 'VkNTAX8AAQ=='
+      bad-reserved.rdb: !!binary 'VkNTAQEBAQ=='
+      bad-streamkind.rdb: !!binary 'VkNTAQEAAg=='
+      truncated-vcs.rdb: !!binary 'VkNT'
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - {tool: valkey-check-rdb, args: [bad-version.rdb], expect_difference: true, expect: {
+        stdout: {contains: "Invalid or unsupported RDB stream envelope"}}}
+    - {tool: valkey-check-rdb, args: [bad-codec.rdb], expect_difference: true, expect: {
+        stdout: {contains: "Invalid or unsupported RDB stream envelope"}}}
+    - {tool: valkey-check-rdb, args: [bad-reserved.rdb], expect_difference: true,
+      expect: {stdout: {contains: "Invalid or unsupported RDB stream envelope"}}}
+    - {tool: valkey-check-rdb, args: [bad-streamkind.rdb], expect_difference: true,
+      expect: {stdout: {contains: "Invalid or unsupported RDB stream envelope"}}}
+    - {tool: valkey-check-rdb, args: [truncated-vcs.rdb], expect_difference: true,
+      expect: {stdout: {contains: "Invalid or unsupported RDB stream envelope"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check}

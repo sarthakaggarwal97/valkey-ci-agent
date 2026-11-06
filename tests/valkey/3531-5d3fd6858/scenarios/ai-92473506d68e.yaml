@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2d7f3d9fde2e..5d3fd6858640.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-92473506d68e
+seed: 102
+experiment:
+  id: proposed.rdb-compression-lz4-roundtrip
+  inputs:
+    resp: 3
+    rdbchecksum: 'no'
+deployment:
+  mode: standalone
+  base_port: 7100

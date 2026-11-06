@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4e98093b208f..a3c5f440e8b0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a20d9b435098
+seed: 4198
+experiment:
+  id: proposed.full-sync-duration-info
+  inputs:
+    dual_channel: 'yes'
+deployment:
+  mode: standalone
+  base_port: 7100

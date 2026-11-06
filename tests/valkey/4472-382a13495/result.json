@@ -1,0 +1,40 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "382a134959b7a437df9b56133624f2cc1408768e",
+  "parent": "52a98359dc503ece3df0a7eba8435abffc034901",
+  "pr": 4472,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rewrite ready-key UAF fix with rotation-based iteration (#4472)",
+  "date": "2026-08-25",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 7,
+    "executed": 7,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.8259,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-dc65895de3c7",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'blocked' returned ERROR: expectations both builds violate alike, so they are not about the change: 36 (read on connection c1), 37 (LRANGE q1 0 -1), 39 (read on connection c3)"
+    },
+    {
+      "scenario": "ai-e9e7b3aff5e4",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'blocked' returned ERROR: expectations both builds violate alike, so they are not about the change: 36 (read on connection c1), 37 (LRANGE q1 0 -1), 39 (read on connection c3)"
+    }
+  ]
+}

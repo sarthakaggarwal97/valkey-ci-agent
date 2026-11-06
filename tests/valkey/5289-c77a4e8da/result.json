@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "parent": "eda518abf470fd33915d2f15e68385b514c16317",
+  "pr": 5289,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Document missing key types and notification flags in module API (#5289)",
+  "date": "2026-11-06",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2594,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is documentation-only: it edits two doc comments in src/module.c (listing the key type constants returned by VM_KeyType and the notification flags accepted by SubscribeToKeyspaceEvents). No code, constant values, replies, or behavior change, so no scenario can distinguish the change from its parent and none is needed."
+}

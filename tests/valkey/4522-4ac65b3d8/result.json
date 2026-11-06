@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4ac65b3d807a731ec1dc1fa061c7498781454c1b",
+  "parent": "09bd347803ee1a7b2713dd9ac414276ea01718c6",
+  "pr": 4522,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Refactor: Extract evictSingleKey() from performEvictions() (#4522)",
+  "date": "2026-08-26",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2992,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a pure behavior-preserving refactor: it moves the per-key eviction body of performEvictions() verbatim into a new static helper evictSingleKey() in src/evict.c. Every operation (execution-unit bracketing, memory-delta measurement around dbGenericDelete, latency sampling, stat_evictedkeys, signalModifiedKey, the 'evicted' keyspace notification, propagateDeletion with the same slot, postExecutionUnitOperations) is preserved in the same order with the same arguments; the only reordering is when the local mem_freed accumulator is updated, which is not observable since it is only read by th"
+}

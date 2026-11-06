@@ -1,0 +1,34 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "11188c239115b6f7943e81b25459c9c4781ba0e6",
+  "parent": "0fb02b7ebd9b6cf0f6e1924c8ee13f3b51403ba8",
+  "pr": 4454,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Persist non-zero cluster-replica-priority to nodes.conf as an aux field (#4454)",
+  "date": "2026-08-20",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 14,
+    "executed": 14,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.4357,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-9c898e0faacb",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'election-safety' returned ERROR: cannot check that 2 election winner(s) reached quorum: no 'Failover auth ACK' line was published as 'cluster.vote.acked' (Valkey logs them since 9.2)"
+    }
+  ]
+}

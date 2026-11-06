@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8cd535ddb3dc..4e98093b208f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-bfe104899da9
+seed: 1
+experiment:
+  id: proposed.cluster-receiver-type255-oob
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

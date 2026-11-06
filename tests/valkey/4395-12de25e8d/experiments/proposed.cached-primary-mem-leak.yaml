@@ -1,0 +1,216 @@
+extends: [valkey.liveness]
+id: proposed.cached-primary-mem-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: Discarding a replica's cached primary client must release its stat_clients_type_memory
+    accounting; the parent leaks mem_clients_normal on every cache/discard cycle
+components:
+- use: valkey.action.commands
+  id: leak
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 2
+    server_config: {repl-diskless-sync-delay: 0}
+    timeout_s: 240
+    commands:
+    - {command: [CONFIG, SET, hz, "500"], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [EVAL, "redis.call('set','foo',string.rep('x',1000000))", 0], node: 0,
+      expect: {error: false}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 30, expect: {equals: 1}}
+    - {command: [REPLICAOF, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [EVAL, "local v=string.match(redis.call('INFO','memory'),'mem_clients_normal:(%d+)')\
+          \ if tonumber(v)<1000000 then return 1 else return 0 end", 0], node: 1,
+      wait_s: 30, expect_difference: true, expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [leak.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: leak}

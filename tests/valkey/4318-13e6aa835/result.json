@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "13e6aa835b53761e50530d0330704537c49d3c1a",
+  "parent": "11188c239115b6f7943e81b25459c9c4781ba0e6",
+  "pr": 4318,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "build: pass CPPFLAGS to bundled deps and src (#4318)",
+  "date": "2026-08-20",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2431,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely to the build system: it appends $(CPPFLAGS) to the compiler invocation lines in the Makefiles of bundled deps (fpconv, hdr_histogram, linenoise), src/, and the Lua module, and persists CPPFLAGS in .make-settings. It adds no code, changes no command, reply, replication, persistence or cluster behavior; binaries built without a custom CPPFLAGS environment are bit-for-bit equivalent in behavior to the parent's. There is no runtime path a fuzzer scenario could reach, so no scenario is needed."
+}

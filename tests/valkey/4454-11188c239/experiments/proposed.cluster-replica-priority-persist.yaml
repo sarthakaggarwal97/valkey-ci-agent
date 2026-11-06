@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.cluster-replica-priority-persist
+deployment:
+  modes: [standalone]
+metadata:
+  description: A peer's non-zero cluster-replica-priority is persisted to nodes.conf,
+    restored on restart before gossip resumes, and removed when it returns to 0
+components:
+- use: valkey.action.commands
+  id: persist
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    server_config: {cluster-ping-interval: 100}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, cluster-replica-priority, 10], node: 1, expect: {equals: OK}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, "<node.1.id>"], node: 0, wait_s: 30,
+      expect: {equals: 10}}
+    - {command: [DEBUG, SLEEP, 8], node: 1, connection: nap}
+    - {restart: true, node: 0, expect: {equals: OK}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, "<node.1.id>"], node: 0, expect_difference: true,
+      expect: {equals: 10}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, "<node.1.id>"], node: 0, wait_s: 30,
+      expect: {equals: 10}}
+    - {command: [CONFIG, SET, cluster-replica-priority, 2147483647], node: 1, expect: {
+        equals: OK}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, "<node.1.id>"], node: 0, wait_s: 30,
+      expect: {equals: 2147483647}}
+    - {command: [DEBUG, SLEEP, 8], node: 1, connection: nap}
+    - {restart: true, node: 0, expect: {equals: OK}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, "<node.1.id>"], node: 0, expect_difference: true,
+      expect: {equals: 2147483647}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, "<node.1.id>"], node: 0, wait_s: 30,
+      expect: {equals: 2147483647}}
+    - {command: [CONFIG, SET, cluster-replica-priority, 0], node: 1, expect: {equals: OK}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, "<node.1.id>"], node: 0, wait_s: 30,
+      expect: {equals: 0}}
+    - {command: [DEBUG, SLEEP, 8], node: 1, connection: nap}
+    - {restart: true, node: 0, expect: {equals: OK}}
+    - {command: [DEBUG, CLUSTER-REPLICA-PRIORITY, "<node.1.id>"], node: 0, expect: {
+        equals: 0}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [persist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: persist}

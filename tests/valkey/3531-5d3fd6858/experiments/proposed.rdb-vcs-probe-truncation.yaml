@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.rdb-vcs-probe-truncation
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-rdb on empty, non-magic, and truncated-VCS files drives
+    the stream-reader probe's EOF branches (passthrough on short non-magic input,
+    INCOMPATIBLE on a truncated VCS magic, CORRUPT on an envelope with no frame)
+components:
+- use: valkey.action.tools
+  id: probe
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    ignore: ['^\d+:[A-Z] .*\n']
+    files:
+      empty.rdb: !!binary ""
+      one-byte.rdb: "X"
+      v-only.rdb: "V"
+      vc-only.rdb: "VC"
+      vcs-truncated-envelope.rdb: !!binary 'VkNTAQ=='
+      vcs-envelope-no-frame.rdb: !!binary 'VkNTAQEAAQ=='
+    runs:
+    - {tool: valkey-check-rdb, args: [empty.rdb], expect: {exit: {equals: 1}, stdout: {
+          contains: "Unexpected EOF reading RDB file"}}}
+    - {tool: valkey-check-rdb, args: [one-byte.rdb], expect: {exit: {equals: 1}, stdout: {
+          contains: "Unexpected EOF reading RDB file"}}}
+    - {tool: valkey-check-rdb, args: [v-only.rdb], expect_difference: true, expect: {
+        exit: {equals: 1}, stdout: {contains: "Invalid or unsupported RDB stream envelope"}}}
+    - {tool: valkey-check-rdb, args: [vc-only.rdb], expect_difference: true, expect: {
+        exit: {equals: 1}, stdout: {contains: "Invalid or unsupported RDB stream envelope"}}}
+    - {tool: valkey-check-rdb, args: [vcs-truncated-envelope.rdb], expect_difference: true,
+      expect: {exit: {equals: 1}, stdout: {contains: "Invalid or unsupported RDB stream\
+            \ envelope"}}}
+    - {tool: valkey-check-rdb, args: [vcs-envelope-no-frame.rdb], expect_difference: true,
+      expect: {exit: {equals: 1}, stdout: {contains: "Corrupt compressed RDB stream"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: probe}

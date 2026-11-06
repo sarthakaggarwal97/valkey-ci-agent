@@ -1,0 +1,127 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5d3fd6858640c7a0f3e1781fac513ae11c05cada",
+  "parent": "2d7f3d9fde2e5352b64e04cd786831f65a7f2dbf",
+  "pr": 3531,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add streaming compression support for RDB (#3531)",
+  "date": "2026-08-17",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 18,
+  "proven": 5,
+  "hunted": 10,
+  "dropped": 10,
+  "recall": true,
+  "coverage": {
+    "lines": 656,
+    "executed": 508,
+    "percent": 77,
+    "uncovered": [
+      "src/compression.c:15",
+      "src/compression.c:16",
+      "src/compression.c:17",
+      "src/compression.c:18",
+      "src/compression.c:21",
+      "src/compression.c:22",
+      "src/compression.c:40",
+      "src/compression.c:41",
+      "src/compression.c:49",
+      "src/compression.c:50",
+      "src/compression.c:63",
+      "src/compression.c:64",
+      "src/compression.c:73",
+      "src/compression.c:74",
+      "src/compression.c:90",
+      "src/compression.c:91",
+      "src/compression.c:108",
+      "src/compression.c:109",
+      "src/compression.c:120",
+      "src/compression.c:121",
+      "src/compression_lz4.c:105",
+      "src/compression_lz4.c:106",
+      "src/compression_stream.c:36",
+      "src/compression_stream.c:37",
+      "src/compression_stream.c:79",
+      "src/compression_stream.c:80",
+      "src/compression_stream.c:91",
+      "src/compression_stream.c:92",
+      "src/compression_stream.c:112",
+      "src/compression_stream.c:113",
+      "src/compression_stream.c:116",
+      "src/compression_stream.c:117",
+      "src/compression_stream.c:192",
+      "src/compression_stream.c:193",
+      "src/compression_stream.c:206",
+      "src/compression_stream.c:207",
+      "src/compression_stream.c:238",
+      "src/compression_stream.c:239",
+      "src/compression_stream.c:240",
+      "src/compression_stream.c:241",
+      "src/compression_stream.c:242",
+      "src/compression_stream.c:243",
+      "src/compression_stream.c:244",
+      "src/compression_stream.c:245",
+      "src/compression_stream.c:246",
+      "src/compression_stream.c:247",
+      "src/compression_stream.c:249",
+      "src/compression_stream.c:251",
+      "src/compression_stream.c:252",
+      "src/compression_stream.c:253"
+    ],
+    "rounds": 3
+  },
+  "cost_usd": 14.8115,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-9fa7cd2ef9fb",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during capability.probe: RunnerError: capability 'build' returned ERROR: default deployment config: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 16 >>> 'forkless-infrastructure-enabled \"yes\""
+    },
+    {
+      "scenario": "ai-b75e50b4c0d6",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during capability.probe: RunnerError: capability 'build' returned ERROR: default deployment config: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 16 >>> 'forkless-infrastructure-enabled \"yes\""
+    },
+    {
+      "scenario": "ai-27658faaafe5",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during capability.probe: RunnerError: capability 'build' returned ERROR: default deployment config: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 16 >>> 'forkless-infrastructure-enabled \"yes\""
+    },
+    {
+      "scenario": "ai-42aea69f5131",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during capability.probe: RunnerError: capability 'build' returned ERROR: default deployment config: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 16 >>> 'forkless-infrastructure-enabled \"yes\""
+    },
+    {
+      "scenario": "ai-8e6fbae3d02e",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported"
+    },
+    {
+      "scenario": "ai-30584f9100a8",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported"
+    },
+    {
+      "scenario": "ai-bb5d6c46be67",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during capability.probe: RunnerError: capability 'build' returned ERROR: default deployment config: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 16 >>> 'forkless-infrastructure-enabled \"yes\""
+    },
+    {
+      "scenario": "ai-aa34f842ea8c",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during capability.probe: RunnerError: capability 'build' returned ERROR: default deployment config: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 16 >>> 'forkless-infrastructure-enabled \"yes\""
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a3c5f440e8b056dc1a699363abaec13bce5695d1",
+  "parent": "4e98093b208f956050fb441d89e1e2d7f91ac466",
+  "pr": 4197,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Track full sync completion time (#4197)",
+  "date": "2026-08-14",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 2,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 14,
+    "executed": 13,
+    "percent": 92,
+    "uncovered": [
+      "src/replication.c:3069"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 4.8952,
+  "findings": [],
+  "recorded": []
+}

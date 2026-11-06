@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0fb02b7ebd9b6cf0f6e1924c8ee13f3b51403ba8",
+  "parent": "12de25e8d0f18c660aabc150715b57ebdc25d9ff",
+  "pr": 4469,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix include order in custom_matchers.hpp to prevent min/max macro pollution (#4469)",
+  "date": "2026-08-19",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2135,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only reorders gmock/gtest #include directives in unit-test headers (src/unit/custom_matchers.hpp and src/unit/wrappers.h) to avoid min/max macro pollution when compiling the C++ unit tests. It is a build/test-infrastructure fix with no change to server, replication, persistence, command, or tool behaviour, so no runtime path exists for a scenario to exercise."
+}

@@ -1,0 +1,101 @@
+extends: [valkey.liveness]
+id: proposed.blocked-clients-rotation
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Drive the rotation-based iteration of handleClientsBlockedOnKey: mixed blocked
+    types on one key with partial service and rotation of skipped waiters, strict
+    FIFO fairness when one push serves several clients, BLMOVE serve chains across
+    ready keys, XREADGROUP re-blocking that re-creates the blocking_keys entry mid-loop,
+    unblock-on-nokey via DEL of a stream, multi-key blockers released by MULTI/EXEC,
+    and SWAPDB wakeups, with every reply compared against the parent build.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: blocked
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {connection: c1, raw: "BLPOP lk 0\r\n"}
+    - {connection: c2, raw: "BZPOPMIN lk 0\r\n"}
+    - {connection: c3, raw: "BLPOP lk 0\r\n"}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: "blocked_clients:3"},
+      compare: skip}
+    - {command: [RPUSH, lk, a], expect: {equals: 1}}
+    - {connection: c1, read: true, expect: {equals: [[lk, a]]}}
+    - {command: [RPUSH, lk, b, c], expect: {equals: 2}}
+    - {connection: c3, read: true, expect: {equals: [[lk, b]]}}
+    - {command: [LRANGE, lk, 0, -1], expect: {equals: [c]}}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: "blocked_clients:1"},
+      compare: skip}
+    - {command: [DEL, lk], expect: {equals: 1}}
+    - {command: [ZADD, lk, 5, m], expect: {equals: 1}}
+    - {connection: c2, read: true}
+    - {connection: c1, raw: "BLMOVE src dst LEFT RIGHT 0\r\n"}
+    - {connection: c3, raw: "BLPOP dst 0\r\n"}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: "blocked_clients:2"},
+      compare: skip}
+    - {command: [LPUSH, src, hello], expect: {equals: 1}}
+    - {connection: c1, read: true, expect: {equals: [hello]}}
+    - {connection: c3, read: true, expect: {equals: [[dst, hello]]}}
+    - {command: [EXISTS, src, dst], expect: {equals: 0}}
+    - {command: [XGROUP, CREATE, st, g, $, MKSTREAM], expect: {equals: OK}}
+    - {connection: c4, raw: "XREADGROUP GROUP g r1 COUNT 5 BLOCK 0 STREAMS st >\r\n"}
+    - {connection: c5, raw: "XREADGROUP GROUP g r2 COUNT 5 BLOCK 0 STREAMS st >\r\n"}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: "blocked_clients:2"},
+      compare: skip}
+    - {command: [XADD, st, 1-1, f, v], expect: {equals: "1-1"}}
+    - {connection: c4, read: true}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: "blocked_clients:1"},
+      compare: skip}
+    - {command: [DEL, st], expect: {equals: 1}}
+    - {connection: c5, read: true}
+    - {connection: c1, raw: "BLPOP q1 q2 q3 0\r\n"}
+    - {connection: c3, raw: "BLPOP q2 0\r\n"}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: "blocked_clients:2"},
+      compare: skip}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [RPUSH, q2, m1], expect: {equals: QUEUED}}
+    - {command: [RPUSH, q1, m2], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [1, 1]}}
+    - {connection: c1, read: true, expect: {equals: [[q2, m1]]}}
+    - {command: [LRANGE, q1, 0, -1], expect: {equals: [m2]}}
+    - {command: [RPUSH, q2, m3], expect: {equals: 1}}
+    - {connection: c3, read: true, expect: {equals: [[q2, m3]]}}
+    - {connection: c2, raw: "BLPOP sk 0\r\n"}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: "blocked_clients:1"},
+      compare: skip}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [RPUSH, sk, z], expect: {equals: 1}}
+    - {command: [SWAPDB, 0, 1], expect: {equals: OK}}
+    - {connection: c2, read: true, expect: {equals: [[sk, z]]}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [EXISTS, sk], expect: {equals: 0}}
+    - {connection: c1, raw: "BLPOP fq 0\r\n"}
+    - {connection: c2, raw: "BLPOP fq 0\r\n"}
+    - {connection: c3, raw: "BLPOP fq 0\r\n"}
+    - {connection: c4, raw: "BLPOP fq 0\r\n"}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: "blocked_clients:4"},
+      compare: skip}
+    - {command: [RPUSH, fq, e1, e2], expect: {equals: 2}}
+    - {connection: c1, read: true, expect: {equals: [[fq, e1]]}}
+    - {connection: c2, read: true, expect: {equals: [[fq, e2]]}}
+    - {command: [RPUSH, fq, e3, e4], expect: {equals: 2}}
+    - {connection: c3, read: true, expect: {equals: [[fq, e3]]}}
+    - {connection: c4, read: true, expect: {equals: [[fq, e4]]}}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: "blocked_clients:0"},
+      compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [blocked.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: blocked}

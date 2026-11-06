@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2d7f3d9fde2e..5d3fd6858640.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-56b69b3525f4
+seed: 9001
+experiment:
+  id: proposed.rdb-vcs-probe-truncation
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

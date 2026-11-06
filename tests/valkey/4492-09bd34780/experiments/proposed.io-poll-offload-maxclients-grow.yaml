@@ -1,0 +1,47 @@
+extends: [valkey.base]
+id: proposed.io-poll-offload-maxclients-grow
+deployment:
+  modes: [standalone]
+metadata:
+  description: Grow the event loop with CONFIG SET maxclients (aeResizeSetSize ->
+    aeApiResize) while IO-thread poll offload (aePoll -> aeApiPoll) runs under write
+    load
+inputs:
+  properties:
+    run_before_resize_s: {type: number, minimum: 0.5, maximum: 30, default: 3}
+    run_after_resize_s: {type: number, minimum: 0.5, maximum: 30, default: 3}
+components:
+- use: valkey.observer.info
+  id: iostats
+  config:
+    instances: primary
+    sections: [stats]
+    interval_s: 0.1
+    expectations:
+    - {evidence_id: valkey.io.poll-offloaded, field: io_threaded_poll_processed, min: 1,
+      required: true}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, iostats]
+  config: {seconds: {$ref: inputs.run_before_resize_s}}
+- use: valkey.action.commands
+  id: grow-eventloop
+  depends_on: [warm-up]
+  config:
+    instances: primary
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, maxclients, 256], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, maxclients, 480], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, maxclients, 800], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [grow-eventloop]
+  config: {seconds: {$ref: inputs.run_after_resize_s}}
+required_events: [grow-eventloop.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: grow-eventloop}
+- {evidence_id: valkey.io.poll-offloaded, source: iostats}

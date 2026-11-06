@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "413f6c32a063074f1cb3389c140a687e88093ad7",
+  "parent": "5d3fd6858640c7a0f3e1781fac513ae11c05cada",
+  "pr": 3984,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "AOF loading must not check ACL permissions (#3984)",
+  "date": "2026-08-17",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.631,
+  "findings": [],
+  "recorded": []
+}
