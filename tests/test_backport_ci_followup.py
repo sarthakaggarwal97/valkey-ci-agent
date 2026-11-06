@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock
@@ -109,18 +110,20 @@ def _marker(
     attempt: int | None = None,
     job: int = 2,
     key: str = "",
+    generation: int | None = None,
     author: str = _BOT,
     outcome: str = "",
 ):
     attempt_text = f" attempt={attempt}" if attempt is not None else ""
     key_text = f" key={key}" if key else ""
+    generation_text = f" generation={generation}" if generation is not None else ""
     outcome_text = f" outcome={outcome}" if outcome else ""
     return SimpleNamespace(
         user=SimpleNamespace(login=author),
         body=(
             "<!-- valkey-ci-agent:auto-ci-followup "
             f"head={head} run={run}{attempt_text} job={job}"
-            f"{key_text}{outcome_text} -->"
+            f"{key_text}{generation_text}{outcome_text} -->"
         ),
     )
 
@@ -469,6 +472,7 @@ def test_the_plan_binds_the_exact_job_and_its_markers(monkeypatch) -> None:
     assert task.failure.base_branch == "9.0"
     (marker,) = plan.markers
     assert f"head={_HEAD} run=10 attempt=4 job=27" in marker and "key=" in marker
+    assert f" generation={ci_followup._FAILURE_GENERATION} -->" in marker
 
 
 def test_a_skip_plans_nothing(monkeypatch) -> None:
@@ -533,6 +537,31 @@ def test_failed_attempts_post_nothing_and_their_plans_bound_the_retries(monkeypa
     assert target is None and reason == "no-unhandled-actionable-failures"
 
 
+def test_old_plan_artifacts_get_a_fresh_bounded_retry_budget(monkeypatch) -> None:
+    """PR #145 can retry heads stranded by failures from its old infrastructure."""
+    pr = _pr()
+    current = _plan(monkeypatch, _target(pr))
+    old = replace(
+        current,
+        markers=tuple(
+            marker.replace(
+                f" generation={ci_followup._FAILURE_GENERATION}",
+                "",
+            )
+            for marker in current.markers
+        ),
+    )
+
+    target, reason, _gh = _select(
+        monkeypatch,
+        pr=pr,
+        prior_plans=(old, old, old),
+    )
+
+    assert reason == "actionable"
+    assert target is not None and target.job.id == 3
+
+
 def test_a_plan_whose_attempt_was_commented_is_not_counted_again(monkeypatch) -> None:
     """A fix or refusal is already on the PR: its plan is not also a failed attempt."""
     pr = _pr()
@@ -549,19 +578,43 @@ def test_a_plan_whose_attempt_was_commented_is_not_counted_again(monkeypatch) ->
 
 def test_a_job_that_keeps_failing_is_retried_a_bounded_number_of_times(monkeypatch) -> None:
     """Failure comments posted before failures went silent still count."""
-    once = (_marker(run=10, job=3, outcome="failed"),)
+    generation = ci_followup._FAILURE_GENERATION
+    once = (_marker(run=10, job=3, generation=generation, outcome="failed"),)
     target, reason, _gh = _select(monkeypatch, pr=_pr(comments=once))
     assert reason == "actionable" and target is not None and target.job.id == 3
 
-    twice = once + (_marker(run=11, job=3, outcome="failed"),)
+    twice = once + (_marker(run=11, job=3, generation=generation, outcome="failed"),)
     target, reason, _gh = _select(monkeypatch, pr=_pr(comments=twice))
     assert target is None and reason == "no-unhandled-actionable-failures"
 
 
 def test_failed_attempts_count_against_the_heads_budget(monkeypatch) -> None:
-    failed = tuple(_marker(run=index, job=index, outcome="failed") for index in range(50, 53))
+    failed = tuple(
+        _marker(
+            run=index,
+            job=index,
+            generation=ci_followup._FAILURE_GENERATION,
+            outcome="failed",
+        )
+        for index in range(50, 53)
+    )
     _target, reason, _gh = _select(monkeypatch, pr=_pr(comments=failed))
     assert reason == "attempt-budget-exhausted"
+
+
+def test_old_failure_comments_get_a_fresh_bounded_retry_budget(monkeypatch) -> None:
+    old_failures = tuple(
+        _marker(run=index, job=3, outcome="failed")
+        for index in range(50, 53)
+    )
+
+    target, reason, _gh = _select(
+        monkeypatch,
+        pr=_pr(comments=old_failures),
+    )
+
+    assert reason == "actionable"
+    assert target is not None and target.job.id == 3
 
 
 # --- a pushed fix or a draft PR also has CI nobody else watches --------------------
