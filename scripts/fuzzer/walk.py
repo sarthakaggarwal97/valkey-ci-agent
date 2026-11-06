@@ -144,10 +144,12 @@ UNCOVERED_KEPT = 50
 CONTEXT_LINES = 3
 MERGE_KEYS = ("repo", "sha", "parent", "pr", "pr_repo", "subject", "date")
 # The checks the walk turns on in every compared command sequence.
-CHECKS = {"variants": True, "replica": True, "acl": True, "concurrency": 4, "compat": True}
+CHECKS = {"variants": True, "replica": True, "acl": True, "concurrency": 4, "compat": True, "faults": True}
 # The diagnostics.reason a failed check gives.
 CHECK_REASONS = frozenset({
     "variant-mismatch", "replica-diverged", "acl-bypass", "acl-overreach", "compat-load", "compat-sync", "hang",
+    # The faults check: a DEBUG RELOAD that failed, a node whose data changed across a restart or a DEBUG RELOAD.
+    "reload-failed", "lost-data",
     # The client could not parse a reply; the diagnostics hold its raw bytes.
     "protocol-error",
 })
@@ -514,7 +516,7 @@ def cover(measure: Callable[[list[Any]], dict[str, Any]], more: Callable[[dict[s
 def with_checks(text: str, *, test_module: bool = False) -> str:
     """An experiment's YAML with CHECKS on every valkey.action.commands that compares two builds: of Valkey
     (``compare_with``), or of a module (``modules_parent``), which leaves out compat, a check of two Valkey
-    builds. ``test_module`` (Valkey's test modules are loaded) leaves out the concurrency and replica checks too:
+    builds. ``test_module`` (Valkey's test modules are loaded) leaves out the concurrency, replica and faults checks:
     the modules keep one client's state in globals, and N clients at once crash them by design; and their
     commands write without replicating as they please (test.call_argv_s calls CallArgv without REPLICATE).
 
@@ -543,6 +545,8 @@ def with_checks(text: str, *, test_module: bool = False) -> str:
         if test_module:
             checks.pop("concurrency")
             checks.pop("replica")
+            # A test module's global state is for one server at a time, as replica and concurrency show.
+            checks.pop("faults")
         key = yaml.ScalarNode("tag:yaml.org,2002:str", "checks")
         config.value.append((key, yaml.compose(yaml.safe_dump(checks), Loader=yaml.SafeLoader)))
     return yaml.serialize(root, Dumper=yaml.SafeDumper)

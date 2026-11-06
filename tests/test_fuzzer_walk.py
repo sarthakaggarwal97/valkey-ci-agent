@@ -480,9 +480,10 @@ required_evidence: [{evidence_id: valkey.command.sequence, source: compared}]
 
 def test_the_template_turns_every_check_on_where_a_sequence_compares_two_builds():
     doc = yaml.safe_load(with_checks(EXPERIMENT))
-    assert CHECKS == {"variants": True, "replica": True, "acl": True, "concurrency": 4, "compat": True}
+    assert CHECKS == {
+        "variants": True, "replica": True, "acl": True, "concurrency": 4, "compat": True, "faults": True}
     # A module's two builds load into one Valkey: every check but compat, which compares two Valkey builds.
-    module_checks = {"variants": True, "replica": True, "acl": True, "concurrency": 4}
+    module_checks = {"variants": True, "replica": True, "acl": True, "concurrency": 4, "faults": True}
     assert [c["config"].get("checks") for c in doc["components"]] == [CHECKS, None, module_checks]
     assert doc["components"][0]["config"]["compare_with"] == {"$ref": "artifacts.parent.binary"}
 
@@ -492,8 +493,8 @@ def test_a_valkey_test_module_runs_no_concurrency_or_replica_check():
     # valkey #3911: basics' test.call_argv_s writes without replicating, and the replica diverged (fuzzer#60).
     doc = yaml.safe_load(with_checks(EXPERIMENT, test_module=True))
     checks = [c["config"].get("checks") for c in doc["components"]]
-    assert [c is None or "concurrency" in c or "replica" in c for c in checks] == [False, True, False]
-    assert checks[0] == {key: value for key, value in CHECKS.items() if key not in ("concurrency", "replica")}
+    assert [c is None or "concurrency" in c or "replica" in c or "faults" in c for c in checks] == [False, True, False]
+    assert checks[0] == {key: value for key, value in CHECKS.items() if key not in ("concurrency", "replica", "faults")}
 
 
 def test_a_plain_sequence_replays_as_valkey_cli_steps():
