@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from github.GithubException import GithubException
+from github.PaginatedList import PaginatedList
 
 from scripts.ci_fix import issues as issues_mod
 from scripts.ci_fix.github_runs import FailedJob
@@ -682,6 +683,19 @@ def _other_repo(issues):
     repo = SimpleNamespace()
     repo.get_issues = lambda **_kwargs: list(issues)
     return repo
+
+
+def test_an_empty_lazy_issue_collection_does_not_crash() -> None:
+    class EmptyRequester:
+        per_page = 30
+
+        def requestJsonAndCheck(self, *_args, **_kwargs):
+            return {}, []
+
+    listed = PaginatedList(SimpleNamespace, EmptyRequester(), firstUrl="/repos/o/r/issues")
+    repo = SimpleNamespace(get_issues=lambda **_kwargs: listed)
+
+    assert issues_mod.open_detector_issues(repo, _BOT, limit=100) == []
 
 
 def test_other_open_detector_issues_are_offered_to_the_engine() -> None:
