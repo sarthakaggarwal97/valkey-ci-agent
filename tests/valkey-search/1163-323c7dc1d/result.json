@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "323c7dc1d956970e9ae6917c5134fa54d215ceef",
+  "parent": "bc4baceb54bcae1329aa375a1b1d8a14c10d195a",
+  "pr": 1163,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Vector Search performance improvement (#1163)",
+  "date": "2026-06-29",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 10.7617,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

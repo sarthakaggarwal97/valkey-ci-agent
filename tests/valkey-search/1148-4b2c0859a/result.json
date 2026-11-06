@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "4b2c0859af6ab0eb42fbf813bbd599971bfff310",
+  "parent": "72ea56f8cb38fbc30dd269d5a9bdcf0b438c0c6a",
+  "pr": 1148,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix tag query parsing to support escaped closing brace (#979) + resolved merge conflicts (#1148)",
+  "date": "2026-06-16",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.188,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

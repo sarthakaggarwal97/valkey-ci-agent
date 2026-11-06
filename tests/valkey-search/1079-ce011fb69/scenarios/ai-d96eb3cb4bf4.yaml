@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 6dcc60563eea..ce011fb699ef.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d96eb3cb4bf4
+seed: 105
+experiment:
+  id: proposed.hnsw-index-rdb-reload
+  inputs:
+    resp: 3
+    m: 16
+deployment:
+  mode: standalone
+  base_port: 7400

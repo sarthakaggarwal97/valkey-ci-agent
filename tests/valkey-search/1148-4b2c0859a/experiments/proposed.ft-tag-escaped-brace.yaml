@@ -1,0 +1,66 @@
+extends: [valkey.liveness]
+id: proposed.ft-tag-escaped-brace
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH tag queries with backslash-escaped closing braces match tags
+    holding a literal '}' (valkey-search
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: tagquery
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, tags, TAG, SEPARATOR,
+        ','], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', tags, 'a}b'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:2', tags, normal], expect: {equals: 1}}
+    - {command: [HSET, 'doc:3', tags, 'x}y}z,normal'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:4', tags, 'a|b'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:5', tags, 'a\'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:6', tags, "caf\xE9,\u4E2D\u6587,\U0001F600"], expect: {
+        equals: 1}}
+    - {command: [HSET, 'doc:7', tags, '}'], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          7]}}
+    - {command: [FT.SEARCH, idx, '@tags:{ a\}b }', NOCONTENT], expect_difference: true,
+      expect: {equals: [1, 'doc:1']}}
+    - {command: [FT.SEARCH, idx, '@tags:{ x\}y\}z }', NOCONTENT], expect_difference: true,
+      expect: {equals: [1, 'doc:3']}}
+    - {command: [FT.SEARCH, idx, '@tags:{ \} }', NOCONTENT], expect_difference: true,
+      expect: {equals: [1, 'doc:7']}}
+    - {command: [FT.SEARCH, idx, '@tags:{ a\|b }', NOCONTENT], expect: {equals: [
+          1, 'doc:4']}}
+    - {command: [FT.SEARCH, idx, '@tags:{ a\\ }', NOCONTENT], expect: {equals: [1,
+          'doc:5']}}
+    - {command: [FT.SEARCH, idx, '@tags:{a\}', NOCONTENT], expect_difference: true,
+      expect: {error: 'Missing closing TAG bracket'}}
+    - {command: [FT.SEARCH, idx, '@tags:{a\}b', NOCONTENT], expect_difference: true,
+      expect: {error: 'Missing closing TAG bracket'}}
+    - {command: [FT.SEARCH, idx, '@tags:{ a\}b | normal }', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx, '@tags:{ a\}b | x\}y\}z }', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, '@tags:{normal} @tags:{x\}y\}z}', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, "@tags:{ caf\xE9 }", NOCONTENT], expect: {equals: [
+          1, 'doc:6']}}
+    - {command: [FT.SEARCH, idx, "@tags:{ \u4E2D\u6587 }", NOCONTENT], expect: {equals: [
+          1, 'doc:6']}}
+    - {command: [FT.SEARCH, idx, "@tags:{ \U0001F600 }", NOCONTENT], expect: {equals: [
+          1, 'doc:6']}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [tagquery.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tagquery}

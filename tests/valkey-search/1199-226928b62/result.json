@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "226928b625bdbbf9f9e73d4bb6540beeab867112",
+  "parent": "5a63e8269b8fd3b0fb98c47a150a7bab5f45e299",
+  "pr": 1199,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Replace main branch release notes with development placeholder (#1199)",
+  "date": "2026-06-30",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2284,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only the 00-RELEASENOTES documentation file, swapping the 1.0.0 release notes for a development-branch placeholder. No module source, command behaviour, configuration, or build logic changes, so no runtime path can differ between the two builds and no scenario is needed."
+}

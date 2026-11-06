@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "067b45462160179820b96789e620116ce8c90a48",
+  "parent": "ec0c01a13367abf3183b5b4211d0d999ab04526c",
+  "pr": 1015,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Replace deque with flat hash map for tracked_vectors (#1015)",
+  "date": "2026-06-25",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.1684,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.hnsw-concurrent-hset
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Concurrent HSET into an HNSW vector index drives the realigned per-element layout
+    of hnswalg.h (offsetData_ padded to pointer alignment, the fix for the torn-pointer
+    race in VectorHNSW::AddRecordImpl). The fix changes no reply, so no command is
+    marked expect_difference: the oracles are reply parity with the parent module
+    build, the stored vector read back intact through the new offsets, and the concurrency
+    check, which replays the sequence on many connections at once on the candidate,
+    where a crash or hang is a FAIL.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    m: {type: integer, minimum: 2, maximum: 64, default: 2}
+    concurrency: {type: integer, minimum: 0, maximum: 16, default: 8}
+components:
+- use: valkey.action.commands
+  id: hnsw
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config: {appendonly: "no"}
+    checks: {concurrency: {$ref: inputs.concurrency}}
+    commands:
+    - {command: [CONFIG, SET, search.writer-threads, 4], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 10, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2, M, {$ref: inputs.m},
+        EF_CONSTRUCTION, 32], expect: {equals: OK}}
+    - {command: [HSET, "doc:0", vec, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAQAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:3", vec, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:4", vec, !!binary "AACAPwAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:5", vec, !!binary "AAAAQAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:6", vec, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:7", vec, !!binary "AACAPwAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:8", vec, !!binary "AAAAQAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:9", vec, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:10", vec, !!binary "AACAPwAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:11", vec, !!binary "AABAQAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:3", vec, !!binary "AAAAQAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 0}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          12]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 12 @vec $B EF_RUNTIME 100]", PARAMS, 2,
+        B, !!binary "AACAPwAAAAAAAAAAAAAAAA==", NOCONTENT, LIMIT, 0, 12, DIALECT,
+        2], compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @vec $B EF_RUNTIME 100]", PARAMS, 2, B,
+        !!binary "AABAQAAAAAAAAAAAAAAAAA==", LIMIT, 0, 1, DIALECT, 2]}
+required_events: [hnsw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hnsw}

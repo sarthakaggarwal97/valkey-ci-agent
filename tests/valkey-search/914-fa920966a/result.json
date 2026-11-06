@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "fa920966a6868beee1c4b83affc8c9f5042e7157",
+  "parent": "067b45462160179820b96789e620116ce8c90a48",
+  "pr": 914,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Allow FT._debug to use when client is admin (#914)",
+  "date": "2026-06-25",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.6559,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-fa6f98c33555",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #914",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/72"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-8318b19479a2",
+      "seed": 102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #914",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/72"
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

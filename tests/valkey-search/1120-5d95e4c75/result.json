@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5d95e4c757599ab828b8c0cab5c684226883b23d",
+  "parent": "29ab9f30462f0a6e06ea4a4692dfbe0baac47131",
+  "pr": 1120,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Guard against disengaged optional in InTrackedMutationRecords (#1120)",
+  "date": "2026-06-24",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.1678,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds a has_value() guard to IndexSchema::InTrackedMutationRecords plus a unit test, but that function has no production callers at either the parent or the change commit: grepping the whole valkey-search tree, the only references are its declaration (src/index_schema.h:513), its definition (src/index_schema.cc:1856), and the new friend test in testing/index_schema_test.cc, and the diff removes no call sites. The guarded disengaged-optional state is only ever dereferenced by this uncalled private method, so no server-visible path (FT.* commands, backfill, keyspace notifications, RDB "
+}

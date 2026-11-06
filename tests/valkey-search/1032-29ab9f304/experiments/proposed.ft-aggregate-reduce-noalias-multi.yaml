@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-reduce-noalias-multi
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE with several un-aliased reducers (0-arg COUNT, SUM, MIN)
+    builds default column names on the change build and crashes the parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, price, NUMERIC,
+        rating, NUMERIC, category, TAG], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", category, c, price, 1, rating, 10], expect: {equals: 3}}
+    - {command: [HSET, "doc:2", category, c, price, 3, rating, 20], expect: {equals: 3}}
+    - {command: [HSET, "doc:3", category, c, price, 5, rating, 10], expect: {equals: 3}}
+    - {command: [FT.AGGREGATE, idx, "@rating:[0 +inf]", LOAD, 1, category, GROUPBY,
+        1, "@category", REDUCE, COUNT, 0, AS, cnt], wait_s: 30, expect: {equals: [
+          1, [category, c, cnt, "3"]]}}
+    - {command: [FT.AGGREGATE, idx, "@rating:[0 +inf]", LOAD, 2, category, price,
+        GROUPBY, 1, "@category", REDUCE, COUNT, 0, REDUCE, SUM, 1, "@price", REDUCE,
+        MIN, 1, "@price"], expect_difference: true, expect: {equals: [1, [category,
+            c, "COUNT()", "3", "SUM(@price)", "9", "MIN(@price)", "1"]]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

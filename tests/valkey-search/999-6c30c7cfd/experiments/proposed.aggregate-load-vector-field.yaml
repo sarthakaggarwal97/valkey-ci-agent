@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.aggregate-load-vector-field
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE LOAD of a vector field is rejected with an error instead
+    of returning raw vector bytes or crashing
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, price, NUMERIC,
+        title, TEXT, embedding, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [HSET, 'doc:0', price, 10, title, hello world 0, embedding, !!binary 'AAAAAAAAgD8AAABA'],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:1', price, 11, title, hello world 1, embedding, !!binary 'AAAAAAAAgD8AAABA'],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:2', price, 12, title, hello world 2, embedding, !!binary 'AAAAAAAAgD8AAABA'],
+      expect: {equals: 3}}
+    - {command: [FT.AGGREGATE, idx, '@price:[-inf +inf]', LOAD, 1, '@embedding'],
+      expect_difference: true, expect: {error: vector}}
+    - {command: [FT.AGGREGATE, idx, '@price:[-inf +inf]', LOAD, 2, '@title', '@embedding'],
+      expect_difference: true, expect: {error: vector}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

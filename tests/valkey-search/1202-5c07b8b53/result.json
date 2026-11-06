@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5c07b8b5301228214be7f0989ecaa2e83c4f3340",
+  "parent": "ae132bea8db015c551ea6743e2e37ee34993c430",
+  "pr": 1202,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Async Index Schema Destruction (#1202)",
+  "date": "2026-06-30",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 12.7352,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

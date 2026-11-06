@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.tag-rax-vector-prefilter
+deployment:
+  modes: [standalone]
+metadata:
+  description: Hybrid KNN over a TAG filter - exercises the rax-backed Tag Search
+    fetchers and the changed GetValue path in PrefilterEvaluator::EvaluateTags, replies
+    compared
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: vec
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idxv, ON, HASH, PREFIX, "1", "v:", SCHEMA, tags, TAG,
+        SEPARATOR, ",", vec, VECTOR, FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [HSET, "v:1", tags, red, vec, !!binary "AAAAAAAAAAA="], expect: {
+        equals: 2}}
+    - {command: [HSET, "v:2", tags, red, vec, !!binary "AACAPwAAAAA="], expect: {
+        equals: 2}}
+    - {command: [HSET, "v:3", tags, blue, vec, !!binary "AAAAQAAAAAA="], expect: {
+        equals: 2}}
+    - {command: [FT.SEARCH, idxv, "@tags:{red}", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [2]}}
+    - {command: [FT.SEARCH, idxv, "@tags:{blue}", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idxv, "@tags:{red}=>[KNN 2 @vec $B]", PARAMS, "2", B,
+        !!binary "AAAAAAAAAAA=", NOCONTENT, DIALECT, "2"], expect: {equals: [2, "v:1",
+          "v:2"]}}
+    - {command: [FT.SEARCH, idxv, "-@tags:{red}=>[KNN 2 @vec $B]", PARAMS, "2", B,
+        !!binary "AAAAAAAAAAA=", NOCONTENT, DIALECT, "2"], expect: {equals: [1, "v:3"]}}
+    - {command: [FT.SEARCH, idxv, "@tags:{re*}=>[KNN 3 @vec $B]", PARAMS, "2", B,
+        !!binary "AAAAAAAAAAA=", NOCONTENT, DIALECT, "2"], expect: {equals: [2, "v:1",
+          "v:2"]}}
+    - {command: [FT.SEARCH, idxv, "@tags:{blue}", RETURN, "1", tags], expect: {equals: [
+          1, "v:3", [tags, blue]]}}
+    - {command: [HSET, "v:1", tags, blue], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idxv, "@tags:{red}", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idxv, "@tags:{red}=>[KNN 2 @vec $B]", PARAMS, "2", B,
+        !!binary "AAAAAAAAAAA=", NOCONTENT, DIALECT, "2"], expect: {equals: [1, "v:2"]}}
+    - {command: [FT.SEARCH, idxv, "@tags:{blue}=>[KNN 3 @vec $B]", PARAMS, "2", B,
+        !!binary "AAAAAAAAAAA=", NOCONTENT, DIALECT, "2"], expect: {equals: [2, "v:1",
+          "v:3"]}}
+    - {command: [FT.DROPINDEX, idxv], expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [vec.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: vec}

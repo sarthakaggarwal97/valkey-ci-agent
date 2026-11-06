@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.hnsw-knn-equivalence-cosine
+deployment:
+  modes: [standalone]
+metadata:
+  description: Cosine-metric HNSW searches (normalized vectors, inexact floats, well-separated
+    angles) must return the same document sets on the SimSIMD + three-phase-loop build
+    as on the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cos
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idxc, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 12, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, COSINE, M, 12, EF_CONSTRUCTION,
+        64, EF_RUNTIME, 24], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAAAAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", vec, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, "doc:4", vec, !!binary "AAAAQAAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, "doc:5", vec, !!binary "AACAPwAAAEA="], expect: {equals: 1}}
+    - {command: [FT.INFO, idxc], wait_s: 30, compare: skip, expect: {contains: 5}}
+    - {command: [FT.SEARCH, idxc, "*=>[KNN 5 @vec $q]", PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        NOCONTENT, DIALECT, 2], wait_s: 30, compare: unordered, expect: {contains: "doc:5"}}
+    - {command: [FT.SEARCH, idxc, "*=>[KNN 1 @vec $q]", PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        NOCONTENT, DIALECT, 2], expect: {equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, idxc, "*=>[KNN 1 @vec $q]", PARAMS, 2, q, !!binary "AAAAAAAAgD8=",
+        NOCONTENT, DIALECT, 2], expect: {equals: [1, "doc:2"]}}
+    - {command: [FT.SEARCH, idxc, "*=>[KNN 2 @vec $q]", PARAMS, 2, q, !!binary "AAAAQAAAgD8=",
+        NOCONTENT, DIALECT, 2], compare: unordered, expect: {contains: "doc:3"}}
+    - {command: [DEL, "doc:4"], expect: {equals: 1}}
+    - {command: [FT.INFO, idxc], wait_s: 30, compare: skip, expect: {contains: 4}}
+    - {command: [FT.SEARCH, idxc, "*=>[KNN 1 @vec $q]", PARAMS, 2, q, !!binary "AAAAQAAAgD8=",
+        NOCONTENT, DIALECT, 2], wait_s: 15, expect: {equals: [1, "doc:3"]}}
+    - {command: [FT.SEARCH, idxc, "*=>[KNN 4 @vec $q]", PARAMS, 2, q, !!binary "AACAPwAAgD8=",
+        NOCONTENT, DIALECT, 2], compare: unordered, expect: {contains: "doc:5"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [cos.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cos}

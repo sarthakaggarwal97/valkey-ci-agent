@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ada7859e84e0a0fd0c837247d4e54b59568c5a65",
+  "parent": "d900f015529684935fea9da6924b192808626fa7",
+  "pr": 1046,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix coordinator bytes-in counting before response mutation (#1046)",
+  "date": "2026-06-23",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 10.7197,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

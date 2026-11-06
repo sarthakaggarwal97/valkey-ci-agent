@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.ft-debug-acl-dangerous
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT._DEBUG now needs @admin/@dangerous instead of @read; a read-only
+    user is denied where the parent only hid the command
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftacl
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [ACL, SETUSER, rouser, "on", ">pw", "~*", "&*", "-@all", "+@read"],
+      expect: {equals: OK}}
+    - {command: [ACL, SETUSER, aduser, "on", ">pw", "~*", "&*", "-@all", "+@admin"],
+      expect: {equals: OK}}
+    - {command: [AUTH, rouser, pw], connection: ro, expect: {equals: OK}}
+    - {command: [FT._DEBUG, HELP], connection: ro, expect_difference: true, expect: {
+        error: "no permissions"}}
+    - {command: [AUTH, aduser, pw], connection: ad, expect: {equals: OK}}
+    - {command: [FT._DEBUG, HELP], connection: ad, expect_difference: true, expect: {
+        error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftacl}

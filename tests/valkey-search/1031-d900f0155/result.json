@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "d900f015529684935fea9da6924b192808626fa7",
+  "parent": "6c30c7cfd5d98cb99114bf44ba8c73bc31d9eaa9",
+  "pr": 1031,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Reimplement TAG field using RAX tree to save space. (#1031)",
+  "date": "2026-06-22",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 10.5485,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-7165fa8e94b2",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'tag' returned ERROR: expectations both builds violate alike, so they are not about the change: 17 (FT.SEARCH idx1 @tags:{red,red} LIMIT 0 0), 18 (FT.SEARCH idx1 @tags:{blue,green} LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-810d6322ee7f",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'tag' returned ERROR: expectations both builds violate alike, so they are not about the change: 17 (FT.SEARCH idx1 @tags:{red,red} LIMIT 0 0), 18 (FT.SEARCH idx1 @tags:{blue,green} LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-dd48d44f857c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'tag' returned ERROR: expectations both builds violate alike, so they are not about the change: 17 (FT.SEARCH idx1 @tags:{red,red} LIMIT 0 0), 18 (FT.SEARCH idx1 @tags:{blue,green} LIMIT 0 0)"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

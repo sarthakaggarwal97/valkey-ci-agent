@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.ft-debug-reachable-no-debug-mode
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT._DEBUG becomes reachable without debug-mode; parent hides it as
+    an unknown command, and SHOW_METADATA probes the null MetadataManager on standalone
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftdebug
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [COMMAND, INFO, FT._DEBUG], expect_difference: true, expect: {error: false}}
+    - {command: [FT._DEBUG, HELP], expect_difference: true, expect: {error: false}}
+    - {command: [FT._DEBUG, SHOW_INFO], expect_difference: true, expect: {error: false}}
+    - {command: [FT._DEBUG, LIST_CONFIGS], expect_difference: true, expect: {error: false}}
+    - {command: [FT._DEBUG, SHOW_INDEXSCHEMAS], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT._DEBUG, SHOW_METADATA], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftdebug}

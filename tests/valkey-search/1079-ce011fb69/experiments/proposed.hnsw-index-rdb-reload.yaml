@@ -1,0 +1,77 @@
+extends: [valkey.liveness]
+id: proposed.hnsw-index-rdb-reload
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    SAVE and restart a server holding an HNSW vector index, so LoadIndex runs: the
+    change makes SaveIndex write the unpadded size_links_level0_ as the header's offset_data
+    and makes LoadIndex recompute the aligned offsetData_ instead of trusting the
+    header, then reads vectors and labels from the unpadded serialized layout. After
+    the reload, new HSETs add into the reloaded (realigned) index and KNN searches
+    must still return every document and the exact stored vector bytes, equal to the
+    parent module build's replies. No reply is meant to change, so nothing is marked.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    m: {type: integer, minimum: 2, maximum: 64, default: 2}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config: {appendonly: "no"}
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 10, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2, M, {$ref: inputs.m},
+        EF_CONSTRUCTION, 32], expect: {equals: OK}}
+    - {command: [HSET, "doc:0", vec, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAQAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:3", vec, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:4", vec, !!binary "AACAPwAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:5", vec, !!binary "AAAAQAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:6", vec, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:7", vec, !!binary "AACAPwAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:8", vec, !!binary "AAAAQAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:9", vec, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:10", vec, !!binary "AACAPwAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:11", vec, !!binary "AABAQAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          12]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 60, expect: {equals: [
+          12]}}
+    - {command: [HSET, "doc:12", vec, !!binary "AACAPwAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          13]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 13 @vec $B EF_RUNTIME 100]", PARAMS, 2,
+        B, !!binary "AACAPwAAAAAAAAAAAAAAAA==", NOCONTENT, LIMIT, 0, 13, DIALECT,
+        2], compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @vec $B EF_RUNTIME 100]", PARAMS, 2, B,
+        !!binary "AABAQAAAAAAAAAAAAAAAAA==", LIMIT, 0, 1, DIALECT, 2]}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

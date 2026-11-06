@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.hnsw-validation-killswitch
+deployment:
+  modes: [standalone]
+metadata:
+  description: The hnsw-validation-enable kill switch is settable under debug-mode,
+    survives CONFIG REWRITE, and a valid index loads with validation disabled
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: killswitch
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, search.debug-mode, yes], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.hnsw-validation-enable, no], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "a:", SCHEMA, v, VECTOR, HNSW,
+        10, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, M, 2, EF_CONSTRUCTION, 16],
+      expect: {equals: OK}}
+    - {command: [HSET, "a:1", v, !!binary "AACAPwAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "a:2", v, !!binary "AAAAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "a:3", v, !!binary "AABAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "a:4", v, !!binary "AACAQAAAAAA="], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4 @v $q]", NOCONTENT, PARAMS, 2, q, !!binary "AAAAAAAAAAA="],
+      wait_s: 30, expect: {equals: [4, "a:1", "a:2", "a:3", "a:4"]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4 @v $q]", NOCONTENT, PARAMS, 2, q, !!binary "AAAAAAAAAAA="],
+      wait_s: 30, expect: {equals: [4, "a:1", "a:2", "a:3", "a:4"]}}
+    - {command: [CONFIG, SET, search.debug-mode, yes], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.hnsw-validation-enable, yes], expect_difference: true,
+      expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [killswitch.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: killswitch}

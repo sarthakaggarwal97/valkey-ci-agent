@@ -1,0 +1,146 @@
+extends: [valkey.liveness]
+id: proposed.ft-drop-churn-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Async index schema destruction - drop/recreate churn under the same
+    name, MULTI drop+create, FLUSHDB index deletion and the reclaimable-memory drain,
+    compared across the two module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2, tag, TAG, n, NUMERIC, t, TEXT],
+      expect: {equals: OK}}
+    - {command: [HSET, "d:0", v, !!binary "AACAPwAAgD8AAIA/AACAPw==", tag, t0, n,
+        0, t, "hello w0"], expect: {equals: 4}}
+    - {command: [HSET, "d:1", v, !!binary "AAAAQAAAAEAAAABAAAAAQA==", tag, t1, n,
+        1, t, "hello w1"]}
+    - {command: [HSET, "d:2", v, !!binary "AACAPwAAgD8AAIA/AACAPw==", tag, t2, n,
+        2, t, "hello w2"]}
+    - {command: [HSET, "d:3", v, !!binary "AAAAQAAAAEAAAABAAAAAQA==", tag, t3, n,
+        3, t, "hello w0"]}
+    - {command: [HSET, "d:4", v, !!binary "AACAPwAAgD8AAIA/AACAPw==", tag, t0, n,
+        4, t, "hello w1"]}
+    - {command: [HSET, "d:5", v, !!binary "AAAAQAAAAEAAAABAAAAAQA==", tag, t1, n,
+        5, t, "hello w2"]}
+    - {command: [HSET, "d:6", v, !!binary "AACAPwAAgD8AAIA/AACAPw==", tag, t2, n,
+        6, t, "hello w0"]}
+    - {command: [HSET, "d:7", v, !!binary "AAAAQAAAAEAAAABAAAAAQA==", tag, t3, n,
+        7, t, "hello w1"]}
+    - {command: [HSET, "d:8", v, !!binary "AACAPwAAgD8AAIA/AACAPw==", tag, t0, n,
+        8, t, "hello w2"]}
+    - {command: [HSET, "d:9", v, !!binary "AAAAQAAAAEAAAABAAAAAQA==", tag, t1, n,
+        9, t, "hello w0"]}
+    - {command: [HSET, "d:10", v, !!binary "AACAPwAAgD8AAIA/AACAPw==", tag, t2, n,
+        10, t, "hello w1"]}
+    - {command: [HSET, "d:11", v, !!binary "AAAAQAAAAEAAAABAAAAAQA==", tag, t3, n,
+        11, t, "hello w2"]}
+    - {command: [HSET, "d:12", v, !!binary "AACAPwAAgD8AAIA/AACAPw==", tag, t0, n,
+        12, t, "hello w0"]}
+    - {command: [HSET, "d:13", v, !!binary "AAAAQAAAAEAAAABAAAAAQA==", tag, t1, n,
+        13, t, "hello w1"]}
+    - {command: [HSET, "d:14", v, !!binary "AACAPwAAgD8AAIA/AACAPw==", tag, t2, n,
+        14, t, "hello w2"]}
+    - {command: [HSET, "d:15", v, !!binary "AAAAQAAAAEAAAABAAAAAQA==", tag, t3, n,
+        15, t, "hello w0"]}
+    - {command: [HSET, "d:16", v, !!binary "AACAPwAAgD8AAIA/AACAPw==", tag, t0, n,
+        16, t, "hello w1"]}
+    - {command: [HSET, "d:17", v, !!binary "AAAAQAAAAEAAAABAAAAAQA==", tag, t1, n,
+        17, t, "hello w2"]}
+    - {command: [HSET, "d:18", v, !!binary "AACAPwAAgD8AAIA/AACAPw==", tag, t2, n,
+        18, t, "hello w0"]}
+    - {command: [HSET, "d:19", v, !!binary "AAAAQAAAAEAAAABAAAAAQA==", tag, t3, n,
+        19, t, "hello w1"]}
+    - {command: [HSET, "d:20", v, !!binary "AACAPwAAgD8AAIA/AACAPw==", tag, t0, n,
+        20, t, "hello w2"]}
+    - {command: [HSET, "d:21", v, !!binary "AAAAQAAAAEAAAABAAAAAQA==", tag, t1, n,
+        21, t, "hello w0"]}
+    - {command: [HSET, "d:22", v, !!binary "AACAPwAAgD8AAIA/AACAPw==", tag, t2, n,
+        22, t, "hello w1"]}
+    - {command: [HSET, "d:23", v, !!binary "AAAAQAAAAEAAAABAAAAAQA==", tag, t3, n,
+        23, t, "hello w2"]}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          24]}}
+    - {command: [FT.SEARCH, idx, "@tag:{t1}", LIMIT, 0, 0], expect: {equals: [6]}}
+    - {command: [FT.SEARCH, idx, hello, LIMIT, 0, 0], expect: {equals: [24]}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, tag, TAG, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, "d:24", v, !!binary "AACAPwAAgD8AAIA/AACAPw==", tag, t0, n,
+        24, t, "hello w0"]}
+    - {command: [HSET, "d:25", v, !!binary "AAAAQAAAAEAAAABAAAAAQA==", tag, t1, n,
+        25, t, "hello w1"]}
+    - {command: [HSET, "d:26", v, !!binary "AACAPwAAgD8AAIA/AACAPw==", tag, t2, n,
+        26, t, "hello w2"]}
+    - {command: [HSET, "d:27", v, !!binary "AAAAQAAAAEAAAABAAAAAQA==", tag, t3, n,
+        27, t, "hello w0"]}
+    - {command: [HSET, "d:28", v, !!binary "AACAPwAAgD8AAIA/AACAPw==", tag, t0, n,
+        28, t, "hello w1"]}
+    - {command: [HSET, "d:29", v, !!binary "AAAAQAAAAEAAAABAAAAAQA==", tag, t1, n,
+        29, t, "hello w2"]}
+    - {command: [DEL, "d:0", "d:1"], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          28]}}
+    - {command: [FT.SEARCH, idx, "@n:[24 29]", LIMIT, 0, 0], expect: {equals: [6]}}
+    - {command: [FT.SEARCH, idx, "@tag:{t1}", LIMIT, 0, 0], expect: {equals: [7]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: QUEUED}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2, tag, TAG, n, NUMERIC, t, TEXT],
+      expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK]}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          28]}}
+    - {command: [FT.SEARCH, idx, hello, LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          28]}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, n, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, n, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, n, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [HSET, "d:30", n, 30], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          29]}}
+    - {command: [FT.SEARCH, idx, "@n:[30 30]", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [1]}}
+    - {command: [FT.DROPINDEX, nosuch], expect: {error: true}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, idx], expect: {error: true}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, tag, TAG], expect: {
+        equals: OK}}
+    - {command: [FT._LIST], compare: unordered, expect: {equals: [idx]}}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], expect: {error: true}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "d:", SCHEMA, tag, TAG], expect: {
+        equals: OK}}
+    - {command: [HSET, "d:0", tag, t0], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx2, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          1]}}
+    - {command: [FT.DROPINDEX, idx2], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], wait_s: 30, compare: skip, expect: {contains: "search_index_reclaimable_memory:0"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

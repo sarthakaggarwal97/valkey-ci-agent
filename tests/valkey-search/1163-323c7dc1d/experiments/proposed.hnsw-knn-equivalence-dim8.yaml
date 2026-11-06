@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.hnsw-knn-equivalence-dim8
+deployment:
+  modes: [standalone]
+metadata:
+  description: Dim-8 L2 and IP HNSW indexes (parent used the SIMD4 kernel at this
+    dimension, the change uses SimSIMD) must return identical KNN results across builds,
+    including after deleting the nearest document
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: knn8
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idxl2, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 12, TYPE, FLOAT32, DIM, 8, DISTANCE_METRIC, L2, M, 16, EF_CONSTRUCTION,
+        64, EF_RUNTIME, 32], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxip, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 12, TYPE, FLOAT32, DIM, 8, DISTANCE_METRIC, IP, M, 16, EF_CONSTRUCTION,
+        64, EF_RUNTIME, 32], expect: {equals: OK}}
+    - {command: [HSET, "doc:0", vec, !!binary "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="],
+      expect: {equals: 1}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAQAAAABAAAABAAAAAQAAAABAAAABAAAAAQAAAAEA="],
+      expect: {equals: 1}}
+    - {command: [HSET, "doc:4", vec, !!binary "AACAQAAAgEAAAIBAAACAQAAAgEAAAIBAAACAQAAAgEA="],
+      expect: {equals: 1}}
+    - {command: [HSET, "doc:6", vec, !!binary "AADAQAAAwEAAAMBAAADAQAAAwEAAAMBAAADAQAAAwEA="],
+      expect: {equals: 1}}
+    - {command: [HSET, "doc:8", vec, !!binary "AAAAQQAAAEEAAABBAAAAQQAAAEEAAABBAAAAQQAAAEE="],
+      expect: {equals: 1}}
+    - {command: [HSET, "doc:10", vec, !!binary "AAAgQQAAIEEAACBBAAAgQQAAIEEAACBBAAAgQQAAIEE="],
+      expect: {equals: 1}}
+    - {command: [FT.INFO, idxl2], wait_s: 30, compare: skip, expect: {contains: 6}}
+    - {command: [FT.INFO, idxip], wait_s: 30, compare: skip, expect: {contains: 6}}
+    - {command: [FT.SEARCH, idxl2, "*=>[KNN 6 @vec $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        NOCONTENT, DIALECT, 2], wait_s: 30, compare: unordered, expect: {contains: "doc:10"}}
+    - {command: [FT.SEARCH, idxip, "*=>[KNN 6 @vec $q]", PARAMS, 2, q, !!binary "AAAAQAAAABAAAABAAAAAQAAAABAAAABAAAAAQAAAAEA=",
+        NOCONTENT, DIALECT, 2], wait_s: 30, compare: unordered, expect: {contains: "doc:0"}}
+    - {command: [FT.SEARCH, idxl2, "*=>[KNN 1 @vec $q]", PARAMS, 2, q, !!binary "AADAQAAAwEAAAMBAAADAQAAAwEAAAMBAAADAQAAAwEA=",
+        NOCONTENT, DIALECT, 2], expect: {equals: [1, "doc:6"]}}
+    - {command: [FT.SEARCH, idxl2, "*=>[KNN 3 @vec $q]", PARAMS, 2, q, !!binary "AAAgQQAAIEEAACBBAAAgQQAAIEEAACBBAAAgQQAAIEE=",
+        NOCONTENT, DIALECT, 2], compare: unordered, expect: {contains: "doc:6"}}
+    - {command: [FT.SEARCH, idxip, "*=>[KNN 1 @vec $q]", PARAMS, 2, q, !!binary "AAAgQQAAIEEAACBBAAAgQQAAIEEAACBBAAAgQQAAIEE=",
+        NOCONTENT, DIALECT, 2], expect: {equals: [1, "doc:10"]}}
+    - {command: [FT.SEARCH, idxip, "*=>[KNN 3 @vec $q]", PARAMS, 2, q, !!binary "AAAgQQAAIEEAACBBAAAgQQAAIEEAACBBAAAgQQAAIEE=",
+        NOCONTENT, DIALECT, 2], compare: unordered, expect: {contains: "doc:6"}}
+    - {command: [DEL, "doc:10"], expect: {equals: 1}}
+    - {command: [FT.INFO, idxl2], wait_s: 30, compare: skip, expect: {contains: 5}}
+    - {command: [FT.INFO, idxip], wait_s: 30, compare: skip, expect: {contains: 5}}
+    - {command: [FT.SEARCH, idxl2, "*=>[KNN 1 @vec $q]", PARAMS, 2, q, !!binary "AAAgQQAAIEEAACBBAAAgQQAAIEEAACBBAAAgQQAAIEE=",
+        NOCONTENT, DIALECT, 2], wait_s: 15, expect: {equals: [1, "doc:8"]}}
+    - {command: [FT.SEARCH, idxip, "*=>[KNN 1 @vec $q]", PARAMS, 2, q, !!binary "AAAgQQAAIEEAACBBAAAgQQAAIEEAACBBAAAgQQAAIEE=",
+        NOCONTENT, DIALECT, 2], wait_s: 15, expect: {equals: [1, "doc:8"]}}
+    - {command: [FT.SEARCH, idxl2, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        NOCONTENT, DIALECT, 2], compare: unordered, expect: {contains: "doc:8"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [knn8.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: knn8}

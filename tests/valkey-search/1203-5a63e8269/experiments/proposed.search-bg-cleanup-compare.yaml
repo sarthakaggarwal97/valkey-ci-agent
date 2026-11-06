@@ -1,0 +1,90 @@
+extends: [valkey.liveness]
+id: proposed.search-bg-cleanup-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Default flip of search.search-result-background-cleanup to true defers freeing
+    the QueryCommand and its neighbors to the utility thread pool. Compare FT.SEARCH
+    replies across the change and its parent while churning that path - bursts of
+    KNN/tag/numeric searches, a search inside MULTI/EXEC, FT.DROPINDEX while cleanups
+    are pending (last IndexSchema shared_ptr released off the main thread), index
+    re-create, and a runtime toggle of the config. CONFIG GET of the default is the
+    marked difference that proves the change was reached.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [CONFIG, GET, search.search-result-background-cleanup], expect_difference: true,
+      expect: {contains: "yes"}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, tag, TAG, num, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAA=", tag, a, num, 1], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAQAAAAAA=", tag, a, num, 2], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:3", vec, !!binary "AABAQAAAAAA=", tag, b, num, 3], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:4", vec, !!binary "AACAQAAAAAA=", tag, b, num, 4], expect: {
+        equals: 3}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          4]}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4 @vec $v AS score]", PARAMS, 2, v, !!binary "AAAAAAAAAAA=",
+        RETURN, 2, score, tag, DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $v]", NOCONTENT, PARAMS, 2, v, !!binary "AAAAAAAAAAA=",
+        DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, "@tag:{a}=>[KNN 2 @vec $v AS score]", PARAMS, 2,
+        v, !!binary "AAAAAAAAAAA=", RETURN, 1, score, DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, "@tag:{zzz}", DIALECT, 2], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@num:[1 2]", NOCONTENT, DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4 @vec $v AS score]", PARAMS, 2, v, !!binary "AAAAAAAAAAA=",
+        RETURN, 2, score, tag, DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4 @vec $v AS score]", PARAMS, 2, v, !!binary "AAAAAAAAAAA=",
+        RETURN, 2, score, tag, DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $v]", NOCONTENT, PARAMS, 2, v, !!binary "AAAAAAAAAAA=",
+        DIALECT, 2], compare: unordered}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@tag:{a}=>[KNN 2 @vec $v AS score]", PARAMS, 2,
+        v, !!binary "AAAAAAAAAAA=", RETURN, 1, score, DIALECT, 2]}
+    - {command: [EXEC]}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, tag, TAG, num, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          4]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4 @vec $v AS score]", PARAMS, 2, v, !!binary "AAAAAAAAAAA=",
+        RETURN, 2, score, tag, DIALECT, 2], compare: unordered}
+    - {command: [DEL, "doc:4"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          3]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $v]", NOCONTENT, PARAMS, 2, v, !!binary "AAAAAAAAAAA=",
+        DIALECT, 2], compare: unordered}
+    - {command: [CONFIG, SET, search.search-result-background-cleanup, "no"]}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @vec $v AS score]", PARAMS, 2, v, !!binary "AAAAAAAAAAA=",
+        RETURN, 1, score, DIALECT, 2], compare: unordered}
+    - {command: [CONFIG, SET, search.search-result-background-cleanup, "yes"]}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @vec $v AS score]", PARAMS, 2, v, !!binary "AAAAAAAAAAA=",
+        RETURN, 1, score, DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @vec $v]", NOCONTENT, PARAMS, 2, v, !!binary "AAAAAAAAAAA=",
+        DIALECT, 2], compare: unordered}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [search.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}

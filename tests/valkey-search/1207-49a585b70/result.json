@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "49a585b709d318444aa3cb2a8119682f516e77e1",
+  "parent": "7204f2f2c813ab5a552436c31b307006e2501eaf",
+  "pr": 1207,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Open next development cycle on main (release stage \"dev\", drop stale CMake VERSION) (#1207)",
+  "date": "2026-07-01",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.887,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only opens the next development cycle: it flips the MODULE_RELEASE_STAGE macro from \"rc2\" to \"dev\" and drops the stale VERSION 1.0.0 from the CMake project() call. MODULE_RELEASE_STAGE is defined in src/version.h and referenced nowhere else in the tree (not in INFO output, any command, or any build script), and no file reads CMake's PROJECT_VERSION. The module's registered version (kModuleVersion 1.2.0), its commands, replies, and RDB/metadata encoding are all unchanged, so the two builds are behaviorally identical and no scenario can reach a difference."
+}

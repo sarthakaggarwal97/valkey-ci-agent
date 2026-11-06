@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search cf1c9bb26a39..f6f9cafa4b25.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-cd9d0ec3b502
+seed: 101
+experiment:
+  id: proposed.search-lifecycle-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

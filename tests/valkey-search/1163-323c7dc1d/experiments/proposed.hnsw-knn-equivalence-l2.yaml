@@ -1,0 +1,79 @@
+extends: [valkey.liveness]
+id: proposed.hnsw-knn-equivalence-l2
+deployment:
+  modes: [standalone]
+metadata:
+  description: KNN, hybrid tag-filtered, EF_RUNTIME and deleted-node searches on a
+    dim-2 L2 HNSW index must return identical results from the three-phase prefetch
+    loop + SimSIMD build and the parent's fused-loop build (integer-valued vectors
+    keep L2 distances bit-exact on both)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: knn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 12, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, M, 12, EF_CONSTRUCTION,
+        64, EF_RUNTIME, 24, tag, TAG], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @vec $q]", PARAMS, 2, q, !!binary "AACAPwAAgD8=",
+        NOCONTENT, DIALECT, 2], wait_s: 15, expect: {equals: [0]}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAgD8=", tag, odd], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAQAAAAEA=", tag, even], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:3", vec, !!binary "AABAQAAAQEA=", tag, odd], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:4", vec, !!binary "AACAQAAAgEA=", tag, even], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:5", vec, !!binary "AACgQAAAoEA=", tag, odd], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:6", vec, !!binary "AADAQAAAwEA=", tag, even], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:7", vec, !!binary "AADgQAAA4EA=", tag, odd], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:8", vec, !!binary "AAAAQQAAAEE=", tag, even], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:9", vec, !!binary "AAAQQQAAEEE=", tag, odd], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:10", vec, !!binary "AAAgQQAAIEE=", tag, even], expect: {
+        equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: 10}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary "AACgQAAAoEA=",
+        NOCONTENT, DIALECT, 2], wait_s: 30, compare: unordered, expect: {contains: "doc:10"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @vec $q]", PARAMS, 2, q, !!binary "AADgQAAA4EA=",
+        NOCONTENT, DIALECT, 2], expect: {equals: [1, "doc:7"]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @vec $q]", PARAMS, 2, q, !!binary "AACAPwAAgD8=",
+        NOCONTENT, DIALECT, 2], compare: unordered, expect: {contains: "doc:3"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @vec $q EF_RUNTIME 100]", PARAMS, 2, q,
+        !!binary "AACgQAAAoEA=", NOCONTENT, DIALECT, 2], compare: unordered, expect: {
+        contains: "doc:3"}}
+    - {command: [FT.SEARCH, idx, "(@tag:{even})=>[KNN 3 @vec $q]", PARAMS, 2, q, !!binary "AACAQAAAgEA=",
+        NOCONTENT, DIALECT, 2], compare: unordered, expect: {contains: "doc:6"}}
+    - {command: [DEL, "doc:4", "doc:5", "doc:6"], expect: {equals: 3}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: 7}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary "AACgQAAAoEA=",
+        NOCONTENT, DIALECT, 2], wait_s: 15, compare: unordered, expect: {contains: "doc:7"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @vec $q]", PARAMS, 2, q, !!binary "AACAQAAAgEA=",
+        NOCONTENT, DIALECT, 2], wait_s: 15, expect: {equals: [1, "doc:3"]}}
+    - {command: [HSET, "doc:5", vec, !!binary "AACgQAAAoEA=", tag, odd], expect: {
+        equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: 8}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @vec $q]", PARAMS, 2, q, !!binary "AACgQAAAoEA=",
+        NOCONTENT, DIALECT, 2], wait_s: 15, expect: {equals: [1, "doc:5"]}}
+    - {command: [FT.SEARCH, idx, "(@tag:{even})=>[KNN 8 @vec $q]", PARAMS, 2, q, !!binary "AAAAQAAAAEA=",
+        NOCONTENT, DIALECT, 2], compare: unordered, expect: {contains: "doc:8"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [knn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: knn}

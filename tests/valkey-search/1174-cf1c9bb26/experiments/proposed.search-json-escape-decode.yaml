@@ -1,0 +1,77 @@
+extends: [valkey.liveness]
+id: proposed.search-json-escape-decode
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    JSON string values with backslash escapes are decoded before indexing (NormalizeJsonRecord),
+    and FT.AGGREGATE no longer unquotes a second time: tag queries, returned content,
+    aggregate LOAD and backfill compared across the two valkey-search builds, with
+    a HASH index as an unchanged control.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: escapes
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, jidx, 'ON', JSON, PREFIX, 1, j, SCHEMA, '$.t', AS, t,
+        TAG, '$.n', AS, 'n', NUMERIC], expect: {equals: OK}}
+    - {command: [JSON.SET, j1, '$', '{"t":"a\\b","n":1}'], expect: {equals: OK}}
+    - {command: [JSON.SET, j2, '$', '{"t":"a\tb","n":2}'], expect: {equals: OK}}
+    - {command: [JSON.SET, j3, '$', '{"t":"a\"b","n":3}'], expect: {equals: OK}}
+    - {command: [JSON.SET, j4, '$', '{"t":"a\nb","n":4}'], expect: {equals: OK}}
+    - {command: [JSON.SET, j5, '$', '{"t":"","n":5}'], expect: {equals: OK}}
+    - {command: [JSON.SET, j6, '$', '{"t":"a\\b,normal","n":6}'], expect: {equals: OK}}
+    - {command: [JSON.SET, j7, '$', '{"t":"normal","n":7}'], expect: {equals: OK}}
+    - {command: [FT.SEARCH, jidx, '@n:[1 7]', LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [7]}}
+    - {command: [FT.SEARCH, jidx, '@t:{ normal }', LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [2]}}
+    - {command: [FT.SEARCH, jidx, '@t:{ a\\b }', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, jidx, '@t:{ a\\\\b }', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, jidx, "@t:{ a\\\tb }", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, jidx, '@t:{ a\\tb }', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, jidx, '@t:{ a\"b }', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, jidx, "@t:{ a\\\nb }", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, jidx, '@n:[1 1]', RETURN, 1, t], expect_difference: true,
+      expect: {equals: [1, j1, [t, 'a\b']]}}
+    - {command: [FT.SEARCH, jidx, '@n:[5 5]', RETURN, 1, t], expect_difference: true,
+      expect: {equals: [1, j5, [t, '']]}}
+    - {command: [FT.AGGREGATE, jidx, '@t:{ a\\b }', LOAD, 1, '@t'], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [FT.AGGREGATE, jidx, '@n:[2 2]', LOAD, 1, '@t'], expect: {exists: true}}
+    - {command: [FT.CREATE, hidx, 'ON', HASH, PREFIX, 1, h, SCHEMA, t, TAG, 'n', NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, h1, t, 'a\b', 'n', 1], expect: {equals: 2}}
+    - {command: [FT.SEARCH, hidx, '@n:[1 1]', LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, hidx, '@t:{ a\\b }', LIMIT, 0, 0], expect: {equals: [
+          1]}}
+    - {command: [FT.CREATE, jidx2, 'ON', JSON, PREFIX, 1, j, SCHEMA, '$.t', AS, t,
+        TAG, '$.n', AS, 'n', NUMERIC], expect: {equals: OK}}
+    - {command: [FT.SEARCH, jidx2, '@n:[1 7]', LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [7]}}
+    - {command: [FT.SEARCH, jidx2, '@t:{ a\\b }', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, jidx2, '@t:{ a\\\\b }', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [escapes.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: escapes}

@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "cf1c9bb26a39c92a3783e66f88028988e421dc79",
+  "parent": "fa920966a6868beee1c4b83affc8c9f5042e7157",
+  "pr": 1174,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "JSON string values with backslash escapes are indexed un-decoded (#1174)",
+  "date": "2026-06-25",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 13.2577,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-105e354763bf",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'escapes' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (FT.CREATE jidx ON JSON PREFIX 1 j SCHEMA $.t AS t TAG $.n AS n NUMERIC), 1 (JSON.SET j1 $ {\"t\":\"a\\\\b\",\"n\":1}), 2 (JSON.SET j2 $ {\"t\":\""
+    },
+    {
+      "scenario": "ai-c8876f1a108e",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'escapes' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (FT.CREATE jidx ON JSON PREFIX 1 j SCHEMA $.t AS t TAG $.n AS n NUMERIC), 1 (JSON.SET j1 $ {\"t\":\"a\\\\b\",\"n\":1}), 2 (JSON.SET j2 $ {\"t\":\""
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

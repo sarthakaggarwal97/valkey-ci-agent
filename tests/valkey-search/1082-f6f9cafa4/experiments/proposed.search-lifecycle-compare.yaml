@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.search-lifecycle-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT index lifecycle (create, ingest, query under the time-sliced lock,
+    drop with queued mutations, re-create and backfill) compared across the change's
+    and the parent's module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, vec, VECTOR,
+        HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2, tag, TAG, num, NUMERIC,
+        body, TEXT], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAA=", tag, red, num, "10",
+        body, "running fast"], expect: {equals: 4}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAAAAAgD8=", tag, red, num, "20",
+        body, "jump high"], expect: {equals: 4}}
+    - {command: [HSET, "doc:3", vec, !!binary "AACAPwAAgD8=", tag, blue, num, "30",
+        body, "the runner runs"], expect: {equals: 4}}
+    - {command: [HSET, "doc:4", vec, !!binary "AAAAQAAAAAA=", tag, green, num, "40",
+        body, "walking slowly"], expect: {equals: 4}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, "0", "0"], wait_s: 30, expect: {equals: [
+          4]}}
+    - {command: [FT.SEARCH, idx, "@tag:{red}", NOCONTENT], compare: unordered, expect: {
+        exists: true}}
+    - {command: [FT.SEARCH, idx, "@num:[15 35]", SORTBY, num, ASC, NOCONTENT], expect: {
+        exists: true}}
+    - {command: [FT.SEARCH, idx, "running", NOCONTENT], compare: unordered, expect: {
+        exists: true}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $b]", PARAMS, "2", b, !!binary "AACAPwAAAAA=",
+        DIALECT, "2", NOCONTENT], compare: unordered, expect: {exists: true}}
+    - {command: [HSET, "doc:5", vec, !!binary "AACAPwAAAAA=", tag, red, num, "50",
+        body, "running again"], expect: {equals: 4}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, "0", "0"], expect: {error: true}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, vec, VECTOR,
+        HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2, tag, TAG, num, NUMERIC,
+        body, TEXT], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, "0", "0"], wait_s: 30, expect: {equals: [
+          5]}}
+    - {command: [DEL, "doc:2"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, "0", "0"], wait_s: 30, expect: {equals: [
+          4]}}
+    - {command: [FT.SEARCH, idx, "@tag:{red}", NOCONTENT], compare: unordered, expect: {
+        exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [search.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}

@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-vector-size-validation
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH rejects a query vector blob whose size does not match the
+    index dimensions at parse time, on FLAT and HNSW indexes and on the hybrid pre-filter
+    path
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: knn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [FT.CREATE, idx_flat, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, n, NUMERIC,
+        vec, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idx_hnsw, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, n, NUMERIC,
+        vec, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [HSET, 'doc:1', n, 15, vec, !!binary "AACAPwAAgD8AAIA/AACAPw=="],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:2', n, 15, vec, !!binary "AACAPwAAgD8AAIA/AACAPw=="],
+      expect: {equals: 2}}
+    - {command: [FT.INFO, idx_flat], wait_s: 30, expect: {contains: 2}, compare: skip}
+    - {command: [FT.INFO, idx_hnsw], wait_s: 30, expect: {contains: 2}, compare: skip}
+    - {command: [FT.SEARCH, idx_flat, '@n:[10 20]=>[KNN 2 @vec $BLOB]', PARAMS, 2,
+        BLOB, !!binary "AACAPwAAgD8AAIA/AACAPw==", NOCONTENT], expect: {error: false},
+      compare: skip}
+    - {command: [FT.SEARCH, idx_hnsw, '*=>[KNN 2 @vec $BLOB]', PARAMS, 2, BLOB, !!binary "AACAPwAAgD8AAIA/AACAPw==",
+        NOCONTENT], expect: {error: false}, compare: skip}
+    - {command: [FT.SEARCH, idx_flat, '@n:[10 20]=>[KNN 2 @vec $BLOB]', PARAMS, 2,
+        BLOB, !!binary "AACAPwAAgD8=", NOCONTENT], expect_difference: true, expect: {
+        error: "query vector blob size"}}
+    - {command: [FT.SEARCH, idx_flat, '*=>[KNN 2 @vec $BLOB]', PARAMS, 2, BLOB, !!binary "AACAPwAAgD8=",
+        NOCONTENT], expect_difference: true, expect: {error: "query vector blob size"}}
+    - {command: [FT.SEARCH, idx_flat, '@n:[10 20]=>[KNN 2 @vec $BLOB]', PARAMS, 2,
+        BLOB, !!binary "AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/", NOCONTENT], expect_difference: true,
+      expect: {error: "query vector blob size"}}
+    - {command: [FT.SEARCH, idx_hnsw, '*=>[KNN 2 @vec $BLOB]', PARAMS, 2, BLOB, !!binary "AACAPwAAgD8=",
+        NOCONTENT], expect_difference: true, expect: {error: "query vector blob size"}}
+    - {command: [FT.SEARCH, idx_hnsw, '*=>[KNN 2 @vec $BLOB]', PARAMS, 2, BLOB, !!binary "AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/",
+        NOCONTENT], expect_difference: true, expect: {error: "query vector blob size"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [knn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: knn}

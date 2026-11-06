@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search bc4baceb54bc..323c7dc1d956.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4287a4736f72
+seed: 31
+experiment:
+  id: proposed.hnsw-knn-equivalence-cosine
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

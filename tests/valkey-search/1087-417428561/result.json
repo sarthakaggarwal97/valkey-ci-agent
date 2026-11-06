@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "4174285614df79b23b1be885d2c3bfea18fa65da",
+  "parent": "5d95e4c757599ab828b8c0cab5c684226883b23d",
+  "pr": 1087,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Drain in-flight async query operations before shutting down in cancel/timeout tests (#1087)",
+  "date": "2026-06-24",
+  "unstable": "6fc33cfa8b5c773997171a72b85dd52a0dafe73f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 12.847,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

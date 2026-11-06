@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 6dcc60563eea..ce011fb699ef.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f18c1aa11328
+seed: 101
+experiment:
+  id: proposed.hnsw-concurrent-hset
+  inputs:
+    resp: 2
+    m: 2
+    concurrency: 8
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.hnsw-rdb-load-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: HNSW indexes (M boundary values, delete-and-readd, small INITIAL_CAP,
+    an empty index) must survive SAVE and restart identically under the new load-time
+    validation
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hnsw
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, search.hnsw-validation-enable, no], expect_difference: true,
+      expect: {error: "hnsw-validation-enable"}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "a:", SCHEMA, v, VECTOR, HNSW,
+        10, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, M, 2, EF_CONSTRUCTION, 16],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "b:", SCHEMA, v, VECTOR, HNSW,
+        14, TYPE, FLOAT32, DIM, 1, DISTANCE_METRIC, L2, M, 64, EF_CONSTRUCTION, 32,
+        INITIAL_CAP, 4], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx3, ON, HASH, PREFIX, 1, "c:", SCHEMA, v, VECTOR, HNSW,
+        10, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, M, 2, EF_CONSTRUCTION, 16],
+      expect: {equals: OK}}
+    - {command: [HSET, "a:1", v, !!binary "AACAPwAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "a:2", v, !!binary "AAAAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "a:3", v, !!binary "AABAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "a:4", v, !!binary "AACAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "a:5", v, !!binary "AACgQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "a:6", v, !!binary "AADAQAAAAAA="], expect: {equals: 1}}
+    - {command: [DEL, "a:3"], expect: {equals: 1}}
+    - {command: [HSET, "a:3", v, !!binary "AAAQQQAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "b:1", v, !!binary "AACAPw=="], expect: {equals: 1}}
+    - {command: [HSET, "b:2", v, !!binary "AAAAQA=="], expect: {equals: 1}}
+    - {command: [HSET, "b:3", v, !!binary "AABAQA=="], expect: {equals: 1}}
+    - {command: [HSET, "b:4", v, !!binary "AACAQA=="], expect: {equals: 1}}
+    - {command: [HSET, "b:5", v, !!binary "AACgQA=="], expect: {equals: 1}}
+    - {command: [HSET, "b:6", v, !!binary "AADAQA=="], expect: {equals: 1}}
+    - {command: [HSET, "b:7", v, !!binary "AADgQA=="], expect: {equals: 1}}
+    - {command: [HSET, "b:8", v, !!binary "AAAAQQ=="], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 6 @v $q]", NOCONTENT, PARAMS, 2, q, !!binary "AAAAAAAAAAA="],
+      wait_s: 30, expect: {equals: [6, "a:1", "a:2", "a:4", "a:5", "a:6", "a:3"]}}
+    - {command: [FT.SEARCH, idx2, "*=>[KNN 8 @v $q]", NOCONTENT, PARAMS, 2, q, !!binary "AAAAAA=="],
+      wait_s: 30, expect: {equals: [8, "b:1", "b:2", "b:3", "b:4", "b:5", "b:6", "b:7",
+          "b:8"]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 6 @v $q]", NOCONTENT, PARAMS, 2, q, !!binary "AAAAAAAAAAA="],
+      wait_s: 30, expect: {equals: [6, "a:1", "a:2", "a:4", "a:5", "a:6", "a:3"]}}
+    - {command: [FT.SEARCH, idx2, "*=>[KNN 8 @v $q]", NOCONTENT, PARAMS, 2, q, !!binary "AAAAAA=="],
+      wait_s: 30, expect: {equals: [8, "b:1", "b:2", "b:3", "b:4", "b:5", "b:6", "b:7",
+          "b:8"]}}
+    - {command: [FT.SEARCH, idx3, "*=>[KNN 1 @v $q]", NOCONTENT, PARAMS, 2, q, !!binary "AAAAAAAAAAA="],
+      expect: {equals: [0]}}
+    - {command: [FT.INFO, idx], compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [hnsw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hnsw}
