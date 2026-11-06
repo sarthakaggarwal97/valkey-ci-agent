@@ -760,6 +760,32 @@ def test_a_change_that_still_replies_as_at_the_merge_is_no_regressed_fix(monkeyp
     publisher.upsert.assert_not_called()
 
 
+def test_a_change_the_merge_got_wrong_is_no_regressed_fix(monkeypatch, tmp_path):
+    # valkey-search #872 (fuzzer#82): the merge broke a suffix search the parent got right, its replies violating
+    # their expect, and unstable fixed it again: the change is gone from unstable, but it was no fix.
+    test = _scenario("seed: 10\nexperiment: {id: proposed.lset}\ndeployment: {mode: standalone}\n")
+
+    def fuzz(fuzzer_bin, doc, seed, *, candidate, compare, core, experiment_dir, run_dir):
+        merge = _build(run_dir) == "merge"
+        return {"status": "FAIL" if merge else "ERROR", "reason": None if merge else "unreached-change",
+                "reached": merge, "parent_exited": False, "found": {},
+                "reached_commands": {("suffix", 5), ("suffix", 6)} if merge else set(),
+                "violating_commands": {("suffix", 5), ("suffix", 6)} if merge else set(),
+                "replies": {("suffix", 5): {"reply": [0]}} if merge else {("suffix", 5): {"reply": [1, "doc:2"]}}}
+
+    result, publisher = _walk_merge(monkeypatch, tmp_path, fuzz, (test,))
+    assert result["proven"] == 1 and result["findings"] == []
+    publisher.upsert.assert_not_called()
+
+
+def test_the_commands_violating_their_expect_are_known_by_component_and_index():
+    report = {"outcome": {"component_results": [
+        {"component_id": "seq", "evidence": [{"evidence_id": walk.SEQUENCE_EVIDENCE, "value": {"violating": [5, 27]}}]},
+        {"component_id": "old", "evidence": [{"evidence_id": walk.SEQUENCE_EVIDENCE, "value": {"reached": [1]}}]},
+    ]}}
+    assert walk.violating_commands(report) == {("seq", 5), ("seq", 27)}
+
+
 def test_the_replies_of_a_runs_sequence_are_known_by_component_and_index():
     report = {"outcome": {"component_results": [
         {"component_id": "seq", "evidence": [{"evidence_id": walk.SEQUENCE_EVIDENCE, "value": {"candidate": {
