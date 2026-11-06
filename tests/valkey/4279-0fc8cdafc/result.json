@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0fc8cdafcba8ee7b443ba1381a8847f8a3579bd5",
+  "parent": "c07e9b6cf2f816acb358ee7d504e8f03e15de9cd",
+  "pr": 4279,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update module.c with missing FLAG_REPLICA description (#4279)",
+  "date": "2026-08-04",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2395,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff only edits a doc comment in src/module.c: it rewords the description of VALKEYMODULE_CLIENTINFO_FLAG_PRIMARY and adds the previously missing description of VALKEYMODULE_CLIENTINFO_FLAG_REPLICA. No executable code, flag value, reply, or behavior changes, so there is no path a scenario could exercise differently between the two builds."
+}

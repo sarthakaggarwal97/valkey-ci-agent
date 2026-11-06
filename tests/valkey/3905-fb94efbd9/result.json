@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fb94efbd9b7a0a6f49433598931d4ad25ba20b2c",
+  "parent": "69cd2ef98ed88f72ae2b74433e348531ed78bfd7",
+  "pr": 3905,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize .clang-format and add enum/argument formatting options (#3905)",
+  "date": "2026-07-31",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.236,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits the .clang-format configuration and reformats existing code to match it: enum declarations in cluster_legacy.c, defrag.c and server.h and a struct initializer list in db.c are reflowed onto multiple lines. Every edit is whitespace and line-break only; no identifier, value, or logic changes, so there is no runtime behaviour to test and no scenario is needed."
+}

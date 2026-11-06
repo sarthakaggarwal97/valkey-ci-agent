@@ -1,0 +1,123 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-keyspace-int64
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark -r parsing and key generation above INT_MAX, compared
+    against the parent build, across the standard, --dataset and --fuzz key paths
+components:
+- use: valkey.action.tools
+  id: parse
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - tool: valkey-benchmark
+      args: [-p, $port, -r, abc, -n, "5", -t, set, -q]
+      expect_difference: true
+      expect: {exit: {equals: 1}, stderr: {contains: "is not a valid number"}}
+    - tool: valkey-benchmark
+      args: [-p, $port, -r, 5x, -n, "5", -t, set, -q]
+      expect_difference: true
+      expect: {exit: {equals: 1}, stderr: {contains: "is not a valid number"}}
+    - tool: valkey-benchmark
+      args: [-p, $port, -r, "-5", -n, "5", -t, set, -q]
+      expect_difference: true
+      expect: {exit: {equals: 1}, stderr: {contains: "must be between 0 and 999999999999"}}
+    - tool: valkey-benchmark
+      args: [-p, $port, -r, "1000000000000", -n, "5", -t, set, -q]
+      expect_difference: true
+      expect: {exit: {equals: 1}, stderr: {contains: "must be between 0 and 999999999999"}}
+    - tool: valkey-benchmark
+      args: [-p, $port, -r, "99999999999999999999", -n, "5", -t, set, -q]
+      expect_difference: true
+      expect: {exit: {equals: 1}, stderr: {contains: "must be between 0 and 999999999999"}}
+    - tool: valkey-cli
+      args: [-p, $port, FLUSHALL]
+      expect: {stdout: {contains: OK}}
+    - tool: valkey-benchmark
+      args: [-p, $port, -r, "999999999999", --sequential, -c, "1", -n, "50", -t, set,
+        -q]
+      compare: skip
+      expect: {exit: {equals: 0}}
+    - tool: valkey-cli
+      args: [-p, $port, EXISTS, "key:000000000049"]
+      expect_difference: true
+      expect: {stdout: {contains: "1"}}
+- use: valkey.action.tools
+  id: bigkeys
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 120
+    runs:
+    - tool: valkey-benchmark
+      args: [-p, $port, -r, "2147483648", --sequential, -c, "1", -n, "10", -t, set,
+        -q]
+      compare: skip
+      expect: {exit: {equals: 0}}
+    - tool: valkey-cli
+      args: [-p, $port, EXISTS, "key:000000000009"]
+      expect_difference: true
+      expect: {stdout: {contains: "1"}}
+    - tool: valkey-cli
+      args: [-p, $port, FLUSHALL]
+      expect: {stdout: {contains: OK}}
+    - tool: valkey-benchmark
+      args: [-p, $port, -r, "999999999999", -n, "1000", -t, set, -q]
+      compare: skip
+      expect: {exit: {equals: 0}}
+    - tool: valkey-cli
+      args: [-p, $port, EVAL, "local f='SMALL' for _,k in ipairs(redis.call('KEYS','*'))\
+          \ do local n=tonumber(string.sub(k,5)) if n and n>2147483647 then f='LARGE'\
+          \ end end return f", "0"]
+      expect_difference: true
+      expect: {stdout: {contains: LARGE}}
+- use: valkey.action.tools
+  id: dataset
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 120
+    files:
+      data.csv: "content\npayload\npayload\npayload\n"
+    runs:
+    - tool: valkey-benchmark
+      args: [-p, $port, --dataset, data.csv, -r, "999999999999", --sequential, -c,
+        "1", -n, "20", -q, SET, "doc:__rand_int__", "__field:content__"]
+      compare: skip
+      expect: {exit: {equals: 0}}
+    - tool: valkey-cli
+      args: [-p, $port, GET, "doc:000000000005"]
+      expect_difference: true
+      expect: {stdout: {contains: payload}}
+    - tool: valkey-cli
+      args: [-p, $port, FLUSHALL]
+      expect: {stdout: {contains: OK}}
+    - tool: valkey-benchmark
+      args: [-p, $port, --dataset, data.csv, -r, "999999999999", -c, "10", -n, "500",
+        -q, SET, "doc:__rand_int__", "__field:content__"]
+      compare: skip
+      expect: {exit: {equals: 0}}
+    - tool: valkey-cli
+      args: [-p, $port, EVAL, "local f='SMALL' for _,k in ipairs(redis.call('KEYS','*'))\
+          \ do local n=tonumber(string.sub(k,5)) if n and n>2147483647 then f='LARGE'\
+          \ end end return f", "0"]
+      expect_difference: true
+      expect: {stdout: {contains: LARGE}}
+- use: valkey.action.tools
+  id: fuzz
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 180
+    runs:
+    - tool: valkey-benchmark
+      args: [-p, $port, --fuzz, --fuzz-loglevel, error, -r, "999999999999", -n, "300"]
+      compare: skip
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: parse}
+- {evidence_id: valkey.tool.runs, source: bigkeys}
+- {evidence_id: valkey.tool.runs, source: dataset}
+- {evidence_id: valkey.tool.runs, source: fuzz}

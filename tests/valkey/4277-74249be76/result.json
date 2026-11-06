@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "74249be76ff25a5c06c9eb8c40940692fc382535",
+  "parent": "dc0411ae14d8faa64d6a01055c46d23b452ac566",
+  "pr": 4277,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add comment and test for bio RDB disk transfer receive timeout (#4277)",
+  "date": "2026-07-29",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2512,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds only comments in replication.c (both hunks insert comment lines above pre-existing, unchanged code: the connRecvTimeout call in replicaReceiveRDBFromPrimaryToDisk and the abort-flag/bioDrainWorker logic in cancelReplicationHandshake) plus a TCL integration test documenting the existing repl_syncio_timeout bound on the bio RDB disk-save read. No executable server behaviour changes, so there is nothing new for a scenario to reach."
+}

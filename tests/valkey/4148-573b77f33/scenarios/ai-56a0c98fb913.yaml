@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cb2d8351399e..573b77f33aff.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-56a0c98fb913
+seed: 41483
+experiment:
+  id: proposed.stale-chain-resync
+  inputs:
+    down_s: 6
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7200
+  server_config:
+    replica-serve-stale-data: 'no'
+    appendonly: 'yes'
+    appendfsync: everysec

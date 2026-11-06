@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fb94efbd9b7a..8eaefda4fdf8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-78744658f25d
+seed: 41553
+experiment:
+  id: proposed.move-copy-current-db-acl
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

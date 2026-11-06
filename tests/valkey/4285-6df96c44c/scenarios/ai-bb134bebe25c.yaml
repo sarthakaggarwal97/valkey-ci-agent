@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0bf28b2dab6d..6df96c44ceb3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-bb134bebe25c
+seed: 101
+experiment:
+  id: proposed.keyspace-notify-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

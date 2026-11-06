@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.cluster-copy-crossdb-oob
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Cross-DB COPY guard in getNodeByQuery - OOB read on a trailing DB token
+    and missed guard for order-independent/repeated DB clauses
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: copy
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    server_config: {cluster-databases: 8}
+    timeout_s: 15
+    commands:
+    - {command: [SET, "{t}k1", v1], expect: {equals: OK}}
+    - {command: [COPY, "{t}k1", "{t}k3", DB, 0, DB, 7], expect_difference: true, expect: {
+        error: "TRYAGAIN"}}
+    - {command: [COPY, "{t}k1", "{t}k2", REPLACE, DB, 7], expect_difference: true,
+      expect: {error: "TRYAGAIN"}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [COPY, "{t}k1", "{t}k4", DB], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [copy.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: copy}

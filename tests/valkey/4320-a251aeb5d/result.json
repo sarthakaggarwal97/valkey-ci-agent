@@ -1,0 +1,40 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a251aeb5d723bfe0e6d1c50f80bae72a21468a12",
+  "parent": "327db78a709e3daab235267d239dba7a86a9a6f2",
+  "pr": 4320,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix io-thread race in slot migration establish response handler (#4320)",
+  "date": "2026-08-05",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.5653,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-2ef15d55bfb1",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'migrate' returned ERROR: expectations both builds violate alike, so they are not about the change: 10 (CLUSTER COUNTKEYSINSLOT 12182 on node 1), 12 (GET {foo}:1 on node 1), 14 (GET {bar}:1 on node 1)"
+    },
+    {
+      "scenario": "ai-58ddd763de64",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'migrate' returned ERROR: expectations both builds violate alike, so they are not about the change: 10 (CLUSTER COUNTKEYSINSLOT 12182 on node 1), 12 (GET {foo}:1 on node 1), 14 (GET {bar}:1 on node 1)"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "eb5a7857e6f31158d7fbdd454eca70f7581b4243",
+  "parent": "d84a2e85989d1ea7cfbe225c2b4f6d280153a37b",
+  "pr": 3611,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix RDMA + IO threads re-entrancy and busy-loop via connection postpone masks (#3611)",
+  "date": "2026-08-05",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 50,
+    "executed": 48,
+    "percent": 96,
+    "uncovered": [
+      "src/io_threads.c:827",
+      "src/networking.c:6589"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 4.5031,
+  "findings": [],
+  "recorded": []
+}

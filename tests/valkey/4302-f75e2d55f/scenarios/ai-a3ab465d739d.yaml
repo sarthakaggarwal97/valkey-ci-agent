@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c739b9296eb4..f75e2d55fa76.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a3ab465d739d
+seed: 2
+experiment:
+  id: proposed.prefetch-bad-arity-queued
+  inputs:
+    resp: 3
+    io_threads: 8
+    prefetch_batch: 2
+deployment:
+  mode: standalone
+  base_port: 7100

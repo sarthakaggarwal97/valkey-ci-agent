@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "12e5e384d22fb07d9d524bfc1673dfcb2d6df680",
+  "parent": "6736cc580335cac05fdc3b4ffd1f65e824389484",
+  "pr": 3510,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix TLS infinite busy loop when write/read handlers are removed (#3510)",
+  "date": "2026-07-31",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.6252,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to src/tls.c (updateSSLEvent and tlsHandleEvent), code compiled only with BUILD_TLS and executed only for TLS-type connections. The fuzzer has no TLS capability: no installed component speaks TLS or provisions certificates, every client connection (workloads, compared-sequence private servers, tools) is plain TCP or unix socket, and the deployment provider rejects tls-port in any config, so no server the fuzzer starts can open a TLS listener and no replication link can be TLS. The changed code is therefore unreachable from any scenario. Additionally, the bug's only sympt"
+}

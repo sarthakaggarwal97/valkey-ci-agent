@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.move-copy-current-db-acl
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    MOVE and COPY must be denied when the ACL user's db= selector does not cover the
+    current (source) database, including COPY with no DB clause and the MULTI/EXEC
+    queue-time check via transaction_db_id; SELECT and SWAPDB stay exempt from the
+    new current-DB check.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl-db
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, secret0, top-secret-db0], expect: {equals: OK}}
+    - {command: [SET, other0, copy-source], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, leak, on, '>pw', '~*', '+@all', 'db=1'], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, ok, on, '>pw', '~*', '+@all', 'db=0,1'], expect: {
+        equals: OK}}
+    - {connection: leak, command: [AUTH, leak, pw], expect: {equals: OK}}
+    - {connection: leak, command: [GET, secret0], expect: {error: database}}
+    - {connection: leak, command: [MOVE, secret0, '1'], expect_difference: true, expect: {
+        error: database}}
+    - {connection: leak, command: [COPY, other0, stolen1, DB, '1'], expect_difference: true,
+      expect: {error: database}}
+    - {connection: leak, command: [COPY, other0, stolen0], expect_difference: true,
+      expect: {error: database}}
+    - {connection: leak, command: [COPY, other0, stolen2, DB, '1', REPLACE, DB, '1'],
+      expect_difference: true, expect: {error: database}}
+    - {connection: leak, command: [MOVE, other0, '2'], expect: {error: database}}
+    - {connection: leak, command: [SELECT, '1'], expect: {equals: OK}}
+    - {connection: leak, command: [MOVE, nosuch, '0'], expect: {error: database}}
+    - {connection: leak, command: [COPY, nosuch, x], expect: {equals: 0}}
+    - {command: [EXISTS, secret0], expect_difference: true, expect: {equals: 1}}
+    - {command: [EXISTS, stolen0], expect_difference: true, expect: {equals: 0}}
+    - {command: [SELECT, '1'], expect: {equals: OK}}
+    - {command: [EXISTS, secret0], expect_difference: true, expect: {equals: 0}}
+    - {command: [EXISTS, stolen1], expect_difference: true, expect: {equals: 0}}
+    - {command: [EXISTS, stolen2], expect_difference: true, expect: {equals: 0}}
+    - {command: [SELECT, '0'], expect: {equals: OK}}
+    - {connection: ok, command: [AUTH, ok, pw], expect: {equals: OK}}
+    - {connection: ok, command: [COPY, other0, legit1, DB, '1'], expect: {equals: 1}}
+    - {connection: ok, command: [MOVE, other0, '1'], expect: {equals: 1}}
+    - {command: [SET, txnkey, v], expect: {equals: OK}}
+    - {connection: txn, command: [AUTH, leak, pw], expect: {equals: OK}}
+    - {connection: txn, command: [SWAPDB, '1', '1'], expect: {equals: OK}}
+    - {connection: txn, command: [MULTI], expect: {equals: OK}}
+    - {connection: txn, command: [MOVE, txnkey, '1'], expect_difference: true, expect: {
+        error: database}}
+    - {connection: txn, command: [EXEC], expect_difference: true, expect: {error: EXECABORT}}
+    - {command: [EXISTS, txnkey], expect_difference: true, expect: {equals: 1}}
+    - {connection: txn, command: [MULTI], expect: {equals: OK}}
+    - {connection: txn, command: [SELECT, '1'], expect: {equals: QUEUED}}
+    - {connection: txn, command: [COPY, legit1, cpy1], expect: {equals: QUEUED}}
+    - {connection: txn, command: [EXEC], expect: {equals: [OK, 1]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [acl-db.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl-db}

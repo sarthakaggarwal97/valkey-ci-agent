@@ -1,0 +1,21 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey af321c4dfd1b..cb2d8351399e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0a09fa6010aa
+seed: 4142
+experiment:
+  id: proposed.psync-busy-retry
+  inputs:
+    resume_after_s: 1
+    mutation_rate: 800
+    value_size: 1024
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7200
+  server_config:
+    enable-debug-command: 'yes'
+    busy-reply-threshold: 100
+    dual-channel-replication-enabled: 'no'
+    repl-diskless-sync: 'yes'
+    repl-diskless-sync-delay: 0
+    repl-backlog-size: 65536

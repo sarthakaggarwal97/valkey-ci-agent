@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.module-timer-selfstop-double-free
+deployment:
+  modes: [standalone]
+metadata:
+  description: A module timer callback that stops its own currently-firing timer must
+    not double-free the timer and crash the server
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: timer
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SET, k, 0], expect: {equals: OK}}
+    - {command: [test.selfstoptimer, 50, k], compare: skip, expect: {exists: true}}
+    - {command: [test.selfstoptimer, 50, k], compare: skip, expect: {exists: true}}
+    - {command: [test.selfstoptimer, 50, k], compare: skip, expect: {exists: true}}
+    - {command: [test.selfstoptimer, 50, k], compare: skip, expect: {exists: true}}
+    - {command: [GET, k], wait_s: 10, expect_difference: true, expect: {equals: "4"}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [timer.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: timer}

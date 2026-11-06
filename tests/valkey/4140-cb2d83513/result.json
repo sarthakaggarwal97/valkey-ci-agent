@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cb2d8351399ee004dbd131ba26adc5118b51e858",
+  "parent": "af321c4dfd1b49f53a15cd12a1b28a843f414def",
+  "pr": 4140,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Retry PSYNC on -BUSY error instead of downgrading to SYNC (#4140)",
+  "date": "2026-08-04",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 1,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 8,
+    "executed": 8,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.529,
+  "findings": [],
+  "recorded": []
+}

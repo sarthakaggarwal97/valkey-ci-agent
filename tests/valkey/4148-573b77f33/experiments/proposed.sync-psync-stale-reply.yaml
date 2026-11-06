@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.sync-psync-stale-reply
+deployment:
+  modes: [standalone]
+metadata:
+  description: SYNC/PSYNC on a replica with its primary link down now reach syncCommand
+    and reply -NOMASTERLINK instead of the generic -MASTERDOWN rejection when replica-serve-stale-data
+    is no
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: stale-sync
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [REPLICAOF, "127.0.0.1", "1"], expect: {equals: OK}}
+    - {command: [INFO, replication], wait_s: 30, expect: {contains: "master_link_status:down"},
+      compare: skip}
+    - {command: [CONFIG, SET, replica-serve-stale-data, "no"], expect: {equals: OK}}
+    - {command: [GET, k], expect: {error: "MASTERDOWN"}}
+    - {command: [PSYNC, "?", "-1"], expect_difference: true, expect: {error: "NOMASTERLINK"}}
+    - {command: [SYNC], expect_difference: true, expect: {error: "NOMASTERLINK"}}
+    - {command: [CONFIG, SET, replica-serve-stale-data, "yes"], expect: {equals: OK}}
+    - {command: [PSYNC, "?", "-1"], expect: {error: "NOMASTERLINK"}}
+    - {command: [SYNC], expect: {error: "NOMASTERLINK"}}
+    - {command: [REPLICAOF, NO, ONE], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [stale-sync.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: stale-sync}

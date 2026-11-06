@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.slot-migration-establish-io-threads
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER MIGRATESLOTS handshakes complete and move data while io threads
+    flush the ESTABLISH command, exercising the clientHasPendingIO guard in slotMigrationJobReadEstablishResponse
+inputs:
+  properties:
+    io_threads: {type: integer, minimum: 1, maximum: 16, default: 8}
+    always_active: {type: string, enum: ["yes", "no"], default: "yes"}
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: 2
+    timeout_s: 30
+    server_config:
+      io-threads: {$ref: inputs.io_threads}
+      io-threads-always-active: {$ref: inputs.always_active}
+    checks: {concurrency: 8}
+    commands:
+    - {command: [SET, "{foo}:1", v1], expect: {equals: OK}}
+    - {command: [SET, "{foo}:2", v2], expect: {equals: OK}}
+    - {command: [SET, "{bar}:1", v3], expect: {equals: OK}}
+    - {command: [SET, "{hello}:1", v4], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 12182, 12182, NODE, "<node.1.id>"],
+      expect: {equals: OK}}
+    - {command: [GET, "{foo}:1"], node: 1, wait_s: 60, expect: {equals: v1}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 1, expect: {equals: 2}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 0, wait_s: 60, expect: {
+        equals: 0}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 12182, 12182, NODE, "<node.0.id>"],
+      node: 1, expect: {equals: OK}}
+    - {command: [GET, "{foo}:2"], node: 0, wait_s: 60, expect: {equals: v2}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 1, wait_s: 60, expect: {
+        equals: 0}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 12182, 12182, NODE, "<node.1.id>"],
+      expect: {equals: OK}}
+    - {command: [GET, "{foo}:1"], node: 1, wait_s: 60, expect: {equals: v1}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 5061, 5061, NODE, "<node.1.id>",
+        SLOTSRANGE, 866, 866, NODE, "<node.2.id>"], expect: {equals: OK}}
+    - {command: [GET, "{bar}:1"], node: 1, wait_s: 60, expect: {equals: v3}}
+    - {command: [GET, "{hello}:1"], node: 2, wait_s: 60, expect: {equals: v4}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], compare: skip}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [PING], node: 2, expect: {equals: PONG}}
+required_events: [migrate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

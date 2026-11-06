@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "aed05498ac9e65f18ebb5beb57c47344ffc052c8",
+  "parent": "a9d54c590190c2aaa5de4c14c8de8f03dc3bacf5",
+  "pr": 4281,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix macOS unit test by wrapping test object symbols (#4281)",
+  "date": "2026-07-28",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2366,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change touches only src/Makefile and src/unit/Makefile: it fixes the macOS unit-test build by wrapping test object symbols, deleting stale static archives before re-creating them, and removing flat-namespace linker flags from the test binary link. No server, command, replication, persistence, or tool code changes, so the shipped valkey-server and tools behave identically; this is a build/CI fix with no runtime behaviour to exercise, and no scenario is needed."
+}

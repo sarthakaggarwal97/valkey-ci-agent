@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 527a38222043..af321c4dfd1b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-16aaea9bcb80
+seed: 3
+experiment:
+  id: proposed.resp3-self-publish-copy-avoid-tear
+  inputs:
+    io_threads: 4
+    cluster_mode: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

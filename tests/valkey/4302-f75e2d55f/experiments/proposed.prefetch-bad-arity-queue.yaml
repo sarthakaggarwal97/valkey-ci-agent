@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.prefetch-bad-arity-queue
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: A bad-arity command queued behind a valid one in a single pipelined
+    read must not reach the key prefetcher under I/O threads
+inputs:
+  required: [pipeline]
+  properties:
+    io_threads: {type: integer, default: 5}
+    cluster: {type: boolean, default: false}
+    pipeline: {type: string}
+components:
+- use: valkey.action.commands
+  id: prefetch
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: {$ref: inputs.cluster}
+    resp: 2
+    timeout_s: 10
+    server_config:
+      io-threads: {$ref: inputs.io_threads}
+      io-threads-always-active: "yes"
+      prefetch-batch-max-size: 16
+    commands:
+    - {command: [PING], connection: pipe, expect: {equals: PONG}}
+    - {raw: {$ref: inputs.pipeline}, connection: pipe, expect_difference: true, expect: {
+        equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [prefetch.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: prefetch}

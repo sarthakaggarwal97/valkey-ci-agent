@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.module-timer-normal-cleanup
+deployment:
+  modes: [standalone]
+metadata:
+  description: A normal module timer that fires and is cleaned up by moduleTimerHandler
+    (raxFind guard then raxRemove/zfree), with no self-stop, must not crash or leak
+    and must increment its key.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: timers
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SET, tk, "0"], expect: {equals: OK}}
+    - {command: [test.createtimer, "60", tk], compare: skip, expect: {exists: true}}
+    - {command: [test.createtimer, "60", tk], compare: skip, expect: {exists: true}}
+    - {command: [test.createtimer, "60", tk], compare: skip, expect: {exists: true}}
+    - {command: [GET, tk], wait_s: 10, expect: {equals: "3"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [timers.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: timers}

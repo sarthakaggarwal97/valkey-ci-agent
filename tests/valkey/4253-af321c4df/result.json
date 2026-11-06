@@ -1,0 +1,40 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "af321c4dfd1b49f53a15cd12a1b28a843f414def",
+  "parent": "527a38222043300c3e645d7d7fa0b3c6de719171",
+  "pr": 4253,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix RESP3 push frame torn apart on self-publish with copy avoidance (#4253)",
+  "date": "2026-08-03",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 9,
+    "executed": 9,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.0061,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-b3f75aad0654",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-668bad21e434",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    }
+  ]
+}

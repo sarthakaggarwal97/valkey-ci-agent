@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "327db78a709e3daab235267d239dba7a86a9a6f2",
+  "parent": "0fc8cdafcba8ee7b443ba1381a8847f8a3579bd5",
+  "pr": 4322,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "reset scan cursor when table is deleted (#4322)",
+  "date": "2026-08-04",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.0925,
+  "findings": [],
+  "recorded": []
+}

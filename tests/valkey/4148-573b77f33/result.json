@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "573b77f33aff882c47d5d60aa99230f37291cbad",
+  "parent": "cb2d8351399ee004dbd131ba26adc5118b51e858",
+  "pr": 4148,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add CMD_STALE flag to SYNC/PSYNC commands (#4148)",
+  "date": "2026-08-04",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 4.2632,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

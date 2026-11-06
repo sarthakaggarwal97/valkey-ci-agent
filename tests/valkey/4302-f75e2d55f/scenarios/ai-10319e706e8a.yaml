@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c739b9296eb4..f75e2d55fa76.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-10319e706e8a
+seed: 303
+experiment:
+  id: proposed.prefetch-bad-arity-queue
+  inputs:
+    pipeline: "*1\r\n$4\r\nPING\r\n*3\r\n$3\r\nSET\r\n$1\r\na\r\n$1\r\n1\r\n*2\r\n\
+      $3\r\nGET\r\n$1\r\na\r\n*1\r\n$3\r\nGET\r\n"
+    io_threads: 5
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

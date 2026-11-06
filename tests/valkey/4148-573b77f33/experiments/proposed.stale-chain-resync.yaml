@@ -1,0 +1,62 @@
+extends: [valkey.base]
+id: proposed.stale-chain-resync
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 2}
+metadata:
+  description: Kill the primary and, while it is down, point a replica at its stale
+    sibling under replica-serve-stale-data no; PSYNC must get -NOMASTERLINK, retry,
+    and sync once the chain heals, with no acknowledged write lost
+inputs:
+  properties:
+    down_s: {type: number, minimum: 2, maximum: 30, default: 6}
+components:
+- use: valkey.observer.log
+  id: repl-logs
+  config:
+    instances: all
+    expect:
+    - {evidence_id: valkey.psync.try-later-logged, pattern: "Primary is currently\
+        \ unable to PSYNC", required: true}
+    forbidden:
+    - {pattern: "Retrying with SYNC"}
+- use: valkey.fault.process-signal
+  id: kill-primary
+  config:
+    when_event: warm-up.completed
+    instance: primary
+    signal: SIGKILL
+    restart: true
+    restart_mode: background
+    restart_delay_s: {$ref: inputs.down_s}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, repl-logs, kill-primary]
+  config: {seconds: 2}
+- use: valkey.action.replicaof
+  id: attach-chain
+  depends_on: [warm-up]
+  config:
+    instance: valkey-2
+    primary: valkey-1
+    wait_linked: true
+    timeout_s: 90
+- use: valkey.action.wait-event
+  id: primary-back
+  depends_on: [attach-chain]
+  config: {event: kill-primary.recovered, timeout_s: 120}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [primary-back]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_s: 2.5
+    loss_window_faults: [kill-primary]
+required_events: [warm-up.completed, kill-primary.recovered]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-primary}
+- {evidence_id: valkey.psync.try-later-logged, source: repl-logs}
+- {evidence_id: valkey.replication.replicaof, source: attach-chain}

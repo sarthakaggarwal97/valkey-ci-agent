@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 327db78a709e..a251aeb5d723.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-58ddd763de64
+seed: 2
+experiment:
+  id: proposed.slot-migration-establish-io-threads
+  inputs:
+    io_threads: 2
+    always_active: 'yes'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

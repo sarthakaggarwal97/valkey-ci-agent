@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8eaefda4fdf8614632ea6e90fc97112aeb2b4f4d",
+  "parent": "fb94efbd9b7a0a6f49433598931d4ad25ba20b2c",
+  "pr": 4155,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix MOVE/COPY command skip the current-DB ACL check (#4155)",
+  "date": "2026-07-31",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.3851,
+  "findings": [],
+  "recorded": []
+}

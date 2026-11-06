@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.debug-pause-before-psync
+deployment:
+  modes: [standalone]
+metadata:
+  description: DEBUG PAUSE-BEFORE-PSYNC exists on the change and errors on the parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dbg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, PAUSE-BEFORE-PSYNC, 1], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [DEBUG, PAUSE-BEFORE-PSYNC, 0], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [dbg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbg}

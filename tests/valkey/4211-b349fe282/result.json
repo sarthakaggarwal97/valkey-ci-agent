@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b349fe2821e3998534b1454c1b64a478daf8c6b7",
+  "parent": "f75e2d55fa768b022ec712b28cb0b43f40b79c3d",
+  "pr": 4211,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Prevent double-free of the module timer when the callback stops it (#4211)",
+  "date": "2026-08-03",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 2.4498,
+  "findings": [],
+  "recorded": []
+}

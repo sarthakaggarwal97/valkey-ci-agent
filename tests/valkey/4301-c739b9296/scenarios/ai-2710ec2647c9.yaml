@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 12e5e384d22f..c739b9296eb4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2710ec2647c9
+seed: 4301
+experiment:
+  id: proposed.cluster-copy-crossdb-migration
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

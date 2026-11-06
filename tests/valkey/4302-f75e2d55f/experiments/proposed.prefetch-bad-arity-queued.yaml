@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.prefetch-bad-arity-queued
+deployment:
+  modes: [standalone]
+metadata:
+  description: A single-read pipeline of bad-arity queued commands reaches getKeysFromCommand
+    via the I/O-thread key prefetcher
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, default: 4}
+    prefetch_batch: {type: integer, default: 16}
+components:
+- use: valkey.action.commands
+  id: pipeline
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    server_config:
+      io-threads: {$ref: inputs.io_threads}
+      io-threads-always-active: "yes"
+      prefetch-batch-max-size: {$ref: inputs.prefetch_batch}
+    commands:
+    - {raw: "PING\r\nGET\r\nMSET k1 v1 k2 v2\r\nEVAL x\r\nMIGRATE a b\r\n", connection: pipe,
+      expect_difference: true, expect: {equals: PONG}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pipeline}

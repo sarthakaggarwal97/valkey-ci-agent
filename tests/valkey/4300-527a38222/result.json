@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "527a38222043300c3e645d7d7fa0b3c6de719171",
+  "parent": "b349fe2821e3998534b1454c1b64a478daf8c6b7",
+  "pr": 4300,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix FIELDS token validation for HPERSIST and HTTL family commands (#4300)",
+  "date": "2026-08-03",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 0.9841,
+  "findings": [],
+  "recorded": []
+}

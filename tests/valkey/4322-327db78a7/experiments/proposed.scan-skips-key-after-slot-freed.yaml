@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.scan-skips-key-after-slot-freed
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Cluster SCAN returns every key of an untouched slot even when another
+    slot is emptied mid-iteration
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    keys_per_slot: {type: string, default: "400"}
+    count: {type: string, default: "5"}
+components:
+- use: valkey.action.commands
+  id: scan
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    timeout_s: 30
+    commands:
+    - command:
+      - EVAL
+      - "local function ks(k) return redis.call('cluster','keyslot',k) end local fill=tonumber(ARGV[1])\
+        \ local cnt=ARGV[2] local sa=ks('{t3}') local sb=ks('{t2}') if sa>=sb then\
+        \ return redis.error_reply('unexpected slot order') end for j=1,fill do redis.call('set','{t3}-'..j,'v')\
+        \ redis.call('set','{t2}-'..j,'v') end local cursor='0' local seen={} while\
+        \ true do local res=redis.call('scan',cursor,'count',cnt) cursor=res[1] for\
+        \ i=1,#res[2] do seen[res[2][i]]=true end local c=tonumber(cursor) if c==0\
+        \ then return redis.error_reply('scan ended before mid-slot') end if c>=16384\
+        \ and (c%16384)==sa then break end end for j=1,fill do redis.call('del','{t3}-'..j)\
+        \ end local guard=0 while true do local res=redis.call('scan',cursor,'count',cnt)\
+        \ cursor=res[1] for i=1,#res[2] do seen[res[2][i]]=true end if tonumber(cursor)==0\
+        \ then break end guard=guard+1 if guard>1000000 then return redis.error_reply('scan\
+        \ did not terminate') end end local n=0 for k,_ in pairs(seen) do if string.sub(k,1,4)=='{t2}'\
+        \ then n=n+1 end end if n==fill then return 1 else return 0 end"
+      - "0"
+      - {$ref: inputs.keys_per_slot}
+      - {$ref: inputs.count}
+      expect_difference: true
+      expect: {equals: 1}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scan}

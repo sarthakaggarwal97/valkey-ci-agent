@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c07e9b6cf2f816acb358ee7d504e8f03e15de9cd",
+  "parent": "cc353b1f683a4a3cae2f3173517827230dc8e489",
+  "pr": 4328,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix and complete slot migration pipe comments (#4328)",
+  "date": "2026-08-04",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2177,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff only edits comments in src/server.h: it replaces the placeholder 'xxxx' comment on slot_migration_pipe_conn with a real description and clarifies the comment on slot_migration_pipe_bufflen. No executable code, data structure, config, or protocol behaviour changes, so no scenario can exercise anything this change altered."
+}

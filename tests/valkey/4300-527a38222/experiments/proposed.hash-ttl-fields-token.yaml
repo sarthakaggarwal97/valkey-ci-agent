@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.hash-ttl-fields-token
+deployment:
+  modes: [standalone]
+metadata:
+  description: HPERSIST and the HTTL family reject a mangled FIELDS token with a syntax
+    error instead of silently acting on the fields
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_max_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: httl-fields
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      hash-max-listpack-entries: {$ref: inputs.hash_max_listpack_entries}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HEXPIRE, h, 10000, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HPERSIST, h, BOGUS, 1, f1], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [HPERSIST, h, FIELDS, 1, f1], expect_difference: true, expect: {equals: [
+          1]}}
+    - {command: [HTTL, h, "", 1, f2], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [HPTTL, h, fieldsx, 1, f2], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [HEXPIRETIME, h, notfields, 1, f2], expect_difference: true, expect: {
+        error: "syntax error"}}
+    - {command: [HPEXPIRETIME, h, notfields, 1, f2], expect_difference: true, expect: {
+        error: "syntax error"}}
+    - {command: [HTTL, h, BOGUS, notanum, f2], expect_difference: true, expect: {
+        error: "syntax error"}}
+    - {command: [HPERSIST, h, BOGUS, 9223372036854775807, f2], expect_difference: true,
+      expect: {error: "syntax error"}}
+    - {command: [SET, s, v], expect: {equals: OK}}
+    - {command: [HPERSIST, s, BOGUS, 1, f1], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [HTTL, nokey, BOGUS, 1, f1], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [HTTL, h, FiElDs, 1, f2], expect: {equals: [-1]}}
+    - {command: [HSET, fields, fields, v], expect: {equals: 1}}
+    - {command: [HTTL, fields, FIELDS, 1, fields], expect: {equals: [-1]}}
+    - {command: [HPERSIST, h, FIELDS, a, b, c], expect: {error: "not an integer"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [httl-fields.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: httl-fields}

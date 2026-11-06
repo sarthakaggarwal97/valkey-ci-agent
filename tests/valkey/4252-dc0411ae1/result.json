@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dc0411ae14d8faa64d6a01055c46d23b452ac566",
+  "parent": "aed05498ac9e65f18ebb5beb57c47344ffc052c8",
+  "pr": 4252,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "valkey-benchmark: fix -r option to support keyspace values above INT_MAX (#4252)",
+  "date": "2026-07-28",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 23,
+    "executed": 21,
+    "percent": 91,
+    "uncovered": [
+      "src/fuzzer_command_generator.c:1201",
+      "src/valkey-benchmark-dataset.c:431"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 5.2029,
+  "findings": [],
+  "recorded": []
+}

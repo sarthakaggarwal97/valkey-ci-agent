@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.resp3-self-publish-copy-avoid-tear
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESP3 self-publish under reply copy avoidance must keep the push frame
+    contiguous after the command reply, including pmessage, smessage and inside EXEC
+inputs:
+  properties:
+    io_threads: {type: integer, enum: [1, 4], default: 1}
+    cluster_mode: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: selfpub
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 3
+    cluster: {$ref: inputs.cluster_mode}
+    server_config:
+      min-string-size-avoid-copy-reply: 1
+      min-string-size-avoid-copy-reply-threaded: 1
+      min-io-threads-avoid-copy-reply: 2
+      io-threads: {$ref: inputs.io_threads}
+    timeout_s: 10
+    commands:
+    - {command: [SUBSCRIBE, wiretest], connection: subA, expect: {equals: [subscribe,
+          wiretest, 1]}}
+    - {command: [PSUBSCRIBE, "news.*"], connection: subB, expect: {equals: [psubscribe,
+          "news.*", 1]}}
+    - {command: [SUBSCRIBE, chanmulti], connection: subC, expect: {equals: [subscribe,
+          chanmulti, 1]}}
+    - {command: [SSUBSCRIBE, shardchan], connection: subD, expect: {equals: [ssubscribe,
+          shardchan, 1]}}
+    - {command: [PUBLISH, wiretest, XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX],
+      connection: subA, expect_difference: true, expect: {equals: 1}}
+    - {command: [PUBLISH, news.XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX,
+        XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX],
+      connection: subB, expect_difference: true, expect: {equals: 1}}
+    - {command: [SPUBLISH, shardchan, XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX],
+      connection: subD, expect_difference: true, expect: {equals: 1}}
+    - {command: [MULTI], connection: subC, expect: {equals: OK}}
+    - {command: [PUBLISH, chanmulti, XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX],
+      connection: subC, expect: {equals: QUEUED}}
+    - {command: [EXEC], connection: subC, expect_difference: true, expect: {equals: [
+          1]}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {read: true, connection: subA, expect_difference: true, expect: {equals: [[
+            message, wiretest, XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX]]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [selfpub.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: selfpub}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey af321c4dfd1b..cb2d8351399e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c1246ac5f19f
+seed: 4143
+experiment:
+  id: proposed.debug-pause-before-psync
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

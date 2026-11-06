@@ -1,0 +1,100 @@
+extends: [valkey.base]
+id: proposed.psync-busy-retry
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 2}
+metadata:
+  description: >-
+    A replica paused right before sending PSYNC (DEBUG PAUSE-BEFORE-PSYNC) is resumed
+    while its primary serves -BUSY from a long script: it must retry PSYNC instead
+    of downgrading to legacy SYNC, resync once the script ends, and ACK offsets so
+    WAIT counts it.
+inputs:
+  properties:
+    resume_after_s: {type: number, minimum: 0.5, maximum: 10, default: 1}
+components:
+- use: valkey.action.replicaof
+  id: detach
+  depends_on: [writes]
+  config:
+    instance: valkey-2
+    primary: null
+- use: valkey.action.commands
+  id: arm
+  depends_on: [detach]
+  config:
+    instances: [valkey-2]
+    commands:
+    - {command: [DEBUG, PAUSE-BEFORE-PSYNC, 1], expect: {equals: OK}}
+- use: valkey.action.replicaof
+  id: attach
+  depends_on: [arm]
+  config:
+    instance: valkey-2
+    primary: valkey-0
+    wait_linked: false
+- use: valkey.action.sleep
+  id: let-replica-pause
+  depends_on: [attach]
+  config: {seconds: 1.5}
+- use: valkey.observer.log-trigger
+  id: busy-log
+  config:
+    instances: [valkey-0]
+    rules:
+    - pattern: "Slow script detected"
+      publish: busy.detected
+      evidence_id: valkey.script.busy-logged
+      required: true
+      max_publishes: 1
+- use: valkey.fault.process-signal
+  id: resume-replica
+  config:
+    when_event: busy.detected
+    instance: valkey-2
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.resume_after_s}
+- use: valkey.action.commands
+  id: busy-script
+  depends_on: [let-replica-pause, busy-log, resume-replica]
+  config:
+    instances: [valkey-0]
+    timeout_s: 30
+    commands:
+    - command:
+      - EVAL
+      - "local s = os.clock() while os.clock() - s < 3 do end return 1"
+      - 0
+      expect: {equals: 1}
+- use: valkey.action.poll
+  id: links-up
+  depends_on: [busy-script]
+  config:
+    instances: [valkey-2]
+    section: replication
+    field: master_link_status
+    predicate: {equals: up}
+    timeout_s: 60
+- use: valkey.action.commands
+  id: acks-work
+  depends_on: [links-up]
+  config:
+    instances: [valkey-0]
+    timeout_s: 15
+    commands:
+    - {command: [WAIT, 2, 5000], expect: {min: 2}}
+- use: valkey.observer.log
+  id: replica-log
+  config:
+    instances: [valkey-2]
+    expect:
+    - pattern: "unable to PSYNC but should be in the future: -BUSY"
+      evidence_id: valkey.replication.busy-psync-retry-logged
+      required: true
+    forbidden:
+    - pattern: "Retrying with SYNC"
+required_events: [busy.detected, busy-script.completed]
+required_evidence:
+- {evidence_id: valkey.replication.busy-psync-retry-logged, source: replica-log}
+- {evidence_id: valkey.script.busy-logged, source: busy-log}
+- {evidence_id: valkey.fault.injected, source: resume-replica}

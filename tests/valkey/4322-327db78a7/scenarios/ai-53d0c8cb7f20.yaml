@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0fc8cdafcba8..327db78a709e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-53d0c8cb7f20
+seed: 1002
+experiment:
+  id: proposed.scan-skips-key-after-slot-freed
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    keys_per_slot: '2000'
+    count: '16'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

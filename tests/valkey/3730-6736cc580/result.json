@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6736cc580335cac05fdc3b4ffd1f65e824389484",
+  "parent": "8eaefda4fdf8614632ea6e90fc97112aeb2b4f4d",
+  "pr": 3730,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "conf: document chown(2) requirement for unixsocketgroup (#3730)",
+  "date": "2026-07-31",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2059,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a documentation comment to valkey.conf (explaining that unixsocketgroup performs chown(2) and must be permitted under syscall-filtering sandboxes). No server code, config parsing, or runtime behaviour is modified, so no scenario can reach or validate it."
+}

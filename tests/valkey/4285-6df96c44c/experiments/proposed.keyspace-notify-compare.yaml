@@ -1,0 +1,121 @@
+extends: [valkey.liveness]
+id: proposed.keyspace-notify-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Keyspace notifications after the notifyKeyspaceEvent allocation rewrite are byte-identical
+    to the parent build: zero-subscriber early return, exact channel bytes for empty,
+    binary and long-dbid keys, K/E bitmask gating, and the full build path with a
+    non-matching subscriber.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: notify
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, notify-keyspace-events, KEA], expect: {equals: OK}}
+    - {command: [SET, nosub, v1], expect: {equals: OK}}
+    - {command: [PSUBSCRIBE, "*"], connection: sub, expect: {equals: [psubscribe,
+          "*", 1]}}
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [PUBLISH, fence1, go], expect: {equals: 1}}
+    - read: true
+      connection: sub
+      expect:
+        equals:
+        - [pmessage, "*", "__keyspace@0__:foo", set]
+        - [pmessage, "*", "__keyevent@0__:set", foo]
+        - [pmessage, "*", fence1, go]
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, t1, a], expect: {equals: QUEUED}}
+    - {command: [DEL, t1], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, 1]}}
+    - {command: [SET, "", empty], expect: {equals: OK}}
+    - {command: [RPUSH, l, a], expect: {equals: 1}}
+    - {command: [EXPIRE, l, 100], expect: {equals: 1}}
+    - {command: [PERSIST, l], expect: {equals: 1}}
+    - {command: [RENAME, l, l2], expect: {equals: OK}}
+    - {command: [DEL, foo], expect: {equals: 1}}
+    - {command: [PEXPIRE, l2, 50], expect: {equals: 1}}
+    - {command: [EXISTS, l2], wait_s: 5, expect: {equals: 0}}
+    - {command: [PUBLISH, fence2, go], expect: {equals: 1}}
+    - read: true
+      connection: sub
+      expect:
+        equals:
+        - [pmessage, "*", "__keyspace@0__:t1", set]
+        - [pmessage, "*", "__keyevent@0__:set", t1]
+        - [pmessage, "*", "__keyspace@0__:t1", del]
+        - [pmessage, "*", "__keyevent@0__:del", t1]
+        - [pmessage, "*", "__keyspace@0__:", set]
+        - [pmessage, "*", "__keyevent@0__:set", ""]
+        - [pmessage, "*", "__keyspace@0__:l", rpush]
+        - [pmessage, "*", "__keyevent@0__:rpush", l]
+        - [pmessage, "*", "__keyspace@0__:l", expire]
+        - [pmessage, "*", "__keyevent@0__:expire", l]
+        - [pmessage, "*", "__keyspace@0__:l", persist]
+        - [pmessage, "*", "__keyevent@0__:persist", l]
+        - [pmessage, "*", "__keyspace@0__:l", rename_from]
+        - [pmessage, "*", "__keyevent@0__:rename_from", l]
+        - [pmessage, "*", "__keyspace@0__:l2", rename_to]
+        - [pmessage, "*", "__keyevent@0__:rename_to", l2]
+        - [pmessage, "*", "__keyspace@0__:foo", del]
+        - [pmessage, "*", "__keyevent@0__:del", foo]
+        - [pmessage, "*", "__keyspace@0__:l2", expire]
+        - [pmessage, "*", "__keyevent@0__:expire", l2]
+        - [pmessage, "*", "__keyspace@0__:l2", expired]
+        - [pmessage, "*", "__keyevent@0__:expired", l2]
+        - [pmessage, "*", fence2, go]
+    - {command: [SELECT, 9], expect: {equals: OK}}
+    - {command: [SET, !!binary "/v8=", binval], expect: {equals: OK}}
+    - {command: [SELECT, 15], expect: {equals: OK}}
+    - {command: [SET, dbk, v], expect: {equals: OK}}
+    - {command: [PUBLISH, fence3, go], expect: {equals: 1}}
+    - read: true
+      connection: sub
+      expect:
+        equals:
+        - [pmessage, "*", {$base64: "X19rZXlzcGFjZUA5X186/v8="}, set]
+        - [pmessage, "*", "__keyevent@9__:set", {$base64: "/v8="}]
+        - [pmessage, "*", "__keyspace@15__:dbk", set]
+        - [pmessage, "*", "__keyevent@15__:set", dbk]
+        - [pmessage, "*", fence3, go]
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [CONFIG, SET, notify-keyspace-events, "$"], expect: {equals: OK}}
+    - {command: [SET, mask, a], expect: {equals: OK}}
+    - {command: [CONFIG, SET, notify-keyspace-events, "K$"], expect: {equals: OK}}
+    - {command: [SET, mask, b], expect: {equals: OK}}
+    - {command: [CONFIG, SET, notify-keyspace-events, "E$"], expect: {equals: OK}}
+    - {command: [SET, mask, c], expect: {equals: OK}}
+    - {command: [PUBLISH, fence4, go], expect: {equals: 1}}
+    - read: true
+      connection: sub
+      expect:
+        equals:
+        - [pmessage, "*", "__keyspace@0__:mask", set]
+        - [pmessage, "*", "__keyevent@0__:set", mask]
+        - [pmessage, "*", fence4, go]
+    - {command: [CONFIG, SET, notify-keyspace-events, KEA], expect: {equals: OK}}
+    - {command: [PUNSUBSCRIBE, "*"], connection: sub, expect: {equals: [punsubscribe,
+          "*", 0]}}
+    - {command: [SET, aftersub, v], expect: {equals: OK}}
+    - {command: [SUBSCRIBE, lonechan], connection: other, expect: {equals: [subscribe,
+          lonechan, 1]}}
+    - {command: [SET, lonely, v], expect: {equals: OK}}
+    - {command: [GET, lonely], expect: {equals: v}}
+    - {read: true, connection: other, expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [notify.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: notify}
