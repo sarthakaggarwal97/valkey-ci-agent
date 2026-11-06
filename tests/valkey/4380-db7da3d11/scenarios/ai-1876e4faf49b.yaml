@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cc45d0637a00..db7da3d1154b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1876e4faf49b
+seed: 303
+experiment:
+  id: proposed.cluster-value-replace-expire
+  inputs:
+    resp: 2
+    lazyfree: 'yes'
+    hash_listpack_entries: 0
+deployment:
+  mode: standalone
+  base_port: 7200

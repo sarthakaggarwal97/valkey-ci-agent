@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.command-docs-since-metadata
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS reports since 9.2.0 (not 10.0.0) for CONFIG INFO and the
+    MOVE REPLACE option, while MOVE REPLACE and CONFIG INFO behaviour is unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, DOCS, MOVE], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, CONFIG], expect_difference: true, expect: {exists: true}}
+    - {command: [SET, k, v1], expect: {equals: OK}}
+    - {command: [MOVE, k, 1], expect: {equals: 1}}
+    - {command: [SET, k, v2], expect: {equals: OK}}
+    - {command: [MOVE, k, 1], expect: {equals: 0}}
+    - {command: [MOVE, k, 1, REPLACE], expect: {equals: 1}}
+    - {command: [EXISTS, k], expect: {equals: 0}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v2}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [CONFIG, INFO, maxmemory], expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cc45d0637a00d59d41cd1e1315de1ced19e78982",
+  "parent": "42aff62b3094489d3b6726f9907f92285bb1d3a5",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix various typos around otherwise with a comma",
+  "date": "2026-08-11",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6075,
+  "findings": [],
+  "recorded": [],
+  "reason": "Every hunk in the diff is a comment or documentation punctuation fix (adding a comma after 'Otherwise') in C source comments, valkey.conf comments, Tcl test comments, a Ruby utility comment, and one line of valkey-cli's --latency help text. No executable code, reply, protocol, persistence, replication, or configuration behavior changes, so there is nothing for a scenario to reach or compare."
+}

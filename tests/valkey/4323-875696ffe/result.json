@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "875696ffec88b34493fb931251c1711d779dcad4",
+  "parent": "db7da3d1154baa795fad5cd2fd1f57e0a3c2435f",
+  "pr": 4323,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Clear the redaction bitmap between commands in a transaction (#4323)",
+  "date": "2026-08-12",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 7,
+    "executed": 7,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.81,
+  "findings": [],
+  "recorded": []
+}

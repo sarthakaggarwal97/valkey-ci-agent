@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "db7da3d1154baa795fad5cd2fd1f57e0a3c2435f",
+  "parent": "cc45d0637a00d59d41cd1e1315de1ced19e78982",
+  "pr": 4380,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Resolve a key's slot from the key, not from the executing command (#4380)",
+  "date": "2026-08-12",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 9,
+  "proven": 2,
+  "hunted": 9,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 14,
+    "executed": 14,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.6894,
+  "findings": [],
+  "recorded": []
+}

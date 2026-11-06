@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d9ce598b07c084270582abe6e85488e217271755",
+  "parent": "2c38467d3bed09c9e3b8aa7476cde83b3e5c15f3",
+  "pr": 4368,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove duplicate unreachable \"command\" branch in fuzzer arg generator (#4368)",
+  "date": "2026-08-12",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2182,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change deletes a duplicate, unreachable else-if branch in src/fuzzer_command_generator.c, Valkey's in-tree fuzzing harness code. It is dead-code removal in test tooling, not in the server: no command behavior, reply, replication, persistence, or cluster path changes, so no scenario can reach or distinguish it."
+}

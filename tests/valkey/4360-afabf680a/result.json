@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "afabf680adc34a410409c1c32cc344544b3fb2cb",
+  "parent": "abebdb02021a53f96724540e5f53d8a501c4f587",
+  "pr": 4360,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix use-after-free crash when cluster messages arrive after module unload (#4360)",
+  "date": "2026-08-13",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.8737,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix removes a module's cluster-message receivers when the module is unloaded (moduleUnregisterCleanup -> moduleUnregisterClusterReceivers), preventing a use-after-free when a cluster-bus message of that type arrives afterward and moduleCallClusterReceivers dispatches to the freed module. Reproducing it needs MODULE UNLOAD on a still-running cluster node followed by a cross-node cluster-bus message to the unloaded type. No sanctioned component can do this: valkey.action.commands refuses MODULE LOAD/LOADEX/UNLOAD on both private and deployment instances (and the private-server command except"
+}

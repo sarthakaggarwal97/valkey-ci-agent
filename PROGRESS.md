@@ -1,11 +1,11 @@
 # Fuzzer walk
 
-Updated 2026-11-06T13:20+00:00.
+Updated 2026-11-06T13:39+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 338 | 2160 | #4401 (2026-08-13) | 225 | 48.3 |
-| valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 32 | 15.6 |
+| valkey-io/valkey | 358 | 2140 | #3971 (2026-08-11) | 245 | 51.1 |
+| valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 12 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
 | valkey-io/valkey-search | 255 | 413 | #903 (2026-03-13) | 203 | 36.4 |
 
@@ -13,28 +13,28 @@ Updated 2026-11-06T13:20+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-06T12:45:51+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42193821279): 20 merge(s) tested, 6 without a code change.
+[2026-11-06T13:39:02+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42220168667): 20 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey#5251](https://github.com/valkey-io/valkey/pull/5251) ([tests](tests/valkey/5251-eda518abf/)): Fix CLUSTER GETSLOTMIGRATIONS reply schema (#5251): declined: The change edits only src/commands/cluster-getslotmigrations.json, the reply-schema metadata: it renames the documented field 'link_name' to 'name' and documents the existing 'remaining_repl_size' field. The server's actual reply in clusterCommandGetSlotMigrations (cluster_migrateslots.c) 
-- [valkey-io/valkey#5289](https://github.com/valkey-io/valkey/pull/5289) ([tests](tests/valkey/5289-c77a4e8da/)): Document missing key types and notification flags in module API (#5289): declined: The change is documentation-only: it edits two doc comments in src/module.c (listing the key type constants returned by VM_KeyType and the notification flags accepted by SubscribeToKeyspaceEvents). No code, constant values, replies, or behavior change, so no scenario can distinguish the ch
-- [valkey-io/valkey#4522](https://github.com/valkey-io/valkey/pull/4522) ([tests](tests/valkey/4522-4ac65b3d8/)): Refactor: Extract evictSingleKey() from performEvictions() (#4522): declined: This is a pure behavior-preserving refactor: it moves the per-key eviction body of performEvictions() verbatim into a new static helper evictSingleKey() in src/evict.c. Every operation (execution-unit bracketing, memory-delta measurement around dbGenericDelete, latency sampling, stat_evict
-- [valkey-io/valkey#4492](https://github.com/valkey-io/valkey/pull/4492) ([tests](tests/valkey/4492-09bd34780/)): Refactor internal AE polling API to not pass aeEventLoop to backends (#4492): 0 of 11 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4472](https://github.com/valkey-io/valkey/pull/4472) ([tests](tests/valkey/4472-382a13495/)): Rewrite ready-key UAF fix with rotation-based iteration (#4472): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4459](https://github.com/valkey-io/valkey/pull/4459) ([tests](tests/valkey/4459-52a98359d/)): Fix ORDERBY truncation in CLUSTER SLOT-STATS comparators (#4459): declined: The fix only changes CLUSTER SLOT-STATS ORDERBY output when two slots' ordering statistic (key-count, cpu-usec, network-bytes-in/out) differ by roughly 2^31 or more, since the bug was a uint64_t subtraction truncated to int in the qsort comparators; below that threshold both the parent and
-- [valkey-io/valkey#4488](https://github.com/valkey-io/valkey/pull/4488) ([tests](tests/valkey/4488-3f0d910c8/)): Minor cleanup to update cluster-node-timeout config name references (#4488): declined: The change only edits human-readable text: a log message string in valkey-cli's clusterManagerCommandSetTimeout error path (renaming 'node-timeout' to 'cluster-node-timeout' in the message) and comments/example numbers in valkey.conf. No executable behaviour, command reply, config parsing,
-- [valkey-io/valkey#4318](https://github.com/valkey-io/valkey/pull/4318) ([tests](tests/valkey/4318-13e6aa835/)): build: pass CPPFLAGS to bundled deps and src (#4318): declined: The change is purely to the build system: it appends $(CPPFLAGS) to the compiler invocation lines in the Makefiles of bundled deps (fpconv, hdr_histogram, linenoise), src/, and the Lua module, and persists CPPFLAGS in .make-settings. It adds no code, changes no command, reply, replication,
-- [valkey-io/valkey#4454](https://github.com/valkey-io/valkey/pull/4454) ([tests](tests/valkey/4454-11188c239/)): Persist non-zero cluster-replica-priority to nodes.conf as an aux field (#4454): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4469](https://github.com/valkey-io/valkey/pull/4469) ([tests](tests/valkey/4469-0fb02b7eb/)): Fix include order in custom_matchers.hpp to prevent min/max macro pollution (#4469): declined: The change only reorders gmock/gtest #include directives in unit-test headers (src/unit/custom_matchers.hpp and src/unit/wrappers.h) to avoid min/max macro pollution when compiling the C++ unit tests. It is a build/test-infrastructure fix with no change to server, replication, persistence,
-- [valkey-io/valkey#4395](https://github.com/valkey-io/valkey/pull/4395) ([tests](tests/valkey/4395-12de25e8d/)): Fix mem_clients_type_memory leak for cached primary client (#4395): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4440](https://github.com/valkey-io/valkey/pull/4440) ([tests](tests/valkey/4440-36aca4bfb/)): Skip IO-thread write-done client re-lookup unless update_state sync-invokes handlers (#4440): 0 of 6 test(s) reached the change, coverage 50%
-- [valkey-io/valkey#3118](https://github.com/valkey-io/valkey/pull/3118) ([tests](tests/valkey/3118-5d4f9d670/)): Incr the dirty counter when deleting expired keys/fields from active expire (#3118): 2 of 9 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3984](https://github.com/valkey-io/valkey/pull/3984) ([tests](tests/valkey/3984-413f6c32a/)): AOF loading must not check ACL permissions (#3984): 2 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3531](https://github.com/valkey-io/valkey/pull/3531) ([tests](tests/valkey/3531-5d3fd6858/)): Add streaming compression support for RDB (#3531): 5 of 18 test(s) reached the change, coverage 77%, 2 skipped (required capability 'build' is unsupported)
-- [valkey-io/valkey#3531](https://github.com/valkey-io/valkey/pull/3531) ([tests](tests/valkey/3531-2d7f3d9fd/)): Vendor LZ4 1.10.0 (#3531): declined: The change only vendors the LZ4 1.10.0 sources into deps/lz4/ and adds them to the deps build (deps/Makefile, deps/CMakeLists.txt), plus README, LICENSE, REUSE.toml and typos.toml updates. No file under src/ references LZ4: the server, tools and tests neither compile nor link the new libra
-- [valkey-io/valkey#4415](https://github.com/valkey-io/valkey/pull/4415) ([tests](tests/valkey/4415-cd6290354/)): Fix signal mask parsing on 32-bit systems (#4415): declined: This is a 32-bit-only correctness fix with no observable effect on the 64-bit servers the fuzzer runs. The widened type (unsigned long -> unsigned long long) and 1L -> 1ULL shift only matter where `unsigned long` is 32 bits; on a 64-bit (x86_64) build `unsigned long` is already 64 bits, so
-- [valkey-io/valkey#4197](https://github.com/valkey-io/valkey/pull/4197) ([tests](tests/valkey/4197-a3c5f440e/)): Track full sync completion time (#4197): 2 of 5 test(s) reached the change, coverage 92%
-- [valkey-io/valkey#4410](https://github.com/valkey-io/valkey/pull/4410) ([tests](tests/valkey/4410-4e98093b2/)): Fix out-of-bounds access in cluster message receivers (#4410): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4267](https://github.com/valkey-io/valkey/pull/4267) ([tests](tests/valkey/4267-917de6ac1/)): Log EXEC in commandlog (#4267): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#4401](https://github.com/valkey-io/valkey/pull/4401) ([tests](tests/valkey/4401-1e7a8f310/)): Skip IO-thread read-done followup unless update_state sync-invokes handlers (#4401): 0 of 3 test(s) reached the change, coverage 50%
+- [valkey-io/valkey#4360](https://github.com/valkey-io/valkey/pull/4360) ([tests](tests/valkey/4360-afabf680a/)): Fix use-after-free crash when cluster messages arrive after module unload (#4360): declined: The fix removes a module's cluster-message receivers when the module is unloaded (moduleUnregisterCleanup -> moduleUnregisterClusterReceivers), preventing a use-after-free when a cluster-bus message of that type arrives afterward and moduleCallClusterReceivers dispatches to the freed modul
+- [valkey-io/valkey#4402](https://github.com/valkey-io/valkey/pull/4402) ([tests](tests/valkey/4402-abebdb020/)): Correct the `since` version on CONFIG INFO and MOVE REPLACE to 9.2.0 (#4402): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#2247](https://github.com/valkey-io/valkey/pull/2247) ([tests](tests/valkey/2247-3f16ffa04/)): Consolidating nonexistent spelling (#2247): declined: The change is a spelling consolidation (#2247): every hunk in the C sources (acl.c, bitops.c, hyperloglog.c, module.c, networking.c, rax.c, t_set.c, t_stream.c) edits only comment text, replacing 'non existing'/'non-existent' with 'nonexistent'. The remaining hunks rename test titles and p
+- [valkey-io/valkey#4381](https://github.com/valkey-io/valkey/pull/4381) ([tests](tests/valkey/4381-8cec1092b/)): Validate stream listpack live and deleted record counts on load (#4381): 2 of 2 test(s) reached the change, coverage 83%; [check, introduced by #4381](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/79); [crash, introduced by #4381](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/80)
+- [valkey-io/valkey#2239](https://github.com/valkey-io/valkey/pull/2239) ([tests](tests/valkey/2239-7b374fcf7/)): Grammar corrections in comments (#2239): declined: The change (PR #2239) only corrects grammar in comments across C sources, utils scripts and Tcl test helpers, plus rewords one static SENTINEL HELP usage string. No code path, reply semantics, config, persistence, replication or protocol behaviour is altered, so there is nothing a scenario
+- [valkey-io/valkey#2253](https://github.com/valkey-io/valkey/pull/2253) ([tests](tests/valkey/2253-bb3b927f2/)): Improve spelling and grammar (#2253): declined: The change is purely cosmetic: every hunk edits a code comment, a Tcl test name/comment, or valkey.conf commentary. No executable statement, error message, reply string, log string, or config default changes — the geo.c edit fixes a usage comment, the module.c/rdb.c/replication.c/rdma.c/sc
+- [valkey-io/valkey#4368](https://github.com/valkey-io/valkey/pull/4368) ([tests](tests/valkey/4368-d9ce598b0/)): Remove duplicate unreachable "command" branch in fuzzer arg generator (#4368): declined: The change deletes a duplicate, unreachable else-if branch in src/fuzzer_command_generator.c, Valkey's in-tree fuzzing harness code. It is dead-code removal in test tooling, not in the server: no command behavior, reply, replication, persistence, or cluster path changes, so no scenario can
+- [valkey-io/valkey#2249](https://github.com/valkey-io/valkey/pull/2249) ([tests](tests/valkey/2249-2c38467d3/)): Fixes grammatical and spelling errors (#2249): declined: The diff only fixes spelling and grammar: code comments, README and valkey.conf comment text, test-suite message strings, and a consistent rename of the local variable restore_replicy to restore_policy in functionRestoreCommand (src/functions.c), with every read and write of the variable r
+- [valkey-io/valkey#3729](https://github.com/valkey-io/valkey/pull/3729) ([tests](tests/valkey/3729-6cdff5ef0/)): Fix grammar errors in code comments (#3729): declined: The change (#3729) only fixes grammar in C code comments across aof.c, cluster_legacy.c, db.c, entry.c, eval.c, latency.c, module.c, t_set.c, t_stream.c, util.c, valkey-check-aof.c, valkeymodule.h and ziplist.c. No executable statement, constant, reply text, or configuration is touched, so
+- [valkey-io/valkey#3922](https://github.com/valkey-io/valkey/pull/3922) ([tests](tests/valkey/3922-967c7cc8e/)): Harden stream validation on RDB load against crafted metadata (#3922): 2 of 2 test(s) reached the change, coverage 91%; [check, introduced by #3922](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/79); [crash, introduced by #3922](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/80)
+- [valkey-io/valkey#2243](https://github.com/valkey-io/valkey/pull/2243) ([tests](tests/valkey/2243-975cfc102/)): Correct spelling in module cleanup, command docs, source comments, and Tcl tests (#2243): declined: The change is purely spelling fixes: comments and docs in bitops.c, defrag.c, lolwut5.c, module.c, replication.c, rio.c, server.c, siphash.c, src/commands/README.md and valkey.conf, plus test-name/comment typos in Tcl tests. The only code edit renames the internal function moduleRemoveCate
+- [valkey-io/valkey#4323](https://github.com/valkey-io/valkey/pull/4323) ([tests](tests/valkey/4323-875696ffe/)): Clear the redaction bitmap between commands in a transaction (#4323): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#4380](https://github.com/valkey-io/valkey/pull/4380) ([tests](tests/valkey/4380-db7da3d11/)): Resolve a key's slot from the key, not from the executing command (#4380): 2 of 9 test(s) reached the change, coverage 100%
+- [valkey-io/valkey@cc45d0637a00](https://github.com/valkey-io/valkey/commit/cc45d0637a00d59d41cd1e1315de1ced19e78982) ([tests](tests/valkey/cc45d0637/)): Fix various typos around otherwise with a comma: declined: Every hunk in the diff is a comment or documentation punctuation fix (adding a comma after 'Otherwise') in C source comments, valkey.conf comments, Tcl test comments, a Ruby utility comment, and one line of valkey-cli's --latency help text. No executable code, reply, protocol, persistence,
+- [valkey-io/valkey@42aff62b3094](https://github.com/valkey-io/valkey/commit/42aff62b3094489d3b6726f9907f92285bb1d3a5) ([tests](tests/valkey/42aff62b3/)): Fix "setup" related typos: declined: The change only fixes 'setup' vs 'set up' typos in C comments, module example comments, and TCL test descriptions. No executable code, command behaviour, reply, config, or protocol path is altered, so there is nothing a scenario could exercise or compare.
+- [valkey-io/valkey#4388](https://github.com/valkey-io/valkey/pull/4388) ([tests](tests/valkey/4388-5813754ff/)): Fix include order in custom_matchers.hpp (#4388): declined: The change only adds an #include to src/unit/custom_matchers.hpp, a header used exclusively by the unit-test build (gtest/gmock matchers). It is a build/test-infrastructure fix with no change to server, replication, persistence, command, or tool behaviour, so no scenario can exercise it an
+- [valkey-io/valkey#2244](https://github.com/valkey-io/valkey/pull/2244) ([tests](tests/valkey/2244-94d221cdd/)): Spelling 7 (#2244): declined: The change is a spelling-fix commit that edits only code comments in C sources and comment/message strings in Tcl test files. No executable code path, command reply, config, or protocol behavior is altered, so there is no behavior change to test and no scenario is needed.
+- [valkey-io/valkey#3972](https://github.com/valkey-io/valkey/pull/3972) ([tests](tests/valkey/3972-119aac6ac/)): Validate PUBLISH and MODULE payload lengths against packet size (#3972): declined: This change only hardens the cluster-bus packet validator (clusterIsValidPacket in src/cluster_legacy.c) against integer-overflow from attacker-controlled length fields (channel_len/message_len/module payload len) in FORGED PUBLISH/PUBLISHSHARD/MODULE packets. The new reject branches fire 
+- [valkey-io/valkey#4327](https://github.com/valkey-io/valkey/pull/4327) ([tests](tests/valkey/4327-4e441522e/)): Skip static Lua engine loading in Sentinel mode (#4327): declined: The change only skips static Lua engine loading when the process starts in Sentinel mode. Non-sentinel servers (the only kind the fuzzer can deploy: standalone and cluster) take the exact same code path as the parent build, so no compared command, tool run, or fault scenario can observe a 
 
 ### valkey-io/valkey-bloom
 
@@ -73,11 +73,11 @@ Updated 2026-11-06T13:20+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 301 of 412 tested (73%)
-- Changed-line coverage: median 100% of 178 merge(s) measured, 8 under 50%
+- Merges whose tests reached the change: 306 of 418 tested (73%)
+- Changed-line coverage: median 100% of 183 merge(s) measured, 8 under 50%
 - Recall: 89 parents flagged of 124 fix merges
-- Claude: $1840.56 in the last 24 hours, $2778.47 in the last 7 days, $2778.47 in all
-- Issues filed: 32
+- Claude: $1839.51 in the last 24 hours, $2819.31 in the last 7 days, $2819.31 in all
+- Issues filed: 34
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -110,6 +110,8 @@ Updated 2026-11-06T13:20+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/75
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/76
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/78
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/79
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/80
 
 ## Retries
 

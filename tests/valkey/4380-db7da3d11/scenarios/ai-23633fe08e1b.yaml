@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cc45d0637a00..db7da3d1154b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-23633fe08e1b
+seed: 102
+experiment:
+  id: proposed.watch-cross-slot-exec
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

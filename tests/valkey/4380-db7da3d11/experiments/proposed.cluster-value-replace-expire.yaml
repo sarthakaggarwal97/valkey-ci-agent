@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.cluster-value-replace-expire
+deployment:
+  modes: [standalone]
+metadata:
+  description: In cluster mode, replacing a value that carries a TTL (INCRBYFLOAT,
+    INCR on a shared int, SET KEEPTTL) and setting an expire on a hash with volatile
+    fields resolve the slot from the client's cached slot; the expires and volatile-items
+    tables must stay consistent and the slot asserts must hold
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    lazyfree: {type: string, enum: ["yes", "no"], default: "no"}
+    hash_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: replace
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    server_config:
+      lazyfree-lazy-server-del: {$ref: inputs.lazyfree}
+      hash-max-listpack-entries: {$ref: inputs.hash_listpack_entries}
+    timeout_s: 10
+    commands:
+    - {command: [SET, k, "10.5", EX, 100], expect: {equals: OK}}
+    - {command: [INCRBYFLOAT, k, "0.25"], expect: {equals: "10.75"}}
+    - {command: [TTL, k], compare: skip, expect: {min: 90}}
+    - {command: [GET, k], expect: {equals: "10.75"}}
+    - {command: [PERSIST, k], expect: {equals: 1}}
+    - {command: [TTL, k], expect: {equals: -1}}
+    - {command: [SET, k2, v, EX, 100], expect: {equals: OK}}
+    - {command: [SET, k2, this-value-is-long-enough-to-never-be-an-embstr-encoded-string,
+        KEEPTTL], expect: {equals: OK}}
+    - {command: [TTL, k2], compare: skip, expect: {min: 90}}
+    - {command: [GETDEL, k2], expect: {equals: this-value-is-long-enough-to-never-be-an-embstr-encoded-string}}
+    - {command: [SET, k3, 5, EX, 100], expect: {equals: OK}}
+    - {command: [INCR, k3], expect: {equals: 6}}
+    - {command: [TTL, k3], compare: skip, expect: {min: 90}}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HEXPIRE, h, 1000, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [EXPIRE, h, 500], expect: {equals: 1}}
+    - {command: [EXPIRE, h, 600], expect: {equals: 1}}
+    - {command: [TTL, h], compare: skip, expect: {min: 500}}
+    - {command: [HTTL, h, FIELDS, 1, f1], compare: skip}
+    - {command: [HPERSIST, h, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [PERSIST, h], expect: {equals: 1}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [DBSIZE], expect: {equals: 3}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [replace.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: replace}

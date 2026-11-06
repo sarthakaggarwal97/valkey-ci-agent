@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.stream-rdb-metadata
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE of a stream whose RDB metadata is crafted (positive length
+    with only tombstone entries, or negative field/deleted counts) must be rejected
+    on load instead of accepted and later panicking.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: restore
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, "1"], expect: {equals: OK}}
+    - {command: [RESTORE, tomb, "0", !!binary "FQEQAAAAAAAAAAEAAAAAAAAAASgoAAAADwAAAQIBAQGBZgIAAQMBAAEAAYF2AgQBAwEBAQEBgXYCBAH/AQICAQEAAAIAUAA/0X6hx1QSVw=="],
+      expect_difference: true, expect: {error: "Bad data format"}}
+    - {command: [RESTORE, negfields, "0", !!binary "FQEQAAAAAAAAAAEAAAAAAAAAARgYAAAACAABAQAB3/0CAAECAQABAAEAAf8BAQEBAQAAAQALAAAAAAAAAAA="],
+      expect_difference: true, expect: {error: "Bad data format"}}
+    - {command: [RESTORE, negdeleted, "0", !!binary "FQEQAAAAAAAAAAEAAAAAAAAAARgYAAAACAADAd/+AgABAAECAQABAAEDAf8DAQEBAQAAAwALAAAAAAAAAAA="],
+      expect_difference: true, expect: {error: "Bad data format"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [restore.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore}

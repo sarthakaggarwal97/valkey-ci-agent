@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "119aac6acf494ad2d8776aa643cd0fb7315bbabb",
+  "parent": "4e441522e02e20899f135870dbf92523bd975fe8",
+  "pr": 3972,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Validate PUBLISH and MODULE payload lengths against packet size (#3972)",
+  "date": "2026-08-11",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7504,
+  "findings": [],
+  "recorded": [],
+  "reason": "This change only hardens the cluster-bus packet validator (clusterIsValidPacket in src/cluster_legacy.c) against integer-overflow from attacker-controlled length fields (channel_len/message_len/module payload len) in FORGED PUBLISH/PUBLISHSHARD/MODULE packets. The new reject branches fire only for malformed packets whose declared lengths don't match the packet size; legitimate bus traffic is always well-formed (totlen == explen) and passes validation identically on both builds, producing no reply, data, resync, or liveness difference. Reaching the changed code requires writing raw, length-wrap"
+}

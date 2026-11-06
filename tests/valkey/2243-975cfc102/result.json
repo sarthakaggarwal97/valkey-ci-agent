@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "975cfc1020fc9adaa6681c551e6a7362b74a4b85",
+  "parent": "875696ffec88b34493fb931251c1711d779dcad4",
+  "pr": 2243,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Correct spelling in module cleanup, command docs, source comments, and Tcl tests (#2243)",
+  "date": "2026-08-12",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3338,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely spelling fixes: comments and docs in bitops.c, defrag.c, lolwut5.c, module.c, replication.c, rio.c, server.c, siphash.c, src/commands/README.md and valkey.conf, plus test-name/comment typos in Tcl tests. The only code edit renames the internal function moduleRemoveCateogires to moduleRemoveCategories, updating its one call site in the same file; it is a pure identifier rename with no change to logic, replies, replication, persistence or the module API, so no runtime behavior changed and no scenario is needed."
+}

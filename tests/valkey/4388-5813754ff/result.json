@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5813754ff7ac09b7008bfa4470b3a23156ea96f0",
+  "parent": "94d221cdde3890cf30baf285184a8e863641a67d",
+  "pr": 4388,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix include order in custom_matchers.hpp (#4388)",
+  "date": "2026-08-11",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2098,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds an #include to src/unit/custom_matchers.hpp, a header used exclusively by the unit-test build (gtest/gmock matchers). It is a build/test-infrastructure fix with no change to server, replication, persistence, command, or tool behaviour, so no scenario can exercise it and none is needed."
+}

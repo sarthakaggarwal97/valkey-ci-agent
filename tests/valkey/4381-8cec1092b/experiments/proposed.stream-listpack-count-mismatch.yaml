@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.stream-listpack-count-mismatch
+deployment:
+  modes: [standalone]
+metadata:
+  description: A stream DUMP whose header live/deleted split disagrees with the records
+    present is rejected on load; a valid stream still loads
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: restore
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [RESTORE, _mismatch, 0, !!binary "FQEQAAAAAAAAAAEAAAAAAAAAAC0tAAAAEQABAQEBAQGBZgIAAQIBAAEAAYF2AgQBAAEBAQABAQGBZwKBdwIGAf8BAgABAAAAAgBQAJB66Gi2VbIi"],
+      expect_difference: true, expect: {error: "Bad data format"}}
+    - {command: [RESTORE, _control, 0, !!binary "FQEQAAAAAAAAAAEAAAAAAAAAAC0tAAAAEQACAQABAQGBZgIAAQIBAAEAAYF2AgQBAAEBAQABAQGBZwKBdwIGAf8CAgABAAAAAgBQAKHf4OFIxfiF"],
+      expect: {equals: OK}}
+    - {command: [XLEN, _control], expect: {equals: 2}}
+    - {command: [XRANGE, _control, "-", "+"], expect: {equals: [["1-0", [f, v]], [
+            "2-0", [g, w]]]}}
+    - {command: [XDEL, _control, "1-0"], expect: {equals: 1}}
+    - {command: [XLEN, _control], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore}

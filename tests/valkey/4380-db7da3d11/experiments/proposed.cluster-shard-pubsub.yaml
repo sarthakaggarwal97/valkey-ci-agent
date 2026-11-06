@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.cluster-shard-pubsub
+deployment:
+  modes: [standalone]
+metadata:
+  description: SSUBSCRIBE in cluster mode resolves the shard channel's slot via the
+    client's cached slot; subscribe, publish and unsubscribe across a tagged channel,
+    an empty-tag channel and an empty-name channel
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: spubsub
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SSUBSCRIBE, "{tag}chan"], connection: sub1, expect: null}
+    - {command: [SPUBLISH, "{tag}chan", hello], expect: {equals: 1}}
+    - {connection: sub1, read: true, expect: null}
+    - {command: [SSUBSCRIBE, ""], connection: sub2, expect: null}
+    - {command: [SPUBLISH, "", msg], expect: {equals: 1}}
+    - {connection: sub2, read: true, expect: null}
+    - {command: [SSUBSCRIBE, "{}x"], connection: sub3, expect: null}
+    - {command: [SPUBLISH, "{}x", m2], expect: {equals: 1}}
+    - {connection: sub3, read: true, expect: null}
+    - {command: [PUBSUB, SHARDCHANNELS], compare: unordered}
+    - {command: [PUBSUB, SHARDNUMSUB, "{tag}chan", "", "{}x"], compare: unordered-pairs,
+      expect: null}
+    - {command: [SUNSUBSCRIBE, "{tag}chan"], connection: sub1, expect: null}
+    - {command: [SPUBLISH, "{tag}chan", nobody], expect: {equals: 0}}
+    - {command: [PUBSUB, SHARDCHANNELS], compare: unordered}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [spubsub.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: spubsub}

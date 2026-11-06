@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6cdff5ef06f820aaa244ef9f0272ecc60bad386f",
+  "parent": "967c7cc8e8d116c65474250258f1f8a0db77a003",
+  "pr": 3729,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix grammar errors in code comments (#3729)",
+  "date": "2026-08-12",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2792,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change (#3729) only fixes grammar in C code comments across aof.c, cluster_legacy.c, db.c, entry.c, eval.c, latency.c, module.c, t_set.c, t_stream.c, util.c, valkey-check-aof.c, valkeymodule.h and ziplist.c. No executable statement, constant, reply text, or configuration is touched, so compiled behaviour is identical to the parent and no scenario can distinguish the builds."
+}

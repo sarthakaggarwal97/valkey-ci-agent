@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3f16ffa044c6e2dfe40cecfd3316df4617e1f703",
+  "parent": "8cec1092b92ee2cbecb5101465ba36c1708059bc",
+  "pr": 2247,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Consolidating nonexistent spelling (#2247)",
+  "date": "2026-08-13",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4357,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a spelling consolidation (#2247): every hunk in the C sources (acl.c, bitops.c, hyperloglog.c, module.c, networking.c, rax.c, t_set.c, t_stream.c) edits only comment text, replacing 'non existing'/'non-existent' with 'nonexistent'. The remaining hunks rename test titles and placeholder key names in the Tcl test suite. No executable server code, reply, config, protocol, or persistence path changes, so there is no behaviour for a scenario to exercise or compare."
+}

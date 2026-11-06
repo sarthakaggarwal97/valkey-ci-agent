@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4e441522e02e20899f135870dbf92523bd975fe8",
+  "parent": "8eb992eb09467a4e628a694cba93915a816658b3",
+  "pr": 4327,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Skip static Lua engine loading in Sentinel mode (#4327)",
+  "date": "2026-08-11",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.9383,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only skips static Lua engine loading when the process starts in Sentinel mode. Non-sentinel servers (the only kind the fuzzer can deploy: standalone and cluster) take the exact same code path as the parent build, so no compared command, tool run, or fault scenario can observe a difference. Sentinel mode is enabled only by argv/exec-name (--sentinel / valkey-sentinel), not by any server_config directive, and no installed experiment, component, or deployment mode supports Sentinel, so the changed path is unreachable by the fuzzer. Within Sentinel the engine was dead weight anyway: Sen"
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2c38467d3bed09c9e3b8aa7476cde83b3e5c15f3",
+  "parent": "6cdff5ef06f820aaa244ef9f0272ecc60bad386f",
+  "pr": 2249,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fixes grammatical and spelling errors (#2249)",
+  "date": "2026-08-12",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3232,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff only fixes spelling and grammar: code comments, README and valkey.conf comment text, test-suite message strings, and a consistent rename of the local variable restore_replicy to restore_policy in functionRestoreCommand (src/functions.c), with every read and write of the variable renamed together. No control flow, reply, data format, or configuration behavior changes, so there is no risky path for a scenario to exercise."
+}

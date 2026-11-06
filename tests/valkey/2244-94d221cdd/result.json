@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "94d221cdde3890cf30baf285184a8e863641a67d",
+  "parent": "119aac6acf494ad2d8776aa643cd0fb7315bbabb",
+  "pr": 2244,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Spelling 7 (#2244)",
+  "date": "2026-08-11",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2694,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a spelling-fix commit that edits only code comments in C sources and comment/message strings in Tcl test files. No executable code path, command reply, config, or protocol behavior is altered, so there is no behavior change to test and no scenario is needed."
+}

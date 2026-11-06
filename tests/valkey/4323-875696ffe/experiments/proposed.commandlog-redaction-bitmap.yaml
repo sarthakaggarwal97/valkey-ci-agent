@@ -1,0 +1,94 @@
+extends: [valkey.liveness]
+id: proposed.commandlog-redaction-bitmap
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The redaction bitmap is cleared before every command execution: a redacting command
+    queued in a MULTI (ACL SETUSER, ACL GETUSER) must not redact the commandlog entries
+    of the commands queued after it, the >=32 argument sentinel bit must not leak
+    either, and a command executed from a script (MIGRATE ... AUTH2) must redact its
+    own sensitive arguments instead of consulting the calling client's bitmap. Entries
+    are compared by their argv vectors only, extracted with a Lua script, because
+    id, timestamp, duration and peer address are nondeterministic.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: redaction
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, commandlog-execution-slower-than, "0"], expect: {equals: OK}}
+    - {command: [COMMANDLOG, RESET, SLOW], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, leak-user, "on", ">secretpw", "+get"], expect: {equals: QUEUED}}
+    - {command: [SET, foo, bar], expect: {equals: QUEUED}}
+    - {command: [GET, foo], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK, bar]}}
+    - {command: [CONFIG, SET, commandlog-execution-slower-than, "-1"], expect: {equals: OK}}
+    - command: [EVAL, "local log = server.call('COMMANDLOG','GET','3','SLOW') local\
+          \ out = {} for i=1,#log do out[i] = log[i][4] end return out", "0"]
+      expect_difference: true
+      expect:
+        equals:
+        - [GET, foo]
+        - [SET, foo, bar]
+        - [ACL, SETUSER, "(redacted)", "(redacted)", "(redacted)", "(redacted)"]
+    - {command: [CONFIG, SET, commandlog-execution-slower-than, "0"], expect: {equals: OK}}
+    - {command: [COMMANDLOG, RESET, SLOW], expect: {equals: OK}}
+    - {command: [EVAL, "server.call('migrate','127.0.0.1','9999','missingkey','9','100','AUTH2','bob','hunter2')\
+          \ return 1", "0"], expect: {equals: 1}}
+    - {command: [CONFIG, SET, commandlog-execution-slower-than, "-1"], expect: {equals: OK}}
+    - command: [EVAL, "local log = server.call('COMMANDLOG','GET','2','SLOW') return\
+          \ log[2][4]", "0"]
+      expect_difference: true
+      expect:
+        equals: [migrate, "127.0.0.1", "9999", missingkey, "9", "100", AUTH2, "(redacted)",
+          "(redacted)"]
+    - {command: [CONFIG, SET, commandlog-execution-slower-than, "0"], expect: {equals: OK}}
+    - {command: [COMMANDLOG, RESET, SLOW], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [ACL, GETUSER, no-such-user], expect: {equals: QUEUED}}
+    - {command: [EVAL, "return server.call('set','k1','sv1')['ok']", "0"], expect: {
+        equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [null, OK]}}
+    - {command: [CONFIG, SET, commandlog-execution-slower-than, "-1"], expect: {equals: OK}}
+    - command: [EVAL, "local log = server.call('COMMANDLOG','GET','3','SLOW') return\
+          \ {log[2][4], log[3][4]}", "0"]
+      expect_difference: true
+      expect:
+        equals:
+        - [set, k1, sv1]
+        - [ACL, GETUSER, "(redacted)"]
+    - {command: [CONFIG, SET, commandlog-execution-slower-than, "0"], expect: {equals: OK}}
+    - {command: [COMMANDLOG, RESET, SLOW], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, sentinel-user, "+get", "+get", "+get", "+get", "+get",
+        "+get", "+get", "+get", "+get", "+get", "+get", "+get", "+get", "+get", "+get",
+        "+get", "+get", "+get", "+get", "+get", "+get", "+get", "+get", "+get", "+get",
+        "+get", "+get", "+get", "+get", "+get", "+get"], expect: {equals: QUEUED}}
+    - {command: [RPUSH, biglist, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12,
+        v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27,
+        v28, v29, v30, v31, v32, v33], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, 33]}}
+    - {command: [CONFIG, SET, commandlog-execution-slower-than, "-1"], expect: {equals: OK}}
+    - command: [EVAL, "local log = server.call('COMMANDLOG','GET','1','SLOW') return\
+          \ log[1][4]", "0"]
+      expect_difference: true
+      expect:
+        equals: [RPUSH, biglist, v1, v2, v3, v4, v5, v6, v7, v8, v9, v10, v11, v12,
+          v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23, v24, v25, v26, v27,
+          v28, v29, "... (4 more arguments)"]
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [redaction.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: redaction}

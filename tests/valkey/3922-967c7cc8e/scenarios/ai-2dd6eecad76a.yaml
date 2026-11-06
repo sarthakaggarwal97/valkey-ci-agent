@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 975cfc1020fc..967c7cc8e8d1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2dd6eecad76a
+seed: 1001
+experiment:
+  id: proposed.stream-rdb-metadata
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

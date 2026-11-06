@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bb3b927f200e47fa8c73fdc226789c80904a4651",
+  "parent": "d9ce598b07c084270582abe6e85488e217271755",
+  "pr": 2253,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Improve spelling and grammar (#2253)",
+  "date": "2026-08-12",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3406,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely cosmetic: every hunk edits a code comment, a Tcl test name/comment, or valkey.conf commentary. No executable statement, error message, reply string, log string, or config default changes \u2014 the geo.c edit fixes a usage comment, the module.c/rdb.c/replication.c/rdma.c/script_lua.c edits fix comment wording, the .tcl edits fix test titles and comments, and the valkey.conf edit rewords documentation text. There is no runtime behaviour to exercise, so no scenario is needed."
+}

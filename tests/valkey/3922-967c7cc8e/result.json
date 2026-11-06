@@ -1,0 +1,86 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "967c7cc8e8d116c65474250258f1f8a0db77a003",
+  "parent": "975cfc1020fc9adaa6681c551e6a7362b74a4b85",
+  "pr": 3922,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Harden stream validation on RDB load against crafted metadata (#3922)",
+  "date": "2026-08-12",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 12,
+    "executed": 11,
+    "percent": 91,
+    "uncovered": [
+      "src/t_stream.c:4063"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 7.2237,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 14750:M 06 Nov 2026 13:34:02.128 # Terminating server after rdb file reading failure.",
+      "scenario": "ai-2dd6eecad76a",
+      "seed": 1001,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #3922",
+      "fingerprint": "f4ace3818f636135ae9e",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/79"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 14750:M 06 Nov 2026 13:34:02.128 # Terminating server after rdb file reading failure.",
+      "scenario": "ai-2dd6eecad76a",
+      "seed": 1001,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #3922",
+      "fingerprint": "5f99e7ae11b196426ba3",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/80"
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 15662:M 06 Nov 2026 13:36:27.291 # Terminating server after rdb file reading failure.",
+      "scenario": "ai-6418e9640cf0",
+      "seed": 1002,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #3922",
+      "fingerprint": "f4ace3818f636135ae9e",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/79"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 15662:M 06 Nov 2026 13:36:27.291 # Terminating server after rdb file reading failure.",
+      "scenario": "ai-6418e9640cf0",
+      "seed": 1002,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #3922",
+      "fingerprint": "5f99e7ae11b196426ba3",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/80"
+    }
+  ],
+  "recorded": []
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7b374fcf7b7bf2a93bb08e6e356b504206456d8b",
+  "parent": "bb3b927f200e47fa8c73fdc226789c80904a4651",
+  "pr": 2239,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Grammar corrections in comments (#2239)",
+  "date": "2026-08-12",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2892,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change (PR #2239) only corrects grammar in comments across C sources, utils scripts and Tcl test helpers, plus rewords one static SENTINEL HELP usage string. No code path, reply semantics, config, persistence, replication or protocol behaviour is altered, so there is nothing a scenario could exercise or break; it needs no test."
+}

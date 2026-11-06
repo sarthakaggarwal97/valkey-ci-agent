@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "42aff62b3094489d3b6726f9907f92285bb1d3a5",
+  "parent": "5813754ff7ac09b7008bfa4470b3a23156ea96f0",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix \"setup\" related typos",
+  "date": "2026-08-11",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3665,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only fixes 'setup' vs 'set up' typos in C comments, module example comments, and TCL test descriptions. No executable code, command behaviour, reply, config, or protocol path is altered, so there is nothing a scenario could exercise or compare."
+}

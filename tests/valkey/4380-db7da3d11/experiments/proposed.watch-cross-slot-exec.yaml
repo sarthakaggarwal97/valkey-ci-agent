@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.watch-cross-slot-exec
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    In cluster mode, EXEC must abort when a WATCHed key that hashes to a different
+    slot than the transaction's commands has expired or was flushed. The parent resolved
+    the watched key's dict index from the executing command's cached slot, looked
+    in the wrong per-slot dict, and committed the transaction.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: watch
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [SET, "{tag1}watched", alive, PX, 150], expect: {equals: OK}}
+    - {command: [WATCH, "{tag1}watched"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.4], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 1}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "{tag2}tx-expired", committed], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: false}}
+    - {command: [EXISTS, "{tag2}tx-expired"], expect_difference: true, expect: {equals: 0}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 1], expect: {equals: OK}}
+    - {command: [UNWATCH], expect: {equals: OK}}
+    - {command: [SET, "{tag1}watched-alive", v], expect: {equals: OK}}
+    - {command: [WATCH, "{tag1}watched-alive"], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "{tag2}tx-alive", committed], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK]}}
+    - {command: [GET, "{tag2}tx-alive"], expect: {equals: committed}}
+    - {command: [SET, "{tag1}watched-flush", alive], expect: {equals: OK}}
+    - {command: [WATCH, "{tag1}watched-flush"], expect: {equals: OK}}
+    - {command: [MULTI], connection: flusher, expect: {equals: OK}}
+    - {command: [SET, "{tag2}flush-tx", v], connection: flusher, expect: {equals: QUEUED}}
+    - {command: [FLUSHALL], connection: flusher, expect: {equals: QUEUED}}
+    - {command: [EXEC], connection: flusher, expect: {equals: [OK, OK]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "{tag2}watcher-tx", by-watcher], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: false}}
+    - {command: [EXISTS, "{tag2}watcher-tx"], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [watch.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: watch}

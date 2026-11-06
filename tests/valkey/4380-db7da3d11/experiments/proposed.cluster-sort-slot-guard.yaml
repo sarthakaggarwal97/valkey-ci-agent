@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.cluster-sort-slot-guard
+deployment:
+  modes: [standalone]
+metadata:
+  description: SORT's BY and GET pattern slot checks in cluster mode compare the pattern's
+    slot against the sort key's cached slot; same-tag patterns are allowed, wildcard
+    and empty-tag patterns denied, and '#' bypasses the GET check
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sortguard
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [RPUSH, "{t}list", c, a, b], expect: {equals: 3}}
+    - {command: [MSET, "{t}weight_a", 2, "{t}weight_b", 3, "{t}weight_c", 1, "{t}data_a",
+        A, "{t}data_b", B, "{t}data_c", C], expect: {equals: OK}}
+    - {command: [SORT, "{t}list", BY, "{t}weight_*", ALPHA], expect: {equals: [c,
+          a, b]}}
+    - {command: [SORT, "{t}list", BY, "weight_*", ALPHA], expect: {error: "BY option\
+          \ of SORT denied"}}
+    - {command: [SORT, "{t}list", BY, "{}weight_*", ALPHA], expect: {error: "BY option\
+          \ of SORT denied"}}
+    - {command: [SORT, "{t}list", BY, "{t}weight_*", GET, "{t}data_*", ALPHA], expect: {
+        equals: [C, A, B]}}
+    - {command: [SORT, "{t}list", BY, "{t}weight_*", GET, "data_*", ALPHA], expect: {
+        error: "GET option of SORT denied"}}
+    - {command: [SORT, "{t}list", BY, "{t}weight_*", GET, "#", GET, "{t}data_*", ALPHA],
+      expect: {equals: [c, C, a, A, b, B]}}
+    - {command: [SORT_RO, "{t}list", BY, "weight_*", ALPHA], expect: {error: "BY option\
+          \ of SORT denied"}}
+    - {command: [SORT, "{t}list", BY, "{t}constant", ALPHA], expect: {equals: [c,
+          a, b]}}
+    - {command: [SORT, "{t}list", BY, "{t}weight_*", STORE, "{t}dest", ALPHA], expect: {
+        equals: 3}}
+    - {command: [LRANGE, "{t}dest", 0, -1], expect: {equals: [c, a, b]}}
+    - {command: [SORT, "{t}missing", BY, "weight_*"], expect: {error: "BY option of\
+          \ SORT denied"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [sortguard.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sortguard}
