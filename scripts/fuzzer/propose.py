@@ -839,7 +839,9 @@ For a compared sequence:
   flat reply (SMEMBERS, HKEYS, KEYS), `unordered-pairs` sorts a RESP2
   field/value reply by pairs (HGETALL), `skip` records a reply and never
   compares it (TIME, TTL and PTTL, INFO, CLIENT ID, SCAN cursors, OBJECT
-  ENCODING, MEMORY USAGE, DEBUG OBJECT). Avoid SPOP, SRANDMEMBER, HRANDFIELD
+  ENCODING, MEMORY USAGE, DEBUG OBJECT), and so does anything computed from
+  them: an EVAL that returns a delta of INFO memory's used_memory_scripts_eval
+  varies by tens of bytes from run to run. Avoid SPOP, SRANDMEMBER, HRANDFIELD
   and RANDOMKEY in a compared sequence: they change state at random, and
   Valkey seeds its hash function per process.
 - An option the change adds is set inside the sequence, `CONFIG SET
