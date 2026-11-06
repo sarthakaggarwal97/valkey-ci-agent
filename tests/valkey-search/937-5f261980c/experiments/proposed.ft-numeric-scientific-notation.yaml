@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.ft-numeric-scientific-notation
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH numeric range filters in scientific notation parse and match
+    on the fix, error on the parent; plain-decimal filters and malformed tokens stay
+    regression-checked
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: scinot
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'd:', SCHEMA, n, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [HSET, 'd:tiny', n, '0.001'], expect: {equals: 1}}
+    - {command: [HSET, 'd:neg', n, '-50'], expect: {equals: 1}}
+    - {command: [HSET, 'd:one', n, '1'], expect: {equals: 1}}
+    - {command: [HSET, 'd:hund', n, '100'], expect: {equals: 1}}
+    - {command: [HSET, 'd:thou', n, '1000'], expect: {equals: 1}}
+    - {command: [HSET, 'd:big', n, '50000'], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: 6}, compare: skip}
+    - {command: [FT.SEARCH, idx, '@n:[100 1000]', NOCONTENT], compare: unordered,
+      expect: {contains: 'd:hund'}}
+    - {command: [FT.SEARCH, idx, '@n:[-inf +inf]', NOCONTENT], compare: unordered,
+      expect: {contains: 6}}
+    - {command: [FT.SEARCH, idx, '@n:[1e2 1e3]', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'd:thou'}}
+    - {command: [FT.SEARCH, idx, '@n:[1E2 1E3]', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'd:hund'}}
+    - {command: [FT.SEARCH, idx, '@n:[1e-3 1e-2]', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'd:tiny'}}
+    - {command: [FT.SEARCH, idx, '@n:[1e0 1e+2]', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'd:one'}}
+    - {command: [FT.SEARCH, idx, '@n:[-1e2 1e0]', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'd:neg'}}
+    - {command: [FT.SEARCH, idx, '@n:[(1e2 1e3]', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {equals: [1, 'd:thou']}}
+    - {command: [FT.SEARCH, idx, '@n:[.5e1 1e3]', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'd:hund'}}
+    - {command: [FT.SEARCH, idx, '@n:[1e2 inf]', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'd:big'}}
+    - {command: [FT.SEARCH, idx, '@n:[1e 1e3]', NOCONTENT], expect_difference: true,
+      expect: {error: 'Invalid number: 1e'}}
+    - {command: [FT.SEARCH, idx, '@n:[e5 10]', NOCONTENT], expect_difference: true,
+      expect: {error: 'Invalid number: e5'}}
+    - {command: [FT.SEARCH, idx, '@n:[1e2.5 1e3]', NOCONTENT], expect_difference: true,
+      expect: {error: 'Invalid number: 1e2.5'}}
+    - {command: [FT.SEARCH, idx, '@n:[1-2 2.0]', NOCONTENT], expect: {error: 'Expected
+          space or'}}
+    - {command: [FT.SEARCH, idx, '@n:[+1 2.0]', NOCONTENT], expect: {error: 'Invalid
+          number'}}
+    - {command: [FT.SEARCH, idx, '@n:[nan 10]', NOCONTENT], expect: {error: 'Invalid
+          number'}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [scinot.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scinot}

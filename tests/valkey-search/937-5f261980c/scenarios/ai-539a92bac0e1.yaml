@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 8c260dba836e..5f261980c905.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-539a92bac0e1
+seed: 937
+experiment:
+  id: proposed.ft-numeric-scientific-notation
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

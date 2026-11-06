@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "e38a5d9c43d6fe4c570cfca3ee7cec0ac4795d40",
+  "parent": "beea10a226cb0909194a718182b2a9fe66db22fd",
+  "pr": 1112,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Update CME error message for MULTI/EXEC and Lua (#1112)",
+  "date": "2026-06-06",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.794,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

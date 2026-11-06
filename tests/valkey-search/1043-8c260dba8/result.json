@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "8c260dba836ecc4a5f6ce1bf19f5b12c7dad96d5",
+  "parent": "b668a71735c78ce808454bd0012aa4a9d8e3b748",
+  "pr": 1043,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Support Borrowed InternedString Ptr to avoid ref counting  (#1043)",
+  "date": "2026-06-04",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.2927,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

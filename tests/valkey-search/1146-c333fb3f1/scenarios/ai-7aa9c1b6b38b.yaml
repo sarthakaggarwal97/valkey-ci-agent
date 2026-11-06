@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search f1277da3e062..c333fb3f1f73.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7aa9c1b6b38b
+seed: 1101
+experiment:
+  id: proposed.ft-internal-update-no-coordinator
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

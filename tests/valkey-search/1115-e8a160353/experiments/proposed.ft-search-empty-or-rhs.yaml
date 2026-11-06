@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-empty-or-rhs
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: FT.SEARCH with an empty OR right-hand side returns Missing OR term
+    instead of crashing
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+    filter: {type: string, default: "@num_field_1.5:[1.0 2.0]|"}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, SCHEMA, "num_field_1.5", NUMERIC, "num_field_2.0",
+        NUMERIC, tag_field_1, TAG], expect: {equals: OK}}
+    - {command: [HSET, doc1, "num_field_1.5", "1.5", "num_field_2.0", "2.0", tag_field_1,
+        tag1], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, {$ref: inputs.filter}], expect_difference: true,
+      expect: {error: "Missing OR term"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [search.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}

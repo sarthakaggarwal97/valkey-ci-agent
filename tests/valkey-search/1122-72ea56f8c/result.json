@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "72ea56f8cb38fbc30dd269d5a9bdcf0b438c0c6a",
+  "parent": "c333fb3f1f733bd042f1da3ac6684d490578de6e",
+  "pr": 1122,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix FLAT BLOCK_SIZE 0 livelock and bound INITIAL_CAP/BLOCK_SIZE (#1107, #1110) (#1122)",
+  "date": "2026-06-16",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.7215,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: Valkey aborting for OUT OF MEMORY. Allocating 85899345888 bytes! #server.c:7786",
+      "scenario": "ai-fe83e9304968",
+      "seed": 1107,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1122",
+      "fingerprint": "6cbd26fb20028cceb7f7",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: Valkey aborting for OUT OF MEMORY. Allocating 85899345888 bytes! #server.c:7786",
+      "scenario": "ai-d64683dc8693",
+      "seed": 1110,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1122",
+      "fingerprint": "6cbd26fb20028cceb7f7",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

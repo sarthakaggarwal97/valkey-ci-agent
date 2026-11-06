@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "d1b1672a21874bf72273af3a28bce8bf5293229b",
+  "parent": "e1b4e036465a22aab4f4fd4f0a6a897e8683496a",
+  "pr": 1063,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Implement search.emulate_release capability as described in COMPATIBILITY.md (#1063)",
+  "date": "2026-06-10",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 4.0768,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

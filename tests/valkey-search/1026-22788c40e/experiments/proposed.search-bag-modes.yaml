@@ -1,0 +1,140 @@
+extends: [valkey.liveness]
+id: proposed.search-bag-modes
+deployment:
+  modes: [standalone]
+metadata:
+  description: Drive the Tag and Numeric BagOfInternedStringPtrs through every representation
+    (Single, Array4, Array8, Set) and every promote/demote boundary, comparing FT.SEARCH
+    replies between the change's module build and the parent's
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bag
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 240
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tags, TAG, SEPARATOR,
+        ",", num, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "doc:a1", tags, alpha, num, 100], expect: {equals: 2}}
+    - {command: [HSET, "doc:b1", tags, bravo, num, 200], expect: {equals: 2}}
+    - {command: [HSET, "doc:b2", tags, bravo, num, 200], expect: {equals: 2}}
+    - {command: [HSET, "doc:b3", tags, bravo, num, 200], expect: {equals: 2}}
+    - {command: [HSET, "doc:b4", tags, bravo, num, 200], expect: {equals: 2}}
+    - {command: [HSET, "doc:c1", tags, charlie, num, 300], expect: {equals: 2}}
+    - {command: [HSET, "doc:c2", tags, charlie, num, 300], expect: {equals: 2}}
+    - {command: [HSET, "doc:c3", tags, charlie, num, 300], expect: {equals: 2}}
+    - {command: [HSET, "doc:c4", tags, charlie, num, 300], expect: {equals: 2}}
+    - {command: [HSET, "doc:c5", tags, charlie, num, 300], expect: {equals: 2}}
+    - {command: [HSET, "doc:d1", tags, delta, num, 400], expect: {equals: 2}}
+    - {command: [HSET, "doc:d2", tags, delta, num, 400], expect: {equals: 2}}
+    - {command: [HSET, "doc:d3", tags, delta, num, 400], expect: {equals: 2}}
+    - {command: [HSET, "doc:d4", tags, delta, num, 400], expect: {equals: 2}}
+    - {command: [HSET, "doc:d5", tags, delta, num, 400], expect: {equals: 2}}
+    - {command: [HSET, "doc:d6", tags, delta, num, 400], expect: {equals: 2}}
+    - {command: [HSET, "doc:d7", tags, delta, num, 400], expect: {equals: 2}}
+    - {command: [HSET, "doc:d8", tags, delta, num, 400], expect: {equals: 2}}
+    - {command: [HSET, "doc:d9", tags, delta, num, 400], expect: {equals: 2}}
+    - {command: [HSET, "doc:u1", num, 555], expect: {equals: 1}}
+    - {command: [HSET, "doc:u2", num, 555], expect: {equals: 1}}
+    - {command: [HSET, "doc:u3", num, 555], expect: {equals: 1}}
+    - {command: [HSET, "doc:u4", num, 555], expect: {equals: 1}}
+    - {command: [HSET, "doc:u5", num, 555], expect: {equals: 1}}
+    - {command: [HSET, "doc:u6", num, 555], expect: {equals: 1}}
+    - {command: [HSET, "doc:u7", num, 555], expect: {equals: 1}}
+    - {command: [HSET, "doc:u8", num, 555], expect: {equals: 1}}
+    - {command: [HSET, "doc:u9", num, 555], expect: {equals: 1}}
+    - {command: [HSET, "doc:v1", tags, victor], expect: {equals: 1}}
+    - {command: [HSET, "doc:v2", tags, victor], expect: {equals: 1}}
+    - {command: [HSET, "doc:v3", tags, victor], expect: {equals: 1}}
+    - {command: [HSET, "doc:v4", tags, victor], expect: {equals: 1}}
+    - {command: [HSET, "doc:v5", tags, victor], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 60, expect: {contains: 33}, compare: skip}
+    - {command: [FT.SEARCH, idx, "@tags:{alpha}", NOCONTENT, LIMIT, 0, 100], wait_s: 30,
+      expect: {equals: [1, "doc:a1"]}}
+    - {command: [FT.SEARCH, idx, "@tags:{bravo}", LIMIT, 0, 0], expect: {equals: [
+          4]}}
+    - {command: [FT.SEARCH, idx, "@tags:{bravo}", NOCONTENT, LIMIT, 0, 100], compare: unordered,
+      expect: {contains: "doc:b3"}}
+    - {command: [FT.SEARCH, idx, "@tags:{charlie}", LIMIT, 0, 0], expect: {equals: [
+          5]}}
+    - {command: [FT.SEARCH, idx, "@tags:{charlie}", NOCONTENT, LIMIT, 0, 100], compare: unordered,
+      expect: {contains: "doc:c5"}}
+    - {command: [FT.SEARCH, idx, "@tags:{delta}", LIMIT, 0, 0], expect: {equals: [
+          9]}}
+    - {command: [FT.SEARCH, idx, "@tags:{delta}", NOCONTENT, LIMIT, 0, 100], compare: unordered,
+      expect: {contains: "doc:d9"}}
+    - {command: [FT.SEARCH, idx, "@tags:{br*}", LIMIT, 0, 0], expect: {equals: [4]}}
+    - {command: [FT.SEARCH, idx, "-@tags:{delta}", NOCONTENT, LIMIT, 0, 100], compare: unordered,
+      expect: {contains: "doc:u5"}}
+    - {command: [FT.SEARCH, idx, "@num:[100 100]", NOCONTENT, LIMIT, 0, 100], expect: {
+        equals: [1, "doc:a1"]}}
+    - {command: [FT.SEARCH, idx, "@num:[200 200]", LIMIT, 0, 0], expect: {equals: [
+          4]}}
+    - {command: [FT.SEARCH, idx, "@num:[400 400]", LIMIT, 0, 0], expect: {equals: [
+          9]}}
+    - {command: [FT.SEARCH, idx, "@num:[(200 400]", LIMIT, 0, 0], expect: {equals: [
+          14]}}
+    - {command: [FT.SEARCH, idx, "@num:[555 555]", LIMIT, 0, 0], expect: {equals: [
+          9]}}
+    - {command: [FT.SEARCH, idx, "-@num:[100 555]", NOCONTENT, LIMIT, 0, 100], compare: unordered,
+      expect: {contains: "doc:v2"}}
+    - {command: [DEL, "doc:d9"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@tags:{delta}", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [8]}}
+    - {command: [FT.SEARCH, idx, "@tags:{delta}", NOCONTENT, LIMIT, 0, 100], compare: unordered,
+      expect: {contains: "doc:d1"}}
+    - {command: [DEL, "doc:d8", "doc:d7", "doc:d6", "doc:d5"], expect: {equals: 4}}
+    - {command: [FT.SEARCH, idx, "@tags:{delta}", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [4]}}
+    - {command: [FT.SEARCH, idx, "@tags:{delta}", NOCONTENT, LIMIT, 0, 100], compare: unordered,
+      expect: {contains: "doc:d2"}}
+    - {command: [DEL, "doc:d4", "doc:d3"], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@tags:{delta}", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [2]}}
+    - {command: [DEL, "doc:d2"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@tags:{delta}", NOCONTENT, LIMIT, 0, 100], wait_s: 30,
+      expect: {equals: [1, "doc:d1"]}}
+    - {command: [DEL, "doc:d1"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@tags:{delta}", NOCONTENT, LIMIT, 0, 100], wait_s: 30,
+      expect: {equals: [0]}}
+    - {command: [HSET, "doc:d1", tags, delta, num, 400], expect: {equals: 2}}
+    - {command: [HSET, "doc:d2", tags, delta, num, 400], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@tags:{delta}", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [2]}}
+    - {command: [HSET, "doc:c1", tags, echo], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@tags:{echo}", NOCONTENT, LIMIT, 0, 100], wait_s: 30,
+      expect: {equals: [1, "doc:c1"]}}
+    - {command: [FT.SEARCH, idx, "@tags:{charlie}", LIMIT, 0, 0], expect: {equals: [
+          4]}}
+    - {command: [HDEL, "doc:b1", tags], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@tags:{bravo}", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [3]}}
+    - {command: [FT.SEARCH, idx, "-@tags:{echo}", NOCONTENT, LIMIT, 0, 100], compare: unordered,
+      expect: {contains: "doc:b1"}}
+    - {command: [DEL, "doc:u1", "doc:u2", "doc:u3", "doc:u4", "doc:u5", "doc:u6",
+        "doc:u7", "doc:u8"], expect: {equals: 8}}
+    - {command: [FT.SEARCH, idx, "@num:[555 555]", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx, "-@tags:{echo}", NOCONTENT, LIMIT, 0, 100], compare: unordered,
+      expect: {contains: "doc:u9"}}
+    - {command: [HDEL, "doc:a1", num], expect: {equals: 1}}
+    - {command: [DEL, "doc:v5", "doc:v4", "doc:v3"], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, "@tags:{victor}", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [2]}}
+    - {command: [FT.SEARCH, idx, "-@num:[0 1000]", NOCONTENT, LIMIT, 0, 100], compare: unordered,
+      expect: {contains: "doc:a1"}}
+    - {command: [FT.SEARCH, idx, "@num:[100 100]", NOCONTENT, LIMIT, 0, 100], expect: {
+        equals: [0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [bag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bag}

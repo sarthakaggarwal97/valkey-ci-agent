@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search be614f3b916d..1a43d0b5c149.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e3f2b73f3d75
+seed: 303
+experiment:
+  id: proposed.search-reclaimable-memory-underflow
+  inputs:
+    resp: 3
+    writer_threads: 8
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

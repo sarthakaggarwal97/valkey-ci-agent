@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "b4bdc1535bf4fd0d9215a1dcb5d88bc610526e5a",
+  "parent": "147b0b2bf99c110e7fd97351d5c9b0d6cd3dda17",
+  "pr": 1045,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Optimize content fetch: eliminate double key open, use HashGet for specific field access (#1045)",
+  "date": "2026-06-04",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 4,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.5041,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-36e9eae7fd2f",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d548b3f91cd3",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5d3896b8ba4c",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5032d83be9f8",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

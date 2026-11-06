@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "b668a71735c78ce808454bd0012aa4a9d8e3b748",
+  "parent": "b4bdc1535bf4fd0d9215a1dcb5d88bc610526e5a",
+  "pr": 1019,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix allow_replace_deleted_ not set before LoadIndex (#1019)",
+  "date": "2026-06-04",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.3313,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

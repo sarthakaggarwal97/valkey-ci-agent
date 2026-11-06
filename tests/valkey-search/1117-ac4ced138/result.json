@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ac4ced1389cc3725fab5015b156cb7475fe32878",
+  "parent": "844be9cecdda323a9c8d85e0906ea5e3e4098615",
+  "pr": 1117,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix GetTargetsForSlot to resolve slots in the middle/end of a range (#1117)",
+  "date": "2026-06-09",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 4,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 7.927,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

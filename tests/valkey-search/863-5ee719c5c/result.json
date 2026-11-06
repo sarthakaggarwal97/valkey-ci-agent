@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5ee719c5cee6b8d2b647e2d7b51e57ee084f8c65",
+  "parent": "1ab782074bf9c97feb214958db379a5686fef343",
+  "pr": 863,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix flakey mrmwmutex test (#863)",
+  "date": "2026-05-28",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2781,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only unit test files (vmsdk/testing/log_test.cc, mrmw_mutex_test.cc, thread_pool_test.cc): it fixes flaky test logic, initializes test-local atomics, and re-enables tests previously disabled behind BROKEN_UNIT_TEST. No source file compiled into the valkey-search module is touched, so the module's runtime behaviour is identical at the change and its parent and no scenario can reach any changed behaviour."
+}

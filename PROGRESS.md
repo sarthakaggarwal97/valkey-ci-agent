@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-06T06:36+00:00.
+Updated 2026-11-06T06:39+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 291 | 2204 | #3708 (2026-09-01) | 247 | 41.6 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 81 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 26 | 8.9 |
-| valkey-io/valkey-search | 170 | 498 | #1122 (2026-06-16) | 146 | 24.3 |
+| valkey-io/valkey-search | 196 | 472 | #1059 (2026-05-22) | 172 | 28.0 |
 
 ## Last runs
 
@@ -48,35 +48,35 @@ Updated 2026-11-06T06:36+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-06T03:49:08+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42136285020): 20 merge(s) tested, 3 without a code change.
+[2026-11-06T06:39:26+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42158810440): 20 merge(s) tested, 6 without a code change.
 
-- [valkey-io/valkey-search#1207](https://github.com/valkey-io/valkey-search/pull/1207) ([tests](tests/valkey-search/1207-49a585b70/)): Open next development cycle on main (release stage "dev", drop stale CMake VERSION) (#1207): declined: The change only opens the next development cycle: it flips the MODULE_RELEASE_STAGE macro from "rc2" to "dev" and drops the stale VERSION 1.0.0 from the CMake project() call. MODULE_RELEASE_STAGE is defined in src/version.h and referenced nowhere else in the tree (not in INFO output, any c
-- [valkey-io/valkey-search#1191](https://github.com/valkey-io/valkey-search/pull/1191) ([tests](tests/valkey-search/1191-7204f2f2c/)): Validate HNSW index data when loading from an external file (#1191): 3 of 3 test(s) reached the change
-- [valkey-io/valkey-search#1199](https://github.com/valkey-io/valkey-search/pull/1199) ([tests](tests/valkey-search/1199-226928b62/)): Replace main branch release notes with development placeholder (#1199): declined: The change edits only the 00-RELEASENOTES documentation file, swapping the 1.0.0 release notes for a development-branch placeholder. No module source, command behaviour, configuration, or build logic changes, so no runtime path can differ between the two builds and no scenario is needed.
-- [valkey-io/valkey-search#1203](https://github.com/valkey-io/valkey-search/pull/1203) ([tests](tests/valkey-search/1203-5a63e8269/)): Reset search.search-result-background-cleanup back to true (#1203): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1202](https://github.com/valkey-io/valkey-search/pull/1202) ([tests](tests/valkey-search/1202-5c07b8b53/)): Async Index Schema Destruction (#1202): 0 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1192](https://github.com/valkey-io/valkey-search/pull/1192) ([tests](tests/valkey-search/1192-ae132bea8/)): Validate query vector size against index dimensions at parse time (#1192): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1163](https://github.com/valkey-io/valkey-search/pull/1163) ([tests](tests/valkey-search/1163-323c7dc1d/)): Vector Search performance improvement (#1163): 0 of 6 test(s) reached the change
-- [valkey-io/valkey-search#1082](https://github.com/valkey-io/valkey-search/pull/1082) ([tests](tests/valkey-search/1082-f6f9cafa4/)): Enable thread-safety checking, fix violations it found. (#1082): 0 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1174](https://github.com/valkey-io/valkey-search/pull/1174) ([tests](tests/valkey-search/1174-cf1c9bb26/)): JSON string values with backslash escapes are indexed un-decoded (#1174): 0 of 2 test(s) reached the change
-- [valkey-io/valkey-search#914](https://github.com/valkey-io/valkey-search/pull/914) ([tests](tests/valkey-search/914-fa920966a/)): Allow FT._debug to use when client is admin (#914): 3 of 3 test(s) reached the change; [crash, introduced by #914](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/72)
-- [valkey-io/valkey-search#1015](https://github.com/valkey-io/valkey-search/pull/1015) ([tests](tests/valkey-search/1015-067b45462/)): Replace deque with flat hash map for tracked_vectors (#1015): declined: no proposed test validated
-- [valkey-io/valkey-search#1087](https://github.com/valkey-io/valkey-search/pull/1087) ([tests](tests/valkey-search/1087-417428561/)): Drain in-flight async query operations before shutting down in cancel/timeout tests (#1087): declined: no proposed test validated
-- [valkey-io/valkey-search#1120](https://github.com/valkey-io/valkey-search/pull/1120) ([tests](tests/valkey-search/1120-5d95e4c75/)): Guard against disengaged optional in InTrackedMutationRecords (#1120): declined: The change adds a has_value() guard to IndexSchema::InTrackedMutationRecords plus a unit test, but that function has no production callers at either the parent or the change commit: grepping the whole valkey-search tree, the only references are its declaration (src/index_schema.h:513), its
-- [valkey-io/valkey-search#1032](https://github.com/valkey-io/valkey-search/pull/1032) ([tests](tests/valkey-search/1032-29ab9f304/)): Workaround fix for ostringstream crash (#1032): 0 of 3 test(s) reached the change
-- [valkey-io/valkey-search#1046](https://github.com/valkey-io/valkey-search/pull/1046) ([tests](tests/valkey-search/1046-ada7859e8/)): Fix coordinator bytes-in counting before response mutation (#1046): declined: no proposed test validated
-- [valkey-io/valkey-search#1031](https://github.com/valkey-io/valkey-search/pull/1031) ([tests](tests/valkey-search/1031-d900f0155/)): Reimplement TAG field using RAX tree to save space. (#1031): 0 of 5 test(s) reached the change
-- [valkey-io/valkey-search#999](https://github.com/valkey-io/valkey-search/pull/999) ([tests](tests/valkey-search/999-6c30c7cfd/)): Fix crash when loading values of type text from JSON in FT.AGGREGATE (#999): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1079](https://github.com/valkey-io/valkey-search/pull/1079) ([tests](tests/valkey-search/1079-ce011fb69/)): Fix Race condition in VectorHNSW::AddRecordImpl during concurrent HSET with HNSW vector index (#1079): 0 of 5 test(s) reached the change
-- [valkey-io/valkey-search#1060](https://github.com/valkey-io/valkey-search/pull/1060) ([tests](tests/valkey-search/1060-59c44b44b/)): Fix race in UnTrackedKeys ingestion access vs negative queries (#1060): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#1148](https://github.com/valkey-io/valkey-search/pull/1148) ([tests](tests/valkey-search/1148-4b2c0859a/)): Fix tag query parsing to support escaped closing brace (#979) + resolved merge conflicts (#1148): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1122](https://github.com/valkey-io/valkey-search/pull/1122) ([tests](tests/valkey-search/1122-72ea56f8c/)): Fix FLAT BLOCK_SIZE 0 livelock and bound INITIAL_CAP/BLOCK_SIZE (#1107, #1110) (#1122): 2 of 2 test(s) reached the change; crash, fixed by #1122 (recorded)
+- [valkey-io/valkey-search#1146](https://github.com/valkey-io/valkey-search/pull/1146) ([tests](tests/valkey-search/1146-c333fb3f1/)): Fix FT.INTERNAL_UPDATE crashes during AOF/RDB load (#1108, #1109) (#1146): 3 of 3 test(s) reached the change; crash, fixed by #1146 (recorded); crash, fixed by #1146 (recorded); crash, fixed by #1146 (recorded)
+- [valkey-io/valkey-search#868](https://github.com/valkey-io/valkey-search/pull/868) ([tests](tests/valkey-search/868-f1277da3e/)): Suppress core dumps around ASSERT_DEATH and EXPECT_DEATH testing calls (#868): declined: The change is confined to unit-test infrastructure: it replaces EXPECT_DEATH/ASSERT_DEATH with VMSDK_EXPECT_DEATH/VMSDK_ASSERT_DEATH macros in three test files and adds an RLimitGuard in vmsdk/src/testing_infra/utils.h that sets RLIMIT_CORE to 0 while gtest death tests run, so intentional 
+- [valkey-io/valkey-search#1131](https://github.com/valkey-io/valkey-search/pull/1131) ([tests](tests/valkey-search/1131-1a43d0b5c/)): Fix reclaimable_memory underflow issue (#1131): 3 of 3 test(s) reached the change
+- [valkey-io/valkey-search#1044](https://github.com/valkey-io/valkey-search/pull/1044) ([tests](tests/valkey-search/1044-be614f3b9/)): Avoid ref counting in Text iterators + Postings ContainsFields short circuit (#1044): 0 of 4 test(s) reached the change; crash, introduced and since fixed (recorded)
+- [valkey-io/valkey-search#1063](https://github.com/valkey-io/valkey-search/pull/1063) ([tests](tests/valkey-search/1063-d1b1672a2/)): Implement search.emulate_release capability as described in COMPATIBILITY.md (#1063): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1117](https://github.com/valkey-io/valkey-search/pull/1117) ([tests](tests/valkey-search/1117-ac4ced138/)): Fix GetTargetsForSlot to resolve slots in the middle/end of a range (#1117): declined: no proposed test validated
+- [valkey-io/valkey-search#1119](https://github.com/valkey-io/valkey-search/pull/1119) ([tests](tests/valkey-search/1119-844be9cec/)): Fix memory reporting when reader/writer threads change at runtime (#1119): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1115](https://github.com/valkey-io/valkey-search/pull/1115) ([tests](tests/valkey-search/1115-e8a160353/)): Fix SIGSEGV on FT.SEARCH query with empty OR right-hand side (#1115): 0 of 3 test(s) reached the change
+- [valkey-io/valkey-search#1026](https://github.com/valkey-io/valkey-search/pull/1026) ([tests](tests/valkey-search/1026-22788c40e/)): Implement space savings for Tag and Numeric (#1026): 0 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1112](https://github.com/valkey-io/valkey-search/pull/1112) ([tests](tests/valkey-search/1112-e38a5d9c4/)): Update CME error message for MULTI/EXEC and Lua (#1112): declined: no proposed test validated
+- [valkey-io/valkey-search#866](https://github.com/valkey-io/valkey-search/pull/866) ([tests](tests/valkey-search/866-beea10a22/)): Refactor support for lua/multi on single slot indexes (#866): 0 of 4 test(s) reached the change
+- [valkey-io/valkey-search#937](https://github.com/valkey-io/valkey-search/pull/937) ([tests](tests/valkey-search/937-5f261980c/)): Fix numeric range search doesn't accept scientific notation (#937): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1043](https://github.com/valkey-io/valkey-search/pull/1043) ([tests](tests/valkey-search/1043-8c260dba8/)): Support Borrowed InternedString Ptr to avoid ref counting  (#1043): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1019](https://github.com/valkey-io/valkey-search/pull/1019) ([tests](tests/valkey-search/1019-b668a7173/)): Fix allow_replace_deleted_ not set before LoadIndex (#1019): declined: no proposed test validated
+- [valkey-io/valkey-search#1045](https://github.com/valkey-io/valkey-search/pull/1045) ([tests](tests/valkey-search/1045-b4bdc1535/)): Optimize content fetch: eliminate double key open, use HashGet for specific field access (#1045): 0 of 4 test(s) reached the change
+- [valkey-io/valkey-search#1062](https://github.com/valkey-io/valkey-search/pull/1062) ([tests](tests/valkey-search/1062-fe65a492f/)): Fix ThreadPool Shutdown timing holes (#1062): declined: no proposed test validated
+- [valkey-io/valkey-search#863](https://github.com/valkey-io/valkey-search/pull/863) ([tests](tests/valkey-search/863-5ee719c5c/)): Fix flakey mrmwmutex test (#863): declined: The change modifies only unit test files (vmsdk/testing/log_test.cc, mrmw_mutex_test.cc, thread_pool_test.cc): it fixes flaky test logic, initializes test-local atomics, and re-enables tests previously disabled behind BROKEN_UNIT_TEST. No source file compiled into the valkey-search module 
+- [valkey-io/valkey-search#1009](https://github.com/valkey-io/valkey-search/pull/1009) ([tests](tests/valkey-search/1009-66bbdce0c/)): Fix compatibility test suite (#1009): declined: The change only modifies the project's own integration test suite (integration/compatibility/*, integration/compatibility_test.py) and .gitignore: it adds a sources-hash check for the pickle answer files, a regenerate.sh script, skips flaky tests, and regenerates the pickles. No module sou
+- [valkey-io/valkey-search#1008](https://github.com/valkey-io/valkey-search/pull/1008) ([tests](tests/valkey-search/1008-2dc8e1f6a/)): Add SCORE_FIELD support and SCORE range validation to FT.CREATE (#1008): 4 of 7 test(s) reached the change, 3 skipped (required capability 'build' is unsupported)
 
 ## Totals
 
-- Merges whose tests reached the change: 260 of 347 tested (75%)
+- Merges whose tests reached the change: 268 of 360 tested (74%)
 - Changed-line coverage: median 100% of 153 merge(s) measured, 8 under 50%
-- Recall: 77 parents flagged of 100 fix merges
-- Claude: $1909.91 in the last 24 hours, $2288.77 in the last 7 days, $2288.77 in all
+- Recall: 82 parents flagged of 106 fix merges
+- Claude: $2004.14 in the last 24 hours, $2382.99 in the last 7 days, $2382.99 in all
 - Issues filed: 29
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search f1277da3e062..c333fb3f1f73.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-aac6e471104a
+seed: 1103
+experiment:
+  id: proposed.ft-internal-update-aof-reload
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

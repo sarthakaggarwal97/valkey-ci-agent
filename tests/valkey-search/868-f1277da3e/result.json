@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "f1277da3e062c81157d17471235b45d57ee7603e",
+  "parent": "1a43d0b5c14926336e98728d0bd1dbc845acfee6",
+  "pr": 868,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Suppress core dumps around ASSERT_DEATH and EXPECT_DEATH testing calls (#868)",
+  "date": "2026-06-15",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.268,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to unit-test infrastructure: it replaces EXPECT_DEATH/ASSERT_DEATH with VMSDK_EXPECT_DEATH/VMSDK_ASSERT_DEATH macros in three test files and adds an RLimitGuard in vmsdk/src/testing_infra/utils.h that sets RLIMIT_CORE to 0 while gtest death tests run, so intentional test crashes stop producing core dumps. No file compiled into the shipped module (nothing under src/ or the non-test parts of vmsdk/) is touched, so the module's runtime behaviour \u2014 commands, replies, indexing, coordinator messaging, persistence \u2014 is identical on both builds and no scenario can observe a diff"
+}

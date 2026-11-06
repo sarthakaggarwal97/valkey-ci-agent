@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.search-memory-thread-resize
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    search_used_memory_bytes must not drop or go negative when the writer thread pool
+    shrinks at runtime: memory allocated on writer threads during indexing must be
+    carried into retired_total_ when those threads exit (valkey-search #1119), instead
+    of being discarded with their ThreadLocalNode as the parent does.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: memcheck
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.writer-threads, 8], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, body, TEXT],
+      expect: {equals: OK}}
+    - {command: [EVAL, "for i=1,3777 do local t={} for j=1,120 do t[#t+1]='d'..i..'w'..j\
+          \ end redis.call('HSET','doc:'..i,'body',table.concat(t,' ')) end return\
+          \ 'OK'", 0], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 90, expect: {contains: "3777"}, compare: skip}
+    - {command: [EVAL, "local s=redis.call('INFO','search') local v=string.match(s,'search_used_memory_bytes:(%-?%d+)')\
+          \ redis.call('SET','membefore',v) if tonumber(v)>8000000 then return 'BIG'\
+          \ end return 'SMALL:'..v", 0], expect: {equals: BIG}}
+    - {command: [CONFIG, SET, search.writer-threads, 1], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 3], expect: {equals: OK}}
+    - {command: [EVAL, "local s=redis.call('INFO','search') local v=tonumber(string.match(s,'search_used_memory_bytes:(%-?%d+)'))\
+          \ local b=tonumber(redis.call('GET','membefore')) local d=b-v if d<0 then\
+          \ d=-d end if d<5000000 then return 'KEPT' end return 'LOST'", 0], expect_difference: true,
+      expect: {equals: KEPT}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 2], expect: {equals: OK}}
+    - {command: [EVAL, "local s=redis.call('INFO','search') local v=tonumber(string.match(s,'search_used_memory_bytes:(%-?%d+)'))\
+          \ if v>=0 and v<100000000 then return 'SANE' end return 'INSANE:'..v", 0],
+      compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [memcheck.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: memcheck}

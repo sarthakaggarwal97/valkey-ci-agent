@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.ft-internal-update-aof-reload
+deployment:
+  modes: [standalone]
+metadata:
+  description: A valid FT.INTERNAL_UPDATE persisted to the AOF crashes the parent
+    on reload; the fixed build rejects it so its AOF stays clean and reload succeeds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aof_reload
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {appendonly: "yes"}
+    timeout_s: 30
+    commands:
+    - {command: [FT.INTERNAL_UPDATE, test_id, "", ""], expect_difference: true, expect: {
+        error: "coordinator"}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {restart: true, expect_difference: true, expect: {equals: OK}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [aof_reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof_reload}

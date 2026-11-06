@@ -1,0 +1,66 @@
+extends: [valkey.liveness]
+id: proposed.text-allfields-mask-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: 64-TEXT-field schema so the unfielded query field mask is exactly ~0ULL,
+    driving the new Postings ContainsFields short circuit and the bit-63 field boundary,
+    replies compared across module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: mask
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx64, ON, HASH, PREFIX, 1, "k:", SCHEMA, f01, TEXT, f02,
+        TEXT, f03, TEXT, f04, TEXT, f05, TEXT, f06, TEXT, f07, TEXT, f08, TEXT, f09,
+        TEXT, f10, TEXT, f11, TEXT, f12, TEXT, f13, TEXT, f14, TEXT, f15, TEXT, f16,
+        TEXT, f17, TEXT, f18, TEXT, f19, TEXT, f20, TEXT, f21, TEXT, f22, TEXT, f23,
+        TEXT, f24, TEXT, f25, TEXT, f26, TEXT, f27, TEXT, f28, TEXT, f29, TEXT, f30,
+        TEXT, f31, TEXT, f32, TEXT, f33, TEXT, f34, TEXT, f35, TEXT, f36, TEXT, f37,
+        TEXT, f38, TEXT, f39, TEXT, f40, TEXT, f41, TEXT, f42, TEXT, f43, TEXT, f44,
+        TEXT, f45, TEXT, f46, TEXT, f47, TEXT, f48, TEXT, f49, TEXT, f50, TEXT, f51,
+        TEXT, f52, TEXT, f53, TEXT, f54, TEXT, f55, TEXT, f56, TEXT, f57, TEXT, f58,
+        TEXT, f59, TEXT, f60, TEXT, f61, TEXT, f62, TEXT, f63, TEXT, f64, TEXT], expect: {
+        equals: OK}}
+    - {command: [HSET, "k:1", f64, "needle alpha zmark"], expect: {equals: 1}}
+    - {command: [HSET, "k:2", f01, "needle zmark"], expect: {equals: 1}}
+    - {command: [HSET, "k:3", f32, "needle beta needle zmark"], expect: {equals: 1}}
+    - {command: [HSET, "k:4", f01, "needle gamma zmark", f64, "gamma needle zmark"],
+      expect: {equals: 2}}
+    - {command: [HSET, "k:5", f63, "alpha beta zmark"], expect: {equals: 1}}
+    - {command: [FT.INFO, idx64], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx64, zmark, NOCONTENT, LIMIT, 0, 100], wait_s: 30, expect: {
+        contains: "k:5"}, compare: unordered}
+    - {command: [FT.SEARCH, idx64, needle, NOCONTENT, LIMIT, 0, 100], expect: {contains: "k:1"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx64, "needle alpha", SLOP, 0, INORDER, NOCONTENT, LIMIT,
+        0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx64, "needle beta", SLOP, 1, NOCONTENT, LIMIT, 0, 100],
+      compare: unordered}
+    - {command: [FT.SEARCH, idx64, "needle gamma", INORDER, NOCONTENT, LIMIT, 0, 100],
+      compare: unordered}
+    - {command: [FT.SEARCH, idx64, "gamma needle", INORDER, NOCONTENT, LIMIT, 0, 100],
+      compare: unordered}
+    - {command: [FT.SEARCH, idx64, "@f64:needle", NOCONTENT, LIMIT, 0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx64, "@f01:needle", NOCONTENT, LIMIT, 0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx64, "@f63:alpha", NOCONTENT, LIMIT, 0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx64, "(needle|alpha) beta", SLOP, 5, NOCONTENT, LIMIT,
+        0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx64, "nee*", NOCONTENT, LIMIT, 0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx64, "nee* alph*", SLOP, 2, NOCONTENT, LIMIT, 0, 100],
+      compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [mask.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mask}

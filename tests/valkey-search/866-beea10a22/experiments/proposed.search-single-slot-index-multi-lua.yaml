@@ -1,0 +1,99 @@
+extends: [valkey.liveness]
+id: proposed.search-single-slot-index-multi-lua
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Single-slot (hash-tag named) and multi-slot indexes created, searched and aggregated
+    directly, inside MULTI/EXEC and inside Lua, across an RDB save/restart, the change's
+    module build compared with the parent's on one Valkey build. The change precomputes
+    the index's slot at IndexSchema construction (FT.CREATE and RDB reload) and consults
+    it in the MULTI/Lua fanout gate; the coordinator itself cannot be enabled here
+    (hidden --use-coordinator startup argv), so the sequence checks the refactored
+    paths stay behavior-neutral and crash-free where they always run.
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, "idx{tag}", PREFIX, "1", "doc:{tag}:", SCHEMA, price,
+        NUMERIC, title, TEXT], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx-plain, PREFIX, "1", "plain:", SCHEMA, price, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, "idx{}", PREFIX, "1", "e:", SCHEMA, f, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, "idx{unterminated", PREFIX, "1", "u:", SCHEMA, f, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, "idx{a}{b}", PREFIX, "1", "ab:", SCHEMA, f, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, "{tagonly}", PREFIX, "1", "t:", SCHEMA, f, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:{tag}:1", price, "42", title, "hello world"], expect: {
+        equals: 2}}
+    - {command: [HSET, "plain:1", price, "7"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, "idx{tag}", "@price:[42 42]"], wait_s: 30, compare: unordered,
+      expect: {contains: "doc:{tag}:1"}}
+    - {command: [FT.SEARCH, idx-plain, "@price:[7 7]"], wait_s: 30, compare: unordered,
+      expect: {contains: "plain:1"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.SEARCH, "idx{tag}", "@price:[42 42]"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {error: false}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.AGGREGATE, "idx{tag}", "@price:[0 100]", LOAD, "1", price], expect: {
+        equals: QUEUED}}
+    - {command: [EXEC], expect: {error: false}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx-plain, "@price:[7 7]"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {error: false}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.SEARCH, "idx{}", "@f:[0 0]"], expect: {equals: QUEUED}}
+    - {command: [FT.SEARCH, "idx{unterminated", "@f:[0 0]"], expect: {equals: QUEUED}}
+    - {command: [FT.SEARCH, "idx{a}{b}", "@f:[0 0]"], expect: {equals: QUEUED}}
+    - {command: [FT.SEARCH, "{tagonly}", "@f:[0 0]"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {error: false}}
+    - {command: [EVAL, "return redis.call('FT.SEARCH', 'idx{tag}', '@price:[42 42]')[1]",
+        "0"], expect: {equals: 1}}
+    - {command: [EVAL, "return redis.call('FT.AGGREGATE', 'idx{tag}', '@price:[0 100]',\
+          \ 'LOAD', '1', 'price')[1]", "0"], expect: {equals: 1}}
+    - {command: [EVAL, "return redis.call('FT.SEARCH', 'idx-plain', '@price:[7 7]')[1]",
+        "0"], expect: {equals: 1}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT._LIST], compare: unordered}
+    - {command: [FT.SEARCH, "idx{tag}", "@price:[42 42]"], wait_s: 30, compare: unordered,
+      expect: {contains: "doc:{tag}:1"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.SEARCH, "idx{tag}", "@price:[42 42]"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {error: false}}
+    - {command: [EVAL, "return redis.call('FT.SEARCH', 'idx{tag}', '@price:[42 42]')[1]",
+        "0"], expect: {equals: 1}}
+    - {command: [FT.DROPINDEX, "idx{tag}"], expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, "idx{unterminated"], expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, "idx{a}{b}"], expect: {equals: OK}}
+    - {command: [FT._LIST], compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [search.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}

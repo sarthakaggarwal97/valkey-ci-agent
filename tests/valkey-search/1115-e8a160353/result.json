@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "e8a16035317aad49c304c84953b985c7395aa627",
+  "parent": "22788c40e2936ec4df96ce5b4f9c84e247d944de",
+  "pr": 1115,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix SIGSEGV on FT.SEARCH query with empty OR right-hand side (#1115)",
+  "date": "2026-06-09",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2754,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-2ec52d45cfbf",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'search' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (FT.CREATE idx ON HASH SCHEMA num_field_1.5 NUMERIC num_field_2.0 NUMERIC tag_field_1 TAG), 2 (FT.SEARCH idx @num_field_1.5:[1.0 2.0]|)"
+    },
+    {
+      "scenario": "ai-444c7ed8e3c1",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'search' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (FT.CREATE idx ON HASH SCHEMA num_field_1.5 NUMERIC num_field_2.0 NUMERIC tag_field_1 TAG), 2 (FT.SEARCH idx @num_field_1.5:[1.0 2.0] |)"
+    },
+    {
+      "scenario": "ai-aeca6b56594d",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'search' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (FT.CREATE idx ON HASH SCHEMA num_field_1.5 NUMERIC num_field_2.0 NUMERIC tag_field_1 TAG), 2 (FT.SEARCH idx (@num_field_1.5:[1.0 2.0]|)"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

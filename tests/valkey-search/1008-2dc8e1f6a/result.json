@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "2dc8e1f6a273f945e54828731c59a8db68983481",
+  "parent": "280174795b3481c031c67fce57748988dfd288b4",
+  "pr": 1008,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add SCORE_FIELD support and SCORE range validation to FT.CREATE (#1008)",
+  "date": "2026-05-26",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 3,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 9.0693,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-d96530e60cba",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported"
+    },
+    {
+      "scenario": "ai-6495e7006bb1",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported"
+    },
+    {
+      "scenario": "ai-96b3fb09f995",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

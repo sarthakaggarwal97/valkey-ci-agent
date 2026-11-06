@@ -1,0 +1,195 @@
+extends: [valkey.liveness]
+id: proposed.search-reclaimable-memory-underflow
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Concurrent HSET overwrites of indexed vectors, batched in MULTI/EXEC so the writer
+    thread pool processes them in parallel, drive hnswlib markDelete (+= vector_size)
+    / unmarkDeletedInternal (-= vector_size) cycles on the shared Metrics reclaimable_memory
+    counter. On the parent the counter is a plain uint64_t, so racing updates can
+    be lost and the counter underflows to a huge value; with the fix it is atomic
+    and must settle at its exact deterministic value at every drain checkpoint: 0
+    after balanced overwrite churn, deleted_count*vector_size (8 keys x 8 bytes =
+    64) after DEL, and 0 again after FT.DROPINDEX, read from INFO SEARCH search_index_reclaimable_memory.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    writer_threads: {type: integer, minimum: 1, maximum: 1024, default: 64}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.writer-threads, {$ref: inputs.writer_threads}],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, SCHEMA, v, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 2,
+        DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, a, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, b, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, c, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, d, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, e, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, f, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, g, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, h, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, i, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, j, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, k, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, l, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, m, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, n, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, o, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, p, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, q, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, r, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, s, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, t, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, u, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, w, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, x, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, y, v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAgD8="],
+      compare: skip, expect: {error: false}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, a, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, b, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, c, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, d, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, e, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, f, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, g, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, h, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, i, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, j, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, k, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, l, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, m, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, n, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, o, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, p, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, q, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, r, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, s, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, t, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, u, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, w, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, x, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, y, v, !!binary "AAAAQAAAAEA="], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAgD8="],
+      compare: skip, expect: {error: false}}
+    - {command: [INFO, SEARCH], wait_s: 20, expect: {contains: "search_index_reclaimable_memory:0\r"},
+      expect_difference: true}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, a, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, b, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, c, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, d, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, e, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, f, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, g, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, h, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, i, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, j, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, k, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, l, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, m, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, n, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, o, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, p, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, q, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, r, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, s, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, t, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, u, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, w, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, x, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, y, v, !!binary "AABAQAAAQEA="], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAgD8="],
+      compare: skip, expect: {error: false}}
+    - {command: [INFO, SEARCH], wait_s: 20, expect: {contains: "search_index_reclaimable_memory:0\r"},
+      expect_difference: true}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, a, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, b, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, c, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, d, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, e, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, f, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, g, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, h, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, i, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, j, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, k, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, l, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, m, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, n, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, o, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, p, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, q, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, r, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, s, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, t, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, u, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, w, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, x, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, y, v, !!binary "AACAQAAAgEA="], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAgD8="],
+      compare: skip, expect: {error: false}}
+    - {command: [INFO, SEARCH], wait_s: 20, expect: {contains: "search_index_reclaimable_memory:0\r"},
+      expect_difference: true}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, a, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, b, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, c, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, d, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, e, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, f, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, g, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, h, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, i, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, j, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, k, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, l, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, m, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, n, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, o, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, p, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, q, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, r, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, s, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, t, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, u, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, w, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, x, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [HSET, y, v, !!binary "AACgQAAAoEA="], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAgD8="],
+      compare: skip, expect: {error: false}}
+    - {command: [INFO, SEARCH], wait_s: 20, expect: {contains: "search_index_reclaimable_memory:0\r"},
+      expect_difference: true}
+    - {command: [DEL, a, b, c, d, e, f, g, h], expect: {equals: 8}}
+    - {command: [INFO, SEARCH], wait_s: 20, expect: {contains: "search_index_reclaimable_memory:64\r"},
+      expect_difference: true}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], wait_s: 20, expect: {contains: "search_index_reclaimable_memory:0\r"},
+      expect_difference: true}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

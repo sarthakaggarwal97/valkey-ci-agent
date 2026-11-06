@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.ft-create-vector-bounds
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.CREATE bounds INITIAL_CAP/BLOCK_SIZE and rejects FLAT BLOCK_SIZE
+    0, which the parent accepts
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftcreate
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - command: [FT.CREATE, idx_flat0, SCHEMA, v, VECTOR, FLAT, "10", TYPE, FLOAT32,
+        DIM, "3", DISTANCE_METRIC, L2, INITIAL_CAP, "100", BLOCK_SIZE, "0"]
+      expect_difference: true
+      expect: {error: "BLOCK_SIZE"}
+    - command: [FT.CREATE, idx_flatbig, SCHEMA, v, VECTOR, FLAT, "8", TYPE, FLOAT32,
+        DIM, "3", DISTANCE_METRIC, L2, BLOCK_SIZE, "20000000"]
+      expect_difference: true
+      expect: {error: "BLOCK_SIZE"}
+    - command: [FT.CREATE, idx_hnswbig, SCHEMA, v, VECTOR, HNSW, "8", TYPE, FLOAT32,
+        DIM, "3", DISTANCE_METRIC, L2, INITIAL_CAP, "2147483647"]
+      expect_difference: true
+      expect: {error: "INITIAL_CAP"}
+    - command: [FT.CREATE, idx_flatcapbig, SCHEMA, v, VECTOR, FLAT, "8", TYPE, FLOAT32,
+        DIM, "3", DISTANCE_METRIC, L2, INITIAL_CAP, "10000001"]
+      expect_difference: true
+      expect: {error: "INITIAL_CAP"}
+    - command: [FT.CREATE, idx_ok, SCHEMA, v, VECTOR, FLAT, "10", TYPE, FLOAT32, DIM,
+        "3", DISTANCE_METRIC, L2, INITIAL_CAP, "200", BLOCK_SIZE, "1024"]
+      expect: {equals: OK}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ftcreate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftcreate}

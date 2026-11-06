@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "66bbdce0c16c2991e0a26258f2c3f8f497684b7c",
+  "parent": "2dc8e1f6a273f945e54828731c59a8db68983481",
+  "pr": 1009,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix compatibility test suite (#1009)",
+  "date": "2026-05-26",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3274,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only modifies the project's own integration test suite (integration/compatibility/*, integration/compatibility_test.py) and .gitignore: it adds a sources-hash check for the pickle answer files, a regenerate.sh script, skips flaky tests, and regenerates the pickles. No module source code is touched, so the valkey-search module built at the change is behaviorally identical to the parent build; there is no runtime behaviour for a scenario to exercise or compare."
+}

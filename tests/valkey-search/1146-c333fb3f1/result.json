@@ -1,0 +1,93 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "c333fb3f1f733bd042f1da3ac6684d490578de6e",
+  "parent": "f1277da3e062c81157d17471235b45d57ee7603e",
+  "pr": 1146,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix FT.INTERNAL_UPDATE crashes during AOF/RDB load (#1108, #1109) (#1146)",
+  "date": "2026-06-16",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.242,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: unknown-crash (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server+0x27766f) (BuildId: 828b65a5391e57848e1dc2012ac0895249dcccc7) in __asan_memcpy",
+      "scenario": "ai-7aa9c1b6b38b",
+      "seed": 1101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1146",
+      "fingerprint": "3e7345c8dafcf1a68e2b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in _ZN13valkey_search11coordinator15MetadataManager16TriggerCallbacksESt17basic_string_viewIcSt11char_traitsIcEERKNS0_7ObjNameERKNS0_19GlobalMetadataEntryE",
+      "scenario": "ai-7aa9c1b6b38b",
+      "seed": 1101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1146",
+      "fingerprint": "cfd23eebb62d67023f88",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: unknown-crash (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server+0x27766f) (BuildId: 828b65a5391e57848e1dc2012ac0895249dcccc7) in __asan_memcpy",
+      "scenario": "ai-476f60dc9388",
+      "seed": 1102,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1146",
+      "fingerprint": "3e7345c8dafcf1a68e2b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in _ZN13valkey_search11coordinator15MetadataManager16TriggerCallbacksESt17basic_string_viewIcSt11char_traitsIcEERKNS0_7ObjNameERKNS0_19GlobalMetadataEntryE",
+      "scenario": "ai-476f60dc9388",
+      "seed": 1102,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1146",
+      "fingerprint": "cfd23eebb62d67023f88",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in _ZN13valkey_search11coordinator15MetadataManager16TriggerCallbacksESt17basic_string_viewIcSt11char_traitsIcEERKNS0_7ObjNameERKNS0_19GlobalMetadataEntryE",
+      "scenario": "ai-aac6e471104a",
+      "seed": 1103,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1146",
+      "fingerprint": "4e5398071ddea967db93",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

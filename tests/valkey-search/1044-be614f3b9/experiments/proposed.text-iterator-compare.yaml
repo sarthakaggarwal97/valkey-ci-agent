@@ -1,0 +1,94 @@
+extends: [valkey.liveness]
+id: proposed.text-iterator-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH term/proximity/OR-proximity/prefix/fuzzy queries compared
+    across the module builds after the Text iterator raw-pointer and priority-queue
+    rewrite
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: text
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t1, TEXT, t2,
+        TEXT], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", t1, "quick brown fox jumps over lazy dog zmarker",
+        t2, "running runner runs daily"], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", t1, "quick quick quick brown brown fox fox zmarker"],
+      expect: {equals: 1}}
+    - {command: [HSET, "doc:3", t1, "brown fox quick zmarker"], expect: {equals: 1}}
+    - {command: [HSET, "doc:4", t1, "quicksand quickstep quickly quest zmarker"],
+      expect: {equals: 1}}
+    - {command: [HSET, "doc:5", t2, "quick brown fox zmarker"], expect: {equals: 1}}
+    - {command: [HSET, "doc:6", t1, "fox lazy zmarker", t2, "quick brown"], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:7", t1, "quip quill quiz quick brown zmarker"], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:8", t1, "dog lazy dog brown quick fox quick brown fox\
+          \ zmarker"], expect: {equals: 1}}
+    - {command: [HSET, "doc:9", t1, "zebra quince fox zmarker", t2, "quack brown daily"],
+      expect: {equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, zmarker, NOCONTENT, LIMIT, 0, 100], wait_s: 30, expect: {
+        contains: "doc:9"}, compare: unordered}
+    - {command: [FT.SEARCH, idx, "quick brown fox", NOCONTENT, LIMIT, 0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx, "quick brown fox", SLOP, 0, INORDER, NOCONTENT, LIMIT,
+        0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx, "quick brown fox", SLOP, 2, NOCONTENT, LIMIT, 0,
+        100], compare: unordered}
+    - {command: [FT.SEARCH, idx, "quick fox", INORDER, NOCONTENT, LIMIT, 0, 100],
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "fox quick", INORDER, NOCONTENT, LIMIT, 0, 100],
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "@t1:quick @t2:brown", NOCONTENT, LIMIT, 0, 100],
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "quick|brown", NOCONTENT, LIMIT, 0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx, "(quick|brown) fox", SLOP, 3, NOCONTENT, LIMIT, 0,
+        100], compare: unordered}
+    - {command: [FT.SEARCH, idx, "(quick brown)|(lazy dog)", SLOP, 1, NOCONTENT, LIMIT,
+        0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx, "(quick|lazy) (brown|dog)", INORDER, NOCONTENT, LIMIT,
+        0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx, "quick*", NOCONTENT, LIMIT, 0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx, "qui*", NOCONTENT, LIMIT, 0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx, "quick* brown", SLOP, 5, NOCONTENT, LIMIT, 0, 100],
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "qui* qu*", INORDER, NOCONTENT, LIMIT, 0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx, "%quik%", NOCONTENT, LIMIT, 0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx, "run", NOCONTENT, LIMIT, 0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx, "running daily", SLOP, 2, NOCONTENT, LIMIT, 0, 100],
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "@t2:run", NOCONTENT, LIMIT, 0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx, "fox fox fox", SLOP, 0, NOCONTENT, LIMIT, 0, 100],
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "quick quick", INORDER, NOCONTENT, LIMIT, 0, 100],
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "nosuchword", NOCONTENT, LIMIT, 0, 100], compare: unordered}
+    - {command: [CONFIG, SET, search.proximity-inorder-compat-mode, yes], expect: {
+        equals: OK}}
+    - {command: [FT.SEARCH, idx, "quick brown fox", SLOP, 0, INORDER, NOCONTENT, LIMIT,
+        0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx, "fox quick", INORDER, NOCONTENT, LIMIT, 0, 100],
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "(quick brown)|(lazy dog)", SLOP, 1, INORDER, NOCONTENT,
+        LIMIT, 0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx, "(quick|lazy) (brown|dog)", INORDER, NOCONTENT, LIMIT,
+        0, 100], compare: unordered}
+    - {command: [FT.SEARCH, idx, "quick quick", INORDER, NOCONTENT, LIMIT, 0, 100],
+      compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [text.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: text}

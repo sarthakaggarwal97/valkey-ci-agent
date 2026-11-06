@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "844be9cecdda323a9c8d85e0906ea5e3e4098615",
+  "parent": "e8a16035317aad49c304c84953b985c7395aa627",
+  "pr": 1119,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix memory reporting when reader/writer threads change at runtime (#1119)",
+  "date": "2026-06-09",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.8646,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

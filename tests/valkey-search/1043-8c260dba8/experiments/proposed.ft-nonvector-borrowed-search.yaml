@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.ft-nonvector-borrowed-search
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    FT.SEARCH/FT.AGGREGATE non-vector path after the BorrowedInternedStringPtr refactor
+    (trim-then-materialize, restructured fetch-limit loop, skipped MaybeAddIndexedContent),
+    replies compared across the two module builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: ftsearch
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, n, NUMERIC,
+        t, TAG], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', n, '1.50', t, red], expect: {equals: 2}}
+    - {command: [HSET, 'doc:2', n, '2', t, red], expect: {equals: 2}}
+    - {command: [HSET, 'doc:3', n, '100.0', t, blue], expect: {equals: 2}}
+    - {command: [HSET, 'doc:4', n, '4', t, green], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          4]}}
+    - {command: [FT.SEARCH, idx, '*', NOCONTENT, LIMIT, 0, 10], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:{red}', NOCONTENT, LIMIT, 0, 10], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@n:[1 2]', NOCONTENT, LIMIT, 0, 10], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:{red} | @n:[90 110]', NOCONTENT, LIMIT, 0, 10],
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, '-@t:{red}', NOCONTENT, LIMIT, 0, 10], compare: unordered}
+    - {command: [FT.SEARCH, idx, '@t:{nosuch}', NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, '@n:[1 1.6]', RETURN, 1, n], expect_difference: true,
+      expect: {equals: [1, 'doc:1', [n, '1.50']]}}
+    - {command: [FT.SEARCH, idx, '@n:[99 101]', RETURN, 1, n], expect_difference: true,
+      expect: {equals: [1, 'doc:3', [n, '100.0']]}}
+    - {command: [FT.SEARCH, idx, '@t:{red}', SORTBY, n, ASC, RETURN, 1, n, LIMIT,
+        0, 10], expect_difference: true, expect: {equals: [2, 'doc:1', [n, '1.50'],
+          'doc:2', [n, '2']]}}
+    - {command: [FT.SEARCH, idx, '@t:{red}', SORTBY, n, DESC, WITHSORTKEYS, RETURN,
+        1, n], expect_difference: true, expect: {equals: [2, 'doc:2', '#2', [n, '2'],
+          'doc:1', '#1.50', [n, '1.50']]}}
+    - {command: [FT.SEARCH, idx, '@t:{red}', NOCONTENT, LIMIT, 4, 10], expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx, '@t:{red}', NOCONTENT, LIMIT, 0, 0], expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx, '*', NOCONTENT, LIMIT, 2147483648, 10], expect: {
+        equals: [4]}}
+    - {command: [FT.SEARCH, idx, '*', NOCONTENT, LIMIT, 1, 2], compare: skip}
+    - {command: [FT.AGGREGATE, idx, '*', GROUPBY, 1, '@t', REDUCE, COUNT, 0, AS, c],
+      compare: skip}
+    - {command: [CONFIG, SET, search.max-nonvector-search-results-fetched, 2], expect: {
+        equals: OK}}
+    - {command: [FT.SEARCH, idx, '*', NOCONTENT, LIMIT, 0, 10], compare: skip}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], expect: {equals: [2]}}
+    - {command: [CONFIG, SET, search.max-nonvector-search-results-fetched, 0], expect: {
+        equals: OK}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], expect: {equals: [0]}}
+    - {command: [CONFIG, SET, search.max-nonvector-search-results-fetched, 100000],
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '*', NOCONTENT, LIMIT, 0, 10], compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ftsearch.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftsearch}

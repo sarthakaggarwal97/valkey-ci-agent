@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.ft-create-score-field-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.CREATE SCORE range validation, SCORE_FIELD acceptance, FT.INFO score
+    fields and per-document score ingestion, compared across module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: score
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx0, "ON", HASH, PREFIX, 1, "a:", SCORE, "1.0", SCHEMA,
+        tag, TAG, n, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx1, "ON", HASH, PREFIX, 1, "d:", SCORE, "0.5", SCORE_FIELD,
+        w, SCHEMA, tag, TAG, n, NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, "ON", HASH, PREFIX, 1, "b:", SCORE, "0", SCHEMA,
+        tag, TAG, n, NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, bad1, "ON", HASH, PREFIX, 1, "x:", SCORE, "2", SCHEMA,
+        tag, TAG], expect_difference: true, expect: {error: "between 0.0 and 1.0"}}
+    - {command: [FT.CREATE, bad2, "ON", HASH, PREFIX, 1, "x:", SCORE, "-0.5", SCHEMA,
+        tag, TAG], expect_difference: true, expect: {error: "between 0.0 and 1.0"}}
+    - {command: [FT.CREATE, bad3, "ON", HASH, PREFIX, 1, "x:", SCORE, "nan", SCHEMA,
+        tag, TAG], expect: {error: true}}
+    - {command: [FT.CREATE, sfe, "ON", HASH, PREFIX, 1, "e:", SCORE_FIELD, "", SCHEMA,
+        tag, TAG, n, NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, sfk, "ON", HASH, PREFIX, 1, "k:", SCORE_FIELD, SCHEMA,
+        SCHEMA, tag, TAG, n, NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, dup, "ON", HASH, PREFIX, 1, "p:", SCORE, "0.5", SCORE,
+        "1", SCHEMA, tag, TAG], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.INFO, idx0], expect_difference: true, expect: {contains: default_score}}
+    - {command: [FT.INFO, idx1], expect_difference: true, expect: {contains: score_field}}
+    - {command: [HSET, "a:1", tag, x, n, 1], expect: {equals: 2}}
+    - {command: [HSET, "d:1", tag, a, n, 1, w, "0.75"], expect: {equals: 3}}
+    - {command: [HSET, "d:2", tag, b, n, 2, w, notanumber], expect: {equals: 3}}
+    - {command: [HSET, "d:3", tag, c, n, 3, w, ""], expect: {equals: 3}}
+    - {command: [HSET, "d:4", tag, a, n, 4, w, "inf"], expect: {equals: 3}}
+    - {command: [HSET, "d:5", tag, b, n, 5, w, "nan"], expect: {equals: 3}}
+    - {command: [HSET, "d:6", tag, c, n, 6, w, "-1e38"], expect: {equals: 3}}
+    - {command: [HSET, "d:7", tag, a, n, 7], expect: {equals: 2}}
+    - {command: [HSET, "d:2", n, 20, w, "0.5"], expect: {equals: 0}}
+    - {command: [HSET, "b:1", tag, y, n, 2], expect: {equals: 2}}
+    - {command: [HSET, "e:1", tag, x, n, 1], expect: {equals: 2}}
+    - {command: [HSET, "e:2", "", "0.9", tag, y, n, 2], expect: {equals: 3}}
+    - {command: [HSET, "k:1", SCHEMA, "0.3", tag, z, n, 9], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx0, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idx1, "*", LIMIT, 0, 0], wait_s: 15, expect_difference: true,
+      expect: {equals: [7]}}
+    - {command: [FT.SEARCH, idx1, "@n:[20 20]", LIMIT, 0, 0], wait_s: 15, expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx2, "*", LIMIT, 0, 0], wait_s: 15, expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, sfe, "*", LIMIT, 0, 0], wait_s: 15, expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, sfk, "*", LIMIT, 0, 0], wait_s: 15, expect_difference: true,
+      expect: {equals: [1]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [score.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: score}

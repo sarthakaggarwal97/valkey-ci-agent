@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5f261980c905796c8205f8f6ba760ef0ce9906ef",
+  "parent": "8c260dba836ecc4a5f6ce1bf19f5b12c7dad96d5",
+  "pr": 937,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix numeric range search doesn't accept scientific notation (#937)",
+  "date": "2026-06-05",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.3576,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "22788c40e2936ec4df96ce5b4f9c84e247d944de",
+  "parent": "e38a5d9c43d6fe4c570cfca3ee7cec0ac4795d40",
+  "pr": 1026,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Implement space savings for Tag and Numeric (#1026)",
+  "date": "2026-06-09",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 13.5021,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

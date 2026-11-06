@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "beea10a226cb0909194a718182b2a9fe66db22fd",
+  "parent": "08a27f37940b7dfebc61d327f81beab67c48e44c",
+  "pr": 866,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Refactor support for lua/multi on single slot indexes (#866)",
+  "date": "2026-06-05",
+  "unstable": "c96bdec601529c26fee831a1fca7b9e1eea14a8f",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 14.8457,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-f9cf955581a5",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'search' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (FT.CREATE idx{a}{b} PREFIX 1 ab: SCHEMA f NUMERIC), 5 (FT.CREATE {tagonly} PREFIX 1 t: SCHEMA f NUMERIC), 38 (FT.DROPINDEX idx{a}{b})"
+    },
+    {
+      "scenario": "ai-0ede8cd70c30",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'search' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (FT.CREATE idx{a}{b} PREFIX 1 ab: SCHEMA f NUMERIC), 5 (FT.CREATE {tagonly} PREFIX 1 t: SCHEMA f NUMERIC), 38 (FT.DROPINDEX idx{a}{b})"
+    },
+    {
+      "scenario": "ai-ad7b3d50e5c9",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'search' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (FT.CREATE idx{a}{b} PREFIX 1 ab: SCHEMA f NUMERIC), 5 (FT.CREATE {tagonly} PREFIX 1 t: SCHEMA f NUMERIC), 38 (FT.DROPINDEX idx{a}{b})"
+    },
+    {
+      "scenario": "ai-fe140bed62d5",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'search' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (FT.CREATE idx{a}{b} PREFIX 1 ab: SCHEMA f NUMERIC), 5 (FT.CREATE {tagonly} PREFIX 1 t: SCHEMA f NUMERIC), 38 (FT.DROPINDEX idx{a}{b})"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}
