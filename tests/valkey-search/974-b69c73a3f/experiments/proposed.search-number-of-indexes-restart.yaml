@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.search-number-of-indexes-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: search_number_of_indexes correct after aux RDB save/load across a restart;
+    new rdb_last_restore_aux_load_duration_ms field appears
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: restore
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, 1, 'a:', SCHEMA, v, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, 'b:', SCHEMA, t, TAG, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.info-developer-visible, yes], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: "search_number_of_indexes:2\r"}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.info-developer-visible, yes], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_rdb_last_restore_aux_load_duration_ms:"}}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: "search_rdb_restore_in_progress:0\r"}}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: "search_number_of_indexes:2\r"}}
+    - {command: [FT._LIST], compare: unordered, expect: {equals: [idx1, idx2]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [restore.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "0f6d44d870d664cc89f9cf5741e024f3e48f6911",
+  "parent": "ef1f0a127609ada313f0eddb88be22482770b33b",
+  "pr": 994,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix Tag Search's EntriesFetcherIterator logic to not rely on RootIterator (full tree walk) on standard cases (#994)",
+  "date": "2026-04-30",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.4589,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

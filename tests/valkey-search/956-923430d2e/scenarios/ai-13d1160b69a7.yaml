@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search daf685e52a42..923430d2efc2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-13d1160b69a7
+seed: 1002
+experiment:
+  id: proposed.dropindex-blocked-queries
+  inputs:
+    resp: 3
+    concurrency: 16
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

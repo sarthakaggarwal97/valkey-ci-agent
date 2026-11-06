@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "70b8c2025c0fe255a3ce64a01e1f92668898e5e2",
+  "parent": "89643b75a10acdf2956fdd95ab276767eda1df81",
+  "pr": 963,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix timefmt causes OOM on empty input, Issue: #962 (#963)",
+  "date": "2026-05-07",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.3306,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: Valkey aborting for OUT OF MEMORY. Allocating 26843545616 bytes! #server.c:7786",
+      "scenario": "ai-326ccde337c0",
+      "seed": 962001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #963",
+      "fingerprint": "6cbd26fb20028cceb7f7",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: Valkey aborting for OUT OF MEMORY. Allocating 26843545616 bytes! #server.c:7786",
+      "scenario": "ai-6346fa36ec3b",
+      "seed": 962002,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #963",
+      "fingerprint": "6cbd26fb20028cceb7f7",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

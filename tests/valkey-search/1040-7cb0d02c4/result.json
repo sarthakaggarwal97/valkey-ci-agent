@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "7cb0d02c41a03f48d0c6dd2ffc8e955bbd77ae18",
+  "parent": "1b85d1acce5ece7a0b1e1f5a766cb3148659173b",
+  "pr": 1040,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Use protobuf Arena for fanout response deserialization (#1040)",
+  "date": "2026-05-15",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.1783,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

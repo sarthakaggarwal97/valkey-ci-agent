@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.timefmt-empty-format-oom
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE APPLY timefmt() with an empty format string must not OOM/hang
+    (issue
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: timefmt
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, ts, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', ts, '1739565015'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@ts:[-inf inf]'], wait_s: 30, compare: skip, expect: {
+        contains: 'doc:1'}}
+    - {command: [FT.AGGREGATE, idx, '@ts:[-inf inf]', LOAD, 1, ts, APPLY, "timefmt(@ts,\
+          \ '')", AS, formatted], expect_difference: true, compare: unordered, expect: {
+        exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: timefmt}

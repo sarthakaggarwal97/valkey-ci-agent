@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.dropindex-blocked-queries
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    FT.DROPINDEX racing FT.SEARCH blocked on an in-flight HSET mutation. The serial
+    sequence is build-agnostic (create, index, search, drop, search-after-drop errors
+    identically on both module builds); the concurrency check reruns the whole sequence
+    on many connections against the change build, where a reintroduced MarkAsDestructing
+    / ResolveContent crash or deadlock on dropped-while-blocked queries surfaces as
+    a candidate crash or hang.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    concurrency: {type: integer, minimum: 2, maximum: 16, default: 8}
+components:
+- use: valkey.action.commands
+  id: dropindex
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    checks:
+      concurrency: {$ref: inputs.concurrency}
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, content, TEXT],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", content, "hello world"], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", content, "hello valkey search"], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", content, "hello there world"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@content:hello", NOCONTENT], wait_s: 10, expect: {
+        contains: "doc:3"}, compare: skip}
+    - {command: [HSET, "doc:1", content, "hello again updated"], expect: {equals: 0}}
+    - {command: [HSET, "doc:2", content, "hello more content"], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@content:hello", NOCONTENT], expect: {contains: "doc:1"},
+      compare: skip}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@content:hello"], expect: {error: "not found"},
+      compare: skip}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dropindex}

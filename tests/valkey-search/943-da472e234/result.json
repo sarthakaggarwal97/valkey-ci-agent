@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "da472e234b6e610e6391b0554b0c8390d8ab2ab8",
+  "parent": "849fb5ac0e85c5a8bde266c01602b3d5e7b1340c",
+  "pr": 943,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix Boolean config type mismatch (#943)",
+  "date": "2026-04-01",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 1,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.1589,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-b1a89a74987d",
+      "build": "unstable",
+      "seed": 943001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b1a89a74987d",
+      "build": "unstable",
+      "seed": 943002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b1a89a74987d",
+      "build": "unstable",
+      "seed": 943003,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

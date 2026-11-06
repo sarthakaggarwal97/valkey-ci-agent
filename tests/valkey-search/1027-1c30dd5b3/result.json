@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "1c30dd5b3bc95d15742d699b2dd7a8565501feda",
+  "parent": "70b8c2025c0fe255a3ce64a01e1f92668898e5e2",
+  "pr": 1027,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix crash in unittests introduced in previous PR (#1027)",
+  "date": "2026-05-10",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2422,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only unit-test files (testing/expr/expr_test.cc and testing/expr/value_test.cc), switching their gtest fixtures to inherit from vmsdk::ValkeyTest to fix a crash in the project's own test harness. No runtime code of the valkey-search module changes, so the module's behavior under the fuzzer is identical at the change and its parent; a compared sequence would show no difference and no fault path is affected."
+}

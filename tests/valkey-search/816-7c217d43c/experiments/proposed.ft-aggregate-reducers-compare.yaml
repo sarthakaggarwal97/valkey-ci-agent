@@ -1,0 +1,85 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-reducers-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    FT.AGGREGATE reducer refactor moved REDUCE parsing into per-reducer parser functions
+    and made reducers polymorphic. Compare every reducer (COUNT, SUM, MIN, MAX, AVG,
+    COUNT_DISTINCT, STDDEV), nil and duplicate values, default output naming without
+    AS, case-insensitive names, more reducers than the inlined capacity of 4, and
+    every argument-count and parse error against the parent build; no reply may change.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reducers
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, agg, ON, HASH, PREFIX, 1, "g:", SCHEMA, grp, TAG, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, "g:1", grp, a, n, 1], expect: {equals: 2}}
+    - {command: [HSET, "g:2", grp, a, n, 2], expect: {equals: 2}}
+    - {command: [HSET, "g:3", grp, a, n, 3], expect: {equals: 2}}
+    - {command: [HSET, "g:4", grp, b, n, 10], expect: {equals: 2}}
+    - {command: [HSET, "g:5", grp, b, n, 30], expect: {equals: 2}}
+    - {command: [HSET, "g:6", grp, b], expect: {equals: 1}}
+    - {command: [HSET, "g:7", grp, c, n, 5], expect: {equals: 2}}
+    - {command: [HSET, "g:8", grp, c, n, 5], expect: {equals: 2}}
+    - {command: [HSET, "g:9", grp, c, n, 5], expect: {equals: 2}}
+    - {command: [FT.SEARCH, agg, "@grp:{a|b|c}", NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [9]}}
+    - {command: [FT.AGGREGATE, agg, "@grp:{a}", GROUPBY, 1, "@grp", REDUCE, COUNT,
+        0, AS, c, REDUCE, SUM, 1, "@n", AS, s, REDUCE, MIN, 1, "@n", AS, mn, REDUCE,
+        MAX, 1, "@n", AS, mx, REDUCE, AVG, 1, "@n", AS, av, REDUCE, COUNT_DISTINCT,
+        1, "@n", AS, cd, REDUCE, STDDEV, 1, "@n", AS, sd], expect: {exists: true}}
+    - {command: [FT.AGGREGATE, agg, "@grp:{b}", GROUPBY, 1, "@grp", REDUCE, COUNT,
+        0, AS, c, REDUCE, SUM, 1, "@n", AS, s, REDUCE, MIN, 1, "@n", AS, mn, REDUCE,
+        MAX, 1, "@n", AS, mx, REDUCE, AVG, 1, "@n", AS, av, REDUCE, COUNT_DISTINCT,
+        1, "@n", AS, cd, REDUCE, STDDEV, 1, "@n", AS, sd], expect: {exists: true}}
+    - {command: [FT.AGGREGATE, agg, "@grp:{c}", GROUPBY, 1, "@grp", REDUCE, COUNT,
+        0, AS, c, REDUCE, SUM, 1, "@n", AS, s, REDUCE, MIN, 1, "@n", AS, mn, REDUCE,
+        MAX, 1, "@n", AS, mx, REDUCE, AVG, 1, "@n", AS, av, REDUCE, COUNT_DISTINCT,
+        1, "@n", AS, cd, REDUCE, STDDEV, 1, "@n", AS, sd], expect: {exists: true}}
+    - {command: [FT.AGGREGATE, agg, "@grp:{a|b|c}", GROUPBY, 1, "@grp", REDUCE, SUM,
+        1, "@n", AS, s, SORTBY, 2, "@s", DESC], expect: {exists: true}}
+    - {command: [FT.AGGREGATE, agg, "@grp:{a}", GROUPBY, 1, "@grp", REDUCE, sum, 1,
+        "@n"], expect: {exists: true}}
+    - {command: [FT.AGGREGATE, agg, "@grp:{c}", GROUPBY, 2, "@grp", "@n", REDUCE,
+        COUNT, 0, AS, c], expect: {exists: true}}
+    - {command: [FT.AGGREGATE, agg, "@grp:{a}", GROUPBY, 1, "@grp", REDUCE, COUNT,
+        0, AS, c1, REDUCE, COUNT, 0, AS, c2, REDUCE, COUNT, 0, AS, c3, REDUCE, COUNT,
+        0, AS, c4, REDUCE, COUNT, 0, AS, c5, REDUCE, COUNT, 0, AS, c6, REDUCE, COUNT,
+        0, AS, c7, REDUCE, COUNT, 0, AS, c8], expect: {exists: true}}
+    - {command: [FT.AGGREGATE, agg, "@grp:{a}", GROUPBY, 1, "@grp", REDUCE, COUNT,
+        1, "@n"], expect: {error: "incorrect number of arguments"}}
+    - {command: [FT.AGGREGATE, agg, "@grp:{a}", GROUPBY, 1, "@grp", REDUCE, SUM, 0],
+      expect: {error: "incorrect number of arguments"}}
+    - {command: [FT.AGGREGATE, agg, "@grp:{a}", GROUPBY, 1, "@grp", REDUCE, SUM, 2,
+        "@n", "@n"], expect: {error: "incorrect number of arguments"}}
+    - {command: [FT.AGGREGATE, agg, "@grp:{a}", GROUPBY, 1, "@grp", REDUCE, COUNT,
+        4294967295], expect: {error: "incorrect number of arguments (4294967295)"}}
+    - {command: [FT.AGGREGATE, agg, "@grp:{a}", GROUPBY, 1, "@grp", REDUCE, WOMBAT,
+        0], expect: {error: "not found"}}
+    - {command: [FT.AGGREGATE, agg, "@grp:{a}", GROUPBY, 1, "@grp", REDUCE, SUM, 1],
+      expect: {error: true}}
+    - {command: [FT.AGGREGATE, agg, "@grp:{a}", GROUPBY, 1, "@grp", REDUCE, SUM, -1],
+      expect: {error: true}}
+    - {command: [FT.AGGREGATE, agg, "@grp:{a}", GROUPBY, 1, "@grp", REDUCE, SUM, 1,
+        "@nosuchfield"], expect: {error: true}}
+    - {command: [FT.AGGREGATE, agg, "@grp:{a}", GROUPBY, 1, "@grp", REDUCE, SUM, 1,
+        "@n", AS], expect: {error: true}}
+    - {command: [FT.AGGREGATE, agg, "@grp:{a}", GROUPBY, 0], expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [reducers.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reducers}

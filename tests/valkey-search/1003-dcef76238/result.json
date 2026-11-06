@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "dcef7623867681b9a88df5ddbc6fe8e784091217",
+  "parent": "30dc0d5b2554d078d2eb0ce544939348015616b7",
+  "pr": 1003,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Ensure fixed ordering in the serialization of the fields. This matters for Text (#1003)",
+  "date": "2026-05-04",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 8.3658,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "77ca3d5501413e9aaad6f50c36850d102a44315f",
+  "parent": "541453bb03204f4dc95f58c00203b61ec45ce4e2",
+  "pr": 973,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix aggregate recursion depth (#973)",
+  "date": "2026-04-17",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.2291,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-cac03b870b57",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'agg' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (FT.AGGREGATE idx * FILTER ((1))), 4 (FT.AGGREGATE idx * FILTER (((1)))), 5 (FT.AGGREGATE idx * APPLY (((1))) AS x), 6 (FT.AGGREGATE idx * "
+    },
+    {
+      "scenario": "ai-e9a4e0669a0f",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'agg' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (CONFIG GET search.query-string-depth), 3 (FT.AGGREGATE idx * FILTER ((1))), 4 (FT.AGGREGATE idx * FILTER (((1)))), 5 (FT.AGGREGATE idx * A"
+    },
+    {
+      "scenario": "ai-adf36e057b59",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'agg' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (FT.AGGREGATE idx * FILTER ((1))), 4 (FT.AGGREGATE idx * FILTER (((1)))), 5 (FT.AGGREGATE idx * APPLY (((1))) AS x), 6 (FT.AGGREGATE idx * "
+    },
+    {
+      "scenario": "ai-509effa2bfd1",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'agg' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (CONFIG GET search.query-string-depth), 3 (FT.AGGREGATE idx * FILTER ((1))), 4 (FT.AGGREGATE idx * FILTER (((1)))), 5 (FT.AGGREGATE idx * A"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

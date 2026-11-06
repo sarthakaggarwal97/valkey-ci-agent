@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "1b85d1acce5ece7a0b1e1f5a766cb3148659173b",
+  "parent": "7cac0c7ca955f148d9fd0cf6800ca14095e5dfc5",
+  "pr": 1029,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix RunByMain shutdown leak by draining pending one-shots (#1029)",
+  "date": "2026-05-13",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 4,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 20.8242,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

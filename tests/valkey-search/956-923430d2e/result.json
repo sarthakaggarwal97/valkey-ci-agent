@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "923430d2efc261f5052ba0a07ba76306d37f2a53",
+  "parent": "daf685e52a426bd7c740df559985e2623e933775",
+  "pr": 956,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix dropindex while blocked queries crash (#956)",
+  "date": "2026-04-07",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 7.6036,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

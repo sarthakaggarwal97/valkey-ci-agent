@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "deab7ef9e6b3dc71c14650d4b31b048263f37289",
+  "parent": "77ca3d5501413e9aaad6f50c36850d102a44315f",
+  "pr": 966,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix crash on empty FT.AGGREGATE expressions (#966)",
+  "date": "2026-04-20",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.0849,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in _ZNK13valkey_search9aggregate5Apply7ExecuteERNS0_9RecordSetE",
+      "scenario": "ai-ddd1ed980909",
+      "seed": 1001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #966",
+      "fingerprint": "c4dfae31ed3e1689607d",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in _ZNK13valkey_search9aggregate5Apply7ExecuteERNS0_9RecordSetE",
+      "scenario": "ai-fe9b3efa8e9a",
+      "seed": 1002,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #966",
+      "fingerprint": "c4dfae31ed3e1689607d",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

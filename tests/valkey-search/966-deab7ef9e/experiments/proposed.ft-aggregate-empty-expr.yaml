@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-empty-expr
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE with an empty or operand-less APPLY/FILTER expression
+    is rejected instead of crashing
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [FT.CREATE, products, ON, HASH, PREFIX, 1, "product:", SCHEMA, price,
+        NUMERIC, category, TAG], expect: {equals: OK}}
+    - {command: [HSET, "product:1", price, "100", category, electronics], expect: {
+        equals: 2}}
+    - {command: [HSET, "product:2", price, "200", category, electronics], expect: {
+        equals: 2}}
+    - {command: [FT.SEARCH, products, "@price:[1 +inf]", NOCONTENT, LIMIT, "0", "0"],
+      wait_s: 30, expect: {equals: [2]}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 +inf]", APPLY, "@price*2", AS,
+        double_price], compare: skip}
+    - {command: [FT.AGGREGATE, products, "@price:[1 +inf]", APPLY, "", AS, result],
+      expect_difference: true, expect: {error: "Invalid or missing expression"}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 +inf]", APPLY, " ", AS, result],
+      expect_difference: true, expect: {error: "Invalid or missing expression"}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 +inf]", FILTER, ""], expect_difference: true,
+      expect: {error: "Invalid or missing expression"}}
+    - {command: [FT.AGGREGATE, products, "@price:[1 +inf]", APPLY, "!", AS, result],
+      expect_difference: true, expect: {error: "Invalid or missing expression"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

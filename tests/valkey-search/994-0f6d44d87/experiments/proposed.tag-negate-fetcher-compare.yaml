@@ -1,0 +1,126 @@
+extends: [valkey.liveness]
+id: proposed.tag-negate-fetcher-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Tag and negated-tag FT.SEARCH replies are unchanged by the lazy EntriesFetcherIterator
+    / PrefixSubTreeIterator rewrite, across empty-index, full-walk negation, untracked-key
+    handoff, prefix wildcards and tag churn
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, category, TAG,
+        rating, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "-@category:{missing}", NOCONTENT, LIMIT, 0, 0],
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@category:{missing}", NOCONTENT, LIMIT, 0, 0], expect: {
+        equals: [0]}}
+    - {command: [HSET, "doc:0", category, cat0, rating, 3], expect: {equals: 2}}
+    - {command: [HSET, "doc:1", category, cat1, rating, 4], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", category, cat2, rating, 3], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", category, cat0, rating, 4], expect: {equals: 2}}
+    - {command: [HSET, "doc:4", category, cat1, rating, 3], expect: {equals: 2}}
+    - {command: [HSET, "doc:5", category, cat2, rating, 4], expect: {equals: 2}}
+    - {command: [HSET, "doc:6", category, cat0, rating, 3], expect: {equals: 2}}
+    - {command: [HSET, "doc:7", category, cat1, rating, 4], expect: {equals: 2}}
+    - {command: [HSET, "doc:8", category, cat2, rating, 3], expect: {equals: 2}}
+    - {command: [HSET, "doc:9", category, cat0, rating, 4], expect: {equals: 2}}
+    - {command: [HSET, "doc:10", category, cat1, rating, 3], expect: {equals: 2}}
+    - {command: [HSET, "doc:11", category, cat2, rating, 4], expect: {equals: 2}}
+    - {command: [HSET, "doc:12", category, cat0, rating, 3], expect: {equals: 2}}
+    - {command: [HSET, "doc:13", category, cat1, rating, 4], expect: {equals: 2}}
+    - {command: [HSET, "doc:14", category, cat2, rating, 3], expect: {equals: 2}}
+    - {command: [HSET, "doc:15", category, cat0, rating, 4], expect: {equals: 2}}
+    - {command: [HSET, "doc:16", category, cat1, rating, 3], expect: {equals: 2}}
+    - {command: [HSET, "doc:17", category, cat2, rating, 4], expect: {equals: 2}}
+    - {command: [HSET, "doc:18", rating, 3], expect: {equals: 1}}
+    - {command: [HSET, "doc:19", rating, 4], expect: {equals: 1}}
+    - {command: [HSET, "doc:20", rating, 3], expect: {equals: 1}}
+    - {command: [HSET, "doc:21", rating, 4], expect: {equals: 1}}
+    - {command: [HSET, "doc:22", rating, 3], expect: {equals: 1}}
+    - {command: [HSET, "doc:23", rating, 4], expect: {equals: 1}}
+    - {command: [HSET, "doc:24", category, "blue,green", rating, 3], expect: {equals: 2}}
+    - {command: [HSET, "doc:25", category, blue, rating, 4], expect: {equals: 2}}
+    - {command: [HSET, "doc:26", category, "blue,green", rating, 3], expect: {equals: 2}}
+    - {command: [HSET, "doc:27", category, blue, rating, 4], expect: {equals: 2}}
+    - {command: [HSET, "doc:28", category, "blue,green", rating, 3], expect: {equals: 2}}
+    - {command: [HSET, "doc:29", category, blue, rating, 4], expect: {equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: 30}, compare: skip}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, LIMIT, 0, 0, DIALECT, 2], wait_s: 30,
+      expect: {equals: [30]}}
+    - {command: [FT.SEARCH, idx, "@category:{cat0}", NOCONTENT, LIMIT, 0, 0], expect: {
+        equals: [6]}}
+    - {command: [FT.SEARCH, idx, "@category:{cat0|cat1}", NOCONTENT, LIMIT, 0, 0],
+      expect: {equals: [12]}}
+    - {command: [FT.SEARCH, idx, "@category:{nonexistent}", NOCONTENT, LIMIT, 0, 0],
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@category:{blue}", NOCONTENT, LIMIT, 0, 0], expect: {
+        equals: [6]}}
+    - {command: [FT.SEARCH, idx, "@category:{green}", NOCONTENT, LIMIT, 0, 0], expect: {
+        equals: [3]}}
+    - {command: [FT.SEARCH, idx, "@category:{cat*}", NOCONTENT, LIMIT, 0, 0], expect: {
+        equals: [18]}}
+    - {command: [FT.SEARCH, idx, "-@category:{cat0}", NOCONTENT, LIMIT, 0, 0], expect: {
+        equals: [24]}}
+    - {command: [FT.SEARCH, idx, "-@category:{cat0|cat1}", NOCONTENT, LIMIT, 0, 0],
+      expect: {equals: [18]}}
+    - {command: [FT.SEARCH, idx, "-@category:{nonexistent}", NOCONTENT, LIMIT, 0,
+        0], expect: {equals: [30]}}
+    - {command: [FT.SEARCH, idx, "-@category:{cat0|cat1|cat2|blue|green}", NOCONTENT,
+        LIMIT, 0, 0], expect: {equals: [6]}}
+    - {command: [FT.SEARCH, idx, "-@category:{cat0|cat1|cat2|blue|green}", NOCONTENT,
+        LIMIT, 0, 100], compare: unordered, expect: {contains: 6}}
+    - {command: [FT.SEARCH, idx, "-@category:{cat*}", NOCONTENT, LIMIT, 0, 0], expect: {
+        equals: [12]}}
+    - {command: [FT.SEARCH, idx, "-@category:{cat*}", NOCONTENT, LIMIT, 0, 100], compare: unordered,
+      expect: {contains: 12}}
+    - {command: [FT.SEARCH, idx, "@category:{blue} -@category:{green}", NOCONTENT,
+        LIMIT, 0, 0], expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx, "@category:{cat1} @rating:[4 4]", NOCONTENT, LIMIT,
+        0, 0], expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx, "-@category:{cat1} @rating:[4 4]", NOCONTENT, LIMIT,
+        0, 0], expect: {equals: [12]}}
+    - {command: [FT.SEARCH, idx, "-@category:{cat0}", NOCONTENT, LIMIT, 0, 5], compare: skip,
+      expect: {contains: 24}}
+    - {command: [HDEL, "doc:0", category], expect: {equals: 1}}
+    - {command: [HSET, "doc:1", category, cat9], expect: {equals: 0}}
+    - {command: [DEL, "doc:24"], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: 29}, compare: skip}
+    - {command: [FT.SEARCH, idx, "@category:{cat9}", NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, "-@category:{cat0}", NOCONTENT, LIMIT, 0, 0], expect: {
+        equals: [24]}}
+    - {command: [FT.SEARCH, idx, "-@category:{cat0|cat9}", NOCONTENT, LIMIT, 0, 0],
+      expect: {equals: [23]}}
+    - {command: [FT.SEARCH, idx, "-@category:{nonexistent}", NOCONTENT, LIMIT, 0,
+        0], expect: {equals: [29]}}
+    - {command: [FT.SEARCH, idx, "-@category:{cat0|cat1|cat2|cat9|blue|green}", NOCONTENT,
+        LIMIT, 0, 0], expect: {equals: [7]}}
+    - {command: [FT.SEARCH, idx, "@category:{green}", NOCONTENT, LIMIT, 0, 0], expect: {
+        equals: [2]}}
+    - {command: [FT.SEARCH, idx, "-@category:{green}", NOCONTENT, LIMIT, 0, 0], expect: {
+        equals: [27]}}
+    - {command: [HSET, "doc:1", category, cat1], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@category:{cat9}", NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "-@category:{nonexistent}", NOCONTENT, LIMIT, 0,
+        0], expect: {equals: [29]}}
+    - {command: [FT.SEARCH, idx, "-@category:{cat9}", NOCONTENT, LIMIT, 0, 0], expect: {
+        equals: [29]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [search.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}

@@ -1,0 +1,87 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-sortby-trim
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    FT.SEARCH SORTBY must sort the complete result set. The change sets sortby_parameter
+    in the parser but SearchCommand::RequiresCompleteResults still reads the old,
+    now never-assigned sortby field, so results are trimmed to limit*buffer-multiplier
+    before ApplySorting runs. Compared against the parent build with queries whose
+    match set exceeds the trim threshold, sorted descending against the index iteration
+    order.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sortby
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, n1, NUMERIC, n2,
+        NUMERIC, t1, TAG], expect: {equals: OK}}
+    - {command: [HSET, "d:1", n1, 1, n2, 24, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:2", n1, 2, n2, 23, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:3", n1, 3, n2, 22, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:4", n1, 4, n2, 21, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:5", n1, 5, n2, 20, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:6", n1, 6, n2, 19, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:7", n1, 7, n2, 18, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:8", n1, 8, n2, 17, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:9", n1, 9, n2, 16, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:10", n1, 10, n2, 15, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:11", n1, 11, n2, 14, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:12", n1, 12, n2, 13, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:13", n1, 13, n2, 12, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:14", n1, 14, n2, 11, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:15", n1, 15, n2, 10, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:16", n1, 16, n2, 9, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:17", n1, 17, n2, 8, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:18", n1, 18, n2, 7, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:19", n1, 19, n2, 6, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:20", n1, 20, n2, 5, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:21", n1, 21, n2, 4, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:22", n1, 22, n2, 3, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:23", n1, 23, n2, 2, t1, x], expect: {equals: 3}}
+    - {command: [HSET, "d:24", n1, 24, n2, 1, t1, x], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, "@n1:[1 24]", NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {equals: [24]}}
+    - {command: [FT.SEARCH, idx, "@n1:[1 24]", NOCONTENT, LIMIT, 0, 5], expect: {
+        equals: [24, "d:1", "d:2", "d:3", "d:4", "d:5"]}}
+    - {command: [FT.SEARCH, idx, "@n1:[1 24]", SORTBY, n1, DESC, RETURN, 1, n1, LIMIT,
+        0, 24]}
+    - {command: [FT.SEARCH, idx, "@n1:[1 24]", SORTBY, n1, DESC, RETURN, 1, n1, LIMIT,
+        0, 5], expect_difference: true, expect: {exists: true}}
+    - {command: [FT.SEARCH, idx, "@n1:[1 24]", SORTBY, n1, DESC, RETURN, 1, n1, LIMIT,
+        10, 5], expect_difference: true, expect: {exists: true}}
+    - {command: [FT.SEARCH, idx, "@n1:[1 24]", SORTBY, n2, ASC, WITHSORTKEYS, RETURN,
+        1, n2, LIMIT, 0, 5], expect_difference: true, expect: {exists: true}}
+    - {command: [FT.CREATE, vidx, ON, HASH, PREFIX, 1, "v:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, n1, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [HSET, "v:1", vec, !!binary "AACAPwAAAAA=", n1, 1], expect: {equals: 2}}
+    - {command: [HSET, "v:2", vec, !!binary "AAAAQAAAAAA=", n1, 2], expect: {equals: 2}}
+    - {command: [HSET, "v:3", vec, !!binary "AABAQAAAAAA=", n1, 3], expect: {equals: 2}}
+    - {command: [HSET, "v:4", vec, !!binary "AACAQAAAAAA=", n1, 4], expect: {equals: 2}}
+    - {command: [HSET, "v:5", vec, !!binary "AACgQAAAAAA=", n1, 5], expect: {equals: 2}}
+    - {command: [HSET, "v:6", vec, !!binary "AADAQAAAAAA=", n1, 6], expect: {equals: 2}}
+    - {command: [HSET, "v:7", vec, !!binary "AADgQAAAAAA=", n1, 7], expect: {equals: 2}}
+    - {command: [HSET, "v:8", vec, !!binary "AAAAQQAAAAA=", n1, 8], expect: {equals: 2}}
+    - {command: [FT.SEARCH, vidx, "*=>[KNN 8 @vec $BLOB]", PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=",
+        NOCONTENT, DIALECT, 2], wait_s: 30, expect: {equals: [8, "v:1", "v:2", "v:3",
+          "v:4", "v:5", "v:6", "v:7", "v:8"]}}
+    - {command: [FT.SEARCH, vidx, "*=>[KNN 8 @vec $BLOB]", PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=",
+        SORTBY, n1, DESC, RETURN, 1, n1, LIMIT, 0, 2, DIALECT, 2], expect_difference: true,
+      expect: {exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [sortby.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sortby}

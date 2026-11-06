@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 541453bb0320..77ca3d550141.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-509effa2bfd1
+seed: 1004
+experiment:
+  id: proposed.aggregate-recursion-depth
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 3
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

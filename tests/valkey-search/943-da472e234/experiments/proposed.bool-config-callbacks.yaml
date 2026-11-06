@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.bool-config-callbacks
+deployment:
+  modes: [standalone]
+metadata:
+  description: Boolean module config get/set callbacks after the ConfigBase<bool>
+    rewiring - runtime toggles, Dev-gate and invalid-value error paths, and a toggled
+    boolean reaching FT.SEARCH
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: boolcfg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, GET, search.enable-partial-results], expect: {contains: "yes"}}
+    - {command: [CONFIG, GET, search.hnsw-allow-replace-deleted], expect: {contains: "no"}}
+    - {command: [CONFIG, SET, search.enable-partial-results, no], expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.enable-partial-results], expect: {contains: "no"}}
+    - {command: [CONFIG, SET, search.enable-partial-results, yes], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.enable-consistent-results, yes], expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.enable-consistent-results], expect: {contains: "yes"}}
+    - {command: [CONFIG, SET, search.search-result-background-cleanup, yes], expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, search.skip-rdb-load, yes], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.drain-mutation-queue-on-save, yes], expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, search.hnsw-allow-replace-deleted, yes], expect: {error: "debug-mode"}}
+    - {command: [CONFIG, SET, search.skip-rdb-load, banana], expect: {error: true}}
+    - {command: [CONFIG, GET, "search.*"], compare: unordered-pairs, expect: {contains: search.enable-partial-results}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, content, TEXT],
+      expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', content, "alpha beta gamma"], expect: {equals: 1}}
+    - {command: [HSET, 'doc:2', content, "gamma beta alpha"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "alpha beta", NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: "doc:2"}}
+    - {command: [FT.SEARCH, idx, "alpha beta", SLOP, 0, INORDER, NOCONTENT], wait_s: 30,
+      expect: {equals: [1, "doc:1"]}}
+    - {command: [CONFIG, SET, search.proximity-inorder-compat-mode, yes], expect: {
+        equals: OK}}
+    - {command: [CONFIG, GET, search.proximity-inorder-compat-mode], expect: {contains: "yes"}}
+    - {command: [FT.SEARCH, idx, "alpha beta", SLOP, 0, INORDER, NOCONTENT], expect: {
+        equals: [1, "doc:1"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [boolcfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: boolcfg}

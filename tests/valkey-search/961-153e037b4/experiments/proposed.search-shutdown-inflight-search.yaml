@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.search-shutdown-inflight-search
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module shutdown with in-flight background FT.SEARCH queries drains
+    worker pools instead of racing index-schema teardown (heap-use-after-free fix)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shutdown_race
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, content, TEXT],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", content, "hello world"], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", content, "hello valkey"], expect: {equals: 1}}
+    - {command: [FT._DEBUG, PAUSEPOINT, SET, background_search_completing], expect: {
+        equals: OK}}
+    - {connection: s1, raw: "FT.SEARCH idx @content:hello LIMIT 0 10\r\n", expect: {
+        exists: false}}
+    - {connection: s2, raw: "FT.SEARCH idx @content:hello NOCONTENT\r\n", expect: {
+        exists: false}}
+    - {connection: s3, raw: "FT.SEARCH idx @content:valkey LIMIT 0 10\r\n", expect: {
+        exists: false}}
+    - {connection: s4, raw: "FT.SEARCH idx @content:valkey NOCONTENT\r\n", expect: {
+        exists: false}}
+    - {command: [FT._DEBUG, PAUSEPOINT, TEST, background_search_completing], wait_s: 15,
+      expect: {min: 1}}
+    - {restart: true, expect_difference: true, expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shutdown_race}

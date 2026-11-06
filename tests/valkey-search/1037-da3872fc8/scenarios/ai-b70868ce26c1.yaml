@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 7cb0d02c41a0..da3872fc8b93.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b70868ce26c1
+seed: 1037
+experiment:
+  id: proposed.pausepoint-fastpath-lifecycle
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

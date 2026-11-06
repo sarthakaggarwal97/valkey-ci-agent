@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.pausepoint-fastpath-lifecycle
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    PausePoint fast-path flag (pause_points_enabled): background threads still pause,
+    are counted and are released after the fast-skip was added, and indexing/search
+    behave identically before any point is set (flag false, new skip path) and after
+    all points are reset (flag true, empty map).
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: pausepoints
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, tag, TAG, n,
+        NUMERIC], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [HSET, 'doc:1', tag, hello, n, 5], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, '@tag:{hello}', NOCONTENT], compare: unordered, expect: {
+        contains: 'doc:1'}}
+    - {command: [FT._DEBUG, PAUSEPOINT, TEST, mutation_processing], expect: {equals: 'Pause
+          Point not found'}}
+    - {command: [FT._DEBUG, PAUSEPOINT, SET, mutation_processing], expect: {equals: OK}}
+    - {command: [HSET, 'item:1', tag, a], expect: {equals: 1}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, 'item:', SCHEMA, tag, TAG],
+      expect: {equals: OK}}
+    - {command: [FT._DEBUG, PAUSEPOINT, TEST, mutation_processing], wait_s: 30, expect: {
+        equals: 1}}
+    - {command: [FT._DEBUG, PAUSEPOINT, LIST], compare: skip, expect: {contains: mutation_processing}}
+    - {command: [FT._DEBUG, PAUSEPOINT, RESET, mutation_processing], expect: {equals: OK}}
+    - {command: [FT.INFO, idx2], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx2, '@tag:{a}', NOCONTENT], compare: unordered, expect: {
+        contains: 'item:1'}}
+    - {command: [HSET, 'doc:2', tag, world, n, 7], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@n:[6 10]', NOCONTENT], compare: unordered, expect: {
+        contains: 'doc:2'}}
+    - {command: [FT._DEBUG, PAUSEPOINT, RESET, never_set_point], expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [pausepoints.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pausepoints}

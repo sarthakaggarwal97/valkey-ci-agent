@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.ft-attribute-order
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.INFO and RDB serialization emit index attributes in sorted-by-alias
+    order; the parent emits hash-map order, which is random per process
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftinfo
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, f1, AS, zulu,
+        TEXT, f2, AS, alpha, TEXT, f3, AS, yankee, TEXT, NOSTEM, f4, AS, bravo, TEXT,
+        WITHSUFFIXTRIE, f5, AS, xray, TEXT, f6, AS, charlie, TEXT, f7, AS, whiskey,
+        TEXT, NOSTEM, f8, AS, delta, TEXT, f9, AS, tango, TAG, f10, AS, november,
+        NUMERIC, f11, AS, victor, VECTOR, FLAT, '6', TYPE, FLOAT32, DIM, '2', DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, expect_difference: true}
+    - {command: [HSET, 'doc:1', f1, zebra, f2, apple, f3, yarn, f4, banana, f5, xylophone,
+        f6, cherry, f7, walnut, f8, dates, f9, 'red,blue', f10, '7', f11, !!binary 'AACAPwAAgD8='],
+      expect: {equals: 11}}
+    - {command: [HSET, 'doc:2', f1, zebra, f2, apple, f3, yarn, f4, bandana, f5, xenon,
+        f6, cocoa, f7, walrus, f8, dill, f9, green, f10, '9', f11, !!binary 'AAAAQAAAAEA='],
+      expect: {equals: 11}}
+    - {command: [FT.SEARCH, idx, '@alpha:apple', NOCONTENT], wait_s: 30, expect: {
+        contains: 'doc:1'}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@whiskey:walnut', NOCONTENT], wait_s: 30, expect: {
+        contains: 'doc:1'}, compare: unordered}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@alpha:apple', NOCONTENT], wait_s: 60, expect: {
+        contains: 'doc:1'}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@bravo:ban*', NOCONTENT], wait_s: 60, expect: {
+        contains: 'doc:1'}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@yankee:yarn', NOCONTENT], wait_s: 60, expect: {
+        contains: 'doc:1'}, compare: unordered}
+    - {command: [FT.INFO, idx], wait_s: 60, expect: {contains: ready}, expect_difference: true}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ftinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftinfo}

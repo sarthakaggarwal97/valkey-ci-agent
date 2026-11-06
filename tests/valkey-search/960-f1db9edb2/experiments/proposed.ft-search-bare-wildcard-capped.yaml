@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-bare-wildcard-capped
+deployment:
+  modes: [standalone]
+metadata:
+  description: Bare wildcard match-all feeds the universal set through the max-nonvector-search-results-fetched
+    cap and returns the capped count
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: wildcardcap
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, products, ON, HASH, PREFIX, "1", "product:", SCHEMA, price,
+        NUMERIC, rating, NUMERIC, category, TAG], expect: {equals: OK}}
+    - {command: [HSET, "product:1", category, electronics, name, Laptop, price, "999.99",
+        rating, "4.5"], expect: {equals: 4}}
+    - {command: [HSET, "product:2", category, electronics, name, Tablet, price, "499.00",
+        rating, "4.0"], expect: {equals: 4}}
+    - {command: [HSET, "product:3", category, electronics, name, Phone, price, "299.00",
+        rating, "3.8"], expect: {equals: 4}}
+    - {command: [HSET, "product:4", category, books, name, Book, price, "19.99", rating,
+        "4.8"], expect: {equals: 4}}
+    - {command: [FT.SEARCH, products, "@price:[0 +inf]", LIMIT, "0", "0", DIALECT,
+        "2"], wait_s: 30, expect: {equals: [4]}}
+    - {command: [CONFIG, SET, "search.max-nonvector-search-results-fetched", "2"],
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, products, "*", NOCONTENT, DIALECT, "2"], compare: unordered,
+      expect_difference: true, expect: {contains: 2}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: wildcardcap}

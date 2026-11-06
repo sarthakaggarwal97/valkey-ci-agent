@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ef1f0a127609ada313f0eddb88be22482770b33b",
+  "parent": "f1db9edb2e4c1abd81b9ceb0bc203839dd55fe5b",
+  "pr": 1002,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Rename utility-worker to util-worker to adhere to 15 char name limit in linux (#1002)",
+  "date": "2026-04-30",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2025,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the utility thread pool's name prefix from 'utility-worker-' to 'util-worker-' so that the string passed to pthread_setname_np fits Linux's 15-character thread-name limit. The name is used solely as an OS-level thread label for debugging (visible in /proc and top -H); it does not affect any command behavior, reply, indexing, replication, persistence, or memory path, so no fuzzer scenario can reach or observe it and none is needed."
+}

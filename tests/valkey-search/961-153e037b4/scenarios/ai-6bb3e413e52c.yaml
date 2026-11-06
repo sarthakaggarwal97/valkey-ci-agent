@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search b69c73a3f361..153e037b440f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6bb3e413e52c
+seed: 1002
+experiment:
+  id: proposed.search-shutdown-inflight-search
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

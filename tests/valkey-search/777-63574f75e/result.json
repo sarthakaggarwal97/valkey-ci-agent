@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "63574f75e6279c2a77b6c2f6729843aad8c74a88",
+  "parent": "153e037b440fe194366c25d14889954c01c38ffa",
+  "pr": 777,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix build script for ASAN integration tests (#777)",
+  "date": "2026-04-20",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2353,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only build.sh and integration/run.sh in valkey-search's CI/test harness: it propagates pytest's exit code to the build script, captures pytest output to a log file, and scans that log for sanitizer errors in ASAN runs. No module source code, command behavior, replies, indexing, persistence or replication paths change, so the loaded module behaves identically at the change and its parent and no fuzzer scenario can exercise the change."
+}

@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.aggregate-recursion-depth
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: FT.AGGREGATE APPLY/FILTER expressions deeper than search.query-string-depth
+    are rejected with 'Expression too complex' on the change but recurse unbounded
+    on the parent
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, search.query-string-depth, "3"], expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.query-string-depth], expect: {equals: [search.query-string-depth,
+          "3"]}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, price, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.AGGREGATE, idx, "*", FILTER, "((1))"], expect: {exists: true}}
+    - {command: [FT.AGGREGATE, idx, "*", FILTER, "(((1)))"], expect_difference: true,
+      expect: {error: "too complex"}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "(((1)))", AS, x], expect_difference: true,
+      expect: {error: "too complex"}}
+    - {command: [FT.AGGREGATE, idx, "*", SORTBY, "1", "(((1)))"], expect_difference: true,
+      expect: {error: "too complex"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

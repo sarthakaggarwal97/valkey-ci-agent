@@ -1,0 +1,100 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "153e037b440fe194366c25d14889954c01c38ffa",
+  "parent": "b69c73a3f36198ed21a3bc020eaf995471a9897c",
+  "pr": 961,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix test_dropindex_with_background_queries heap-use-after-free leak (#961)",
+  "date": "2026-04-20",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": "dd28a1246728937fdc00a15672cc01e16f419c37",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.2656,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from valkey_search::indexes::text::InvasivePtr<valkey_search::indexes::text::Postings>",
+      "scenario": "ai-b18058589251",
+      "seed": 1001,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "shown by ASan on unstable, the one build with it",
+      "fingerprint": "4b77ec8dd6891ad74acd",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/78"
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from valkey_search::indexes::text::InvasivePtr<valkey_search::indexes::text::Postings>",
+      "scenario": "ai-6bb3e413e52c",
+      "seed": 1002,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "shown by ASan on unstable, the one build with it",
+      "fingerprint": "4b77ec8dd6891ad74acd",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/78"
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-b18058589251",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'shutdown_race' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (FT._DEBUG PAUSEPOINT SET background_search_completing), 4 (raw \"FT.SEARCH idx @content:hello LIMIT 0 10\\r\\n\" on connection s1), "
+    },
+    {
+      "scenario": "ai-b18058589251",
+      "build": "unstable",
+      "seed": 1001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b18058589251",
+      "build": "unstable",
+      "seed": 1002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b18058589251",
+      "build": "unstable",
+      "seed": 1003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6bb3e413e52c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'shutdown_race' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (FT._DEBUG PAUSEPOINT SET background_search_completing), 4 (raw \"FT.SEARCH idx @content:hello LIMIT 0 10\\r\\n\" on connection s1), "
+    },
+    {
+      "scenario": "ai-6bb3e413e52c",
+      "build": "unstable",
+      "seed": 1002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6bb3e413e52c",
+      "build": "unstable",
+      "seed": 1003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6bb3e413e52c",
+      "build": "unstable",
+      "seed": 1004,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}
