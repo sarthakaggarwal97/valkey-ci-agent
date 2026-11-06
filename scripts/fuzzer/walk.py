@@ -123,6 +123,9 @@ MAX_REFUSALS = 5
 # Seeds each test runs with on unstable: its own and the next ones.
 HUNT_SEEDS = 3
 RUN_TIMEOUT_S = 900
+# What valkey-server prints when its config file holds a directive or value the build does not accept. A
+# deployment instance that dies on it makes the run unsupported on that build, not a failure to walk again.
+REJECTED_CONFIG = "FATAL CONFIG FILE ERROR"
 # What Claude is told when its timeout cuts it off, in the same session, and how long it has to answer.
 TIME_UP_PROMPT = ("Your time is up. Stop reading and answer now with what you have: the one JSON object the first "
                   "message asks for, or its \"reason\" alone if you found no test worth writing.")
@@ -687,9 +690,15 @@ def fuzz(fuzzer_bin: str, doc: dict[str, Any], seed: int, *, candidate: dict[str
     if problem:
         return {"status": None, "error": problem, "found": {}}
     if report["status"] == "ERROR" and not report["outcome"]["component_results"]:
+        summary = f"the run could not start: {report['summary']}"[:1000]
+        if REJECTED_CONFIG in str(report["summary"]):
+            # The build refused the scenario's server config at startup (valkey #4005, #4076, #4425: a config
+            # the build does not know in deployment.server_config): the test is unsupported on that build, as a
+            # build probe would have said, not a deployment failure to walk again.
+            return {"status": "SKIP_UNSUPPORTED", "reason": None, "reached": False, "parent_exited": False,
+                    "reached_commands": set(), "replies": {}, "found": {}, "summary": summary}
         # Nothing ran: the deployment or an artifact failed before the test, so the run says nothing of it.
-        return {"status": None, "error": f"the run could not start: {report['summary']}"[:1000], "found": {},
-                "unstarted": True}
+        return {"status": None, "error": summary, "found": {}, "unstarted": True}
     outcome = _change_outcome(report)
     sequence = (outcome.sequence if outcome else None) or {}
     return {"status": report["status"], "reason": outcome.reason if outcome else None,

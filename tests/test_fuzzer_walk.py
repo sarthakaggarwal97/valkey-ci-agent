@@ -894,6 +894,27 @@ def test_a_run_that_could_not_start_tested_nothing(monkeypatch, tmp_path):
     assert done["error"] == f"the run could not start: {summary}"
 
 
+def test_a_build_that_rejects_the_server_config_is_unsupported_not_unstarted(monkeypatch, tmp_path):
+    # valkey #4005, #4076, #4425: an old build died on a config it does not know ('priority-subnets ...' | Bad
+    # directive), and the merge erred as "could not start" on every attempt instead of skipping the test.
+    summary = ("runner execution failed during deployment.provision: LocalDeploymentError: Instance valkey-0 "
+               "failed to start within 30s (process output: | *** FATAL CONFIG FILE ERROR (Version 255.255.255) "
+               "*** | Reading the configuration file, at line 18 | >>> 'priority-subnets \"127.0.0.0/8\"' | "
+               "Bad directive or wrong number of arguments)")
+
+    def run(command, **kw):
+        report = {key: None for key in ("generated_at", "scenario", "coverage", "reproducer", "provenance")}
+        report.update(status="ERROR", summary=summary, outcome={"status": "ERROR", "component_results": []})
+        Path(command[command.index("--output") + 1]).write_text(json.dumps(report))
+
+    monkeypatch.setattr(walk.subprocess, "run", run)
+    doc = {"scenario_id": "s", "experiment": {"id": "proposed.x"}, "deployment": {"mode": "standalone"}}
+    done = walk.fuzz("valkey-fuzzer", doc, 1, candidate={"server": "/m"}, compare={"server": "/p"}, core=True,
+                     experiment_dir=tmp_path / "e", run_dir=tmp_path / "r")
+    assert done["status"] == "SKIP_UNSUPPORTED" and "unstarted" not in done and "error" not in done
+    assert done["found"] == {} and done["reached"] is False
+
+
 def test_a_run_suppresses_the_leaks_leaksanitizer_cannot_follow_in_valkey_json(monkeypatch, tmp_path):
     envs = []
 
