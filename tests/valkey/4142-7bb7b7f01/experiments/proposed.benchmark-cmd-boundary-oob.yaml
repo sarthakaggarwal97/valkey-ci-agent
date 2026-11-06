@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-cmd-boundary-oob
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark parses a command sequence whose boundary lands at
+    the end of argv without reading past the sds_args array
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: inputs.parent}
+    server: true
+    timeout_s: 30
+    ignore: ['[0-9.]+ requests per second.*\n', '^throughput summary.*\n', '^\s+[0-9.]+
+        .*\n']
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 1, -c, 1, -q, SET, foo, bar],
+      expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 1, -c, 1, -q, SET, foo, bar,
+        ';'], expect_difference: true, expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 1, -c, 1, -q, SET, foo, bar,
+        ';', '3'], expect_difference: true, expect: {exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

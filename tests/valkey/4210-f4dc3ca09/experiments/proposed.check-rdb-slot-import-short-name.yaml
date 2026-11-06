@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.check-rdb-slot-import-short-name
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: valkey-check-rdb rejects a slot-import record whose job name is not
+    CLUSTER_NAMELEN (40) bytes
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.tools
+  id: check-rdb
+  config:
+    compare_with: {$ref: inputs.parent}
+    files:
+      slot-import-1byte.rdb: !!binary 'VkFMS0VZMDgw8wFBAQAA/wAAAAAAAAAA'
+      slot-import-empty.rdb: !!binary 'VkFMS0VZMDgw8wABAAD/AAAAAAAAAAA='
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - {tool: valkey-check-rdb, args: [slot-import-1byte.rdb], expect_difference: true,
+      expect: {exit: {equals: 1}, stdout: {contains: "Invalid slot import job name\
+            \ length"}}}
+    - {tool: valkey-check-rdb, args: [slot-import-empty.rdb], expect_difference: true,
+      expect: {exit: {equals: 1}, stdout: {contains: "Invalid slot import job name\
+            \ length"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check-rdb}

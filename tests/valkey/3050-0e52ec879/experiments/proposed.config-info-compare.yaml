@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.config-info-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    CONFIG INFO is a new subcommand and CONFIG GET was refactored onto shared pattern-matching
+    helpers. Compare both across the change and its parent: every config type and
+    flag through CONFIG INFO, glob patterns including a full '*' sweep and an unclosed
+    bracket class, alias and hidden-config lookups, case-insensitive exact names,
+    multi-pattern dedup, the arity error, and CONFIG GET parity after the refactor.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cfg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, INFO, maxmemory], expect_difference: true, expect: {error: false}}
+    - {command: [CONFIG, INFO, list-max-listpack-size], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CONFIG, INFO, list-max-ziplist-size], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CONFIG, INFO, appendfsync], expect_difference: true, expect: {error: false}}
+    - {command: [CONFIG, INFO, repl-diskless-load], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CONFIG, INFO, save], expect_difference: true, expect: {error: false}}
+    - {command: [CONFIG, INFO, activerehashing], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CONFIG, INFO, dbfilename], expect_difference: true, expect: {error: false}}
+    - {command: [CONFIG, INFO, requirepass], expect_difference: true, expect: {error: false}}
+    - {command: [CONFIG, INFO, databases], expect_difference: true, expect: {error: false}}
+    - {command: [CONFIG, INFO, MAXMEMORY], expect_difference: true, expect: {error: false}}
+    - {command: [CONFIG, INFO, no-such-config-xyz], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [CONFIG, INFO, ''], expect_difference: true, expect: {equals: []}}
+    - {command: [CONFIG, INFO, aof-disable-auto-gc], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CONFIG, INFO, 'aof-disable-auto-g?'], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [CONFIG, INFO, 'max*', '*max*', maxmemory, MAXMEMORY], expect_difference: true,
+      expect: {error: false}}
+    - {command: [CONFIG, INFO, '*'], expect_difference: true, expect: {error: false}}
+    - {command: [CONFIG, INFO, '['], expect_difference: true, expect: {error: false}}
+    - {command: [CONFIG, INFO], expect_difference: true, expect: {error: true}}
+    - {command: [CONFIG, HELP], expect_difference: true, expect: {error: false}}
+    - {command: [COMMAND, DOCS, config], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, INFO, 'config|info'], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [CONFIG, GET, maxmemory]}
+    - {command: [CONFIG, GET, 'max*']}
+    - {command: [CONFIG, GET, 'max*', maxmemory, maxclients]}
+    - {command: [CONFIG, GET, slaveof]}
+    - {command: [CONFIG, GET, save]}
+    - {command: [CONFIG, GET, aof-disable-auto-gc]}
+    - {command: [CONFIG, GET, 'aof-disable-auto-g?']}
+    - {command: [CONFIG, GET, appendfsync, 'appendf*']}
+    - {command: [CONFIG, SET, maxmemory, '104857600'], expect: {equals: OK}}
+    - {command: [CONFIG, GET, maxmemory]}
+    - {command: [CONFIG, GET, MAXMEMORY], expect_difference: true, expect: {exists: true}}
+    - {command: [CONFIG, GET, MAXMEMORY, maxmemory], expect_difference: true, expect: {
+        exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [cfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cfg}

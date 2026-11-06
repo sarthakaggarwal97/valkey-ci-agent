@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.rdb-load-slot-import-bad-name
+deployment:
+  modes: [standalone]
+metadata:
+  description: Server RDB load rejects a slot-import job name whose length is not
+    CLUSTER_NAMELEN
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.commands
+  id: load
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    timeout_s: 60
+    server_config: {save: "", appendonly: "no"}
+    files:
+      crafted.rdb: !!binary 'UkVESVMwMDEx8zBBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUEBAAD/AAAAAAAAAAA='
+    commands:
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, dbfilename, crafted.rdb], expect: {equals: OK}}
+    - {command: [CONFIG, SET, appendonly, "no"], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect_difference: true, expect: {error: true}}
+    - {command: [PING], expect_difference: true, expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: load}

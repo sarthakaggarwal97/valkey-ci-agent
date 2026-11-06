@@ -1,0 +1,89 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3a27559aba5e36b4add32a8e81cb04c2b3353e72",
+  "parent": "7bb7b7f01fc003918d421467326f704b497a80bf",
+  "pr": 3039,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Prevent module loading during async replication and slot migration (#3039)",
+  "date": "2026-07-14",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 11,
+  "proven": 2,
+  "hunted": 7,
+  "dropped": 4,
+  "recall": true,
+  "coverage": {
+    "lines": 31,
+    "executed": 19,
+    "percent": 61,
+    "uncovered": [
+      "src/module.c:13165",
+      "src/module.c:13374",
+      "src/module.c:13380",
+      "src/module.c:13425",
+      "src/module.c:13432",
+      "src/module.c:13454",
+      "src/module.c:13455",
+      "src/module.c:13456",
+      "src/module.c:13470",
+      "src/module.c:13510",
+      "src/module.c:14647",
+      "src/module.c:14648"
+    ],
+    "rounds": 3
+  },
+  "cost_usd": 22.0995,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-03a720fe693e",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'module-load' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (valkey-cli -p $port MODULE LOAD nosuchmodule.so), 1 (valkey-cli -p $port MODULE LOAD notamodule.so), 2 (valkey-cli -p $port MODULE"
+    },
+    {
+      "scenario": "ai-6e3cf11a645b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'module-load' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (valkey-cli -p $port MODULE LOAD nosuchmodule.so), 1 (valkey-cli -p $port MODULE LOAD notamodule.so), 2 (valkey-cli -p $port MODULE"
+    },
+    {
+      "scenario": "ai-0202ba77f344",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'modload' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (valkey-cli -p $port MODULE LOAD nosuchmodule.so), 2 (valkey-cli -p $port MODULE LOAD notamodule.so arg1 arg2), 3 (valkey-cli -p $port "
+    },
+    {
+      "scenario": "ai-bd5e7c9d069d",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'modload' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (valkey-cli -p $port MODULE LOAD nosuchmodule.so), 2 (valkey-cli -p $port MODULE LOAD notamodule.so arg1 arg2), 3 (valkey-cli -p $port "
+    },
+    {
+      "scenario": "ai-8a1416cf44e0",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-6040e20a09c5",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-4d915ba835f4",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-878ce5b64c75",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    }
+  ]
+}

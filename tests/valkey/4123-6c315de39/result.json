@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6c315de391c6dc0ba2cd4bc82a51e3b5b46c84e0",
+  "parent": "301b6cde1c2d737827ce61817633efd5752ae172",
+  "pr": 4123,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "CI: add make test-unit to macOS build and auto-detect Homebrew LLVM path (#4123)",
+  "date": "2026-07-09",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2298,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely build/CI infrastructure: it edits the GitHub Actions macOS workflow (installs llvm/googletest earlier, sets CC/CXX/AR/RANLIB as job env, runs make test-unit) and adds Homebrew LLVM path auto-detection to src/unit/Makefile, which only affects compiling the unit-test harness on macOS. No server, replication, persistence, command, or tool behaviour changes, so there is nothing a fuzzer scenario against a running server could reach."
+}

@@ -1,0 +1,66 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0e52ec87909e666983211a526b1d35fdb6cdd881",
+  "parent": "6c315de391c6dc0ba2cd4bc82a51e3b5b46c84e0",
+  "pr": 3050,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add support for CONFIG INFO <config> to display config type and valid values (#3050)",
+  "date": "2026-07-09",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 107,
+    "executed": 106,
+    "percent": 99,
+    "uncovered": [
+      "src/config.c:3787"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 3.1676,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-5e6e1d8fcbbe",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5e6e1d8fcbbe",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5e6e1d8fcbbe",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d6c9b633c878",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d6c9b633c878",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d6c9b633c878",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

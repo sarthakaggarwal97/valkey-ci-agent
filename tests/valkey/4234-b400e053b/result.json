@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b400e053ba5194c0bb3709080a33d3a7e044466c",
+  "parent": "e9cde414965becbd8639f5a39fce3db99ab61942",
+  "pr": 4234,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix use-after-free in tlsProcessPendingData() on CLIENT KILL (#4234)",
+  "date": "2026-07-21",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7509,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix is a use-after-free confined to tlsProcessPendingData() in src/tls.c, reachable only with multiple concurrent TLS client connections that have SSL-buffered pending data, one of which is freed synchronously (CLIENT KILL -> freeClient -> connTLSClose -> listDelNode) while another is being iterated. The fuzzer cannot establish TLS connections: tls-port is a managed/forbidden server option with no certificate provisioning, valkey.action.commands and the workloads connect over plain TCP (docs state replies come 'over a raw connection without TLS'), and valkey.action.tools starts non-TLS pri"
+}

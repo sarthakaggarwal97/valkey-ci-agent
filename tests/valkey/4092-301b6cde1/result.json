@@ -1,0 +1,52 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "301b6cde1c2d737827ce61817633efd5752ae172",
+  "parent": "f0312a243229c34b269e0b541c1f4c06aa9af437",
+  "pr": 4092,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix CLUSTER BUMPEPOCH getting stuck when a dead node holds a high configEpoch (#4092)",
+  "date": "2026-07-09",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 5,
+  "recall": false,
+  "coverage": {
+    "lines": 11,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/cluster_legacy.c:1044",
+      "src/cluster_legacy.c:1045",
+      "src/cluster_legacy.c:1046",
+      "src/cluster_legacy.c:2363",
+      "src/cluster_legacy.c:2371",
+      "src/cluster_legacy.c:2414",
+      "src/cluster_legacy.c:2421",
+      "src/cluster_legacy.c:2422",
+      "src/cluster_legacy.c:2427",
+      "src/cluster_legacy.c:2428",
+      "src/cluster_legacy.c:2429"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 34.2219,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-b7a7290fdfb8",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'election-safety' returned ERROR: cannot check that 2 election winner(s) reached quorum: no 'Failover auth ACK' line was published as 'cluster.vote.acked' (Valkey logs them since 9.2)"
+    },
+    {
+      "scenario": "ai-986f250eba71",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'election-safety' returned ERROR: cannot check that 2 election winner(s) reached quorum: no 'Failover auth ACK' line was published as 'cluster.vote.acked' (Valkey logs them since 9.2)"
+    }
+  ]
+}

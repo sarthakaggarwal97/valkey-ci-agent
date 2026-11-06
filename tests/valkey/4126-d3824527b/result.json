@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d3824527b94584e74dffb2387464adcb501f243b",
+  "parent": "0e52ec87909e666983211a526b1d35fdb6cdd881",
+  "pr": 4126,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "feat: Add VALKEYCLI_USER env var (#4126)",
+  "date": "2026-07-10",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.3391,
+  "findings": [],
+  "recorded": []
+}

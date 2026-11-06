@@ -1,0 +1,80 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dd30872fd8d7302fd257dc1f1e4e56ed269ee63f",
+  "parent": "f4dc3ca09eb650c2fe14060090a41c524eca803f",
+  "pr": 3769,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Preserve module load order in CONFIG REWRITE (#3769)",
+  "date": "2026-07-23",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 0,
+  "hunted": 8,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 67,
+    "executed": 61,
+    "percent": 91,
+    "uncovered": [
+      "src/module.c:2379",
+      "src/module.c:7209",
+      "src/module.c:7210",
+      "src/module.c:7211",
+      "src/module.c:7929",
+      "src/module.c:13674"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 11.8665,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-159b6b58c07d",
+      "seed": 303,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #3769",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/72"
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-00b4ffc73374",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'rewrite' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (COPY k2 k4)"
+    },
+    {
+      "scenario": "ai-c5f90b3a098c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'rewrite' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (COPY k2 k4)"
+    },
+    {
+      "scenario": "ai-399412ebd1e7",
+      "build": "unstable",
+      "seed": 106,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-399412ebd1e7",
+      "build": "unstable",
+      "seed": 107,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-399412ebd1e7",
+      "build": "unstable",
+      "seed": 108,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+extends: [valkey.base]
+id: proposed.defrag-module-globals
+deployment:
+  modes: [standalone]
+metadata:
+  description: Drive an active-defrag cycle to completion under the key-value workload
+    so moduleDefragGlobals iterates the new modules list
+components:
+- use: valkey.action.poll
+  id: defrag-started
+  config:
+    field: total_active_defrag_time
+    section: stats
+    instances: primary
+    predicate: {min: 1}
+    timeout_s: 90
+- use: valkey.action.sleep
+  id: finish-cycle
+  depends_on: [defrag-started]
+  config:
+    seconds: 5
+required_events: [finish-cycle.completed]
+required_evidence:
+- {evidence_id: valkey.poll.satisfied, source: defrag-started}

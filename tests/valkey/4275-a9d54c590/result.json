@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a9d54c590190c2aaa5de4c14c8de8f03dc3bacf5",
+  "parent": "4733aed65893c3227925e17f4423c44c0a892d15",
+  "pr": 4275,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix ZRANGE XX option schema and test failures under force-resp3 (#4275)",
+  "date": "2026-07-27",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3422,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits command JSON reply_schema metadata (compiled in solely under the LOG_REQ_RES CI build, absent from standard binaries) and fixes Tcl test assertions to accept the RESP3 null under --force-resp3. No C code changed; ZRANGE/ZRANGEBYSCORE/ZRANGEBYLEX and their REV variants with XX return the same replies (RESP2 *-1, RESP3 _) on both the parent and the change builds, so no fuzzer scenario can observe a difference or reach new behavior."
+}

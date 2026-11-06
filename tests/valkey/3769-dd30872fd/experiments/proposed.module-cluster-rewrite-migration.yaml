@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.module-cluster-rewrite-migration
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    On a two-node cluster with datatype.so loaded (it does not declare VALKEYMODULE_OPTIONS_HANDLE_ATOMIC_SLOT_MIGRATION),
+    CLUSTER MIGRATESLOTS must be refused by the rewritten list iteration in moduleVerifyAllAllowAtomicSlotMigrationOrReply
+    with the per-module error, and CONFIG REWRITE plus restart on the slot-owning
+    node must bring the module and its data back. Replies are compared against the
+    parent build.
+components:
+- use: valkey.action.commands
+  id: migration
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: true
+    nodes: 2
+    timeout_s: 90
+    commands:
+    - {command: [datatype.set, mk, 7, seven], node: 0, expect: {equals: OK}}
+    - {command: [TYPE, mk], node: 0, expect: {equals: test___dt}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, "100", "200", NODE, "<node.1.id>"],
+      node: 0, expect: {error: "does not support atomic slot migration"}}
+    - {command: [datatype.get, mk], node: 0, expect: {equals: [7, seven]}}
+    - {command: [MODULE, LIST], node: 1, compare: skip}
+    - {command: [CONFIG, REWRITE], node: 0, expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], node: 1, expect: {equals: OK}}
+    - {command: [SAVE], node: 0, expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [datatype.get, mk], node: 0, wait_s: 30, expect: {equals: [7, seven]}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, "100", "200", NODE, "<node.1.id>"],
+      node: 0, expect: {error: "does not support atomic slot migration"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [migration.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migration}

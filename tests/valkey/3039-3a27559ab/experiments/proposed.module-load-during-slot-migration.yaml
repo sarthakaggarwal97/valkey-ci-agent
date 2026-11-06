@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.module-load-during-slot-migration
+deployment:
+  modes: [standalone]
+metadata:
+  description: MODULE LOAD and LOADEX are refused on the exporting node of an in-progress
+    atomic slot migration
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: migload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config: {enable-module-command: "yes"}
+    commands:
+    - {command: [DEBUG, SLOTMIGRATION, PREVENT-PAUSE, 1], node: 0, expect: {equals: OK}}
+    - {command: [DEBUG, SLOTMIGRATION, PREVENT-PAUSE, 1], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 100, 100, NODE, "<node.1.id>"],
+      node: 0, expect: {equals: OK}}
+    - {raw: "MODULE LOAD nosuchmodule.so\r\n", node: 0, connection: mod, expect_difference: true,
+      expect: {error: "cannot load module during slot migration"}}
+    - {raw: "MODULE LOADEX nosuchmodule.so ARGS x\r\n", node: 0, connection: mod,
+      expect_difference: true, expect: {error: "cannot load module during slot migration"}}
+    - {command: [CLUSTER, CANCELSLOTMIGRATIONS], node: 0, expect: {equals: OK}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [migload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migload}

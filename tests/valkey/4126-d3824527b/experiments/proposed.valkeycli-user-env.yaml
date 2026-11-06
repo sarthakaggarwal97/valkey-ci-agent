@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.valkeycli-user-env
+deployment:
+  modes: [standalone]
+metadata:
+  description: VALKEYCLI_USER environment variable selects the ACL user for valkey-cli
+    AUTH, with --user taking precedence
+components:
+- use: valkey.action.tools
+  id: cli-user-env
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 30
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, ACL, SETUSER, clienv, on, ">mypass", allkeys,
+        "+@all"], expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, env: {VALKEYCLI_USER: clienv}, args: [-p, $port, -a, mypass,
+        --no-auth-warning, SET, envkey, envval], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, envkey], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: envval}}}
+    - {tool: valkey-cli, env: {VALKEYCLI_USER: clienv, VALKEYCLI_AUTH: mypass}, args: [
+        -p, $port, --no-auth-warning, SET, envkey2, envval2], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, env: {VALKEYCLI_USER: nonexistent}, args: [-p, $port, --user,
+        clienv, -a, mypass, --no-auth-warning, SET, preckey, precval], expect: {exit: {
+          equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, env: {VALKEYCLI_USER: nonexistent}, args: [-p, $port, -a,
+        mypass, --no-auth-warning, PING], expect_difference: true, expect: {stderr: {
+          contains: WRONGPASS}}}
+    - {tool: valkey-cli, env: {VALKEYCLI_USER: ""}, args: [-p, $port, -a, mypass,
+        --no-auth-warning, PING], expect_difference: true, expect: {stderr: {contains: WRONGPASS}}}
+    - {tool: valkey-cli, env: {VALKEYCLI_USER: clienv}, args: [-p, $port, PING], expect: {
+        exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [--help], expect_difference: true, expect: {exit: {
+          equals: 0}, stdout: {contains: VALKEYCLI_USER}}}
+required_events: [cli-user-env.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-user-env}

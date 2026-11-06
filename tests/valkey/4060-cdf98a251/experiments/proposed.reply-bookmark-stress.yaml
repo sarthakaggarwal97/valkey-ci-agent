@@ -1,0 +1,40 @@
+extends: [valkey.writes]
+id: proposed.reply-bookmark-stress
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Under a concurrent key-value workload with IO threads active, one client leaves
+    multi-megabyte deferred-length replies undrained while sending more such commands,
+    churning the io_last_written bookmark across partial writes and resumes; the liveness
+    oracle catches the fix's new debugServerAssert desync detectors and any crash,
+    the ledger the workload's integrity, and the final replies must be correct.
+components:
+- use: valkey.action.commands
+  id: pipeline
+  config:
+    timeout_s: 60
+    instances: primaries
+    commands:
+    - {command: [CONFIG, SET, io-threads-always-active, yes], expect: {equals: OK}}
+    - {command: [EVAL, "local v=string.rep('v',100) for i=1,40000 do redis.call('RPUSH',\
+          \ KEYS[1], v) end return redis.call('LLEN', KEYS[1])", 1, biglist], expect: {
+        equals: 40000}}
+    - {command: [EVAL, "for i=1,40000 do redis.call('ZADD', KEYS[1], i, 'm'..i) end\
+          \ return redis.call('ZCARD', KEYS[1])", 1, bigzset], expect: {equals: 40000}}
+    - {command: [EVAL, "for i=1,100000 do redis.call('SADD', KEYS[1], i) end return\
+          \ redis.call('SCARD', KEYS[1])", 1, bigset], expect: {equals: 100000}}
+    - {raw: "SMEMBERS bigset\r\nLRANGE biglist 0 -1\r\nZRANGEBYSCORE bigzset -inf\
+        \ +inf WITHSCORES\r\nSMEMBERS bigset\r\nLRANGE biglist 0 -1\r\nZRANGEBYSCORE\
+        \ bigzset -inf +inf WITHSCORES\r\n", connection: pipe}
+    - {raw: "ZRANGEBYSCORE bigzset -inf +inf WITHSCORES\r\nSMEMBERS bigset\r\nLRANGE\
+        \ biglist 0 -1\r\n", connection: pipe}
+    - {raw: "SMEMBERS bigset\r\nZRANGEBYSCORE bigzset -inf +inf WITHSCORES\r\n", connection: pipe}
+    - {raw: "LRANGE biglist 0 -1\r\nSMEMBERS bigset\r\n", connection: pipe}
+    - {read: true, connection: pipe}
+    - {read: true, connection: pipe}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [LLEN, biglist], expect: {equals: 40000}}
+required_events: [pipeline.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pipeline}

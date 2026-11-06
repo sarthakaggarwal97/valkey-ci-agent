@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 168c22afd55d..7bb7b7f01fc0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e14d160215a1
+seed: 7000
+experiment:
+  id: proposed.benchmark-cmd-boundary-oob
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

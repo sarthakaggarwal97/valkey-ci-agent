@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "327fbd345487d0103406a42a93c8aea268abeacd",
+  "parent": "8d7e713d31a7973f17c95307df0727ecd2efe3c6",
+  "pr": 4100,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Avoid UB in slot-entry parsing of cluster config (#4100)",
+  "date": "2026-07-07",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.6836,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a UB/robustness fix confined to clusterLoadConfig, the nodes.conf text parser, which runs only once at startup (src/cluster_legacy.c:1499). It is unreachable by any installed experiment or writable one, and would false-positive if forced. The changed branches are entered only by a *corrupted* cluster config file, and on every such input both builds terminate the process: the fmterr label calls serverPanic(\"...corrupted cluster config file...\") (src/cluster_legacy.c:1050), an abort the liveness oracle flags as a crash. The fix does not make the server survive corrupt config -- it still "
+}

@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.module-load-errmsg-cli
+deployment:
+  modes: [standalone]
+metadata:
+  description: MODULE LOAD and LOADEX failures reply with the new specific error messages
+    instead of the generic extension error
+inputs:
+  properties:
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.tools
+  id: modload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: {$ref: inputs.cluster}
+    files:
+      notamodule.so: "this is not a shared object"
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {stdout: {contains: PONG}}}
+    - {tool: valkey-cli, args: [-p, $port, MODULE, LOAD, nosuchmodule.so], expect_difference: true,
+      expect: {stdout: {contains: "Error loading module: failed to open the module\
+            \ library"}}}
+    - {tool: valkey-cli, args: [-p, $port, MODULE, LOAD, notamodule.so, arg1, arg2],
+      expect_difference: true, expect: {stdout: {contains: "Error loading module:"}}}
+    - {tool: valkey-cli, args: [-p, $port, MODULE, LOADEX, nosuchmodule.so, BOGUSARG],
+      expect_difference: true, expect: {stdout: {contains: "Error loading module:\
+            \ invalid LOADEX arguments"}}}
+    - {tool: valkey-cli, args: [-p, $port, MODULE, LOADEX, nosuchmodule.so, CONFIG,
+        some-config, some-value], expect_difference: true, expect: {stdout: {contains: "Error\
+            \ loading module: failed to open the module library"}}}
+    - {tool: valkey-cli, args: [-p, $port, MODULE, LOADEX, nosuchmodule.so, ARGS,
+        a, b], expect_difference: true, expect: {stdout: {contains: "Error loading\
+            \ module: failed to open the module library"}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {stdout: {contains: PONG}}}
+required_events: [modload.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: modload}

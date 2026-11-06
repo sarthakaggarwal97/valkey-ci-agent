@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.deferred-len-next-merge
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Deferred-length replies issued on a drained connection put the placeholder at
+    the head of the reply list, so setDeferredReply skips the prev-merge and evaluates
+    the next-merge guard (networking.c:1202-1204, including the new next->buf != io_last_written.buf
+    check); replies must stay byte-identical across the fix.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: nextmerge
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [KEYS, "*"], expect: {equals: [k1]}}
+    - {command: [RPUSH, l, a, b, a, c, a], expect: {equals: 5}}
+    - {command: [LPOS, l, a, COUNT, 0], expect: {equals: [0, 2, 4]}}
+    - {command: [XADD, s, 1-1, f, v], expect: {equals: 1-1}}
+    - {command: [XADD, s, 1-2, f, v2], expect: {equals: 1-2}}
+    - {command: [XRANGE, s, "-", "+"], expect: {exists: true}}
+    - {command: [DEBUG, POPULATE, 2000], expect: {equals: OK}}
+    - {command: [KEYS, "key:*"], compare: unordered, expect: {exists: true}}
+    - {command: [DBSIZE], expect: {equals: 2003}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [nextmerge.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: nextmerge}

@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-06T21:12+00:00.
+Updated 2026-11-06T21:25+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 406 | 2092 | #4275 (2026-07-27) | 227 | 58.0 |
+| valkey-io/valkey | 436 | 2062 | #3581 (2026-07-06) | 257 | 62.3 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
 | valkey-io/valkey-search | 309 | 359 | #797 (2026-02-20) | 209 | 44.1 |
@@ -13,28 +13,28 @@ Updated 2026-11-06T21:12+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-06T18:01:55+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42252345373): 20 merge(s) tested, 5 without a code change.
+[2026-11-06T21:25:50+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42267007259): 20 merge(s) tested, 11 without a code change.
 
-- [valkey-io/valkey#3611](https://github.com/valkey-io/valkey/pull/3611) ([tests](tests/valkey/3611-eb5a7857e/)): Fix RDMA + IO threads re-entrancy and busy-loop via connection postpone masks (#3611): 0 of 4 test(s) reached the change, coverage 96%
-- [valkey-io/valkey#4320](https://github.com/valkey-io/valkey/pull/4320) ([tests](tests/valkey/4320-a251aeb5d/)): Fix io-thread race in slot migration establish response handler (#4320): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4322](https://github.com/valkey-io/valkey/pull/4322) ([tests](tests/valkey/4322-327db78a7/)): reset scan cursor when table is deleted (#4322): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4279](https://github.com/valkey-io/valkey/pull/4279) ([tests](tests/valkey/4279-0fc8cdafc/)): Update module.c with missing FLAG_REPLICA description (#4279): declined: The diff only edits a doc comment in src/module.c: it rewords the description of VALKEYMODULE_CLIENTINFO_FLAG_PRIMARY and adds the previously missing description of VALKEYMODULE_CLIENTINFO_FLAG_REPLICA. No executable code, flag value, reply, or behavior changes, so there is no path a scena
-- [valkey-io/valkey#4328](https://github.com/valkey-io/valkey/pull/4328) ([tests](tests/valkey/4328-c07e9b6cf/)): Fix and complete slot migration pipe comments (#4328): declined: The diff only edits comments in src/server.h: it replaces the placeholder 'xxxx' comment on slot_migration_pipe_conn with a real description and clarifies the comment on slot_migration_pipe_bufflen. No executable code, data structure, config, or protocol behaviour changes, so no scenario c
-- [valkey-io/valkey#4148](https://github.com/valkey-io/valkey/pull/4148) ([tests](tests/valkey/4148-573b77f33/)): Add CMD_STALE flag to SYNC/PSYNC commands (#4148): 2 of 4 test(s) reached the change
-- [valkey-io/valkey#4140](https://github.com/valkey-io/valkey/pull/4140) ([tests](tests/valkey/4140-cb2d83513/)): Retry PSYNC on -BUSY error instead of downgrading to SYNC (#4140): 1 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4253](https://github.com/valkey-io/valkey/pull/4253) ([tests](tests/valkey/4253-af321c4df/)): Fix RESP3 push frame torn apart on self-publish with copy avoidance (#4253): 1 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4300](https://github.com/valkey-io/valkey/pull/4300) ([tests](tests/valkey/4300-527a38222/)): Fix FIELDS token validation for HPERSIST and HTTL family commands (#4300): 3 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4211](https://github.com/valkey-io/valkey/pull/4211) ([tests](tests/valkey/4211-b349fe282/)): Prevent double-free of the module timer when the callback stops it (#4211): 2 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4302](https://github.com/valkey-io/valkey/pull/4302) ([tests](tests/valkey/4302-f75e2d55f/)): Skip bad-arity commands when prefetching queued command keys (#4302): 3 of 5 test(s) reached the change, coverage 100%; crash, fixed by #4302 (recorded); crash, fixed by #4302 (recorded)
-- [valkey-io/valkey#4301](https://github.com/valkey-io/valkey/pull/4301) ([tests](tests/valkey/4301-c739b9296/)): Fix out-of-bounds read in getNodeByQuery's cross-DB COPY check (#4301): 2 of 4 test(s) reached the change, coverage 100%; crash, fixed by #4301 (recorded)
-- [valkey-io/valkey#3510](https://github.com/valkey-io/valkey/pull/3510) ([tests](tests/valkey/3510-12e5e384d/)): Fix TLS infinite busy loop when write/read handlers are removed (#3510): declined: The change is confined to src/tls.c (updateSSLEvent and tlsHandleEvent), code compiled only with BUILD_TLS and executed only for TLS-type connections. The fuzzer has no TLS capability: no installed component speaks TLS or provisions certificates, every client connection (workloads, compare
-- [valkey-io/valkey#3730](https://github.com/valkey-io/valkey/pull/3730) ([tests](tests/valkey/3730-6736cc580/)): conf: document chown(2) requirement for unixsocketgroup (#3730): declined: The change only adds a documentation comment to valkey.conf (explaining that unixsocketgroup performs chown(2) and must be permitted under syscall-filtering sandboxes). No server code, config parsing, or runtime behaviour is modified, so no scenario can reach or validate it.
-- [valkey-io/valkey#4155](https://github.com/valkey-io/valkey/pull/4155) ([tests](tests/valkey/4155-8eaefda4f/)): Fix MOVE/COPY command skip the current-DB ACL check (#4155): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3905](https://github.com/valkey-io/valkey/pull/3905) ([tests](tests/valkey/3905-fb94efbd9/)): Optimize .clang-format and add enum/argument formatting options (#3905): declined: The change only edits the .clang-format configuration and reformats existing code to match it: enum declarations in cluster_legacy.c, defrag.c and server.h and a struct initializer list in db.c are reflowed onto multiple lines. Every edit is whitespace and line-break only; no identifier, v
-- [valkey-io/valkey#4285](https://github.com/valkey-io/valkey/pull/4285) ([tests](tests/valkey/4285-6df96c44c/)): Optimize notifyKeyspaceEvent to avoid unnecessary allocations (#4285): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#4277](https://github.com/valkey-io/valkey/pull/4277) ([tests](tests/valkey/4277-74249be76/)): Add comment and test for bio RDB disk transfer receive timeout (#4277): declined: The change adds only comments in replication.c (both hunks insert comment lines above pre-existing, unchanged code: the connRecvTimeout call in replicaReceiveRDBFromPrimaryToDisk and the abort-flag/bioDrainWorker logic in cancelReplicationHandshake) plus a TCL integration test documenting 
-- [valkey-io/valkey#4252](https://github.com/valkey-io/valkey/pull/4252) ([tests](tests/valkey/4252-dc0411ae1/)): valkey-benchmark: fix -r option to support keyspace values above INT_MAX (#4252): 1 of 1 test(s) reached the change, coverage 91%
-- [valkey-io/valkey#4281](https://github.com/valkey-io/valkey/pull/4281) ([tests](tests/valkey/4281-aed05498a/)): Fix macOS unit test by wrapping test object symbols (#4281): declined: The change touches only src/Makefile and src/unit/Makefile: it fixes the macOS unit-test build by wrapping test object symbols, deleting stale static archives before re-creating them, and removing flat-namespace linker flags from the test binary link. No server, command, replication, persi
+- [valkey-io/valkey#4275](https://github.com/valkey-io/valkey/pull/4275) ([tests](tests/valkey/4275-a9d54c590/)): Fix ZRANGE XX option schema and test failures under force-resp3 (#4275): declined: The change only edits command JSON reply_schema metadata (compiled in solely under the LOG_REQ_RES CI build, absent from standard binaries) and fixes Tcl test assertions to accept the RESP3 null under --force-resp3. No C code changed; ZRANGE/ZRANGEBYSCORE/ZRANGEBYLEX and their REV variants
+- [valkey-io/valkey#2978](https://github.com/valkey-io/valkey/pull/2978) ([tests](tests/valkey/2978-4733aed65/)): Add XX option to ZRANGE commands for null/empty distinction (#2978): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3769](https://github.com/valkey-io/valkey/pull/3769) ([tests](tests/valkey/3769-dd30872fd/)): Preserve module load order in CONFIG REWRITE (#3769): 0 of 8 test(s) reached the change, coverage 91%; [crash, predates #3769](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/72)
+- [valkey-io/valkey#4210](https://github.com/valkey-io/valkey/pull/4210) ([tests](tests/valkey/4210-f4dc3ca09/)): Check and reject invalid slot import job names during RDB load (#4210): 1 of 2 test(s) reached the change, coverage 50%
+- [valkey-io/valkey#4229](https://github.com/valkey-io/valkey/pull/4229) ([tests](tests/valkey/4229-4691888e7/)): Validate slot import ranges when loading from RDB (#4229): declined: This is a defensive guard against corrupt/crafted RDB input: clusterRDBLoadSlotImport now rejects slot-import ranges with start_slot or end_slot >= CLUSTER_SLOTS or start > end, and the kvstore asserts now bound-check didx>=0. It is a real crash fix (the parent aborts on assert, or reads o
+- [valkey-io/valkey#4234](https://github.com/valkey-io/valkey/pull/4234) ([tests](tests/valkey/4234-b400e053b/)): Fix use-after-free in tlsProcessPendingData() on CLIENT KILL (#4234): declined: The fix is a use-after-free confined to tlsProcessPendingData() in src/tls.c, reachable only with multiple concurrent TLS client connections that have SSL-buffered pending data, one of which is freed synchronously (CLIENT KILL -> freeClient -> connTLSClose -> listDelNode) while another is 
+- [valkey-io/valkey#3362](https://github.com/valkey-io/valkey/pull/3362): to retry, Claude Code failed (rc=1): timeout after 600s
+- [valkey-io/valkey#4104](https://github.com/valkey-io/valkey/pull/4104) ([tests](tests/valkey/4104-50a0397f4/)): Avoid offloading writes to IO threads for the slot migration export job while snapshotting. (#4104): 0 of 4 test(s) reached the change, coverage 100%; [check, predates #4104](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/83)
+- [valkey-io/valkey#4186](https://github.com/valkey-io/valkey/pull/4186) ([tests](tests/valkey/4186-79fc84157/)): Always log "possibly failing" when a node reaches PFAIL (#4186): declined: The change only moves a serverLog(LL_NOTICE, "possibly failing") call in clusterCron so it is emitted for voting primaries too, instead of only for non-voting nodes. The PFAIL flag setting, update_state, and markNodeAsFailingIfNeeded logic are unchanged, and the log statement reuses the ex
+- [valkey-io/valkey#3039](https://github.com/valkey-io/valkey/pull/3039) ([tests](tests/valkey/3039-3a27559ab/)): Prevent module loading during async replication and slot migration (#3039): 2 of 11 test(s) reached the change, coverage 61%
+- [valkey-io/valkey#4142](https://github.com/valkey-io/valkey/pull/4142) ([tests](tests/valkey/4142-7bb7b7f01/)): Out of Bounds read in valkey-benchmark (#4142): 1 of 1 test(s) reached the change, coverage 100%; [crash, appeared after #4142](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/81); crash, fixed by #4142 (recorded)
+- [valkey-io/valkey#4060](https://github.com/valkey-io/valkey/pull/4060) ([tests](tests/valkey/4060-cdf98a251/)): Fix io_last_written bookmark desync that corrupts replies with IO threads (#4060): 0 of 6 test(s) reached the change, coverage 72%
+- [valkey-io/valkey#4063](https://github.com/valkey-io/valkey/pull/4063) ([tests](tests/valkey/4063-c03970afd/)): stream: strip redundant LIMIT when rewriting XADD/XTRIM for propagation (#4063): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#4126](https://github.com/valkey-io/valkey/pull/4126) ([tests](tests/valkey/4126-d3824527b/)): feat: Add VALKEYCLI_USER env var (#4126): 1 of 1 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3050](https://github.com/valkey-io/valkey/pull/3050) ([tests](tests/valkey/3050-0e52ec879/)): Add support for CONFIG INFO <config> to display config type and valid values (#3050): 2 of 2 test(s) reached the change, coverage 99%
+- [valkey-io/valkey#4123](https://github.com/valkey-io/valkey/pull/4123) ([tests](tests/valkey/4123-6c315de39/)): CI: add make test-unit to macOS build and auto-detect Homebrew LLVM path (#4123): declined: The change is purely build/CI infrastructure: it edits the GitHub Actions macOS workflow (installs llvm/googletest earlier, sets CC/CXX/AR/RANLIB as job env, runs make test-unit) and adds Homebrew LLVM path auto-detection to src/unit/Makefile, which only affects compiling the unit-test har
+- [valkey-io/valkey#4092](https://github.com/valkey-io/valkey/pull/4092) ([tests](tests/valkey/4092-301b6cde1/)): Fix CLUSTER BUMPEPOCH getting stuck when a dead node holds a high configEpoch (#4092): 0 of 3 test(s) reached the change, coverage 0%
+- [valkey-io/valkey#4116](https://github.com/valkey-io/valkey/pull/4116) ([tests](tests/valkey/4116-f0312a243/)): Add static_assert to guard node flags fit in uint16_t (#4116): declined: The change only adds a compile-time static_assert (and the CLUSTER_NODE_MAX macro it uses) to guard that cluster node flags fit in uint16_t. It alters no runtime behavior: no command, reply, replication, cluster-bus message, or persistence path changes. Any violation would be a build failu
+- [valkey-io/valkey#4105](https://github.com/valkey-io/valkey/pull/4105) ([tests](tests/valkey/4105-c2b8c17a9/)): Send replica version on dual-channel RDB connection (#4105): 1 of 3 test(s) reached the change
+- [valkey-io/valkey#4100](https://github.com/valkey-io/valkey/pull/4100) ([tests](tests/valkey/4100-327fbd345/)): Avoid UB in slot-entry parsing of cluster config (#4100): declined: This is a UB/robustness fix confined to clusterLoadConfig, the nodes.conf text parser, which runs only once at startup (src/cluster_legacy.c:1499). It is unreachable by any installed experiment or writable one, and would false-positive if forced. The changed branches are entered only by a 
 
 ### valkey-io/valkey-bloom
 
@@ -73,11 +73,11 @@ Updated 2026-11-06T21:12+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 338 of 470 tested (72%)
-- Changed-line coverage: median 100% of 207 merge(s) measured, 10 under 50%
-- Recall: 102 parents flagged of 142 fix merges
-- Claude: $1715.24 in the last 24 hours, $3174.13 in the last 7 days, $3174.13 in all
-- Issues filed: 36
+- Merges whose tests reached the change: 345 of 482 tested (72%)
+- Changed-line coverage: median 100% of 218 merge(s) measured, 11 under 50%
+- Recall: 102 parents flagged of 144 fix merges
+- Claude: $1834.05 in the last 24 hours, $3292.94 in the last 7 days, $3292.94 in all
+- Issues filed: 37
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -114,7 +114,8 @@ Updated 2026-11-06T21:12+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/80
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/81
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/82
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/83
 
 ## Retries
 
-None.
+- [valkey-io/valkey#3362](https://github.com/valkey-io/valkey/pull/3362): attempt 1 of 3, Claude Code failed (rc=1): timeout after 600s

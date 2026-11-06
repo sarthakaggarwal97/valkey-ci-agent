@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c2b8c17a9303be8a3bc3cbe9470a1c8e9b07be41",
+  "parent": "327fbd345487d0103406a42a93c8aea268abeacd",
+  "pr": 4105,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Send replica version on dual-channel RDB connection (#4105)",
+  "date": "2026-07-07",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 1,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.9048,
+  "findings": [],
+  "recorded": []
+}

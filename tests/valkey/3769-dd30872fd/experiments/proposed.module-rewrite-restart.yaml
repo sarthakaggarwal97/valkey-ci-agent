@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.module-rewrite-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    With a module loaded, CONFIG REWRITE must emit exactly one loadmodule line: a
+    duplicated line aborts the next start (module name busy) so the restart step fails,
+    and an omitted line makes datatype.* commands vanish after the restart. Two rewrite+SAVE+restart
+    cycles also drive the rewritten moduleUnloadAllModules reverse iteration at graceful
+    shutdown (datatype exports a type and refuses to unload), rdbSaveModulesAux on
+    SAVE, and moduleTypeLookupModuleByName/ByID when the module-type keys reload.
+    Replies are compared against the parent build.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    appendonly: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: rewrite
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {appendonly: {$ref: inputs.appendonly}}
+    timeout_s: 60
+    commands:
+    - {command: [datatype.set, k1, 1, one], expect: {equals: OK}}
+    - {command: [datatype.set, k2, 42, answer], expect: {equals: OK}}
+    - {command: [TYPE, k1], expect: {equals: test___dt}}
+    - {command: [COPY, k1, k3], expect: {equals: 1}}
+    - {command: [datatype.get, k3], expect: {equals: [1, one/k1/k3]}}
+    - {command: [COPY, k2, k4]}
+    - {command: [MODULE, LIST], compare: skip}
+    - {command: [HELLO], compare: skip}
+    - {command: [INFO, modules], compare: skip}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [datatype.get, k1], expect: {equals: [1, one]}}
+    - {command: [datatype.get, k2], expect: {equals: [42, answer]}}
+    - {command: [datatype.get, k3], expect: {equals: [1, one/k1/k3]}}
+    - {command: [TYPE, k1], expect: {equals: test___dt}}
+    - {command: [datatype.dump, k1]}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [datatype.get, k1], expect: {equals: [1, one]}}
+    - {command: [MODULE, LIST], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [rewrite.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rewrite}

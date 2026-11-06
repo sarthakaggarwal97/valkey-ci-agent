@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c03970afd1b9..cdf98a251e2d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-66f8c0395a3b
+seed: 40602
+experiment:
+  id: proposed.deferred-len-next-merge
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

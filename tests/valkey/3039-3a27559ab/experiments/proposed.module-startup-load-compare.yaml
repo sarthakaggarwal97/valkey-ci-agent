@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.module-startup-load-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: A module loaded at startup through the loadmodule queue passes the
+    new async-replication and slot-migration guards in moduleLoad and still initializes
+    and serves commands
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: modboot
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [MODULE, LIST], compare: skip}
+    - {command: [test.basics], expect: {equals: "ALL TESTS PASSED"}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modboot.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modboot}

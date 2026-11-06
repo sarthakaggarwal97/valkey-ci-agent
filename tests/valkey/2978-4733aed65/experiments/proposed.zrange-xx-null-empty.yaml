@@ -1,0 +1,92 @@
+extends: [valkey.liveness]
+id: proposed.zrange-xx-null-empty
+deployment:
+  modes: [standalone]
+metadata:
+  description: XX option on the ZRANGE command family returns a null array for a missing
+    key and an empty array for an existing key with an empty range; the parent build
+    rejects XX as a syntax error. Covers option-combination parsing, WRONGTYPE ordering,
+    ZRANGESTORE rejection, MULTI/EXEC, Lua conversion, and both zset encodings.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: zxx
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [ZADD, "zs{zx}", 1, a, 2, b, 3, c], expect: {equals: 3}}
+    - {command: [ZRANGE, "zs{zx}", 0, -1, XX], expect_difference: true, expect: {
+        equals: [a, b, c]}}
+    - {command: [ZRANGE, "zs{zx}", 0, -1, xx], expect_difference: true, expect: {
+        equals: [a, b, c]}}
+    - {command: [ZRANGE, "zs{zx}", 0, -1, XX, XX, XX], expect_difference: true, expect: {
+        equals: [a, b, c]}}
+    - {command: [ZRANGE, "nope{zx}", 0, -1, XX], expect_difference: true, expect: {
+        error: false}}
+    - {command: [ZRANGE, "nope{zx}", 0, -1], expect: {equals: []}}
+    - {command: [ZRANGE, "zs{zx}", 10, 20, XX], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [ZRANGE, "zs{zx}", 0, -1, WITHSCORES, XX], expect_difference: true,
+      expect: {error: false}}
+    - {command: [ZRANGE, "zs{zx}", 0, 5, BYSCORE, LIMIT, 0, 2, XX], expect_difference: true,
+      expect: {equals: [a, b]}}
+    - {command: [ZRANGE, "zs{zx}", 0, -1, REV, XX], expect_difference: true, expect: {
+        equals: [c, b, a]}}
+    - {command: [ZADD, "lex{zx}", 0, alpha, 0, bar, 0, cool], expect: {equals: 3}}
+    - {command: [ZRANGE, "lex{zx}", "-", "[bar", BYLEX, XX], expect_difference: true,
+      expect: {equals: [alpha, bar]}}
+    - {command: [ZRANGEBYLEX, "lex{zx}", "-", "[bar", XX], expect_difference: true,
+      expect: {equals: [alpha, bar]}}
+    - {command: [ZREVRANGEBYLEX, "lex{zx}", "+", "[bar", XX], expect_difference: true,
+      expect: {equals: [cool, bar]}}
+    - {command: [ZRANGEBYLEX, "nope{zx}", "-", "+", XX], expect_difference: true,
+      expect: {error: false}}
+    - {command: [ZRANGEBYLEX, "lex{zx}", "[zzz", "+", XX], expect_difference: true,
+      expect: {equals: []}}
+    - {command: [ZRANGEBYSCORE, "zs{zx}", "(1", "+inf", XX], expect_difference: true,
+      expect: {equals: [b, c]}}
+    - {command: [ZRANGEBYSCORE, "nope{zx}", "-inf", "+inf", XX], expect_difference: true,
+      expect: {error: false}}
+    - {command: [ZREVRANGEBYSCORE, "zs{zx}", "+inf", "-inf", LIMIT, 0, 2, XX], expect_difference: true,
+      expect: {equals: [c, b]}}
+    - {command: [ZREVRANGE, "zs{zx}", 0, 1, XX], expect_difference: true, expect: {
+        equals: [c, b]}}
+    - {command: [ZREVRANGE, "nope{zx}", 0, -1, XX], expect_difference: true, expect: {
+        error: false}}
+    - {command: [SET, "str{zx}", v], expect: {equals: OK}}
+    - {command: [ZRANGE, "str{zx}", 0, -1, XX], expect_difference: true, expect: {
+        error: WRONGTYPE}}
+    - {command: [ZRANGE, "str{zx}", 0, -1], expect: {error: WRONGTYPE}}
+    - {command: [ZRANGESTORE, "dst{zx}", "zs{zx}", 0, -1, XX], expect: {error: syntax}}
+    - {command: [ZRANGE, "lex{zx}", "-", "+", BYLEX, WITHSCORES, XX], expect_difference: true,
+      expect: {error: BYLEX}}
+    - {command: [ZRANGE, "zs{zx}", 0, -1, LIMIT, 0, 2, XX], expect_difference: true,
+      expect: {error: LIMIT}}
+    - {command: [CONFIG, SET, zset-max-listpack-entries, 0], expect: {equals: OK}}
+    - {command: [ZADD, "big{zx}", 1, a, 2, b, 3, c, 4, d], expect: {equals: 4}}
+    - {command: [OBJECT, ENCODING, "big{zx}"], compare: skip}
+    - {command: [ZRANGE, "big{zx}", 0, -1, XX], expect_difference: true, expect: {
+        equals: [a, b, c, d]}}
+    - {command: [ZREVRANGEBYSCORE, "big{zx}", "+inf", "-inf", WITHSCORES, XX], expect_difference: true,
+      expect: {error: false}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [ZRANGE, "nope{zx}", 0, -1, XX], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {error: false}}
+    - {command: [EVAL, "local v = redis.call('ZRANGE', KEYS[1], 0, -1, 'XX') if v\
+          \ == false then return 'isnull' end return 'notnull'", 1, "nope{zx}"], expect_difference: true,
+      expect: {equals: isnull}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [zxx.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zxx}

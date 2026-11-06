@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7bb7b7f01fc003918d421467326f704b497a80bf",
+  "parent": "168c22afd55df6c85ef0db6e0fd7eac462f5f8d1",
+  "pr": 4142,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Out of Bounds read in valkey-benchmark (#4142)",
+  "date": "2026-07-14",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 0.9378,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: LeakSanitizer: detected",
+      "scenario": "ai-e14d160215a1",
+      "seed": 7000,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #4142",
+      "fingerprint": "407cf7f564b273e3887a",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/81"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: killed by signal 11",
+      "scenario": "ai-e14d160215a1",
+      "seed": 7000,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #4142",
+      "fingerprint": "3c9b6d82c5da2b04c973",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

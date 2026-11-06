@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c03970afd1b9..cdf98a251e2d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ab0f7794676f
+seed: 406004
+experiment:
+  id: proposed.reply-bookmark-stress
+  inputs:
+    mutation_rate: 1000
+    mutable_keys: 500
+    value_size: 1024
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300
+  server_config:
+    io-threads: 9
+    set-max-intset-entries: 1000000

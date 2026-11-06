@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f0312a243229c34b269e0b541c1f4c06aa9af437",
+  "parent": "b2eefcabe67b58923e34383afe1d5339b5a3ebf0",
+  "pr": 4116,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add static_assert to guard node flags fit in uint16_t (#4116)",
+  "date": "2026-07-08",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2135,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a compile-time static_assert (and the CLUSTER_NODE_MAX macro it uses) to guard that cluster node flags fit in uint16_t. It alters no runtime behavior: no command, reply, replication, cluster-bus message, or persistence path changes. Any violation would be a build failure, not a testable server behavior, so no fuzzer scenario can reach or exercise it."
+}

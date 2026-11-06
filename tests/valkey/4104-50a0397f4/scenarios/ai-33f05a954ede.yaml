@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6b006c9a94a5..50a0397f4f22.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-33f05a954ede
+seed: 202
+experiment:
+  id: proposed.slot-migration-export-iothreads
+  inputs:
+    resp: 3
+    io_threads: 9
+    key_save_delay_us: 60000
+deployment:
+  mode: standalone
+  base_port: 7100

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f4dc3ca09eb6..dd30872fd8d7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-153f420790aa
+seed: 404
+experiment:
+  id: proposed.module-cluster-rewrite-migration
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

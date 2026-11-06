@@ -1,0 +1,21 @@
+extends: [valkey.liveness]
+id: proposed.module-unload-cli
+deployment:
+  modes: [standalone]
+metadata:
+  description: MODULE UNLOAD reaches moduleUnload's list lookup via valkey-cli, compared
+    across the two builds
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, MODULE, UNLOAD, nosuchmodule]}
+    - {tool: valkey-cli, args: [-p, $port, MODULE, UNLOAD, ""]}
+    - {tool: valkey-cli, args: [-p, $port, MODULE, LIST]}
+    - {tool: valkey-cli, args: [-p, $port, COMMAND, COUNT]}
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {stdout: {equals: "PONG\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

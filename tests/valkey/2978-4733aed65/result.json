@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4733aed65893c3227925e17f4423c44c0a892d15",
+  "parent": "dd30872fd8d7302fd257dc1f1e4e56ed269ee63f",
+  "pr": 2978,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add XX option to ZRANGE commands for null/empty distinction (#2978)",
+  "date": "2026-07-24",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.3653,
+  "findings": [],
+  "recorded": []
+}

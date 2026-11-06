@@ -1,0 +1,19 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8886bd103569..c03970afd1b9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0418881538cc
+seed: 4063
+experiment:
+  id: proposed.stream-trim-limit-propagation
+  inputs:
+    target: primary
+    signal: SIGKILL
+    restart_delay_s: 0
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7000
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec
+    stream-node-max-entries: 5
+    propagation-error-behavior: panic

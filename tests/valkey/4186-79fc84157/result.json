@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "79fc841577be18d5e789f741ca92a4157e8315fa",
+  "parent": "f439060b6fb0f3f2a04617d6843c50cc3b9e3c80",
+  "pr": 4186,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Always log \"possibly failing\" when a node reaches PFAIL (#4186)",
+  "date": "2026-07-15",
+  "unstable": "c77a4e8da1d0c311d8c0c4b4295fcc7021f108ed",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2432,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only moves a serverLog(LL_NOTICE, \"possibly failing\") call in clusterCron so it is emitted for voting primaries too, instead of only for non-voting nodes. The PFAIL flag setting, update_state, and markNodeAsFailingIfNeeded logic are unchanged, and the log statement reuses the exact format string and arguments that already existed. It is a log-message-visibility change with no effect on replies, cluster state, failover, replication, or persistence, so no fuzzer oracle (ledger, deployment state, liveness, or a compared command sequence) can observe any difference between the two build"
+}

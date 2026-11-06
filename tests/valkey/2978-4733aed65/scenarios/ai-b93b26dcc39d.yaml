@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey dd30872fd8d7..4733aed65893.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b93b26dcc39d
+seed: 2
+experiment:
+  id: proposed.zrange-xx-null-empty
+  inputs:
+    resp: 3
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

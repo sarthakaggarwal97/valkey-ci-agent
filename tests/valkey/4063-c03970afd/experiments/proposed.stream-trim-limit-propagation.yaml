@@ -1,0 +1,133 @@
+extends: [valkey.base]
+id: proposed.stream-trim-limit-propagation
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: XADD/XTRIM with approximate trim plus LIMIT under a kill and resync;
+    the rewritten propagation (LIMIT stripped) must replicate, resync and reload from
+    AOF cleanly
+inputs:
+  properties:
+    target: {type: string, enum: [primary, replica], default: replica}
+    signal: {type: string, enum: [SIGKILL, SIGTERM, SIGSTOP], default: SIGKILL}
+    restart_delay_s: {type: number, minimum: 0, maximum: 30, default: 0}
+components:
+- use: valkey.fault.process-signal
+  id: kill-target
+  config:
+    when_event: stream-before.completed
+    instance: {$ref: inputs.target}
+    signal: {$ref: inputs.signal}
+    restart: true
+    restart_mode: background
+    restart_delay_s: {$ref: inputs.restart_delay_s}
+- use: valkey.action.commands
+  id: stream-before
+  depends_on: [writes, kill-target]
+  config:
+    instances: primaries
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, stream-node-max-entries, "5"], expect: {equals: OK}}
+    - {command: [XADD, st, "1-1", f, v], expect: {error: false}}
+    - {command: [XADD, st, "2-1", f, v], expect: {error: false}}
+    - {command: [XADD, st, "3-1", f, v], expect: {error: false}}
+    - {command: [XADD, st, "4-1", f, v], expect: {error: false}}
+    - {command: [XADD, st, "5-1", f, v], expect: {error: false}}
+    - {command: [XADD, st, "6-1", f, v], expect: {error: false}}
+    - {command: [XADD, st, "7-1", f, v], expect: {error: false}}
+    - {command: [XADD, st, "8-1", f, v], expect: {error: false}}
+    - {command: [XADD, st, "9-1", f, v], expect: {error: false}}
+    - {command: [XADD, st, "10-1", f, v], expect: {error: false}}
+    - {command: [XADD, st, "11-1", f, v], expect: {error: false}}
+    - {command: [XADD, st, "12-1", f, v], expect: {error: false}}
+    - {command: [XADD, st, "13-1", f, v], expect: {error: false}}
+    - {command: [XADD, st, "14-1", f, v], expect: {error: false}}
+    - {command: [XADD, st, "15-1", f, v], expect: {error: false}}
+    - {command: [XADD, st, MAXLEN, "~", "10", LIMIT, "5", "16-1", f, v], expect: {
+        error: false}}
+    - {command: [XADD, st, LIMIT, "5", MAXLEN, "~", "10", "17-1", f, v], expect: {
+        error: false}}
+    - {command: [XADD, st, MAXLEN, "~", "10", LIMIT, "0", "18-1", f, v], expect: {
+        error: false}}
+    - {command: [XADD, st, NOMKSTREAM, MAXLEN, "~", "8", LIMIT, "5", "*", f, v], expect: {
+        error: false}}
+    - {command: [XTRIM, st, MAXLEN, "~", "5", LIMIT, "5"], expect: {min: 0}}
+    - {command: [XTRIM, st, MAXLEN, "~", "2", LIMIT, "5", LIMIT, "6"], expect: {min: 0}}
+    - {command: [XADD, st2, "1-1", f, v], expect: {error: false}}
+    - {command: [XADD, st2, "2-1", f, v], expect: {error: false}}
+    - {command: [XADD, st2, "3-1", f, v], expect: {error: false}}
+    - {command: [XADD, st2, "4-1", f, v], expect: {error: false}}
+    - {command: [XADD, st2, "5-1", f, v], expect: {error: false}}
+    - {command: [XADD, st2, "6-1", f, v], expect: {error: false}}
+    - {command: [XADD, st2, "7-1", f, v], expect: {error: false}}
+    - {command: [XADD, st2, "8-1", f, v], expect: {error: false}}
+    - {command: [XADD, st2, "9-1", f, v], expect: {error: false}}
+    - {command: [XADD, st2, "10-1", f, v], expect: {error: false}}
+    - {command: [XADD, st2, MINID, "~", "4-0", LIMIT, "4", "11-1", f, v], expect: {
+        error: false}}
+    - {command: [XTRIM, st2, MINID, "~", "8-0", LIMIT, "4"], expect: {min: 0}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [XADD, st, MAXLEN, "~", "6", LIMIT, "5", "*", f, v], expect: {equals: QUEUED}}
+    - {command: [XTRIM, st2, MINID, "~", "10-0", LIMIT, "3"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {error: false}}
+    - {command: [XTRIM, st, MAXLEN, "=", "5", LIMIT, "5"], expect: {error: "LIMIT\
+          \ cannot be used without the special ~ option"}}
+    - {command: [XTRIM, st, LIMIT, "5"], expect: {error: "without specifying a trimming\
+          \ strategy"}}
+    - {command: [XADD, st, MAXLEN, "~", "9223372036854775807", LIMIT, "9223372036854775807",
+        "*", f, v], expect: {error: false}}
+    - {command: [WAIT, "1", "5000"], wait_s: 20, expect: {min: 1}}
+- use: valkey.action.commands
+  id: stream-during
+  depends_on: [stream-before]
+  config:
+    instances: primaries
+    timeout_s: 90
+    commands:
+    - {command: [XADD, st, MAXLEN, "~", "6", LIMIT, "4", "*", f, v], wait_s: 30, expect: {
+        error: false}}
+    - {command: [XADD, st, MAXLEN, "~", "6", LIMIT, "4", "*", f, v], wait_s: 30, expect: {
+        error: false}}
+    - {command: [XADD, st, LIMIT, "4", MAXLEN, "~", "6", "*", f, v], wait_s: 30, expect: {
+        error: false}}
+    - {command: [XADD, st2, MINID, "~", "6-0", LIMIT, "3", "*", f, v], wait_s: 30,
+      expect: {error: false}}
+    - {command: [XADD, st2, MINID, "~", "6-0", LIMIT, "3", "*", f, v], wait_s: 30,
+      expect: {error: false}}
+    - {command: [XTRIM, st, MAXLEN, "~", "4", LIMIT, "3"], wait_s: 30, expect: {min: 0}}
+- use: valkey.action.wait-event
+  id: wait-recovered
+  depends_on: [stream-during]
+  config: {event: kill-target.recovered, only_after: kill-target.injected, timeout_s: 90}
+- use: valkey.action.commands
+  id: stream-after
+  depends_on: [wait-recovered]
+  config:
+    instances: primaries
+    timeout_s: 90
+    commands:
+    - {command: [XADD, st, MAXLEN, "~", "6", LIMIT, "4", "*", f, v], wait_s: 30, expect: {
+        error: false}}
+    - {command: [XADD, st, LIMIT, "4", MAXLEN, "~", "6", "*", f, v], expect: {error: false}}
+    - {command: [XTRIM, st2, MINID, "~", "6-0", LIMIT, "2"], expect: {min: 0}}
+    - {command: [WAIT, "1", "8000"], wait_s: 30, expect: {min: 1}}
+- use: valkey.action.commands
+  id: verify
+  depends_on: [stream-after]
+  config:
+    instances: all
+    timeout_s: 30
+    commands:
+    - {command: [XLEN, st], expect: {min: 1}}
+    - {command: [XLEN, st2], expect: {min: 1}}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [stream-before.completed, stream-during.completed, kill-target.recovered,
+  stream-after.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-target}
+- {evidence_id: valkey.command.sequence, source: stream-before}
+- {evidence_id: valkey.command.sequence, source: stream-after}

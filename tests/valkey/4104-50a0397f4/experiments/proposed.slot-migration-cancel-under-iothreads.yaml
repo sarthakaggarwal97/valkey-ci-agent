@@ -1,0 +1,78 @@
+extends: [valkey.liveness]
+id: proposed.slot-migration-cancel-under-iothreads
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Cancel a CLUSTER MIGRATESLOTS export while the snapshot child is running and IO
+    threads are active (killSlotMigrationChild path), verify the source keeps its
+    data, then re-migrate to completion.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, minimum: 2, maximum: 16, default: 4}
+    key_save_delay_us: {type: integer, minimum: 0, maximum: 200000, default: 50000}
+components:
+- use: valkey.action.commands
+  id: cancel
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config:
+      io-threads: {$ref: inputs.io_threads}
+      io-threads-always-active: "yes"
+      rdb-key-save-delay: {$ref: inputs.key_save_delay_us}
+    commands:
+    - {command: [MSET, "{6ZJ}k0", v0, "{6ZJ}k1", v1, "{6ZJ}k2", v2, "{6ZJ}k3", v3,
+        "{6ZJ}k4", v4, "{6ZJ}k5", v5, "{6ZJ}k6", v6, "{6ZJ}k7", v7, "{6ZJ}k8", v8,
+        "{6ZJ}k9", v9, "{6ZJ}k10", v10, "{6ZJ}k11", v11, "{6ZJ}k12", v12, "{6ZJ}k13",
+        v13, "{6ZJ}k14", v14, "{6ZJ}k15", v15, "{6ZJ}k16", v16, "{6ZJ}k17", v17, "{6ZJ}k18",
+        v18, "{6ZJ}k19", v19], expect: {equals: OK}}
+    - {command: [MSET, "{6ZJ}k20", v20, "{6ZJ}k21", v21, "{6ZJ}k22", v22, "{6ZJ}k23",
+        v23, "{6ZJ}k24", v24, "{6ZJ}k25", v25, "{6ZJ}k26", v26, "{6ZJ}k27", v27, "{6ZJ}k28",
+        v28, "{6ZJ}k29", v29, "{6ZJ}k30", v30, "{6ZJ}k31", v31, "{6ZJ}k32", v32, "{6ZJ}k33",
+        v33, "{6ZJ}k34", v34, "{6ZJ}k35", v35, "{6ZJ}k36", v36, "{6ZJ}k37", v37, "{6ZJ}k38",
+        v38, "{6ZJ}k39", v39], expect: {equals: OK}}
+    - {command: [MSET, "{6ZJ}k40", v40, "{6ZJ}k41", v41, "{6ZJ}k42", v42, "{6ZJ}k43",
+        v43, "{6ZJ}k44", v44, "{6ZJ}k45", v45, "{6ZJ}k46", v46, "{6ZJ}k47", v47, "{6ZJ}k48",
+        v48, "{6ZJ}k49", v49, "{6ZJ}k50", v50, "{6ZJ}k51", v51, "{6ZJ}k52", v52, "{6ZJ}k53",
+        v53, "{6ZJ}k54", v54, "{6ZJ}k55", v55, "{6ZJ}k56", v56, "{6ZJ}k57", v57, "{6ZJ}k58",
+        v58, "{6ZJ}k59", v59], expect: {equals: OK}}
+    - {command: [SETRANGE, "{6ZJ}p0", 4096, x], expect: {equals: 4097}}
+    - {command: [SETRANGE, "{6ZJ}p1", 4096, x], expect: {equals: 4097}}
+    - {command: [SETRANGE, "{6ZJ}p2", 4096, x], expect: {equals: 4097}}
+    - {command: [SETRANGE, "{6ZJ}p3", 4096, x], expect: {equals: 4097}}
+    - {command: [SETRANGE, "{6ZJ}p4", 4096, x], expect: {equals: 4097}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 16383, 16383, NODE, "<node.1.id>"],
+      expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16383], node: 1, wait_s: 60, expect: {
+        min: 1}}
+    - {command: [SETRANGE, "{6ZJ}c0", 8192, x], expect: {equals: 8193}}
+    - {command: [SETRANGE, "{6ZJ}c1", 8192, x], expect: {equals: 8193}}
+    - {command: [SETRANGE, "{6ZJ}c2", 8192, x], expect: {equals: 8193}}
+    - {command: [SETRANGE, "{6ZJ}c3", 8192, x], expect: {equals: 8193}}
+    - {command: [SETRANGE, "{6ZJ}c4", 8192, x], expect: {equals: 8193}}
+    - {command: [CLUSTER, CANCELSLOTMIGRATIONS], expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16383], node: 1, compare: skip}
+    - {command: [GET, "{6ZJ}k1"], expect: {equals: v1}}
+    - {command: [STRLEN, "{6ZJ}c0"], expect: {equals: 8193}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16383], expect: {equals: 70}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 16383, 16383, NODE, "<node.1.id>"],
+      wait_s: 60, expect: {equals: OK}}
+    - {command: [GET, "{6ZJ}k1"], node: 1, wait_s: 120, expect: {equals: v1}}
+    - {command: [STRLEN, "{6ZJ}c0"], node: 1, expect: {equals: 8193}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16383], node: 1, expect: {equals: 70}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16383], wait_s: 60, expect: {equals: 0}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [cancel.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cancel}
