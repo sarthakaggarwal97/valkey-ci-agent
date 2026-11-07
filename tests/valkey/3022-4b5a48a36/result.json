@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4b5a48a36e22a885dad2140cf72fda7b64c5eb03",
+  "parent": "951d942ab20178b89c07420f8f4c13ae7a764749",
+  "pr": 3022,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix HRANDFIELD to return null response when no field could be found (#3022)",
+  "date": "2026-01-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 11,
+    "executed": 11,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.3529,
+  "findings": [],
+  "recorded": []
+}

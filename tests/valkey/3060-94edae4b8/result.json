@@ -1,0 +1,80 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "94edae4b8d81ad683ab225c93a381eae444a0f14",
+  "parent": "e7d004be0b8221af1e6b07ef7598b901e2d45382",
+  "pr": 3060,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix how hash is handling overriding of expired fields overwrite (#3060)",
+  "date": "2026-01-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 11,
+  "proven": 4,
+  "hunted": 5,
+  "dropped": 6,
+  "recall": true,
+  "coverage": {
+    "lines": 93,
+    "executed": 78,
+    "percent": 83,
+    "uncovered": [
+      "src/module.c:5470",
+      "src/t_hash.c:1041",
+      "src/t_hash.c:1042",
+      "src/t_hash.c:1055",
+      "src/t_hash.c:1056",
+      "src/t_hash.c:1057",
+      "src/t_hash.c:1247",
+      "src/t_hash.c:1248",
+      "src/t_hash.c:1254",
+      "src/t_hash.c:1255",
+      "src/t_hash.c:1256",
+      "src/t_hash.c:1262",
+      "src/t_hash.c:1263",
+      "src/t_hash.c:1295",
+      "src/t_hash.c:1296"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 9.2634,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-47c2ea9d8873",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-bdf8c7713182",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-36bd3ef5b88f",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-2939e1817f34",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-67239f395004",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-ce4882f32bbb",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    }
+  ]
+}

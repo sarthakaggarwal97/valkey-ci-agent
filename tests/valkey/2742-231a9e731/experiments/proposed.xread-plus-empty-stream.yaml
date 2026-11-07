@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.xread-plus-empty-stream
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    XREAD with the + ID on an empty stream whose last_id is 0-0 (created via XGROUP
+    CREATE ... MKSTREAM) returned the error "the stream last element ID is 0-0" before
+    the fix; now it returns an empty result. Verifies the fixed reply, the multi-stream
+    case where one empty 0-0 stream poisoned the whole command, the blocking variant,
+    and that unchanged paths (non-empty stream, stream emptied by XDEL, XREADGROUP
+    +, $ on empty stream) stay identical.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: xread
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [XGROUP, CREATE, s1, g1, $, MKSTREAM], expect: {equals: OK}}
+    - {command: [XLEN, s1], expect: {equals: 0}}
+    - {command: [XREAD, COUNT, 10, STREAMS, s1, +], expect_difference: true, expect: {
+        error: false}}
+    - {command: [XREAD, COUNT, 10, BLOCK, 50, STREAMS, s1, +], expect_difference: true,
+      expect: {error: false}}
+    - {command: [XREAD, COUNT, 10, STREAMS, s1, s1, +, +], expect_difference: true,
+      expect: {error: false}}
+    - {command: [XADD, s2, 1-1, f, v], expect: {equals: 1-1}}
+    - {command: [XREAD, COUNT, 10, STREAMS, s2, s1, +, +], expect_difference: true,
+      expect: {error: false}}
+    - {command: [XREAD, COUNT, 10, STREAMS, s2, +], expect: {error: false}}
+    - {command: [XADD, s3, 5-5, f, v], expect: {equals: 5-5}}
+    - {command: [XDEL, s3, 5-5], expect: {equals: 1}}
+    - {command: [XLEN, s3], expect: {equals: 0}}
+    - {command: [XREAD, COUNT, 10, STREAMS, s3, +], expect: {error: false}}
+    - {command: [XREADGROUP, GROUP, g1, c1, COUNT, 1, STREAMS, s1, +], expect: {error: "meaningless"}}
+    - {command: [XREAD, COUNT, 10, STREAMS, s1, $], expect: {error: false}}
+    - {command: [XADD, s1, 2-2, f, v], expect: {equals: 2-2}}
+    - {command: [XREAD, COUNT, 10, STREAMS, s1, +], expect: {error: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [xread.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: xread}

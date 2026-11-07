@@ -1,0 +1,36 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4ad7628d05c87ae69996939fb5cbfa2fd899c478",
+  "parent": "985cf836ac13e7366f938aa9a4e7a309d83733da",
+  "pr": 2463,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Instrumenting used active time metrics for I/O threads (#2463)",
+  "date": "2026-01-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 16,
+    "executed": 15,
+    "percent": 93,
+    "uncovered": [
+      "src/io_threads.c:247"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 1.4192,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-e7afc920cfb6",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

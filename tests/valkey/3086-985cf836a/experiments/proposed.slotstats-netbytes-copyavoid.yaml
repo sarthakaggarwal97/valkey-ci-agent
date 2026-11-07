@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.slotstats-netbytes-copyavoid
+deployment:
+  modes: [standalone]
+metadata:
+  description: With commandlog-request-larger-than -1, cluster slot-stats network-bytes-out
+    for a copy-avoided bulk reply is accounted via the re-enabled IO-thread path in
+    releaseBufReferences (exactly 2057 for a 2048-byte GET), and is not double-counted
+    once tracking is re-enabled
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slotstats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    server_config: {cluster-slot-stats-enabled: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CLUSTER, KEYSLOT, foo], expect: {equals: 12182}}
+    - {command: [CONFIG, SET, min-string-size-avoid-copy-reply, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, commandlog-reply-larger-than, 1024], expect: {equals: OK}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, -1], expect: {equals: OK}}
+    - {command: [COMMANDLOG, RESET, LARGE-REPLY], expect: {equals: OK}}
+    - {command: [SETRANGE, foo, 2047, A], expect: {equals: 2048}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [GET, foo]}
+    - {command: [COMMANDLOG, LEN, LARGE-REPLY], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 12182, 12182], wait_s: 15, compare: skip,
+      expect: {contains: "2057"}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, 1024], expect: {equals: OK}}
+    - {command: [COMMANDLOG, RESET, LARGE-REPLY], expect: {equals: OK}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [GET, foo]}
+    - {command: [COMMANDLOG, LEN, LARGE-REPLY], expect: {equals: 1}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 12182, 12182], wait_s: 15, compare: skip,
+      expect: {contains: "2057"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slotstats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotstats}

@@ -1,0 +1,102 @@
+extends: [valkey.liveness]
+id: proposed.rehash-batch-integrity
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Mass inserts, SCAN walks mid-rehash, mass deletes to force shrink, and DEBUG DICT-RESIZING
+    to build long bucket chains released into one big expansion: drives the batched
+    expand rehash, the rewritten shrink rehash and the deferred child-bucket cleanup
+    on the main, hash and set tables, with absolute count expectations on both builds.
+inputs:
+  properties:
+    scan_count: {type: integer, minimum: 1, maximum: 5000, default: 100}
+components:
+- use: valkey.action.commands
+  id: rehash
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      hash-max-listpack-entries: 0
+      set-max-listpack-entries: 0
+    timeout_s: 180
+    commands:
+    - command: [EVAL, "for i=1,100000 do redis.call('SET','k:'..i,'v') end return\
+          \ redis.call('DBSIZE')", 0]
+      expect: {equals: 100000}
+    - command: [EVAL, "local c=0 local seen={} local cur='0' repeat local r=redis.call('SCAN',cur,'COUNT',ARGV[1])\
+          \ cur=r[1] for _,k in ipairs(r[2]) do if not seen[k] then seen[k]=true c=c+1\
+          \ end end until cur=='0' return c", 0, {$ref: inputs.scan_count}]
+      expect: {equals: 100000}
+    - command: [EVAL, "local d=0 for i=1,98000 do d=d+redis.call('DEL','k:'..i) end\
+          \ return d", 0]
+      expect: {equals: 98000}
+    - command: [DBSIZE]
+      expect: {equals: 2000}
+    - command: [EVAL, "local m=0 for i=98001,100000 do m=m+redis.call('EXISTS','k:'..i)\
+          \ end return m", 0]
+      expect: {equals: 2000}
+    - command: [EVAL, "local c=0 local seen={} local cur='0' repeat local r=redis.call('SCAN',cur,'COUNT',ARGV[1])\
+          \ cur=r[1] for _,k in ipairs(r[2]) do if not seen[k] then seen[k]=true c=c+1\
+          \ end end until cur=='0' return c", 0, {$ref: inputs.scan_count}]
+      expect: {equals: 2000}
+    - command: [DEBUG, DICT-RESIZING, 0]
+      expect: {equals: OK}
+    - command: [EVAL, "for i=1,30000 do redis.call('SET','c:'..i,'v') end return redis.call('DBSIZE')",
+        0]
+      expect: {equals: 32000}
+    - command: [DEBUG, DICT-RESIZING, 1]
+      expect: {equals: OK}
+    - command: [EVAL, "for i=1,5000 do redis.call('SET','d:'..i,'v') end return redis.call('DBSIZE')",
+        0]
+      expect: {equals: 37000}
+    - command: [EVAL, "local m=0 for i=1,30000 do m=m+redis.call('EXISTS','c:'..i)\
+          \ end return m", 0]
+      expect: {equals: 30000}
+    - command: [EVAL, "local c=0 local seen={} local cur='0' repeat local r=redis.call('SCAN',cur,'COUNT',ARGV[1])\
+          \ cur=r[1] for _,k in ipairs(r[2]) do if not seen[k] then seen[k]=true c=c+1\
+          \ end end until cur=='0' return c", 0, {$ref: inputs.scan_count}]
+      expect: {equals: 37000}
+    - command: [EVAL, "local d=0 for i=1,30000 do d=d+redis.call('DEL','c:'..i) end\
+          \ for i=1,5000 do d=d+redis.call('DEL','d:'..i) end return d", 0]
+      expect: {equals: 35000}
+    - command: [DBSIZE]
+      expect: {equals: 2000}
+    - command: [EVAL, "local c=0 local seen={} local cur='0' repeat local r=redis.call('SCAN',cur,'COUNT',ARGV[1])\
+          \ cur=r[1] for _,k in ipairs(r[2]) do if not seen[k] then seen[k]=true c=c+1\
+          \ end end until cur=='0' return c", 0, {$ref: inputs.scan_count}]
+      expect: {equals: 2000}
+    - command: [EVAL, "for i=1,30000 do redis.call('HSET','h','f'..i,'x') end return\
+          \ redis.call('HLEN','h')", 0]
+      expect: {equals: 30000}
+    - command: [EVAL, "local d=0 for i=1,29000 do d=d+redis.call('HDEL','h','f'..i)\
+          \ end return d", 0]
+      expect: {equals: 29000}
+    - command: [HLEN, h]
+      expect: {equals: 1000}
+    - command: [EVAL, "local c=0 local seen={} local cur='0' repeat local r=redis.call('HSCAN','h',cur,'COUNT',ARGV[1])\
+          \ cur=r[1] for i=1,#r[2],2 do local f=r[2][i] if not seen[f] then seen[f]=true\
+          \ c=c+1 end end until cur=='0' return c", 0, {$ref: inputs.scan_count}]
+      expect: {equals: 1000}
+    - command: [EVAL, "for i=1,30000 do redis.call('SADD','s','m'..i) end return redis.call('SCARD','s')",
+        0]
+      expect: {equals: 30000}
+    - command: [EVAL, "local d=0 for i=1,29000 do d=d+redis.call('SREM','s','m'..i)\
+          \ end return d", 0]
+      expect: {equals: 29000}
+    - command: [SCARD, s]
+      expect: {equals: 1000}
+    - command: [EVAL, "local c=0 local seen={} local cur='0' repeat local r=redis.call('SSCAN','s',cur,'COUNT',ARGV[1])\
+          \ cur=r[1] for _,m in ipairs(r[2]) do if not seen[m] then seen[m]=true c=c+1\
+          \ end end until cur=='0' return c", 0, {$ref: inputs.scan_count}]
+      expect: {equals: 1000}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rehash.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rehash}

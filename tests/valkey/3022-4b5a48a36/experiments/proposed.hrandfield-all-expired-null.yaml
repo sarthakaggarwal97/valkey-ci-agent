@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.hrandfield-all-expired-null
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    HRANDFIELD without count on a hashtable-encoded hash whose every field has expired
+    must reply null; the parent replies a bulk string built from an uninitialized
+    integer. Count variants on the same hash must stay empty arrays, and a hash with
+    one live field among expired ones must keep returning the live field.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hrand
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [HSETEX, h, PX, 1, FIELDS, 2, f1, v1, f2, v2], expect: {equals: 1}}
+    - {command: [HKEYS, h], wait_s: 15, expect: {equals: []}}
+    - {command: [HRANDFIELD, h], expect_difference: true, expect: {exists: false}}
+    - {command: [HRANDFIELD, h, 1], expect: {equals: []}}
+    - {command: [HRANDFIELD, h, 5], expect: {equals: []}}
+    - {command: [HRANDFIELD, h, -5], expect: {equals: []}}
+    - {command: [HRANDFIELD, h, 3, WITHVALUES], expect: {equals: []}}
+    - {command: [HRANDFIELD, h, 0], expect: {equals: []}}
+    - {command: [HSETEX, h2, PX, 1, FIELDS, 10, a, 1, b, 2, c, 3, d, 4, e, 5, f, 6,
+        g, 7, i, 8, j, 9, k, 10], expect: {equals: 1}}
+    - {command: [HKEYS, h2], wait_s: 15, expect: {equals: []}}
+    - {command: [HRANDFIELD, h2, 2], expect: {equals: []}}
+    - {command: [HRANDFIELD, h2], expect_difference: true, expect: {exists: false}}
+    - {command: [HSET, h3, live, lv], expect: {equals: 1}}
+    - {command: [HSETEX, h3, PX, 1, FIELDS, 1, dead, dv], expect: {equals: 1}}
+    - {command: [HKEYS, h3], wait_s: 15, expect: {equals: [live]}}
+    - {command: [HRANDFIELD, h3], expect: {equals: live}}
+    - {command: [HRANDFIELD, h3, -3], expect: {equals: [live, live, live]}}
+    - {command: [HRANDFIELD, nosuchkey], expect: {exists: false}}
+    - {command: [HRANDFIELD, nosuchkey, 3], expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hrand.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hrand}

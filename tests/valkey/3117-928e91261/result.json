@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "928e9126172dfdfdbf4ce6ebdc65aae854c6e79e",
+  "parent": "4ad7628d05c87ae69996939fb5cbfa2fd899c478",
+  "pr": 3117,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "remove unneeded include of expire.h (#3117)",
+  "date": "2026-01-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2011,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only removes an unneeded #include \"expire.h\" from src/t_hash.c. No executable code, reply, data format, or configuration changes; any breakage would be a compile failure caught by the build, not a runtime behaviour a fuzzer scenario could reach."
+}

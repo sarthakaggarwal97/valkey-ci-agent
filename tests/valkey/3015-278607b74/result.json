@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "278607b746235913c8187671ce4ee9412c77148e",
+  "parent": "d8315cfcfb83207813e365a944e5049d852469a2",
+  "pr": 3015,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "makefile formatting: split lists onto multiple lines for better readability and easier merging (#3015)",
+  "date": "2026-01-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.288,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely a Makefile formatting refactor: the ENGINE_SERVER_OBJ, ENGINE_TRACE_OBJ, ENGINE_CLI_OBJ, ENGINE_BENCHMARK_OBJ and Lua-module object lists are split onto multiple lines and sorted alphabetically, with the identical set of object files before and after. No source file, compile flag, link flag or target is added, removed or changed, so the built binaries behave identically; this is a build-system readability change with no runtime behaviour to test."
+}

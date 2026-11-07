@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.monotonic-hw-clock
+deployment:
+  modes: [standalone]
+metadata:
+  description: HW (TSC) monotonic clock is active by default and time-driven behavior
+    (expiry, blocking timeout, cron) still works under it
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: clock
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hz: 100}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [INFO, server], expect_difference: true, expect: {contains: "monotonic_clock:X86\
+          \ TSC"}}
+    - {command: [SET, k, v, PX, "150"], expect: {equals: OK}}
+    - {command: [EXISTS, k], wait_s: 10, expect: {equals: 0}}
+    - {command: [BLPOP, nolist, "1"], expect: {exists: false}}
+    - {command: [SET, long-lived, v2, EX, "100"], expect: {equals: OK}}
+    - {command: [TTL, long-lived], compare: skip, expect: {min: 90, max: 100}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [clock.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: clock}

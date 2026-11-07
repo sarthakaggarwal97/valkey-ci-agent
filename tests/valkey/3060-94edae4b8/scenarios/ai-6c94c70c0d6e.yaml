@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e7d004be0b82..94edae4b8d81.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6c94c70c0d6e
+seed: 94002
+experiment:
+  id: proposed.hash-expiry-replication
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

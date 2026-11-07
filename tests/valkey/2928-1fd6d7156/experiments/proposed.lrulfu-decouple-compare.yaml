@@ -1,0 +1,105 @@
+extends: [valkey.liveness]
+id: proposed.lrulfu-decouple-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    LRU/LFU decoupled from server.h. Verify lfu-log-factor and lfu-decay-time wiring
+    to the new module globals at the 0 and INT_MAX boundaries, expose the behaviour
+    change (the LFU/LRU policy snapshot refreshes once per execution unit, so a policy
+    switch inside MULTI/EXEC stamps objects created later in the same EXEC with the
+    pre-switch representation), and check LFU frequency survives SAVE and a restart,
+    all compared against the parent build.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-lfu], expect: {equals: OK}}
+    - {command: [CONFIG, SET, lfu-decay-time, "2147483647"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, lfu-log-factor, "0"], expect: {equals: OK}}
+    - {command: [SET, f1, payload-one], expect: {equals: OK}}
+    - {command: [GET, f1], expect: {equals: payload-one}}
+    - {command: [GET, f1], expect: {equals: payload-one}}
+    - {command: [GET, f1], expect: {equals: payload-one}}
+    - {command: [GET, f1], expect: {equals: payload-one}}
+    - {command: [GET, f1], expect: {equals: payload-one}}
+    - {command: [GET, f1], expect: {equals: payload-one}}
+    - {command: [GET, f1], expect: {equals: payload-one}}
+    - {command: [GET, f1], expect: {equals: payload-one}}
+    - {command: [GET, f1], expect: {equals: payload-one}}
+    - {command: [GET, f1], expect: {equals: payload-one}}
+    - {command: [OBJECT, FREQ, f1], expect: {equals: 15}}
+    - {command: [CONFIG, SET, lfu-log-factor, "2147483647"], expect: {equals: OK}}
+    - {command: [CONFIG, GET, lfu-log-factor]}
+    - {command: [SET, f2, payload-two], expect: {equals: OK}}
+    - {command: [GET, f2], expect: {equals: payload-two}}
+    - {command: [GET, f2], expect: {equals: payload-two}}
+    - {command: [GET, f2], expect: {equals: payload-two}}
+    - {command: [OBJECT, FREQ, f2], expect: {equals: 6}}
+    - {command: [CONFIG, SET, lfu-decay-time, "0"], expect: {equals: OK}}
+    - {command: [OBJECT, FREQ, f2], expect: {equals: 6}}
+    - {command: [OBJECT, FREQ, f1], expect: {equals: 15}}
+    - {command: [CONFIG, GET, lfu-decay-time]}
+    - {command: [CONFIG, SET, lfu-decay-time, "1"], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-lru], expect: {equals: QUEUED}}
+    - {command: [SET, s1, stale-probe-one], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK]}}
+    - {command: [OBJECT, IDLETIME, s1], expect_difference: true, expect: {min: 0}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-lfu], expect: {equals: QUEUED}}
+    - {command: [SET, s2, stale-probe-two], expect: {equals: QUEUED}}
+    - {command: [GET, s2], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK, stale-probe-two]}}
+    - {command: [OBJECT, FREQ, s2], expect_difference: true, expect: {max: 255}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: persist
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    server_config:
+      maxmemory-policy: allkeys-lfu
+      lfu-log-factor: "0"
+      lfu-decay-time: "2147483647"
+      appendonly: "no"
+    commands:
+    - {command: [SET, p1, persisted-value], expect: {equals: OK}}
+    - {command: [GET, p1], expect: {equals: persisted-value}}
+    - {command: [GET, p1], expect: {equals: persisted-value}}
+    - {command: [GET, p1], expect: {equals: persisted-value}}
+    - {command: [GET, p1], expect: {equals: persisted-value}}
+    - {command: [GET, p1], expect: {equals: persisted-value}}
+    - {command: [GET, p1], expect: {equals: persisted-value}}
+    - {command: [GET, p1], expect: {equals: persisted-value}}
+    - {command: [OBJECT, FREQ, p1], expect: {equals: 12}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [OBJECT, FREQ, p1], expect: {equals: 12}}
+    - {command: [GET, p1], expect: {equals: persisted-value}}
+    - {command: [OBJECT, FREQ, p1], expect: {equals: 13}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed, persist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}
+- {evidence_id: valkey.command.sequence, source: persist}

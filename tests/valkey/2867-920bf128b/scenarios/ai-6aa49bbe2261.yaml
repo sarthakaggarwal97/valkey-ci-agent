@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1fd6d7156fbf..920bf128b6c4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6aa49bbe2261
+seed: 102
+experiment:
+  id: proposed.zset-skiplist-ops
+  inputs:
+    resp: 3
+    max_listpack_entries: 0
+deployment:
+  mode: standalone
+  base_port: 7100

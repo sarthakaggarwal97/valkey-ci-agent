@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4638b556f0db..1cc268de9fad.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ae244780e6b5
+seed: 31262
+experiment:
+  id: proposed.commandlog-reply-copy-avoid
+  inputs:
+    resp: 3
+    io_threads: 8
+    cluster: false
+    slot_stats: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

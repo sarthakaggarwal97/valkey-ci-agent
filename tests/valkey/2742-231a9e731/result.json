@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "231a9e731ede9055a9b57861051a596a0a5f82f7",
+  "parent": "2e2eb418f97ee8ac0dcccd1d5d790697bd0fa43e",
+  "pr": 2742,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix XREAD returning error on empty stream with + ID (#2742)",
+  "date": "2026-01-22",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 0.8232,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 951d942ab201..4b5a48a36e22.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fc1239bb7bf9
+seed: 220602
+experiment:
+  id: proposed.hrandfield-all-expired-null
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

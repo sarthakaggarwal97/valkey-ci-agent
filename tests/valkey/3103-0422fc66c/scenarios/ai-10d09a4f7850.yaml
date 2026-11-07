@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8d509a5d33a9..0422fc66cfcc.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-10d09a4f7850
+seed: 1101
+experiment:
+  id: proposed.monotonic-hw-clock
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

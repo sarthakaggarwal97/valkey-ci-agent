@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey eb3f465e5070..f5d7dc8d057d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c0863f4dd30e
+seed: 29531
+experiment:
+  id: proposed.promoted-writable-replica-expire-leak
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

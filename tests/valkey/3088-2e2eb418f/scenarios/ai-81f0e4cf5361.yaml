@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1a2ed04705d5..2e2eb418f97e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-81f0e4cf5361
+seed: 1337
+experiment:
+  id: proposed.getcommandkeys-leak
+  inputs:
+    resp: 2
+    with_flags: 1
+    target_cmd: getkeys.command_with_flags
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f5d7dc8d057d..1fd6d7156fbf.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e4f6f0e19f83
+seed: 102
+experiment:
+  id: proposed.lrulfu-decouple-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7100

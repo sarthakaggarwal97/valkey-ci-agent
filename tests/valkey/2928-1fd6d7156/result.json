@@ -1,0 +1,49 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1fd6d7156fbf438f471a680fbc7e5b6b087167be",
+  "parent": "f5d7dc8d057df8431d9d23f80b35c83b424b4d2c",
+  "pr": 2928,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "decouple lru/lfu from server.h (#2928)",
+  "date": "2026-01-28",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 3,
+  "recall": true,
+  "coverage": {
+    "lines": 15,
+    "executed": 13,
+    "percent": 86,
+    "uncovered": [
+      "src/lrulfu.c:34",
+      "src/lrulfu.c:46"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 13.0,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-3f3ca723e566",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-10212f8db76b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-9c101b2a6a3f",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'forkless-infrastructure-enabled \"yes\"' Bad directive or wrong number of arguments; default deployment config"
+    }
+  ]
+}

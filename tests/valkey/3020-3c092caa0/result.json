@@ -1,0 +1,59 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3c092caa08fd7e202e52791bc7c523d80c8247ea",
+  "parent": "1084e671c7aa097ca456213bdd23b1ef8159f6f9",
+  "pr": 3020,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Automatic TLS reload (#3020)",
+  "date": "2026-01-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 4,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/bio.c:241",
+      "src/bio.c:242",
+      "src/bio.c:243",
+      "src/bio.c:244",
+      "src/bio.c:310",
+      "src/bio.c:314"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 12.5409,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-d2b3b77f3392",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-20c9e8730418",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'reload' returned ERROR: the parent build (/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent/src/valkey-server) does not start with {'sanitize-dump-payload': 'yes', 'enable-debug-command': 'yes', 'tls-replication': 'yes'"
+    },
+    {
+      "scenario": "ai-1e8298dabdee",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'reload' returned ERROR: the parent build (/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent/src/valkey-server) does not start with {'sanitize-dump-payload': 'yes', 'enable-debug-command': 'yes', 'tls-replication': 'no',"
+    },
+    {
+      "scenario": "ai-83fdcc18c773",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'reload' returned ERROR: the parent build (/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent/src/valkey-server) does not start with {'sanitize-dump-payload': 'yes', 'enable-debug-command': 'yes', 'tls-replication': 'yes'"
+    }
+  ]
+}

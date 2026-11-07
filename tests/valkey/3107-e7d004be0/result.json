@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e7d004be0b8221af1e6b07ef7598b901e2d45382",
+  "parent": "278607b746235913c8187671ce4ee9412c77148e",
+  "pr": 3107,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Comment cleanup around entry.c file (#3107)",
+  "date": "2026-01-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2654,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is comment and whitespace cleanup in entry.c. The only two code edits are behavior-neutral: (1) entryGetExpiryRef's debugServerAssert was upgraded to serverAssert, but all three callers (entryGetExpiry, entrySetExpiry, and the guarded call in entryUpdateAsStringRef) already establish entryHasExpiry before calling it, so the assert is unreachable hardening; (2) entryIsExpired now returns early for EXPIRY_NONE (-1), but timestampIsExpired already returns false for any negative timestamp, so the result is identical for every input, and no other negative expiry can be stored (RDB load r"
+}

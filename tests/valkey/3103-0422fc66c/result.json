@@ -1,0 +1,40 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0422fc66cfcced854f4fe30515467fb258dd9e61",
+  "parent": "8d509a5d33a9eed7a47d116ff4273e61afb5189c",
+  "pr": 3103,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Enable HW clock by default (#3103)",
+  "date": "2026-01-28",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 1,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 11,
+    "executed": 11,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.108,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-f655030783e6",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-ffb825e1ace2",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

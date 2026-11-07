@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e7d004be0b82..94edae4b8d81.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-58011f4c30a3
+seed: 104
+experiment:
+  id: proposed.hash-hincrby-expired-propagation
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

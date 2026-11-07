@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1cc268de9fad8e9ed363e2de9e782393418bf697",
+  "parent": "4638b556f0dbe51e887e52c2f08f9d0dfd60f340",
+  "pr": 3126,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix mixup of reply-larger-than and request-larger-than (#3126)",
+  "date": "2026-01-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 8.3476,
+  "findings": [],
+  "recorded": []
+}

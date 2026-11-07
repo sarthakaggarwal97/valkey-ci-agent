@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.tls-auto-reload-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: tls-auto-reload-interval exists, validates its bounds, is a no-op while
+    TLS is off, and survives CONFIG REWRITE and a restart; the parent rejects it as
+    an unknown option
+inputs:
+  properties:
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: reload-config
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, tls-auto-reload-interval], expect_difference: true,
+      expect: {equals: [tls-auto-reload-interval, "0"]}}
+    - {command: [CONFIG, SET, tls-auto-reload-interval, "1"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, tls-auto-reload-interval, "2147483647"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, tls-auto-reload-interval, "-1"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, tls-auto-reload-interval, "2147483648"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, GET, tls-auto-reload-interval], expect_difference: true,
+      expect: {equals: [tls-auto-reload-interval, "2147483647"]}}
+    - {command: [CONFIG, SET, tls-auto-reload-interval, "300"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, tls-auto-reload-interval], expect_difference: true,
+      expect: {equals: [tls-auto-reload-interval, "300"]}}
+    - {command: [CONFIG, SET, tls-auto-reload-interval, "0"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reload-config.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload-config}

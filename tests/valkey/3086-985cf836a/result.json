@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "985cf836ac13e7366f938aa9a4e7a309d83733da",
+  "parent": "94edae4b8d81ad683ab225c93a381eae444a0f14",
+  "pr": 3086,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Perf: Track net bytes only if commandlog-request-larger-than != -1 (#3086)",
+  "date": "2026-01-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 3,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 20,
+    "executed": 20,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 9.7044,
+  "findings": [],
+  "recorded": []
+}

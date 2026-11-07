@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2e2eb418f97ee8ac0dcccd1d5d790697bd0fa43e",
+  "parent": "1a2ed04705d589948498ec1ceb9f657f0f9f7033",
+  "pr": 3088,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix the memory leak in the VM_GetCommandKeysWithFlags function (#3088)",
+  "date": "2026-01-22",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.4116,
+  "findings": [],
+  "recorded": []
+}

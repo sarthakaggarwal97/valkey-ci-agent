@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.commandlog-reply-copy-avoid
+deployment:
+  modes: [standalone]
+metadata:
+  description: Large-reply commandlog tracking under reply copy avoidance must follow
+    commandlog-reply-larger-than, not commandlog-request-larger-than
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, enum: [1, 8], default: 1}
+    cluster: {type: boolean, default: false}
+    slot_stats: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: cmdlog
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: {$ref: inputs.cluster}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config:
+      io-threads: {$ref: inputs.io_threads}
+      cluster-slot-stats-enabled: {$ref: inputs.slot_stats}
+    commands:
+    - {command: [CONFIG, SET, min-string-size-avoid-copy-reply, "1"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, "-1"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, commandlog-reply-larger-than, "100"], expect: {equals: OK}}
+    - {command: [SETRANGE, "{t}k1", 2047, A], expect: {equals: 2048}}
+    - {command: [SETRANGE, "{t}k2", 2047, B], expect: {equals: 2048}}
+    - {command: [COMMANDLOG, RESET, LARGE-REPLY], expect: {equals: OK}}
+    - {command: [GET, "{t}k1"], expect: {exists: true}}
+    - {command: [COMMANDLOG, LEN, LARGE-REPLY], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [COMMANDLOG, RESET, LARGE-REPLY], expect: {equals: OK}}
+    - {command: [MGET, "{t}k1", "{t}k2"], expect: {exists: true}}
+    - {command: [COMMANDLOG, LEN, LARGE-REPLY], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [CONFIG, SET, commandlog-reply-larger-than, "-1"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, "100"], expect: {equals: OK}}
+    - {command: [COMMANDLOG, RESET, LARGE-REPLY], expect: {equals: OK}}
+    - {command: [GET, "{t}k1"], expect: {exists: true}}
+    - {command: [COMMANDLOG, LEN, LARGE-REPLY], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cmdlog.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cmdlog}

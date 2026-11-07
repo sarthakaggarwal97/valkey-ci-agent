@@ -1,0 +1,153 @@
+extends: [valkey.liveness]
+id: proposed.zset-skiplist-ops
+deployment:
+  modes: [standalone]
+metadata:
+  description: Compare zset skiplist query, update, store, pop and delete replies
+    across the embedded-skiplist-header change
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    max_listpack_entries: {type: integer, enum: [0, 128], default: 0}
+components:
+- use: valkey.action.commands
+  id: ops
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      zset-max-listpack-entries: {$ref: inputs.max_listpack_entries}
+      zset-max-listpack-value: 64
+    commands:
+    - {command: [ZADD, z, 0, a0, 1, a1, 2, a2, 3, a3, 4, a4, 5, a5, 6, a6, 7, a7,
+        8, a8, 9, a9, 10, a10, 11, a11, 12, a12, 13, a13, 14, a14, 15, a15, 16, a16,
+        17, a17, 18, a18, 19, a19, 20, a20, 21, a21, 22, a22, 23, a23, 24, a24, 25,
+        a25, 26, a26, 27, a27, 28, a28, 29, a29, 30, a30, 31, a31, 32, a32, 33, a33,
+        34, a34, 35, a35, 36, a36, 37, a37, 38, a38, 39, a39, 40, a40, 41, a41, 42,
+        a42, 43, a43], expect: {equals: 44}}
+    - {command: [ZADD, z, 44, a44, 45, a45, 46, a46, 47, a47, 48, a48, 49, a49, 50,
+        a50, 51, a51, 52, a52, 53, a53, 54, a54, 55, a55, 56, a56, 57, a57, 58, a58,
+        59, a59, 60, a60, 61, a61, 62, a62, 63, a63, 64, a64, 65, a65, 66, a66, 67,
+        a67, 68, a68, 69, a69, 70, a70, 71, a71, 72, a72, 73, a73, 74, a74, 75, a75,
+        76, a76, 77, a77, 78, a78, 79, a79, 80, a80, 81, a81, 82, a82, 83, a83, 84,
+        a84, 85, a85, 86, a86, 87, a87], expect: {equals: 44}}
+    - {command: [ZADD, z, 88, a88, 89, a89, 90, a90, 91, a91, 92, a92, 93, a93, 94,
+        a94, 95, a95, 96, a96, 97, a97, 98, a98, 99, a99, 100, a100, 101, a101, 102,
+        a102, 103, a103, 104, a104, 105, a105, 106, a106, 107, a107, 108, a108, 109,
+        a109, 110, a110, 111, a111, 112, a112, 113, a113, 114, a114, 115, a115, 116,
+        a116, 117, a117, 118, a118, 119, a119, 120, a120, 121, a121, 122, a122, 123,
+        a123, 124, a124, 125, a125, 126, a126, 127, a127, 128, a128, 129, a129, 130,
+        a130, 131, a131], expect: {equals: 44}}
+    - {command: [ZADD, lex, 0, b000, 0, b001, 0, b002, 0, b003, 0, b004, 0, b005,
+        0, b006, 0, b007, 0, b008, 0, b009, 0, b010, 0, b011, 0, b012, 0, b013, 0,
+        b014, 0, b015, 0, b016, 0, b017, 0, b018, 0, b019, 0, b020, 0, b021, 0, b022,
+        0, b023, 0, b024, 0, b025, 0, b026, 0, b027, 0, b028, 0, b029, 0, b030, 0,
+        b031, 0, b032, 0, b033, 0, b034, 0, b035, 0, b036, 0, b037, 0, b038, 0, b039,
+        0, b040, 0, b041, 0, b042, 0, b043], expect: {equals: 44}}
+    - {command: [ZADD, lex, 0, b044, 0, b045, 0, b046, 0, b047, 0, b048, 0, b049,
+        0, b050, 0, b051, 0, b052, 0, b053, 0, b054, 0, b055, 0, b056, 0, b057, 0,
+        b058, 0, b059, 0, b060, 0, b061, 0, b062, 0, b063, 0, b064, 0, b065, 0, b066,
+        0, b067, 0, b068, 0, b069, 0, b070, 0, b071, 0, b072, 0, b073, 0, b074, 0,
+        b075, 0, b076, 0, b077, 0, b078, 0, b079, 0, b080, 0, b081, 0, b082, 0, b083,
+        0, b084, 0, b085, 0, b086, 0, b087], expect: {equals: 44}}
+    - {command: [ZADD, lex, 0, b088, 0, b089, 0, b090, 0, b091, 0, b092, 0, b093,
+        0, b094, 0, b095, 0, b096, 0, b097, 0, b098, 0, b099, 0, b100, 0, b101, 0,
+        b102, 0, b103, 0, b104, 0, b105, 0, b106, 0, b107, 0, b108, 0, b109, 0, b110,
+        0, b111, 0, b112, 0, b113, 0, b114, 0, b115, 0, b116, 0, b117, 0, b118, 0,
+        b119, 0, b120, 0, b121, 0, b122, 0, b123, 0, b124, 0, b125, 0, b126, 0, b127,
+        0, b128, 0, b129, 0, b130, 0, b131], expect: {equals: 44}}
+    - {command: [OBJECT, ENCODING, z], compare: skip}
+    - {command: [ZCARD, z], expect: {equals: 132}}
+    - {command: [ZCARD, lex], expect: {equals: 132}}
+    - {command: [ZRANGE, z, 0, -1]}
+    - {command: [ZRANGE, z, 0, -1, REV]}
+    - {command: [ZRANGE, z, 47, 53], expect: {equals: [a47, a48, a49, a50, a51, a52,
+          a53]}}
+    - {command: [ZRANGEBYSCORE, z, 20, 120, LIMIT, 50, 5], expect: {equals: [a70,
+          a71, a72, a73, a74]}}
+    - {command: [ZREVRANGEBYSCORE, z, 120, 20, LIMIT, 50, 5], expect: {equals: [a70,
+          a69, a68, a67, a66]}}
+    - {command: [ZRANGEBYSCORE, z, '(20', '(120', WITHSCORES, LIMIT, 0, 3]}
+    - {command: [ZCOUNT, z, 50, 131], expect: {equals: 82}}
+    - {command: [ZCOUNT, z, '-inf', '+inf'], expect: {equals: 132}}
+    - {command: [ZCOUNT, z, '(131', '+inf'], expect: {equals: 0}}
+    - {command: [ZRANK, z, a100], expect: {equals: 100}}
+    - {command: [ZREVRANK, z, a100], expect: {equals: 31}}
+    - {command: [ZSCORE, z, a0]}
+    - {command: [ZRANGEBYLEX, lex, '[b000', '[b131', LIMIT, 100, 5], expect: {equals: [
+          b100, b101, b102, b103, b104]}}
+    - {command: [ZREVRANGEBYLEX, lex, '+', '-', LIMIT, 120, 5], expect: {equals: [
+          b011, b010, b009, b008, b007]}}
+    - {command: [ZLEXCOUNT, lex, '-', '+'], expect: {equals: 132}}
+    - {command: [ZLEXCOUNT, lex, '(b010', '[b020'], expect: {equals: 10}}
+    - {command: [ZRANGESTORE, dst, z, 10, 120], expect: {equals: 111}}
+    - {command: [ZINCRBY, z, 500, a0]}
+    - {command: [ZREVRANK, z, a0], expect: {equals: 0}}
+    - {command: [ZINCRBY, z, -1000, a131]}
+    - {command: [ZRANK, z, a131], expect: {equals: 0}}
+    - {command: [ZADD, z, GT, CH, 500, a100], expect: {equals: 1}}
+    - {command: [ZADD, z, GT, CH, 10, a100], expect: {equals: 0}}
+    - {command: [ZADD, z, GT, NX, 1, a3], expect: {error: true}}
+    - {command: [ZUNIONSTORE, u, 2, z, lex, WEIGHTS, 1, 2], expect: {equals: 264}}
+    - {command: [ZUNION, 2, z, lex, WITHSCORES]}
+    - {command: [ZADD, tiny, 5, a10, 6, a20, 7, a30], expect: {equals: 3}}
+    - {command: [ZINTERSTORE, small, 2, z, tiny], expect: {equals: 3}}
+    - {command: [ZINTERCARD, 2, z, lex], expect: {equals: 0}}
+    - {command: [ZDIFFSTORE, d, 2, z, dst], expect: {equals: 21}}
+    - {command: [SORT, dst, BY, nosort, LIMIT, 100, 5], expect: {equals: [a110, a111,
+          a112, a113, a114]}}
+    - {command: [SORT, dst, BY, nosort, DESC, LIMIT, 100, 5], expect: {equals: [a20,
+          a19, a18, a17, a16]}}
+    - {command: [COPY, dst, dstcopy], expect: {equals: 1}}
+    - {command: [ZRANGE, dstcopy, 0, 4], expect: {equals: [a10, a11, a12, a13, a14]}}
+    - {command: [MEMORY, USAGE, z], compare: skip}
+    - {command: [ZPOPMIN, z, 3]}
+    - {command: [ZPOPMAX, z, 3]}
+    - {command: [ZMPOP, 2, nokey, dst, MIN, COUNT, 5]}
+    - {command: [CONFIG, SET, lazyfree-lazy-user-del, 'yes'], expect: {equals: OK}}
+    - {command: [UNLINK, u], expect: {equals: 1}}
+    - {command: [ZREMRANGEBYSCORE, z, 50, 100], expect: {equals: 50}}
+    - {command: [ZCARD, z], expect: {equals: 76}}
+    - {command: [ZREMRANGEBYRANK, lex, 0, 49], expect: {equals: 50}}
+    - {command: [ZREMRANGEBYLEX, lex, '[b100', '+'], expect: {equals: 32}}
+    - {command: [ZCARD, lex], expect: {equals: 50}}
+    - {command: [ZREMRANGEBYRANK, dstcopy, 0, -1], expect: {equals: 111}}
+    - {command: [EXISTS, dstcopy], expect: {equals: 0}}
+    - {command: [ZPOPMAX, dst, 200]}
+    - {command: [EXISTS, dst], expect: {equals: 0}}
+    - {command: [ZADD, edge, 'inf', x], expect: {equals: 1}}
+    - {command: [ZADD, edge, '-inf', 'y'], expect: {equals: 1}}
+    - {command: [ZADD, edge, 0, w], expect: {equals: 1}}
+    - {command: [ZRANGEBYSCORE, edge, '-inf', '+inf'], expect: {equals: ['y', w, x]}}
+    - {command: [ZSCORE, edge, x]}
+    - {command: [ZADD, edge, 'nan', q], expect: {error: true}}
+    - {command: [ZADD, mt, 5, ''], expect: {equals: 1}}
+    - {command: [ZSCORE, mt, '']}
+    - {command: [ZRANGEBYLEX, mt, '-', '+'], expect: {equals: ['']}}
+    - {command: [ZADD, dup, 1, x, 2, x, 3, x], expect: {equals: 1}}
+    - {command: [ZSCORE, dup, x]}
+    - {command: [SET, s, v], expect: {equals: OK}}
+    - {command: [ZADD, s, 1, m], expect: {error: true}}
+    - {command: [ZADD, WITHSCORES, 1, m], expect: {equals: 1}}
+    - {command: [ZRANGE, WITHSCORES, 0, -1, WITHSCORES]}
+    - {command: [ZADD, longv, 1, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      expect: {equals: 1}}
+    - {command: [ZRANGE, longv, 0, -1]}
+    - {command: [ZREM, longv, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      expect: {equals: 1}}
+    - {command: [EXISTS, longv], expect: {equals: 0}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES]}
+    - {command: [ZREMRANGEBYRANK, z, 0, -1], expect: {equals: 76}}
+    - {command: [EXISTS, z], expect: {equals: 0}}
+    - {command: [DBSIZE]}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ops.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ops}

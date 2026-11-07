@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.commandlog-netbytes-gate
+deployment:
+  modes: [standalone]
+metadata:
+  description: commandlog-request-larger-than -1 stops net-output-byte tracking on
+    the copy-avoidance reply path, so the large-reply commandlog stays empty; re-enabling
+    restores it, and toggling the config inside MULTI/EXEC mixes track_bytes across
+    encoded reply headers in one buffer
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, min-string-size-avoid-copy-reply, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, commandlog-reply-larger-than, 64], expect: {equals: OK}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, -1], expect: {equals: OK}}
+    - {command: [COMMANDLOG, RESET, LARGE-REPLY], expect: {equals: OK}}
+    - {command: [SET, big, AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA],
+      expect: {equals: OK}}
+    - {command: [GET, big], expect: {equals: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA}}
+    - {command: [COMMANDLOG, LEN, LARGE-REPLY], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [COMMANDLOG, GET, -1, LARGE-REPLY], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, 80], expect: {equals: OK}}
+    - {command: [COMMANDLOG, RESET, LARGE-REPLY], expect: {equals: OK}}
+    - {command: [GET, big], expect: {equals: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA}}
+    - {command: [COMMANDLOG, LEN, LARGE-REPLY], expect: {equals: 1}}
+    - {command: [COMMANDLOG, RESET, LARGE-REQUEST], expect: {equals: OK}}
+    - {command: [SET, big2, AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA],
+      expect: {equals: OK}}
+    - {command: [COMMANDLOG, LEN, LARGE-REQUEST], expect: {equals: 1}}
+    - {command: [COMMANDLOG, RESET, LARGE-REPLY], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, big], expect: {equals: QUEUED}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, -1], expect: {equals: QUEUED}}
+    - {command: [GET, big], expect: {equals: QUEUED}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, 0], expect: {equals: QUEUED}}
+    - {command: [GET, big], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA,
+          OK, AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA, OK,
+          AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA]}}
+    - {command: [GET, big], expect: {equals: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

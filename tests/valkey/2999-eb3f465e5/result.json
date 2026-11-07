@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "eb3f465e50701e94f42a6e930862bdfaa7d5fb0d",
+  "parent": "0422fc66cfcced854f4fe30515467fb258dd9e61",
+  "pr": 2999,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fail fast on invalid certificates at TLS config load (#2999)",
+  "date": "2026-01-28",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.5141,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds certificate-validity checks in src/tls.c's createSSLContext, reached when a TLS-enabled build loads a TLS config (at startup or on CONFIG SET of a tls-* option). Exercising the new branch needs a BUILD_TLS=yes binary, an active TLS listener, and deliberately expired/not-yet-valid certificate files on disk. The fuzzer has no TLS provisioning: no certificate component, tls-port is a managed/refused server_config option, no experiment or action enables a TLS listener, and no primitive can generate time-invalid certificates (valkey.action.commands files: writes only static byt"
+}

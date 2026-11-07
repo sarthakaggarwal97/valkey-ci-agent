@@ -1,0 +1,64 @@
+extends: [valkey.base]
+id: proposed.writable-replica-promotion-cleanup
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1, maximum: 1}
+metadata:
+  description: >-
+    Seed the deployment's replica (made writable) with 100 direct keys with expiration
+    so the tracking dict exceeds the 64-entry lazyfree threshold, promote it under
+    the key-value workload with a replication-chaos wave, then verify the promoted
+    primary drains slave_expires_tracked_keys to 0 through the async bio lazyfree
+    path, keeps the seeded keys, loses no acknowledged write, and does not crash.
+inputs:
+  properties:
+    waves:
+      type: array
+      default: [[{op: promote, target: replica, mode: graceful}]]
+      description: "replication-chaos waves; must promote the replica"
+components:
+- use: valkey.action.commands
+  id: seed-replica
+  depends_on: [writes]
+  config:
+    instances: replica
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, replica-read-only, no], expect: {equals: OK}}
+    - {command: [EVAL, "for i=1,100 do redis.call('SET','rk'..i,'v','EX','1000') end\
+          \ return redis.status_reply('OK')", 0], expect: {equals: OK}}
+    - {command: [INFO, stats], expect: {contains: "slave_expires_tracked_keys:100"}}
+- use: valkey.action.replication-chaos
+  id: chaos
+  depends_on: [seed-replica]
+  config:
+    waves: {$ref: inputs.waves}
+    validation: {stabilization_wait: 1, max_retries: 2, retry_delay: 1}
+- use: valkey.action.commands
+  id: verify-cleanup
+  depends_on: [chaos]
+  config:
+    instances: replica
+    timeout_s: 40
+    commands:
+    - {command: [INFO, replication], wait_s: 30, expect: {contains: "role:master"}}
+    - {command: [INFO, stats], wait_s: 30, expect: {contains: "slave_expires_tracked_keys:0"}}
+    - {command: [GET, rk1], expect: {equals: v}}
+- use: valkey.oracle.deployment-state
+  id: deployment-state
+  config:
+    chaos: chaos
+    validation: {stabilization_wait: 1, validation_timeout: 120}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_faults: [chaos]
+    loss_window_after_s: 1.0
+    loss_window_scope: fault_targets
+    converge_timeout_s: 60
+required_events: [seed-replica.completed, verify-cleanup.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seed-replica}
+- {evidence_id: valkey.command.sequence, source: verify-cleanup}
+- {evidence_id: valkey.chaos.schedule, source: chaos}

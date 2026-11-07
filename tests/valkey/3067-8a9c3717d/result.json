@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8a9c3717d13e7857b19a792058f9075f045868f4",
+  "parent": "920bf128b6c41caa1a2badeaccf9e5c58a3e86e8",
+  "pr": 3067,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Don't exit the process when locale-collate fails to be set from env during startup (#3067)",
+  "date": "2026-01-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.1723,
+  "findings": [],
+  "recorded": [],
+  "reason": "The only behaviour change is at startup: when locale-collate is at its empty default and setlocale(LC_COLLATE, \"\") fails, the server now continues with the default locale instead of exit(1). That branch is taken only when the valkey-server process's own environment variables (LC_ALL/LC_COLLATE/LANG) name a locale the host lacks, and no fuzzer component can set environment variables for a server process: the only env knob is valkey.action.tools' per-run env, which applies to the tool process, and valkey-check-rdb/aof exit from main() before initServer runs, so they never reach the changed code."
+}

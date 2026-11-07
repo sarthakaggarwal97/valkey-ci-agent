@@ -1,0 +1,68 @@
+extends: [valkey.base]
+id: proposed.zset-skiplist-resync
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Seed skiplist zsets, SIGKILL a replica or the primary under writes,
+    and verify the full resync or AOF reload serializes the embedded-header skiplist
+    intact
+inputs:
+  properties:
+    target: {type: string, enum: [replica, primary], default: replica}
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+startup_overlays:
+- overlay_id: force-skiplist
+  server_config:
+    zset-max-listpack-entries: 0
+components:
+- use: valkey.action.commands
+  id: seed
+  depends_on: [writes]
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [ZADD, rz, 0, d00, 1, d01, 2, d02, 3, d03, 4, d04, 5, d05, 6, d06,
+        7, d07, 8, d08, 9, d09, 10, d10, 11, d11, 12, d12, 13, d13, 14, d14, 15, d15,
+        16, d16, 17, d17, 18, d18, 19, d19, 20, d20, 21, d21, 22, d22, 23, d23, 24,
+        d24, 25, d25, 26, d26, 27, d27, 28, d28, 29, d29], expect: {equals: 30}}
+    - {command: [ZADD, rz, 30, d30, 31, d31, 32, d32, 33, d33, 34, d34, 35, d35, 36,
+        d36, 37, d37, 38, d38, 39, d39, 40, d40, 41, d41, 42, d42, 43, d43, 44, d44,
+        45, d45, 46, d46, 47, d47, 48, d48, 49, d49, 50, d50, 51, d51, 52, d52, 53,
+        d53, 54, d54, 55, d55, 56, d56, 57, d57, 58, d58, 59, d59], expect: {equals: 30}}
+    - {command: [ZADD, redge, 'inf', e1, '-inf', e2, 0, e3], expect: {equals: 3}}
+    - {command: [ZADD, rlex, 0, f1, 0, f2, 0, f3, 0, f4, 0, f5], expect: {equals: 5}}
+    - {command: [ZCARD, rz], expect: {equals: 60}}
+- use: valkey.fault.process-signal
+  id: kill
+  config:
+    when_event: warm-up.completed
+    instance: {$ref: inputs.target}
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [seed, kill]
+  config: {seconds: 3}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 4}
+- use: valkey.action.commands
+  id: verify
+  depends_on: [settle]
+  config:
+    timeout_s: 60
+    commands:
+    - {command: [ZCARD, rz], wait_s: 30, expect: {equals: 60}}
+    - {command: [ZSCORE, redge, e1], expect: {equals: 'inf'}}
+    - {command: [ZRANGEBYSCORE, rz, 10, 50, LIMIT, 20, 3], expect: {equals: [d30,
+          d31, d32]}}
+    - {command: [ZLEXCOUNT, rlex, '-', '+'], expect: {equals: 5}}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed, verify.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill}
+- {evidence_id: valkey.command.sequence, source: seed}

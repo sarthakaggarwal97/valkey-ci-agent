@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f5d7dc8d057df8431d9d23f80b35c83b424b4d2c",
+  "parent": "eb3f465e50701e94f42a6e930862bdfaa7d5fb0d",
+  "pr": 2953,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix potential memory leaks when a writable replica is promoted to primary after direct writes of keys with expiration (#2953)",
+  "date": "2026-01-28",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 1,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 8.2046,
+  "findings": [],
+  "recorded": []
+}

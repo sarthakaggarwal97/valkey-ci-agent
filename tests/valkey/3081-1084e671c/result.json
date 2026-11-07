@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1084e671c7aa097ca456213bdd23b1ef8159f6f9",
+  "parent": "62c303fd549cf914f738998ef874132c7c7247ab",
+  "pr": 3081,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "improve format for hashtableDump (#3081)",
+  "date": "2026-01-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2597,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only reworks printf formatting inside hashtableDump, a debug dump helper in src/hashtable.c. The function is not called from any server code path \u2014 its only reference besides the definition is a forward declaration in the unit test file src/unit/test_hashtable.c \u2014 so no command reply, data structure behaviour, replication, or persistence path is affected. It is a cosmetic developer-tooling change with no observable behaviour to test, so no scenario is needed."
+}

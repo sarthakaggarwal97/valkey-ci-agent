@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.getcommandkeys-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_GetCommandKeysWithFlags with >256 keys takes the heap path; the
+    parent leaks the getKeysResult, caught by the sanitizer
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    with_flags: {type: integer, enum: [0, 1], default: 1}
+    target_cmd: {type: string, default: getkeys.command_with_flags}
+components:
+- use: valkey.action.commands
+  id: leak
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - command: [getkeys.introspect, {$ref: inputs.with_flags}, {$ref: inputs.target_cmd},
+        key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key,
+        v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v,
+        key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key,
+        v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v,
+        key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key,
+        v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v,
+        key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key,
+        v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v,
+        key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key,
+        v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v,
+        key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key,
+        v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v,
+        key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key,
+        v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v,
+        key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key,
+        v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v,
+        key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key,
+        v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v,
+        key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key,
+        v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v,
+        key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key,
+        v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v,
+        key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key,
+        v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v,
+        key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key,
+        v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v,
+        key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key,
+        v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v, key, v,
+        key, v, key, v, key, v, key, v, key, v, key, v]
+      expect: {error: false}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [leak.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: leak}
