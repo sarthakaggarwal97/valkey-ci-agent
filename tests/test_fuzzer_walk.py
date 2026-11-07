@@ -621,6 +621,8 @@ def test_a_merge_is_proven_hunted_rerun_and_filed_by_the_rule(monkeypatch, tmp_p
     crash = {"rule": "crash", "detail": "crash: signal 11 in lsetCommand", "lines": []}
     flaky = {"rule": "crash", "detail": "crash: signal 6 in other", "lines": []}
     fixed = {"rule": "check", "detail": "replica-diverged: x", "lines": []}
+    # fuzzer#94: a tool's crash names ASan without the log's SUMMARY line.
+    asan = {"rule": "crash", "detail": "crash: AddressSanitizer: SEGV", "lines": []}
     calls, dirs = [], []
 
     def fuzz(fuzzer_bin, doc, seed, *, candidate, compare, core, experiment_dir, run_dir):
@@ -638,6 +640,8 @@ def test_a_merge_is_proven_hunted_rerun_and_filed_by_the_rule(monkeypatch, tmp_p
             found["f"] = flaky
         if build == "parent" and seed == 10:
             found["p"] = fixed
+        if build == "unstable" and seed == 12:
+            found["a"] = asan
         return {"status": "PASS" if build != "unstable" else "ERROR", "reached": build == "merge",
                 "reason": "unreached-change" if build == "unstable" and seed == 10 else None,
                 "reached_commands": {("lset", 1), ("lset", 2)} if build == "merge" else {("lset", 2)},
@@ -655,11 +659,14 @@ def test_a_merge_is_proven_hunted_rerun_and_filed_by_the_rule(monkeypatch, tmp_p
     # Not on the rerun: recorded, not filed. On the parent only: the merge fixed it.
     assert by_detail[flaky["detail"]]["verdict"] == "not reproduced" and by_detail[flaky["detail"]]["issue"] is None
     assert by_detail[fixed["detail"]]["verdict"] == "fixed by #4716" and by_detail[fixed["detail"]]["issue"] is None
+    # On unstable alone, the one build with ASan: not when it appeared.
+    assert by_detail[asan["detail"]]["verdict"] == "shown by ASan on unstable, the one build with it"
+    assert by_detail[asan["detail"]]["issue"] == "https://x/issues/2"
     # Command 1 reached the change at the merge and no longer does on unstable.
     regressed = next(f for f in result["findings"] if f["rule"] == "regressed-fix")
-    assert regressed["verdict"] == "the fix of #4716 regressed" and regressed["issue"] == "https://x/issues/2"
+    assert regressed["verdict"] == "the fix of #4716 regressed" and regressed["issue"] == "https://x/issues/3"
     assert regressed["detail"].endswith("(commands lset 1)")
-    assert [c.kwargs["idempotency_key"] for c in publisher.upsert.call_args_list] == [merge["sha"]] * 2
+    assert [c.kwargs["idempotency_key"] for c in publisher.upsert.call_args_list] == [merge["sha"]] * 3
     # Each build runs against its own: the merge against the parent, unstable from the run's build.
     test = reached["scenario_id"]
     assert (test, "merge", 10, False, "merge") in calls and (test, "unstable", 12, False, "unstable") in calls

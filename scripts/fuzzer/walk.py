@@ -1120,7 +1120,7 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
                                                "reason": UNEXPLAINED})
             for finding in found:
                 finding.update(scenario=test, verdict=verdict(finding["builds"], pr,
-                                                              sanitizer=bool(_SANITIZER_RE.search(finding["detail"]))))
+                                                              sanitizer="Sanitizer" in finding["detail"]))
                 if finding["rule"] == "regressed-fix":
                     finding["verdict"] = f"the fix of {pr} regressed" if finding["builds"]["unstable"] else "not reproduced"
                 if (finding["rule"] == "crash" and finding["builds"]["merge"] and not finding["builds"]["parent"]
