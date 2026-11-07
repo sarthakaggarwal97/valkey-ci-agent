@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.move-replace-aof-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: MOVE REPLACE written to the AOF replays correctly across a restart,
+    overwriting the destination and keeping the source TTL
+components:
+- use: valkey.action.commands
+  id: move-aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes", appendfsync: always}
+    timeout_s: 120
+    commands:
+    - {command: [SELECT, 10], expect: {equals: OK}}
+    - {command: [SET, a1, dst, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, a2, dst2], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SET, a1, src, EX, 100], expect: {equals: OK}}
+    - {command: [SET, a2, src2], expect: {equals: OK}}
+    - {command: [MOVE, a1, 10, REPLACE], expect_difference: true, expect: {equals: 1}}
+    - {command: [MOVE, a2, 10, REPLACE], expect_difference: true, expect: {equals: 1}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [EXISTS, a1], expect_difference: true, expect: {equals: 0}}
+    - {command: [EXISTS, a2], expect_difference: true, expect: {equals: 0}}
+    - {command: [SELECT, 10], expect: {equals: OK}}
+    - {command: [GET, a1], expect_difference: true, expect: {equals: src}}
+    - {command: [TTL, a1], compare: skip, expect: {min: 1, max: 100}}
+    - {command: [GET, a2], expect_difference: true, expect: {equals: src2}}
+    - {command: [TTL, a2], compare: skip, expect: {equals: -1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [move-aof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: move-aof}

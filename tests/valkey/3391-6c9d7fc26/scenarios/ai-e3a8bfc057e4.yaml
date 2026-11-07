@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 75fee11c6c00..6c9d7fc263dd.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e3a8bfc057e4
+seed: 11003
+experiment:
+  id: proposed.clusterscan-slot-migration-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

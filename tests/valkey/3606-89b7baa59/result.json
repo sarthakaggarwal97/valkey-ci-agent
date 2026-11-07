@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "89b7baa598b177286572e0784a4391810910f3d2",
+  "parent": "1d7224f3894c8e6db39a9e86c040270b3122c064",
+  "pr": 3606,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Speed up cluster startup by 10 seconds (#3606)",
+  "date": "2026-05-07",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 1,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.8466,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 3 (CLUSTER SHARDS on node 1) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[[\"slots\",[0,16383],\"nodes\",[[\"id\",\"<node.0.id>\",\"por",
+      "scenario": "ai-bbe3ef3db3a0",
+      "seed": 360601,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #3606",
+      "fingerprint": "a270f33cfd951215f695",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/89"
+    }
+  ],
+  "recorded": []
+}

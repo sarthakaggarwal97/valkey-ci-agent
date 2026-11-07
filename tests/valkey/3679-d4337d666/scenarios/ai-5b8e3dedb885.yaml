@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fdd903930738..d4337d66625a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5b8e3dedb885
+seed: 1101
+experiment:
+  id: proposed.clusterscan-fingerprint-failover
+  inputs:
+    resp: 2
+    hash_seed: fingerprint-seed
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

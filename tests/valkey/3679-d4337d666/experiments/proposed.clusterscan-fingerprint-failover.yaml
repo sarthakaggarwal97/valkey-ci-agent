@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.clusterscan-fingerprint-failover
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTERSCAN cursor fingerprint derives from hash-seed, so primary and
+    replica share it and it survives a manual failover; a mismatched fingerprint restarts
+    the scan from 0
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_seed: {type: string, default: fingerprint-seed}
+components:
+- use: valkey.action.commands
+  id: fpscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    server_config:
+      hash-seed: {$ref: inputs.hash_seed}
+    timeout_s: 30
+    commands:
+    - {command: [MSET, "{06S}:k00", v, "{06S}:k01", v, "{06S}:k02", v, "{06S}:k03",
+        v, "{06S}:k04", v, "{06S}:k05", v, "{06S}:k06", v, "{06S}:k07", v, "{06S}:k08",
+        v, "{06S}:k09", v, "{06S}:k10", v, "{06S}:k11", v, "{06S}:k12", v, "{06S}:k13",
+        v, "{06S}:k14", v, "{06S}:k15", v, "{06S}:k16", v, "{06S}:k17", v, "{06S}:k18",
+        v, "{06S}:k19", v], expect: {equals: OK}}
+    - {command: [MSET, "{06S}:k20", v, "{06S}:k21", v, "{06S}:k22", v, "{06S}:k23",
+        v, "{06S}:k24", v, "{06S}:k25", v, "{06S}:k26", v, "{06S}:k27", v, "{06S}:k28",
+        v, "{06S}:k29", v, "{06S}:k30", v, "{06S}:k31", v, "{06S}:k32", v, "{06S}:k33",
+        v, "{06S}:k34", v, "{06S}:k35", v, "{06S}:k36", v, "{06S}:k37", v, "{06S}:k38",
+        v, "{06S}:k39", v], expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [DBSIZE], node: 1, wait_s: 30, expect: {equals: 40}}
+    - {command: [READONLY], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTERSCAN, "0", SLOT, 0], expect: {exists: true}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", SLOT, 0, COUNT, 100], expect: {exists: true}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", SLOT, 0, COUNT, 100], node: 1, expect: {
+        exists: true}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", SLOT, 0, COUNT, 5], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", SLOT, 0, COUNT, 5], node: 1, expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CLUSTERSCAN, "oooooo-{06S}-18446744073709551615", SLOT, 0, COUNT,
+        100], expect: {exists: true}}
+    - {command: [CLUSTERSCAN, "-{06S}-0", SLOT, 0, COUNT, 100], expect: {exists: true}}
+    - {command: [CLUSTERSCAN, "0-{06S}-"], expect: {error: "Invalid cursor"}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", SLOT, 55], expect: {error: "slot mismatch"}}
+    - {command: [CLUSTER, FAILOVER], node: 1, wait_s: 30, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 60, expect: {contains: "role:master"},
+      compare: skip}
+    - {command: [INFO, replication], node: 0, wait_s: 60, expect: {contains: "role:slave"},
+      compare: skip}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", SLOT, 0, COUNT, 5], node: 1, expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", SLOT, 0, COUNT, 100], node: 1, expect: {
+        exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [fpscan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fpscan}

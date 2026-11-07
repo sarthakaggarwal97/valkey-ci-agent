@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 390a11c895d5..0321a69e62f5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-301a91af48c1
+seed: 371902
+experiment:
+  id: proposed.deferred-free-primary-kill
+  inputs:
+    signal: SIGKILL
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7100
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec
+    enable-debug-command: 'yes'

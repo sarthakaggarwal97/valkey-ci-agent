@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 390a11c895d5..0321a69e62f5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-32c039ed699d
+seed: 371904
+experiment:
+  id: proposed.deferred-free-repoint
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7300
+  server_config:
+    enable-debug-command: 'yes'

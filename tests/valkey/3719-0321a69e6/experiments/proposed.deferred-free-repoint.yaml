@@ -1,0 +1,44 @@
+extends: [valkey.base]
+id: proposed.deferred-free-repoint
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 2}
+metadata:
+  description: Arm DEBUG force-free-primary-async on a replica, then repoint it to
+    another replica under writes; the stale deferred free must not clobber the new
+    replication state or trigger a spurious reconnect
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: arm-debug
+  depends_on: [warm-up]
+  config:
+    instances: valkey-2
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, force-free-primary-async, 1], expect: {equals: OK}}
+- use: valkey.action.replicaof
+  id: repoint
+  depends_on: [arm-debug]
+  config:
+    instance: valkey-2
+    primary: valkey-1
+    wait_linked: true
+    timeout_s: 60
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [repoint]
+  config: {seconds: 5}
+- use: valkey.observer.log
+  id: repoint-log
+  config:
+    instances: valkey-2
+    forbidden:
+    - {pattern: "Reconnecting to PRIMARY"}
+required_events: [repoint.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: arm-debug}
+- {evidence_id: valkey.replication.replicaof, source: repoint}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fdd903930738..d4337d66625a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4371642aff1e
+seed: 1103
+experiment:
+  id: proposed.clusterscan-fingerprint-restart
+  inputs:
+    resp: 2
+    hash_seed: clusterscan-fingerprint-restart-seed-0123456789abcdef-0123456789abcdef
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

@@ -1,0 +1,82 @@
+extends: [valkey.liveness]
+id: proposed.move-replace-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: MOVE with the new optional REPLACE argument overwrites the destination
+    key, carries the source TTL over the destination's, aborts WATCHers of the destination,
+    and rejects bad syntax; the non-REPLACE path (refactored from dbAdd to setKey)
+    is unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: move-replace
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SET, plain, v0, EX, 50], expect: {equals: OK}}
+    - {command: [MOVE, plain, 11], expect: {equals: 1}}
+    - {command: [SELECT, 11], expect: {equals: OK}}
+    - {command: [GET, plain], expect: {equals: v0}}
+    - {command: [TTL, plain], compare: skip, expect: {min: 1, max: 50}}
+    - {command: [SELECT, 10], expect: {equals: OK}}
+    - {command: [SET, k1, dst1], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SET, k1, src1], expect: {equals: OK}}
+    - {command: [MOVE, k1, 10], expect: {equals: 0}}
+    - {command: [MOVE, k1, 10, REPLACE], expect_difference: true, expect: {equals: 1}}
+    - {command: [EXISTS, k1], expect_difference: true, expect: {equals: 0}}
+    - {command: [SELECT, 10], expect: {equals: OK}}
+    - {command: [GET, k1], expect_difference: true, expect: {equals: src1}}
+    - {command: [SET, t1, dst-ttl, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, t2, dst-ttl2, EX, 1000], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SET, t1, src-ttl, EX, 100], expect: {equals: OK}}
+    - {command: [SET, t2, src-nottl], expect: {equals: OK}}
+    - {command: [MOVE, t1, 10, replace], expect_difference: true, expect: {equals: 1}}
+    - {command: [MOVE, t2, 10, Replace], expect_difference: true, expect: {equals: 1}}
+    - {command: [SELECT, 10], expect: {equals: OK}}
+    - {command: [GET, t1], expect_difference: true, expect: {equals: src-ttl}}
+    - {command: [TTL, t1], compare: skip, expect: {min: 1, max: 100}}
+    - {command: [GET, t2], expect_difference: true, expect: {equals: src-nottl}}
+    - {command: [TTL, t2], compare: skip, expect: {equals: -1}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SET, fresh, vf], expect: {equals: OK}}
+    - {command: [MOVE, fresh, 10, REPLACE], expect_difference: true, expect: {equals: 1}}
+    - {command: [MOVE, nosuchkey, 10, REPLACE], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [MOVE, k1, 10, NOTREPLACE], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [MOVE, k1, 10, REPLACE, EXTRA], expect_difference: true, expect: {
+        error: "syntax error"}}
+    - {command: [MOVE, k1, 0, REPLACE], expect_difference: true, expect: {error: "same"}}
+    - {command: [MOVE, k1, 99, REPLACE], expect_difference: true, expect: {error: "out\
+          \ of range"}}
+    - {command: [MOVE, k1, notanint, REPLACE], expect_difference: true, expect: {
+        error: true}}
+    - {command: [SELECT, 10], expect: {equals: OK}}
+    - {command: [GET, fresh], expect_difference: true, expect: {equals: vf}}
+    - {command: [SET, w1, dstw], expect: {equals: OK}}
+    - {connection: watcher, command: [SELECT, 10], expect: {equals: OK}}
+    - {connection: watcher, command: [WATCH, w1], expect: {equals: OK}}
+    - {connection: watcher, command: [MULTI], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SET, w1, srcw], expect: {equals: OK}}
+    - {command: [MOVE, w1, 10, REPLACE], expect_difference: true, expect: {equals: 1}}
+    - {connection: watcher, command: [SET, w1, queued], expect: {equals: QUEUED}}
+    - {connection: watcher, command: [EXEC], expect_difference: true, expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [move-replace.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: move-replace}

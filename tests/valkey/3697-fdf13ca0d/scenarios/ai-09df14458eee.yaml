@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5b167f45562e..fdf13ca0def8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-09df14458eee
+seed: 404
+experiment:
+  id: proposed.libvalkey-cli-cluster-compare
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

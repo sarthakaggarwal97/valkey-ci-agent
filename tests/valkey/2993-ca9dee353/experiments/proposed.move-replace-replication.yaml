@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.move-replace-replication
+deployment:
+  modes: [standalone]
+metadata:
+  description: MOVE REPLACE propagates verbatim to a replica, which overwrites the
+    destination-db key and applies the source TTL
+components:
+- use: valkey.action.commands
+  id: move-repl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 2
+    timeout_s: 120
+    commands:
+    - {node: 1, command: [REPLICAOF, <node.0.host>, <node.0.port>], expect: {equals: OK}}
+    - {node: 1, command: [INFO, replication], compare: skip, wait_s: 30, expect: {
+        contains: "master_link_status:up"}}
+    - {node: 0, command: [SELECT, 10], expect: {equals: OK}}
+    - {node: 0, command: [SET, r1, dst, EX, 1000], expect: {equals: OK}}
+    - {node: 0, command: [SELECT, 0], expect: {equals: OK}}
+    - {node: 0, command: [SET, r1, src, EX, 100], expect: {equals: OK}}
+    - {node: 0, command: [MOVE, r1, 10, REPLACE], expect_difference: true, expect: {
+        equals: 1}}
+    - {node: 1, command: [SELECT, 10], expect: {equals: OK}}
+    - {node: 1, command: [GET, r1], wait_s: 10, expect_difference: true, expect: {
+        equals: src}}
+    - {node: 1, command: [TTL, r1], compare: skip, expect: {min: 1, max: 100}}
+    - {node: 1, command: [SELECT, 0], expect: {equals: OK}}
+    - {node: 1, command: [EXISTS, r1], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [move-repl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: move-repl}

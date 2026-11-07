@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ca9dee353d2f0c1f48f4471fd191d5583043407d",
+  "parent": "418c98bd25f37259f304956142b46c42d386d188",
+  "pr": 2993,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add optional REPLACE argument to MOVE (#2993)",
+  "date": "2026-05-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 12,
+    "executed": 12,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.0835,
+  "findings": [],
+  "recorded": []
+}

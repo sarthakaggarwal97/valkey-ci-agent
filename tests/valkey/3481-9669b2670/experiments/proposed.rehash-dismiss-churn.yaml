@@ -1,0 +1,48 @@
+extends: [valkey.base]
+id: proposed.rehash-dismiss-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Drive the main hashtable through several incremental expand rehashes, a mass-delete
+    shrink, a repopulate that aborts the shrink mid-rehash and rehashes back into
+    dismissed pages, and a final shrink to completion, so the incremental MADV_DONTNEED
+    release of rehashed bucket pages runs many times while the key-value workload
+    reads and writes both tables.
+components:
+- use: valkey.action.commands
+  id: churn
+  depends_on: [writes]
+  config:
+    timeout_s: 120
+    commands:
+    - {command: [EVAL, "for i=0,49999 do redis.call('SET','reh:'..i,'v:'..i) end return\
+          \ 0", "0"], expect: {equals: 0}}
+    - {command: [EVAL, "for i=50000,99999 do redis.call('SET','reh:'..i,'v:'..i) end\
+          \ return 0", "0"], expect: {equals: 0}}
+    - {command: [EVAL, "for i=100000,149999 do redis.call('SET','reh:'..i,'v:'..i)\
+          \ end return 0", "0"], expect: {equals: 0}}
+    - {command: [EVAL, "for i=150000,199999 do redis.call('SET','reh:'..i,'v:'..i)\
+          \ end return 0", "0"], expect: {equals: 0}}
+    - {command: [GET, "reh:0"], expect: {equals: "v:0"}}
+    - {command: [GET, "reh:199999"], expect: {equals: "v:199999"}}
+    - {command: [EVAL, "local n=0 for i=0,199999 do if redis.call('GET','reh:'..i)=='v:'..i\
+          \ then n=n+1 end end return n", "0"], expect: {equals: 200000}}
+    - {command: [EVAL, "for i=0,199999 do redis.call('DEL','reh:'..i) end return 0",
+        "0"], expect: {equals: 0}}
+    - {command: [EVAL, "for i=0,99999 do redis.call('SET','reh:'..i,'w:'..i) end return\
+          \ 0", "0"], expect: {equals: 0}}
+    - {command: [EXISTS, "reh:150000"], expect: {equals: 0}}
+    - {command: [GET, "reh:0"], expect: {equals: "w:0"}}
+    - {command: [GET, "reh:99999"], expect: {equals: "w:99999"}}
+    - {command: [EVAL, "local n=0 for i=0,99999 do if redis.call('GET','reh:'..i)=='w:'..i\
+          \ then n=n+1 end end return n", "0"], expect: {equals: 100000}}
+    - {command: [EVAL, "for i=0,99999 do redis.call('DEL','reh:'..i) end return 0",
+        "0"], expect: {equals: 0}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [churn]
+  config: {seconds: 5}
+required_events: [churn.completed, settle.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

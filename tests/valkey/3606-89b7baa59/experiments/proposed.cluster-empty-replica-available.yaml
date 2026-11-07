@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.cluster-empty-replica-available
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    After the initial PING on an empty replication stream, a just-synced empty replica
+    has a non-zero replication offset, so it is listed in CLUSTER SLOTS and reported
+    online in CLUSTER SHARDS right away; the parent reports it loading and hides it
+    from CLUSTER SLOTS until the first periodic PING, which repl-ping-replica-period
+    300 keeps out of the run.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shards
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    server_config: {repl-ping-replica-period: 300}
+    timeout_s: 180
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, wait_s: 30, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 1, compare: skip, wait_s: 60, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [CLUSTER, SLOTS], node: 1, wait_s: 15, expect_difference: true, expect: {
+        contains: "<node.1.id>"}}
+    - {command: [CLUSTER, SHARDS], node: 1, expect_difference: true, expect: {contains: online}}
+    - {command: [CLUSTER, SLOTS], node: 0, wait_s: 15, expect_difference: true, expect: {
+        contains: "<node.1.id>"}}
+    - {command: [CLUSTER, SHARDS], node: 0, expect_difference: true, expect: {contains: online}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shards.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shards}

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d4337d66625a276fdbeb1d03a350b3f0a49e3387",
+  "parent": "fdd90393073881cefb26520c7826ca8991ad9269",
+  "pr": 3679,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix CLUSTERSCAN fingerprint to use configurable_hash_seed (#3679)",
+  "date": "2026-05-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 3,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.8652,
+  "findings": [],
+  "recorded": []
+}

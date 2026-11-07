@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.libvalkey-cli-cluster-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli cluster-mode commands and --cluster subcommands on a one-node
+    cluster of each build, output compared
+components:
+- use: valkey.action.tools
+  id: ccli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 120
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - tool: valkey-cli
+      args: [-c, -p, $port, SET, foo, bar]
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}
+    - tool: valkey-cli
+      args: [-c, -p, $port, GET, foo]
+      expect: {stdout: {equals: "bar\n"}}
+    - tool: valkey-cli
+      args: [-p, $port, CLUSTER, COUNTKEYSINSLOT, 12182]
+      expect: {stdout: {equals: "1\n"}}
+    - tool: valkey-cli
+      args: [-p, $port, CLUSTER, INFO]
+      compare: skip
+      expect: {stdout: {contains: "cluster_state:ok"}}
+    - tool: valkey-cli
+      args: [--cluster, check, "127.0.0.1:$port"]
+      expect: {exit: {equals: 0}, stdout: {contains: "[OK] All 16384 slots covered"}}
+    - tool: valkey-cli
+      args: [--cluster, info, "127.0.0.1:$port"]
+      expect: {exit: {equals: 0}}
+    - tool: valkey-cli
+      args: [-p, $port, CLUSTER, SLOTS]
+      expect: {exit: {equals: 0}}
+    - tool: valkey-cli
+      args: [-p, $port, -3, CLUSTER, SHARDS]
+      compare: skip
+      expect: {exit: {equals: 0}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: ccli}

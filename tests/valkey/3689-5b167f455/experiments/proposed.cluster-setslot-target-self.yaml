@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.cluster-setslot-target-self
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER SETSLOT MIGRATING/IMPORTING must reject the node itself as
+    target; parent accepts it and ASK-redirects clients to itself
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: setslot-self
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, SETSLOT, 12182, MIGRATING, "<node.0.id>"], node: 0, expect_difference: true,
+      expect: {error: "Target node is myself"}}
+    - {command: [GET, foo], node: 0, expect_difference: true, expect: {error: false}}
+    - {command: [CLUSTER, SETSLOT, 12182, STABLE], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 16383, MIGRATING, "<node.0.id>", TIMEOUT, 100],
+      node: 0, expect_difference: true, expect: {error: "Target node is myself"}}
+    - {command: [CLUSTER, SETSLOT, 16383, STABLE], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, "<node.1.id>"], node: 1, expect_difference: true,
+      expect: {error: "Target node is myself"}}
+    - {command: [ASKING], node: 1, expect: {equals: OK}}
+    - {command: [GET, foo], node: 1, expect_difference: true, expect: {error: "MOVED"}}
+    - {command: [CLUSTER, SETSLOT, 12182, STABLE], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, MIGRATING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, STABLE], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, STABLE], node: 1, expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [setslot-self.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: setslot-self}

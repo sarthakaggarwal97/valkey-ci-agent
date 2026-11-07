@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.deferred-free-primary-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: DEBUG force-free-primary-async defers the primary-client free across
+    a REPLICAOF repoint, a primary restart, and REPLICAOF NO ONE; the deferred free
+    must not clobber replication state
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: deferred-free
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 2, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 2, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [DEBUG, force-free-primary-async, 1], node: 2, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.1.host>", "<node.1.port>"], node: 2, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 2, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [SET, probe1, v1], node: 1, expect: {equals: OK}}
+    - {command: [GET, probe1], node: 2, wait_s: 15, expect: {equals: v1}}
+    - {command: [DEBUG, force-free-primary-async, 1], node: 2, expect_difference: true,
+      expect: {equals: OK}}
+    - {restart: true, node: 1}
+    - {command: [INFO, replication], node: 2, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [SET, probe2, v2], node: 1, expect: {equals: OK}}
+    - {command: [GET, probe2], node: 2, wait_s: 15, expect: {equals: v2}}
+    - {command: [DEBUG, force-free-primary-async, 1], node: 2, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [REPLICAOF, NO, ONE], node: 2, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 2, wait_s: 15, expect: {contains: "role:master"},
+      compare: skip}
+    - {command: [SET, after, x], node: 2, expect: {equals: OK}}
+    - {command: [GET, after], node: 2, expect: {equals: x}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [deferred-free.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: deferred-free}

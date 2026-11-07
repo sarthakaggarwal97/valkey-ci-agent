@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "parent": "b8d08dfe29f938a66ced908567fdb54b0031301e",
+  "pr": 4470,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Validate slot import ranges in valkey-check-rdb when checking slot RDB (#4470)",
+  "date": "2026-11-07",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.2996,
+  "findings": [],
+  "recorded": []
+}

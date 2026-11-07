@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b8d08dfe29f9..aa7545348b68.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-abf4dd9c8011
+seed: 4470
+experiment:
+  id: proposed.check-rdb-slot-import-range
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

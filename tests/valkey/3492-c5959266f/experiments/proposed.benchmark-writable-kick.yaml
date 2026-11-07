@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-writable-kick
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    valkey-benchmark of both builds runs a full TCP benchmark against a private server
+    of its own build. The change routes every AE_WRITABLE registration (createClient,
+    writeHandler's write-to-read transition, resetClient) through the new createFileEvent
+    wrapper; on TCP the benchmark must still issue every request and exit 0, and the
+    keys the SET/INCR tests write must land, which a deterministic GET of the un-randomized
+    key verifies on both sides.
+inputs:
+  properties:
+    threads: {type: integer, minimum: 0, maximum: 8, default: 0}
+    pipeline: {type: integer, minimum: 1, maximum: 64, default: 1}
+    clients: {type: integer, minimum: 1, maximum: 50, default: 10}
+    requests: {type: integer, minimum: 100, maximum: 100000, default: 2000}
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 120
+    runs:
+    - tool: valkey-benchmark
+      args: [-p, $port, -c, {$ref: inputs.clients}, -n, {$ref: inputs.requests}, -P,
+        {$ref: inputs.pipeline}, --threads, {$ref: inputs.threads}, -t, "ping,set,get,incr",
+        --csv]
+      compare: skip
+      expect: {exit: {equals: 0}, stdout: {contains: "GET"}}
+    - tool: valkey-cli
+      args: [-p, $port, GET, "key:__rand_int__"]
+      expect: {exit: {equals: 0}, stdout: {equals: "xxx\n"}}
+    - tool: valkey-cli
+      args: [-p, $port, EXISTS, "counter:__rand_int__"]
+      expect: {exit: {equals: 0}, stdout: {equals: "1\n"}}
+required_events: [bench.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

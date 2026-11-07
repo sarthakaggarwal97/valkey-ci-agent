@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.clusterscan-slot-migration-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTERSCAN range scanning stops at a slot-ownership boundary created
+    by migrating one slot to a second node, replies compared with the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cscan-migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, "{06S}:k0", v], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{4ZG}:k50", v], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{6od}:k51", v], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "100", MIGRATING, "<node.1.id>"], node: 0, wait_s: 30,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "100", IMPORTING, "<node.0.id>"], node: 1, wait_s: 30,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "100", NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "100", NODE, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [SET, "{0or}:k100", v], node: 1, wait_s: 30, expect: {equals: OK}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", COUNT, "2000"], node: 0, expect_difference: true,
+      expect: {equals: ["0-{0or}-0", ["{06S}:k0", "{4ZG}:k50", "{6od}:k51"]]}}
+    - {command: [CLUSTERSCAN, "0-{0or}-0", COUNT, "2000"], node: 1, expect: {equals: [
+          "0-{1j2}-0", ["{0or}:k100"]]}}
+    - {command: [CLUSTERSCAN, "0-{1j2}-0", COUNT, "2000"], node: 0, expect_difference: true,
+      expect: {equals: ["0", []]}}
+    - {command: [CLUSTERSCAN, "0-{0or}-0", COUNT, "2000"], node: 0, expect: {equals: [
+          "0-{1j2}-0", []]}}
+    - {command: [CLUSTERSCAN, "0", SLOT, "100"], node: 0, expect: {equals: ["0-{0or}-0",
+          []]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cscan-migrate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cscan-migrate}

@@ -1,0 +1,38 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "96a6bc5d2749a2722a91ecff8c094c23a58e9a7a",
+  "parent": "6c9d7fc263dd4dfe07460f7ed6de63295890b77a",
+  "pr": 3643,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix the memory leak in valkey-benchmark (#3643)",
+  "date": "2026-05-07",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 6,
+    "executed": 3,
+    "percent": 50,
+    "uncovered": [
+      "src/valkey-benchmark.c:1412",
+      "src/valkey-benchmark.c:1486",
+      "src/valkey-benchmark.c:1487"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 5.107,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-637a074c92e8",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'bench' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (valkey-benchmark -p $port --cluster -c 8 -n 2000 -t set,get -q), 3 (valkey-benchmark -p $port --cluster -c 4 -n 1000 -q SET key:{foo} v)"
+    }
+  ]
+}

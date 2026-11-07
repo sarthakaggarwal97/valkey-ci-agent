@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5b167f45562e..fdf13ca0def8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c45751014fc8
+seed: 202
+experiment:
+  id: proposed.libvalkey-benchmark-compare
+  inputs:
+    pipeline: 32
+    value_size: 1024
+    requests: 20000
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

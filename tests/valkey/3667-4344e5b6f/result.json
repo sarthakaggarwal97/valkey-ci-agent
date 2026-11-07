@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4344e5b6fdbba8b1efd82470bfbc0e7513443bd5",
+  "parent": "fc849f087d731bea4ee7fb85b702664ae7583384",
+  "pr": 3667,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Minor cleanup and fix typo in bzmpop get_keys_function (#3667)",
+  "date": "2026-05-13",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3989,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames BZMPOP's get_keys_function from blmpopGetKeys to bzmpopGetKeys. Both functions are identical wrappers calling genericGetKeys(0, 2, 3, 1, argv, argc, result) in src/db.c, and BZMPOP/BLMPOP share the same argument layout, so key extraction (COMMAND GETKEYS, cluster slot routing, ACL key checks) is unchanged on every input. This is a pure naming cleanup with no observable behavior change, so no scenario can distinguish the builds."
+}

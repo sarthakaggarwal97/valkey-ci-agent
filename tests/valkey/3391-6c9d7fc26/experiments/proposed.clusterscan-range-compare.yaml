@@ -1,0 +1,96 @@
+extends: [valkey.liveness]
+id: proposed.clusterscan-range-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTERSCAN range-bounded scanning over contiguous slots on a single-node
+    cluster, option parsing and adversarial cursors, replies compared with the parent
+    build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    server_config: {cluster-require-full-coverage: "no"}
+    timeout_s: 30
+    commands:
+    - {command: [SET, "{06S}:k0", v], expect: {equals: OK}}
+    - {command: [SET, "{4ZG}:k50", v], expect: {equals: OK}}
+    - {command: [RPUSH, "{6od}:l51", a], expect: {equals: 1}}
+    - {command: [SET, "{0or}:k100", v], expect: {equals: OK}}
+    - {command: [CLUSTERSCAN, "0"], expect: {equals: ["0-{06S}-0", []]}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", COUNT, "2000"], expect_difference: true,
+      expect: {equals: ["0", ["{06S}:k0", "{4ZG}:k50", "{6od}:l51", "{0or}:k100"]]}}
+    - {command: [CLUSTERSCAN, "0-{Qi}-0", COUNT, "2000"], expect_difference: true,
+      expect: {equals: ["0", ["{4ZG}:k50", "{6od}:l51", "{0or}:k100"]]}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", TYPE, list, COUNT, "2000"], expect_difference: true,
+      expect: {equals: ["0", ["{6od}:l51"]]}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", MATCH, "*k100*", COUNT, "2000"], expect_difference: true,
+      expect: {equals: ["0", ["{0or}:k100"]]}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", MATCH, "", COUNT, "2000"], expect_difference: true,
+      expect: {equals: ["0", []]}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", COUNT, "9223372036854775807"], expect_difference: true,
+      expect: {equals: ["0", ["{06S}:k0", "{4ZG}:k50", "{6od}:l51", "{0or}:k100"]]}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", COUNT, "9223372036854775808"], expect: {
+        error: "not an integer"}}
+    - {command: [CLUSTERSCAN, "0-{4ZG}-0", MATCH, "{4ZG}*", COUNT, "2000"], expect: {
+        equals: ["0", ["{4ZG}:k50"]]}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", MATCH, "{0or}*"], expect: {equals: ["0-{0or}-0",
+          []]}}
+    - {command: [CLUSTERSCAN, "0-{0or}-0", MATCH, "{06S}*"], expect: {equals: ["0",
+          []]}}
+    - {command: [CLUSTERSCAN, "0", SLOT, "50"], expect: {equals: ["0-{4ZG}-0", []]}}
+    - {command: [CLUSTERSCAN, "0-{4ZG}-0", SLOT, "50", COUNT, "2000"], expect: {equals: [
+          "0", ["{4ZG}:k50"]]}}
+    - {command: [CLUSTERSCAN, "0", SLOT, "50", MATCH, "{0or}*"], expect: {equals: [
+          "0", []]}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", SLOT, "50"], expect: {error: "mismatch"}}
+    - {command: [CLUSTERSCAN, "0", SLOT, "0", SLOT, "0"], expect: {error: "once"}}
+    - {command: [CLUSTERSCAN, "0", COUNT, "0"], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [CLUSTERSCAN, "0", COUNT, "-1"], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [CLUSTERSCAN, "0", COUNT, not-an-integer], expect_difference: true,
+      expect: {error: "not an integer"}}
+    - {command: [CLUSTERSCAN, "0", TYPE, notatype], expect_difference: true, expect: {
+        error: "unknown type name"}}
+    - {command: [CLUSTERSCAN, "0", NOVALUES], expect_difference: true, expect: {error: "NOVALUES"}}
+    - {command: [CLUSTERSCAN, "0", NOSCORES], expect_difference: true, expect: {error: "NOSCORES"}}
+    - {command: [CLUSTERSCAN, "zzzzzz-{06S}-123456", COUNT, "2000"], expect_difference: true,
+      expect: {equals: ["0", ["{06S}:k0", "{4ZG}:k50", "{6od}:l51", "{0or}:k100"]]}}
+    - {command: [CLUSTERSCAN, abc], expect: {error: "Invalid cursor"}}
+    - {command: [CLUSTERSCAN, "0-{06S}"], expect: {error: "Invalid cursor"}}
+    - {command: [CLUSTERSCAN, "0-{06S}-18446744073709551616"], expect: {error: "Invalid\
+          \ cursor"}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", COUNT, "1"], compare: skip}
+    - {command: [CLUSTER, DELSLOTS, "200"], expect: {equals: OK}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", COUNT, "2000"], expect_difference: true,
+      expect: {equals: ["0-{2hJ}-0", ["{06S}:k0", "{4ZG}:k50", "{6od}:l51", "{0or}:k100"]]}}
+    - {command: [CLUSTERSCAN, "0-{2hJ}-0", COUNT, "2000"], expect: {equals: ["0-{1MH}-0",
+          []]}}
+    - {command: [CLUSTERSCAN, "0-{1MH}-0", COUNT, "2000"], expect_difference: true,
+      expect: {equals: ["0", []]}}
+    - {command: [HSET, "{Qi}h", f, v], expect: {equals: 1}}
+    - {command: [HSCAN, "{Qi}h", "0", NOVALUES], expect: {equals: ["0", [f]]}}
+    - {command: [HSCAN, "{Qi}h", "0", NOSCORES], expect: {error: "NOSCORES"}}
+    - {command: [ZADD, "{5L5}z", "1", m], expect: {equals: 1}}
+    - {command: [ZSCAN, "{5L5}z", "0", NOSCORES], expect: {equals: ["0", [m]]}}
+    - {command: [SSCAN, "{06S}:nosuchset", "0"], expect: {equals: ["0", []]}}
+    - {command: [SCAN, "0", MATCH, "{4ZG}*", COUNT, "2000"], expect: {equals: ["0",
+          ["{4ZG}:k50"]]}}
+    - {command: [SCAN, "0", SLOT, "0"], expect: {error: "syntax"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cscan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cscan}

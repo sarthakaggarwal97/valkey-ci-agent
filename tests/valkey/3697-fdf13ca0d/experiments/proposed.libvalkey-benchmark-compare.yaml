@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.libvalkey-benchmark-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark of the libvalkey 0.5.0 build vs the parent under pipelined
+    load, RESP2 and RESP3, TCP and unix socket, plus a refused connect
+inputs:
+  properties:
+    pipeline: {type: integer, minimum: 1, maximum: 512, default: 32}
+    value_size: {type: integer, minimum: 1, maximum: 1048576, default: 1024}
+    requests: {type: integer, minimum: 100, maximum: 200000, default: 20000}
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 600
+    runs:
+    - tool: valkey-benchmark
+      args: [-p, $port, -n, {$ref: inputs.requests}, -c, 10, -P, {$ref: inputs.pipeline},
+        -d, {$ref: inputs.value_size}, -t, "set,get", -q]
+      compare: skip
+      expect: {exit: {equals: 0}, stdout: {contains: "requests per second"}}
+    - tool: valkey-benchmark
+      args: [-p, $port, -3, -n, {$ref: inputs.requests}, -c, 10, -P, {$ref: inputs.pipeline},
+        -d, {$ref: inputs.value_size}, -t, "set,get,lpush,lrange", -q]
+      compare: skip
+      expect: {exit: {equals: 0}, stdout: {contains: "requests per second"}}
+    - tool: valkey-benchmark
+      args: [-s, $socket, -n, 5000, -c, 5, -P, {$ref: inputs.pipeline}, -t, ping,
+        -q]
+      compare: skip
+      expect: {exit: {equals: 0}}
+    - tool: valkey-benchmark
+      args: [-p, 1, -n, 10, -t, ping, -q]
+      expect: {exit: {equals: 1}, stderr: {contains: "Connection refused"}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

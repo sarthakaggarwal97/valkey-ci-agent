@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fea0b4064cf6..c5959266f1f9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0b4318d71ac4
+seed: 101
+experiment:
+  id: proposed.benchmark-writable-kick
+  inputs:
+    threads: 0
+    pipeline: 1
+    clients: 10
+    requests: 2000
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

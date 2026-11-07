@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-cluster-node-free
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    valkey-benchmark --cluster after the node-ip ownership fix: fetch a single-range
+    cluster map, then fragment the map with CLUSTER DELSLOTS so the same node appears
+    in nine CLUSTER SLOTS rows, driving the duplicate-node branch that now frees the
+    extra ip and name, and run the benchmark to completion with no crash, invalid
+    free, or sanitizer report.
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 120
+    runs:
+    - tool: valkey-cli
+      args: [-p, $port, CONFIG, SET, cluster-require-full-coverage, "no"]
+      expect: {exit: {equals: 0}, stdout: {contains: OK}}
+    - tool: valkey-benchmark
+      args: [-p, $port, --cluster, -c, 8, -n, 2000, -t, "set,get", -q]
+      compare: skip
+      expect: {exit: {equals: 0}}
+    - tool: valkey-cli
+      args: [-p, $port, CLUSTER, DELSLOTS, 1000, 3000, 5000, 7000, 9000, 11000, 13000,
+        15000]
+      expect: {exit: {equals: 0}, stdout: {contains: OK}}
+    - tool: valkey-benchmark
+      args: [-p, $port, --cluster, -c, 4, -n, 1000, -q, SET, "key:{foo}", v]
+      compare: skip
+      expect: {exit: {equals: 0}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

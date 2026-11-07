@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b8d08dfe29f938a66ced908567fdb54b0031301e",
+  "parent": "58a6ddc9dd45a3309ae2e8ab15c97475569b90cc",
+  "pr": 5311,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix uninitialized variable use in clusterManagerMigrateKeysInSlot (#5311)",
+  "date": "2026-11-07",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.319,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change fixes an uninitialized-variable read in valkey-cli's clusterManagerMigrateKeysInSlot (src/valkey-cli.c): in the parent build, 'dots', 'reply' and 'migrate_reply' were declared after the cliSelect() call, and the 'if (cliSelect(...) == VALKEY_ERR) goto next;' branch jumps over their initializers to the 'next:' label, which then calls freeReplyObject/zfree on uninitialized stack pointers. The bug only triggers when cliSelect() fails (an I/O error on the source connection) inside valkey-cli's per-database slot-migration loop during '--cluster reshard/move/fix', which move slots between"
+}

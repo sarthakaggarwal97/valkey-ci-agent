@@ -1,0 +1,43 @@
+extends: [valkey.base]
+id: proposed.deferred-free-primary-kill
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Arm DEBUG force-free-primary-async on the replicas, then kill and restart
+    the primary under writes; the deferred free of each replica's primary client must
+    leave it able to reconnect, with no acknowledged write lost
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: arm-debug
+  depends_on: [warm-up, kill-primary]
+  config:
+    instances: replicas
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, force-free-primary-async, 1], expect: {equals: OK}}
+- use: valkey.fault.process-signal
+  id: kill-primary
+  config:
+    when_event: arm-debug.completed
+    instance: primary
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [arm-debug]
+  config: {seconds: 8}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [arm-debug.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-primary}
+- {evidence_id: valkey.command.sequence, source: arm-debug}

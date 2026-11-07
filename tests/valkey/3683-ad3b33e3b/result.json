@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ad3b33e3ba95bcfee71830fe8f4aefbb26eb1ec8",
+  "parent": "0321a69e62f5148096d03358e26a1b884af3b969",
+  "pr": 3683,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "cmake: Fix missing release_header dependency for cli, benchmark, and gtest (#3683)",
+  "date": "2026-05-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2237,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds CMake add_dependencies(... release_header) lines for valkey-cli, valkey-benchmark, and the gtest library, fixing a parallel-build race where the generated release.h header might not exist yet. It is purely a build-system fix with no change to any binary's runtime behaviour, replies, replication, or persistence, so there is no risky path a scenario could reach."
+}

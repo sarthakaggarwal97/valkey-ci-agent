@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.clusterscan-fingerprint-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTERSCAN cursor fingerprint derived from hash-seed is recomputed
+    identically after a restart; mismatched and malformed cursors behave the same
+    before and after
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_seed: {type: string, default: fingerprint-seed}
+components:
+- use: valkey.action.commands
+  id: fprestart
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 1
+    resp: {$ref: inputs.resp}
+    server_config:
+      hash-seed: {$ref: inputs.hash_seed}
+    timeout_s: 30
+    commands:
+    - {command: [MSET, "{06S}:r00", v, "{06S}:r01", v, "{06S}:r02", v, "{06S}:r03",
+        v, "{06S}:r04", v, "{06S}:r05", v, "{06S}:r06", v, "{06S}:r07", v, "{06S}:r08",
+        v, "{06S}:r09", v, "{06S}:r10", v, "{06S}:r11", v, "{06S}:r12", v, "{06S}:r13",
+        v, "{06S}:r14", v, "{06S}:r15", v, "{06S}:r16", v, "{06S}:r17", v, "{06S}:r18",
+        v, "{06S}:r19", v], expect: {equals: OK}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", SLOT, 0, COUNT, 3], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", SLOT, 0, COUNT, 100], expect: {exists: true}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", SLOT, 0, COUNT, 3], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", SLOT, 0, COUNT, 100], expect: {exists: true}}
+    - {command: [CLUSTERSCAN, "oooooo-{06S}-42", SLOT, 0, COUNT, 100], expect: {exists: true}}
+    - {command: [CLUSTERSCAN, "0-{06S}-"], expect: {error: "Invalid cursor"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [fprestart.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fprestart}

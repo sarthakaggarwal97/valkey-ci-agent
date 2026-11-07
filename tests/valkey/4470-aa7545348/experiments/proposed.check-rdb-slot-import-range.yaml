@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.check-rdb-slot-import-range
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-rdb rejects slot-import ranges that are out of bounds
+    or inverted, and still accepts a valid range
+components:
+- use: valkey.action.tools
+  id: check-rdb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files:
+      start-gt-end.rdb: !!binary 'VkFMS0VZMDgx8yhBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBAUfQQ+j/AAAAAAAAAAA='
+      end-out-of-range.rdb: !!binary 'VkFMS0VZMDgx8yhBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBAQCAAABAAP8AAAAAAAAAAA=='
+      both-32bit-boundary.rdb: !!binary 'VkFMS0VZMDgx8yhBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBAYD/////gP//////AAAAAAAAAAA='
+      valid-range.rdb: !!binary 'VkFMS0VZMDgx8yhBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBAQB/////AAAAAAAAAA=='
+    runs:
+    - {tool: valkey-check-rdb, args: [start-gt-end.rdb], expect_difference: true,
+      expect: {exit: {equals: 1}, stdout: {contains: "Invalid slot import range in\
+            \ RDB: start=2000 end=1000"}}}
+    - {tool: valkey-check-rdb, args: [end-out-of-range.rdb], expect_difference: true,
+      expect: {exit: {equals: 1}, stdout: {contains: "Invalid slot import range in\
+            \ RDB: start=0 end=16384"}}}
+    - {tool: valkey-check-rdb, args: [both-32bit-boundary.rdb], expect_difference: true,
+      expect: {exit: {equals: 1}, stdout: {contains: "Invalid slot import range in\
+            \ RDB: start=4294967295 end=4294967295"}}}
+    - {tool: valkey-check-rdb, args: [valid-range.rdb], expect: {exit: {equals: 0},
+        stdout: {contains: "RDB looks OK"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check-rdb}

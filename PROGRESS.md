@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-07T06:18+00:00.
+Updated 2026-11-07T06:28+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 542 | 1963 | #3683 (2026-05-18) | 273 | 77.4 |
+| valkey-io/valkey | 566 | 1941 | #3619 (2026-05-05) | 275 | 80.9 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
 | valkey-io/valkey-search | 372 | 297 | #607 (2026-01-29) | 202 | 53.1 |
@@ -13,28 +13,28 @@ Updated 2026-11-07T06:18+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-07T04:58:35+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42331067903): 20 merge(s) tested, 12 without a code change.
+[2026-11-07T06:28:34+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42340727393): 20 merge(s) tested, 6 without a code change.
 
-- [valkey-io/valkey#3374](https://github.com/valkey-io/valkey/pull/3374): to retry, 1 of 1 run(s) could not start: the run could not start: environment acquisition failed
-- [valkey-io/valkey#3658](https://github.com/valkey-io/valkey/pull/3658) ([tests](tests/valkey/3658-0ff817e8c/)): CMake: Plain and keyword can not be mixed (#3658): declined: The change is purely a build-system fix: it adds the PRIVATE keyword to target_link_libraries calls in the CMake files so plain and keyword signatures are not mixed, which CMake requires. The set and order of linked libraries is unchanged, so the produced binaries behave identically; no co
-- [valkey-io/valkey#3846](https://github.com/valkey-io/valkey/pull/3846) ([tests](tests/valkey/3846-f25ec5e40/)): Fix use-after-free in VM_RegisterClusterMessageReceiver (#3846): 1 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3872](https://github.com/valkey-io/valkey/pull/3872) ([tests](tests/valkey/3872-2035fb30c/)): Redacting customer information when hide_user_data_from_log is true in rdb.c, networking.c, debug.c and t_hash  (#3872): declined: Every hunk only alters the text of a server log message (serverLog/serverLogHexDump/rdbReportCorruptRDB) based on hide-user-data-from-log, redacting the user's key name, consumer-group name, query-buffer bytes, or listpack hexdump. The surrounding control flow is identical on both branches
-- [valkey-io/valkey#3721](https://github.com/valkey-io/valkey/pull/3721) ([tests](tests/valkey/3721-e4fdae45a/)): Force listpack validation on load to prevent deferred assertions (#3721): 10 of 14 test(s) reached the change, coverage 87%; crash, fixed by #3721 (recorded)
-- [valkey-io/valkey#3676](https://github.com/valkey-io/valkey/pull/3676) ([tests](tests/valkey/3676-8ee3fd704/)): Trigger cluster state update immediately when cluster-require-full-coverage changes (#3676): 1 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3827](https://github.com/valkey-io/valkey/pull/3827) ([tests](tests/valkey/3827-1c49ca05c/)): Trigger failover check ASAP when cluster-replica-no-failover is disabled (#3827): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3407](https://github.com/valkey-io/valkey/pull/3407) ([tests](tests/valkey/3407-42765b2ff/)): Fix integer overflow in WAIT and WAITAOF numreplicas parameter (#3407): 3 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3791](https://github.com/valkey-io/valkey/pull/3791) ([tests](tests/valkey/3791-cce8f49b6/)): Restrict zmadvise_dontneed_range() to jemalloc builds (#3791): declined: The change only narrows a preprocessor condition so madvise(MADV_DONTNEED) in zmadvise_dontneed_range() compiles on jemalloc Linux builds instead of all Linux builds. Its sole caller, dismissRehashedBucketsIfNeeded() in hashtable.c, releases pages of already-rehashed, dead hashtable bucket
-- [valkey-io/valkey#3808](https://github.com/valkey-io/valkey/pull/3808) ([tests](tests/valkey/3808-c59b24713/)): Document database-level ACL rules in valkey.conf and acl.c (#3808): declined: The change edits only comments: doc comments in src/acl.c describing the db=/alldbs/resetdbs ACL rules and the reset action, and the matching commented documentation text in valkey.conf. No executable code, parsing, or reply behaviour changes, so there is nothing a scenario could exercise.
-- [valkey-io/valkey#3804](https://github.com/valkey-io/valkey/pull/3804) ([tests](tests/valkey/3804-355d30642/)): Remove MIGRATE command dead code in ACLSelectorCheckCmd (#3804): declined: The change deletes an unreachable branch: the removed `cmd->proc == migrateCommand` case is inside the `if (cmd->get_dbid_args)` block in ACLSelectorCheckCmd, and MIGRATE does not define get_dbid_args in migrate.json (only SELECT, MOVE, SWAPDB and COPY do), so the branch could never execut
-- [valkey-io/valkey#3796](https://github.com/valkey-io/valkey/pull/3796) ([tests](tests/valkey/3796-604dcdb00/)): hashtable: disallow insert during safe iteration (fixes #2302) (#3796): declined: The change adds an internal invariant assertion (assert(ht->safe_iterators == NULL) in hashtable.c's insert()), a doc rewrite, and a rewritten unit test. It forbids inserting into a hashtable during safe iteration; delete/replace are unchanged. No command-reachable path in this build viola
-- [valkey-io/valkey#3787](https://github.com/valkey-io/valkey/pull/3787) ([tests](tests/valkey/3787-8d3e6c306/)): Fix "time_t' different  typedef  on 32-bit /64-bit systems (#3787): declined: The change only corrects printf format specifiers for time_t/long on 32-bit builds (valkey-check-aof messages, INFO lru_clock cast, internal fuzzer generator) and adds a 32-bit Alpine CI job. On the 64-bit platform the fuzzer runs on, time_t is a 64-bit long, so %ld and %jd with an intmax_
-- [valkey-io/valkey#3723](https://github.com/valkey-io/valkey/pull/3723) ([tests](tests/valkey/3723-d778b3771/)): Fix double-finish and RESP reply violation in cluster slot migration (#3723): 4 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3800](https://github.com/valkey-io/valkey/pull/3800): to retry, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
-- [valkey-io/valkey#3756](https://github.com/valkey-io/valkey/pull/3756) ([tests](tests/valkey/3756-f2fe917bb/)): Revert "IO-Threads redesign cleanup work (#3544)" (#3756): 0 of 12 test(s) reached the change, coverage 76%
-- [valkey-io/valkey#3678](https://github.com/valkey-io/valkey/pull/3678) ([tests](tests/valkey/3678-294680700/)): Restore ERR prefix and error-code preservation in Lua scripting (#3678): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#3743](https://github.com/valkey-io/valkey/pull/3743) ([tests](tests/valkey/3743-bfeb3685e/)): Fix buffered_reply assert in HFE commands with module keyspace notifications (#3743): declined: The change adds initDeferredReplyBuffer/commitDeferredReplyBuffer around the reply-building in HGETDEL, the hexpireGenericCommand family, and HPERSIST (src/t_hash.c) to defer the array reply when a module blocks the client inside a keyspace-notification callback. Both helpers are strict no
-- [valkey-io/valkey#3505](https://github.com/valkey-io/valkey/pull/3505) ([tests](tests/valkey/3505-69bd02b2e/)): Extend CAPA REDIRECT to cover keyless commands on cluster replicas (#3505): 3 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3654](https://github.com/valkey-io/valkey/pull/3654) ([tests](tests/valkey/3654-5a604b3ef/)): Use full hash-seed bytes when deriving SipHash seed (#3654): 0 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#5311](https://github.com/valkey-io/valkey/pull/5311) ([tests](tests/valkey/5311-b8d08dfe2/)): Fix uninitialized variable use in clusterManagerMigrateKeysInSlot (#5311): declined: The change fixes an uninitialized-variable read in valkey-cli's clusterManagerMigrateKeysInSlot (src/valkey-cli.c): in the parent build, 'dots', 'reply' and 'migrate_reply' were declared after the cliSelect() call, and the 'if (cliSelect(...) == VALKEY_ERR) goto next;' branch jumps over th
+- [valkey-io/valkey#4470](https://github.com/valkey-io/valkey/pull/4470) ([tests](tests/valkey/4470-aa7545348/)): Validate slot import ranges in valkey-check-rdb when checking slot RDB (#4470): 1 of 1 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3374](https://github.com/valkey-io/valkey/pull/3374): Fix module loading failure for redis module (#3374): error: 2 of 2 run(s) could not start: the run could not start: environment acquisition failed
+- [valkey-io/valkey#3683](https://github.com/valkey-io/valkey/pull/3683) ([tests](tests/valkey/3683-ad3b33e3b/)): cmake: Fix missing release_header dependency for cli, benchmark, and gtest (#3683): declined: The change only adds CMake add_dependencies(... release_header) lines for valkey-cli, valkey-benchmark, and the gtest library, fixing a parallel-build race where the generated release.h header might not exist yet. It is purely a build-system fix with no change to any binary's runtime behav
+- [valkey-io/valkey#3719](https://github.com/valkey-io/valkey/pull/3719) ([tests](tests/valkey/3719-0321a69e6/)): Fix deferred freeClient clobbering replication state after replicaof (#3719): 1 of 8 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3697](https://github.com/valkey-io/valkey/pull/3697) ([tests](tests/valkey/3697-fdf13ca0d/)): Update deps/libvalkey to version 0.5.0 (#3697): 0 of 4 test(s) reached the change
+- [valkey-io/valkey#3689](https://github.com/valkey-io/valkey/pull/3689) ([tests](tests/valkey/3689-5b167f455/)): Add check to disallow `CLUSTER SETSLOT` to target self (#3689): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3667](https://github.com/valkey-io/valkey/pull/3667) ([tests](tests/valkey/3667-4344e5b6f/)): Minor cleanup and fix typo in bzmpop get_keys_function (#3667): declined: The change only renames BZMPOP's get_keys_function from blmpopGetKeys to bzmpopGetKeys. Both functions are identical wrappers calling genericGetKeys(0, 2, 3, 1, argv, argc, result) in src/db.c, and BZMPOP/BLMPOP share the same argument layout, so key extraction (COMMAND GETKEYS, cluster sl
+- [valkey-io/valkey#3679](https://github.com/valkey-io/valkey/pull/3679) ([tests](tests/valkey/3679-d4337d666/)): Fix CLUSTERSCAN fingerprint to use configurable_hash_seed (#3679): 3 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3544](https://github.com/valkey-io/valkey/pull/3544) ([tests](tests/valkey/3544-fdd903930/)): IO-Threads redesign cleanup work (#3544): 0 of 7 test(s) reached the change, coverage 82%
+- [valkey-io/valkey#2993](https://github.com/valkey-io/valkey/pull/2993) ([tests](tests/valkey/2993-ca9dee353/)): Add optional REPLACE argument to MOVE (#2993): 4 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3606](https://github.com/valkey-io/valkey/pull/3606) ([tests](tests/valkey/3606-89b7baa59/)): Speed up cluster startup by 10 seconds (#3606): 1 of 3 test(s) reached the change, coverage 100%; [check, introduced by #3606](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/89)
+- [valkey-io/valkey#3613](https://github.com/valkey-io/valkey/pull/3613): to retry, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
+- [valkey-io/valkey#3643](https://github.com/valkey-io/valkey/pull/3643) ([tests](tests/valkey/3643-96a6bc5d2/)): Fix the memory leak in valkey-benchmark (#3643): 0 of 1 test(s) reached the change, coverage 50%
+- [valkey-io/valkey#3391](https://github.com/valkey-io/valkey/pull/3391) ([tests](tests/valkey/3391-6c9d7fc26/)): CLUSTERSCAN range bounded scanning across contiguous slots (#3391): 4 of 6 test(s) reached the change, coverage 92%
+- [valkey-io/valkey#3448](https://github.com/valkey-io/valkey/pull/3448) ([tests](tests/valkey/3448-75fee11c6/)): Fixes server crash when RDMA benchmark clients disconnect (#3448): declined: The change is confined to src/rdma.c: it fixes pending_list corruption (double-add and premature node removal) when an RDMA client disconnects. Exercising it requires a BUILD_RDMA build, RDMA hardware or the rdma_rxe soft-RoCE kernel module (root-only, unavailable in these runs), and a cli
+- [valkey-io/valkey#3641](https://github.com/valkey-io/valkey/pull/3641) ([tests](tests/valkey/3641-2f1610771/)): Add null check in updateSSLPendingFlag (#3641): declined: The change adds a defensive null check in updateSSLPendingFlag (src/tls.c). It is unreachable as a behaviour change: the function's only three callers (connTLSRead, connTLSSyncRead, connTLSSyncReadLine) each invoke it immediately after SSL_read(conn->ssl, ...), so on any path where conn->s
+- [valkey-io/valkey#3481](https://github.com/valkey-io/valkey/pull/3481) ([tests](tests/valkey/3481-9669b2670/)): Reduce latency spikes during rehashing via incremental page release (#3481): 0 of 5 test(s) reached the change, coverage 93%, 1 skipped (required capability 'build' is unsupported)
+- [valkey-io/valkey#3578](https://github.com/valkey-io/valkey/pull/3578): to retry, 3 of 3 run(s) could not start: the run could not start: environment acquisition failed
+- [valkey-io/valkey#3492](https://github.com/valkey-io/valkey/pull/3492) ([tests](tests/valkey/3492-c5959266f/)): valkey-benchmark: centralize RDMA WRITABLE kick via createFileEvent (#3492): 0 of 4 test(s) reached the change, coverage 87%
 
 ### valkey-io/valkey-bloom
 
@@ -73,11 +73,11 @@ Updated 2026-11-07T06:18+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 398 of 564 tested (71%)
-- Changed-line coverage: median 100% of 254 merge(s) measured, 16 under 50%
-- Recall: 118 parents flagged of 165 fix merges
-- Claude: $1737.27 in the last 24 hours, $3934.23 in the last 7 days, $3934.23 in all
-- Issues filed: 41
+- Merges whose tests reached the change: 405 of 576 tested (70%)
+- Changed-line coverage: median 100% of 265 merge(s) measured, 16 under 50%
+- Recall: 120 parents flagged of 168 fix merges
+- Claude: $1725.57 in the last 24 hours, $4014.34 in the last 7 days, $4014.34 in all
+- Issues filed: 42
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -119,6 +119,7 @@ Updated 2026-11-07T06:18+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/85
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/86
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/89
 
 ## Retries
 
@@ -126,5 +127,6 @@ Updated 2026-11-07T06:18+00:00.
 - [valkey-io/valkey-search#735](https://github.com/valkey-io/valkey-search/pull/735): attempt 2 of 3, `deps=/opt/valkey-search-deps` failed in merge (exit 1): [138/223] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/commands
 - [valkey-io/valkey-search#734](https://github.com/valkey-io/valkey-search/pull/734): attempt 2 of 3, `deps=/opt/valkey-search-deps` failed in merge (exit 1): [137/221] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/commands
 - [valkey-io/valkey-search#621](https://github.com/valkey-io/valkey-search/pull/621): attempt 2 of 3, `deps=/opt/valkey-search-deps` failed in merge (exit 1): [137/221] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/commands
-- [valkey-io/valkey#3374](https://github.com/valkey-io/valkey/pull/3374): attempt 2 of 3, 1 of 1 run(s) could not start: the run could not start: environment acquisition failed
 - [valkey-io/valkey#3800](https://github.com/valkey-io/valkey/pull/3800): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
+- [valkey-io/valkey#3613](https://github.com/valkey-io/valkey/pull/3613): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
+- [valkey-io/valkey#3578](https://github.com/valkey-io/valkey/pull/3578): attempt 1 of 3, 3 of 3 run(s) could not start: the run could not start: environment acquisition failed

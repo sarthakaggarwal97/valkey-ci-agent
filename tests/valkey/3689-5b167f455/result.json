@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5b167f45562e59fda28f03fc828aef84834aa88a",
+  "parent": "a813df05461d9fd6e613ebbed5dbeee51482ee06",
+  "pr": 3689,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add check to disallow `CLUSTER SETSLOT` to target self (#3689)",
+  "date": "2026-05-13",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.1315,
+  "findings": [],
+  "recorded": []
+}

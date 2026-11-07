@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 418c98bd25f3..ca9dee353d2f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7be6ded8f33f
+seed: 103
+experiment:
+  id: proposed.move-replace-replication
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7200
