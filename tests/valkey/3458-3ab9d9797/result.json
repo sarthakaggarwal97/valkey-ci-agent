@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3ab9d9797ebaaf1e6ec582dcab6f56284bc74dd2",
+  "parent": "03c2d4c2a21bdebc182266b49932e71716e2762a",
+  "pr": 3458,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix race condition during async client freeing with IO threading enabled (#3458)",
+  "date": "2026-04-22",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 1,
+    "percent": 33,
+    "uncovered": [
+      "src/networking.c:4171",
+      "src/networking.c:4172"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 5.2082,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-0759fce2b3b7",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-0be6417ab5c7",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

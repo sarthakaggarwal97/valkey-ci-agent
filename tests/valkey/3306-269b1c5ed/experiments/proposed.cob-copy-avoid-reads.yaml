@@ -1,0 +1,24 @@
+extends: [valkey.base]
+id: proposed.cob-copy-avoid-reads
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Heavy copy-avoided large-string GET replies drive the new COB reference
+    tracking (trackBufReferences/releaseBufReferences, io_tracked_reply_len); liveness,
+    ledger and deployment-state judge
+inputs:
+  properties:
+    read_value_size: {type: integer, minimum: 1, maximum: 1048576, default: 16384}
+components:
+- use: valkey.workload.key-value
+  id: writes
+  config:
+    value_size: {$ref: inputs.read_value_size}
+    mix: {get: 0.9, set: 0.1, del: 0.0}
+- use: valkey.action.sleep
+  id: soak
+  depends_on: [writes]
+  config: {seconds: 8}
+required_events: [soak.completed]
+required_evidence:
+- {evidence_id: valkey.data.ledger-verified, source: data}

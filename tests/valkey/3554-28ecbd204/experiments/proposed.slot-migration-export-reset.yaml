@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.slot-migration-export-reset
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Cancelling an in-flight slot export and pruning the finished job must
+    not dereference the client's stale slot-migration pointer
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    log_max_len:
+      type: string
+      default: "0"
+      description: cluster-slot-migration-log-max-len; 0 prunes a finished job at
+        once, widening the use-after-free window
+    node_timeout:
+      type: string
+      default: "15000"
+components:
+- use: valkey.action.commands
+  id: mig
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 2
+    resp: 2
+    timeout_s: 30
+    server_config:
+      cluster-slot-migration-log-max-len: {$ref: inputs.log_max_len}
+      cluster-node-timeout: {$ref: inputs.node_timeout}
+    commands:
+    - {command: [DEBUG, POPULATE, "300000"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, "0", "16383", NODE, "<node.1.id>"],
+      node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, CANCELSLOTMIGRATIONS], node: 0, expect: {error: false}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 0, compare: skip}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [PING], node: 0, connection: probe, expect_difference: true, expect: {
+        equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mig}

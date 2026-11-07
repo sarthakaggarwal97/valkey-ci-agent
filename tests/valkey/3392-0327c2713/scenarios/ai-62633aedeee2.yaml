@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 269b1c5eda93..0327c271316d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-62633aedeee2
+seed: 102
+experiment:
+  id: proposed.dynamic-module-beside-static-lua
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

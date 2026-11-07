@@ -1,0 +1,20 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey edc0d26ada08..bb88665578b8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-dc7982413dde
+seed: 70003
+experiment:
+  id: proposed.fork-dismiss-collections-chaos
+  inputs:
+    signal: SIGKILL
+    mutation_rate: 800
+    mutable_keys: 800
+    value_size: 64
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec
+    repl-diskless-sync: 'yes'
+    dual-channel-replication-enabled: 'yes'

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a7d495352ac0ba724eeec51fd57b615e8e805f52",
+  "parent": "54980ece3a46a1bf83eea40870542c09c843b8fa",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "extra UT",
+  "date": "2026-04-24",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2148,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds only a new unit test (safe_iterator_release_before_cleanup) to src/unit/test_hashtable.cpp; no server, tool, or library code changes. There is no runtime behaviour to exercise, so no scenario is needed."
+}

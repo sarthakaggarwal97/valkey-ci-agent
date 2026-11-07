@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 269b1c5eda93..0327c271316d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7fd6ff1f02a0
+seed: 105
+experiment:
+  id: proposed.static-lua-scripting-parity
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

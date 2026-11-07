@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4a42c95853c0..269b1c5eda93.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4688b1768ed5
+seed: 202
+experiment:
+  id: proposed.cob-copy-avoid-reads
+  inputs:
+    read_value_size: 65536
+    stable_keys: 1000
+    mutation_rate: 800
+deployment:
+  mode: standalone
+  base_port: 7100
+  server_config:
+    io-threads: 1
+    min-string-size-avoid-copy-reply: 1024
+    client-output-buffer-limit: normal 2097152 0 0

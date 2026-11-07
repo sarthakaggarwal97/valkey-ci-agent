@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cb2cfdd4e016..d2db0c268cc7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f2a16cab65a5
+seed: 7102
+experiment:
+  id: proposed.commandresult-unload-counter
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

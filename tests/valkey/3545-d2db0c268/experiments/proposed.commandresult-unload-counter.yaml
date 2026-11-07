@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.commandresult-unload-counter
+deployment:
+  modes: [standalone]
+metadata:
+  description: Unloading the commandresult module at shutdown must decrement the command-result
+    listener counters; after reload a fresh unsubscribe must not crash the next command
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: unload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [cmdresult.register, all], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [cmdresult.unsubscribe], expect: {error: "not subscribed"}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [unload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: unload}

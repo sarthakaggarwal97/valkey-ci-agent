@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "651c40a89ebe6427e2053bb139a7dedf466821ff",
+  "parent": "c403eecd5b7dbfdf737e8c6aae8e1d022727ba50",
+  "pr": 3541,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix FD leak in connSocketBlockingConnect on timeout (#3541)",
+  "date": "2026-04-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6771,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only moves conn->fd = fd before the aeWait timeout check in connSocketBlockingConnect, closing an fd that was previously leaked on a connect timeout. Its sole caller is MIGRATE to an unresponsive target. The client-visible behaviour is identical on both builds: both send -IOERR error or timeout connecting to the client, free the connection, and return NULL. The only difference is a leaked kernel file descriptor, which no oracle detects (it is not a heap leak, so LeakSanitizer never fires, and there is no fd-count command/INFO field to compare). Triggering the timeout branch determin"
+}

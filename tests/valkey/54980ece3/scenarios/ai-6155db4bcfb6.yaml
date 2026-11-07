@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d2db0c268cc7..54980ece3a46.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6155db4bcfb6
+seed: 101
+experiment:
+  id: proposed.hashtable-iter-exhaustion
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

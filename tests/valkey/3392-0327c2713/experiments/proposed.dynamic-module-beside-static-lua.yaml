@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.dynamic-module-beside-static-lua
+deployment:
+  modes: [standalone]
+metadata:
+  description: A dlopen()ed module (aclcheck.so) loaded beside the statically linked
+    Lua engine; module ACL categories, scripting interop and replies compared with
+    the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dynmod
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [aclcheck.module.command.aclcategories.write], expect: {equals: OK}}
+    - {command: [block.commands.outside.onload], expect: {equals: OK}}
+    - {command: [ACL, CAT], compare: unordered, expect: {contains: foocategory}}
+    - {command: [ACL, CAT, foocategory], compare: unordered, expect: {contains: aclcheck.module.command.test.add.new.aclcategories}}
+    - {command: [ACL, SETUSER, u1, on, ">pw", "~*", "-@all", "+@foocategory"], expect: {
+        equals: OK}}
+    - {connection: c2, command: [AUTH, u1, pw], expect: {equals: OK}}
+    - {connection: c2, command: [aclcheck.module.command.test.add.new.aclcategories],
+      expect: {equals: OK}}
+    - {connection: c2, command: [aclcheck.module.command.aclcategories.write], expect: {
+        error: NOPERM}}
+    - {connection: c2, command: [GET, k], expect: {error: NOPERM}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [EVAL, "return server.call('SET', KEYS[1], ARGV[1])", 1, k1, v1],
+      expect: {equals: QUEUED}}
+    - {command: [aclcheck.module.command.aclcategories.write], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK]}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [EVAL, "return server.call('aclcheck.module.command.aclcategories.write')",
+        0], expect: {equals: OK}}
+    - {command: [SCRIPT, LOAD, "return 1"], expect: {equals: e0e1f9fabfc9d4800c877a703b823ac0578ff831}}
+    - {command: [EVALSHA, e0e1f9fabfc9d4800c877a703b823ac0578ff831, 0], expect: {
+        equals: 1}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nserver.register_function('myfunc',\
+          \ function(keys, args) return 42 end)"], expect: {equals: mylib}}
+    - {command: [FCALL, myfunc, 0], expect: {equals: 42}}
+    - {command: [INFO, modules], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [dynmod.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dynmod}

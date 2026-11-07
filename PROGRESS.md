@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-07T10:24+00:00.
+Updated 2026-11-07T10:39+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 589 | 1918 | #3554 (2026-04-27) | 277 | 84.1 |
+| valkey-io/valkey | 612 | 1895 | #3509 (2026-04-17) | 300 | 87.4 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
 | valkey-io/valkey-search | 393 | 276 | #603 (2026-01-15) | 165 | 56.1 |
@@ -13,28 +13,28 @@ Updated 2026-11-07T10:24+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-07T08:16:30+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42347171554): 20 merge(s) tested, 4 without a code change.
+[2026-11-07T10:39:11+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42354781729): 20 merge(s) tested, 5 without a code change.
 
-- [valkey-io/valkey#3578](https://github.com/valkey-io/valkey/pull/3578): to retry, 3 of 3 run(s) could not start: the run could not start: environment acquisition failed
-- [valkey-io/valkey#3619](https://github.com/valkey-io/valkey/pull/3619) ([tests](tests/valkey/3619-fea0b4064/)): Fix invalid memory access in RESTORE with malformed zipmap (CVE-2026-25243) (#3619): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3625](https://github.com/valkey-io/valkey/pull/3625) ([tests](tests/valkey/3625-c7c92db43/)): Delay full sync during yielding Lua scripts to prevent use-after-free (CVE-2026-23631) (#3625): declined: no proposed test validated
-- [valkey-io/valkey#3610](https://github.com/valkey-io/valkey/pull/3610) ([tests](tests/valkey/3610-797c62604/)): Fix SIGSEGV in VM_GetLRU/SetLRU/GetLFU/SetLFU on NULL key (#3610): 4 of 4 test(s) reached the change, coverage 100%; crash, fixed by #3610 (recorded)
-- [valkey-io/valkey#3583](https://github.com/valkey-io/valkey/pull/3583) ([tests](tests/valkey/3583-8891441ab/)): Fix checkPrefixCollisionsOrReply returning non-zero on self-overlap (#3583): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3330](https://github.com/valkey-io/valkey/pull/3330) ([tests](tests/valkey/3330-cea9354b5/)): Big Endian: add daily workflow UT job and fix UTs (#3330): declined: The change is purely CI and unit-test work: it adds an s390x (big-endian) daily GitHub Actions job, adds/fixes gtest unit tests for endianness round-trips and raw byte layouts, and adds header prototypes (encodeTimeoutKey, decodeTimeoutKey, streamEncodeID) for functions whose definitions i
-- [valkey-io/valkey#3601](https://github.com/valkey-io/valkey/pull/3601) ([tests](tests/valkey/3601-46d37e4d5/)): Fix off-by-one boundary in lpEncodeBacklen() for 3 values (#3601): 2 of 2 test(s) reached the change, coverage 100%; [check, predates #3601](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/90); check, predates #3601, since fixed (recorded); crash, predates #3601, since fixed (recorded)
-- [valkey-io/valkey#3591](https://github.com/valkey-io/valkey/pull/3591) ([tests](tests/valkey/3591-54bdf5737/)): Handle NULL pointer in streamTrim listpack delta calculation (#3591): 0 of 5 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3596](https://github.com/valkey-io/valkey/pull/3596) ([tests](tests/valkey/3596-cba05103d/)): Fix: prevent NULL dereference crash in connectSlotExportJob when target node disappears (#3596): 0 of 2 test(s) reached the change, coverage 25%
-- [valkey-io/valkey#3592](https://github.com/valkey-io/valkey/pull/3592) ([tests](tests/valkey/3592-72fc5b14b/)): Fix compilation error: replace deprecated je_calloc with zcalloc_num (#3592): declined: The change only swaps the deprecated je_calloc for zcalloc_num in allocatorDefragInit to fix a compilation error. zcalloc_num has the same semantics (zeroed memory, calloc signature, non-NULL or abort), so there is no runtime behaviour change to exercise: it is a build fix, and the fact th
-- [valkey-io/valkey#3598](https://github.com/valkey-io/valkey/pull/3598) ([tests](tests/valkey/3598-81639e397/)): fix: validate key count before allocating result in keyspec (#3598): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3586](https://github.com/valkey-io/valkey/pull/3586) ([tests](tests/valkey/3586-7e2a2f7c4/)): fix(cluster): Remove per-call srand in clusterManagerNodePrimaryRandom (#3586): 0 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3580](https://github.com/valkey-io/valkey/pull/3580) ([tests](tests/valkey/3580-678a06d21/)): Set errno on EOF in syncRead and propagate it in logs (#3580): 0 of 7 test(s) reached the change, coverage 66%
-- [valkey-io/valkey#3568](https://github.com/valkey-io/valkey/pull/3568) ([tests](tests/valkey/3568-7817ca8a7/)): Fix GEOSEARCH BYPOLYGON leak on invalid COUNT (#3568): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3585](https://github.com/valkey-io/valkey/pull/3585) ([tests](tests/valkey/3585-ad404cd26/)): fix compile warning in util.c (#3585): declined: The change is a build-level fix for a compile warning: it replaces the raw __attribute__((no_sanitize_address, no_sanitize("thread"))) annotations on the string2ll ifunc resolver in src/util.c with the equivalent VALKEY_NO_SANITIZE macros. The resolver body and the string2ll implementation
-- [valkey-io/valkey#2823](https://github.com/valkey-io/valkey/pull/2823) ([tests](tests/valkey/2823-39036c7c0/)): Add structured datasets loading capability in valkey benchmark (#2823): 5 of 5 test(s) reached the change, coverage 81%
-- [valkey-io/valkey#3584](https://github.com/valkey-io/valkey/pull/3584) ([tests](tests/valkey/3584-16ed690fe/)): fix LTO compilation warning in eval (#3584): declined: Build-only fix: the eval shebang parser is refactored into an extra local and a serverAssert purely to silence an LTO compilation warning. The pre-existing guard at line 255 (sdslen(parts[0]) < 2 returns C_ERR) already guarantees part0_len >= 2 before the assert, so the assert can never tr
-- [valkey-io/valkey#3573](https://github.com/valkey-io/valkey/pull/3573) ([tests](tests/valkey/3573-8091c6c10/)): Remove redundant count division in genericHgetallCommand (#3573): declined: The change replaces `setDeferredMapLen(c, replylen, count /= 2); count /= 2;` with `setDeferredMapLen(c, replylen, count / 2);` in genericHgetallCommand. The old compound assignment already passed count/2 to setDeferredMapLen, and the second division only mutated a local variable that is n
-- [valkey-io/valkey#3382](https://github.com/valkey-io/valkey/pull/3382) ([tests](tests/valkey/3382-ff80b2d1d/)): Migrate the remaining cluster tests to the new framework and remove legacy files (#2297) (#3382): declined: The change migrates legacy Tcl cluster tests (failover loop, resharding, replica migration, cluster shards) to the new test framework and deletes the old tests/cluster/ harness, runtest-cluster, and updates the daily CI workflow accordingly. No file under src/ is modified, so no server, to
-- [valkey-io/valkey#3503](https://github.com/valkey-io/valkey/pull/3503) ([tests](tests/valkey/3503-6dbb7f81a/)): Fix remove cached eval scripts on engine unregister (#3503): declined: The fix only runs inside scriptingEngineManagerUnregister(), reachable solely via VM_UnregisterScriptingEngine() from a scripting-engine module's OnUnload — i.e. MODULE UNLOAD of an engine module (e.g. Lua built as a module). The fuzzer cannot reach it: valkey.action.commands refuses MODUL
+- [valkey-io/valkey#3578](https://github.com/valkey-io/valkey/pull/3578): Fix Deferred Reply Placeholders in Active Deferred Buffers (#3578): error: 2 of 2 run(s) could not start: the run could not start: environment acquisition failed
+- [valkey-io/valkey#3554](https://github.com/valkey-io/valkey/pull/3554) ([tests](tests/valkey/3554-28ecbd204/)): Ensure client slot migration pointer is cleared during reset (#3554): 0 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3548](https://github.com/valkey-io/valkey/pull/3548) ([tests](tests/valkey/3548-a3e44a55d/)): Fix lua-enable-insecure-api default value cannot be changed to yes (#3548): declined: no proposed test validated
+- [valkey-io/valkey#3557](https://github.com/valkey-io/valkey/pull/3557) ([tests](tests/valkey/3557-ac9ca9de3/)): Fix rdmaServer leaks when create listen cm id error (#3557): declined: The change only fixes a resource leak (event channel and addrinfo not freed) on an error path in rdmaServer when rdma_create_id fails during RDMA listener setup. It has no observable behaviour change: the listen attempt fails with the same error either way. Reaching the path requires an RD
+- [valkey-io/valkey#3533](https://github.com/valkey-io/valkey/pull/3533) ([tests](tests/valkey/3533-bb8866557/)): hashtable: fix dismissHashtable madvise size (#3533): 0 of 6 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3555](https://github.com/valkey-io/valkey/pull/3555) ([tests](tests/valkey/3555-edc0d26ad/)): Strip LTO flags from static Lua module build (#3555): declined: The change is build-system only: it strips LTO flags (-flto, -flto=auto, -ffat-lto-objects) from the static Lua module Makefile so that archiving into libvalkeylua.a does not produce LTO bitcode objects the system linker cannot read. No runtime behaviour, command reply, replication, persis
+- [valkey-io/valkey@a7d495352ac0](https://github.com/valkey-io/valkey/commit/a7d495352ac0ba724eeec51fd57b615e8e805f52) ([tests](tests/valkey/a7d495352/)): extra UT: declined: The change adds only a new unit test (safe_iterator_release_before_cleanup) to src/unit/test_hashtable.cpp; no server, tool, or library code changes. There is no runtime behaviour to exercise, so no scenario is needed.
+- [valkey-io/valkey@54980ece3a46](https://github.com/valkey-io/valkey/commit/54980ece3a46a1bf83eea40870542c09c843b8fa) ([tests](tests/valkey/54980ece3/)): hashtable iterator safety: invalidate on exhaustion: 0 of 9 test(s) reached the change, coverage 100%, 4 skipped (required capability 'build' is unsupported)
+- [valkey-io/valkey#3545](https://github.com/valkey-io/valkey/pull/3545) ([tests](tests/valkey/3545-d2db0c268/)): Fix module commandresult event cleanup during unsubscribe and module unload (#3545): 0 of 5 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3504](https://github.com/valkey-io/valkey/pull/3504) ([tests](tests/valkey/3504-5abf79e0e/)): Add zmalloc_aligned() and fix SPMC queue buffer alignment (#3504): 0 of 5 test(s) reached the change, coverage 81%
+- [valkey-io/valkey#3535](https://github.com/valkey-io/valkey/pull/3535) ([tests](tests/valkey/3535-970984344/)): Optimize HGETDEL to pause auto shrink when deleting multiple items (#3535): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3541](https://github.com/valkey-io/valkey/pull/3541) ([tests](tests/valkey/3541-651c40a89/)): Fix FD leak in connSocketBlockingConnect on timeout (#3541): declined: The change only moves conn->fd = fd before the aeWait timeout check in connSocketBlockingConnect, closing an fd that was previously leaked on a connect timeout. Its sole caller is MIGRATE to an unresponsive target. The client-visible behaviour is identical on both builds: both send -IOERR 
+- [valkey-io/valkey#3498](https://github.com/valkey-io/valkey/pull/3498): to retry, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
+- [valkey-io/valkey#3458](https://github.com/valkey-io/valkey/pull/3458) ([tests](tests/valkey/3458-3ab9d9797/)): Fix race condition during async client freeing with IO threading enabled (#3458): 0 of 3 test(s) reached the change, coverage 33%
+- [valkey-io/valkey#3518](https://github.com/valkey-io/valkey/pull/3518) ([tests](tests/valkey/3518-fc00f7be0/)): Fix VLA warning in io_threads (#3518): declined: The change only replaces a `const int BATCH_SIZE = 32` local with `#define BATCH_SIZE 32` in io_threads.c so the `batch_jobs[BATCH_SIZE]` array is no longer a compiler-flagged VLA. The array size and all runtime behavior are identical; this is a warning-silencing refactor with no observabl
+- [valkey-io/valkey#2936](https://github.com/valkey-io/valkey/pull/2936): to retry, 5 of 5 run(s) could not start: the run could not start: environment acquisition failed
+- [valkey-io/valkey#3520](https://github.com/valkey-io/valkey/pull/3520) ([tests](tests/valkey/3520-9d51f5ff8/)): Document VALKEYCLI_HOST/PORT variables in help (#3520): declined: The change only edits the static usage/help text printed by valkey-cli (documenting the pre-existing VALKEYCLI_HOST/VALKEYCLI_PORT environment variables for -h and -p). No code path that parses options, reads the environment variables, connects, or executes commands is modified, so there i
+- [valkey-io/valkey#3392](https://github.com/valkey-io/valkey/pull/3392) ([tests](tests/valkey/3392-0327c2713/)): Add Static Module Support (#3392): 6 of 15 test(s) reached the change, coverage 59%
+- [valkey-io/valkey#3306](https://github.com/valkey-io/valkey/pull/3306) ([tests](tests/valkey/3306-269b1c5ed/)): Improve COB memory tracking with copy avoidance (#3306): 0 of 4 test(s) reached the change, coverage 95%
+- [valkey-io/valkey#3516](https://github.com/valkey-io/valkey/pull/3516) ([tests](tests/valkey/3516-4a42c9585/)): Fix HPERSIST RESP protocol violation on wrong-type key (#3516): 2 of 2 test(s) reached the change, coverage 100%
 
 ### valkey-io/valkey-bloom
 
@@ -73,10 +73,10 @@ Updated 2026-11-07T10:24+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 414 of 595 tested (70%)
-- Changed-line coverage: median 100% of 276 merge(s) measured, 17 under 50%
-- Recall: 123 parents flagged of 177 fix merges
-- Claude: $1569.99 in the last 24 hours, $4183.49 in the last 7 days, $4183.49 in all
+- Merges whose tests reached the change: 416 of 605 tested (69%)
+- Changed-line coverage: median 100% of 286 merge(s) measured, 18 under 50%
+- Recall: 124 parents flagged of 182 fix merges
+- Claude: $1677.00 in the last 24 hours, $4290.50 in the last 7 days, $4290.50 in all
 - Issues filed: 43
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
@@ -126,4 +126,5 @@ Updated 2026-11-07T10:24+00:00.
 
 - [valkey-io/valkey#3800](https://github.com/valkey-io/valkey/pull/3800): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
 - [valkey-io/valkey#3613](https://github.com/valkey-io/valkey/pull/3613): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
-- [valkey-io/valkey#3578](https://github.com/valkey-io/valkey/pull/3578): attempt 2 of 3, 3 of 3 run(s) could not start: the run could not start: environment acquisition failed
+- [valkey-io/valkey#3498](https://github.com/valkey-io/valkey/pull/3498): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
+- [valkey-io/valkey#2936](https://github.com/valkey-io/valkey/pull/2936): attempt 1 of 3, 5 of 5 run(s) could not start: the run could not start: environment acquisition failed

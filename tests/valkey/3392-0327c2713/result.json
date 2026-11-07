@@ -1,0 +1,112 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0327c271316daa952e6c9a41cc922ea8a9548827",
+  "parent": "269b1c5eda9347fb7d4d485ac9d375d11d467edd",
+  "pr": 3392,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add Static Module Support (#3392)",
+  "date": "2026-04-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 15,
+  "proven": 6,
+  "hunted": 13,
+  "dropped": 3,
+  "recall": true,
+  "coverage": {
+    "lines": 87,
+    "executed": 52,
+    "percent": 59,
+    "uncovered": [
+      "src/module.c:13092",
+      "src/module.c:13093",
+      "src/module.c:13095",
+      "src/module.c:13096",
+      "src/module.c:13097",
+      "src/module.c:13101",
+      "src/module.c:13104",
+      "src/module.c:13105",
+      "src/module.c:13106",
+      "src/module.c:13108",
+      "src/module.c:13126",
+      "src/module.c:13127",
+      "src/module.c:13144",
+      "src/module.c:13146",
+      "src/module.c:13150",
+      "src/module.c:13152",
+      "src/module.c:13156",
+      "src/module.c:13157",
+      "src/module.c:13158",
+      "src/module.c:13230",
+      "src/module.c:13237",
+      "src/module.c:13238",
+      "src/module.c:13240",
+      "src/module.c:13241",
+      "src/module.c:13246",
+      "src/module.c:13247",
+      "src/module.c:13249",
+      "src/module.c:13252",
+      "src/module.c:13253",
+      "src/module.c:13322",
+      "src/module.c:13323",
+      "src/module.c:13324",
+      "src/module.c:13331",
+      "src/module.c:13332",
+      "src/module.c:13334"
+    ],
+    "rounds": 2
+  },
+  "cost_usd": 23.6668,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-6789ba3806d9",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'identity' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (SCRIPT LOAD return 1), 4 (EVALSHA e0e1f9fabfc9d4800c877a703b823ac0578ff831 0), 8 (SCRIPT LOAD return 1)"
+    },
+    {
+      "scenario": "ai-d7205fdd204a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'identity' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (SCRIPT LOAD return 1), 4 (EVALSHA e0e1f9fabfc9d4800c877a703b823ac0578ff831 0), 8 (SCRIPT LOAD return 1)"
+    },
+    {
+      "scenario": "ai-696578238f7a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'identity' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (SCRIPT LOAD return 1), 4 (EVALSHA e0e1f9fabfc9d4800c877a703b823ac0578ff831 0), 8 (SCRIPT LOAD return 1)"
+    },
+    {
+      "scenario": "ai-09594587213a",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-35a40f0c3385",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'election-safety' returned ERROR: cannot check that 2 election winner(s) reached quorum: no 'Failover auth ACK' line was published as 'cluster.vote.acked' (Valkey logs them since 9.2)"
+    },
+    {
+      "scenario": "ai-a28c46d0f052",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'dynmod' returned ERROR: expectations both builds violate alike, so they are not about the change: 15 (SCRIPT LOAD return 1), 16 (EVALSHA e0e1f9fabfc9d4800c877a703b823ac0578ff831 0)"
+    },
+    {
+      "scenario": "ai-62633aedeee2",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'dynmod' returned ERROR: expectations both builds violate alike, so they are not about the change: 15 (SCRIPT LOAD return 1), 16 (EVALSHA e0e1f9fabfc9d4800c877a703b823ac0578ff831 0)"
+    },
+    {
+      "scenario": "ai-59cdc685c0f0",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'cli' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (valkey-cli -p $port SCRIPT LOAD return 1), 3 (valkey-cli -p $port MODULE UNLOAD lua)"
+    }
+  ]
+}

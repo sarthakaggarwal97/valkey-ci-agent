@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.static-lua-scripting-parity
+deployment:
+  modes: [standalone]
+metadata:
+  description: "Scripting and functions behave identically with the statically linked\
+    \ Lua engine: EVAL error paths, function flags, and functions reloaded from a\
+    \ SAVEd RDB across a restart"
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: scripting
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "return server.call('SET', KEYS[1], ARGV[1])", 1, k, v1], expect: {
+        equals: OK}}
+    - {command: [GET, k], expect: {equals: v1}}
+    - {command: [EVAL, "return {1,'two',{3,'three'}}", 0], expect: {equals: [1, two,
+          [3, three]]}}
+    - {command: [EVAL, "local ok, err = pcall(function() return server.call('INCR',\
+          \ KEYS[1]) end) if ok then return 'no-error' else return 'caught' end",
+        1, k], expect: {equals: caught}}
+    - {command: [EVAL, "return server.call('INCR', KEYS[1])", 1, k], expect: {error: true}}
+    - command:
+      - FUNCTION
+      - LOAD
+      - "#!lua name=mylib\nserver.register_function('f1', function(keys, args) return\
+        \ server.call('SET', keys[1], args[1]) end)\nserver.register_function{function_name='f2',\
+        \ callback=function(keys, args) return 7 end, flags={'no-writes'}}"
+      expect: {equals: mylib}
+    - {command: [FCALL, f1, 1, fk, fv], expect: {equals: OK}}
+    - {command: [GET, fk], expect: {equals: fv}}
+    - {command: [FCALL_RO, f2, 0], expect: {equals: 7}}
+    - {command: [FCALL_RO, f1, 1, fk, fv], expect: {error: true}}
+    - {command: [FUNCTION, LIST], compare: skip}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FCALL_RO, f2, 0], expect: {equals: 7}}
+    - {command: [FCALL, f1, 1, fk2, fv2], expect: {equals: OK}}
+    - {command: [MODULE, LIST], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [scripting.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scripting}

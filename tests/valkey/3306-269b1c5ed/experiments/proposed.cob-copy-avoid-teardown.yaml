@@ -1,0 +1,40 @@
+extends: [valkey.base]
+id: proposed.cob-copy-avoid-teardown
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Copy-avoided large reads while the primary is signalled and restarted,
+    exercising reply-reference release on client teardown and resync; ledger and liveness
+    judge
+inputs:
+  properties:
+    read_value_size: {type: integer, minimum: 1, maximum: 1048576, default: 16384}
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGTERM}
+components:
+- use: valkey.workload.key-value
+  id: writes
+  config:
+    value_size: {$ref: inputs.read_value_size}
+    mix: {get: 0.9, set: 0.1, del: 0.0}
+- use: valkey.fault.process-signal
+  id: restart-primary
+  config:
+    when_event: warm-up.completed
+    instance: primary
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, restart-primary]
+  config: {seconds: 4}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 4}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: restart-primary}

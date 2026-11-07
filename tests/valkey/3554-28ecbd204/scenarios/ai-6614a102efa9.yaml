@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a3e44a55d3da..28ecbd204fce.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6614a102efa9
+seed: 101
+experiment:
+  id: proposed.slot-migration-export-reset
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    log_max_len: '0'
+    node_timeout: '15000'
+deployment:
+  mode: standalone
+  base_port: 7000

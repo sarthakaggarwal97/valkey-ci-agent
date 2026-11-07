@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.dynamic-module-restart-cycle
+deployment:
+  modes: [standalone]
+metadata:
+  description: Restart a server running the static Lua engine plus a dlopen()ed module;
+    graceful shutdown unloads both (static-symbol and dynamic dlsym unload paths),
+    startup reloads both, replies compared with the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cycle
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [aclcheck.module.command.aclcategories.write], expect: {equals: OK}}
+    - {command: [EVAL, "return server.call('SET', KEYS[1], ARGV[1])", 1, k1, v1],
+      expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [aclcheck.module.command.aclcategories.write], expect: {equals: OK}}
+    - {command: [ACL, CAT, foocategory], compare: unordered, expect: {contains: aclcheck.module.command.test.add.new.aclcategories}}
+    - {command: [EVAL, "return server.call('GET', KEYS[1])", 1, k1], expect: {equals: v1}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [aclcheck.module.command.aclcategories.write], expect: {equals: OK}}
+    - {command: [EVAL, "return 7", 0], expect: {equals: 7}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [cycle.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cycle}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 269b1c5eda93..0327c271316d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f9c4dfc3d9fc
+seed: 51001
+experiment:
+  id: proposed.dynamic-module-onunload-cycle
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

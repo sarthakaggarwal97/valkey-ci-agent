@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 109ef346f355..4a42c95853c0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-75b7c90ad10f
+seed: 2
+experiment:
+  id: proposed.hpersist-wrongtype-protocol
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

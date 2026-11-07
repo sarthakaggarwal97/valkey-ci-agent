@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 651c40a89ebe..97098434463c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3c97e635e469
+seed: 101
+experiment:
+  id: proposed.hgetdel-pause-auto-shrink
+  inputs:
+    resp: 2
+    listpack_entries: 16
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

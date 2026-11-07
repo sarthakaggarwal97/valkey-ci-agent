@@ -1,0 +1,58 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "54980ece3a46a1bf83eea40870542c09c843b8fa",
+  "parent": "d2db0c268cc73ede427f46ad206cb93685c0b10f",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "hashtable iterator safety: invalidate on exhaustion",
+  "date": "2026-04-24",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 9,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 5,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 20.4056,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-acce80092d62",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported"
+    },
+    {
+      "scenario": "ai-2aedc34baf52",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported"
+    },
+    {
+      "scenario": "ai-42364d3cb3e7",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported"
+    },
+    {
+      "scenario": "ai-177cbf265ea1",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported"
+    },
+    {
+      "scenario": "ai-f1548181d555",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

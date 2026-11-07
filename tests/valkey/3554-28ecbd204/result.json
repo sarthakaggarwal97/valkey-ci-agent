@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "28ecbd204fceec9f0bf1aa1b2d791b0f7e9fc7e5",
+  "parent": "a3e44a55d3da5bc590b5ee596f195e56f187f70e",
+  "pr": 3554,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Ensure client slot migration pointer is cleared during reset (#3554)",
+  "date": "2026-04-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.2531,
+  "findings": [],
+  "recorded": []
+}

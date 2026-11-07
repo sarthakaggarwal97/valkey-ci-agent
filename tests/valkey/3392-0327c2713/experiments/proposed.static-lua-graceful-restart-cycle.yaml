@@ -1,0 +1,31 @@
+extends: [valkey.base]
+id: proposed.static-lua-graceful-restart-cycle
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: SIGTERM a replica under writes so graceful shutdown unloads its modules
+    (static lua, and any loadmodule) and the restart reloads them; no acknowledged
+    write lost
+components:
+- use: valkey.fault.process-signal
+  id: stop-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: SIGTERM
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, stop-replica]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: stop-replica}

@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.static-lua-module-identity
+deployment:
+  modes: [standalone]
+metadata:
+  description: "Static Lua module registration: MODULE LIST and HELLO show the bare\
+    \ name instead of the .so path, CONFIG REWRITE skips the static module, and a\
+    \ restart reloads the engine from the executable"
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: identity
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "return 1", 0], expect: {equals: 1}}
+    - {command: [MODULE, LIST], expect_difference: true, expect: {exists: true}}
+    - {command: [HELLO], expect_difference: true, expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 1"], expect: {equals: e0e1f9fabfc9d4800c877a703b823ac0578ff831}}
+    - {command: [EVALSHA, e0e1f9fabfc9d4800c877a703b823ac0578ff831, 0], expect: {
+        equals: 1}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [EVAL, "return 1", 0], expect: {equals: 1}}
+    - {command: [SCRIPT, LOAD, "return 1"], expect: {equals: e0e1f9fabfc9d4800c877a703b823ac0578ff831}}
+    - {command: [MODULE, LIST], expect_difference: true, expect: {exists: true}}
+    - {command: [INFO, modules], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [identity.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: identity}

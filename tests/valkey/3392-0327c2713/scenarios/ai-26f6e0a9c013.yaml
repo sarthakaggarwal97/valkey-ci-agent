@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 269b1c5eda93..0327c271316d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-26f6e0a9c013
+seed: 103
+experiment:
+  id: proposed.dynamic-module-restart-cycle
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

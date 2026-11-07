@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.hpersist-wrongtype-protocol
+deployment:
+  modes: [standalone]
+metadata:
+  description: HPERSIST on a wrong-type key must reply a lone WRONGTYPE error, not
+    an array header followed by the error that desyncs the connection and steals later
+    replies
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hpersist
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SET, mystr, hello], expect: {equals: OK}}
+    - {command: [HPERSIST, mystr, FIELDS, 1, f1], expect_difference: true, expect: {
+        error: "WRONGTYPE"}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [HPERSIST, mystr, FIELDS, 2, f1], expect: {error: "numfields"}}
+    - {connection: d, raw: "HPERSIST mystr FIELDS 3 f1 f2 f3\r\nPING\r\nPING\r\nPING\r\
+        \n", expect_difference: true, expect: {error: "WRONGTYPE"}}
+    - {connection: d, read: true, expect_difference: true, expect: {equals: [PONG,
+          PONG, PONG]}}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HEXPIRE, h, 100, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HPERSIST, h, FIELDS, 3, f1, f2, nofield], expect: {equals: [1, -1,
+          -2]}}
+    - {command: [HPERSIST, missing, FIELDS, 1, f1], expect: {equals: [-2]}}
+    - {command: [HTTL, h, FIELDS, 1, f1], expect: {equals: [-1]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hpersist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hpersist}

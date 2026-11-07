@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a3e44a55d3da5bc590b5ee596f195e56f187f70e",
+  "parent": "ac9ca9de3d1feff4a40358935b0f2e2acdcdc789",
+  "pr": 3548,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix lua-enable-insecure-api default value cannot be changed to yes (#3548)",
+  "date": "2026-04-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.5126,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

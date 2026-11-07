@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "269b1c5eda9347fb7d4d485ac9d375d11d467edd",
+  "parent": "4a42c95853c0f3978715cb509a774f457edc182b",
+  "pr": 3306,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Improve COB memory tracking with copy avoidance (#3306)",
+  "date": "2026-04-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 46,
+    "executed": 44,
+    "percent": 95,
+    "uncovered": [
+      "src/networking.c:761",
+      "src/networking.c:2922"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 4.6276,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,46 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "97098434463c4687f8ed1f4567717fea4c6bce21",
+  "parent": "651c40a89ebe6427e2053bb139a7dedf466821ff",
+  "pr": 3535,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize HGETDEL to pause auto shrink when deleting multiple items (#3535)",
+  "date": "2026-04-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.0773,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-3c97e635e469",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hgetdel' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (HGETDEL h FIELDS 0)"
+    },
+    {
+      "scenario": "ai-df46d2bd6b91",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hgetdel' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (HGETDEL h FIELDS 0)"
+    },
+    {
+      "scenario": "ai-66c74b58612c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hgetdel' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (HGETDEL h FIELDS 0)"
+    }
+  ]
+}

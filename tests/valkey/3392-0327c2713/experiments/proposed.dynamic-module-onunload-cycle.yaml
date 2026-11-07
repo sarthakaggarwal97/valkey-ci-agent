@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.dynamic-module-onunload-cycle
+deployment:
+  modes: [standalone]
+metadata:
+  description: Dynamic module with ValkeyModule_OnUnload cycled through CONFIG SET
+    and two graceful restarts; replies compared across the static-module refactor
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: modcycle
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, GET, moduleconfigs.string], expect: {contains: secret password}}
+    - {command: [CONFIG, SET, moduleconfigs.string, runtime-set-value], expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, moduleconfigs.numeric, 2000], expect: {equals: OK}}
+    - {command: [CONFIG, SET, moduleconfigs.numeric, 2001], expect: {error: true}}
+    - {command: [CONFIG, SET, moduleconfigs.string, rejectisfreed], expect: {error: "Cannot\
+          \ set string"}}
+    - {command: [CONFIG, GET, moduleconfigs.numeric], expect: {contains: "2000"}}
+    - {command: [MODULE, LIST], compare: skip, expect: {contains: moduleconfigs}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [MODULE, LIST], compare: skip, expect: {contains: moduleconfigs}}
+    - {command: [CONFIG, GET, moduleconfigs.string], expect: {contains: secret password}}
+    - {command: [CONFIG, GET, moduleconfigs.numeric], expect: {contains: "-1"}}
+    - {command: [block.register.configs.outside.onload], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, moduleconfigs.enum], expect: {contains: five}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modcycle.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modcycle}

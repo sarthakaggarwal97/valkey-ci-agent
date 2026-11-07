@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.hashtable-iter-exhaustion-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: Iterator exhaustion over a cluster kvstore's per-slot hashtables, compared
+    across builds. KEYS and SAVE exhaust and retarget one iterator per non-empty slot;
+    CLUSTER FLUSHSLOT deletes every key of a slot through a safe iterator to exhaustion
+    and then frees the slot's hashtable.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slots
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [MSET, "{foo}a01", v, "{foo}a02", v, "{foo}a03", v, "{foo}a04", v,
+        "{foo}a05", v, "{foo}a06", v, "{foo}a07", v, "{foo}a08", v, "{foo}a09", v,
+        "{foo}a10", v, "{foo}a11", v, "{foo}a12", v, "{foo}a13", v, "{foo}a14", v,
+        "{foo}a15", v, "{foo}a16", v, "{foo}a17", v, "{foo}a18", v, "{foo}a19", v,
+        "{foo}a20", v], expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect: {equals: 20}}
+    - {command: [SET, s01, v], expect: {equals: OK}}
+    - {command: [SET, s02, v], expect: {equals: OK}}
+    - {command: [SET, s03, v], expect: {equals: OK}}
+    - {command: [SET, s04, v], expect: {equals: OK}}
+    - {command: [SET, s05, v], expect: {equals: OK}}
+    - {command: [SET, s06, v], expect: {equals: OK}}
+    - {command: [SET, s07, v], expect: {equals: OK}}
+    - {command: [SET, s08, v], expect: {equals: OK}}
+    - {command: [SET, s09, v], expect: {equals: OK}}
+    - {command: [SET, s10, v], expect: {equals: OK}}
+    - {command: [SET, s11, v], expect: {equals: OK}}
+    - {command: [SET, s12, v], expect: {equals: OK}}
+    - {command: [SET, s13, v], expect: {equals: OK}}
+    - {command: [SET, s14, v], expect: {equals: OK}}
+    - {command: [SET, s15, v], expect: {equals: OK}}
+    - {command: [SET, s16, v], expect: {equals: OK}}
+    - {command: [DEBUG, DICT-RESIZING, 0], expect: {equals: OK}}
+    - {command: [MSET, "{foo}b01", v, "{foo}b02", v, "{foo}b03", v, "{foo}b04", v,
+        "{foo}b05", v, "{foo}b06", v, "{foo}b07", v, "{foo}b08", v, "{foo}b09", v,
+        "{foo}b10", v, "{foo}b11", v, "{foo}b12", v, "{foo}b13", v, "{foo}b14", v,
+        "{foo}b15", v, "{foo}b16", v, "{foo}b17", v, "{foo}b18", v, "{foo}b19", v,
+        "{foo}b20", v], expect: {equals: OK}}
+    - {command: [DEBUG, DICT-RESIZING, 1], expect: {equals: OK}}
+    - {command: [SET, "{foo}trig", v], expect: {equals: OK}}
+    - {command: [KEYS, '*'], compare: unordered}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182, SYNC], expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect: {equals: 0}}
+    - {command: [KEYS, '*'], compare: unordered}
+    - {command: [DBSIZE]}
+    - {command: [SAVE], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slots.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slots}

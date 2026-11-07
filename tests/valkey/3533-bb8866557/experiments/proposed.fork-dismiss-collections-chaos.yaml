@@ -1,0 +1,110 @@
+extends: [valkey.base]
+id: proposed.fork-dismiss-collections-chaos
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: >
+    Build hash/set/zset keys whose hashtables span the 128..1023-bucket range the
+    dismissHashtable madvise-size fix newly releases (and an 8192-bucket one), then
+    run every fork path that dismisses them under writes: BGSAVE with RDB reload verification,
+    a replica SIGKILL forcing a full-sync fork, and an AOF rewrite followed by a primary
+    SIGKILL that must recover the collections from the AOF.
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+components:
+- use: valkey.action.commands
+  id: build
+  depends_on: [writes]
+  config:
+    timeout_s: 120
+    commands:
+    - command: [EVAL, "for i=1,50000 do redis.call('HSET','h:big','f'..i,'v'..i) end\
+          \ for i=1,3000 do redis.call('HSET','h:mid','f'..i,'v'..i) end return redis.call('HLEN','h:big')",
+        0]
+      expect: {equals: 50000}
+    - command: [EVAL, "for i=1,50000 do redis.call('SADD','s:big','m'..i) end for\
+          \ i=1,3000 do redis.call('SADD','s:mid','m'..i) end return redis.call('SCARD','s:big')",
+        0]
+      expect: {equals: 50000}
+    - command: [EVAL, "for i=1,50000 do redis.call('ZADD','z:big',i,'z'..i) end for\
+          \ i=1,3000 do redis.call('ZADD','z:mid',i,'z'..i) end return redis.call('ZCARD','z:big')",
+        0]
+      expect: {equals: 50000}
+    - {command: [OBJECT, ENCODING, 'h:big'], expect: {equals: hashtable}}
+    - {command: [OBJECT, ENCODING, 'h:mid'], expect: {equals: hashtable}}
+    - {command: [OBJECT, ENCODING, 's:mid'], expect: {equals: hashtable}}
+    - {command: [OBJECT, ENCODING, 'z:mid'], expect: {equals: skiplist}}
+- use: valkey.action.bgsave
+  id: bgsave
+  depends_on: [build, kill-replica]
+  config: {instances: primary, capture_rdb: true, timeout_s: 120}
+- use: valkey.oracle.rdb-snapshot
+  id: snapshot
+  config: {bgsave: bgsave, workload: writes}
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: bgsave.save-completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.wait-event
+  id: replica-back
+  depends_on: [bgsave]
+  config: {event: kill-replica.recovered, only_after: kill-replica.injected, timeout_s: 90}
+- use: valkey.action.poll
+  id: resynced
+  depends_on: [replica-back]
+  config:
+    field: master_link_status
+    instances: replica
+    predicate: {equals: up}
+    section: replication
+    timeout_s: 120
+- use: valkey.action.commands
+  id: rewrite
+  depends_on: [resynced, kill-primary]
+  config:
+    timeout_s: 120
+    commands:
+    - {command: [BGREWRITEAOF], expect: {error: false}}
+    - {command: [INFO, persistence], wait_s: 60, expect: {contains: "aof_rewrite_in_progress:0"}}
+- use: valkey.fault.process-signal
+  id: kill-primary
+  config:
+    when_event: rewrite.completed
+    instance: primary
+    signal: SIGKILL
+    restart_mode: immediate
+- use: valkey.action.wait-event
+  id: primary-back
+  depends_on: [rewrite]
+  config: {event: kill-primary.recovered, only_after: kill-primary.injected, timeout_s: 90}
+- use: valkey.action.commands
+  id: verify
+  depends_on: [primary-back]
+  config:
+    timeout_s: 120
+    commands:
+    - {command: [HLEN, 'h:big'], wait_s: 60, expect: {equals: 50000}}
+    - {command: [HLEN, 'h:mid'], expect: {equals: 3000}}
+    - {command: [SCARD, 's:big'], expect: {equals: 50000}}
+    - {command: [SCARD, 's:mid'], expect: {equals: 3000}}
+    - {command: [ZCARD, 'z:big'], expect: {equals: 50000}}
+    - {command: [ZCARD, 'z:mid'], expect: {equals: 3000}}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_s: 2.5
+    loss_window_faults: [kill-replica, kill-primary]
+required_events: [build.completed, kill-replica.recovered, kill-primary.recovered,
+  verify.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: build}
+- {evidence_id: valkey.bgsave.result, source: bgsave}
+- {evidence_id: valkey.rdb.reload-verified, source: snapshot}
+- {evidence_id: valkey.fault.injected, source: kill-replica}
+- {evidence_id: valkey.fault.injected, source: kill-primary}

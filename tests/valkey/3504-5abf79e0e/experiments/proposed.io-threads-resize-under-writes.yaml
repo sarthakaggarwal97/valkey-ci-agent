@@ -1,0 +1,55 @@
+extends: [valkey.base]
+id: proposed.io-threads-resize-under-writes
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Resize io-threads up and down while the key-value workload writes, so the cache-aligned
+    SPMC shared inbox is allocated (at boot or at the first resize) and then used
+    across thread scale-up, scale-down, and a drop to a single thread and back; the
+    liveness and ledger oracles catch a crash, sanitizer report, or data corruption
+    from the zmalloc_cache_aligned buffer and the new flag checks in zfree.
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: shrink
+  depends_on: [warm-up]
+  config:
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, io-threads, "2"], expect: {equals: OK}}
+    - {command: [CONFIG, GET, io-threads], expect: {contains: "2"}}
+- use: valkey.action.sleep
+  id: after-shrink
+  depends_on: [shrink]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: grow
+  depends_on: [after-shrink]
+  config:
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, io-threads, "8"], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: after-grow
+  depends_on: [grow]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: single-and-back
+  depends_on: [after-grow]
+  config:
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, io-threads, "1"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "8"], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [single-and-back]
+  config: {seconds: 3}
+required_events: [single-and-back.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shrink}
+- {evidence_id: valkey.command.sequence, source: single-and-back}

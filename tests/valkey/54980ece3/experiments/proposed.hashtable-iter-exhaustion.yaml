@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.hashtable-iter-exhaustion
+deployment:
+  modes: [standalone]
+metadata:
+  description: Iterator exhaustion (HGETALL/HKEYS/SMEMBERS, KEYS, in-process SAVE)
+    over chained buckets and mid-rehash tables, compared across builds. The change
+    invalidates iterators eagerly on exhaustion; no reply may differ, and neither
+    build may crash or trip the pause_rehash/fingerprint asserts.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: exhaust
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 0, set-max-listpack-entries: 0, set-max-intset-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, DICT-RESIZING, 0], expect: {equals: OK}}
+    - {command: [HSET, bigh, f01, v, f02, v, f03, v, f04, v, f05, v, f06, v, f07,
+        v, f08, v, f09, v, f10, v, f11, v, f12, v, f13, v, f14, v, f15, v, f16, v,
+        f17, v, f18, v, f19, v, f20, v], expect: {equals: 20}}
+    - {command: [HSET, bigh, g01, v, g02, v, g03, v, g04, v, g05, v, g06, v, g07,
+        v, g08, v, g09, v, g10, v, g11, v, g12, v, g13, v, g14, v, g15, v, g16, v,
+        g17, v, g18, v, g19, v, g20, v], expect: {equals: 20}}
+    - {command: [HGETALL, bigh], compare: unordered-pairs}
+    - {command: [DEBUG, DICT-RESIZING, 1], expect: {equals: OK}}
+    - {command: [HSET, bigh, h01, v], expect: {equals: 1}}
+    - {command: [HGETALL, bigh], compare: unordered-pairs}
+    - {command: [HDEL, bigh, f01, f02, f03, f04, f05, f06, f07, f08, f09, f10], expect: {
+        equals: 10}}
+    - {command: [HKEYS, bigh], compare: unordered}
+    - {command: [SADD, bigs, m01, m02, m03, m04, m05, m06, m07, m08, m09, m10, m11,
+        m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23, m24], expect: {
+        equals: 24}}
+    - {command: [SMEMBERS, bigs], compare: unordered}
+    - {command: [SREM, bigs, m01, m02, m03, m04, m05, m06], expect: {equals: 6}}
+    - {command: [SMEMBERS, bigs], compare: unordered}
+    - {command: [MSET, k01, v, k02, v, k03, v, k04, v, k05, v, k06, v, k07, v, k08,
+        v, k09, v, k10, v, k11, v, k12, v, k13, v, k14, v, k15, v, k16, v, k17, v,
+        k18, v, k19, v, k20, v], expect: {equals: OK}}
+    - {command: [DEBUG, DICT-RESIZING, 0], expect: {equals: OK}}
+    - {command: [MSET, q01, v, q02, v, q03, v, q04, v, q05, v, q06, v, q07, v, q08,
+        v, q09, v, q10, v, q11, v, q12, v, q13, v, q14, v, q15, v, q16, v, q17, v,
+        q18, v, q19, v, q20, v], expect: {equals: OK}}
+    - {command: [DEBUG, DICT-RESIZING, 1], expect: {equals: OK}}
+    - {command: [SET, trig, v], expect: {equals: OK}}
+    - {command: [KEYS, '*'], compare: unordered}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [KEYS, '*'], compare: unordered}
+    - {command: [HGETALL, bigh], compare: unordered-pairs}
+    - {command: [FLUSHALL, SYNC], expect: {equals: OK}}
+    - {command: [KEYS, '*'], expect: {equals: []}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SET, after, v], expect: {equals: OK}}
+    - {command: [KEYS, '*'], expect: {equals: [after]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [exhaust.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: exhaust}

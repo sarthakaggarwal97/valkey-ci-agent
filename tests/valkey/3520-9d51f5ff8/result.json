@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9d51f5ff8a8634a20f29fc38f39d592b848ddc14",
+  "parent": "0327c271316daa952e6c9a41cc922ea8a9548827",
+  "pr": 3520,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Document VALKEYCLI_HOST/PORT variables in help (#3520)",
+  "date": "2026-04-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2286,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits the static usage/help text printed by valkey-cli (documenting the pre-existing VALKEYCLI_HOST/VALKEYCLI_PORT environment variables for -h and -p). No code path that parses options, reads the environment variables, connects, or executes commands is modified, so there is no behaviour to break: no crash, data, replication, or reply path is reachable. A help-string wording change needs no fuzzer scenario."
+}

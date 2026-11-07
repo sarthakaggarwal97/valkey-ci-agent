@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fc00f7be030784ac115e088ddf31bc94266cb01d",
+  "parent": "6444717517316ecd16712e5f50794f99f600cdfe",
+  "pr": 3518,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix VLA warning in io_threads (#3518)",
+  "date": "2026-04-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2159,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only replaces a `const int BATCH_SIZE = 32` local with `#define BATCH_SIZE 32` in io_threads.c so the `batch_jobs[BATCH_SIZE]` array is no longer a compiler-flagged VLA. The array size and all runtime behavior are identical; this is a warning-silencing refactor with no observable behavior change, so no scenario is needed."
+}

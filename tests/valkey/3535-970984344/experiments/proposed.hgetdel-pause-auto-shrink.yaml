@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.hgetdel-pause-auto-shrink
+deployment:
+  modes: [standalone]
+metadata:
+  description: Bulk HGETDEL on hashtable-encoded hashes pauses auto shrink for the
+    whole delete loop; replies and final state must match the parent build, and the
+    pause/resume pairing must not crash or leak across keyremoved, volatile-field
+    and fork paths
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    listpack_entries: {type: integer, minimum: 0, maximum: 128, default: 16, description: "hash-max-listpack-entries:\
+        \ 0 makes every hash hashtable-encoded from the first field"}
+components:
+- use: valkey.action.commands
+  id: hgetdel
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      hash-max-listpack-entries: {$ref: inputs.listpack_entries}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [EVAL, "for i=1,1000 do redis.call('hset', KEYS[1], 'f'..i, 'v'..i)\
+          \ end return redis.call('hlen', KEYS[1])", 1, h], expect: {equals: 1000}}
+    - {command: [OBJECT, ENCODING, h], compare: skip}
+    - {command: [EVAL, "local t={} for i=1,990 do t[i]='f'..i end local r=redis.call('hgetdel',\
+          \ KEYS[1], 'FIELDS', #t, unpack(t)) return #r", 1, h], expect: {equals: 990}}
+    - {command: [HLEN, h], expect: {equals: 10}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HGETDEL, h, FIELDS, 4, f991, f991, f991, nosuchfield], expect: {
+        exists: true}}
+    - {command: [HLEN, h], expect: {equals: 9}}
+    - {command: [HGETDEL, h, FIELDS, 9, f992, f993, f994, f995, f996, f997, f998,
+        f999, f1000], expect: {equals: [v992, v993, v994, v995, v996, v997, v998,
+          v999, v1000]}}
+    - {command: [EXISTS, h], expect: {equals: 0}}
+    - {command: [HGETDEL, h, FIELDS, 0], expect: {error: "numfields"}}
+    - {command: [HGETDEL, h, FIELDS, 2, f1], expect: {error: "numfields"}}
+    - {command: [HGETDEL, nokey, FIELDS, 2, a, b], expect: {exists: true}}
+    - {command: [EVAL, "for i=1,50 do redis.call('hset', KEYS[1], 'g'..i, 'w'..i)\
+          \ end return redis.call('hlen', KEYS[1])", 1, vol], expect: {equals: 50}}
+    - {command: [HEXPIRE, vol, 1000, FIELDS, 2, g1, g2], expect: {equals: [1, 1]}}
+    - {command: [EVAL, "local t={'g1','g2'} for i=3,45 do t[#t+1]='g'..i end local\
+          \ r=redis.call('hgetdel', KEYS[1], 'FIELDS', #t, unpack(t)) return #r",
+        1, vol], expect: {equals: 45}}
+    - {command: [HLEN, vol], expect: {equals: 5}}
+    - {command: [HGETALL, vol], compare: unordered-pairs}
+    - {command: [HEXPIRE, vol, 1000, FIELDS, 2, g46, g47], expect: {equals: [1, 1]}}
+    - {command: [HGETDEL, vol, FIELDS, 5, g46, g47, g48, g49, g50], expect: {equals: [
+          w46, w47, w48, w49, w50]}}
+    - {command: [EXISTS, vol], expect: {equals: 0}}
+    - {command: [HSET, lp, a, "1", b, "2", c, "3"], expect: {equals: 3}}
+    - {command: [HGETDEL, lp, FIELDS, 2, a, c], expect: {equals: ["1", "3"]}}
+    - {command: [HGETALL, lp], compare: unordered-pairs}
+    - {command: [EVAL, "for i=1,1000 do redis.call('hset', KEYS[1], 'k'..i, 'u'..i)\
+          \ end return redis.call('hlen', KEYS[1])", 1, h2], expect: {equals: 1000}}
+    - {command: [BGSAVE], expect: {contains: "Background saving started"}}
+    - {command: [EVAL, "local t={} for i=1,995 do t[i]='k'..i end local r=redis.call('hgetdel',\
+          \ KEYS[1], 'FIELDS', #t, unpack(t)) return #r", 1, h2], expect: {equals: 995}}
+    - {command: [HLEN, h2], expect: {equals: 5}}
+    - {command: [EVAL, "for i=1,300 do redis.call('hset', KEYS[1], 'r'..i, 'x') end\
+          \ return redis.call('hlen', KEYS[1])", 1, h2], expect: {equals: 305}}
+    - {command: [HGETALL, h2], compare: unordered-pairs}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hgetdel.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hgetdel}

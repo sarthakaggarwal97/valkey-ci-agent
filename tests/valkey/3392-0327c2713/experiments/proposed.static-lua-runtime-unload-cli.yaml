@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.static-lua-runtime-unload-cli
+deployment:
+  modes: [standalone]
+metadata:
+  description: Unload the statically linked lua module at runtime with valkey-cli
+    MODULE UNLOAD and verify the server survives; parent unloads its dynamic lua module
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 30
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, MODULE, LIST], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: lua}}}
+    - {tool: valkey-cli, args: [-p, $port, EVAL, "return redis.sha1hex('')", 0], expect: {
+        exit: {equals: 0}, stdout: {contains: da39a3ee5e6b4b0d3255bfef95601890afd80709}}}
+    - {tool: valkey-cli, args: [-p, $port, SCRIPT, LOAD, "return 1"], expect: {exit: {
+          equals: 0}, stdout: {contains: e0e1f9fabfc9d4800c877a703b823ac0578ff831}}}
+    - {tool: valkey-cli, args: [-p, $port, MODULE, UNLOAD, lua], expect: {exit: {
+          equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, MODULE, LIST], expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, EVAL, "return 1", 0], expect: {exit: {
+          equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, EVALSHA, e0e1f9fabfc9d4800c877a703b823ac0578ff831,
+        0], expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, MODULE, UNLOAD, lua], expect: {exit: {
+          equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, SET, k, v], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, k], expect: {stdout: {equals: "v\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

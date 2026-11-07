@@ -1,0 +1,60 @@
+extends: [valkey.base]
+id: proposed.iter-exhaustion-under-writes
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Iterator-exhausting commands (KEYS, HGETALL/HKEYS over chained and
+    rehashing tables, in-process SAVE) on the deployment's primary while the key-value
+    workload churns the keyspace, then a replica SIGKILLed and restarted so the resync's
+    RDB save iterates the live keyspace to exhaustion again. Liveness catches an assert
+    or crash from the eager cleanup; the ledger catches lost or inconsistent data.
+components:
+- use: valkey.action.commands
+  id: exhaust
+  depends_on: [writes, kill-replica]
+  config:
+    instances: primaries
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, DICT-RESIZING, 0], expect: {equals: OK}}
+    - {command: [HSET, "exh:bigh", f01, v, f02, v, f03, v, f04, v, f05, v, f06, v,
+        f07, v, f08, v, f09, v, f10, v, f11, v, f12, v, f13, v, f14, v, f15, v, f16,
+        v, f17, v, f18, v, f19, v, f20, v], expect: {equals: 20}}
+    - {command: [HSET, "exh:bigh", g01, v, g02, v, g03, v, g04, v, g05, v, g06, v,
+        g07, v, g08, v, g09, v, g10, v, g11, v, g12, v, g13, v, g14, v, g15, v, g16,
+        v, g17, v, g18, v, g19, v, g20, v], expect: {equals: 20}}
+    - {command: [DEBUG, DICT-RESIZING, 1], expect: {equals: OK}}
+    - {command: [HSET, "exh:bigh", h01, v], expect: {equals: 1}}
+    - {command: [HGETALL, "exh:bigh"]}
+    - {command: [KEYS, '*']}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [KEYS, '*']}
+    - {command: [HKEYS, "exh:bigh"]}
+    - {command: [DEBUG, DICT-RESIZING, 0], expect: {equals: OK}}
+    - {command: [MSET, "exh:k01", v, "exh:k02", v, "exh:k03", v, "exh:k04", v, "exh:k05",
+        v, "exh:k06", v, "exh:k07", v, "exh:k08", v, "exh:k09", v, "exh:k10", v, "exh:k11",
+        v, "exh:k12", v, "exh:k13", v, "exh:k14", v, "exh:k15", v, "exh:k16", v, "exh:k17",
+        v, "exh:k18", v, "exh:k19", v, "exh:k20", v], expect: {equals: OK}}
+    - {command: [DEBUG, DICT-RESIZING, 1], expect: {equals: OK}}
+    - {command: [SET, "exh:trig", v], expect: {equals: OK}}
+    - {command: [KEYS, '*']}
+    - {command: [SAVE], expect: {equals: OK}}
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: exhaust.completed
+    instance: replica
+    signal: SIGKILL
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [exhaust]
+  config: {seconds: 5}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [exhaust.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: exhaust}
+- {evidence_id: valkey.fault.injected, source: kill-replica}

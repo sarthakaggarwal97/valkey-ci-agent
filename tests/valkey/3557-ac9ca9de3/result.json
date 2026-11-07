@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ac9ca9de3d1feff4a40358935b0f2e2acdcdc789",
+  "parent": "bb88665578b8da8ef94e9b17d32859c25b09688d",
+  "pr": 3557,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix rdmaServer leaks when create listen cm id error (#3557)",
+  "date": "2026-04-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3137,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only fixes a resource leak (event channel and addrinfo not freed) on an error path in rdmaServer when rdma_create_id fails during RDMA listener setup. It has no observable behaviour change: the listen attempt fails with the same error either way. Reaching the path requires an RDMA-enabled build, RDMA hardware or soft-RoCE (root), and an induced rdma_create_id failure at server startup \u2014 none of which the fuzzer's local throwaway servers can provide, and no installed or composable experiment exercises RDMA transport. No scenario can reach the changed code."
+}

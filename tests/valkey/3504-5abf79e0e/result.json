@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5abf79e0e3b7d6af5f1bbb3a6385e5f339c8cc18",
+  "parent": "97098434463c4687f8ed1f4567717fea4c6bce21",
+  "pr": 3504,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add zmalloc_aligned() and fix SPMC queue buffer alignment (#3504)",
+  "date": "2026-04-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 11,
+    "executed": 9,
+    "percent": 81,
+    "uncovered": [
+      "src/zmalloc.c:212",
+      "src/zmalloc.c:213"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 4.8276,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-eb2974f08854",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-cc68725a7765",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

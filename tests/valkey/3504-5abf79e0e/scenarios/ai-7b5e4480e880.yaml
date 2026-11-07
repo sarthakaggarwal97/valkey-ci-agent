@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 97098434463c..5abf79e0e3b7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7b5e4480e880
+seed: 102
+experiment:
+  id: proposed.io-threads-resize-under-writes
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
+  server_config:
+    io-threads-always-active: 'yes'
