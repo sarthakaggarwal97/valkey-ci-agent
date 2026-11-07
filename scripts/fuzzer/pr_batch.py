@@ -166,8 +166,11 @@ sudo dpkg -i "${deb}"
         # build.sh finds /opt/valkey-search-deps itself since August 2026; before, it took --use-system-modules.
         # #621 (9ea236a) dropped the schema_manager declaration from QueryCommand::Execute but kept its uses, so
         # no commit until #741 (b0e8a26) restored it compiles: that fix is applied first, as a bisect carries a
-        # build fix.
-        build="""deps=/opt/valkey-search-deps
+        # build fix. #483 (19977d4) set BUILD_TOOL from an undefined NINJA_TOOL for the Ninja default, so no
+        # commit until #494 (cdfe0c4) fixed that ran the build at all (it left no libsearch.so); NINJA_TOOL is
+        # exported so build.sh finds ninja on that window, which is harmless once it stops reading the variable.
+        build="""export NINJA_TOOL=ninja
+deps=/opt/valkey-search-deps
 export CMAKE_PREFIX_PATH="${deps}/lib/cmake/protobuf:${deps}/lib/cmake/absl:${deps}/lib/cmake/grpc:\
 ${deps}/lib/cmake/GTest:${deps}/lib/cmake/utf8_range:${deps}/lib/cmake/benchmark:${deps}"
 if grep -q 'schema_manager\\.' src/commands/commands.cc 2> /dev/null \\

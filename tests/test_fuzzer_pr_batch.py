@@ -185,6 +185,23 @@ def test_valkey_search_build_carries_the_741_declaration_fix(tmp_path, monkeypat
     assert build(fixed).count("auto &schema_manager") == 1  # already declared: the patch is not applied twice
 
 
+def test_valkey_search_build_defines_ninja_tool_for_the_483_window(tmp_path):
+    """valkey-search #483 (19977d4) set BUILD_TOOL from the undefined NINJA_TOOL for the Ninja default, so no
+    commit until #494 (cdfe0c4) ran the build (it left no libsearch.so): the recipe exports NINJA_TOOL so a
+    build.sh reading it finds ninja."""
+    src = tmp_path / "src"
+    src.mkdir()
+    # A stand-in for the broken window's build.sh: the build tool is whatever NINJA_TOOL holds.
+    (src / "build.sh").write_text(
+        '#!/bin/bash\nif [[ "${CMAKE_GENERATOR:-Ninja}" == "Ninja" ]]; then BUILD_TOOL="${NINJA_TOOL}"; fi\n'
+        'echo "${BUILD_TOOL}" > tool\n'
+    )
+    (src / "build.sh").chmod(0o755)
+    subprocess.run(["bash", "-euo", "pipefail", "-c", pr_batch_mod.MODULES["valkey-search"].build],
+                   cwd=src, check=True, capture_output=True, text=True)
+    assert (src / "tool").read_text().strip() == "ninja"
+
+
 def test_batch_names_keep_a_fitting_id_and_fix_the_rest():
     ids = ["ai-0123456789ab", "spec-register:lost-write", "spec-register-lost-write", "..x..y", ":::", "s" * 120,
            "s" * 130]
