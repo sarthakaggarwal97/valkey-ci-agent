@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "24d9b083e2393583b652dab4f0e982f020e403f0",
+  "parent": "a1b3769334d6b9d00ec74ba14aee450ce3853a40",
+  "pr": 679,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Refactor Dockerfile to Reduce Image Layers and Size (#679)",
+  "date": "2026-02-04",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2435,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only .devcontainer/Dockerfile, merging apt install steps into fewer layers and cleaning caches to shrink the dev-container image. It is purely a build/CI environment change: no module source, command handling, indexing, replication or persistence code changes, so the loaded valkey-search module behaves identically on both builds and there is nothing a runtime scenario could reach."
+}

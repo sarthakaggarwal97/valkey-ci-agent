@@ -1,0 +1,124 @@
+extends: [valkey.liveness]
+id: proposed.ft-text-fetcher-edges
+deployment:
+  modes: [standalone]
+metadata:
+  description: Edge shapes of the new text iterator builder - cross-field proximity
+    mask short-circuit, static OR field mask, negation inside AND, prefixes under
+    proximity, repeated terms, deep OR nesting, dedup
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftedges
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - command: [CONFIG, GET, search.enable-proximity-prefilter-eval]
+      expect_difference: true
+      expect: {exists: true}
+    - command: [CONFIG, SET, search.enable-proximity-prefilter-eval, "yes"]
+      expect_difference: true
+      expect: {error: true}
+    - command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "d:", SCHEMA, title, TEXT, NOSTEM,
+        body, TEXT, NOSTEM, color, TAG, price, NUMERIC]
+      expect: {equals: OK}
+    - command: [HSET, "d:1", title, "alpha beta gamma", body, "delta epsilon alpha",
+        color, red, price, 10]
+      expect: {equals: 4}
+    - command: [HSET, "d:2", title, "beta gamma", body, "alpha zeta", color, blue,
+        price, 20]
+      expect: {equals: 4}
+    - command: [HSET, "d:3", title, "gamma delta", body, "beta beta beta", color,
+        red, price, 30]
+      expect: {equals: 4}
+    - command: [FT.INFO, idx2]
+      wait_s: 30
+      expect: {contains: ready}
+      compare: skip
+    - command: [FT.SEARCH, idx2, "@price:[0 100]", LIMIT, 0, 0, DIALECT, 2]
+      wait_s: 30
+      expect: {equals: [3]}
+    - command: [FT.SEARCH, idx2, "@title:alpha @body:alpha", NOCONTENT, DIALECT, 2]
+      expect: {equals: [1, "d:1"]}
+    - command: [FT.SEARCH, idx2, "@title:alpha @body:alpha", NOCONTENT, INORDER, DIALECT,
+        2]
+      expect: {equals: [0]}
+    - command: [FT.SEARCH, idx2, "@title:alpha @body:alpha", NOCONTENT, SLOP, 5, DIALECT,
+        2]
+      expect: {equals: [0]}
+    - command: [FT.SEARCH, idx2, "@title:(alpha beta)", NOCONTENT, INORDER, DIALECT,
+        2]
+      expect: {equals: [1, "d:1"]}
+    - command: [FT.SEARCH, idx2, "@title:(beta alpha)", NOCONTENT, INORDER, DIALECT,
+        2]
+      expect: {equals: [0]}
+    - command: [FT.SEARCH, idx2, "@body:(delta alpha)", NOCONTENT, SLOP, 2, DIALECT,
+        2]
+      expect: {equals: [1, "d:1"]}
+    - command: [FT.SEARCH, idx2, "@body:(delta alpha)", NOCONTENT, SLOP, 0, DIALECT,
+        2]
+      expect: {equals: [0]}
+    - command: [FT.SEARCH, idx2, "-alpha beta", NOCONTENT, DIALECT, 2]
+      expect: {equals: [1, "d:3"]}
+    - command: [FT.SEARCH, idx2, "-alpha beta", NOCONTENT, INORDER, DIALECT, 2]
+      compare: unordered
+    - command: [FT.SEARCH, idx2, "-alpha", NOCONTENT, DIALECT, 2]
+      expect: {equals: [1, "d:3"]}
+    - command: [FT.SEARCH, idx2, '-"alpha beta" gamma', LIMIT, 0, 0, DIALECT, 2]
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, idx2, '-"alpha beta" gamma', NOCONTENT, DIALECT, 2]
+      compare: unordered
+    - command: [FT.SEARCH, idx2, "-(alpha | beta) gamma", NOCONTENT, DIALECT, 2]
+      expect: {equals: [0]}
+    - command: [FT.SEARCH, idx2, "(-alpha | @body:zeta) beta", LIMIT, 0, 0, DIALECT,
+        2]
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, idx2, "(-alpha | @body:zeta) beta", NOCONTENT, DIALECT,
+        2]
+      compare: unordered
+    - command: [FT.SEARCH, idx2, "(@title:alpha | @body:zeta) @body:alpha", LIMIT,
+        0, 0, DIALECT, 2]
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, idx2, "(@title:alpha | @body:zeta) @body:alpha", NOCONTENT,
+        INORDER, DIALECT, 2]
+      compare: unordered
+    - command: [FT.SEARCH, idx2, "(@title:alpha | @body:zeta) @body:alpha", NOCONTENT,
+        SLOP, 3, DIALECT, 2]
+      compare: unordered
+    - command: [FT.SEARCH, idx2, "@title:(gam* del*)", NOCONTENT, INORDER, DIALECT,
+        2]
+      expect: {equals: [1, "d:3"]}
+    - command: [FT.SEARCH, idx2, "beta beta beta", LIMIT, 0, 0, DIALECT, 2]
+      expect: {equals: [3]}
+    - command: [FT.SEARCH, idx2, "beta beta beta", NOCONTENT, INORDER, DIALECT, 2]
+      compare: unordered
+    - command: [FT.SEARCH, idx2, "((((((alpha | beta) | gamma) | delta) | epsilon)\
+          \ | zeta) beta @color:{red})", LIMIT, 0, 0, DIALECT, 2]
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, idx2, "@title:alpha | @price:[5 15]", NOCONTENT, DIALECT,
+        2]
+      expect: {equals: [1, "d:1"]}
+    - command: [FT.SEARCH, idx2, "alpha | alpha | alpha", LIMIT, 0, 0, DIALECT, 2]
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, idx2, "((nosuchterm absent) | missing)", NOCONTENT, DIALECT,
+        2]
+      expect: {equals: [0]}
+    - command: [CONFIG, SET, search.max-term-expansions, 1]
+      expect: {equals: OK}
+    - command: [FT.SEARCH, idx2, "@title:(gam* del*)", NOCONTENT, INORDER, DIALECT,
+        2]
+      compare: unordered
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftedges.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftedges}

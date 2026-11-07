@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-07T05:16+00:00.
+Updated 2026-11-07T05:20+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 542 | 1963 | #3683 (2026-05-18) | 273 | 77.4 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
-| valkey-io/valkey-search | 351 | 318 | #707 (2026-02-05) | 181 | 50.1 |
+| valkey-io/valkey-search | 372 | 297 | #607 (2026-01-29) | 202 | 53.1 |
 
 ## Last runs
 
@@ -48,35 +48,35 @@ Updated 2026-11-07T05:16+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-07T01:34:15+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42306322056): 20 merge(s) tested, 1 without a code change.
+[2026-11-07T05:20:38+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42324778733): 20 merge(s) tested, 5 without a code change.
 
-- [valkey-io/valkey-search#1546](https://github.com/valkey-io/valkey-search/pull/1546) ([tests](tests/valkey-search/1546-6e403afa1/)): feat(vector-range): add epsilon-aware HNSW range traversal (#1546): 4 of 4 test(s) reached the change
-- [valkey-io/valkey-search#667](https://github.com/valkey-io/valkey-search/pull/667) ([tests](tests/valkey-search/667-fa3ae057c/)): Raise limit on number of attributes. Correct misnamed max-vector-attribute (#667): 5 of 5 test(s) reached the change
-- [valkey-io/valkey-search#749](https://github.com/valkey-io/valkey-search/pull/749) ([tests](tests/valkey-search/749-b383d752f/)): Make fanout async threshold configurable (#749): 3 of 3 test(s) reached the change
-- [valkey-io/valkey-search#746](https://github.com/valkey-io/valkey-search/pull/746) ([tests](tests/valkey-search/746-311be1eb3/)): Use consistent + performant casefolding logic in both query/ingestion (#746): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#711](https://github.com/valkey-io/valkey-search/pull/711) ([tests](tests/valkey-search/711-da4e28f2d/)): Hybrid vector text query integration test (#711): declined: The change is test-and-CI only: it adds hybrid vector/text query cases to integration/test_fulltext.py (refactoring existing assertions into a shared HYBRID_QUERY_EXPECTED_RESULTS table and adding a KNN variant of the same queries) and amends scripts/common.rc to pip-install an extra requi
-- [valkey-io/valkey-search#743](https://github.com/valkey-io/valkey-search/pull/743) ([tests](tests/valkey-search/743-a6a71b394/)):  ftdebug to list configs in search module (#743): 0 of 2 test(s) reached the change; [crash, appeared after #743](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87)
-- [valkey-io/valkey-search#674](https://github.com/valkey-io/valkey-search/pull/674) ([tests](tests/valkey-search/674-a2c814f7d/)): Add grpc coordinator threads CPU time metric to INFO command (#674): declined: The change only does anything when the module is loaded with the --use-coordinator module argument: the ThreadGroupCPUMonitor is created in ValkeySearch::Startup only under GetUseCoordinator(), and the new INFO field search_coordinator_threads_cpu_time_sec is VisibleIf(UsingCoordinator()),
-- [valkey-io/valkey-search#722](https://github.com/valkey-io/valkey-search/pull/722) ([tests](tests/valkey-search/722-e015fa874/)): Implement SLOP and INORDER in FT.AGGREGATE (#722): 3 of 3 test(s) reached the change
 - [valkey-io/valkey-search#741](https://github.com/valkey-io/valkey-search/pull/741): to retry, `deps=/opt/valkey-search-deps` failed in parent (exit 1): [138/223] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/command
 - [valkey-io/valkey-search#735](https://github.com/valkey-io/valkey-search/pull/735): to retry, `deps=/opt/valkey-search-deps` failed in merge (exit 1): [138/223] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/commands
 - [valkey-io/valkey-search#734](https://github.com/valkey-io/valkey-search/pull/734): to retry, `deps=/opt/valkey-search-deps` failed in merge (exit 1): [137/221] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/commands
-- [valkey-io/valkey-search#621](https://github.com/valkey-io/valkey-search/pull/621): to retry, `deps=/opt/valkey-search-deps` failed in merge (exit 1): [136/221] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/commands
-- [valkey-io/valkey-search#618](https://github.com/valkey-io/valkey-search/pull/618) ([tests](tests/valkey-search/618-9b29188d0/)): Feature/sortby implementation (#618): 5 of 5 test(s) reached the change
-- [valkey-io/valkey-search#639](https://github.com/valkey-io/valkey-search/pull/639) ([tests](tests/valkey-search/639-444fb186b/)): Increase default for allowed number of indexes to 1000 (#639): 3 of 3 test(s) reached the change
-- [valkey-io/valkey-search#671](https://github.com/valkey-io/valkey-search/pull/671) ([tests](tests/valkey-search/671-cff18a5a0/)): Endurance Testing - adding more search functionality testing. (#671): declined: The change modifies only valkey-search's own integration-test harness: testing/integration/stability_runner.py (new memtier test documents, a different FT.SEARCH query mix for TEXT indexes, consolidated delete/expire memtier commands, and nostem/with_suffix_trie tweaks in the test's index 
-- [valkey-io/valkey-search#731](https://github.com/valkey-io/valkey-search/pull/731) ([tests](tests/valkey-search/731-0345b6268/)): Endurance test added as a GitHub workflow (#731): declined: The change is purely CI/tooling: it adds a new GitHub workflow (.github/workflows/endurance_tests.yml), a benchmark driver script (scripts/benchmark/run_endurance_test.sh), and installs jq in the devcontainer Dockerfile. No module source, command handling, indexing, replication, or persist
-- [valkey-io/valkey-search#541](https://github.com/valkey-io/valkey-search/pull/541) ([tests](tests/valkey-search/541-6bdc2dde5/)): Block Search Response on Conflicting In-Flight Keys for fulltext queries (#541): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#712](https://github.com/valkey-io/valkey-search/pull/712) ([tests](tests/valkey-search/712-945d29388/)): Ensure content is always retrieved on correct DB during search (#712): declined: no proposed test validated
-- [valkey-io/valkey-search#708](https://github.com/valkey-io/valkey-search/pull/708) ([tests](tests/valkey-search/708-703331414/)): Undo the renaming of an existing config (#708): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#685](https://github.com/valkey-io/valkey-search/pull/685) ([tests](tests/valkey-search/685-cd722c45b/)): Fix OOM Handling for SearchBased ReadOnly commands (#685): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#621](https://github.com/valkey-io/valkey-search/pull/621): to retry, `deps=/opt/valkey-search-deps` failed in merge (exit 1): [137/221] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/commands
+- [valkey-io/valkey-search#707](https://github.com/valkey-io/valkey-search/pull/707) ([tests](tests/valkey-search/707-aa8261ef0/)): Implement WEIGHT text field option, require a 1.0 value (#707): 4 of 4 test(s) reached the change; crash, predates #707, since fixed (recorded)
+- [valkey-io/valkey-search#622](https://github.com/valkey-io/valkey-search/pull/622) ([tests](tests/valkey-search/622-69658d902/)): Introduce ShardedAtomic for zero-contention, high-concurrency counters (#622): declined: no proposed test validated
+- [valkey-io/valkey-search#701](https://github.com/valkey-io/valkey-search/pull/701) ([tests](tests/valkey-search/701-300fe700c/)): Stem search terms regardless of stemsize - Bug fix (#701): 2 of 2 test(s) reached the change; crash, fixed by #701 (recorded); crash, fixed by #701 (recorded)
+- [valkey-io/valkey-search#699](https://github.com/valkey-io/valkey-search/pull/699) ([tests](tests/valkey-search/699-014309dd7/)): Fix error message to match parsing logic (#699): 2 of 2 test(s) reached the change; crash, predates #699, since fixed (recorded)
+- [valkey-io/valkey-search#688](https://github.com/valkey-io/valkey-search/pull/688) ([tests](tests/valkey-search/688-fe6c99b31/)): Rax Integration (#688): 0 of 4 test(s) reached the change; crash, predates #688, since fixed (recorded)
+- [valkey-io/valkey-search#668](https://github.com/valkey-io/valkey-search/pull/668) ([tests](tests/valkey-search/668-e73481fd9/)): Add Memory Tracking for Index Schema Attributes (#668): 4 of 4 test(s) reached the change; crash, predates #668, since fixed (recorded)
+- [valkey-io/valkey-search#679](https://github.com/valkey-io/valkey-search/pull/679) ([tests](tests/valkey-search/679-24d9b083e/)): Refactor Dockerfile to Reduce Image Layers and Size (#679): declined: The change modifies only .devcontainer/Dockerfile, merging apt install steps into fewer layers and cleaning caches to shrink the dev-container image. It is purely a build/CI environment change: no module source, command handling, indexing, replication or persistence code changes, so the lo
+- [valkey-io/valkey-search#670](https://github.com/valkey-io/valkey-search/pull/670) ([tests](tests/valkey-search/670-a1b376933/)): Fix misleading error message when query string is error or not support. (#670): 2 of 2 test(s) reached the change; crash, predates #670, since fixed (recorded)
+- [valkey-io/valkey-search#608](https://github.com/valkey-io/valkey-search/pull/608) ([tests](tests/valkey-search/608-d300acff7/)): Endurance failover (#608): declined: The change modifies only valkey-search's own integration test harness (testing/integration/stability_runner.py, stability_test.py, utils.py), adding failover coordination to its Python stability tests. No module source code changes, so the built module's behaviour is identical at the chang
+- [valkey-io/valkey-search#669](https://github.com/valkey-io/valkey-search/pull/669) ([tests](tests/valkey-search/669-13bea40e9/)): Solving text completely in entries fetcher (#669): 4 of 4 test(s) reached the change; crash, predates #669, since fixed (recorded)
+- [valkey-io/valkey-search#630](https://github.com/valkey-io/valkey-search/pull/630) ([tests](tests/valkey-search/630-06ea5f2a1/)): Add fulltext metrics to info (#630): declined: no proposed test validated
+- [valkey-io/valkey-search#677](https://github.com/valkey-io/valkey-search/pull/677) ([tests](tests/valkey-search/677-1772b56d5/)): Revert "Rax Integration (#605)" (#677): 0 of 4 test(s) reached the change; crash, predates #677, since fixed (recorded)
+- [valkey-io/valkey-search#605](https://github.com/valkey-io/valkey-search/pull/605) ([tests](tests/valkey-search/605-ab8da9c75/)): Rax Integration (#605): 0 of 4 test(s) reached the change; crash, predates #605, since fixed (recorded); crash, introduced and since fixed (recorded)
+- [valkey-io/valkey-search#614](https://github.com/valkey-io/valkey-search/pull/614) ([tests](tests/valkey-search/614-ae0f8f095/)): Stemming Ingestion and Search  (resolves #651) (#614): 4 of 4 test(s) reached the change; crash, predates #614, since fixed (recorded)
+- [valkey-io/valkey-search#647](https://github.com/valkey-io/valkey-search/pull/647) ([tests](tests/valkey-search/647-e9571671c/)): Move MINSTEMSIZE clause from per text field to per schema (#647): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#641](https://github.com/valkey-io/valkey-search/pull/641) ([tests](tests/valkey-search/641-2fc6219c2/)): Revert "Update Vector HNSW output field format (#312)" (#641): 2 of 2 test(s) reached the change; crash, predates #641, since fixed (recorded)
 
 ## Totals
 
-- Merges whose tests reached the change: 389 of 552 tested (70%)
+- Merges whose tests reached the change: 398 of 564 tested (71%)
 - Changed-line coverage: median 100% of 254 merge(s) measured, 16 under 50%
-- Recall: 115 parents flagged of 162 fix merges
-- Claude: $1605.16 in the last 24 hours, $3802.11 in the last 7 days, $3802.11 in all
+- Recall: 118 parents flagged of 165 fix merges
+- Claude: $1737.27 in the last 24 hours, $3934.23 in the last 7 days, $3934.23 in all
 - Issues filed: 41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
@@ -122,9 +122,9 @@ Updated 2026-11-07T05:16+00:00.
 
 ## Retries
 
-- [valkey-io/valkey-search#741](https://github.com/valkey-io/valkey-search/pull/741): attempt 1 of 3, `deps=/opt/valkey-search-deps` failed in parent (exit 1): [138/223] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/command
-- [valkey-io/valkey-search#735](https://github.com/valkey-io/valkey-search/pull/735): attempt 1 of 3, `deps=/opt/valkey-search-deps` failed in merge (exit 1): [138/223] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/commands
-- [valkey-io/valkey-search#734](https://github.com/valkey-io/valkey-search/pull/734): attempt 1 of 3, `deps=/opt/valkey-search-deps` failed in merge (exit 1): [137/221] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/commands
-- [valkey-io/valkey-search#621](https://github.com/valkey-io/valkey-search/pull/621): attempt 1 of 3, `deps=/opt/valkey-search-deps` failed in merge (exit 1): [136/221] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/commands
+- [valkey-io/valkey-search#741](https://github.com/valkey-io/valkey-search/pull/741): attempt 2 of 3, `deps=/opt/valkey-search-deps` failed in parent (exit 1): [138/223] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/command
+- [valkey-io/valkey-search#735](https://github.com/valkey-io/valkey-search/pull/735): attempt 2 of 3, `deps=/opt/valkey-search-deps` failed in merge (exit 1): [138/223] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/commands
+- [valkey-io/valkey-search#734](https://github.com/valkey-io/valkey-search/pull/734): attempt 2 of 3, `deps=/opt/valkey-search-deps` failed in merge (exit 1): [137/221] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/commands
+- [valkey-io/valkey-search#621](https://github.com/valkey-io/valkey-search/pull/621): attempt 2 of 3, `deps=/opt/valkey-search-deps` failed in merge (exit 1): [137/221] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/commands
 - [valkey-io/valkey#3374](https://github.com/valkey-io/valkey/pull/3374): attempt 2 of 3, 1 of 1 run(s) could not start: the run could not start: environment acquisition failed
 - [valkey-io/valkey#3800](https://github.com/valkey-io/valkey/pull/3800): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict

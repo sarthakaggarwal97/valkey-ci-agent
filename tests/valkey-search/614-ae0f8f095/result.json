@@ -1,0 +1,62 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ae0f8f095f6a5c5dc89a03b54eaf8e5c9fe10659",
+  "parent": "3aa73c3fa4dda91ffbbad886eb7017fa5374bec2",
+  "pr": 614,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Stemming Ingestion and Search  (resolves #651) (#614)",
+  "date": "2026-02-03",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 4.7137,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-761fe8d1742c",
+      "seed": 4,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #614, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-3f20e3763c75",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'stem' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (FT.CREATE idx ON HASH SCHEMA content TEXT nostem TEXT NOSTEM), 3 (FT.SEARCH idx @content:run LIMIT 0 0), 4 (FT.SEARCH idx @content:\"runni"
+    },
+    {
+      "scenario": "ai-167e83866cb9",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'stem' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (FT.CREATE idx ON HASH SCHEMA content TEXT nostem TEXT NOSTEM), 3 (FT.SEARCH idx @content:run LIMIT 0 0), 4 (FT.SEARCH idx @content:\"runni"
+    },
+    {
+      "scenario": "ai-d19ae8a405de",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'stem' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (FT.CREATE idx ON HASH SCHEMA content TEXT nostem TEXT NOSTEM), 3 (FT.SEARCH idx @content:run LIMIT 0 0), 4 (FT.SEARCH idx @content:\"runni"
+    },
+    {
+      "scenario": "ai-761fe8d1742c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'stem' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (FT.CREATE idx ON HASH SCHEMA content TEXT nostem TEXT NOSTEM), 3 (FT.SEARCH idx @content:run LIMIT 0 0), 4 (FT.SEARCH idx @content:\"runni"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.text-radix-revert-edge
+deployment:
+  modes: [standalone]
+metadata:
+  description: Adversarial tree shapes compared across the RadixTree revert - shared-prefix
+    node splits, long and single-byte words, UTF-8, empty and punctuation-only values,
+    term-expansion cap, fuzzy distance 2, deleting a word that is a prefix of surviving
+    words
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: edge
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, t, TEXT, WITHSUFFIXTRIE],
+      expect: {equals: OK}}
+    - {command: [HSET, "d:1", t, "aaaa aaaab aaaac ab b qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"],
+      expect: {equals: 1}}
+    - {command: [HSET, "d:2", t, "ba"], expect: {equals: 1}}
+    - {command: [HSET, "d:3", t, "bb"], expect: {equals: 1}}
+    - {command: [HSET, "d:4", t, "bc"], expect: {equals: 1}}
+    - {command: [HSET, "d:5", t, "bd"], expect: {equals: 1}}
+    - {command: [HSET, "d:6", t, "bf"], expect: {equals: 1}}
+    - {command: [HSET, "d:7", t, "h\xC3\xA9llo w\xC3\xB6rld"], expect: {equals: 1}}
+    - {command: [HSET, "d:8", t, ""], expect: {equals: 1}}
+    - {command: [HSET, "d:9", t, "... !!! ,,,"], expect: {equals: 1}}
+    - {command: [HSET, "d:10", t, "foo.bar"], expect: {equals: 1}}
+    - {command: [HSET, "d:11", t, "dup dup dup dup dup"], expect: {equals: 1}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, ""], wait_s: 30, expect: {equals: [
+          aaaa, aaaab, aaaac, ab, b, ba, bar, bb, bc, bd, bf, dup, foo, "h\xC3\xA9\
+            llo", "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+          "w\xC3\xB6rld"]}}
+    - {command: [CONFIG, SET, search.max-term-expansions, "2"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@t:b*", LIMIT, 0, 0], expect: {equals: [2]}}
+    - {command: [CONFIG, SET, search.max-term-expansions, "200"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@t:b*", LIMIT, 0, 0], expect: {equals: [7]}}
+    - {command: [FT.SEARCH, idx, "@t:aaaa*", NOCONTENT], expect: {equals: [1, "d:1"]}}
+    - {command: [FT.SEARCH, idx, "@t:*qqq", NOCONTENT], expect: {equals: [1, "d:1"]}}
+    - {command: [FT.SEARCH, idx, "@t:h\xC3\xA9llo", NOCONTENT], expect: {equals: [
+          1, "d:7"]}}
+    - {command: [FT.SEARCH, idx, "@t:foo", NOCONTENT], expect: {equals: [1, "d:10"]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, SUFFIX, ""]}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, dup, WITHKEYS, WITHPOSITIONS]}
+    - {command: [DEL, "d:1"], expect: {equals: 1}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, "aaaa"], wait_s: 30, expect: {
+        equals: []}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, "b"], expect: {equals: [ba, bar,
+          bb, bc, bd, bf]}}
+    - {command: [FT.SEARCH, idx, "@t:*b", LIMIT, 0, 0], expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, "@t:%%bb%%", LIMIT, 0, 0], expect: {equals: [6]}}
+    - {command: [FT.SEARCH, idx, "@t:b*", LIMIT, 0, 0], expect: {equals: [6]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [edge.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: edge}

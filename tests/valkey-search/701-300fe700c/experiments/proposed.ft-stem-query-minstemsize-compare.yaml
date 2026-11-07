@@ -1,0 +1,91 @@
+extends: [valkey.liveness]
+id: proposed.ft-stem-query-minstemsize-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH now stems query terms regardless of MINSTEMSIZE; compare
+    short-term stem expansion, deletion consistency and hybrid prefilter across the
+    two module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: stem
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, "1", "a:", SCHEMA, title, TEXT,
+        v, VECTOR, FLAT, "6", TYPE, FLOAT32, DIM, "4", DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [HSET, "a:1", title, cri, v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="],
+      expect: {equals: 2}}
+    - {command: [HSET, "a:2", title, cry, v, !!binary "AAAAAAAAgD8AAAAAAAAAAA=="],
+      expect: {equals: 2}}
+    - {command: [HSET, "a:3", title, cries, v, !!binary "AAAAAAAAAAAAAIA/AAAAAA=="],
+      expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx1, "*", LIMIT, "0", "0"], wait_s: 60, expect: {equals: [
+          3]}}
+    - {command: [FT.SEARCH, idx1, cry, LIMIT, "0", "0", DIALECT, "2"], expect_difference: true,
+      expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx1, cry, NOCONTENT, DIALECT, "2"], compare: unordered,
+      expect_difference: true, expect: {contains: "a:1"}}
+    - {command: [FT.SEARCH, idx1, cries, LIMIT, "0", "0", DIALECT, "2"], expect: {
+        equals: [2]}}
+    - {command: [FT.SEARCH, idx1, cry, VERBATIM, LIMIT, "0", "0", DIALECT, "2"], expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx1, "(@title:cry)=>[KNN 10 @v $b]", PARAMS, "2", b,
+        !!binary "AAAAAAAAgD8AAAAAAAAAAA==", LIMIT, "0", "0", DIALECT, "2"], expect_difference: true,
+      expect: {equals: [3]}}
+    - {command: [DEL, "a:3"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx1, "*", LIMIT, "0", "0"], wait_s: 30, expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx1, cry, LIMIT, "0", "0", DIALECT, "2"], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx1, cri, LIMIT, "0", "0", DIALECT, "2"], expect: {equals: [
+          1]}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, "1", "b:", MINSTEMSIZE, "6", SCHEMA,
+        title, TEXT, desc, TEXT], expect: {equals: OK}}
+    - {command: [HSET, "b:1", title, happiness], expect: {equals: 1}}
+    - {command: [HSET, "b:2", title, happy], expect: {equals: 1}}
+    - {command: [HSET, "b:3", desc, happy], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx2, "*", LIMIT, "0", "0"], wait_s: 60, expect: {equals: [
+          3]}}
+    - {command: [FT.SEARCH, idx2, happy, LIMIT, "0", "0", DIALECT, "2"], expect_difference: true,
+      expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx2, happy, NOCONTENT, DIALECT, "2"], compare: unordered,
+      expect_difference: true, expect: {contains: "b:1"}}
+    - {command: [FT.SEARCH, idx2, happi, LIMIT, "0", "0", DIALECT, "2"], expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx2, happiness, LIMIT, "0", "0", DIALECT, "2"], expect: {
+        equals: [1]}}
+    - {command: [FT.CREATE, idx3, ON, HASH, PREFIX, "1", "c:", SCHEMA, title, TEXT],
+      expect: {equals: OK}}
+    - {command: [HSET, "c:1", title, ai], expect: {equals: 1}}
+    - {command: [HSET, "c:2", title, ais], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx3, "*", LIMIT, "0", "0"], wait_s: 60, expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx3, ais, LIMIT, "0", "0", DIALECT, "2"], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx3, ai, LIMIT, "0", "0", DIALECT, "2"], expect: {equals: [
+          1]}}
+    - {command: [FT.CREATE, idx4, ON, HASH, PREFIX, "1", "d:", SCHEMA, title, TEXT,
+        NOSTEM], expect: {equals: OK}}
+    - {command: [HSET, "d:1", title, cry], expect: {equals: 1}}
+    - {command: [HSET, "d:2", title, cri], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx4, "*", LIMIT, "0", "0"], wait_s: 60, expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx4, cry, LIMIT, "0", "0", DIALECT, "2"], expect: {equals: [
+          1]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [stem.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: stem}

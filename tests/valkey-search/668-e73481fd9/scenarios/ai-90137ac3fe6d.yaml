@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 24d9b083e239..e73481fd9cb5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-90137ac3fe6d
+seed: 104
+experiment:
+  id: proposed.ft-index-memory-rdb-restart
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7300

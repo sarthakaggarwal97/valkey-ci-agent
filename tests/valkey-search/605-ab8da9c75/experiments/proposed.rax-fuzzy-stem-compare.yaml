@@ -1,0 +1,82 @@
+extends: [valkey.liveness]
+id: proposed.rax-fuzzy-stem-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Fuzzy search through the new raw-node PathIterator, stem-tree expansion
+    and removal (including NOSTEM-only words), and exact-phrase positions, compared
+    between the Rax integration and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fz
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, t, TEXT, n, TEXT,
+        NOSTEM], expect: {equals: OK}}
+    - {command: [HSET, "d:1", t, happy], expect: {equals: 1}}
+    - {command: [HSET, "d:2", t, happiness], expect: {equals: 1}}
+    - {command: [HSET, "d:3", t, happily], expect: {equals: 1}}
+    - {command: [HSET, "d:4", t, hapless], expect: {equals: 1}}
+    - {command: [HSET, "d:5", t, chapter], expect: {equals: 1}}
+    - {command: [HSET, "d:6", t, "banana bandana"], expect: {equals: 1}}
+    - {command: [HSET, "d:7", t, "kitten sitting"], expect: {equals: 1}}
+    - {command: [HSET, "d:8", n, "running jumping"], expect: {equals: 1}}
+    - {command: [HSET, "d:9", t, trial], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:chapter", NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "d:5"]}}
+    - {command: [FT.SEARCH, idx, "@n:jumping", NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "d:8"]}}
+    - {command: [FT.SEARCH, idx, "@t:trial", NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "d:9"]}}
+    - {command: [FT.SEARCH, idx, "@t:happy", NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, "@t:happiness", NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, "@n:run", NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@n:running", NOCONTENT], expect: {equals: [1, "d:8"]}}
+    - {command: [FT.SEARCH, idx, "@t:%happy%", NOCONTENT], expect: {equals: [1, "d:1"]}}
+    - {command: [FT.SEARCH, idx, "@t:%%happily%%", NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, "@t:%banana%", NOCONTENT], expect: {equals: [1, "d:6"]}}
+    - {command: [FT.SEARCH, idx, "@t:%trail%", NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, "@t:%zzzzz%", NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, '@t:"kitten sitting"', NOCONTENT], expect: {equals: [
+          1, "d:7"]}}
+    - {command: [FT.SEARCH, idx, '@t:"sitting kitten"', NOCONTENT], expect: {equals: [
+          0]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, STEM, sit]}
+    - {command: [FT._DEBUG, TEXTINFO, idx, STEM, ""], compare: skip}
+    - {command: [DEL, "d:5"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:chapter", NOCONTENT], wait_s: 15, expect: {equals: [
+          0]}}
+    - {command: [DEL, "d:1", "d:2", "d:3"], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, "@t:happy", NOCONTENT], wait_s: 15, expect: {equals: [
+          0]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, STEM, happi], wait_s: 15, expect: {equals: []}}
+    - {command: [FT.SEARCH, idx, "@t:%happy%", NOCONTENT], expect: {equals: [0]}}
+    - {command: [DEL, "d:8"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@n:running", NOCONTENT], wait_s: 15, expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, "@t:%bandana%", NOCONTENT], expect: {equals: [1,
+          "d:6"]}}
+    - {command: [DEL, "d:4"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:hapless", NOCONTENT], wait_s: 15, expect: {equals: [
+          0]}}
+    - {command: [DEL, "d:7"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '@t:"kitten sitting"', NOCONTENT], wait_s: 15, expect: {
+        equals: [0]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, ""], expect: {equals: [banana,
+          bandana, trial]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [fz.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fz}

@@ -1,0 +1,108 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ab8da9c75867e21a847b42757cf9bea31d7ba4ff",
+  "parent": "ae0f8f095f6a5c5dc89a03b54eaf8e5c9fe10659",
+  "pr": 605,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Rax Integration (#605)",
+  "date": "2026-02-03",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 12.3431,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-3fec53a0e8ca",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #605, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in _ZNK13valkey_search11IndexSchema24InTrackedMutationRecordsERKNS_17InternedStringPtrERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE",
+      "scenario": "ai-84039ef29bc4",
+      "seed": 201,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "e91de74136928025afbf",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-84039ef29bc4",
+      "seed": 201,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #605",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-84039ef29bc4",
+      "build": "unstable",
+      "seed": 201,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-84039ef29bc4",
+      "build": "unstable",
+      "seed": 202,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-84039ef29bc4",
+      "build": "unstable",
+      "seed": 203,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6076bc1092ba",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'fz' returned ERROR: expectations both builds violate alike, so they are not about the change: 24 (FT._DEBUG TEXTINFO idx STEM sit), 25 (FT._DEBUG TEXTINFO idx STEM ), 30 (FT._DEBUG TEXTINFO idx STEM happi), 39 (FT._DEBUG TEXTINFO idx PR"
+    },
+    {
+      "scenario": "ai-6076bc1092ba",
+      "build": "unstable",
+      "seed": 202,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6076bc1092ba",
+      "build": "unstable",
+      "seed": 203,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6076bc1092ba",
+      "build": "unstable",
+      "seed": 204,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

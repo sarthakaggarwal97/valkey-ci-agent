@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.ft-numeric-separator-error-message
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    FT.SEARCH with a numeric range filter whose start/end separator is invalid (e.g.
+    `|`) returns an error that now names `,` as the accepted separator; the parent
+    build's error wrongly names `|`. Valid separators (space, comma) must keep parsing
+    identically on both builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftsep
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@n:[1|2]"], expect_difference: true, expect: {error: "Expected\
+          \ space or `,` between start and end"}}
+    - {command: [FT.SEARCH, idx, "@n:[(1;2]"], expect_difference: true, expect: {
+        error: "Expected space or `,` between start and end"}}
+    - {command: [FT.SEARCH, idx, "@n:[-inf|+inf]"], expect_difference: true, expect: {
+        error: "Expected space or `,` between start and end"}}
+    - {command: [FT.SEARCH, idx, "@n:[1 2]"], compare: unordered}
+    - {command: [FT.SEARCH, idx, "@n:[1,2]"], compare: unordered}
+    - {command: [FT.SEARCH, idx, "@n:[(1,(2]"], compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftsep.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftsep}

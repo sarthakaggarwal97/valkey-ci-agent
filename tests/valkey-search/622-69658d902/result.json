@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "69658d902d5b96f210f8af24492ad9b435492c58",
+  "parent": "300fe700c3baa16b2eed2aa7564e62d814d32271",
+  "pr": 622,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Introduce ShardedAtomic for zero-contention, high-concurrency counters (#622)",
+  "date": "2026-02-05",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 4,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 10.8235,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

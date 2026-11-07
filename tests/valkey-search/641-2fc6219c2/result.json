@@ -1,0 +1,37 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "2fc6219c25b7c5bcb9a80d989d16ca37a2f1b067",
+  "parent": "e41ee6069170fa9e44cdbac5033a675818871e01",
+  "pr": 641,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Revert \"Update Vector HNSW output field format (#312)\" (#641)",
+  "date": "2026-01-29",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.3003,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-0d325f020b84",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #641, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

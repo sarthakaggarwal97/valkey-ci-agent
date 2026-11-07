@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search e41ee6069170..2fc6219c25b7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0d325f020b84
+seed: 2
+experiment:
+  id: proposed.ft-info-vector-format
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

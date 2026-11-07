@@ -1,0 +1,162 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "e73481fd9cb521b90f51e00ae2b78bd83c7e7a3a",
+  "parent": "24d9b083e2393583b652dab4f0e982f020e403f0",
+  "pr": 668,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add Memory Tracking for Index Schema Attributes (#668)",
+  "date": "2026-02-04",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 3,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 26.1369,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-ef45a0efeb62",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #668, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-402408ea0b5a",
+      "seed": 103,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #668, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-90137ac3fe6d",
+      "seed": 104,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #668, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-887d014ea6f4",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ftinfo' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (FT.SEARCH idx * NOCONTENT LIMIT 0 0), 15 (FT.SEARCH idx * NOCONTENT LIMIT 0 0), 20 (FT.SEARCH idx * NOCONTENT LIMIT 0 0), 23 (FT.SEARCH"
+    },
+    {
+      "scenario": "ai-887d014ea6f4",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-887d014ea6f4",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-887d014ea6f4",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ef45a0efeb62",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ftinfo' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (FT.SEARCH idx * NOCONTENT LIMIT 0 0), 15 (FT.SEARCH idx * NOCONTENT LIMIT 0 0), 20 (FT.SEARCH idx * NOCONTENT LIMIT 0 0), 23 (FT.SEARCH"
+    },
+    {
+      "scenario": "ai-ef45a0efeb62",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ef45a0efeb62",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ef45a0efeb62",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-402408ea0b5a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'reload' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (FT.SEARCH idxp * NOCONTENT LIMIT 0 0), 10 (FT.SEARCH idxp * NOCONTENT LIMIT 0 0), 14 (FT.SEARCH idxp * NOCONTENT LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-402408ea0b5a",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-402408ea0b5a",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-402408ea0b5a",
+      "build": "unstable",
+      "seed": 105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-90137ac3fe6d",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'reload' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (FT.SEARCH idxp * NOCONTENT LIMIT 0 0), 10 (FT.SEARCH idxp * NOCONTENT LIMIT 0 0), 14 (FT.SEARCH idxp * NOCONTENT LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-90137ac3fe6d",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-90137ac3fe6d",
+      "build": "unstable",
+      "seed": 105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-90137ac3fe6d",
+      "build": "unstable",
+      "seed": 106,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

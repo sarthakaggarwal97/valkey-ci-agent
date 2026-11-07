@@ -1,0 +1,92 @@
+extends: [valkey.liveness]
+id: proposed.rax-text-churn-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Adversarial churn on the rax-backed TEXT trees - overwrite churn on
+    shared postings, long shared-prefix words, unicode, repeated words, delete-driven
+    node merges - compared against the RadixTree parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 300
+    commands:
+    - {command: [CONFIG, SET, search.debug-mode, yes], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "k:", SCHEMA, f, TEXT, WITHSUFFIXTRIE],
+      expect: {equals: OK}}
+    - {command: [HSET, "k:1", f, "alpha beta gamma"], expect: {equals: 1}}
+    - {command: [HSET, "k:1", f, "beta gamma delta"], expect: {equals: 0}}
+    - {command: [HSET, "k:1", f, "gamma delta alpha"], expect: {equals: 0}}
+    - {command: [HSET, "k:1", f, "delta alpha beta"], expect: {equals: 0}}
+    - {command: [HSET, "k:1", f, "alpha beta gamma delta"], expect: {equals: 0}}
+    - {command: [DEL, "k:1"], expect: {equals: 1}}
+    - {command: [HSET, "k:1", f, "alpha beta gamma"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, alpha, NOCONTENT], compare: skip}
+    - {command: [HSET, "k:1", f, beta], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, beta, NOCONTENT], compare: skip}
+    - {command: [DEL, "k:1"], expect: {equals: 1}}
+    - {command: [HSET, "k:1", f, "alpha gamma"], expect: {equals: 1}}
+    - {command: [HSET, "k:2", f, "\u3053\u3093\u306B\u3061\u306F naive caf\xE9 r\xE9\
+          sum\xE9"], expect: {equals: 1}}
+    - {command: [HSET, "k:3", f, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaap\
+          \ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaq"],
+      expect: {equals: 1}}
+    - {command: [HSET, "k:4", f, "b c d e g h"], expect: {equals: 1}}
+    - {command: [HSET, "k:5", f, "echo echo echo echo echo echo echo echo echo echo"],
+      expect: {equals: 1}}
+    - {command: [HSET, "k:6", f, "prefix suffix stem schema text search nocontent"],
+      expect: {equals: 1}}
+    - {command: [HSET, "k:7", f, ""], expect: {equals: 1}}
+    - {command: [HSET, "k:8", f, zfinalsentinel], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, zfinalsentinel, NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "k:8"]}}
+    - {command: [FT.SEARCH, idx, gamma, NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "k:1"]}}
+    - {command: [FT.SEARCH, idx, beta, NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, "aaaa*", NOCONTENT], expect: {equals: [1, "k:3"]}}
+    - {command: [FT.SEARCH, idx, "*q", NOCONTENT], expect: {equals: [1, "k:3"]}}
+    - {command: [FT.SEARCH, idx, "*\xE9", NOCONTENT]}
+    - {command: [FT.SEARCH, idx, "%echo%", NOCONTENT], expect: {equals: [1, "k:5"]}}
+    - {command: [FT.SEARCH, idx, "%%alfa%%", NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, text, NOCONTENT], expect: {equals: [1, "k:6"]}}
+    - {command: [FT.SEARCH, idx, "s*", NOCONTENT], compare: unordered}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, ""]}
+    - {command: [FT._DEBUG, TEXTINFO, idx, SUFFIX, ""]}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, a, WITHKEYS, WITHPOSITIONS], expect: {
+        error: false}, compare: skip}
+    - {command: [FT._DEBUG, TEXTINFO, idx, STEM, ""], expect: {error: false}, compare: skip}
+    - {command: [DEL, "k:3"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "aaaa*", NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [DEL, "k:2", "k:5", "k:6"], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, "%echo%", NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, text, NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [DEL, "k:1", "k:4", "k:7", "k:8"], expect: {equals: 4}}
+    - {command: [FT.SEARCH, idx, zfinalsentinel, NOCONTENT], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idx, gamma, NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, ""]}
+    - {command: [FT.SEARCH, idx, alpha, NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "*a", NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "%zz%", NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.text-radix-revert-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: Text index rebuilt by backfill after SAVE and restart, compared across
+    the RadixTree revert, then post-restart ingest and delete
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, content, TEXT,
+        WITHSUFFIXTRIE], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", content, "run runner running"], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", content, "wonder wonderful"], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", content, "happy"], expect: {equals: 1}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, ""], wait_s: 30, expect: {equals: [
+          happy, run, runner, running, wonder, wonderful]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, ""], wait_s: 60, expect: {equals: [
+          happy, run, runner, running, wonder, wonderful]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, SUFFIX, ""], expect: {equals: [gninnur,
+          lufrednow, nur, rednow, rennur, yppah]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, STEM, happi], expect: {equals: [[happi,
+            [happy]]]}}
+    - {command: [FT.SEARCH, idx, "@content:happiness", NOCONTENT], expect: {equals: [
+          1, "doc:3"]}}
+    - {command: [FT.SEARCH, idx, "@content:*ing", NOCONTENT], expect: {equals: [1,
+          "doc:1"]}}
+    - {command: [FT.SEARCH, idx, "@content:%wander%", NOCONTENT], expect: {equals: [
+          1, "doc:2"]}}
+    - {command: [HSET, "doc:4", content, zebra], expect: {equals: 1}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, z], wait_s: 30, expect: {equals: [
+          zebra]}}
+    - {command: [DEL, "doc:2"], expect: {equals: 1}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, wonder], wait_s: 30, expect: {
+        equals: []}}
+    - {command: [FT.SEARCH, idx, "@content:wond*", LIMIT, 0, 0], expect: {equals: [
+          0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

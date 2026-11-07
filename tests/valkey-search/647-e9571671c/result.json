@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "e9571671c8d4f556d07e60ccfad1068ac6a4d039",
+  "parent": "2fc6219c25b7c5bcb9a80d989d16ca37a2f1b067",
+  "pr": 647,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Move MINSTEMSIZE clause from per text field to per schema (#647)",
+  "date": "2026-01-30",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 7.0747,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

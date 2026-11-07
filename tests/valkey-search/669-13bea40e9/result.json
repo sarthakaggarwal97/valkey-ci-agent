@@ -1,0 +1,152 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "13bea40e932248cc5ffbabb4a7974d190b968a02",
+  "parent": "06ea5f2a110d5b02b3a46daaddc8b170dc3c15d5",
+  "pr": 669,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Solving text completely in entries fetcher (#669)",
+  "date": "2026-02-04",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 7.4911,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-8d57ceebe902",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #669, since fixed",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-c5b8f4c06feb",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #669, since fixed",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-241c9da22702",
+      "seed": 103,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #669",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-7c1994971bf7",
+      "seed": 104,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #669",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-8d57ceebe902",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8d57ceebe902",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8d57ceebe902",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c5b8f4c06feb",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c5b8f4c06feb",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c5b8f4c06feb",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-241c9da22702",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-241c9da22702",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-241c9da22702",
+      "build": "unstable",
+      "seed": 105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-7c1994971bf7",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-7c1994971bf7",
+      "build": "unstable",
+      "seed": 105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-7c1994971bf7",
+      "build": "unstable",
+      "seed": 106,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

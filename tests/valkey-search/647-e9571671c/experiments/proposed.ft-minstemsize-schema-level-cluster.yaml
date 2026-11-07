@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.ft-minstemsize-schema-level-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: "Schema-level MINSTEMSIZE on a single-node cluster - FT.CREATE parsing,\
+    \ FT.INFO shape and stemming semantics through the cluster-mode (coordinator)\
+    \ paths"
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: minstem-cluster
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: true
+    timeout_s: 60
+    commands:
+    - {command: [HSET, "doc:1", t, jumping], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", t, sprinting], expect: {equals: 1}}
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TEXT], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "doc:", MINSTEMSIZE, 100, SCHEMA,
+        t, TEXT], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx4, ON, HASH, PREFIX, 1, "doc:", MINSTEMSIZE, 2, SCHEMA,
+        t, TEXT, NOSTEM], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxbad, ON, HASH, SCHEMA, t, TEXT, MINSTEMSIZE, 2], expect_difference: true,
+      expect: {error: "Unknown argument"}}
+    - {command: [FT.CREATE, idxbad3, ON, HASH, MINSTEMSIZE, 0, SCHEMA, t, TEXT], expect: {
+        error: "MINSTEMSIZE must be positive"}}
+    - {command: [FT.INFO, idx1], wait_s: 30, expect_difference: true, expect: {contains: ready}}
+    - {command: [FT.INFO, idx2], wait_s: 30, expect_difference: true, expect: {contains: ready}}
+    - {command: [FT.INFO, idx4], wait_s: 30, expect_difference: true, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx1, "@t:jumps", NOCONTENT], compare: unordered, expect: {
+        equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, idx2, "@t:jumps", NOCONTENT], compare: unordered, expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idx2, "@t:jumping", NOCONTENT], compare: unordered, expect: {
+        equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, idx2, jumping, NOCONTENT], compare: unordered, expect: {
+        equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, idx4, "@t:jumps", NOCONTENT], compare: unordered, expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idx4, "@t:jumping", NOCONTENT], compare: unordered, expect: {
+        equals: [1, "doc:1"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [minstem-cluster.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: minstem-cluster}

@@ -1,0 +1,71 @@
+extends: [valkey.liveness]
+id: proposed.ft-info-attribute-memory-lifecycle
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.INFO user_indexed_memory tracking across inserts, updates, field
+    and key deletes, double deletes, MULTI/EXEC, RENAME, expiry, backfill of a second
+    index, and index drop
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftinfo
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, f1, AS, t, TAG,
+        f2, AS, n, NUMERIC, f3, AS, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", f1, hello, f2, 42, f3, !!binary "AAAAAAAAAAA="], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:2", f1, "", f2, 0], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [2]}}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {contains: user_indexed_memory}}
+    - {command: [HSET, "doc:1", f1, helloworldlong], expect: {equals: 0}}
+    - {command: [HDEL, "doc:1", f3], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:{helloworldlong}", NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "doc:1"]}}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {contains: user_indexed_memory}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, "doc:3", f1, x, f2, 1], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:3", f1, yy], expect: {equals: QUEUED}}
+    - {command: [DEL, "doc:3"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:3", f1, zzz, f2, 7], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [2, 0, 1, 2]}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [3]}}
+    - {command: [DEL, "doc:1"], expect: {equals: 1}}
+    - {command: [DEL, "doc:1"], expect: {equals: 0}}
+    - {command: [SET, "doc:4", notahash], expect: {equals: OK}}
+    - {command: [DEL, "doc:4"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [2]}}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {contains: user_indexed_memory}}
+    - {command: [RENAME, "doc:2", "doc:9"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, LIMIT, 0, 10], wait_s: 30, expect: {
+        contains: "doc:9"}, compare: unordered}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "doc:", SCHEMA, f2, NUMERIC,
+        f1, TAG], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx2, "*", NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [2]}}
+    - {command: [FT.INFO, idx2], expect_difference: true, expect: {contains: user_indexed_memory}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [PEXPIRE, "doc:3", 50], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx2, "*", NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [1]}}
+    - {command: [FT.INFO, idx2], expect_difference: true, expect: {contains: user_indexed_memory}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftinfo}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search d300acff7599..a1b3769334d6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7124ee128664
+seed: 670001
+experiment:
+  id: proposed.ft-query-error-message
+  inputs:
+    resp: 2
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.valkey-search-stemming-ingestion
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Stemming moved to ingestion-time with a stem tree; exact/prefix/VERBATIM
+    now hit original words, non-exact term search expands via the stem tree, and delete/overwrite
+    cleans the tree.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: stem
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, SCHEMA, content, TEXT, nostem, TEXT, NOSTEM],
+      expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', content, running, nostem, running], expect: {equals: 2}}
+    - {command: [HSET, 'doc:2', content, runs, nostem, runs], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, '@content:run', LIMIT, 0, 0], wait_s: 20, expect: {
+        equals: [2]}}
+    - {command: [FT.SEARCH, idx, '@content:"running"', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, '@content:"run"', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, '@nostem:running', LIMIT, 0, 0], expect: {equals: [
+          1]}}
+    - {command: [FT.CREATE, idx2, ON, HASH, SCHEMA, body, TEXT], expect: {equals: OK}}
+    - {command: [HSET, 'doc:10', body, happiness], expect: {equals: 1}}
+    - {command: [HSET, 'doc:11', body, happy], expect: {equals: 1}}
+    - {command: [HSET, 'doc:12', body, happier], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx2, '@body:happi', LIMIT, 0, 0], wait_s: 20, expect: {
+        equals: [2]}}
+    - {command: [FT.SEARCH, idx2, '@body:happine*', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx2, '@body:"happiness"', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx2, '@body:"happi"', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx2, '@body:happi', VERBATIM, LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx2, '@body:happier', LIMIT, 0, 0], expect: {equals: [
+          1]}}
+    - {command: [FT.CREATE, idx3, ON, HASH, MINSTEMSIZE, 6, SCHEMA, t, TEXT], expect: {
+        equals: OK}}
+    - {command: [HSET, 'doc:20', t, happiness], expect: {equals: 1}}
+    - {command: [HSET, 'doc:21', t, happy], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx3, '@t:happiness', LIMIT, 0, 0], wait_s: 20, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx3, '@t:"happiness"', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx3, '@t:happy', LIMIT, 0, 0], expect: {equals: [1]}}
+    - {command: [HSET, 'doc:11', body, jumping], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx2, '@body:jump', LIMIT, 0, 0], wait_s: 20, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx2, '@body:happi', LIMIT, 0, 0], expect: {equals: [
+          1]}}
+    - {command: [DEL, 'doc:10'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx2, '@body:happi', LIMIT, 0, 0], wait_s: 20, expect: {
+        equals: [0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: stem}

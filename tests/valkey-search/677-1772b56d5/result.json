@@ -1,0 +1,80 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "1772b56d5929d8fae841985b6f7925a651c5802b",
+  "parent": "ab8da9c75867e21a847b42757cf9bea31d7ba4ff",
+  "pr": 677,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Revert \"Rax Integration (#605)\" (#677)",
+  "date": "2026-02-04",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 14.8831,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-0b5df804dc25",
+      "seed": 1104,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #677, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-ec3689042f75",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'core' returned ERROR: expectations both builds violate alike, so they are not about the change: 7 (FT._DEBUG TEXTINFO idx PREFIX ), 8 (FT._DEBUG TEXTINFO idx SUFFIX ), 9 (FT._DEBUG TEXTINFO idx STEM happi), 10 (FT._DEBUG TEXTINFO idx PR"
+    },
+    {
+      "scenario": "ai-d60db29732e2",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'core' returned ERROR: expectations both builds violate alike, so they are not about the change: 7 (FT._DEBUG TEXTINFO idx PREFIX ), 8 (FT._DEBUG TEXTINFO idx SUFFIX ), 9 (FT._DEBUG TEXTINFO idx STEM happi), 10 (FT._DEBUG TEXTINFO idx PR"
+    },
+    {
+      "scenario": "ai-6aff1250726a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'edge' returned ERROR: expectations both builds violate alike, so they are not about the change: 12 (FT._DEBUG TEXTINFO idx PREFIX ), 19 (FT.SEARCH idx @t:h\u00c3\u00a9llo NOCONTENT), 21 (FT._DEBUG TEXTINFO idx SUFFIX ), 22 (FT._DEBUG TEXTINFO idx"
+    },
+    {
+      "scenario": "ai-0b5df804dc25",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'reload' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (FT._DEBUG TEXTINFO idx PREFIX ), 7 (FT._DEBUG TEXTINFO idx PREFIX ), 8 (FT._DEBUG TEXTINFO idx SUFFIX ), 9 (FT._DEBUG TEXTINFO idx STEM"
+    },
+    {
+      "scenario": "ai-0b5df804dc25",
+      "build": "unstable",
+      "seed": 1104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0b5df804dc25",
+      "build": "unstable",
+      "seed": 1105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0b5df804dc25",
+      "build": "unstable",
+      "seed": 1106,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

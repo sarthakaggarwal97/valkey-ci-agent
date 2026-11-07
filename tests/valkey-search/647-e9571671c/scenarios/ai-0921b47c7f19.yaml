@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 2fc6219c25b7..e9571671c8d4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0921b47c7f19
+seed: 647003
+experiment:
+  id: proposed.ft-minstemsize-schema-level-cluster
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

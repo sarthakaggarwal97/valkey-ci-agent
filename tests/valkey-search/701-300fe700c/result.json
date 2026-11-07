@@ -1,0 +1,88 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "300fe700c3baa16b2eed2aa7564e62d814d32271",
+  "parent": "014309dd7753440785cd9c93926898aa867b18a5",
+  "pr": 701,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Stem search terms regardless of stemsize - Bug fix (#701)",
+  "date": "2026-02-05",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 4.714,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: unknown-crash (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server+0x27766f) (BuildId: 70960ae4fd5f860116b528988a2d405c84878708) in __asan_memcpy",
+      "scenario": "ai-2a287b69c4dc",
+      "seed": 702,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #701",
+      "fingerprint": "3e7345c8dafcf1a68e2b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in _ZNK13valkey_search11IndexSchema24InTrackedMutationRecordsERKNS_17InternedStringPtrERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE",
+      "scenario": "ai-2a287b69c4dc",
+      "seed": 702,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #701",
+      "fingerprint": "2369c16498509559fab9",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-7c92721cc71e",
+      "build": "unstable",
+      "seed": 701,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-7c92721cc71e",
+      "build": "unstable",
+      "seed": 702,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-7c92721cc71e",
+      "build": "unstable",
+      "seed": 703,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2a287b69c4dc",
+      "build": "unstable",
+      "seed": 702,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2a287b69c4dc",
+      "build": "unstable",
+      "seed": 703,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2a287b69c4dc",
+      "build": "unstable",
+      "seed": 704,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

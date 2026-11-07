@@ -1,0 +1,93 @@
+extends: [valkey.liveness]
+id: proposed.rax-text-prefix-suffix-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Term, prefix and suffix text search, TEXTINFO tree dumps, deletes that
+    merge rax nodes, tree emptied and reused, restart with backfill, compared between
+    the Rax integration and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rax
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TEXT, WITHSUFFIXTRIE],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", t, "cat car can dog chart"], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", t, "app application apple"], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", t, "test testing tester"], expect: {equals: 1}}
+    - {command: [HSET, "doc:4", t, "xabc xtest xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
+      expect: {equals: 1}}
+    - {command: [HSET, "doc:5", t, "\u3053\u3093\u306B\u3061\u306F worldly"], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:6", t, "cards card car"], expect: {equals: 1}}
+    - {command: [HSET, "doc:7", t, "fields schema prefix"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:dog", NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:1"]}}
+    - {command: [FT.SEARCH, idx, "@t:worldly", NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:5"]}}
+    - {command: [FT.SEARCH, idx, "@t:prefix", NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:7"]}}
+    - {command: [FT.SEARCH, idx, "@t:car", NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, "@t:ca*", NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, "@t:appl*", NOCONTENT], expect: {equals: [1, "doc:2"]}}
+    - {command: [FT.SEARCH, idx, "@t:application*", NOCONTENT], expect: {equals: [
+          1, "doc:2"]}}
+    - {command: [FT.SEARCH, idx, "@t:zzz*", NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@t:*ing", NOCONTENT], expect: {equals: [1, "doc:3"]}}
+    - {command: [FT.SEARCH, idx, "@t:*ar", NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, "@t:*qqq", NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@t:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        NOCONTENT], expect: {equals: [1, "doc:4"]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, ""]}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, ca]}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, appl]}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, zz], expect: {equals: []}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, SUFFIX, ""]}
+    - {command: [FT._DEBUG, TEXTINFO, idx, SUFFIX, gni]}
+    - {command: [DEL, "doc:1"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:dog", NOCONTENT], wait_s: 15, expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, "@t:car", NOCONTENT], expect: {equals: [1, "doc:6"]}}
+    - {command: [HSET, "doc:3", t, replaced], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "@t:testing", NOCONTENT], wait_s: 15, expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, "@t:replaced", NOCONTENT], expect: {equals: [1, "doc:3"]}}
+    - {command: [DEL, "doc:2", "doc:3", "doc:4", "doc:5", "doc:6", "doc:7"], expect: {
+        equals: 6}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, ""], wait_s: 30, expect: {equals: []}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, SUFFIX, ""], expect: {equals: []}}
+    - {command: [FT.SEARCH, idx, "@t:car", NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@t:ca*", NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@t:*ar", NOCONTENT], expect: {equals: [0]}}
+    - {command: [HSET, "doc:9", t, car], expect: {equals: 1}}
+    - {command: [HSET, "doc:10", t, cards], expect: {equals: 1}}
+    - {command: [HSET, "doc:11", t, "cat sled"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:sled", NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:11"]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@t:sled", NOCONTENT], wait_s: 60, expect: {equals: [
+          1, "doc:11"]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, ""], wait_s: 30, expect: {equals: [
+          car, cards, cat, sled]}}
+    - {command: [FT.SEARCH, idx, "@t:ca*", NOCONTENT], compare: unordered}
+    - {command: [CONFIG, SET, search.max-term-expansions, 2], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@t:ca*", NOCONTENT], compare: unordered}
+    - {command: [CONFIG, SET, search.max-term-expansions, 200], expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rax.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rax}

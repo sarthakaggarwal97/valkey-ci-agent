@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.ft-info-vector-format
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.INFO vector attribute format reverted to nested index/algorithm
+    arrays for HNSW and FLAT; compares replies and array-length bookkeeping across
+    the two module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftinfo
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, embedding, VECTOR,
+        HNSW, 12, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, COSINE, M, 16, EF_CONSTRUCTION,
+        100, EF_RUNTIME, 30], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", embedding, !!binary "AACAPwAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:2", embedding, !!binary "AAAAAACAPwAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {contains: dimensions}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @embedding $vec]", NOCONTENT, PARAMS,
+        2, vec, !!binary "AACAPwAAAAAAAAAAAAAAAA==", DIALECT, 2], wait_s: 30, expect: {
+        contains: "doc:1"}, compare: unordered}
+    - {command: [FT.CREATE, idxflat, ON, HASH, PREFIX, 1, "f:", SCHEMA, embedding,
+        VECTOR, FLAT, 8, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2, BLOCK_SIZE, 1024],
+      expect: {equals: OK}}
+    - {command: [HSET, "f:1", embedding, !!binary "AACAPwAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [FT.INFO, idxflat], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.INFO, idxflat], expect_difference: true, expect: {contains: dimensions}}
+    - {command: [FT.SEARCH, idxflat, "*=>[KNN 1 @embedding $vec]", NOCONTENT, PARAMS,
+        2, vec, !!binary "AACAPwAAAAAAAAAAAAAAAA==", DIALECT, 2], wait_s: 30, expect: {
+        contains: "f:1"}, compare: unordered}
+    - {command: [FT.CREATE, idxmix, ON, HASH, PREFIX, 1, "m:", SCHEMA, v, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, IP, tagf, TAG, numf, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, "m:1", v, !!binary "AACAPwAAAAAAAAAAAAAAAA==", tagf, red, numf,
+        7], expect: {equals: 3}}
+    - {command: [FT.INFO, idxmix], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftinfo}

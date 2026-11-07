@@ -1,0 +1,114 @@
+extends: [valkey.liveness]
+id: proposed.rax-text-lifecycle-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Full TEXT index lifecycle on the rax-backed trees, replies compared
+    between the rax build and the RadixTree parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: textseq
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 300
+    commands:
+    - {command: [CONFIG, SET, search.debug-mode, yes], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, title, TEXT,
+        WITHSUFFIXTRIE, body, TEXT, tags, TEXT, NOSTEM], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", title, "happy running cats", body, "quick brown fox\
+          \ jumps high", tags, "alpha sentinelone"], expect: {equals: 3}}
+    - {command: [HSET, "doc:2", title, "happiness runs deep", body, "foxes jumped\
+          \ quickly", tags, "alphabet sentineltwo"], expect: {equals: 3}}
+    - {command: [HSET, "doc:3", title, "unhappy runner", body, "lazy dog sleeps soundly",
+        tags, "beta sentinelthree"], expect: {equals: 3}}
+    - {command: [HSET, "doc:4", title, "run", body, "xabc xtest", tags, "gamma sentinelfour"],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:5", title, "application app apple", body, "cats catcher\
+          \ cards car", tags, "delta sentinelfive"], expect: {equals: 3}}
+    - {command: [HSET, "doc:6", title, "zebra", body, "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+        tags, "epsilon sentinelsix"], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, sentinelone, NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:1"]}}
+    - {command: [FT.SEARCH, idx, sentineltwo, NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:2"]}}
+    - {command: [FT.SEARCH, idx, sentinelthree, NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "doc:3"]}}
+    - {command: [FT.SEARCH, idx, sentinelfour, NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:4"]}}
+    - {command: [FT.SEARCH, idx, sentinelfive, NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:5"]}}
+    - {command: [FT.SEARCH, idx, sentinelsix, NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:6"]}}
+    - {command: [FT.SEARCH, idx, fox, NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, "happ*", NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, "app*", NOCONTENT], expect: {equals: [1, "doc:5"]}}
+    - {command: [FT.SEARCH, idx, "appl*", NOCONTENT], expect: {equals: [1, "doc:5"]}}
+    - {command: [FT.SEARCH, idx, "zqx*", NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "xab*", NOCONTENT], expect: {equals: [1, "doc:4"]}}
+    - {command: [FT.SEARCH, idx, "*ness", NOCONTENT], expect: {equals: [1, "doc:2"]}}
+    - {command: [FT.SEARCH, idx, "*ing", NOCONTENT], expect: {equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, idx, "%cat%", NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, "%%aple%%", NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx, '"quick brown fox"', NOCONTENT], expect: {equals: [
+          1, "doc:1"]}}
+    - {command: [FT.SEARCH, idx, '"brown quick fox"', NOCONTENT]}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, ""]}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, happ, WITHKEYS, WITHPOSITIONS],
+      expect: {error: false}, compare: skip}
+    - {command: [FT._DEBUG, TEXTINFO, idx, SUFFIX, ""]}
+    - {command: [FT._DEBUG, TEXTINFO, idx, STEM, ""], expect: {error: false}, compare: skip}
+    - {command: [CONFIG, SET, search.max-term-expansions, 1], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "c*", NOCONTENT], compare: unordered}
+    - {command: [CONFIG, SET, search.max-term-expansions, 200], expect: {equals: OK}}
+    - {command: [HSET, "doc:5", title, app], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, "appl*", NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, "app*", NOCONTENT], expect: {equals: [1, "doc:5"]}}
+    - {command: [DEL, "doc:1"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, sentinelone, NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, "*ing", NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "happ*", NOCONTENT], expect: {equals: [1, "doc:2"]}}
+    - {command: [DEL, "doc:4"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, sentinelfour, NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, "xab*", NOCONTENT], expect: {equals: [0]}}
+    - {command: [DEL, "doc:2", "doc:3", "doc:5", "doc:6"], expect: {equals: 4}}
+    - {command: [FT.SEARCH, idx, sentineltwo, NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, sentinelthree, NOCONTENT], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idx, sentinelfive, NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, sentinelsix, NOCONTENT], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, fox, NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "a*", NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "*ing", NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "%cat%", NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT._DEBUG, TEXTINFO, idx, PREFIX, ""]}
+    - {command: [HSET, "doc:7", title, "regrow fresh bloom", tags, sentinelseven],
+      expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, sentinelseven, NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "doc:7"]}}
+    - {command: [FT.SEARCH, idx, "regro*", NOCONTENT], expect: {equals: [1, "doc:7"]}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "doc:", SCHEMA, title, TEXT,
+        WITHSUFFIXTRIE], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx2, regrow, NOCONTENT], wait_s: 30, expect: {equals: [
+          1, "doc:7"]}}
+    - {command: [FT.SEARCH, idx2, "*grow", NOCONTENT], expect: {equals: [1, "doc:7"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [textseq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: textseq}

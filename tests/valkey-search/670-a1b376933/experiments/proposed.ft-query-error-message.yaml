@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.ft-query-error-message
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH/FT.AGGREGATE with a query that has no predicate and no vector
+    clause now errors "Invalid query string syntax" instead of "Vector query clause
+    is missing"
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: ftquery
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, n, NUMERIC, t, TAG],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary 'AAAAAAAAgD8=', n, 1, t, red], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:2", vec, !!binary 'AACAPwAAAAA=', n, 2, t, blue], expect: {
+        equals: 3}}
+    - {command: [FT.SEARCH, idx, "@n:[1 1]", NOCONTENT], wait_s: 30, expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx, "@n:[2 2]", NOCONTENT], wait_s: 30, expect: {contains: "doc:2"}}
+    - {command: [FT.SEARCH, idx, "*"], expect_difference: true, expect: {error: "Invalid\
+          \ query string syntax"}}
+    - {command: [FT.SEARCH, idx, ""], expect_difference: true, expect: {error: "Invalid\
+          \ query string syntax"}}
+    - {command: [FT.SEARCH, idx, "   "], expect_difference: true, expect: {error: "Invalid\
+          \ query string syntax"}}
+    - {command: [FT.SEARCH, idx, "(*)"], expect_difference: true, expect: {error: "Invalid\
+          \ query string syntax"}}
+    - {command: [FT.SEARCH, idx, "* =>"], expect_difference: true, expect: {error: "Invalid\
+          \ query string syntax"}}
+    - {command: [FT.AGGREGATE, idx, "*"], expect_difference: true, expect: {error: "Invalid\
+          \ query string syntax"}}
+    - {command: [FT.SEARCH, idx, "()"], expect: {error: "Invalid filter expression"}}
+    - {command: [FT.SEARCH, idx, "@nosuch:[1 2]"], expect: {error: true}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @nosuchvec $B]", PARAMS, 2, B, !!binary 'AAAAAAAAAAA='],
+      expect: {error: true}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $B]", PARAMS, 2, B, !!binary 'AAAAAAAAAAA=',
+        NOCONTENT], compare: unordered, expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx, "@t:{red}=>[KNN 2 @vec $B]", PARAMS, 2, B, !!binary 'AAAAAAAAAAA=',
+        NOCONTENT], compare: unordered, expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx, "@n:[0 100]", NOCONTENT], compare: unordered, expect: {
+        contains: "doc:2"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftquery.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftquery}

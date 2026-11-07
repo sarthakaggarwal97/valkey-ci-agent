@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "d300acff75992b6b1d088e5ba14411e954c99b6e",
+  "parent": "13bea40e932248cc5ffbabb4a7974d190b968a02",
+  "pr": 608,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Endurance failover (#608)",
+  "date": "2026-02-05",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2681,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only valkey-search's own integration test harness (testing/integration/stability_runner.py, stability_test.py, utils.py), adding failover coordination to its Python stability tests. No module source code changes, so the built module's behaviour is identical at the change and its parent; there is nothing for a scenario to exercise."
+}

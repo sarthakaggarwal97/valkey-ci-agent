@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.ft-text-weight-create-info
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.CREATE TEXT WEIGHT parsing edge cases, FT.INFO WEIGHT attribute
+    field, and search on a weighted index, compared across the two module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: weight
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx_w, ON, HASH, PREFIX, 1, "doc:", SCHEMA, body, TEXT,
+        WEIGHT, "1.0"], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_w1, ON, HASH, SCHEMA, t, TEXT, weight, "1"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_we, ON, HASH, SCHEMA, t, TEXT, WEIGHT, "1e0"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_wp, ON, HASH, SCHEMA, t, TEXT, WEIGHT, "+1.0"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_ulp, ON, HASH, SCHEMA, t, TEXT, WEIGHT, "1.0000000000000001"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, bad_w2, ON, HASH, SCHEMA, t, TEXT, WEIGHT, "2.0"], expect_difference: true,
+      expect: {error: "not supported"}}
+    - {command: [FT.CREATE, bad_w0, ON, HASH, SCHEMA, t, TEXT, WEIGHT, "0"], expect_difference: true,
+      expect: {error: "not supported"}}
+    - {command: [FT.CREATE, bad_neg, ON, HASH, SCHEMA, t, TEXT, WEIGHT, "-1.0"], expect_difference: true,
+      expect: {error: "not supported"}}
+    - {command: [FT.CREATE, bad_nan, ON, HASH, SCHEMA, t, TEXT, WEIGHT, "nan"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.CREATE, bad_inf, ON, HASH, SCHEMA, t, TEXT, WEIGHT, "inf"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.CREATE, bad_empty, ON, HASH, SCHEMA, t, TEXT, WEIGHT, ""], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.CREATE, bad_missing, ON, HASH, SCHEMA, t, TEXT, WEIGHT], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.CREATE, idx_rep, ON, HASH, SCHEMA, t, TEXT, WEIGHT, "1.0", WEIGHT,
+        "1.0"], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, bad_rep, ON, HASH, SCHEMA, t, TEXT, WEIGHT, "1.0", WEIGHT,
+        "2.0"], expect_difference: true, expect: {error: "not supported"}}
+    - {command: [FT.CREATE, idx_mix, ON, HASH, SCHEMA, t, TEXT, NOSTEM, WEIGHT, "1.0",
+        WITHSUFFIXTRIE], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_kw, ON, HASH, SCHEMA, WEIGHT, TEXT, WEIGHT, "1.0"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_plain, ON, HASH, PREFIX, 1, "p:", SCHEMA, body, TEXT],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", body, "hello world"], expect: {equals: 1}}
+    - {command: [HSET, "p:1", body, "hello world"], expect: {equals: 1}}
+    - {command: [HSET, "p:2", body, "weight of the world"], expect: {equals: 1}}
+    - {command: [FT.INFO, idx_plain], wait_s: 30, expect_difference: true, expect: {
+        contains: ready}}
+    - {command: [FT.SEARCH, idx_plain, world, NOCONTENT], compare: unordered}
+    - {command: [FT.SEARCH, idx_w, hello, NOCONTENT], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT._LIST], expect_difference: true, expect: {contains: idx_plain}}
+    - {command: [FT.DROPINDEX, idx_w], expect_difference: true, expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [weight.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: weight}
