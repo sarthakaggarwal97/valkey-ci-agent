@@ -942,6 +942,34 @@ def test_a_build_that_rejects_the_server_config_is_unsupported_not_unstarted(mon
     assert done["found"] == {} and done["reached"] is False
 
 
+def test_the_walk_builds_porcupine_for_the_history_oracle(monkeypatch, tmp_path):
+    # valkey 54980ece3's ai-f1548181d555: the history oracle errored every run with "porcupine is not on PATH".
+    (tmp_path / "fuzzer" / "porcupine").mkdir(parents=True)
+    commands = []
+
+    def sh(command, cwd, log, env=None):
+        commands.append(command)
+        (tmp_path / "work" / "bin").mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(walk, "_sh", sh)
+    monkeypatch.setattr(walk.shutil, "which", lambda name: "/usr/bin/go" if name == "go" else None)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    walk.ensure_porcupine(tmp_path / "fuzzer", tmp_path / "work")
+    (command,) = commands
+    assert command.startswith("go -C ") and command.endswith(f"build -o {tmp_path / 'work' / 'bin' / 'porcupine'}")
+    assert walk.os.environ["PATH"] == f"{tmp_path / 'work' / 'bin'}:/usr/bin"
+
+
+def test_porcupine_already_on_path_or_without_go_is_left_alone(monkeypatch, tmp_path):
+    (tmp_path / "fuzzer" / "porcupine").mkdir(parents=True)
+    monkeypatch.setattr(walk, "_sh", lambda *a, **kw: pytest.fail("built anyway"))
+    monkeypatch.setattr(walk.shutil, "which", lambda name: "/usr/bin/porcupine" if name == "porcupine" else None)
+    walk.ensure_porcupine(tmp_path / "fuzzer", tmp_path / "work")
+    monkeypatch.setattr(walk.shutil, "which", lambda name: None)
+    walk.ensure_porcupine(tmp_path / "fuzzer", tmp_path / "work")
+    walk.ensure_porcupine(tmp_path / "no-such-fuzzer", tmp_path / "work")
+
+
 def test_a_run_suppresses_the_leaks_leaksanitizer_cannot_follow_in_valkey_json(monkeypatch, tmp_path):
     envs = []
 

@@ -673,6 +673,23 @@ def sequence_replies(report: dict[str, Any]) -> dict[tuple[str, int], dict[str, 
 LSAN_SUPPRESSIONS = Path(__file__).with_name("lsan.supp")
 
 
+def ensure_porcupine(fuzzer_dir: Path, work: Path) -> None:
+    """Put the porcupine checker on PATH, built from the fuzzer checkout, so the history oracle a proposed
+    experiment extends (valkey.history) errors no run; without go, the oracle keeps saying what is missing."""
+    if shutil.which("porcupine") or not (fuzzer_dir / "porcupine").is_dir() or not shutil.which("go"):
+        return
+    bin_dir = work / "bin"
+    try:
+        _sh(f"go -C {shlex.quote(str((fuzzer_dir / 'porcupine').resolve()))} build -o "
+            f"{shlex.quote(str(bin_dir / 'porcupine'))}", fuzzer_dir, work / "porcupine-build.log",
+            {"GOPATH": str(work / "go"), "GOCACHE": str(work / "go" / "cache")})
+    except RuntimeError as exc:
+        # The oracle still names what is missing; a run without the history check beats no run.
+        logger.warning("Building porcupine failed: %s", exc)
+        return
+    os.environ["PATH"] = f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"
+
+
 def fuzz(fuzzer_bin: str, doc: dict[str, Any], seed: int, *, candidate: dict[str, Any], compare: dict[str, Any],
          core: bool, experiment_dir: Path, run_dir: Path) -> dict[str, Any]:
     """Run one test with ``candidate`` as the build under test and ``compare`` as what it compares with: each a
@@ -920,6 +937,7 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
           unstable: Path, module_head: Path | None, folder: Path, work: Path, tests_url: str) -> None:
     started = time.monotonic()
     repo, core = merge["repo"], merge["repo"] == VALKEY_REPO
+    ensure_porcupine(fuzzer_dir, work)
     server = unstable / "src" / "valkey-server"
     # The three builds: each a Valkey server and, for a module merge or a test module, the module it loads.
     sides: dict[str, dict[str, Any]]
