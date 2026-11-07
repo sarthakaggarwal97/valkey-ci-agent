@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "329da60728229821c4a592f543b36cc964d8bcdb",
+  "parent": "e8b166bfd7791857dde6f8f0d35bfca0b6808509",
+  "pr": 363,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix valkey and json module versions in build and integration test. (#363)",
+  "date": "2025-09-16",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2412,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only scripts/common.rc, a build/CI helper script that clones and builds valkey-server and the valkey-json module for valkey-search's own integration tests: it makes VALKEY_VERSION and VALKEY_JSON_VERSION overridable env vars and clones valkey-json by branch instead of a pinned commit. No module source code is touched, so the loaded valkey-search module's commands, replies, indexing, replication or persistence behaviour are identical on both builds; there is no runtime path a scenario could exercise."
+}

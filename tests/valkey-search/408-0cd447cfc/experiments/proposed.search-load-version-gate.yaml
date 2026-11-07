@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.search-load-version-gate
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-search still loads and serves the full FT lifecycle after the
+    new on-load server version gate; the change intends no behaviour change on servers
+    >= 8.1.1, so a changed reply or a failed load is a regression
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: ft
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {error: true}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAAAAAgD8="], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $q]", NOCONTENT, PARAMS, 2, q, !!binary "AACAPwAAAAA="],
+      wait_s: 30, compare: skip, expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $q]", NOCONTENT, PARAMS, 2, q, !!binary "AACAPwAAAAA="],
+      wait_s: 30, compare: skip, expect: {contains: "doc:2"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $q]", NOCONTENT, PARAMS, 2, q, !!binary "AACAPwAAAAA="],
+      compare: unordered, expect: {contains: "doc:1"}}
+    - {command: [FT._LIST], compare: unordered, expect: {equals: [idx]}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ft.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ft}

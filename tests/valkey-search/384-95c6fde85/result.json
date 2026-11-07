@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "95c6fde850c70d0a09afc1642ad114723e1cdff9",
+  "parent": "4be4f56802bc776e8bae60a78ebba5a22f5f020f",
+  "pr": 384,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add --format option to build script (#384)",
+  "date": "2025-09-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2275,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only modifies build.sh, adding a --format option that runs clang-format on the source tree as a developer convenience. It is a build/tooling change with no effect on the compiled module's runtime behavior, commands, replies, persistence, or replication, so there is nothing for a fuzzer scenario to exercise."
+}

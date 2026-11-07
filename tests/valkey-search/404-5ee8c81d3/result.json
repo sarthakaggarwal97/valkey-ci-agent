@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5ee8c81d3d90776d5a8f411a1f5e31d071bbae48",
+  "parent": "2812344e7a8172c507b2f0ad1c421a21d82eae52",
+  "pr": 404,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "add .kiro folder to .gitignore; enable developers to use kiro while prevent uploading kiro steering files (#404)",
+  "date": "2025-10-02",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2111,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds a single line (`.kiro/`) to .gitignore so developers' Kiro steering files aren't committed. It touches no source code, build configuration, or runtime behavior of the valkey-search module; there is no command, reply, replication, or persistence path to exercise."
+}

@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.ft-info-fanout-retry-surface
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Surface of the fanout-retry change reachable without --use-coordinator: the new
+    search.ft-info-rpc-timeout-ms config and its 100..300000 bounds, the new search_info_fanout_retry_count
+    / fail_count INFO fields, the relocated search.ft-info-timeout-ms registration,
+    and the unchanged FT.INFO LOCAL, PRIMARY/CLUSTER-refused and error paths, compared
+    across the module builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: ftinfo
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, search.ft-info-rpc-timeout-ms], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [EVAL, "local t = redis.call('CONFIG','GET','search.ft-info-rpc-timeout-ms')\
+          \ return t[2]", 0], expect_difference: true, expect: {equals: "2500"}}
+    - {command: [CONFIG, SET, search.ft-info-rpc-timeout-ms, 100], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.ft-info-rpc-timeout-ms, 99], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.ft-info-rpc-timeout-ms, 300000], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.ft-info-rpc-timeout-ms, 300001], expect_difference: true,
+      expect: {error: true}}
+    - {command: [EVAL, "local t = redis.call('CONFIG','GET','search.ft-info-rpc-timeout-ms')\
+          \ return t[2]", 0], expect_difference: true, expect: {equals: "300000"}}
+    - {command: [EVAL, "local t = redis.call('CONFIG','GET','search.ft-info-timeout-ms')\
+          \ return t[2]", 0], expect: {equals: "5000"}}
+    - {command: [CONFIG, SET, search.ft-info-timeout-ms, 100], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.ft-info-timeout-ms, 99], expect: {error: true}}
+    - {command: [CONFIG, SET, search.ft-info-timeout-ms, 300001], expect: {error: true}}
+    - {command: [CONFIG, SET, search.ft-info-timeout-ms, 5000], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: info_fanout_retry_count}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: info_fanout_fail_count}}
+    - {command: [FT._DEBUG, CONTROLLED_VARIABLE, GET, ForceRemoteFailCount], expect: {
+        error: true}}
+    - {command: [HSET, "doc:0", price, 10], expect: {equals: 1}}
+    - {command: [HSET, "doc:1", price, 11], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", price, 12], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", price, 13], expect: {equals: 1}}
+    - {command: [HSET, "doc:4", price, 14], expect: {equals: 1}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, price, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: 5}, compare: skip}
+    - {command: [FT.INFO, idx], expect: {contains: ready}}
+    - {command: [FT.INFO, idx, LOCAL], expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, "@price:[10 12]", NOCONTENT], compare: unordered,
+      expect: {contains: 3}}
+    - {command: [FT.INFO, idx, PRIMARY], expect: {error: "PRIMARY option is not valid"}}
+    - {command: [FT.INFO, idx, CLUSTER], expect: {error: "CLUSTER option is not valid"}}
+    - {command: [FT.INFO, nosuchindex], expect: {error: "not found"}}
+    - {command: [FT.INFO, idx, BOGUS], expect: {error: "Invalid scope"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftinfo}

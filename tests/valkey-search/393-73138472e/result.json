@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "73138472ec35626ef676a0d69af6c76ea7254692",
+  "parent": "5ee8c81d3d90776d5a8f411a1f5e31d071bbae48",
+  "pr": 393,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "FT.DROPINDEX consistency check (#393)",
+  "date": "2025-10-02",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 12.8077,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is real behaviour (FT.DROPINDEX in cluster mode now fans out a consistency check over the coordinator's gRPC channel, retrying until every node reports the index gone; gRPC NOT_FOUND is reclassified as INDEX_NAME_ERROR; FT.INFO CLUSTER retries on index-name errors), but every changed path is gated on IsCluster() && UsingCoordinator(). UsingCoordinator() requires the module to be loaded with the '--use-coordinator' module argument: that option is built Hidden() (valkey_search_options.cc:129) and ModuleConfigManager::Init skips hidden entries, so it is not registered as a Valkey confi"
+}

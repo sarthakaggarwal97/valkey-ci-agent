@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search af2e9a8e0d02..d3c87b5ce355.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a8b6481f2dc5
+seed: 395001
+experiment:
+  id: proposed.ft-info-tag-casesensitive
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "b2aca8c691f3a9d38098ab720268549de9d14ce0",
+  "parent": "b3b3449fb8a8bfcc44932be71dad69c2f41a4d75",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix typo in ft.aggregate commit",
+  "date": "2025-10-14",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.8424,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only fixes a typo in an error string inside the filter_str.empty() branch of the file-local ParseKNN (ft_search_parser.cc:185). That branch is unreachable: ParseKNN's sole caller, PreParseQueryString at ft_search_parser.cc:393, is guarded by !vector_filter.empty() on the very string it passes as filter_str. The client-reachable empty-vector-clause error (e.g. FT.SEARCH idx '*' on a vector index) is produced at ft_search_parser.cc:386, whose message was already correct in both the parent and the change. No command reply or other observable behaviour differs between the two builds, so"
+}

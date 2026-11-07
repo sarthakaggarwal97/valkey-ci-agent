@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.search-acl-prefix-errortext
+deployment:
+  modes: [standalone]
+metadata:
+  description: Partial-prefix denial - both builds deny FT.INFO and FT.DROPINDEX for
+    a user missing one of the index prefixes, but the error message text differs
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [FT.CREATE, idxtwo, PREFIX, 2, "vec:", "vector:", SCHEMA, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [ACL, SETUSER, half, on, ">pass", resetkeys, "~vector:*", "&*", "+@all"],
+      expect: {equals: OK}}
+    - {command: [AUTH, half, pass], expect: {equals: OK}}
+    - {command: [FT.INFO, idxtwo], expect_difference: true, expect: {error: "does\
+          \ not have permission to access the key prefix"}}
+    - {command: [FT.DROPINDEX, idxtwo], expect_difference: true, expect: {error: "does\
+          \ not have permission to access the key prefix"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

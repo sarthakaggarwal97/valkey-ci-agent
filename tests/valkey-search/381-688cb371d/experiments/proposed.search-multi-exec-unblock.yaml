@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.search-multi-exec-unblock
+deployment:
+  modes: [standalone]
+metadata:
+  description: A plain HSET on a key mutated inside a prior MULTI/EXEC or Lua script
+    must reply immediately, not leave the client blocked until the next FT.SEARCH
+    flushes the multi queue
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: multiblock
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, search.writer-threads, 8], expect: {equals: OK}}
+    - {command: [FT.CREATE, books_index, SCHEMA, price, NUMERIC], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, cpp_book, price, 60], expect: {equals: QUEUED}}
+    - {command: [HSET, rust_book, price, 60], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [1, 1]}}
+    - {raw: "HSET rust_book price 50\r\n", connection: probe1, expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [FT.SEARCH, books_index, "@price: [50 50]"], wait_s: 30, compare: unordered,
+      expect: {contains: rust_book}}
+    - {command: [HSET, scala_book, price, 80], expect: {equals: 1}}
+    - {command: [FT.SEARCH, books_index, "@price: [80 80]"], wait_s: 30, compare: unordered,
+      expect: {contains: scala_book}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, scala_book, price, 65], expect: {equals: QUEUED}}
+    - {command: [HSET, go_book, price, 55], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [0, 1]}}
+    - {raw: "HSET scala_book price 70\r\n", connection: probe2, expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [FT.SEARCH, books_index, "@price: [70 70]"], wait_s: 30, compare: unordered,
+      expect: {contains: scala_book}}
+    - {command: [EVAL, "return redis.call('HSET', KEYS[1], 'price', '40')", 1, lua_book],
+      expect: {equals: 1}}
+    - {raw: "HSET lua_book price 45\r\n", connection: probe3, expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [FT.SEARCH, books_index, "@price: [45 45]"], wait_s: 30, compare: unordered,
+      expect: {contains: lua_book}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [multiblock.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: multiblock}

@@ -1,0 +1,59 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "d3c87b5ce35520e02a2e95d2bb4943a873626c5b",
+  "parent": "af2e9a8e0d02884a521ed0724a83acfa9f1085b8",
+  "pr": 395,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "tag casesentive updated to be key-value pair (#395)",
+  "date": "2025-09-24",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.95,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-a8b6481f2dc5",
+      "build": "unstable",
+      "seed": 395001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a8b6481f2dc5",
+      "build": "unstable",
+      "seed": 395002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a8b6481f2dc5",
+      "build": "unstable",
+      "seed": 395003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b3f24fefb9e0",
+      "build": "unstable",
+      "seed": 395002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b3f24fefb9e0",
+      "build": "unstable",
+      "seed": 395003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b3f24fefb9e0",
+      "build": "unstable",
+      "seed": 395004,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

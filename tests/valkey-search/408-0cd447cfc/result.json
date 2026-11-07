@@ -1,0 +1,77 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "0cd447cfc7f015b5ce35e096fff50a7d6251ef6b",
+  "parent": "73138472ec35626ef676a0d69af6c76ea7254692",
+  "pr": 408,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Implement server version checking on load (#408)",
+  "date": "2025-10-07",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 7.27,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-747bd358af25",
+      "build": "unstable",
+      "seed": 4081,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-747bd358af25",
+      "build": "unstable",
+      "seed": 4082,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-747bd358af25",
+      "build": "unstable",
+      "seed": 4083,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-39197dac0d64",
+      "build": "unstable",
+      "seed": 4082,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-39197dac0d64",
+      "build": "unstable",
+      "seed": 4083,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-39197dac0d64",
+      "build": "unstable",
+      "seed": 4084,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-cd1849e99b0d",
+      "build": "unstable",
+      "seed": 4083,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-cd1849e99b0d",
+      "build": "unstable",
+      "seed": 4084,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-cd1849e99b0d",
+      "build": "unstable",
+      "seed": 4085,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

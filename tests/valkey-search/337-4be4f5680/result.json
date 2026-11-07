@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "4be4f56802bc776e8bae60a78ebba5a22f5f020f",
+  "parent": "0e185efac0fb814d720992f92b91e82eb7d12b78",
+  "pr": 337,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Adding retry to fanout base class (#337)",
+  "date": "2025-09-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 7.4601,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-3394f8e0b33a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ftinfo' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (EVAL local t = redis.call('CONFIG','GET','search.ft-info-rpc-timeout-ms') return t[2] 0), 6 (EVAL local t = redis.call('CONFIG','GET','"
+    },
+    {
+      "scenario": "ai-47f05697bb4c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ftinfo' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (EVAL local t = redis.call('CONFIG','GET','search.ft-info-rpc-timeout-ms') return t[2] 0), 6 (EVAL local t = redis.call('CONFIG','GET','"
+    },
+    {
+      "scenario": "ai-464d3f2d669b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ftinfo' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (EVAL local t = redis.call('CONFIG','GET','search.ft-info-rpc-timeout-ms') return t[2] 0), 6 (EVAL local t = redis.call('CONFIG','GET','"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

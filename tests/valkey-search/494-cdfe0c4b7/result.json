@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "cdfe0c4b76afc5015359238f6097ca83e2a10706",
+  "parent": "e9f277cfd8c66d9ea982a7bdf01b6ae0e0e9be96",
+  "pr": 494,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fixed regression which broke Ninja builds OO (#494)",
+  "date": "2025-11-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2425,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only build.sh in valkey-search: it moves the Ninja/make build-tool selection after the function definitions and fixes ninja vs ninja-build detection so Ninja builds work again. It is purely a build-script/CI fix with no change to any module source, command behavior, reply, indexing, replication or persistence path, so there is no runtime behavior difference between the two builds for a scenario to detect."
+}

@@ -1,0 +1,59 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "7182af06da90cb341e0fe31af1fcb8dc36df0169",
+  "parent": "329da60728229821c4a592f543b36cc964d8bcdb",
+  "pr": 387,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Remove command alloed acl checks is it is already done by Valkey (#387)",
+  "date": "2025-09-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.6965,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-fa73b925584c",
+      "build": "unstable",
+      "seed": 4387001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-fa73b925584c",
+      "build": "unstable",
+      "seed": 4387002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-fa73b925584c",
+      "build": "unstable",
+      "seed": 4387003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-37cfed9f538d",
+      "build": "unstable",
+      "seed": 4387002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-37cfed9f538d",
+      "build": "unstable",
+      "seed": 4387003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-37cfed9f538d",
+      "build": "unstable",
+      "seed": 4387004,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

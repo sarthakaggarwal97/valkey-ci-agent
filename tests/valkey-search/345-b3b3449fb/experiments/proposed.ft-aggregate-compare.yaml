@@ -1,0 +1,102 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    FT.AGGREGATE pipeline stages (LOAD, APPLY, FILTER, GROUPBY/REDUCE, SORTBY, LIMIT,
+    PARAMS, DIALECT, ADDSCORES, MULTI/EXEC sync path) and the refactored shared FT.SEARCH
+    parse path (deferred KNN $-param substitution, changed error texts), compared
+    between the change's module build and the parent's.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n1, NUMERIC,
+        n2, NUMERIC, t1, TAG, t2, TAG, v1, VECTOR, HNSW, 6, DIM, 3, TYPE, FLOAT32,
+        DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:01", n1, 1, n2, 10, t1, red, t2, x, v1, !!binary 'AACAPwAAAAAAAAAA'],
+      expect: {equals: 5}}
+    - {command: [HSET, "doc:02", n1, 2, n2, -5, t1, blue, t2, y, v1, !!binary 'AAAAAAAAgD8AAAAA'],
+      expect: {equals: 5}}
+    - {command: [HSET, "doc:03", n1, 3, n2, 0, t1, red, t2, x, v1, !!binary 'AAAAAAAAAAAAAIA/'],
+      expect: {equals: 5}}
+    - {command: [HSET, "doc:04", n1, 4, n2, 2.5, t1, green, t2, y, v1, !!binary 'AAAAQAAAAAAAAAAA'],
+      expect: {equals: 5}}
+    - {command: [HSET, "doc:05", n1, 5, n2, "1e100", t1, red, t2, x, v1, !!binary 'AACAPwAAAAAAAAAA'],
+      expect: {equals: 5}}
+    - {command: [HSET, "doc:06", n1, 6, n2, "-0", t1, blue, t2, y, v1, !!binary 'AAAAAAAAgD8AAAAA'],
+      expect: {equals: 5}}
+    - {command: [HSET, "doc:07", n1, 7, n2, 9223372036854775807, t1, green, t2, x,
+        v1, !!binary 'AAAAAAAAAAAAAIA/'], expect: {equals: 5}}
+    - {command: [HSET, "doc:08", n1, 8, n2, 0.1, t1, red, t2, y, v1, !!binary 'AAAAQAAAAAAAAAAA'],
+      expect: {equals: 5}}
+    - {command: [HSET, "doc:09", n1, 9, n2, notanumber, t1, blue, t2, x, v1, !!binary 'AACAPwAAAAAAAAAA'],
+      expect: {equals: 5}}
+    - {command: [HSET, "doc:10", n1, 10, n2, "-1e-300", t1, green, t2, y, v1, !!binary 'AAAAAAAAgD8AAAAA'],
+      expect: {equals: 5}}
+    - {command: [HSET, "doc:11", n1, 11, n2, 42, t1, red, t2, x, v1, !!binary 'AAAAAAAAAAAAAIA/'],
+      expect: {equals: 5}}
+    - {command: [HSET, "doc:12", n1, 12, n2, 7, t1, blue, t2, y, v1, !!binary 'AAAAQAAAAAAAAAAA'],
+      expect: {equals: 5}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, LIMIT, 0, 20], wait_s: 30, expect: {
+        contains: "doc:12"}, compare: unordered}
+    - {command: [FT.AGGREGATE, idx, "*"], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 3, "@__key", "@n1", "@t1"], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "*"], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 2, "@n1", "@t1", GROUPBY, 1, "@t1",
+        REDUCE, COUNT, 0, AS, cnt, REDUCE, SUM, 1, "@n1", AS, s, REDUCE, AVG, 1, "@n1",
+        AS, a, REDUCE, MIN, 1, "@n1", AS, mn, REDUCE, MAX, 1, "@n1", AS, mx, REDUCE,
+        STDDEV, 1, "@n1", AS, sd, REDUCE, COUNT_DISTINCT, 1, "@t2", AS, cd], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 2, "@__key", "@n1", SORTBY, 2, "@n1",
+        DESC], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 2, "@__key", "@n1", SORTBY, 2, "@n1",
+        ASC, MAX, 3, LIMIT, 1, 2], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 3, "@n1", "@n2", "@t1", APPLY, "@n1+@n2",
+        AS, s12, APPLY, "upper(@t1)", AS, ut1, APPLY, "@n2/0", AS, z, FILTER, "@s12\
+          \ >= 0"], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 1, "@n2", GROUPBY, 1, "@t1", REDUCE,
+        SUM, 1, "@n2", AS, total, SORTBY, 2, "@total", DESC, LIMIT, 0, 2], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*=>[KNN 3 @v1 $BLOB]", LOAD, 1, "@__key", SORTBY,
+        2, "@__v1_score", ASC, PARAMS, 2, BLOB, !!binary 'AACAPwAAAAAAAAAA', DIALECT,
+        2], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 1, "@n1", DIALECT, 3], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 1, "@n1", DIALECT, 4, TIMEOUT, 1000],
+      expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", ADDSCORES, LOAD, 1, "@__key"], expect_difference: true,
+      expect: {error: false}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 1, "@n1"], expect_difference: true,
+      expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {error: false}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @nofield $BLOB]", PARAMS, 2, BLOB, !!binary 'AACAPwAAAAAAAAAA',
+        DIALECT, 2], expect_difference: true, expect: {error: "does not exist"}}
+    - {command: [FT.SEARCH, idx, "*=>"], expect_difference: true, expect: {error: "missing1"}}
+    - {command: [FT.SEARCH, idx, "@t1:{red}", NOCONTENT, LIMIT, 0, 20], compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN $K @v1 $BLOB EF_RUNTIME $EF]", NOCONTENT,
+        PARAMS, 6, K, 3, BLOB, !!binary 'AAAAQAAAAAAAAAAA', EF, 50, DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @v1 $BLOB AS myscore]", NOCONTENT, PARAMS,
+        2, BLOB, !!binary 'AAAAAAAAgD8AAAAA', DIALECT, 2], compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

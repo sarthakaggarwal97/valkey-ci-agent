@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.search-acl-prefix-empty
+deployment:
+  modes: [standalone]
+metadata:
+  description: Empty-prefix regression - a key-restricted user can now FT.CREATE an
+    all-keys index (no PREFIX) where the parent denied it
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [ACL, SETUSER, rwlim, on, ">pass", resetkeys, "~lim:*", "&*", "+@all"],
+      expect: {equals: OK}}
+    - {command: [AUTH, rwlim, pass], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxe, SCHEMA, m, NUMERIC], expect_difference: true, expect: {
+        equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

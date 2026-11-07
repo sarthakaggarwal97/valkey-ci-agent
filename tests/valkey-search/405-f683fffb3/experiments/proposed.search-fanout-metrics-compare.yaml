@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.search-fanout-metrics-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    FT.DROPINDEX consistency-check change (valkey-search 13fa8d4f..f683fffb): the
+    new always-visible fanout metric pause_handle_cluster_message_round_count must
+    appear in INFO SEARCH on the change's build only; the coordinator-gated field
+    and the FT.INFO PRIMARY/CLUSTER and FT._DEBUG gates must behave identically on
+    both builds; module load must survive the new static info-field registrations
+    (info_field::Validate asserts at load, so a bad registration is a startup crash).
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: ftinfo
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: {$ref: inputs.cluster}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, "1", "doc:", SCHEMA, price, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:0", price, "10"], expect: {equals: 1}}
+    - {command: [HSET, "doc:1", price, "11"], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", price, "12"], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", price, "13"], expect: {equals: 1}}
+    - {command: [HSET, "doc:4", price, "14"], expect: {equals: 1}}
+    - {command: [FT.INFO, idx1], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.INFO, idx1], wait_s: 30, compare: skip, expect: {contains: 5}}
+    - {command: [INFO, SEARCH], compare: skip}
+    - {command: [EVAL, "local i = redis.call('INFO','SEARCH') if string.find(i, 'pause_handle_cluster_message_round_count',\
+          \ 1, true) then return 1 else return 0 end", "0"], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [EVAL, "local i = redis.call('INFO','SEARCH') if string.find(i, 'coordinator_metadata_reconciliation_completed_count',\
+          \ 1, true) then return 1 else return 0 end", "0"], expect: {equals: 0}}
+    - {command: [FT.INFO, idx1, PRIMARY], expect: {error: "not valid in this configuration"}}
+    - {command: [FT.INFO, idx1, CLUSTER], expect: {error: "not valid in this configuration"}}
+    - {command: [FT._DEBUG, PAUSEPOINT, LIST], expect: {error: "unknown command"}}
+    - {command: [FT.DROPINDEX, idx1], expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, idx1], expect: {error: "not found"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftinfo}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "90e550e1376234fd16003c4d2fe56d9472e37a1f",
+  "parent": "cac7af75ed789f095d10301bf6e7215a37c15067",
+  "pr": 379,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "- Remove unused variable from test (#379)",
+  "date": "2025-09-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2471,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only removes unused variables and magic numbers from a unit test file (thread_pool_test.cc) and adds `inline` to two explicit template specializations in debug.h to fix ODR/linkage for a header-defined function. The function bodies are unchanged, so no command, reply, indexing, replication or persistence behavior of the valkey-search module differs between the parent and the change; there is nothing a runtime scenario could observe."
+}

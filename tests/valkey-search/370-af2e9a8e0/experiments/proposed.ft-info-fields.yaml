@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.ft-info-fields
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.INFO reply trimmed from 34 to 22 entries (index_options, num_terms,
+    gc_stats, cursor_stats, dialect_stats, Index Errors removed); compared across
+    the module builds for every attribute kind, with surrounding FT.SEARCH and error
+    paths unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftinfo
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, tag, TAG, SEPARATOR,
+        ",", num, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "t:", SCHEMA, mytag, TAG, SEPARATOR,
+        "@", CASESENSITIVE], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx3, ON, HASH, PREFIX, 2, "n:", "m:", SCHEMA, num, NUMERIC],
+      expect: {equals: OK}}
+    - command: [HSET, "doc:1", vec, !!binary "AACAPwAAAEA=", tag, "a,b", num, "5"]
+      expect: {equals: 3}
+    - command: [HSET, "doc:2", vec, !!binary "AABAQAAAgEA=", tag, b, num, "7"]
+      expect: {equals: 3}
+    - {command: [HSET, "doc:3", tag, "", num, notanumber], expect: {equals: 2}}
+    - {command: [HSET, "t:1", mytag, "A@b"], expect: {equals: 1}}
+    - {command: [HSET, "n:1", num, "42"], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect_difference: true, expect: {contains: ready}}
+    - {command: [FT.INFO, idx2], wait_s: 30, expect_difference: true, expect: {contains: ready}}
+    - {command: [FT.INFO, idx3], wait_s: 30, expect_difference: true, expect: {contains: ready}}
+    - command: [FT.SEARCH, idx, "@tag:{b}=>[KNN 2 @vec $v]", PARAMS, 2, v, !!binary "AACAPwAAAEA=",
+        NOCONTENT]
+      wait_s: 30
+      compare: unordered
+      expect: {contains: "doc:1"}
+    - command: [FT.SEARCH, idx, "*=>[KNN 3 @vec $v]", PARAMS, 2, v, !!binary "AABAQAAAgEA=",
+        NOCONTENT]
+      compare: unordered
+      expect: {contains: "doc:2"}
+    - {command: [FT.INFO, nosuchindex], expect: {error: true}}
+    - {command: [FT.DROPINDEX, idx2], expect: {equals: OK}}
+    - {command: [FT.INFO, idx2], expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftinfo}

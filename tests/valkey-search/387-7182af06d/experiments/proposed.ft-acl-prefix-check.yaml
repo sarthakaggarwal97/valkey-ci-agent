@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.ft-acl-prefix-check
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The module's redundant per-command ACL filter was removed. A user granted an FT
+    command by name (ACL GETUSER reports it lowercase; the parent compared case-sensitively
+    against "FT.SEARCH") or granted key patterns only through a selector must now
+    run FT.SEARCH/FT.INFO/FT.CREATE/FT.DROPINDEX; the parent wrongly denies them.
+    Category grants and missing key patterns must behave the same on both builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, PREFIX, 2, "idxa:", "idxb:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, COSINE], expect: {equals: OK}}
+    - {command: [HSET, "idxa:doc1", vec, !!binary "AACAPwAAAEAAAEBA"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @vec $q]", PARAMS, 2, q, !!binary "AACAPwAAAEAAAEBA"],
+      wait_s: 30, expect: {contains: "idxa:doc1"}, compare: unordered}
+    - {command: [ACL, SETUSER, usercmd, "on", ">pw1", "-@all", "+auth", "+FT.SEARCH",
+        "~*"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, userinfo, "on", ">pw2", "-@all", "+auth", "+fT.InFo",
+        "~*"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, usersel, "on", ">pw3", "-@all", "+auth", "+@search",
+        "~idxa:*", "(~idxb:* +get)"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, usercat, "on", ">pw4", "-@all", "+auth", "+@search",
+        "~*"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, usercreate, "on", ">pw5", "-@all", "+auth", "+FT.CREATE",
+        "~*"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, usernokey, "on", ">pw6", "-@all", "+auth", "+ft.search",
+        "~other:*"], expect: {equals: OK}}
+    - {command: [AUTH, usercmd, pw1], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @vec $q]", PARAMS, 2, q, !!binary "AACAPwAAAEAAAEBA"],
+      expect_difference: true, expect: {error: false}}
+    - {command: [AUTH, userinfo, pw2], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {error: false}}
+    - {command: [AUTH, usersel, pw3], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @vec $q]", PARAMS, 2, q, !!binary "AACAPwAAAEAAAEBA"],
+      expect_difference: true, expect: {error: false}}
+    - {command: [AUTH, usercat, pw4], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @vec $q]", PARAMS, 2, q, !!binary "AACAPwAAAEAAAEBA"],
+      expect: {error: false}, compare: unordered}
+    - {command: [AUTH, usernokey, pw6], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @vec $q]", PARAMS, 2, q, !!binary "AACAPwAAAEAAAEBA"],
+      expect: {error: true}}
+    - {command: [AUTH, usercreate, pw5], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, PREFIX, 1, "idxa:", SCHEMA, vec, VECTOR, HNSW, 6,
+        TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, COSINE], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [AUTH, default, x], expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, idx2], expect_difference: true, expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [acl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

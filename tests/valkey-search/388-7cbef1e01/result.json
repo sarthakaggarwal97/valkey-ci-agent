@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "7cbef1e01b7214fdbf5d3cf26197e3d757618f68",
+  "parent": "7182af06da90cb341e0fe31af1fcb8dc36df0169",
+  "pr": 388,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix memory leak at config get (#388)",
+  "date": "2025-09-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.8999,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change rewrites OnGetStringConfig, the CONFIG GET callback for string-typed module configs in vmsdk (caching the ValkeyModuleString instead of leaking a fresh one per call). That callback is only installed by config::String::Register, and valkey-search at this commit never instantiates a config::String: every registered config (query-string-bytes, hnsw-block-size, reader/writer-threads, use-coordinator, skip-rdb-load, log-level, enable-partial-results, the ft-create limits, max-indexes, etc.) is a Number, Boolean or Enum, whose get callbacks the diff does not touch; StringBuilder/config::S"
+}

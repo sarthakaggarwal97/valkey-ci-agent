@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.ft-info-tag-casesensitive
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.INFO reports CASESENSITIVE as a key-value pair for TAG attributes,
+    present on both case-sensitive and case-insensitive indexes, with reply array
+    lengths intact and search semantics unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftinfo
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx_ci, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TAG, SEPARATOR,
+        ","], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_cs, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TAG, SEPARATOR,
+        ",", CASESENSITIVE], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_mix, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TAG,
+        CASESENSITIVE, u, TAG, n, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.INFO, idx_ci], wait_s: 30, expect_difference: true, expect: {
+        contains: ready}}
+    - {command: [FT.INFO, idx_cs], wait_s: 30, expect_difference: true, expect: {
+        contains: ready}}
+    - {command: [FT.INFO, idx_mix], wait_s: 30, expect_difference: true, expect: {
+        contains: ready}}
+    - {command: [HSET, "doc:1", t, "Hello,World", u, Alpha, n, 1], expect: {equals: 3}}
+    - {command: [HSET, "doc:2", t, hello, u, alpha, n, 2], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx_ci, "@t:{hello}", NOCONTENT], wait_s: 30, compare: skip,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx_ci, "@t:{hello}", NOCONTENT], wait_s: 30, compare: skip,
+      expect: {contains: "doc:2"}}
+    - {command: [FT.SEARCH, idx_cs, "@t:{hello}", NOCONTENT], wait_s: 30, compare: skip,
+      expect: {contains: "doc:2"}}
+    - {command: [FT.SEARCH, idx_mix, "@u:{alpha}", NOCONTENT], wait_s: 30, compare: skip,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx_ci, "@t:{hello}", NOCONTENT], compare: unordered,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx_cs, "@t:{hello}", NOCONTENT], compare: unordered,
+      expect: {contains: "doc:2"}}
+    - {command: [FT.SEARCH, idx_cs, "@t:{Hello}", NOCONTENT], compare: unordered,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx_mix, "@u:{alpha}", NOCONTENT], compare: unordered,
+      expect: {contains: "doc:2"}}
+    - {command: [FT.INFO, idx_cs], expect_difference: true, expect: {contains: ready}}
+    - {command: [FT.INFO, idx_mix], expect_difference: true, expect: {contains: ready}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftinfo}

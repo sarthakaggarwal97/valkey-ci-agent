@@ -1,0 +1,113 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-adversarial
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Parser and expression-engine abuse of FT.AGGREGATE: LOAD/LIMIT counts at the 2^31,
+    2^32 and UINT64 boundaries, empty and keyword-named arguments, bad reducers, binary
+    tag bytes, GROUPBY on a vector field and on __key, division by zero and NaN in
+    APPLY, SORTBY MAX 0 heap path.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: adv
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, n, NUMERIC, t,
+        TAG, v, VECTOR, HNSW, 6, DIM, 3, TYPE, FLOAT32, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [HSET, "d:1", n, 1, t, a, v, !!binary 'AACAPwAAAAAAAAAA'], expect: {
+        equals: 3}}
+    - {command: [HSET, "d:2", n, 2, t, b, v, !!binary 'AAAAAAAAgD8AAAAA'], expect: {
+        equals: 3}}
+    - {command: [HSET, "d:3", n, 9223372036854775807, t, a, v, !!binary 'AAAAAAAAAAAAAIA/'],
+      expect: {equals: 3}}
+    - {command: [HSET, "d:4", n, 4, t, !!binary '//4=', v, !!binary 'AAAAQAAAAAAAAAAA'],
+      expect: {equals: 3}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "kw:", SCHEMA, load, NUMERIC,
+        groupby, TAG, as, TAG], expect: {equals: OK}}
+    - {command: [HSET, "kw:1", load, 1, groupby, g, as, a], expect: {equals: 3}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, LIMIT, 0, 10], wait_s: 30, expect: {
+        contains: "d:3"}, compare: unordered}
+    - {command: [FT.SEARCH, idx2, "*", NOCONTENT, LIMIT, 0, 10], wait_s: 30, expect: {
+        contains: "kw:1"}, compare: unordered}
+    - {command: [FT.AGGREGATE, idx, "*", LIMIT, 0, 0], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", LIMIT, 2147483648, 4294967296], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", LIMIT, 0, 18446744073709551615], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", LIMIT, 18446744073709551616, 1], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, "*", LIMIT, -1, 5], expect_difference: true, expect: {
+        error: true}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 4294967295, "@n"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 1, ""], expect_difference: true, expect: {
+        error: "Empty argument"}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 1, "@"], expect_difference: true, expect: {
+        error: "Empty argument"}}
+    - {command: [FT.AGGREGATE, idx, "*", SORTBY, 3, "@n", DESC], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 2, "@__key", "@n", SORTBY, 2, "@n",
+        DESC, MAX, 0], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", GROUPBY, 0], expect_difference: true, expect: {
+        error: "requires arguments"}}
+    - {command: [FT.AGGREGATE, idx, "*", GROUPBY, 1, n], expect_difference: true,
+      expect: {error: "start with"}}
+    - {command: [FT.AGGREGATE, idx, "*", GROUPBY, 1, "@nosuchfield"], expect_difference: true,
+      expect: {error: "does not exist"}}
+    - {command: [FT.AGGREGATE, idx, "*", GROUPBY, 1, "@t", REDUCE, BOGUS, 0], expect_difference: true,
+      expect: {error: "not found"}}
+    - {command: [FT.AGGREGATE, idx, "*", GROUPBY, 1, "@t", REDUCE, COUNT, 2, "@n",
+        "@t"], expect_difference: true, expect: {error: "incorrect number"}}
+    - {command: [FT.AGGREGATE, idx, "*", GROUPBY, 1, "@t", REDUCE, SUM, 1, "@n"],
+      expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", GROUPBY, 1, "@__key", REDUCE, COUNT, 0, AS,
+        c], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, "*", GROUPBY, 1, "@v", REDUCE, COUNT,
+        0, AS, c], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", PARAMS, 2, bad-name, 1], expect_difference: true,
+      expect: {error: "invalid character"}}
+    - {command: [FT.AGGREGATE, idx, "*", PARAMS, 3, a, 1], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, "*", TIMEOUT, 60001], expect_difference: true,
+      expect: {error: "cannot exceed"}}
+    - {command: [FT.AGGREGATE, idx, "*", DIALECT, 1], expect_difference: true, expect: {
+        error: "Dialects"}}
+    - {command: [FT.AGGREGATE, idx, "*", JUNKARG], expect_difference: true, expect: {
+        error: true}}
+    - {command: [FT.AGGREGATE, idx], expect_difference: true, expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, ""], expect_difference: true, expect: {exists: true}}
+    - {command: [FT.AGGREGATE, idx, "*", APPLY, "@n+1"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 1, "@n", APPLY, "@n/0", AS, z, APPLY,
+        "sqrt(0-@n)", AS, nn, APPLY, "@n^0.5", AS, p], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 1, "@t", APPLY, "substr(@t, -5, -1000)",
+        AS, s, APPLY, 'contains(@t, "")', AS, c2], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT.AGGREGATE, idx, "*", LOAD, 2, "@__key", "@t", FILTER, '@t == "a"',
+        SORTBY, 2, "@__key", ASC], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx2, "*", LOAD, 3, "@load", "@groupby", "@as", GROUPBY,
+        1, "@groupby", REDUCE, SUM, 1, "@load", AS, total], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx2, "*", LOAD, 2, load, as], expect_difference: true,
+      expect: {error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [adv.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: adv}

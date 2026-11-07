@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "2812344e7a8172c507b2f0ad1c421a21d82eae52",
+  "parent": "ae6464f2605f11a70c06b27a3a123839ed1eb054",
+  "pr": 386,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "FT.CREATE consistency check (#386)",
+  "date": "2025-09-30",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4578,
+  "findings": [],
+  "recorded": [],
+  "reason": "The only behavioural change sits behind the coordinator, which this fuzzer cannot enable. FT.CREATE's new consistency-check fanout runs only when `ValkeySearch::Instance().IsCluster() && UsingCoordinator()` (src/commands/ft_create.cc:63-70); otherwise the command takes the unchanged else-branch and replies OK exactly as the parent build does. UsingCoordinator() is true only when the coordinator gRPC server was created at module load, which requires the `--use-coordinator` module startup argument: it is a Hidden config, never registered with Valkey, so it cannot be set by `CONFIG SET` or a `sea"
+}

@@ -1,0 +1,59 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "af2e9a8e0d02884a521ed0724a83acfa9f1085b8",
+  "parent": "58f0549274111ffef7c9b5a50ed56b17f4a056a4",
+  "pr": 370,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "added and removed stats and attributes from ft.info (#370)",
+  "date": "2025-09-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.407,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-1db47f5d7676",
+      "build": "unstable",
+      "seed": 370001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1db47f5d7676",
+      "build": "unstable",
+      "seed": 370002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1db47f5d7676",
+      "build": "unstable",
+      "seed": 370003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-939fa8393113",
+      "build": "unstable",
+      "seed": 370002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-939fa8393113",
+      "build": "unstable",
+      "seed": 370003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-939fa8393113",
+      "build": "unstable",
+      "seed": 370004,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

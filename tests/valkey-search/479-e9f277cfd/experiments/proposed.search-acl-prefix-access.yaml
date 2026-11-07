@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.search-acl-prefix-access
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.CREATE now distinguishes read vs write key-prefix permission; write-only
+    grants are allowed and read-only grants are denied where the parent did the opposite
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [ACL, SETUSER, wonly, on, ">pass", resetkeys, "%W~doc:*", "&*", "+@all"],
+      expect: {equals: OK}}
+    - {command: [ACL, SETUSER, ronly, on, ">pass", resetkeys, "%R~rdo:*", "&*", "+@all"],
+      expect: {equals: OK}}
+    - {command: [AUTH, wonly, pass], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxw, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [AUTH, ronly, pass], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxr, PREFIX, 1, "rdo:", SCHEMA, n, NUMERIC], expect_difference: true,
+      expect: {error: "does not have permission to access the key prefix"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

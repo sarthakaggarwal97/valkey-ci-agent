@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "e9f277cfd8c66d9ea982a7bdf01b6ae0e0e9be96",
+  "parent": "d90a3580253b97411138ccf7ed0a1d2225a5b871",
+  "pr": 479,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add support for checking ACL key prefix permissions using the new Valkey module API. (#479)",
+  "date": "2025-11-22",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 9.002,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

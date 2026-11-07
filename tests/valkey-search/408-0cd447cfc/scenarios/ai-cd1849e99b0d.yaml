@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 73138472ec35..0cd447cfc7f0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-cd1849e99b0d
+seed: 4083
+experiment:
+  id: proposed.search-load-version-gate
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 2
+    cluster: true
+deployment:
+  mode: standalone
+  base_port: 7200

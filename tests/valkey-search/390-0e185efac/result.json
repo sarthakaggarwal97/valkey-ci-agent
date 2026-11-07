@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "0e185efac0fb814d720992f92b91e82eb7d12b78",
+  "parent": "d3c87b5ce35520e02a2e95d2bb4943a873626c5b",
+  "pr": 390,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Captured errors should be formatted as such. (#390)",
+  "date": "2025-09-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2834,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to the unit-test infrastructure: vmsdk/src/testing_infra/module.h's ReplyCapture mock (used only by gtest) now formats captured errors as RESP errors ('-msg') instead of bulk strings, and testing/ft_create_test.cc, ft_info_test.cc and ft_search_test.cc update their expected strings accordingly. No production/runtime code of the module changes, so a running server's replies are identical on the change and its parent; there is no behaviour a fuzzer scenario could reach or compare."
+}

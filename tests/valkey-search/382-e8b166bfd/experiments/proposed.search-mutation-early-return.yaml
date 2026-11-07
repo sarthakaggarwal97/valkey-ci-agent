@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.search-mutation-early-return
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The change makes IndexSchema::ProcessKeyspaceNotification return early when an
+    attribute's record is missing and the key is neither tracked by that attribute's
+    index nor in tracked_mutated_records_. The return aborts the whole key, not just
+    the attribute, so it can drop indexing of fields that ARE present (partial documents,
+    notification and backfill paths), and InTrackedMutationRecords looks the attribute
+    identifier up in a map keyed by alias, so an aliased field's pending delete inside
+    MULTI/EXEC can be dropped, leaving a stale index entry. This sequence probes all
+    of these against the parent build.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: mutations
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, 1, "a:", SCHEMA, f1, TAG], expect: {
+        equals: OK}}
+    - {command: [HSET, "a:1", other, hello], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx1, "@f1:{hello}"], expect: {equals: [0]}}
+    - {command: [INFO, everything], expect_difference: true, expect: {contains: "search_ingest_hash_keys:0"}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "b:", SCHEMA, v, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, n1, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "b:1", v, !!binary "AACAPwAAAAA="], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx2, "*=>[KNN 2 @v $B]", PARAMS, 2, B, !!binary "AAAAAAAAAAA=",
+        NOCONTENT], expect_difference: true, expect: {equals: [0]}}
+    - {command: [HSET, "b:1", n1, 7], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx2, "*=>[KNN 2 @v $B]", PARAMS, 2, B, !!binary "AAAAAAAAAAA=",
+        NOCONTENT], expect: {equals: [1, "b:1"]}}
+    - {command: [HDEL, "b:1", n1], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx2, "@n1:[0 100]=>[KNN 2 @v $B]", PARAMS, 2, B, !!binary "AAAAAAAAAAA=",
+        NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.CREATE, idx3, ON, HASH, PREFIX, 1, "c:", SCHEMA, vf, AS, va, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, "c:1", vf, !!binary "AACAPwAAAAA=", pad, x], expect: {equals: QUEUED}}
+    - {command: [HDEL, "c:1", vf], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [2, 1]}}
+    - {command: [FT.SEARCH, idx3, "*=>[KNN 1 @va $B]", PARAMS, 2, B, !!binary "AAAAAAAAAAA=",
+        NOCONTENT], expect_difference: true, expect: {equals: [1, "c:1"]}}
+    - {command: [FT.CREATE, idx4, ON, HASH, PREFIX, 1, "e:", SCHEMA, ve, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, "e:1", ve, !!binary "AACAPwAAAAA=", pad, x], expect: {equals: QUEUED}}
+    - {command: [HDEL, "e:1", ve], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [2, 1]}}
+    - {command: [FT.SEARCH, idx4, "*=>[KNN 1 @ve $B]", PARAMS, 2, B, !!binary "AAAAAAAAAAA=",
+        NOCONTENT], expect: {equals: [0]}}
+    - {command: [HSET, "d:1", v5, !!binary "AACAPwAAAAA=", pad, x], expect: {equals: 2}}
+    - {command: [FT.CREATE, idx5, ON, HASH, PREFIX, 1, "d:", SCHEMA, v5, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, n5, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.INFO, idx5], wait_s: 20, expect: {contains: ready}, compare: skip}
+    - {command: [DEBUG, SLEEP, "1"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx5, "*=>[KNN 1 @v5 $B]", PARAMS, 2, B, !!binary "AAAAAAAAAAA=",
+        NOCONTENT], expect_difference: true, expect: {equals: [0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [mutations.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mutations}
