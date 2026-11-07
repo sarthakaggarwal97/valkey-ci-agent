@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.memtoull-erange-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    memtoull now reports ERANGE from strtoull. Memory-unit config values that overflow
+    unsigned long long (e.g. 18446744073709551616) must be rejected by CONFIG SET
+    instead of silently clamping to ULLONG_MAX, and for percent-capable configs (maxmemory-clients)
+    instead of being misread as a small percentage via the signed -1 round-trip.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: overflow
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, maxmemory, 100mb], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, "18446744073709551615"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, 100mb], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, "18446744073709551616"], expect_difference: true,
+      expect: {error: "memory value"}}
+    - {command: [CONFIG, GET, maxmemory], expect_difference: true, expect: {contains: "104857600"}}
+    - {command: [CONFIG, SET, maxmemory, "99999999999999999999999kb"], expect_difference: true,
+      expect: {error: "memory value"}}
+    - {command: [CONFIG, GET, maxmemory], expect_difference: true, expect: {contains: "104857600"}}
+    - {command: [CONFIG, SET, maxmemory-clients, "18446744073709551616"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, GET, maxmemory-clients], expect_difference: true, expect: {
+        contains: "0"}}
+    - {command: [CONFIG, SET, proto-max-bulk-len, "99999999999999999999999"], expect_difference: true,
+      expect: {error: "memory value"}}
+    - {command: [CONFIG, SET, client-output-buffer-limit, "normal 18446744073709551616\
+          \ 0 0"], expect_difference: true, expect: {error: "buffer limit"}}
+    - {command: [CONFIG, GET, client-output-buffer-limit], expect_difference: true,
+      expect: {contains: "normal 0 0 0"}}
+    - {command: [CONFIG, SET, maxmemory, 12x34], expect: {error: true}}
+    - {command: [DEBUG, QUICKLIST-PACKED-THRESHOLD, "18446744073709551616"], expect: {
+        error: true}}
+    - {command: [DEBUG, QUICKLIST-PACKED-THRESHOLD, 1k], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, "0"], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [overflow.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: overflow}

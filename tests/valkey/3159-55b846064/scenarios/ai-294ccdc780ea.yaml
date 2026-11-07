@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 980ef57829a8..55b846064d5e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-294ccdc780ea
+seed: 31590001
+experiment:
+  id: proposed.memtoull-erange-config
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

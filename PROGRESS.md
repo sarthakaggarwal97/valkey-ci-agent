@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-07T21:03+00:00.
+Updated 2026-11-07T21:22+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 757 | 1750 | #3135 (2026-02-10) | 351 | 108.1 |
+| valkey-io/valkey | 785 | 1722 | #3126 (2026-01-29) | 379 | 112.1 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
 | valkey-io/valkey-search | 481 | 188 | #362 (2025-09-09) | 172 | 68.7 |
@@ -13,28 +13,28 @@ Updated 2026-11-07T21:03+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-07T19:41:43+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42398172464): 20 merge(s) tested, 8 without a code change.
+[2026-11-07T21:22:56+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42407462314): 20 merge(s) tested, 8 without a code change.
 
-- [valkey-io/valkey#3197](https://github.com/valkey-io/valkey/pull/3197) ([tests](tests/valkey/3197-1f473323c/)): Fix getKeysUsingKeySpecs keynum case ignoring keystep when calc the last key (#3197): declined: The fix changes getKeysUsingKeySpecs's last-key formula from first+numkeys-1 to first+(numkeys-1)*step, which differs only when a KEYNUM key spec has keystep > 1. Every built-in command with a KEYNUM spec (EVAL/EVALSHA/FCALL families, ZUNION/ZINTER/ZDIFF/ZINTERCARD, SINTERCARD, LMPOP/BLMPO
-- [valkey-io/valkey#2846](https://github.com/valkey-io/valkey/pull/2846) ([tests](tests/valkey/2846-130befc81/)): Dual-channel-replication announces itself at replica-announce-ip if configured (#2846): 0 of 2 test(s) reached the change, coverage 0%
-- [valkey-io/valkey#3216](https://github.com/valkey-io/valkey/pull/3216) ([tests](tests/valkey/3216-24b67843a/)): Update deps/libvalkey to version 0.4.0 (#3216): 0 of 5 test(s) reached the change
-- [valkey-io/valkey#3230](https://github.com/valkey-io/valkey/pull/3230) ([tests](tests/valkey/3230-13dd4b8b9/)): Skip large-memory unit test with ASan that got OOM (#3230): declined: The change edits only the unit-test harness file src/unit/test_quicklist.c, adding an early return under VALKEY_ADDRESS_SANITIZER so the large-memory quicklist compress/decompress unit test is skipped in ASan CI runs to avoid OOM. No server, command, data-structure, replication, or persist
-- [valkey-io/valkey#3217](https://github.com/valkey-io/valkey/pull/3217) ([tests](tests/valkey/3217-d0a32a70f/)): Add `ALLOW_BUSY` flag to `SELECT` and various `CLIENT` sub-commands (#3217): 3 of 3 test(s) reached the change
-- [valkey-io/valkey#3160](https://github.com/valkey-io/valkey/pull/3160) ([tests](tests/valkey/3160-385895a96/)): [BUG][issue-2797] Block module unload when ACL references module subcommands (#3160): 5 of 5 test(s) reached the change, coverage 86%; crash, fixed by #3160 (recorded)
-- [valkey-io/valkey#3223](https://github.com/valkey-io/valkey/pull/3223) ([tests](tests/valkey/3223-b00c9367f/)): Always untrack initialized safe iterator (#3223): 0 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3178](https://github.com/valkey-io/valkey/pull/3178) ([tests](tests/valkey/3178-051a5ebaa/)): Fixes memory leak when the job crashes before it's freed (#3178): 0 of 11 test(s) reached the change, coverage 93%
-- [valkey-io/valkey#3215](https://github.com/valkey-io/valkey/pull/3215) ([tests](tests/valkey/3215-80bd689ac/)): Fix database ACL check for alldbs commands (#3215): 3 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1840](https://github.com/valkey-io/valkey/pull/1840) ([tests](tests/valkey/1840-223bfa840/)): Added comment to maxmemory-clients conf to mention the performance issue (#1840): declined: The change only edits documentation comments in valkey.conf (rewording the maxmemory-clients description and adding a commented-out example line). No code path, config default, or parsing behaviour changes, so there is nothing a runtime scenario could exercise.
-- [valkey-io/valkey#3201](https://github.com/valkey-io/valkey/pull/3201) ([tests](tests/valkey/3201-fde31b08f/)): Optimize endian conversion functions (#3201): 0 of 5 test(s) reached the change
-- [valkey-io/valkey#3193](https://github.com/valkey-io/valkey/pull/3193) ([tests](tests/valkey/3193-e0a467eda/)): Optimize ustime() with monotonic delta (#3193): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3205](https://github.com/valkey-io/valkey/pull/3205) ([tests](tests/valkey/3205-62686985e/)): Fix bug causing no response flush sometimes when IO threads are busy (#3205): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3034](https://github.com/valkey-io/valkey/pull/3034) ([tests](tests/valkey/3034-fd57c2171/)): add option to use libbacktrace for backtraces in crash reports (#3034): declined: The change is entirely behind a new compile-time flag USE_LIBBACKTRACE (default no) that the runner's standard build does not set, so the new symbolizeWithLibbacktrace code in src/debug.c is compiled out of both binaries under test. Everything else in the diff is CI workflow, .gitignore an
-- [valkey-io/valkey#3186](https://github.com/valkey-io/valkey/pull/3186) ([tests](tests/valkey/3186-42fc851b7/)): Fix pointer-to-int-cast warnings for RDMA address handling (#3186): declined: The change only inserts intermediate (uintptr_t) casts when converting between pointers and uint64_t in src/rdma.c and tests/rdma/rdma-test.c to fix compiler pointer-to-int-cast warnings. On the supported 64-bit platforms the resulting values are bit-identical to the parent build, so there
-- [valkey-io/valkey#3185](https://github.com/valkey-io/valkey/pull/3185) ([tests](tests/valkey/3185-9cbe1045d/)): Update and pin github actions to full SHAs for supply chain security (#3185): declined: The change pins GitHub Actions workflows to full SHAs (CI-only files under .github/workflows/) and fixes typos: comments, unit-test function/message spellings, TCL test comments, and semantically identical local variable renames (cpy->copy in sds.c/networking.c, aof_preable->aof_preamble i
-- [valkey-io/valkey#3182](https://github.com/valkey-io/valkey/pull/3182) ([tests](tests/valkey/3182-a95a75ab4/)): Fix server assert on ACL LOAD and resetchannels (#3182): 6 of 7 test(s) reached the change, coverage 91%; crash, fixed by #3182 (recorded)
-- [valkey-io/valkey#3190](https://github.com/valkey-io/valkey/pull/3190) ([tests](tests/valkey/3190-c2aca7255/)): Build Lua by default with make test (#3190): declined: The change only edits src/Makefile: it factors the 'all' target's prerequisites into a variable and makes 'make test' build the same full prerequisite set (including the Lua/TLS/RDMA modules) before running the test suite. It alters what gets compiled before tests, not any runtime behaviou
-- [valkey-io/valkey#3184](https://github.com/valkey-io/valkey/pull/3184) ([tests](tests/valkey/3184-06d30f293/)): Fix PFADD corrupted sparse HLL handling by restoring hllSparseSet return type (#3184): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3180](https://github.com/valkey-io/valkey/pull/3180) ([tests](tests/valkey/3180-06ccdf990/)): Fix remaining_repl_size should be in CLUSTER GETSLOTMIGRATIONS in conf (#3180): declined: The change edits only a comment in valkey.conf, correcting the documented command name ('CLUSTER MIGRATESLOTS' -> 'CLUSTER GETSLOTMIGRATIONS') for where the remaining_repl_size field appears. No code, config parsing, command behaviour, replication, or persistence path is touched — the comm
+- [valkey-io/valkey#3135](https://github.com/valkey-io/valkey/pull/3135) ([tests](tests/valkey/3135-751a09964/)): Add remaining_repl_size field in CLUSTER MIGRATESLOTS output (#3135): 3 of 3 test(s) reached the change, coverage 100%; [check, introduced by #3135](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100); [check, introduced by #3135](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101)
+- [valkey-io/valkey#2868](https://github.com/valkey-io/valkey/pull/2868) ([tests](tests/valkey/2868-87caeb764/)): Add more client info flags to module API (#2868): 3 of 3 test(s) reached the change, coverage 100%; check, not reproduced (recorded); check, introduced and since fixed (recorded); check, not reproduced (recorded); check, introduced and since fixed (recorded); [crash, appeared after #2868](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/102); crash, predates #2868, since fixed (recorded)
+- [valkey-io/valkey#3167](https://github.com/valkey-io/valkey/pull/3167) ([tests](tests/valkey/3167-ca34cc0b8/)): Make TLS disable/enable INFO checks deterministic for module mode (#3167): declined: The only behavioral change is in TLS module mode (BUILD_TLS=module): the server's non-OpenSSL tlsResetCertInfo stub no longer wipes the INFO TLS cert serial/expiry fields that the loaded valkey-tls module populated, when a TLS config is set while TLS stays enabled. The fuzzer cannot reach 
+- [valkey-io/valkey#3173](https://github.com/valkey-io/valkey/pull/3173) ([tests](tests/valkey/3173-e84852dca/)): Avoid crash in genClusterInfoString when myself is uninitialized (#3173): declined: The fix adds a NULL guard in genClusterInfoString so that nodeEpoch is not called on a NULL `myself`. `myself` is only ever NULL in one window: during clusterInit() itself, if clusterLoadConfig() hits a corrupted cluster-config-file and calls serverPanic (cluster_legacy.c:1445/1012) before
+- [valkey-io/valkey#3159](https://github.com/valkey-io/valkey/pull/3159) ([tests](tests/valkey/3159-55b846064/)): Minor cleanup in memtoull to also check ERANGE when calling strtoull (#3159): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3174](https://github.com/valkey-io/valkey/pull/3174) ([tests](tests/valkey/3174-980ef5782/)): make test_empty_buckets_rehashing deterministic across hash seeds (#3174): declined: The change only edits the unit test src/unit/test_hashtable.c to make test_empty_buckets_rehashing deterministic across randomized hash seeds (choosing which key to keep by its bucket index and adding fresh keys instead of reused ones). No Valkey server code, command, data structure, repli
+- [valkey-io/valkey#3155](https://github.com/valkey-io/valkey/pull/3155) ([tests](tests/valkey/3155-666472c76/)): Fix arr bound err in test-sanitizer-undefined (gcc) (#3155): 0 of 3 test(s) reached the change
+- [valkey-io/valkey#3150](https://github.com/valkey-io/valkey/pull/3150) ([tests](tests/valkey/3150-346c11dde/)): Rehashing more empty buckets to optimize the rehashing speed (#3150): 1 of 3 test(s) reached the change, coverage 80%
+- [valkey-io/valkey#3154](https://github.com/valkey-io/valkey/pull/3154) ([tests](tests/valkey/3154-9f374e158/)): Skips the internal clients from logresreq checks (#3154): declined: The change only touches reqresShouldLog() in src/logreqres.c, which is entirely inside #ifdef LOG_REQ_RES — a compile-time feature the Makefile enables only for the reply-schema validation CI tooling, and which is driven solely by the hidden, immutable req-res-logfile config that itself ex
+- [valkey-io/valkey#2839](https://github.com/valkey-io/valkey/pull/2839) ([tests](tests/valkey/2839-5d7d54249/)): Add cache for COMMAND (#2839): 0 of 4 test(s) reached the change, coverage 97%
+- [valkey-io/valkey#2913](https://github.com/valkey-io/valkey/pull/2913) ([tests](tests/valkey/2913-e4804d50f/)): Add server side TLS certificate expiry tracking and INFO telemetry (#2913): 2 of 2 test(s) reached the change, coverage 78%
+- [valkey-io/valkey#3144](https://github.com/valkey-io/valkey/pull/3144) ([tests](tests/valkey/3144-8ed270f44/)): Optimize SREM/ZREM/HDEL to pause auto shrink when deleting multiple items (#3144): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3141](https://github.com/valkey-io/valkey/pull/3141) ([tests](tests/valkey/3141-79c8948ed/)): Optimize rehash completion check for empty hash table (#3141): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3142](https://github.com/valkey-io/valkey/pull/3142) ([tests](tests/valkey/3142-cfbe0937f/)): Extend hashtableGetStatsMsg to always show empty table and rehash index (#3142): 3 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3116](https://github.com/valkey-io/valkey/pull/3116) ([tests](tests/valkey/3116-eabfe235d/)): Check expiration time first before lookup the key in GETEX command (#3116): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3137](https://github.com/valkey-io/valkey/pull/3137) ([tests](tests/valkey/3137-9e0303bc5/)): Revert #3088 (#3137): 0 of 1 test(s) reached the change
+- [valkey-io/valkey#2948](https://github.com/valkey-io/valkey/pull/2948) ([tests](tests/valkey/2948-851eaafe6/)): Free replica local buffer in async way in dual channel replication (#2948): 1 of 8 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3128](https://github.com/valkey-io/valkey/pull/3128) ([tests](tests/valkey/3128-73838a0dd/)): Remove empty list dead code condition in lmoveGenericCommand code (#3128): declined: This is a pure dead-code removal refactor with no observable behavior change. The deleted branch in lmoveGenericCommand handled an existing key holding an empty (zero-length) list, but no client-reachable path can produce such a key: every list loader in rdb.c routes zero-element lists to 
+- [valkey-io/valkey#3123](https://github.com/valkey-io/valkey/pull/3123) ([tests](tests/valkey/3123-b8650a5a3/)): Fix Lua Module Build For MacOS Compatibility (#3123): declined: The change is purely a CMake build-system fix for macOS: it adds -fPIC to the fpconv static library, selects libvalkeylua.dylib as the module name on Apple, and bundles sha1.c, rand.c and fpconv into the valkeylua shared library so it links on macOS. No C source, command, reply, replicatio
+- [valkey-io/valkey#3001](https://github.com/valkey-io/valkey/pull/3001) ([tests](tests/valkey/3001-fd1438063/)): HSETEX - Always issue keyspace notifications after validation (#3001): 7 of 7 test(s) reached the change, coverage 100%
 
 ### valkey-io/valkey-bloom
 
@@ -73,11 +73,14 @@ Updated 2026-11-07T21:03+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 478 of 702 tested (68%)
-- Changed-line coverage: median 100% of 338 merge(s) measured, 22 under 50%
-- Recall: 140 parents flagged of 209 fix merges
-- Claude: $1857.01 in the last 24 hours, $5031.14 in the last 7 days, $5031.14 in all
-- Issues filed: 50
+- Merges whose tests reached the change: 487 of 716 tested (68%)
+- Changed-line coverage: median 100% of 350 merge(s) measured, 22 under 50%
+- Recall: 140 parents flagged of 210 fix merges
+- Claude: $1957.51 in the last 24 hours, $5131.64 in the last 7 days, $5131.64 in all
+- Issues filed: 53
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/102
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42

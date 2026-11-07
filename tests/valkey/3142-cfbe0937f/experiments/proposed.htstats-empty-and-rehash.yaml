@@ -1,0 +1,94 @@
+extends: [valkey.liveness]
+id: proposed.htstats-empty-and-rehash
+deployment:
+  modes: [standalone]
+metadata:
+  description: DEBUG HTSTATS and HTSTATS-KEY now print stats for empty hash tables
+    and a rehashing index for table 0, including mid-rehash and zero-bucket tables
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: stats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {activerehashing: "no", hash-max-listpack-entries: 0, zset-max-listpack-entries: 0,
+      enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, HTSTATS, "0"], expect: {contains: "[Dictionary HT]"}}
+    - {command: [SET, k0, v0], expect: {equals: OK}}
+    - {command: [SET, kx, vx, EX, "100"], expect: {equals: OK}}
+    - {command: [PERSIST, kx], expect: {equals: 1}}
+    - {command: [DEL, k0, kx], expect: {equals: 2}}
+    - {command: [DEBUG, HTSTATS, "0"], expect_difference: true, expect: {contains: "rehashing\
+          \ index: -1"}}
+    - {command: [DEBUG, HTSTATS, "0", full], expect_difference: true, expect: {contains: "top-level\
+          \ buckets"}}
+    - {command: [FLUSHALL, SYNC], expect: {equals: OK}}
+    - {command: [DEBUG, HTSTATS, "0", full], expect_difference: true, expect: {contains: "rehashing\
+          \ index: -1"}}
+    - {command: [MSET, k1, v1, k2, v2, k3, v3, k4, v4, k5, v5, k6, v6, k7, v7, k8,
+        v8, k9, v9, k10, v10, k11, v11, k12, v12, k13, v13, k14, v14, k15, v15, k16,
+        v16, k17, v17, k18, v18, k19, v19, k20, v20, k21, v21, k22, v22, k23, v23,
+        k24, v24, k25, v25, k26, v26, k27, v27, k28, v28, k29, v29, k30, v30, k31,
+        v31, k32, v32, k33, v33, k34, v34, k35, v35, k36, v36, k37, v37, k38, v38,
+        k39, v39, k40, v40, k41, v41, k42, v42, k43, v43, k44, v44, k45, v45, k46,
+        v46, k47, v47, k48, v48, k49, v49, k50, v50, k51, v51, k52, v52, k53, v53,
+        k54, v54, k55, v55], expect: {equals: OK}}
+    - {command: [DEBUG, HTSTATS, "0"], expect_difference: true, expect: {contains: "rehashing\
+          \ index: -1"}}
+    - {command: [SET, t1, v], expect: {equals: OK}}
+    - {command: [SET, t2, v], expect: {equals: OK}}
+    - {command: [DEBUG, DICT-RESIZING, "0"], expect: {equals: OK}}
+    - {command: [DEBUG, HTSTATS, "0"], expect_difference: true, expect: {contains: "rehashing\
+          \ target"}}
+    - {command: [DEBUG, HTSTATS, "0", full], expect_difference: true, expect: {contains: "rehashing\
+          \ index: "}}
+    - {command: [DEBUG, DICT-RESIZING, "1"], expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [GET, k2], expect: {equals: v2}}
+    - {command: [GET, k3], expect: {equals: v3}}
+    - {command: [GET, k4], expect: {equals: v4}}
+    - {command: [GET, k5], expect: {equals: v5}}
+    - {command: [GET, k6], expect: {equals: v6}}
+    - {command: [GET, k7], expect: {equals: v7}}
+    - {command: [GET, k8], expect: {equals: v8}}
+    - {command: [GET, k9], expect: {equals: v9}}
+    - {command: [GET, k10], expect: {equals: v10}}
+    - {command: [DEBUG, HTSTATS, "0"], expect_difference: true, expect: {contains: "rehashing\
+          \ index: -1"}}
+    - {command: [HSET, h, f0, x0], expect: {equals: 1}}
+    - {command: [DEBUG, HTSTATS-KEY, h], expect_difference: true, expect: {contains: "rehashing\
+          \ index: -1"}}
+    - {command: [HSET, h, f1, x1, f2, x2, f3, x3, f4, x4, f5, x5, f6, x6, f7, x7,
+        f8, x8, f9, x9, f10, x10, f11, x11, f12, x12, f13, x13, f14, x14, f15, x15,
+        f16, x16, f17, x17, f18, x18, f19, x19, f20, x20, f21, x21, f22, x22, f23,
+        x23, f24, x24, f25, x25, f26, x26, f27, x27, f28, x28, f29, x29, f30, x30,
+        f31, x31, f32, x32, f33, x33, f34, x34, f35, x35, f36, x36, f37, x37, f38,
+        x38, f39, x39, f40, x40, f41, x41, f42, x42, f43, x43, f44, x44, f45, x45,
+        f46, x46, f47, x47, f48, x48, f49, x49, f50, x50, f51, x51, f52, x52, f53,
+        x53, f54, x54, f55, x55, f56, x56], expect: {equals: 56}}
+    - {command: [DEBUG, DICT-RESIZING, "0"], expect: {equals: OK}}
+    - {command: [DEBUG, HTSTATS-KEY, h], expect_difference: true, expect: {contains: "rehashing\
+          \ target"}}
+    - {command: [DEBUG, HTSTATS-KEY, h, full], expect_difference: true, expect: {
+        contains: "rehashing index: "}}
+    - {command: [DEBUG, DICT-RESIZING, "1"], expect: {equals: OK}}
+    - {command: [ZADD, z, "1", a], expect: {equals: 1}}
+    - {command: [DEBUG, HTSTATS-KEY, z], expect_difference: true, expect: {contains: "rehashing\
+          \ index: -1"}}
+    - {command: [SET, s, str], expect: {equals: OK}}
+    - {command: [DEBUG, HTSTATS-KEY, s], expect: {error: "not represented"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [stats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: stats}

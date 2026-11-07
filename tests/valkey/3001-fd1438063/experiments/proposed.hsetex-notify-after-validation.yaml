@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.hsetex-notify-after-validation
+deployment:
+  modes: [standalone]
+metadata:
+  description: HSETEX with a past expiry always replies 1 and emits hset/hexpire/hexpired
+    after validation, even when no field changed
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hsetex
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {notify-keyspace-events: "Egh"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SUBSCRIBE, "__keyevent@0__:hset"], connection: sub-hset, expect: {
+        exists: true}}
+    - {command: [SUBSCRIBE, "__keyevent@0__:hexpire"], connection: sub-hexpire, expect: {
+        exists: true}}
+    - {command: [SUBSCRIBE, "__keyevent@0__:hexpired"], connection: sub-hexpired,
+      expect: {exists: true}}
+    - {command: [HSET, h, f1, v1], expect: {equals: 1}}
+    - {command: [HSETEX, h, EXAT, 1, FIELDS, 2, f1, v1, f2, v2], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [EXISTS, h], expect: {equals: 0}}
+    - {connection: sub-hset, read: true, expect_difference: true, expect: {exists: true}}
+    - {connection: sub-hexpire, read: true, expect_difference: true, expect: {exists: true}}
+    - {connection: sub-hexpired, read: true, expect: {exists: true}}
+    - {command: [HSETEX, nokey, PXAT, 1, FIELDS, 1, f, v], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [EXISTS, nokey], expect: {equals: 0}}
+    - {connection: sub-hset, read: true, expect_difference: true, expect: {exists: true}}
+    - {connection: sub-hexpire, read: true, expect_difference: true, expect: {exists: true}}
+    - {connection: sub-hexpired, read: true, expect_difference: true, expect: {exists: true}}
+    - {command: [HSETEX, h3, FXX, EXAT, 1, FIELDS, 1, f, v], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hsetex.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hsetex}

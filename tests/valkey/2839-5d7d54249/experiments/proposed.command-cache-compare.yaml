@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.command-cache-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND and COMMAND INFO served from the new response cache, compared
+    byte-for-byte across builds, with enable-debug-assert verifying every cache hit
+    and HELLO switching between RESP2 and RESP3 cache slots
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cmdcache
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-assert: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [COMMAND, COUNT], expect: {min: 100}}
+    - {command: [COMMAND], compare: skip}
+    - {command: [COMMAND], compare: skip}
+    - {command: [COMMAND, INFO, GET]}
+    - {command: [COMMAND, INFO, GET]}
+    - {command: [COMMAND, INFO, get]}
+    - {command: [COMMAND, INFO, no-such-command], expect: {exists: true}}
+    - {command: [COMMAND, INFO, GET, SET, no-such-command, MSET, GET]}
+    - {command: [COMMAND, INFO, '']}
+    - {command: [COMMAND, INFO, CLUSTER], compare: skip}
+    - {command: [COMMAND, INFO, CLUSTER], compare: skip}
+    - {command: [COMMAND, INFO, GET, GET, GET, GET, GET, GET, GET, GET, GET, GET,
+        GET, GET, GET, GET, GET, GET]}
+    - {command: [HELLO, 3], compare: skip}
+    - {command: [COMMAND, INFO, GET]}
+    - {command: [COMMAND], compare: skip}
+    - {command: [COMMAND], compare: skip}
+    - {command: [COMMAND, COUNT], expect: {min: 100}}
+    - {command: [COMMAND, INFO, CLUSTER], compare: skip}
+    - {command: [HELLO, 2], compare: skip}
+    - {command: [COMMAND, INFO, GET]}
+    - {command: [COMMAND], compare: skip}
+    - {command: [COMMAND, GETKEYS, SET, k, v], expect: {equals: [k]}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [cmdcache.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cmdcache}

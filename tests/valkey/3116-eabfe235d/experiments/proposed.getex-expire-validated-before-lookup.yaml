@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.getex-expire-validated-before-lookup
+deployment:
+  modes: [standalone]
+metadata:
+  description: GETEX validates the expiration argument before the key lookup, so a
+    bad expire now errors on a missing or wrong-type key where the parent replied
+    nil or WRONGTYPE
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: getex
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [GETEX, nokey, EX, abcd], expect_difference: true, expect: {error: "value\
+          \ is not an integer or out of range"}}
+    - {command: [GETEX, nokey, PX, -1], expect_difference: true, expect: {error: "invalid\
+          \ expire time"}}
+    - {command: [GETEX, nokey, EX, -9223372036854775808], expect_difference: true,
+      expect: {error: "invalid expire time"}}
+    - {command: [GETEX, nokey, PX, 9223372036854775808], expect_difference: true,
+      expect: {error: "value is not an integer or out of range"}}
+    - {command: [GETEX, nokey, EXAT, 9223372036854775807], expect_difference: true,
+      expect: {error: "invalid expire time"}}
+    - {command: [EXISTS, nokey], expect: {equals: 0}}
+    - {command: [HSET, h, f, v], expect: {equals: 1}}
+    - {command: [GETEX, h, PX, -abcd], expect_difference: true, expect: {error: "value\
+          \ is not an integer or out of range"}}
+    - {command: [GETEX, h, EXAT, -9223372036854775808], expect_difference: true, expect: {
+        error: "invalid expire time"}}
+    - {command: [GETEX, h, EX, 100], expect: {error: "WRONGTYPE"}}
+    - {command: [SET, s, bar], expect: {equals: OK}}
+    - {command: [GETEX, s, EX, abcd], expect: {error: "value is not an integer or\
+          \ out of range"}}
+    - {command: [GETEX, s, EX, 0], expect: {error: "invalid expire time"}}
+    - {command: [TTL, s], expect: {equals: -1}}
+    - {command: [GETEX, s], expect: {equals: bar}}
+    - {command: [GETEX, s, EX, 100], expect: {equals: bar}}
+    - {command: [TTL, s], compare: skip, expect: {min: 95, max: 100}}
+    - {command: [GETEX, s, PERSIST], expect: {equals: bar}}
+    - {command: [TTL, s], expect: {equals: -1}}
+    - {command: [GETEX, s, EXAT, 1], expect: {equals: bar}}
+    - {command: [EXISTS, s], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [getex.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: getex}

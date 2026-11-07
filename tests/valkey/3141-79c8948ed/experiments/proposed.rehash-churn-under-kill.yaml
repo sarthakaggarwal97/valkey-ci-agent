@@ -1,0 +1,46 @@
+extends: [valkey.base]
+id: proposed.rehash-churn-under-kill
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Delete-heavy writes empty the keyspace tables mid-rehash (the new early-completion
+    branch in rehashStepFinalize), then a primary kill and AOF reload mass-rehash
+    them back; ledger and liveness judge
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+    mutation_rate: {maximum: 20000, default: 2000}
+    stable_keys: {minimum: 0, default: 0}
+    value_size: {default: 8}
+components:
+- use: valkey.workload.key-value
+  id: writes
+  config:
+    mix: {set: 0.5, del: 0.4, get: 0.1}
+- use: valkey.fault.process-signal
+  id: kill-primary
+  config:
+    when_event: churn.completed
+    instance: primary
+    signal: {$ref: inputs.signal}
+    restart: true
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: churn
+  depends_on: [writes, kill-primary]
+  config: {seconds: 5}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [churn]
+  config: {seconds: 5}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_s: 2.5
+    loss_window_faults: [kill-primary]
+    converge_timeout_s: 120
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-primary}

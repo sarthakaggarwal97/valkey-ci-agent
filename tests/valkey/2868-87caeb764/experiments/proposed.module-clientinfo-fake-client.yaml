@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.module-clientinfo-fake-client
+deployment:
+  modes: [standalone]
+metadata:
+  description: test.clientinfo on a module/fake client via a nested RM_Call, probing
+    the new module/fake flags and the NULL-connection path
+inputs:
+  required: [parent, module, module_parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fakeinfo
+  config:
+    compare_with: {$ref: inputs.parent}
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [test.clientinfo], expect_difference: true, expect: {contains: "ever_authenticated"}}
+    - {command: [test.rm_call, test.clientinfo], expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fakeinfo}

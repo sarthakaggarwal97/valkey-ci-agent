@@ -1,0 +1,112 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "87caeb76465a6b7dba52f9ac98ccb754ed439825",
+  "parent": "185d2ad7d9e8d1c598af544ba623f9383ef6b00f",
+  "pr": 2868,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add more client info flags to module API (#2868)",
+  "date": "2026-02-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 7,
+    "executed": 7,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.2701,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (EXEC) replies otherwise with resp 3: {\"reply\":[[\"flags\",\"::::unixsocket:multi::::::authenticated:ever_authenticated:\",\"id\",4,\"addr\",\"/tmp/vfc-0a835grk/s.sock:0\",\"port\",0,\"db\",0]]}, not {\"reply\":[[\"flags\",\"::::unixsocket:multi::::::authenticated:ever_authenticated:\",\"id\",",
+      "scenario": "ai-14b9827e0bd2",
+      "seed": 1001,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "39589ff875b30089efd0",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (EXEC) replies otherwise with resp 3: {\"reply\":[[\"flags\",\"::::unixsocket:multi::::::authenticated:ever_authenticated:\",\"id\",4,\"addr\",\"/tmp/vfc-ji0vqmav/s.sock:0\",\"port\",0,\"db\",0]]}, not {\"reply\":[[\"flags\",\"::::unixsocket:multi::::::authenticated:ever_authenticated:\",\"id\",",
+      "scenario": "ai-14b9827e0bd2",
+      "seed": 1001,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "01b56e72bb108d7cbb7e",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (EXEC) replies otherwise with resp 2: {\"reply\":[[\"flags\",\"::::unixsocket:multi::::::authenticated:ever_authenticated:\",\"id\",4,\"addr\",\"/tmp/vfc-qxynxoct/s.sock:0\",\"port\",0,\"db\",0]]}, not {\"reply\":[[\"flags\",\"::::unixsocket:multi::::::authenticated:ever_authenticated:\",\"id\",",
+      "scenario": "ai-bfdf0fed8f1c",
+      "seed": 1002,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "40f268e964a6693d3a95",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (EXEC) replies otherwise with resp 2: {\"reply\":[[\"flags\",\"::::unixsocket:multi::::::authenticated:ever_authenticated:\",\"id\",4,\"addr\",\"/tmp/vfc-6nwrm6bd/s.sock:0\",\"port\",0,\"db\",0]]}, not {\"reply\":[[\"flags\",\"::::unixsocket:multi::::::authenticated:ever_authenticated:\",\"id\",",
+      "scenario": "ai-bfdf0fed8f1c",
+      "seed": 1002,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "36e80f95c1d402ddb6d1",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in modulePopulateClientInfoStructure",
+      "scenario": "ai-c145a4338d0c",
+      "seed": 1003,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #2868",
+      "fingerprint": "ad36aec4a9081eacb6fd",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/102"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-c145a4338d0c",
+      "seed": 1003,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #2868, since fixed",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

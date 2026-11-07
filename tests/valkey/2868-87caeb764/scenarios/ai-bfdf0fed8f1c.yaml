@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 185d2ad7d9e8..87caeb76465a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-bfdf0fed8f1c
+seed: 1002
+experiment:
+  id: proposed.module-clientinfo-flags
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

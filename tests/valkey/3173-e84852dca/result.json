@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e84852dcae8bfe3a3080cc7a90db8f803004f851",
+  "parent": "dbdc3d9c6bce50a4d50396fd672bf43160762db5",
+  "pr": 3173,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Avoid crash in genClusterInfoString when myself is uninitialized (#3173)",
+  "date": "2026-02-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.4759,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix adds a NULL guard in genClusterInfoString so that nodeEpoch is not called on a NULL `myself`. `myself` is only ever NULL in one window: during clusterInit() itself, if clusterLoadConfig() hits a corrupted cluster-config-file and calls serverPanic (cluster_legacy.c:1445/1012) before myself is assigned at :1448. The panic's crash report (printCrashReport -> logServerInfo -> genClusterDebugString -> genClusterInfoString) then dereferenced NULL myself, turning a clean startup abort into a secondary SIGSEGV inside the crash handler. At every other call site (CLUSTER INFO, INFO cluster_info,"
+}

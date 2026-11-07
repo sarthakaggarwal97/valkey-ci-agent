@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey eabfe235d2b5..cfbe0937fb3b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-05b80daf9935
+seed: 13
+experiment:
+  id: proposed.htstats-cluster-kvstore
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

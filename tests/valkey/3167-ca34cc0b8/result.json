@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ca34cc0b8f75d83414a88e42f65a8c8623ef6f93",
+  "parent": "e84852dcae8bfe3a3080cc7a90db8f803004f851",
+  "pr": 3167,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make TLS disable/enable INFO checks deterministic for module mode (#3167)",
+  "date": "2026-02-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.5043,
+  "findings": [],
+  "recorded": [],
+  "reason": "The only behavioral change is in TLS module mode (BUILD_TLS=module): the server's non-OpenSSL tlsResetCertInfo stub no longer wipes the INFO TLS cert serial/expiry fields that the loaded valkey-tls module populated, when a TLS config is set while TLS stays enabled. The fuzzer cannot reach that configuration: connection modules load only at bootup from a build-specific .so the runner does not supply, tls-port is a managed deployment option and a refused CONFIG SET, and no certificate material or TLS module artifact exists in the environment. In the configurations the fuzzer can start the change"
+}

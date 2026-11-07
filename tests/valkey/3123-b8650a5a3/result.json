@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b8650a5a31ad80b65f42fd37652a304c8020caef",
+  "parent": "fd1438063927d0d3d2d8c9018011d8f7bcda47c3",
+  "pr": 3123,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix Lua Module Build For MacOS Compatibility (#3123)",
+  "date": "2026-01-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2835,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely a CMake build-system fix for macOS: it adds -fPIC to the fpconv static library, selects libvalkeylua.dylib as the module name on Apple, and bundles sha1.c, rand.c and fpconv into the valkeylua shared library so it links on macOS. No C source, command, reply, replication, persistence or config behaviour changes. On Linux, where the fuzzer runs, the UNIX-and-not-Apple branch keeps the exact pre-change LUA_LIB definition and link options, and compiling sha1.c/rand.c/fpconv into the module instead of resolving them from the server executable produces identical runtime behaviou"
+}

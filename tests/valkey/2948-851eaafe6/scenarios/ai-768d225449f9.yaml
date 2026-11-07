@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f5b0360fae0f..851eaafe61da.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-768d225449f9
+seed: 1
+experiment:
+  id: proposed.dual-channel-buffer-async-free
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.hsetex-keepttl-expired-overwrite
+deployment:
+  modes: [standalone]
+metadata:
+  description: HSETEX overwriting lazily-expired fields (KEEPTTL and plain) bumps
+    expired_fields and drops stale TTLs; the fixed build replies 1 and issues hset/hexpire/hexpired
+    notifications after validation
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_max_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: keepttl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      notify-keyspace-events: KA
+      hash-max-listpack-entries: {$ref: inputs.hash_max_listpack_entries}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [HSETEX, h1, PX, 10, FIELDS, 2, f1, v1, f2, v2], expect: {equals: 1}}
+    - {command: [HSETEX, h4, PX, 10, FIELDS, 1, g1, w1], expect: {equals: 1}}
+    - {command: [DEBUG, SLEEP, 0.3], expect: {equals: OK}}
+    - {command: [SUBSCRIBE, "__keyspace@0__:h1"], connection: sub}
+    - {command: [HSETEX, h1, KEEPTTL, FIELDS, 2, f1, n1, f2, n2], expect: {equals: 1}}
+    - {command: [HTTL, h1, FIELDS, 2, f1, f2], expect: {equals: [-1, -1]}}
+    - {command: [HGETALL, h1], compare: unordered-pairs, expect: {exists: true}}
+    - {read: true, connection: sub}
+    - {command: [HSETEX, h4, EX, 100, FIELDS, 1, g1, w2], expect: {equals: 1}}
+    - {command: [HTTL, h4, FIELDS, 1, g1], compare: skip, expect: {min: 1, max: 100}}
+    - {command: [HSET, h2, a, "1"], expect: {equals: 1}}
+    - {command: [SUBSCRIBE, "__keyspace@0__:h2"], connection: sub2}
+    - {command: [HSETEX, h2, EXAT, 1, FIELDS, 2, a, x, b, y], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [EXISTS, h2], expect: {equals: 0}}
+    - {read: true, connection: sub2, expect_difference: true, expect: {exists: true}}
+    - {command: [HSETEX, h3, PXAT, 1, FIELDS, 1, nf, nv], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [EXISTS, h3], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [keepttl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: keepttl}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "980ef57829a857be46dba08af14efd59e8fcf52d",
+  "parent": "839d0c66980f85610869486e467a6b9f3ad1a83f",
+  "pr": 3174,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "make test_empty_buckets_rehashing deterministic across hash seeds (#3174)",
+  "date": "2026-02-08",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2294,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits the unit test src/unit/test_hashtable.c to make test_empty_buckets_rehashing deterministic across randomized hash seeds (choosing which key to keep by its bucket index and adding fresh keys instead of reused ones). No Valkey server code, command, data structure, replication, or persistence behavior changes, so no fuzzer scenario can reach it and none is needed."
+}

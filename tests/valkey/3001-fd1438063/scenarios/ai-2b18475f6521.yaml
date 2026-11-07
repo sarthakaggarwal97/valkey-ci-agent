@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1cc268de9fad..fd1438063927.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2b18475f6521
+seed: 7003
+experiment:
+  id: proposed.hsetex-keepttl-expired-overwrite
+  inputs:
+    resp: 2
+    hash_max_listpack_entries: 0
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

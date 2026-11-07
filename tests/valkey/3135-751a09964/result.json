@@ -1,0 +1,70 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "751a099643f9a4397a91cef2316468e7eed5bfeb",
+  "parent": "87caeb76465a6b7dba52f9ac98ccb754ed439825",
+  "pr": 3135,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add remaining_repl_size field in CLUSTER MIGRATESLOTS output (#3135)",
+  "date": "2026-02-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.7732,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 8 (CLUSTER GETSLOTMIGRATIONS) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[[\"name\",\"<new-id.0>\",\"operation\",\"EXPORT\",\"slot_ran",
+      "scenario": "ai-84857f497364",
+      "seed": 311,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #3135",
+      "fingerprint": "706a65640ac9242ef070",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100"
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 8 (CLUSTER GETSLOTMIGRATIONS) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[{\"cow_size\":0,\"create_time\":1794082259,\"last_ack_ti",
+      "scenario": "ai-c67a39c58116",
+      "seed": 312,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #3135",
+      "fingerprint": "06cc906c8caa490ddab4",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101"
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 8 (CLUSTER GETSLOTMIGRATIONS) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[[\"name\",\"<new-id.0>\",\"operation\",\"EXPORT\",\"slot_ran",
+      "scenario": "ai-a1db5e9217fe",
+      "seed": 313,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #3135",
+      "fingerprint": "706a65640ac9242ef070",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100"
+    }
+  ],
+  "recorded": []
+}

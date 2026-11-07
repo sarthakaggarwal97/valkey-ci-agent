@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e4804d50ff26..5d7d542499ca.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-09200a29c435
+seed: 102
+experiment:
+  id: proposed.command-cache-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

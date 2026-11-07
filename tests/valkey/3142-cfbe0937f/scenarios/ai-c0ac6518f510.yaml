@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey eabfe235d2b5..cfbe0937fb3b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c0ac6518f510
+seed: 11
+experiment:
+  id: proposed.htstats-empty-and-rehash
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

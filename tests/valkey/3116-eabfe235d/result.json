@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "eabfe235d2b522f0aded9a6139f16c4f5deeed93",
+  "parent": "9e0303bc53c61b9d9e48fe5f14a640287888fe54",
+  "pr": 3116,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Check expiration time first before lookup the key in GETEX command (#3116)",
+  "date": "2026-02-01",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.0468,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.tls-info-telemetry
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    New INFO tls section reports serial "none" and 0 seconds remaining while TLS is
+    disabled, and tls-* CONFIG SET churn (each triggering tlsResetCertInfo) plus CONFIG
+    REWRITE and a restart keep the telemetry cleared without a crash or double-free
+    of the serial sds fields
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: tlsinfo
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [INFO, tls], expect_difference: true, expect: {contains: "tls_server_cert_serial:none"}}
+    - {command: [INFO, tls], expect_difference: true, expect: {contains: "tls_server_cert_expires_in_seconds:0"}}
+    - {command: [INFO, tls], expect_difference: true, expect: {contains: "tls_client_cert_serial:none"}}
+    - {command: [INFO, tls], expect_difference: true, expect: {contains: "tls_client_cert_expires_in_seconds:0"}}
+    - {command: [INFO, tls], expect_difference: true, expect: {contains: "tls_ca_cert_serial:none"}}
+    - {command: [INFO, tls], expect_difference: true, expect: {contains: "tls_ca_cert_expires_in_seconds:0"}}
+    - {command: [CONFIG, SET, tls-ca-cert-file, /nonexistent/ca.pem], expect: {equals: OK}}
+    - {command: [INFO, tls], expect_difference: true, expect: {contains: "tls_ca_cert_serial:none"}}
+    - {command: [CONFIG, SET, tls-ca-cert-dir, /nonexistent-ca-dir], expect: {equals: OK}}
+    - {command: [CONFIG, SET, tls-cert-file, /nonexistent/server.crt], expect: {equals: OK}}
+    - {command: [CONFIG, SET, tls-key-file, /nonexistent/server.key], expect: {equals: OK}}
+    - {command: [CONFIG, SET, tls-client-cert-file, /nonexistent/client.crt], expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, tls-client-key-file, /nonexistent/client.key], expect: {
+        equals: OK}}
+    - {command: [INFO, tls], expect_difference: true, expect: {contains: "tls_server_cert_serial:none"}}
+    - {command: [CONFIG, SET, tls-ca-cert-file, ""], expect: {equals: OK}}
+    - {command: [CONFIG, SET, tls-cert-file, ""], expect: {equals: OK}}
+    - {command: [CONFIG, SET, tls-key-file, ""], expect: {equals: OK}}
+    - {command: [INFO, tls], expect_difference: true, expect: {contains: "tls_ca_cert_serial:none"}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [INFO, tls], expect_difference: true, expect: {contains: "tls_server_cert_serial:none"}}
+    - {command: [INFO, tls], expect_difference: true, expect: {contains: "tls_ca_cert_expires_in_seconds:0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [tlsinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tlsinfo}

@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.getkeys-withflags-heap-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_GetCommandKeysWithFlags leaks the heap keys buffer when a module
+    reports more than MAX_KEYS_BUFFER (256) keys
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The getkeys module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the getkeys module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: introspect
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - command: [getkeys.introspect, "1", getkeys.command_with_flags, key, x, key,
+        x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x,
+        key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key,
+        x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x,
+        key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key,
+        x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x,
+        key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key,
+        x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x,
+        key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key,
+        x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x,
+        key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key,
+        x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x,
+        key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key,
+        x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x,
+        key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key,
+        x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x,
+        key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key,
+        x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x,
+        key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key,
+        x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x,
+        key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key,
+        x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x,
+        key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key,
+        x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x,
+        key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key,
+        x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x,
+        key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key,
+        x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x,
+        key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key,
+        x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x,
+        key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key,
+        x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x, key, x,
+        key, x, key, x, key, x, key, x]
+      expect: {error: false}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: introspect}

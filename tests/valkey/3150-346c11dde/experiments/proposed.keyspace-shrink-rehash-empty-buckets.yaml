@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.keyspace-shrink-rehash-empty-buckets
+deployment:
+  modes: [standalone]
+metadata:
+  description: Shrink-rehash of the main keyspace hashtable (16384 buckets, 100 entries
+    left) finishes within 3000 reads on the new build and not on the parent; KEYS
+    and reads mid-rehash lose nothing
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shrink
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {activerehashing: "no", save: ""}
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [DEBUG, POPULATE, 100000], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 100000}}
+    - {command: [EVAL, "for i=1,20000 do redis.call('get','key:0') end return 1",
+        0], expect: {equals: 1}}
+    - {command: [DEBUG, HTSTATS, 0, full], compare: skip, expect: {contains: "top-level\
+          \ buckets: 16384"}}
+    - {command: [DEBUG, DICT-RESIZING, 0], expect: {equals: OK}}
+    - {command: [EVAL, "for i=100,99999 do redis.call('del','key:'..i) end return\
+          \ redis.call('dbsize')", 0], expect: {equals: 100}}
+    - {command: [DEBUG, DICT-RESIZING, 1], expect: {equals: OK}}
+    - {command: [SET, tmp, v], expect: {equals: OK}}
+    - {command: [DEL, tmp], expect: {equals: 1}}
+    - {command: [DEBUG, HTSTATS, 0], compare: skip, wait_s: 10, expect: {contains: "rehashing\
+          \ target"}}
+    - {command: [KEYS, "key:*"], compare: unordered}
+    - {command: [EVAL, "return #redis.call('keys','*')", 0], expect: {equals: 100}}
+    - {command: [EVAL, "for i=1,3000 do redis.call('get','key:0') end return redis.call('get','key:0')",
+        0], expect: {equals: "value:0"}}
+    - {command: [DEBUG, HTSTATS, 0], expect_difference: true, expect: {contains: "rehashing\
+          \ index: -1"}}
+    - {command: [DBSIZE], expect: {equals: 100}}
+    - {command: [GET, "key:50"], expect: {equals: "value:50"}}
+    - {command: [EVAL, "return #redis.call('keys','*')", 0], expect: {equals: 100}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shrink.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shrink}

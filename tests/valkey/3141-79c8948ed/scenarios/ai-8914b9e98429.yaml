@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3ea5cb39898b..79c8948edcdb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8914b9e98429
+seed: 31001
+experiment:
+  id: proposed.rehash-churn-under-kill
+  inputs:
+    signal: SIGKILL
+    mutation_rate: 2000
+    mutable_keys: 500
+    stable_keys: 0
+    value_size: 8
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7000

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d64f2072efd8..8ed270f44370.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c33d335b25e4
+seed: 1001
+experiment:
+  id: proposed.multi-delete-pause-autoshrink
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

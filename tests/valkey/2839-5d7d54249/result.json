@@ -1,0 +1,85 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5d7d542499ca481f3b9691334e123b36feff397c",
+  "parent": "e4804d50ff266f832949e6ab5b118c5a1a96368e",
+  "pr": 2839,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add cache for COMMAND (#2839)",
+  "date": "2026-02-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 77,
+    "executed": 75,
+    "percent": 97,
+    "uncovered": [
+      "src/server.c:5305",
+      "src/server.c:5485"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 5.6025,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-33e7cce7e3dc",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-33e7cce7e3dc",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-33e7cce7e3dc",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-09200a29c435",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-09200a29c435",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-09200a29c435",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ac3de2599528",
+      "build": "unstable",
+      "seed": 105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ac3de2599528",
+      "build": "unstable",
+      "seed": 106,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ac3de2599528",
+      "build": "unstable",
+      "seed": 107,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

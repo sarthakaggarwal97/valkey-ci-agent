@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "73838a0ddb485ba0c5cbd8c2a430037876127128",
+  "parent": "b8650a5a31ad80b65f42fd37652a304c8020caef",
+  "pr": 3128,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove empty list dead code condition in lmoveGenericCommand code (#3128)",
+  "date": "2026-01-30",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.9366,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a pure dead-code removal refactor with no observable behavior change. The deleted branch in lmoveGenericCommand handled an existing key holding an empty (zero-length) list, but no client-reachable path can produce such a key: every list loader in rdb.c routes zero-element lists to `emptykey` and rdbLoad silently discards RDB_LOAD_ERR_EMPTY_KEY keys (the #8453 fix), RESTORE rejects an empty-list payload with 'Bad data format', and every command that empties a list calls dbDelete immediately. A list reaching lmoveGenericCommand therefore always has length >= 1, so the removed `addReplyNu"
+}

@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.htstats-cluster-kvstore
+deployment:
+  modes: [standalone]
+metadata:
+  description: DEBUG HTSTATS over a cluster-mode kvstore, combining stats across per-slot
+    hash tables with one table frozen mid-rehash
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: clusterstats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    server_config: {activerehashing: "no", enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, "{t}seed", v], expect: {equals: OK}}
+    - {command: [DEL, "{t}seed"], expect: {equals: 1}}
+    - {command: [DEBUG, HTSTATS, "0"], expect: {contains: "[Dictionary HT]"}}
+    - {command: [MSET, "{t}k1", v1, "{t}k2", v2, "{t}k3", v3, "{t}k4", v4, "{t}k5",
+        v5, "{t}k6", v6, "{t}k7", v7, "{t}k8", v8, "{t}k9", v9, "{t}k10", v10, "{t}k11",
+        v11, "{t}k12", v12, "{t}k13", v13, "{t}k14", v14, "{t}k15", v15, "{t}k16",
+        v16, "{t}k17", v17, "{t}k18", v18, "{t}k19", v19, "{t}k20", v20, "{t}k21",
+        v21, "{t}k22", v22, "{t}k23", v23, "{t}k24", v24, "{t}k25", v25, "{t}k26",
+        v26, "{t}k27", v27, "{t}k28", v28, "{t}k29", v29, "{t}k30", v30, "{t}k31",
+        v31, "{t}k32", v32, "{t}k33", v33, "{t}k34", v34, "{t}k35", v35, "{t}k36",
+        v36, "{t}k37", v37, "{t}k38", v38, "{t}k39", v39, "{t}k40", v40, "{t}k41",
+        v41, "{t}k42", v42, "{t}k43", v43, "{t}k44", v44, "{t}k45", v45, "{t}k46",
+        v46, "{t}k47", v47, "{t}k48", v48, "{t}k49", v49, "{t}k50", v50, "{t}k51",
+        v51, "{t}k52", v52, "{t}k53", v53, "{t}k54", v54, "{t}k55", v55], expect: {
+        equals: OK}}
+    - {command: [SET, other1, x], expect: {equals: OK}}
+    - {command: [SET, other2, y], expect: {equals: OK}}
+    - {command: [DEBUG, HTSTATS, "0"], expect_difference: true, expect: {contains: "rehashing\
+          \ index: -1"}}
+    - {command: [SET, "{t}t1", v], expect: {equals: OK}}
+    - {command: [SET, "{t}t2", v], expect: {equals: OK}}
+    - {command: [DEBUG, DICT-RESIZING, "0"], expect: {equals: OK}}
+    - {command: [DEBUG, HTSTATS, "0"], expect_difference: true, expect: {contains: "rehashing\
+          \ target"}}
+    - {command: [DEBUG, HTSTATS, "0", full], expect_difference: true, expect: {contains: "rehashing\
+          \ index: "}}
+    - {command: [DEBUG, DICT-RESIZING, "1"], expect: {equals: OK}}
+    - {command: [GET, "{t}k1"], expect: {equals: v1}}
+    - {command: [GET, "{t}k2"], expect: {equals: v2}}
+    - {command: [GET, "{t}k3"], expect: {equals: v3}}
+    - {command: [GET, "{t}k4"], expect: {equals: v4}}
+    - {command: [GET, "{t}k5"], expect: {equals: v5}}
+    - {command: [GET, "{t}k6"], expect: {equals: v6}}
+    - {command: [GET, "{t}k7"], expect: {equals: v7}}
+    - {command: [GET, "{t}k8"], expect: {equals: v8}}
+    - {command: [GET, "{t}k9"], expect: {equals: v9}}
+    - {command: [GET, "{t}k10"], expect: {equals: v10}}
+    - {command: [DEBUG, HTSTATS, "0"], expect_difference: true, expect: {contains: "rehashing\
+          \ index: -1"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [clusterstats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: clusterstats}

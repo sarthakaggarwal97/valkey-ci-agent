@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 851eaafe61da..9e0303bc53c6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-82d1760f78a9
+seed: 7001
+experiment:
+  id: proposed.getkeys-withflags-heap-leak
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.module-clientinfo-flags
+deployment:
+  modes: [standalone]
+metadata:
+  description: test.clientinfo reports the new authenticated/ever_authenticated client-info
+    flags, compared across builds
+inputs:
+  required: [parent, module, module_parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: clientinfo
+  config:
+    compare_with: {$ref: inputs.parent}
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [test.clientinfo], expect_difference: true, expect: {contains: "ever_authenticated"}}
+    - {command: [CLIENT, TRACKING, "ON"], expect: {equals: OK}}
+    - {command: [test.clientinfo], expect_difference: true, expect: {contains: "tracking"}}
+    - {command: [CLIENT, TRACKING, "OFF"], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [test.clientinfo], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {contains: "ever_authenticated"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: clientinfo}

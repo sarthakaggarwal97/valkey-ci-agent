@@ -1,0 +1,101 @@
+extends: [valkey.liveness]
+id: proposed.multi-delete-pause-autoshrink
+deployment:
+  modes: [standalone]
+metadata:
+  description: SREM/HDEL/ZREM multi-member deletes with auto-shrink paused behave
+    like the parent build, including delete-to-empty (resume skipped on the freed
+    table), key reuse after it, volatile hash fields, and the non-hashtable encodings
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: massdel
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {set-max-listpack-entries: 4, set-max-intset-entries: 4, hash-max-listpack-entries: 4,
+      zset-max-listpack-entries: 4}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SADD, s, e0, e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13,
+        e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25, e26, e27, e28,
+        e29, e30, e31, e32, e33, e34, e35, e36, e37, e38, e39, e40, e41, e42, e43,
+        e44, e45, e46, e47, e48, e49, e50, e51, e52, e53, e54, e55, e56, e57, e58,
+        e59], expect: {equals: 60}}
+    - {command: [OBJECT, ENCODING, s], compare: skip, expect: {equals: hashtable}}
+    - {command: [SREM, s, e0, e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13,
+        e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25, e26, e27, e28,
+        e29, e30, e31, e32, e33, e34, e35, e36, e37, e38, e39, e40, e41, e42, e43,
+        e44, e45, e46, e47, e48, e49, e50, e51, e52, e53, e54, e55, e0, e1, nosuch],
+      expect: {equals: 56}}
+    - {command: [SCARD, s], expect: {equals: 4}}
+    - {command: [SMEMBERS, s], compare: unordered, expect: {contains: e59}}
+    - {command: [MEMORY, USAGE, s], compare: skip}
+    - {command: [SADD, s, x1, x2], expect: {equals: 2}}
+    - {command: [SREM, s, e56, e57, e58, e59, x1, x2, ghost], expect: {equals: 6}}
+    - {command: [EXISTS, s], expect: {equals: 0}}
+    - {command: [SADD, s, back], expect: {equals: 1}}
+    - {command: [SADD, nums, 1, 2, 3], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, nums], compare: skip, expect: {equals: intset}}
+    - {command: [SREM, nums, 1, 2, 99], expect: {equals: 2}}
+    - {command: [SADD, sl, a, b, '', d], expect: {equals: 4}}
+    - {command: [SREM, sl, '', a, zz], expect: {equals: 2}}
+    - {command: [HSET, h, f0, v, f1, v, f2, v, f3, v, f4, v, f5, v, f6, v, f7, v,
+        f8, v, f9, v, f10, v, f11, v, f12, v, f13, v, f14, v, f15, v, f16, v, f17,
+        v, f18, v, f19, v, f20, v, f21, v, f22, v, f23, v, f24, v, f25, v, f26, v,
+        f27, v, f28, v, f29, v, f30, v, f31, v, f32, v, f33, v, f34, v, f35, v, f36,
+        v, f37, v, f38, v, f39, v, f40, v, f41, v, f42, v, f43, v, f44, v, f45, v,
+        f46, v, f47, v, f48, v, f49, v, f50, v, f51, v, f52, v, f53, v, f54, v, f55,
+        v, f56, v, f57, v, f58, v, f59, v], expect: {equals: 60}}
+    - {command: [OBJECT, ENCODING, h], compare: skip, expect: {equals: hashtable}}
+    - {command: [HEXPIRE, h, 1000, FIELDS, 2, f0, f1], expect: {equals: [1, 1]}}
+    - {command: [HDEL, h, f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13,
+        f14, f15, f16, f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28,
+        f29, f30, f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41, f42, f43,
+        f44, f45, f46, f47, f48, f49, f50, f51, f52, f53, f54, f55, f0, nosuch], expect: {
+        equals: 56}}
+    - {command: [HLEN, h], expect: {equals: 4}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HDEL, h, f56, f57, f58, f59, ghost], expect: {equals: 4}}
+    - {command: [EXISTS, h], expect: {equals: 0}}
+    - {command: [HSET, h2, a, v, b, v, c, v, d, v, e, v], expect: {equals: 5}}
+    - {command: [HEXPIRE, h2, 1000, FIELDS, 1, a], expect: {equals: [1]}}
+    - {command: [HDEL, h2, a, b, c, d, e, zz], expect: {equals: 5}}
+    - {command: [EXISTS, h2], expect: {equals: 0}}
+    - {command: [HSET, hl, a, 1, b, 2], expect: {equals: 2}}
+    - {command: [HDEL, hl, a, zz], expect: {equals: 1}}
+    - {command: [ZADD, z, 0, m0, 1, m1, 2, m2, 3, m3, 4, m4, 5, m5, 6, m6, 7, m7,
+        8, m8, 9, m9, 10, m10, 11, m11, 12, m12, 13, m13, 14, m14, 15, m15, 16, m16,
+        17, m17, 18, m18, 19, m19, 20, m20, 21, m21, 22, m22, 23, m23, 24, m24, 25,
+        m25, 26, m26, 27, m27, 28, m28, 29, m29, 30, m30, 31, m31, 32, m32, 33, m33,
+        34, m34, 35, m35, 36, m36, 37, m37, 38, m38, 39, m39, 40, m40, 41, m41, 42,
+        m42, 43, m43, 44, m44, 45, m45, 46, m46, 47, m47, 48, m48, 49, m49, 50, m50,
+        51, m51, 52, m52, 53, m53, 54, m54, 55, m55, 56, m56, 57, m57, 58, m58, 59,
+        m59], expect: {equals: 60}}
+    - {command: [OBJECT, ENCODING, z], compare: skip, expect: {equals: skiplist}}
+    - {command: [ZREM, z, m0, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13,
+        m14, m15, m16, m17, m18, m19, m20, m21, m22, m23, m24, m25, m26, m27, m28,
+        m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40, m41, m42, m43,
+        m44, m45, m46, m47, m48, m49, m50, m51, m52, m53, m54, m55, m0, nosuch], expect: {
+        equals: 56}}
+    - {command: [ZCARD, z], expect: {equals: 4}}
+    - {command: [ZRANGE, z, 0, -1], expect: {equals: [m56, m57, m58, m59]}}
+    - {command: [ZRANK, z, m58], expect: {equals: 2}}
+    - {command: [ZREM, z, m56, m57, m58, m59, ghost], expect: {equals: 4}}
+    - {command: [EXISTS, z], expect: {equals: 0}}
+    - {command: [ZADD, z2, 1, a, 2, b, 3, c, 4, d, 5, e], expect: {equals: 5}}
+    - {command: [ZREM, z2, a, b, c, d, e, zz], expect: {equals: 5}}
+    - {command: [EXISTS, z2], expect: {equals: 0}}
+    - {command: [ZADD, z2, 1, a], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [massdel.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: massdel}

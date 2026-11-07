@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.hsetex-expired-field-delete
+deployment:
+  modes: [standalone]
+metadata:
+  description: HSETEX past expiry deletes a lazily-expired hashtable field (parent
+    leaves a hidden entry that keeps the key alive) and counts every named field in
+    expired_fields
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hsetex-ttl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [HSET, h, f1, v1], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, h], compare: skip, expect: {equals: hashtable}}
+    - {command: [HPEXPIRE, h, 50, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [DEBUG, SLEEP, 0.2], expect: {equals: OK}}
+    - {command: [HSETEX, h, PXAT, 1, FIELDS, 1, f1, v1], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [EXISTS, h], expect_difference: true, expect: {equals: 0}}
+    - {command: [HLEN, h], expect_difference: true, expect: {equals: 0}}
+    - {command: [HSET, h2, a, 1], expect: {equals: 1}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [HSETEX, h2, EXAT, 1, FIELDS, 2, a, x, b, y], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [INFO, stats], compare: skip, expect: {contains: "expired_fields:2"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hsetex-ttl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hsetex-ttl}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9e0303bc53c61b9d9e48fe5f14a640287888fe54",
+  "parent": "851eaafe61dada5ba075def06d5a839f8980d4bb",
+  "pr": 3137,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Revert #3088 (#3137)",
+  "date": "2026-01-30",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.046,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

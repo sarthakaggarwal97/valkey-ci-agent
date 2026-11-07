@@ -1,0 +1,37 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "346c11dde9928bbc9aacd0f0c63594ec31967959",
+  "parent": "9f374e15848d7b070cdd58a071a741c0a59a6c75",
+  "pr": 3150,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rehashing more empty buckets to optimize the rehashing speed (#3150)",
+  "date": "2026-02-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 1,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 10,
+    "executed": 8,
+    "percent": 80,
+    "uncovered": [
+      "src/hashtable.c:1386",
+      "src/hashtable.c:1387"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 8.3349,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-e63760ab5d29",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'shrink' returned ERROR: expectations both builds violate alike, so they are not about the change: 10 (ZSCORE myzset 0)"
+    }
+  ]
+}

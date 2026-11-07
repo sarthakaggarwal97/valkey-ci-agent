@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 87caeb76465a..751a099643f9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-84857f497364
+seed: 311
+experiment:
+  id: proposed.migrateslots-remaining-repl-size
+  inputs:
+    resp: 2
+    max_repl_bytes: 0
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
