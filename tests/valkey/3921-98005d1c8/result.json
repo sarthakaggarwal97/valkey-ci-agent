@@ -1,0 +1,59 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "98005d1c8ca56d5887d81ed4256dfc10ebc09912",
+  "parent": "63dc7484bbd326806090acef4369b644e65a51a2",
+  "pr": 3921,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reject NAN scores in listpack/ziplist-encoded sorted sets on RDB load (#3921)",
+  "date": "2026-06-11",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 21,
+    "executed": 19,
+    "percent": 90,
+    "uncovered": [
+      "src/t_zset.c:884",
+      "src/t_zset.c:886"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 3.7571,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: assertion failed: 14349:M 07 Nov 2026 01:21:54.103 # ==> t_zset.c:260 '!isnan(node->score)' is not true",
+      "scenario": "ai-0cc593b9da07",
+      "seed": 7001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3921",
+      "fingerprint": "3bed4b1eec15b5803201",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: assertion failed: 15037:M 07 Nov 2026 01:23:07.931 # ==> t_zset.c:260 '!isnan(node->score)' is not true",
+      "scenario": "ai-d7e3e37436ba",
+      "seed": 7101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3921",
+      "fingerprint": "3bed4b1eec15b5803201",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

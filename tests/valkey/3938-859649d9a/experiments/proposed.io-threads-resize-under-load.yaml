@@ -1,0 +1,38 @@
+extends: [valkey.base]
+id: proposed.io-threads-resize-under-load
+deployment:
+  modes: [standalone]
+metadata:
+  description: Resize io-threads up and down at runtime while the key-value workload
+    writes, exercising runtime-sized queue init/free and the updateIOThreads pending
+    check; no acknowledged write may be lost and the server must stay live
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: resize
+  depends_on: [warm-up]
+  config:
+    instances: primaries
+    timeout_s: 120
+    commands:
+    - {command: [CONFIG, SET, io-threads, "2"], wait_s: 30, expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, io-threads, "8"], wait_s: 30, expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, io-threads, "1"], wait_s: 30, expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, io-threads, "8"], wait_s: 30, expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, io-threads, "1"], wait_s: 30, expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "8"], wait_s: 30, expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [resize]
+  config: {seconds: 3}
+required_events: [resize.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: resize}

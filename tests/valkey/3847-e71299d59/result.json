@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e71299d5962eda173828d99378464d9df892e01f",
+  "parent": "7abe49a6ce6933434410022be8459cfd01cfc2bc",
+  "pr": 3847,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Harden SENTINEL commands and config rewrite against control-character injection (#3847)",
+  "date": "2026-06-01",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.5278,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is entirely inside src/sentinel.c and only executes when valkey-server runs in Sentinel mode: sentinelValidateArgs guards SENTINEL SET / SENTINEL MONITOR / SENTINEL CONFIG SET, and the sdscatrepr escaping runs in rewriteConfigSentinelOption, which rewrites sentinel state. Sentinel mode is enabled only by the --sentinel command-line argument or a valkey-sentinel executable name (checkForSentinelMode, src/server.c:7267), never by a config option; on a normal server the SENTINEL command is not even registered (CMD_ONLY_SENTINEL, src/server.c:3354) and a 'sentinel' directive in a config"
+}

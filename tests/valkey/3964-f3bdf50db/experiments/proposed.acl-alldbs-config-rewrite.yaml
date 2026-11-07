@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.acl-alldbs-config-rewrite
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG REWRITE persists user lines without the implicit alldbs rule;
+    restarting from the rewritten config restores identical database permissions,
+    and a second rewrite is idempotent
+components:
+- use: valkey.action.commands
+  id: rewrite
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 30
+    commands:
+    - {command: [ACL, SETUSER, dbuser, on, nopass, "~*", "&*", "+get", "+select",
+        "db=0,2"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, evry, on, nopass, "~*", "&*", "+@all", alldbs], expect: {
+        equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ACL, LIST], expect_difference: true, expect: {equals: ["user dbuser\
+            \ on nopass ~* &* db=0,2 -@all +get +select", "user default on nopass\
+            \ ~* &* +@all", "user evry on nopass ~* &* +@all"]}}
+    - {command: [AUTH, dbuser, x], connection: c1, expect: {equals: OK}}
+    - {command: [SELECT, 2], connection: c1, expect: {equals: OK}}
+    - {command: [GET, k], connection: c1, expect: {error: false}}
+    - {command: [SELECT, 1], connection: c1, expect: {error: "NOPERM"}}
+    - {command: [AUTH, evry, x], connection: c2, expect: {equals: OK}}
+    - {command: [SELECT, 7], connection: c2, expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ACL, LIST], expect_difference: true, expect: {equals: ["user dbuser\
+            \ on nopass ~* &* db=0,2 -@all +get +select", "user default on nopass\
+            \ ~* &* +@all", "user evry on nopass ~* &* +@all"]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rewrite.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rewrite}

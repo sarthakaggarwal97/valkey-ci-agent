@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2013e029c3c644bbb059384e1136b6f237a6279f",
+  "parent": "b0137ef851a22fecbfd5999ae2d2b270ecd73dc8",
+  "pr": 3925,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix server crash on FUNCTION DELETE after case-only function name collision (#3925)",
+  "date": "2026-06-08",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.5148,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: functions.c:332 'ret == DICT_OK' is not true",
+      "scenario": "ai-279c35325dd1",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3925",
+      "fingerprint": "f2e7527eb27730492836",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: functions.c:332 'ret == DICT_OK' is not true",
+      "scenario": "ai-7269f4192feb",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3925",
+      "fingerprint": "f2e7527eb27730492836",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

@@ -1,0 +1,87 @@
+extends: [valkey.liveness]
+id: proposed.acl-db-log-dbid
+deployment:
+  modes: [standalone]
+metadata:
+  description: Executed db=denied commands log the exact dbid in ACL LOG object, including
+    COPY with repeated DB clauses and queue-time MULTI denials (RESP2)
+components:
+- use: valkey.action.commands
+  id: log
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {databases: 256}
+    resp: 2
+    timeout_s: 10
+    commands:
+    - {command: [ACL, SETUSER, dbuser, on, ">pass", "~*", "&*", "+@all", "db=0,1"],
+      expect: {equals: OK}}
+    - {command: [AUTH, dbuser, pass], connection: u, expect: {equals: OK}}
+    - {command: [SET, src, hello], connection: u, expect: {equals: OK}}
+    - {command: [ACL, LOG, RESET], expect: {equals: OK}}
+    - {command: [COPY, src, dst, DB, 2], connection: u, expect: {error: "NOPERM"}}
+    - {command: [ACL, LOG], expect_difference: true, expect: {contains: "'object',\
+          \ '2'"}}
+    - {command: [ACL, LOG, RESET], expect: {equals: OK}}
+    - {command: [COPY, src, dst, REPLACE, DB, 2], connection: u, expect: {error: "NOPERM"}}
+    - {command: [ACL, LOG], expect_difference: true, expect: {contains: "'object',\
+          \ '2'"}}
+    - {command: [ACL, LOG, RESET], expect: {equals: OK}}
+    - {command: [COPY, src, dst, DB, 1, DB, 2], connection: u, expect: {error: "NOPERM"}}
+    - {command: [ACL, LOG], expect_difference: true, expect: {contains: "'object',\
+          \ '2'"}}
+    - {command: [ACL, LOG, RESET], expect: {equals: OK}}
+    - {command: [COPY, src, dst, DB, 2, DB, 1], connection: u, expect: {error: "NOPERM"}}
+    - {command: [ACL, LOG], expect_difference: true, expect: {contains: "'object',\
+          \ '2'"}}
+    - {command: [ACL, LOG, RESET], expect: {equals: OK}}
+    - {command: [COPY, src, dst, DB, 1, REPLACE, DB, 255], connection: u, expect: {
+        error: "NOPERM"}}
+    - {command: [ACL, LOG], expect_difference: true, expect: {contains: "'object',\
+          \ '255'"}}
+    - {command: [ACL, LOG, RESET], expect: {equals: OK}}
+    - {command: [COPY, src, dst, DB, 1], connection: u, expect: {equals: 1}}
+    - {command: [SELECT, 2], connection: u, expect: {error: "NOPERM"}}
+    - {command: [ACL, LOG], compare: skip, expect: {contains: "'object', '2'"}}
+    - {command: [ACL, LOG, RESET], expect: {equals: OK}}
+    - {command: [MOVE, src, 2], connection: u, expect: {error: "NOPERM"}}
+    - {command: [ACL, LOG], compare: skip, expect: {contains: "'object', '2'"}}
+    - {command: [ACL, LOG, RESET], expect: {equals: OK}}
+    - {command: [SWAPDB, 2, 0], connection: u, expect: {error: "NOPERM"}}
+    - {command: [ACL, LOG], compare: skip, expect: {contains: "'object', '2'"}}
+    - {command: [ACL, LOG, RESET], expect: {equals: OK}}
+    - {command: [SWAPDB, 0, 2], connection: u, expect: {error: "NOPERM"}}
+    - {command: [ACL, LOG], compare: skip, expect: {contains: "'object', '2'"}}
+    - {command: [ACL, LOG, RESET], expect: {equals: OK}}
+    - {command: [FLUSHALL], connection: u, expect: {error: "NOPERM"}}
+    - {command: [ACL, LOG], compare: skip, expect: {contains: "'object', 'flushall'"}}
+    - {command: [ACL, LOG, RESET], expect: {equals: OK}}
+    - {command: [MULTI], connection: u, expect: {equals: OK}}
+    - {command: [SELECT, 1], connection: u, expect: {equals: QUEUED}}
+    - {command: [COPY, src, dst, DB, 2], connection: u, expect: {error: "NOPERM"}}
+    - {command: [ACL, LOG], expect_difference: true, expect: {contains: "'object',\
+          \ '2'"}}
+    - {command: [EXEC], connection: u, expect: {error: "EXECABORT"}}
+    - {command: [ACL, LOG, RESET], expect: {equals: OK}}
+    - {command: [MULTI], connection: u, expect: {equals: OK}}
+    - {command: [SELECT, 2], connection: u, expect: {error: "NOPERM"}}
+    - {command: [ACL, LOG], compare: skip, expect: {contains: "'object', '2'"}}
+    - {command: [EXEC], connection: u, expect: {error: "EXECABORT"}}
+    - {command: [MULTI], connection: u, expect: {equals: OK}}
+    - {command: [SELECT, abc], connection: u, expect: {equals: QUEUED}}
+    - {command: [EXEC], connection: u}
+    - {command: [MULTI], connection: u, expect: {equals: OK}}
+    - {command: [SELECT, 1], connection: u, expect: {equals: QUEUED}}
+    - {command: [GET, src], connection: u, expect: {equals: QUEUED}}
+    - {command: [EXEC], connection: u}
+    - {command: [SELECT, 0], connection: u, expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [log.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: log}

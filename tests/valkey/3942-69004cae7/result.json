@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "69004cae7f0c8417f63d96970128a332f1a0d5a1",
+  "parent": "d9a80af14ac31d6a39e22c8e25f3ceeb798bf17e",
+  "pr": 3942,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix shard_id format specifier in UPDATE message log (#3942)",
+  "date": "2026-06-09",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.9316,
+  "findings": [],
+  "recorded": [],
+  "reason": "Logging-only fix: it changes the printf format specifier for the fixed 40-byte, non-NUL-terminated shard_id buffer from %s to %.40s in one cluster UPDATE-message LL_NOTICE log line. The pre-fix %s over-reads past the 40-byte array, but only into adjacent fields of the same clusterNode heap allocation, so ASan does not catch it, there is no crash, and no data, reply, replication, failover, or persistence behaviour changes. The sole visible difference is garbage trailing bytes in one log line, which no fuzzer oracle inspects, so no scenario can reach or verify the change."
+}

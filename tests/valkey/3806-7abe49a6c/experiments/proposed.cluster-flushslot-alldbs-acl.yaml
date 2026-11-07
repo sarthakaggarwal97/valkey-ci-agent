@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.cluster-flushslot-alldbs-acl
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER FLUSHSLOT now carries ALL_DBS, so a db-restricted ACL user
+    is denied where the parent flushed keys out of every database
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flushslot
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    server_config: {cluster-databases: 16}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, foo, v0], expect: {equals: OK}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [SET, foo, v1], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, flushuser, on, nopass, "~*", "&*", "+@all", "db=0"],
+      expect: {equals: OK}}
+    - {command: [AUTH, flushuser, ""], connection: u, expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182], connection: u, expect_difference: true,
+      expect: {error: NOPERM}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182, SYNC], connection: u, expect_difference: true,
+      expect: {error: NOPERM}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182, ASYNC], connection: u, expect_difference: true,
+      expect: {error: NOPERM}}
+    - {command: [CLUSTER, FLUSHSLOT, 16384], connection: u, expect_difference: true,
+      expect: {error: NOPERM}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182, BOGUS], connection: u, expect_difference: true,
+      expect: {error: NOPERM}}
+    - {command: [GET, foo], expect_difference: true, expect: {equals: v0}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [GET, foo], expect_difference: true, expect: {equals: v1}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [MULTI], connection: u, expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182], connection: u, expect_difference: true,
+      expect: {error: NOPERM}}
+    - {command: [EXEC], connection: u, expect_difference: true, expect: {error: EXECABORT}}
+    - {command: [EVAL, "return redis.call('cluster','flushslot','12182')", 0], connection: u,
+      expect_difference: true, expect: {error: true}}
+    - {command: [ACL, SETUSER, partial, on, nopass, "~*", "&*", "+@all", "db=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14"],
+      expect: {equals: OK}}
+    - {command: [AUTH, partial, ""], connection: p, expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182], connection: p, expect_difference: true,
+      expect: {error: NOPERM}}
+    - {command: [ACL, SETUSER, partial, "db=15"], expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182], connection: p, expect: {equals: OK}}
+    - {command: [ACL, SETUSER, flushuser, alldbs], expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182], connection: u, expect: {equals: OK}}
+    - {command: [EXISTS, foo], expect: {equals: 0}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [EXISTS, foo], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [flushslot.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flushslot}

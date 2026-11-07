@@ -1,0 +1,99 @@
+extends: [valkey.liveness]
+id: proposed.hash-field-ttl-tracking
+deployment:
+  modes: [standalone]
+metadata:
+  description: Drive every call site of dbTrack/dbUntrackKeyWithVolatileItems (tracking
+    flips, overwrites, rename/copy/move/swapdb, delete-to-empty, active field expiry,
+    RDB reload) and compare with the parent; the new asserts must never fire on these
+    legitimate paths
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ttl-tracking
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [HSET, h1, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HEXPIRE, h1, 100, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HEXPIRE, h1, 100, FIELDS, 1, f2], expect: {equals: [1]}}
+    - {command: [HPERSIST, h1, FIELDS, 2, f1, f2], expect: {equals: [1, 1]}}
+    - {command: [HEXPIRE, h1, 100, FIELDS, 2, f1, f2], expect: {equals: [1, 1]}}
+    - {command: [RENAME, h1, h2], expect: {equals: OK}}
+    - {command: [COPY, h2, h3], expect: {equals: 1}}
+    - {command: [SET, h3, plain], expect: {equals: OK}}
+    - {command: [COPY, h2, h4], expect: {equals: 1}}
+    - {command: [HSET, h5, a, b], expect: {equals: 1}}
+    - {command: [HEXPIRE, h5, 100, FIELDS, 1, a], expect: {equals: [1]}}
+    - {command: [COPY, h2, h5, REPLACE], expect: {equals: 1}}
+    - {command: [DEL, h5], expect: {equals: 1}}
+    - {command: [UNLINK, h4], expect: {equals: 1}}
+    - {command: [HDEL, h2, f1, f2], expect: {equals: 2}}
+    - {command: [SADD, src1, m1, m2], expect: {equals: 2}}
+    - {command: [HSETEX, dst1, EX, 100, FIELDS, 1, a, b], expect: {equals: 1}}
+    - {command: [SINTERSTORE, dst1, src1, src1], expect: {equals: 2}}
+    - {command: [DEL, dst1, src1], expect: {equals: 2}}
+    - {command: [HSETEX, s1, EX, 100, FIELDS, 2, a, 1, b, 2], expect: {equals: 1}}
+    - {command: [HGETDEL, s1, FIELDS, 2, a, b], expect: {equals: ["1", "2"]}}
+    - {command: [EXISTS, s1], expect: {equals: 0}}
+    - {command: [HSETEX, s2, PXAT, 1, FIELDS, 1, a, v], expect: {equals: 1}}
+    - {command: [EXISTS, s2], expect: {equals: 0}}
+    - {command: [HSETEX, s3, EX, 100, FIELDS, 1, a, v], expect: {equals: 1}}
+    - {command: [HSETEX, s3, KEEPTTL, FIELDS, 1, a, v2], expect: {equals: 1}}
+    - {command: [HGETEX, s3, PERSIST, FIELDS, 1, a], expect: {equals: [v2]}}
+    - {command: [HGETEX, s3, EX, 100, FIELDS, 1, a], expect: {equals: [v2]}}
+    - {command: [MOVE, s3, 1], expect: {equals: 1}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [HPTTL, s3, FIELDS, 1, a], compare: skip}
+    - {command: [DEL, s3], expect: {equals: 1}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [HSET, FIELDS, FIELDS, FIELDS], expect: {equals: 1}}
+    - {command: [HEXPIRE, FIELDS, 100, FIELDS, 1, FIELDS], expect: {equals: [1]}}
+    - {command: [HPERSIST, FIELDS, FIELDS, 1, FIELDS], expect: {equals: [1]}}
+    - {command: [HSETEX, emp, EX, 100, FIELDS, 1, "", ""], expect: {equals: 1}}
+    - {command: [HGETDEL, emp, FIELDS, 1, ""], expect: {equals: [""]}}
+    - {command: [HSETEX, w1, EX, 100, FIELDS, 1, a, b], expect: {equals: 1}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [HSETEX, w2, EX, 100, FIELDS, 1, c, d], expect: {equals: 1}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SWAPDB, 0, 1], expect: {equals: OK}}
+    - {command: [EXISTS, w2], expect: {equals: 1}}
+    - {command: [HPEXPIRE, w2, 50, FIELDS, 1, c], expect: {equals: [1]}}
+    - {command: [EXISTS, w2], wait_s: 20, expect: {equals: 0}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [DEL, w1], expect: {equals: 1}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [HSET, e1, x, 1, y, 2], expect: {equals: 2}}
+    - {command: [HPEXPIRE, e1, 50, FIELDS, 1, x], expect: {equals: [1]}}
+    - {command: [HLEN, e1], wait_s: 20, expect: {equals: 1}}
+    - {command: [HPEXPIRE, e1, 50, FIELDS, 1, y], expect: {equals: [1]}}
+    - {command: [EXISTS, e1], wait_s: 20, expect: {equals: 0}}
+    - {command: [HSET, r1, p, q], expect: {equals: 1}}
+    - {command: [HSETEX, r1, EX, 1000, FIELDS, 2, m, 1, n, 2], expect: {equals: 1}}
+    - {command: [HSET, r2, a, b], expect: {equals: 1}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HGET, r1, p], expect: {equals: q}}
+    - {command: [HPTTL, r1, FIELDS, 2, m, n], compare: skip}
+    - {command: [EXISTS, r2], expect: {equals: 1}}
+    - {command: [HPEXPIRE, r1, 50, FIELDS, 3, p, m, n], expect: {equals: [1, 1, 1]}}
+    - {command: [EXISTS, r1], wait_s: 20, expect: {equals: 0}}
+    - {command: [HSETEX, g1, EX, 100, FIELDS, 1, a, b], expect: {equals: 1}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [HSETEX, g2, EX, 100, FIELDS, 1, a, b], expect: {equals: 1}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [DBSIZE], wait_s: 20, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ttl-tracking.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ttl-tracking}

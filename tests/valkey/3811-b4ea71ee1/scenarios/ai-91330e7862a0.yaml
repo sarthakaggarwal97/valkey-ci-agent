@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ce8d17759e3f..b4ea71ee19c1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-91330e7862a0
+seed: 101
+experiment:
+  id: proposed.repl-transfer-size-info-truncation
+  inputs:
+    dual_channel: 'no'
+deployment:
+  mode: standalone
+  base_port: 7000

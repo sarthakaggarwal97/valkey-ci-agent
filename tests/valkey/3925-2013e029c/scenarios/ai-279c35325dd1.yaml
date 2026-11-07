@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b0137ef851a2..2013e029c3c6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-279c35325dd1
+seed: 1
+experiment:
+  id: proposed.function-case-collision-delete
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

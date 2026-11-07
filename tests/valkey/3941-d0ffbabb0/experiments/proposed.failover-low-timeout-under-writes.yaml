@@ -1,0 +1,38 @@
+extends: [valkey.base]
+id: proposed.failover-low-timeout-under-writes
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Force a failover on a replica whose cluster-node-timeout is below 30
+    while writes run; it must promote without crashing or losing acknowledged writes
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: set-low-timeout
+  depends_on: [warm-up]
+  config:
+    instances: replica
+    commands:
+    - {command: [CONFIG, SET, cluster-node-timeout, "10"], expect: {equals: OK}}
+- use: valkey.action.failover
+  id: failover
+  depends_on: [set-low-timeout]
+  config: {shard: 0, force: false, timeout_s: 60}
+- use: valkey.action.commands
+  id: restore-timeout
+  depends_on: [failover]
+  config:
+    instances: all
+    commands:
+    - {command: [CONFIG, SET, cluster-node-timeout, "15000"], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [restore-timeout]
+  config: {seconds: 3}
+required_events: [failover.completed]
+required_evidence:
+- {evidence_id: valkey.failover.result, source: failover}

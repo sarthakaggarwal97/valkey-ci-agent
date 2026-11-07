@@ -1,0 +1,54 @@
+extends: [valkey.base]
+id: proposed.hash-field-ttl-replica-resync
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: SIGKILL and restart a replica while hashes with field TTLs exist on
+    the primary; the resync RDB load must re-track them and propagated field expiry
+    and deletes must not trip the new asserts
+components:
+- use: valkey.action.commands
+  id: seed
+  depends_on: [writes]
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [HSET, hvt-h1, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HEXPIRE, hvt-h1, 1000, FIELDS, 2, f1, f2], expect: {equals: [1, 1]}}
+    - {command: [HSETEX, hvt-h2, EX, 1000, FIELDS, 2, a, 1, b, 2], expect: {equals: 1}}
+    - {command: [HSETEX, hvt-h3, EX, 1000, FIELDS, 1, a, b], expect: {equals: 1}}
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: seed.completed
+    instance: replica
+    signal: SIGKILL
+    restart_mode: immediate
+- use: valkey.action.wait-event
+  id: replica-back
+  depends_on: [seed]
+  config: {event: kill-replica.recovered, only_after: kill-replica.injected, timeout_s: 90}
+- use: valkey.action.commands
+  id: verify
+  depends_on: [replica-back]
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [RENAME, hvt-h2, hvt-h4], expect: {equals: OK}}
+    - {command: [DEL, hvt-h4], expect: {equals: 1}}
+    - {command: [HPEXPIRE, hvt-h1, 50, FIELDS, 2, f1, f2], expect: {equals: [1, 1]}}
+    - {command: [EXISTS, hvt-h1], wait_s: 30, expect: {equals: 0}}
+    - {command: [HPEXPIRE, hvt-h3, 50, FIELDS, 1, a], expect: {equals: [1]}}
+    - {command: [EXISTS, hvt-h3], wait_s: 30, expect: {equals: 0}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [verify]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [seed.completed, kill-replica.recovered, verify.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}
+- {evidence_id: valkey.command.sequence, source: seed}

@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.acl-alldbs-aclfile
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL SAVE writes an aclfile without the implicit alldbs rule; ACL LOAD
+    and a restart from that file restore identical database permissions for alldbs,
+    db=N and resetdbs users
+components:
+- use: valkey.action.commands
+  id: aclsave
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {aclfile: users.acl}
+    files: {users.acl: "user default on nopass ~* &* +@all\n"}
+    timeout_s: 30
+    commands:
+    - {command: [ACL, SETUSER, dbuser, on, nopass, "~*", "&*", "+get", "+select",
+        "db=0,5"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, evry, on, nopass, "~*", "&*", "+@all", alldbs], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, nodb, on, nopass, "~*", "&*", "+get", resetdbs], expect: {
+        equals: OK}}
+    - {command: [ACL, SAVE], expect: {equals: OK}}
+    - {command: [ACL, LOAD], expect: {equals: OK}}
+    - {command: [ACL, LIST], expect_difference: true, expect: {equals: ["user dbuser\
+            \ on nopass ~* &* db=0,5 -@all +get +select", "user default on nopass\
+            \ ~* &* +@all", "user evry on nopass ~* &* +@all", "user nodb on nopass\
+            \ ~* &* resetdbs -@all +get"]}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ACL, LIST], expect_difference: true, expect: {equals: ["user dbuser\
+            \ on nopass ~* &* db=0,5 -@all +get +select", "user default on nopass\
+            \ ~* &* +@all", "user evry on nopass ~* &* +@all", "user nodb on nopass\
+            \ ~* &* resetdbs -@all +get"]}}
+    - {command: [AUTH, dbuser, x], connection: c1, expect: {equals: OK}}
+    - {command: [SELECT, 5], connection: c1, expect: {equals: OK}}
+    - {command: [GET, foo], connection: c1, expect: {error: false}}
+    - {command: [SELECT, 3], connection: c1, expect: {error: "NOPERM"}}
+    - {command: [AUTH, evry, x], connection: c2, expect: {equals: OK}}
+    - {command: [SELECT, 9], connection: c2, expect: {equals: OK}}
+    - {command: [SET, foo, bar], connection: c2, expect: {equals: OK}}
+    - {command: [AUTH, nodb, x], connection: c3, expect: {equals: OK}}
+    - {command: [GET, foo], connection: c3, expect: {error: "NOPERM"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aclsave.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aclsave}

@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0ff817e8cc7f..7abe49a6ce69.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a0e87451ef28
+seed: 1
+experiment:
+  id: proposed.cluster-flushslot-alldbs-acl
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

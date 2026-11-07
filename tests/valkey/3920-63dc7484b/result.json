@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "63dc7484bbd326806090acef4369b644e65a51a2",
+  "parent": "4f11dd63551c3098e2dedc38e52faca0aeec4a9f",
+  "pr": 3920,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reject integer overflow of length fields in zipmapValidateIntegrity (#3920)",
+  "date": "2026-06-11",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.0571,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,46 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f3bdf50db381647481def0c91b30b4df4e3b7642",
+  "parent": "719268e847e7cdd0b0c7932049ceaf04251eccdb",
+  "pr": 3964,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Omit alldbs rule in ACL SAVE/LIST and CONFIG REWRITE for compatibility (#3964)",
+  "date": "2026-06-10",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 9.4035,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-2ce753bda39b",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2ce753bda39b",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2ce753bda39b",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

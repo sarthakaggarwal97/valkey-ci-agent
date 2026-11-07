@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.acl-db-dryrun-dbid
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL DRYRUN names the exact denied dbid for COPY DB clauses under a
+    db= selector; parent names the command instead
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dryrun
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {databases: 256}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [ACL, SETUSER, dbuser, on, ">pass", "~*", "&*", "+@all", "db=0,1"],
+      expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, dbuser, SELECT, 2], expect: {contains: "has no permissions\
+          \ to access database 2"}}
+    - {command: [ACL, DRYRUN, dbuser, SELECT, 255], expect: {contains: "has no permissions\
+          \ to access database 255"}}
+    - {command: [ACL, DRYRUN, dbuser, MOVE, k, 2], expect: {contains: "has no permissions\
+          \ to access database 2"}}
+    - {command: [ACL, DRYRUN, dbuser, SWAPDB, 0, 2], expect: {contains: "has no permissions\
+          \ to access database 2"}}
+    - {command: [ACL, DRYRUN, dbuser, SWAPDB, 2, 0], expect: {contains: "has no permissions\
+          \ to access database 2"}}
+    - {command: [ACL, DRYRUN, dbuser, FLUSHALL], expect: {contains: "has no permissions\
+          \ to access database"}}
+    - {command: [ACL, DRYRUN, dbuser, COPY, k1, k2, DB, 1], expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, dbuser, COPY, k1, k2, REPLACE, DB, 1], expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, dbuser, COPY, k1, k2, DB, 2], expect_difference: true,
+      expect: {contains: "has no permissions to access database 2"}}
+    - {command: [ACL, DRYRUN, dbuser, COPY, k1, k2, DB, 2, REPLACE], expect_difference: true,
+      expect: {contains: "has no permissions to access database 2"}}
+    - {command: [ACL, DRYRUN, dbuser, COPY, k1, k2, REPLACE, DB, 2], expect_difference: true,
+      expect: {contains: "has no permissions to access database 2"}}
+    - {command: [ACL, DRYRUN, dbuser, COPY, k1, k2, DB, 1, DB, 2], expect_difference: true,
+      expect: {contains: "has no permissions to access database 2"}}
+    - {command: [ACL, DRYRUN, dbuser, COPY, k1, k2, DB, 2, DB, 1], expect_difference: true,
+      expect: {contains: "has no permissions to access database 2"}}
+    - {command: [ACL, DRYRUN, dbuser, COPY, k1, k2, REPLACE, REPLACE, DB, 1, REPLACE,
+        DB, 2], expect_difference: true, expect: {contains: "has no permissions to\
+          \ access database 2"}}
+    - {command: [ACL, DRYRUN, dbuser, COPY, k1, k2, DB, 255], expect_difference: true,
+      expect: {contains: "has no permissions to access database 255"}}
+    - {command: [ACL, DRYRUN, dbuser, COPY, db, db2, DB, 2], expect_difference: true,
+      expect: {contains: "has no permissions to access database 2"}}
+    - {command: [ACL, DRYRUN, dbuser, COPY, k1, k2, DB, 256], expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, dbuser, COPY, k1, k2, DB, -1], expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, dbuser, COPY, k1, k2, DB, "9223372036854775808"], expect: {
+        equals: OK}}
+    - {command: [ACL, DRYRUN, dbuser, COPY, k1, k2, DB, "01"], expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, dbuser, COPY, k1, k2, DB, 2, DB], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dryrun.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dryrun}

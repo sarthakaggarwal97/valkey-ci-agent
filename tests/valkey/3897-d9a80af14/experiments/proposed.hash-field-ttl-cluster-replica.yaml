@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.hash-field-ttl-cluster-replica
+deployment:
+  modes: [standalone]
+metadata:
+  description: Volatile-field hashes in cluster mode, where the tracking kvstore index
+    comes from the key's slot, replicated by full sync; the replica's RDB load re-tracks
+    and propagated HDEL/DEL untracks, and the new asserts must not fire on either
+    node
+components:
+- use: valkey.action.commands
+  id: repl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 30
+    commands:
+    - {command: [HSET, "{t}h1", f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HEXPIRE, "{t}h1", 1000, FIELDS, 2, f1, f2], expect: {equals: [1,
+          1]}}
+    - {command: [HSETEX, "{t}h2", EX, 1000, FIELDS, 1, a, b], expect: {equals: 1}}
+    - {command: [HSET, "{t}h3", a, b], expect: {equals: 1}}
+    - {command: [CLUSTER, REPLICATE, <node.0.id>], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 60, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [READONLY], node: 1, expect: {equals: OK}}
+    - {command: [HGET, "{t}h1", f1], node: 1, wait_s: 30, expect: {equals: v1}}
+    - {command: [HPTTL, "{t}h1", FIELDS, 2, f1, f2], node: 1, compare: skip}
+    - {command: [RENAME, "{t}h2", "{t}h4"], expect: {equals: OK}}
+    - {command: [COPY, "{t}h1", "{t}h3", REPLACE], expect: {equals: 1}}
+    - {command: [DEL, "{t}h4"], expect: {equals: 1}}
+    - {command: [HPEXPIRE, "{t}h1", 50, FIELDS, 2, f1, f2], expect: {equals: [1, 1]}}
+    - {command: [EXISTS, "{t}h1"], wait_s: 30, expect: {equals: 0}}
+    - {command: [EXISTS, "{t}h1"], node: 1, wait_s: 30, expect: {equals: 0}}
+    - {command: [HPEXPIRE, "{t}h3", 50, FIELDS, 2, f1, f2], expect: {equals: [1, 1]}}
+    - {command: [EXISTS, "{t}h3"], wait_s: 30, expect: {equals: 0}}
+    - {command: [EXISTS, "{t}h3"], node: 1, wait_s: 30, expect: {equals: 0}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [repl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: repl}

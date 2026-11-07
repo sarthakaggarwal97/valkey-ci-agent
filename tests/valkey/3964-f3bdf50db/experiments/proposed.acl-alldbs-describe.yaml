@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.acl-alldbs-describe
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL LIST omits the implicit alldbs rule but keeps db=/resetdbs tokens,
+    on the root and on secondary selectors; ACL GETUSER still reports alldbs
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: describe
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [ACL, LIST], expect_difference: true, expect: {equals: ["user default\
+            \ on nopass ~* &* +@all"]}}
+    - {command: [ACL, SETUSER, u-all, on, nopass, "-@all", "+get", "~*", "&*", alldbs],
+      expect: {equals: OK}}
+    - {command: [ACL, LIST], expect_difference: true, expect: {equals: ["user default\
+            \ on nopass ~* &* +@all", "user u-all on nopass ~* &* -@all +get"]}}
+    - {command: [ACL, SETUSER, u-all, "db=0,1"], expect: {equals: OK}}
+    - {command: [ACL, LIST], expect_difference: true, expect: {equals: ["user default\
+            \ on nopass ~* &* +@all", "user u-all on nopass ~* &* db=0,1 -@all +get"]}}
+    - {command: [ACL, SETUSER, u-all, resetdbs], expect: {equals: OK}}
+    - {command: [ACL, LIST], expect_difference: true, expect: {equals: ["user default\
+            \ on nopass ~* &* +@all", "user u-all on nopass ~* &* resetdbs -@all +get"]}}
+    - {command: [ACL, SETUSER, u-all, alldbs], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, u-sel, on, nopass, "~k1", "+get", "(~k2 +set db=3)"],
+      expect: {equals: OK}}
+    - {command: [ACL, LIST], expect_difference: true, expect: {equals: ["user default\
+            \ on nopass ~* &* +@all", "user u-all on nopass ~* &* -@all +get", "user\
+            \ u-sel on nopass ~k1 resetchannels -@all +get (~k2 resetchannels db=3\
+            \ -@all +set)"]}}
+    - {command: [ACL, GETUSER, u-all]}
+    - {command: [ACL, GETUSER, u-sel]}
+    - {command: [ACL, WHOAMI], expect: {equals: default}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [describe.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: describe}

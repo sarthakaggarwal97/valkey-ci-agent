@@ -1,0 +1,48 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "12061032d0099c4033f29db0123a1c6d6de4888d",
+  "parent": "c15ecf1dd83cd045fc3538e81df4ae91ab0ff11c",
+  "pr": 3801,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Validate every DB clause in COPY against ACL db= permissions (#3801)",
+  "date": "2026-06-02",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 19,
+    "executed": 18,
+    "percent": 94,
+    "uncovered": [
+      "src/db.c:3096"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 1.8653,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-0828a84d0b0f",
+      "build": "unstable",
+      "seed": 7201,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0828a84d0b0f",
+      "build": "unstable",
+      "seed": 7202,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0828a84d0b0f",
+      "build": "unstable",
+      "seed": 7203,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

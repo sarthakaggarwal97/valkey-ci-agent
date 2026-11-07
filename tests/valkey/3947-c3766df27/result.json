@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c3766df270376e6397c4a68a9abc04f1facec8ad",
+  "parent": "948aaf8b42066600ba86454c89514605a2b1cb06",
+  "pr": 3947,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Align THP advice in createLatencyReport with checkTHPEnabled (#3947)",
+  "date": "2026-06-10",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.1531,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewords the human-readable THP advice string inside createLatencyReport (LATENCY DOCTOR output); no logic, reply structure, data path, or config behaviour changes. The message is also emitted only when the kernel has allocated anonymous huge pages to the process, an environment condition the fuzzer's throwaway servers cannot reliably trigger, and comparing free-form advisory prose across builds would flag only the intended wording difference. This is effectively a documentation change and needs no scenario."
+}

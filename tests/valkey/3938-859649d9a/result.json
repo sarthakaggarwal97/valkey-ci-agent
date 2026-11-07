@@ -1,0 +1,62 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "859649d9abc29459acdec292c8a012249f76715a",
+  "parent": "d0ffbabb002214b6103c2031fcdc805b142b5085",
+  "pr": 3938,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix IO-Threads redesign cleanup perf regression from #3544 (#3938)",
+  "date": "2026-06-09",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 4,
+  "recall": false,
+  "coverage": {
+    "lines": 60,
+    "executed": 51,
+    "percent": 85,
+    "uncovered": [
+      "src/io_threads.c:321",
+      "src/networking.c:6536",
+      "src/networking.c:6543",
+      "src/queues.c:27",
+      "src/queues.c:56",
+      "src/queues.c:124",
+      "src/queues.c:134",
+      "src/queues.c:147",
+      "src/queues.c:284"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 4.5692,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-3ffea29c4fd4",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-0eac266ef18f",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-766e60c35048",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-7b0bd097458d",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'data' returned ERROR: cannot read the dataset within 120s: ConnectionError: Connection closed by server."
+    }
+  ]
+}

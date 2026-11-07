@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.zipmap-length-overflow
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE of a zipmap DUMP payload whose value-length plus free byte
+    overflows 32-bit is rejected by the fixed integrity check
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zipmap
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, "1"], expect: {equals: OK}}
+    - {command: [RESTORE, key, "0", !!binary "CQwBA2Zvb/7/////Af8LAAAAAAAAAAAA"],
+      expect_difference: true, expect: {error: "Bad data format"}}
+    - {command: [EXISTS, key], expect_difference: true, expect: {equals: 0}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [zipmap.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zipmap}

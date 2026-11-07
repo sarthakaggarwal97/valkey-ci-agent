@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.command-info-subcommands-resp3-type
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND INFO's empty subcommands field is an Array, not a Set, in RESP3
+    (fix of the type violation in addReplyCommandSubCommands)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 3}
+components:
+- use: valkey.action.commands
+  id: cmdinfo
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, INFO, ping], expect: {exists: true}}
+    - command: [EVAL, "server.setresp(3) local r = server.call('COMMAND','INFO','ping')\
+          \ local sub = r[1][10] if type(sub) == 'table' and sub.set ~= nil then return\
+          \ 'set' end if type(sub) == 'table' and sub.map ~= nil then return 'map'\
+          \ end return 'array'", 0]
+      expect_difference: true
+      expect: {equals: array}
+    - command: [EVAL, "server.setresp(3) local r = server.call('COMMAND','INFO','config|get')\
+          \ local sub = r[1][10] if type(sub) == 'table' and sub.set ~= nil then return\
+          \ 'set' end return 'array'", 0]
+      expect_difference: true
+      expect: {equals: array}
+    - command: [EVAL, "server.setresp(2) local r = server.call('COMMAND','INFO','ping')\
+          \ local sub = r[1][10] if type(sub) == 'table' and sub.set ~= nil then return\
+          \ 'set' end return 'array'", 0]
+      expect: {equals: array}
+    - command: [EVAL, "server.setresp(3) local r = server.call('COMMAND','INFO','config')\
+          \ local sub = r[1][10] if type(sub) == 'table' and sub.set ~= nil then return\
+          \ 'set' end return 'array'", 0]
+      expect: {equals: array}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cmdinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cmdinfo}

@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7abe49a6ce6933434410022be8459cfd01cfc2bc",
+  "parent": "0ff817e8cc7f3c1980ee3c7b9245d13241e388fc",
+  "pr": 3806,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add ALL_DBS flag to CLUSTER FLUSHSLOT for database-level ACL (#3806)",
+  "date": "2026-05-31",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.9974,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-a0e87451ef28",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'flushslot' returned ERROR: expectations both builds violate alike, so they are not about the change: 23 (CLUSTER FLUSHSLOT 12182 on connection p)"
+    },
+    {
+      "scenario": "ai-9c2b7cd07009",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'flushslot' returned ERROR: expectations both builds violate alike, so they are not about the change: 23 (CLUSTER FLUSHSLOT 12182 on connection p)"
+    }
+  ],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

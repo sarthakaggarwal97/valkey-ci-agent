@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f7b236dfe2fa18c396679006897c28417ef23959",
+  "parent": "2013e029c3c644bbb059384e1136b6f237a6279f",
+  "pr": 3937,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix typo option name in repl-ping-replica-period comment in valkey.conf (#3937)",
+  "date": "2026-06-08",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.1981,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only a comment line in valkey.conf, correcting the spelling of the repl-ping-replica-period option name in documentation text. No code path, config parsing, default value, or runtime behaviour changes, so there is nothing a scenario could exercise or compare."
+}

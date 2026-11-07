@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d7384b9192363f463c6e7204e2f15ed5f55c0a36",
+  "parent": "3cfaf5777bb41fd3b4c9dabed2a96a95a92d2583",
+  "pr": 3848,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix cluster AUX-field control-character and delimiter injection (#3848)",
+  "date": "2026-06-03",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 4,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 13.0658,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

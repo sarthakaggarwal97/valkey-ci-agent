@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.copy-acl-dryrun
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL DRYRUN of COPY reflects the same per-DB-clause validation as live
+    execution
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dryrunseq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [ACL, SETUSER, duser, on, nopass, "+@all", "~*", "db=0,1"], expect: {
+        equals: OK}}
+    - {command: [ACL, DRYRUN, duser, COPY, k1, k2, DB, "1"], expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, duser, COPY, k1, k2, REPLACE, DB, "2"], expect_difference: true,
+      expect: {contains: "database"}}
+    - {command: [ACL, DRYRUN, duser, COPY, k1, k2, DB, "1", DB, "2"], expect_difference: true,
+      expect: {contains: "database"}}
+    - {command: [ACL, DRYRUN, duser, COPY, k1, k2, DB, "2"], expect: {contains: "database"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dryrunseq}

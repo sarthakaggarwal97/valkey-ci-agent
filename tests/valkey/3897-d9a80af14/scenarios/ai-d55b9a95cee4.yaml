@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f7b236dfe2fa..d9a80af14ac3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d55b9a95cee4
+seed: 38973
+experiment:
+  id: proposed.hash-field-ttl-replica-resync
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    lazyfree-lazy-expire: 'yes'
+    lazyfree-lazy-server-del: 'yes'

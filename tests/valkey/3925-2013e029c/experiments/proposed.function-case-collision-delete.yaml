@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.function-case-collision-delete
+deployment:
+  modes: [standalone]
+metadata:
+  description: FUNCTION LOAD with case-only function name collision is rejected; the
+    following FUNCTION DELETE does not crash the server
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: funcs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [FUNCTION, LOAD, "#!lua name=casecollision\nserver.register_function('myfunc',\
+          \ function() return 1 end)\nserver.register_function('MYFUNC', function()\
+          \ return 2 end)"], expect_difference: true, expect: {error: "already exists\
+          \ in the library"}}
+    - {command: [FUNCTION, DELETE, casecollision], expect_difference: true, expect: {
+        error: "not found"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: funcs}

@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c3766df27037..e1bc58c72f62.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-346442105afc
+seed: 7100
+experiment:
+  id: proposed.vset-ht-bucket-size-one-expiry
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
+  server_config:
+    hash-max-listpack-entries: 0
+    active-expire-effort: 4
+    hz: 100

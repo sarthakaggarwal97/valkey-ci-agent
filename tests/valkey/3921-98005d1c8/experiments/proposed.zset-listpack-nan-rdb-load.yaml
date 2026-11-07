@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.zset-listpack-nan-rdb-load
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE of a listpack/ziplist zset holding a NAN score is rejected
+    (was accepted, later crashed on skiplist conversion)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: restore
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, "1"], expect: {equals: OK}}
+    - {command: [RESTORE, _nan_zset_lp, "0", !!binary "ERkZAAAABACCbTEDg25hbgSCbTIDgzIuNQT/UADFXMYMff+1Ug=="],
+      expect_difference: true, expect: {error: "Bad data format"}}
+    - {command: [RESTORE, _nan_zset_zl, "0", !!binary "DB0dAAAAFwAAAAQAAAJtMQQDbmFuBQJtMgQDMi41/wsAAAAAAAAAAAA="],
+      expect_difference: true, expect: {error: "Bad data format"}}
+    - {command: [EXISTS, _nan_zset_lp], expect_difference: true, expect: {equals: 0}}
+    - {command: [EXISTS, _nan_zset_zl], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [restore.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore}

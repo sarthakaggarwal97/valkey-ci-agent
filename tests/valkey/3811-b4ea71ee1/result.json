@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b4ea71ee19c1e8af3177c7df3bce229e35359aba",
+  "parent": "ce8d17759e3f528029261b81a65cebe94b56883a",
+  "pr": 3811,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix off_t to int truncation in bio repl transfer size reporting (#3811)",
+  "date": "2026-06-12",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.6366,
+  "findings": [],
+  "recorded": []
+}

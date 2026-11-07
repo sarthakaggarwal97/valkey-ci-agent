@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d0ffbabb0022..859649d9abc2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d8553e28f6f0
+seed: 104
+experiment:
+  id: valkey.replication-partial-resync
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7300
+  server_config:
+    io-threads: '8'

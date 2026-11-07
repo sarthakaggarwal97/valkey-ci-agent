@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f7b236dfe2fa..d9a80af14ac3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-82f1e597ef37
+seed: 38971
+experiment:
+  id: proposed.hash-field-ttl-tracking
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

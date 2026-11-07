@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 63dc7484bbd3..98005d1c8ca5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d7e3e37436ba
+seed: 7101
+experiment:
+  id: proposed.zset-listpack-nan-rdb-load
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

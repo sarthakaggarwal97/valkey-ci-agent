@@ -1,0 +1,20 @@
+extends: [valkey.liveness]
+id: proposed.command-info-subcommands-cli-type
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli -3 shows COMMAND INFO's empty subcommands field as (empty
+    array), not (empty set)
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, -3, --no-raw, COMMAND, INFO, ping], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "(empty array)"}}}
+    - {tool: valkey-cli, args: [-p, $port, -2, --no-raw, COMMAND, INFO, ping], expect: {
+        exit: {equals: 0}, stdout: {contains: "(empty array)"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "69d3f50c8bea67b402730c45732e11098dc916a5",
+  "parent": "98005d1c8ca56d5887d81ed4256dfc10ebc09912",
+  "pr": 3945,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Exit with error when getRDB ftruncate fails (#3945)",
+  "date": "2026-06-11",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2708,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters valkey-cli's exit status (exit 1 instead of a silent exit 0) when ftruncate() fails while stripping the EOF marker from an RDB downloaded via the diskless-sync path in getRDB(). On the normal success path both builds are byte-for-byte identical. No installed fuzzer component can make ftruncate() fail on valkey-cli's own output file: it is a freshly-created regular file in the tool's writable working directory, shrunk to an always-valid in-range size, and the disk/deny-writes/partition faults apply to the deployment's servers (and need root), not to the valkey.action.tool"
+}

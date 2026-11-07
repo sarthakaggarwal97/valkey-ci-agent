@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f7b236dfe2fa..d9a80af14ac3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-36e42ce1bec8
+seed: 38972
+experiment:
+  id: proposed.hash-field-ttl-cluster-replica
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

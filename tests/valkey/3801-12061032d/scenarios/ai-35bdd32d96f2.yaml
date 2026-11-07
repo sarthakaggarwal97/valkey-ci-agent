@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c15ecf1dd83c..12061032d009.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-35bdd32d96f2
+seed: 7101
+experiment:
+  id: proposed.copy-acl-db-bypass
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100
+  replicas_per_primary: 0
