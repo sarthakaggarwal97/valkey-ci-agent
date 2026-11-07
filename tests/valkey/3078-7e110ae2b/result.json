@@ -1,0 +1,39 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7e110ae2b6c87b3d9092d039b30edfd8330f48fa",
+  "parent": "c21689ab4d2d80802b8c78a2338dfed3444a0f35",
+  "pr": 3078,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Support TLS authentication using SAN URI (#3078)",
+  "date": "2026-03-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 9,
+    "executed": 5,
+    "percent": 55,
+    "uncovered": [
+      "src/networking.c:1779",
+      "src/networking.c:1780",
+      "src/networking.c:1781",
+      "src/networking.c:1784"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 9.8839,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-247873ca3623",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0d713a4edf5cab11e5edded2c089d1c09b1ed256",
+  "parent": "61f990f1550c6c69ad92ae3166d513bdccec0770",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix for [CVE-2025-67733] RESP Protocol Injectiton via Lua error_reply",
+  "date": "2026-02-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 5,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/networking.c:980",
+      "src/networking.c:981",
+      "src/networking.c:982",
+      "src/networking.c:983",
+      "src/networking.c:984"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 4.6515,
+  "findings": [],
+  "recorded": []
+}

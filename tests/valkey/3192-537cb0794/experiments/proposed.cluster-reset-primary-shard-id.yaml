@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.cluster-reset-primary-shard-id
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER RESET SOFT on a primary that was never a replica now generates
+    a new shard ID, persisted in nodes.conf across a restart; hard reset still renames
+    node and shard without breaking the shards dict
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reset
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 1
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, MYSHARDID], expect: {equals: "<node.0.shard-id>"}}
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [CLUSTER, RESET, SOFT], expect: {error: "containing keys"}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [CLUSTER, RESET, SOFT], expect: {equals: OK}}
+    - {command: [CLUSTER, MYSHARDID], expect_difference: true, expect: {not_equals: "<node.0.shard-id>"}}
+    - {command: [CLUSTER, SHARDS], compare: skip}
+    - {command: [CLUSTER, ADDSLOTSRANGE, 0, 16383], expect: {equals: OK}}
+    - {restart: true}
+    - {command: [CLUSTER, MYSHARDID], expect_difference: true, expect: {not_equals: "<node.0.shard-id>"}}
+    - {command: [CLUSTER, RESET, HARD], expect: {equals: OK}}
+    - {command: [CLUSTER, MYID], compare: skip}
+    - {command: [CLUSTER, MYSHARDID], compare: skip, expect: {not_equals: "<node.0.shard-id>"}}
+    - {command: [CLUSTER, SHARDS], compare: skip}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reset.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reset}

@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 537cb07942f1..501b3153f26e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ebff858ab4d5
+seed: 404
+experiment:
+  id: proposed.primary-killed-reloads-expired-hash-fields
+  inputs:
+    signal: SIGKILL
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7300
+  server_config:
+    enable-debug-command: 'yes'

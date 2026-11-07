@@ -1,0 +1,72 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "537cb07942f1e4233e9e8a60a5015a6b3dee6e2d",
+  "parent": "2b0a1c3669caea0f63443880ee692854a7a55f8a",
+  "pr": 3192,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Logging fix or improvement around new shard ID generation (#3192)",
+  "date": "2026-02-24",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 12,
+    "executed": 11,
+    "percent": 91,
+    "uncovered": [
+      "src/cluster_legacy.c:7912"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 9.0493,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 5 (CLUSTER MYSHARDID) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":\"fd4e55b8f88fb05e48461f165a1fb20b7e3c7299\"}, not {\"reply\":\"6",
+      "scenario": "ai-326001896786",
+      "seed": 31921,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #3192",
+      "fingerprint": "c12d195550c72fa42ed7",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/98"
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 16 (CLUSTER MYSHARDID) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":\"3490fc42a59166175b48dd239a538f854accd9c5\"}, not {\"reply\":\"",
+      "scenario": "ai-0d5a286068dd",
+      "seed": 31922,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #3192",
+      "fingerprint": "c12d195550c72fa42ed7",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/98"
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 16 (CLUSTER MYSHARDID) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":\"6ebe7fc73ac151584f0922466df10cc2fde5dec8\"}, not {\"reply\":\"",
+      "scenario": "ai-18a8c955c6f6",
+      "seed": 31923,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #3192",
+      "fingerprint": "c12d195550c72fa42ed7",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/98"
+    }
+  ],
+  "recorded": []
+}

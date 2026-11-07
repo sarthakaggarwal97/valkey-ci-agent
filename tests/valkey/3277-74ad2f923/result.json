@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "74ad2f923218773bf3a4b0fd4d2aa9114474e490",
+  "parent": "834dc83516c4bcec551e0b034b7d2958e2d6bc91",
+  "pr": 3277,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Suppress valgrind for BIO jobs (#3277)",
+  "date": "2026-02-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2648,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is Valgrind test-tooling only: it removes the current_job field that existed solely to keep in-flight BIO jobs reachable for memcheck after thread cancellation, factors the identical zmalloc call into a noinline allocBioJob wrapper so its frame can be matched, and adds a matching suppression to src/valgrind.sup. The allocated size, job contents, submission, processing and freeing of BIO jobs are byte-for-byte the same as before, so there is no observable behaviour change in replies, persistence, replication or memory handling for a fuzzer scenario to reach; the suppression file only"
+}

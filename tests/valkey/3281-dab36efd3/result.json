@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dab36efd33e5b2bbc4dfc780c5fa2cc77b7a0483",
+  "parent": "74ad2f923218773bf3a4b0fd4d2aa9114474e490",
+  "pr": 3281,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix use zfree in cli --eval path  (#3281)",
+  "date": "2026-03-01",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.9139,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: killed by signal 6",
+      "scenario": "ai-3ef2c85ba1fe",
+      "seed": 1741,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3281",
+      "fingerprint": "3c9b6d82c5da2b04c973",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

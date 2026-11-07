@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.negative-mbulk-reqtype-crash
+deployment:
+  modes: [standalone]
+metadata:
+  description: A zero/negative multibulk header followed in the same buffer by an
+    inline command must not leave reqtype stale and crash the parser
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {raw: "\r\nPING\r\n", connection: emptyline, expect: {equals: PONG}}
+    - {raw: "*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n", connection: pipe, expect: {
+        equals: PONG}}
+    - {raw: "*0\r\nPING\r\n", connection: zerohdr, expect_difference: true, expect: {
+        equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

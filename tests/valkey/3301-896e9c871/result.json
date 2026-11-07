@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "896e9c871e5af4ca94851bfddb4fb88e83421dc5",
+  "parent": "7e110ae2b6c87b3d9092d039b30edfd8330f48fa",
+  "pr": 3301,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix compatibility issue for death test with Valgrind (#3301)",
+  "date": "2026-03-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2241,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only the C++ unit-test infrastructure: an example death test in src/unit/example_tests.cpp now uses serverAssert(false) instead of a raw SEGV, and src/unit/main.cpp sets GoogleTest's death_test_style to 'threadsafe' when running under Valgrind. These files are part of the gtest unit-test binary, not valkey-server or any shipped tool, so no runtime behaviour, command reply, replication, persistence or cluster path changes. There is nothing for a fuzzer scenario against real servers to exercise."
+}

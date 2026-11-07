@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3a1e5d5ce9a45eeb6aaaba710f9bf191c9b16a27",
+  "parent": "994d87a0f255f5a261b78c3f792eb7ac81a1ecbe",
+  "pr": 3072,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Lazy loading of RDMA libs in CLI/Benchmark when building as module (#3072)",
+  "date": "2026-02-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2514,
+  "findings": [],
+  "recorded": [],
+  "reason": "Build-system-only change: it adds USE_DLOPEN_RDMA/ENABLE_DLOPEN_RDMA flags and drops RDMA_LIBS from the valkey-cli/valkey-benchmark link line when BUILD_RDMA=module, so the RDMA client library is dlopen'd lazily instead of being a hard link dependency. No source file changes; server commands, replication, persistence and tool behaviour are identical. The only path affected is startup/linking of the tools in an RDMA-module build using the RDMA transport, which requires RDMA libraries and hardware that the fuzzer's local throwaway environment does not have, so no scenario can reach it."
+}

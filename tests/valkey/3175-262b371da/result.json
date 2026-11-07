@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "262b371da0d2454130dd487db34b388f50697c02",
+  "parent": "501b3153f26e4d8e5f9764d04abed624e2e655cf",
+  "pr": 3175,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Abort and swap the tables if ht1 is very full during the hashtable shrink rehashing (#3175)",
+  "date": "2026-02-24",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 33,
+    "executed": 31,
+    "percent": 93,
+    "uncovered": [
+      "src/hashtable.c:1512",
+      "src/hashtable.c:1516"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 2.2185,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-c93c409a421a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'shrink-abort' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (ZSCORE z m0), 3 (ZSCORE z m1), 4 (ZSCORE z m2), 5 (ZSCORE z m3), 6 (ZSCORE z m4), 7 (ZSCORE z m5), 8 (ZSCORE z m6), 9 (ZSCORE z m"
+    },
+    {
+      "scenario": "ai-48b873e639d8",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported"
+    }
+  ]
+}

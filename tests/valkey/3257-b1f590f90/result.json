@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b1f590f90586565a23fdfa1feb2b3b2375c63bc7",
+  "parent": "323ed0354070bf456ee83e973154243444c90c4b",
+  "pr": 3257,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix TSAN compatibility for module loading (#3257)",
+  "date": "2026-03-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.1991,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a sanitizer-compatibility build fix with no behaviour change on regular builds: it defines VALKEY_THREAD_SANITIZER and uses it only to (a) exclude RTLD_DEEPBIND from dlopen in moduleLoad when compiling under TSAN, mirroring the existing ASAN exclusion, and (b) mark the string2ll ifunc resolver no_sanitize(\"thread\") so TSAN skips instrumenting pre-init code. On non-TSAN builds the macro is undefined and the attribute has no effect, so module loading flags and string2ll behaviour are identical to the parent; nothing a fuzzer scenario runs against normal binaries can reach or distin"
+}

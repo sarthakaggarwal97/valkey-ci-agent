@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "323ed0354070bf456ee83e973154243444c90c4b",
+  "parent": "661c62f7a972c0080a3667262471d00e026ce2dd",
+  "pr": 3278,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "rename functions - prefix should be zset not zsl (#3278)",
+  "date": "2026-03-02",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3067,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames two internal functions (zslParseLexRange -> zsetParseLexRange, zslFreeLexRange -> zsetFreeLexRange) and updates their declarations, call sites and comments. Every call site is updated identically with the same arguments and control flow; no command behavior, reply, data layout, replication or persistence path changes. A pure refactor with no behavior change needs no scenario."
+}

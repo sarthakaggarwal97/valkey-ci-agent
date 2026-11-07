@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 501b3153f26e..262b371da0d2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5445dd324ed6
+seed: 31751
+experiment:
+  id: proposed.hashtable-shrink-abort
+  inputs:
+    resp: 2
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

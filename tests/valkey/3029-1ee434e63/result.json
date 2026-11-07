@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1ee434e63e46aeb337ede4b5e91e6336f2067d77",
+  "parent": "262b371da0d2454130dd487db34b388f50697c02",
+  "pr": 3029,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Bugfix for GIL deadlock while unloading script engine, reenable memory test in crash report (#3029)",
+  "date": "2026-02-24",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6553,
+  "findings": [],
+  "recorded": [],
+  "reason": "Both changes sit on paths the fuzzer cannot reach or observe. The GIL deadlock fix in scriptingEngineManagerUnregister is only invoked by VM_UnregisterScriptingEngine (unloading a module that registered a custom scripting engine while lazy-free jobs drain); this requires MODULE LOAD/UNLOAD of a custom engine module, which no installed component provides and valkey.action.commands refuses, so no experiment or compared sequence can build the condition. Re-enabling doFastMemoryTest() only adds diagnostic logging inside printCrashReport() on an already-crashing process (gated on HAVE_PROC_MAPS and"
+}

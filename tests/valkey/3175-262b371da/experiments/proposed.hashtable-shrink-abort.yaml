@@ -1,0 +1,269 @@
+extends: [valkey.liveness]
+id: proposed.hashtable-shrink-abort
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Deterministically drive the new shrink-rehash abort (abortShrinkIfNeeded/swapTables)
+    on zset, hash and set hashtables and compare every reply with the parent build.
+    Each round grows a collection to 60 entries (capacity 112), deletes all but one
+    so a shrink rehash to a 7-slot ht1 starts, freezes incremental rehash steps with
+    DEBUG DICT-RESIZING 0, then inserts 36 entries: insert 35 pushes ht1 past MAX_FILL_PERCENT_HARD
+    (7*500/100=35), so the candidate swaps the tables and restarts rehashing as an
+    expand while the parent keeps chaining into the tiny ht1. Rehash is then unfrozen
+    and reads/removals verify no entry was lost or duplicated by the swap.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: shrink-abort
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    server_config:
+      enable-debug-command: "yes"
+      zset-max-listpack-entries: 0
+      hash-max-listpack-entries: 0
+      set-max-listpack-entries: 0
+      set-max-intset-entries: 0
+    commands:
+    - {command: [DEBUG, HASHTABLE-CAN-ABORT-SHRINK, 1], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [ZADD, z, 0, m0, 1, m1, 2, m2, 3, m3, 4, m4, 5, m5, 6, m6, 7, m7,
+        8, m8, 9, m9, 10, m10, 11, m11, 12, m12, 13, m13, 14, m14, 15, m15, 16, m16,
+        17, m17, 18, m18, 19, m19, 20, m20, 21, m21, 22, m22, 23, m23, 24, m24, 25,
+        m25, 26, m26, 27, m27, 28, m28, 29, m29, 30, m30, 31, m31, 32, m32, 33, m33,
+        34, m34, 35, m35, 36, m36, 37, m37, 38, m38, 39, m39, 40, m40, 41, m41, 42,
+        m42, 43, m43, 44, m44, 45, m45, 46, m46, 47, m47, 48, m48, 49, m49, 50, m50,
+        51, m51, 52, m52, 53, m53, 54, m54, 55, m55, 56, m56, 57, m57, 58, m58, 59,
+        m59], expect: {equals: 60}}
+    - {command: [ZSCORE, z, m0], expect: {equals: "0"}}
+    - {command: [ZSCORE, z, m1], expect: {equals: "1"}}
+    - {command: [ZSCORE, z, m2], expect: {equals: "2"}}
+    - {command: [ZSCORE, z, m3], expect: {equals: "3"}}
+    - {command: [ZSCORE, z, m4], expect: {equals: "4"}}
+    - {command: [ZSCORE, z, m5], expect: {equals: "5"}}
+    - {command: [ZSCORE, z, m6], expect: {equals: "6"}}
+    - {command: [ZSCORE, z, m7], expect: {equals: "7"}}
+    - {command: [ZSCORE, z, m8], expect: {equals: "8"}}
+    - {command: [ZSCORE, z, m9], expect: {equals: "9"}}
+    - {command: [ZCARD, z], expect: {equals: 60}}
+    - {command: [ZREMRANGEBYRANK, z, 1, -1], expect: {equals: 59}}
+    - {command: [ZCARD, z], expect: {equals: 1}}
+    - {command: [DEBUG, DICT-RESIZING, 0], expect: {equals: OK}}
+    - {command: [ZADD, z, 100, n0], expect: {equals: 1}}
+    - {command: [ZADD, z, 101, n1], expect: {equals: 1}}
+    - {command: [ZADD, z, 102, n2], expect: {equals: 1}}
+    - {command: [ZADD, z, 103, n3], expect: {equals: 1}}
+    - {command: [ZADD, z, 104, n4], expect: {equals: 1}}
+    - {command: [ZADD, z, 105, n5], expect: {equals: 1}}
+    - {command: [ZADD, z, 106, n6], expect: {equals: 1}}
+    - {command: [ZADD, z, 107, n7], expect: {equals: 1}}
+    - {command: [ZADD, z, 108, n8], expect: {equals: 1}}
+    - {command: [ZADD, z, 109, n9], expect: {equals: 1}}
+    - {command: [ZADD, z, 110, n10], expect: {equals: 1}}
+    - {command: [ZADD, z, 111, n11], expect: {equals: 1}}
+    - {command: [ZADD, z, 112, n12], expect: {equals: 1}}
+    - {command: [ZADD, z, 113, n13], expect: {equals: 1}}
+    - {command: [ZADD, z, 114, n14], expect: {equals: 1}}
+    - {command: [ZADD, z, 115, n15], expect: {equals: 1}}
+    - {command: [ZADD, z, 116, n16], expect: {equals: 1}}
+    - {command: [ZADD, z, 117, n17], expect: {equals: 1}}
+    - {command: [ZADD, z, 118, n18], expect: {equals: 1}}
+    - {command: [ZADD, z, 119, n19], expect: {equals: 1}}
+    - {command: [ZADD, z, 120, n20], expect: {equals: 1}}
+    - {command: [ZADD, z, 121, n21], expect: {equals: 1}}
+    - {command: [ZADD, z, 122, n22], expect: {equals: 1}}
+    - {command: [ZADD, z, 123, n23], expect: {equals: 1}}
+    - {command: [ZADD, z, 124, n24], expect: {equals: 1}}
+    - {command: [ZADD, z, 125, n25], expect: {equals: 1}}
+    - {command: [ZADD, z, 126, n26], expect: {equals: 1}}
+    - {command: [ZADD, z, 127, n27], expect: {equals: 1}}
+    - {command: [ZADD, z, 128, n28], expect: {equals: 1}}
+    - {command: [ZADD, z, 129, n29], expect: {equals: 1}}
+    - {command: [ZADD, z, 130, n30], expect: {equals: 1}}
+    - {command: [ZADD, z, 131, n31], expect: {equals: 1}}
+    - {command: [ZADD, z, 132, n32], expect: {equals: 1}}
+    - {command: [ZADD, z, 133, n33], expect: {equals: 1}}
+    - {command: [ZADD, z, 134, n34], expect: {equals: 1}}
+    - {command: [ZADD, z, 135, n35], expect: {equals: 1}}
+    - {command: [ZCARD, z], expect: {equals: 37}}
+    - {command: [DEBUG, HTSTATS-KEY, z, full], compare: skip}
+    - {command: [DEBUG, DICT-RESIZING, 1], expect: {equals: OK}}
+    - {command: [ZSCORE, z, n0], expect: {equals: "100"}}
+    - {command: [ZSCORE, z, n1], expect: {equals: "101"}}
+    - {command: [ZSCORE, z, n2], expect: {equals: "102"}}
+    - {command: [ZSCORE, z, n3], expect: {equals: "103"}}
+    - {command: [ZSCORE, z, n4], expect: {equals: "104"}}
+    - {command: [ZSCORE, z, n5], expect: {equals: "105"}}
+    - {command: [ZSCORE, z, n6], expect: {equals: "106"}}
+    - {command: [ZSCORE, z, n7], expect: {equals: "107"}}
+    - {command: [ZSCORE, z, n8], expect: {equals: "108"}}
+    - {command: [ZSCORE, z, n9], expect: {equals: "109"}}
+    - {command: [ZREM, z, m0], expect: {equals: 1}}
+    - {command: [ZCARD, z], expect: {equals: 36}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES], expect: {exists: true}}
+    - {command: [DEBUG, HASHTABLE-CAN-ABORT-SHRINK, 0], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [HSET, h, f0, v0, f1, v1, f2, v2, f3, v3, f4, v4, f5, v5, f6, v6,
+        f7, v7, f8, v8, f9, v9, f10, v10, f11, v11, f12, v12, f13, v13, f14, v14,
+        f15, v15, f16, v16, f17, v17, f18, v18, f19, v19, f20, v20, f21, v21, f22,
+        v22, f23, v23, f24, v24, f25, v25, f26, v26, f27, v27, f28, v28, f29, v29,
+        f30, v30, f31, v31, f32, v32, f33, v33, f34, v34, f35, v35, f36, v36, f37,
+        v37, f38, v38, f39, v39, f40, v40, f41, v41, f42, v42, f43, v43, f44, v44,
+        f45, v45, f46, v46, f47, v47, f48, v48, f49, v49, f50, v50, f51, v51, f52,
+        v52, f53, v53, f54, v54, f55, v55, f56, v56, f57, v57, f58, v58, f59, v59],
+      expect: {equals: 60}}
+    - {command: [HGET, h, f0], expect: {equals: v0}}
+    - {command: [HGET, h, f1], expect: {equals: v1}}
+    - {command: [HGET, h, f2], expect: {equals: v2}}
+    - {command: [HGET, h, f3], expect: {equals: v3}}
+    - {command: [HGET, h, f4], expect: {equals: v4}}
+    - {command: [HGET, h, f5], expect: {equals: v5}}
+    - {command: [HGET, h, f6], expect: {equals: v6}}
+    - {command: [HGET, h, f7], expect: {equals: v7}}
+    - {command: [HGET, h, f8], expect: {equals: v8}}
+    - {command: [HGET, h, f9], expect: {equals: v9}}
+    - {command: [HDEL, h, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13,
+        f14, f15, f16, f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28,
+        f29, f30, f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41, f42, f43,
+        f44, f45, f46, f47, f48, f49, f50, f51, f52, f53, f54, f55, f56, f57, f58,
+        f59], expect: {equals: 59}}
+    - {command: [HLEN, h], expect: {equals: 1}}
+    - {command: [DEBUG, DICT-RESIZING, 0], expect: {equals: OK}}
+    - {command: [HSET, h, g0, w], expect: {equals: 1}}
+    - {command: [HSET, h, g1, w], expect: {equals: 1}}
+    - {command: [HSET, h, g2, w], expect: {equals: 1}}
+    - {command: [HSET, h, g3, w], expect: {equals: 1}}
+    - {command: [HSET, h, g4, w], expect: {equals: 1}}
+    - {command: [HSET, h, g5, w], expect: {equals: 1}}
+    - {command: [HSET, h, g6, w], expect: {equals: 1}}
+    - {command: [HSET, h, g7, w], expect: {equals: 1}}
+    - {command: [HSET, h, g8, w], expect: {equals: 1}}
+    - {command: [HSET, h, g9, w], expect: {equals: 1}}
+    - {command: [HSET, h, g10, w], expect: {equals: 1}}
+    - {command: [HSET, h, g11, w], expect: {equals: 1}}
+    - {command: [HSET, h, g12, w], expect: {equals: 1}}
+    - {command: [HSET, h, g13, w], expect: {equals: 1}}
+    - {command: [HSET, h, g14, w], expect: {equals: 1}}
+    - {command: [HSET, h, g15, w], expect: {equals: 1}}
+    - {command: [HSET, h, g16, w], expect: {equals: 1}}
+    - {command: [HSET, h, g17, w], expect: {equals: 1}}
+    - {command: [HSET, h, g18, w], expect: {equals: 1}}
+    - {command: [HSET, h, g19, w], expect: {equals: 1}}
+    - {command: [HSET, h, g20, w], expect: {equals: 1}}
+    - {command: [HSET, h, g21, w], expect: {equals: 1}}
+    - {command: [HSET, h, g22, w], expect: {equals: 1}}
+    - {command: [HSET, h, g23, w], expect: {equals: 1}}
+    - {command: [HSET, h, g24, w], expect: {equals: 1}}
+    - {command: [HSET, h, g25, w], expect: {equals: 1}}
+    - {command: [HSET, h, g26, w], expect: {equals: 1}}
+    - {command: [HSET, h, g27, w], expect: {equals: 1}}
+    - {command: [HSET, h, g28, w], expect: {equals: 1}}
+    - {command: [HSET, h, g29, w], expect: {equals: 1}}
+    - {command: [HSET, h, g30, w], expect: {equals: 1}}
+    - {command: [HSET, h, g31, w], expect: {equals: 1}}
+    - {command: [HSET, h, g32, w], expect: {equals: 1}}
+    - {command: [HSET, h, g33, w], expect: {equals: 1}}
+    - {command: [HSET, h, g34, w], expect: {equals: 1}}
+    - {command: [HSET, h, g35, w], expect: {equals: 1}}
+    - {command: [HLEN, h], expect: {equals: 37}}
+    - {command: [DEBUG, DICT-RESIZING, 1], expect: {equals: OK}}
+    - {command: [HGET, h, g0], expect: {equals: w}}
+    - {command: [HGET, h, g5], expect: {equals: w}}
+    - {command: [HGET, h, g10], expect: {equals: w}}
+    - {command: [HGET, h, g15], expect: {equals: w}}
+    - {command: [HGET, h, g20], expect: {equals: w}}
+    - {command: [HGET, h, g25], expect: {equals: w}}
+    - {command: [HGET, h, g30], expect: {equals: w}}
+    - {command: [HGET, h, g35], expect: {equals: w}}
+    - {command: [HGET, h, f0], expect: {equals: v0}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HLEN, h], expect: {equals: 37}}
+    - {command: [DEBUG, HASHTABLE-CAN-ABORT-SHRINK, 1], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [SADD, s, e0, e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13,
+        e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25, e26, e27, e28,
+        e29, e30, e31, e32, e33, e34, e35, e36, e37, e38, e39, e40, e41, e42, e43,
+        e44, e45, e46, e47, e48, e49, e50, e51, e52, e53, e54, e55, e56, e57, e58,
+        e59], expect: {equals: 60}}
+    - {command: [SISMEMBER, s, e0], expect: {equals: 1}}
+    - {command: [SISMEMBER, s, e1], expect: {equals: 1}}
+    - {command: [SISMEMBER, s, e2], expect: {equals: 1}}
+    - {command: [SISMEMBER, s, e3], expect: {equals: 1}}
+    - {command: [SISMEMBER, s, e4], expect: {equals: 1}}
+    - {command: [SISMEMBER, s, e5], expect: {equals: 1}}
+    - {command: [SISMEMBER, s, e6], expect: {equals: 1}}
+    - {command: [SISMEMBER, s, e7], expect: {equals: 1}}
+    - {command: [SISMEMBER, s, e8], expect: {equals: 1}}
+    - {command: [SISMEMBER, s, e9], expect: {equals: 1}}
+    - {command: [SREM, s, e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13,
+        e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25, e26, e27, e28,
+        e29, e30, e31, e32, e33, e34, e35, e36, e37, e38, e39, e40, e41, e42, e43,
+        e44, e45, e46, e47, e48, e49, e50, e51, e52, e53, e54, e55, e56, e57, e58,
+        e59], expect: {equals: 59}}
+    - {command: [SCARD, s], expect: {equals: 1}}
+    - {command: [DEBUG, DICT-RESIZING, 0], expect: {equals: OK}}
+    - {command: [SADD, s, q0], expect: {equals: 1}}
+    - {command: [SADD, s, q1], expect: {equals: 1}}
+    - {command: [SADD, s, q2], expect: {equals: 1}}
+    - {command: [SADD, s, q3], expect: {equals: 1}}
+    - {command: [SADD, s, q4], expect: {equals: 1}}
+    - {command: [SADD, s, q5], expect: {equals: 1}}
+    - {command: [SADD, s, q6], expect: {equals: 1}}
+    - {command: [SADD, s, q7], expect: {equals: 1}}
+    - {command: [SADD, s, q8], expect: {equals: 1}}
+    - {command: [SADD, s, q9], expect: {equals: 1}}
+    - {command: [SADD, s, q10], expect: {equals: 1}}
+    - {command: [SADD, s, q11], expect: {equals: 1}}
+    - {command: [SADD, s, q12], expect: {equals: 1}}
+    - {command: [SADD, s, q13], expect: {equals: 1}}
+    - {command: [SADD, s, q14], expect: {equals: 1}}
+    - {command: [SADD, s, q15], expect: {equals: 1}}
+    - {command: [SADD, s, q16], expect: {equals: 1}}
+    - {command: [SADD, s, q17], expect: {equals: 1}}
+    - {command: [SADD, s, q18], expect: {equals: 1}}
+    - {command: [SADD, s, q19], expect: {equals: 1}}
+    - {command: [SADD, s, q20], expect: {equals: 1}}
+    - {command: [SADD, s, q21], expect: {equals: 1}}
+    - {command: [SADD, s, q22], expect: {equals: 1}}
+    - {command: [SADD, s, q23], expect: {equals: 1}}
+    - {command: [SADD, s, q24], expect: {equals: 1}}
+    - {command: [SADD, s, q25], expect: {equals: 1}}
+    - {command: [SADD, s, q26], expect: {equals: 1}}
+    - {command: [SADD, s, q27], expect: {equals: 1}}
+    - {command: [SADD, s, q28], expect: {equals: 1}}
+    - {command: [SADD, s, q29], expect: {equals: 1}}
+    - {command: [SADD, s, q30], expect: {equals: 1}}
+    - {command: [SADD, s, q31], expect: {equals: 1}}
+    - {command: [SADD, s, q32], expect: {equals: 1}}
+    - {command: [SADD, s, q33], expect: {equals: 1}}
+    - {command: [SADD, s, q34], expect: {equals: 1}}
+    - {command: [SADD, s, q35], expect: {equals: 1}}
+    - {command: [DEBUG, DICT-RESIZING, 1], expect: {equals: OK}}
+    - {command: [SADD, s, x0], expect: {equals: 1}}
+    - {command: [SREM, s, x0], expect: {equals: 1}}
+    - {command: [SADD, s, x1], expect: {equals: 1}}
+    - {command: [SREM, s, x1], expect: {equals: 1}}
+    - {command: [SADD, s, x2], expect: {equals: 1}}
+    - {command: [SREM, s, x2], expect: {equals: 1}}
+    - {command: [SADD, s, x3], expect: {equals: 1}}
+    - {command: [SREM, s, x3], expect: {equals: 1}}
+    - {command: [SADD, s, x4], expect: {equals: 1}}
+    - {command: [SREM, s, x4], expect: {equals: 1}}
+    - {command: [SCARD, s], expect: {equals: 37}}
+    - {command: [SMEMBERS, s], compare: unordered, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shrink-abort.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shrink-abort}

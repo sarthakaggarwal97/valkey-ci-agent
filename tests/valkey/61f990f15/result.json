@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "61f990f1550c6c69ad92ae3166d513bdccec0770",
+  "parent": "1f473323c8b6d51dcf5955125ba723437f2a8287",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix for [CVE-2026-21863] Remote DoS with malformed Valkey Cluster bus message",
+  "date": "2026-02-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.8367,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix hardens the cluster-bus binary parser (clusterIsValidPacket for PING/PONG/MEET) against malformed packets whose gossip count or EXT_DATA extension length exceeds the packet's totlen, causing an out-of-bounds read (CVE-2026-21863). The new rejection branches are reached only by delivering crafted raw bytes to a node's cluster-bus port (base_port+10000), exactly as the added packet.tcl does with a hand-built clusterMsg. No installed component can do this: all components speak RESP on the client port/socket, none opens a raw socket to the cluster-bus port or lets a connection target it, a"
+}

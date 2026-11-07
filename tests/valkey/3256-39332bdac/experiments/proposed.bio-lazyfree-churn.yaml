@@ -1,0 +1,77 @@
+extends: [valkey.base]
+id: proposed.bio-lazyfree-churn
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Hammer the BIO lazy-free worker with UNLINK of large objects and FLUSHDB
+    ASYNC under AOF-everysec writes, kill a node mid-run, and churn again after it
+    resyncs
+inputs:
+  properties:
+    target: {type: string, enum: [primary, replica], default: replica}
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+components:
+- use: valkey.action.commands
+  id: churn
+  depends_on: [writes]
+  config:
+    timeout_s: 60
+    commands:
+    - {command: [RPUSH, biglist, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x,
+        x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x,
+        x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x,
+        x], expect: {min: 65}}
+    - {command: [UNLINK, biglist], expect: {equals: 1}}
+    - {command: [SADD, bigset, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12,
+        s13, s14, s15, s16, s17, s18, s19, s20, s21, s22, s23, s24, s25, s26, s27,
+        s28, s29, s30, s31, s32, s33, s34, s35, s36, s37, s38, s39, s40, s41, s42,
+        s43, s44, s45, s46, s47, s48, s49, s50, s51, s52, s53, s54, s55, s56, s57,
+        s58, s59, s60, s61, s62, s63, s64, s65, s66, s67, s68], expect: {min: 65}}
+    - {command: [UNLINK, bigset], expect: {equals: 1}}
+    - {command: [RPUSH, biglist, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x,
+        x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x,
+        x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x,
+        x], expect: {min: 65}}
+    - {command: [UNLINK, biglist], expect: {equals: 1}}
+    - {command: [SELECT, "5"], expect: {equals: OK}}
+    - {command: [MSET, f1, v, f2, v, f3, v], expect: {equals: OK}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: OK}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+- use: valkey.fault.process-signal
+  id: kill-node
+  config:
+    when_event: warm-up.completed
+    instance: {$ref: inputs.target}
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, churn, kill-node]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 4}
+- use: valkey.action.commands
+  id: churn-after
+  depends_on: [settle]
+  config:
+    timeout_s: 60
+    commands:
+    - {command: [RPUSH, biglist2, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x,
+        x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x,
+        x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x,
+        x, x], expect: {min: 65}}
+    - {command: [UNLINK, biglist2], expect: {equals: 1}}
+    - {command: [SELECT, "5"], expect: {equals: OK}}
+    - {command: [MSET, g1, v, g2, v], expect: {equals: OK}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: OK}}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-node}
+- {evidence_id: valkey.command.sequence, source: churn}
+- {evidence_id: valkey.command.sequence, source: churn-after}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c471364910e7412b4a46f6cd6cc7d5c70c1dc13b",
+  "parent": "4dee322edeb9c96029d89cfaf1600abad2afead0",
+  "pr": 3255,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix type of now parameter in rdbLoadObject() to use mstime_t instead of time_t (#3255)",
+  "date": "2026-02-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4604,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only widens the type of rdbLoadObject()'s 'now' parameter from time_t to mstime_t. On the 64-bit Linux platform the fuzzer runs on, time_t and mstime_t are both 64-bit signed integers, so the parent build's implicit conversion of the mstime() value loses nothing and the single use of the parameter (the hash-field expiry comparison at rdb.c:2250) evaluates identically on both builds; the other callers pass a constant 0. The fix changes behavior only on platforms with a 32-bit time_t, which cannot be exercised in this environment, so no scenario can reach a behavioral difference and n"
+}

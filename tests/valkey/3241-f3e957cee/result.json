@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f3e957cee88ab4f76bc537a8148040152d944e62",
+  "parent": "9c8130d414f32c43471bd277baecbdfcff2866a4",
+  "pr": 3241,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Introduce GoogleTest for Valkey unit testing (#3241)",
+  "date": "2026-02-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6996,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change migrates Valkey's unit tests from the in-house framework to GoogleTest: CI workflow updates, CMake/Makefile plumbing, vendored gtest-parallel, and test_*.c -> test_*.cpp rewrites. The only runtime-source edits are mechanical C++-compatibility changes with no behavioral effect: testOnly* wrappers exposing static internals (dead code in a server run), parameter renames of C++ keywords (template, class), #ifndef __cplusplus guards in headers, a semantically identical SDS_HDR_VAR cast, and a reorder of the stream struct's fields (in-memory layout only, never serialized by offset). No co"
+}

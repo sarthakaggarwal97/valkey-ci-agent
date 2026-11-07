@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-07T17:37+00:00.
+Updated 2026-11-07T17:49+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 697 | 1810 | #3303 (2026-03-05) | 316 | 99.6 |
+| valkey-io/valkey | 729 | 1778 | #3197 (2026-02-23) | 348 | 104.1 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
 | valkey-io/valkey-search | 458 | 211 | #405 (2025-10-14) | 177 | 65.4 |
@@ -13,28 +13,28 @@ Updated 2026-11-07T17:37+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-07T16:44:05+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42388835142): 20 merge(s) tested, 7 without a code change.
+[2026-11-07T17:49:04+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42392779916): 20 merge(s) tested, 12 without a code change.
 
-- [valkey-io/valkey#3421](https://github.com/valkey-io/valkey/pull/3421) ([tests](tests/valkey/3421-2cde059da/)): Handle EAGAIN in clusterWriteHandler (#3421): 0 of 6 test(s) reached the change, coverage 0%, 1 skipped (required capability 'save-behavior-support' is unsupported)
-- [valkey-io/valkey#3352](https://github.com/valkey-io/valkey/pull/3352) ([tests](tests/valkey/3352-26522fc52/)): Add availability-zone to the reply schema for CLUSTER SHARDS/SLOTS (#3352): 2 of 2 test(s) reached the change; [check, appeared after #3352](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/95); check, introduced and since fixed (recorded); [check, appeared after #3352](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/96); check, introduced and since fixed (recorded)
-- [valkey-io/valkey#1546](https://github.com/valkey-io/valkey/pull/1546) ([tests](tests/valkey/1546-7403b423c/)): Add unsigned 64-bit numeric config in module API (#1546): 2 of 2 test(s) reached the change, coverage 97%
-- [valkey-io/valkey#3329](https://github.com/valkey-io/valkey/pull/3329) ([tests](tests/valkey/3329-641472050/)): Replace fast_float (C++) with ffc.h (#3329): 3 of 3 test(s) reached the change, coverage 94%
-- [valkey-io/valkey#3344](https://github.com/valkey-io/valkey/pull/3344) ([tests](tests/valkey/3344-8051de740/)): Inherit LDFLAGS for TLS and RDMA modules (#3344): declined: The change is build-only: it adds $(LDFLAGS) to the Makefile link lines for the optional valkey-tls.so and valkey-rdma.so modules so externally supplied linker flags are inherited when building those shared objects. No source code, command behavior, reply, replication, persistence, or conf
-- [valkey-io/valkey#3279](https://github.com/valkey-io/valkey/pull/3279) ([tests](tests/valkey/3279-a7d919a5b/)): Optimize SET key value EX/PX/EXAT ttl to reduce calls of rewriteClientCommandVector (#3279): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3342](https://github.com/valkey-io/valkey/pull/3342) ([tests](tests/valkey/3342-6b384e9a5/)): Fix ZDIFF algorithm 2 memory leak on early exit (#3342): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3156](https://github.com/valkey-io/valkey/pull/3156) ([tests](tests/valkey/3156-374150355/)): Add availability-zone field support to CLUSTER SHARDS / CLUSTER SLOTS (#3156): 3 of 4 test(s) reached the change, coverage 87%; crash, intended by #3156: a panic the change adds (recorded)
-- [valkey-io/valkey#3121](https://github.com/valkey-io/valkey/pull/3121) ([tests](tests/valkey/3121-ba5854636/)): New MSETEX command allows to set an expiration time with MSET (#3121): 2 of 5 test(s) reached the change, coverage 83%; check, introduced and since fixed (recorded)
-- [valkey-io/valkey#3331](https://github.com/valkey-io/valkey/pull/3331) ([tests](tests/valkey/3331-1e2ca5ec5/)): fix alignment different between c and c++ in gtest (#3331): declined: The change rewrites _Atomic declarations in server.h from the qualifier form (_Atomic T) to the type-specifier form (_Atomic(T)), which are semantically identical in C, so the server binary's behavior is unchanged. The substantive edit is to src/unit/wrappers.h, a header used only when com
-- [valkey-io/valkey#3258](https://github.com/valkey-io/valkey/pull/3258) ([tests](tests/valkey/3258-6fee1aa61/)): Use dictGetSomeKeys instead of dictGetRandomKey for gossip node population (#3258): 0 of 3 test(s) reached the change, coverage 87%, 1 skipped (required capability 'save-behavior-support' is unsupported)
-- [valkey-io/valkey#2746](https://github.com/valkey-io/valkey/pull/2746) ([tests](tests/valkey/2746-0ff55de21/)): Make the number of healthy nodes in gossip section configurable (#2746): 1 of 4 test(s) reached the change, coverage 100%, 1 skipped (required capability 'save-behavior-support' is unsupported)
-- [valkey-io/valkey#3252](https://github.com/valkey-io/valkey/pull/3252) ([tests](tests/valkey/3252-3d8a1b55e/)): Replace long long timestamp references with more specific mstime_t/ustime_t (#3252): declined: The change only renames types: every edit replaces a `long long` declaration, cast or sizeof with `mstime_t` or `ustime_t`, both of which are `typedef long long` (src/util.h:71-72). Type sizes, alignment, signedness, arithmetic, the entry expiry memory layout and all format strings are unc
-- [valkey-io/valkey#3325](https://github.com/valkey-io/valkey/pull/3325) ([tests](tests/valkey/3325-9f0106755/)): Changed LUA module dependency (#3325): declined: The change touches only build files (deps/lua/src/Makefile, src/Makefile, src/modules/lua/Makefile): it reorders the engine_lua.so build dependency so the Lua module is built as a prerequisite of valkey-server rather than after it, filters the module out of the server link inputs, and adds
-- [valkey-io/valkey#2934](https://github.com/valkey-io/valkey/pull/2934) ([tests](tests/valkey/2934-8a4a7b25d/)): CLUSTERSCAN Command (#2934): 4 of 6 test(s) reached the change
-- [valkey-io/valkey#3280](https://github.com/valkey-io/valkey/pull/3280) ([tests](tests/valkey/3280-fc217fca2/)): Update cluster config file when NOFAILOVER changes (#3280): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3314](https://github.com/valkey-io/valkey/pull/3314) ([tests](tests/valkey/3314-8c397ea16/)): Fixed point arithmetic for x86 TSC (#3314): 1 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3311](https://github.com/valkey-io/valkey/pull/3311) ([tests](tests/valkey/3311-acb0b9b73/)): Recommend passwordless users for mTLS certificate-based authentication (#3311): declined: The change modifies only a Tcl test file (tests/unit/tls.tcl) and documentation comments in valkey.conf, rewording the tls-auth-clients-user docs to recommend passwordless users for mTLS certificate authentication. No server code, command behavior, config semantics, or protocol handling ch
-- [valkey-io/valkey#3307](https://github.com/valkey-io/valkey/pull/3307) ([tests](tests/valkey/3307-cb9e7c94e/)): Let script continue if busy-reply-threshold is zero (#3307): 3 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3316](https://github.com/valkey-io/valkey/pull/3316) ([tests](tests/valkey/3316-dcfb9269f/)): Fix zset to operate defrag scan lexicographically (#3316): 0 of 2 test(s) reached the change, coverage 100%; crash, fixed by #3316 (recorded)
+- [valkey-io/valkey#3303](https://github.com/valkey-io/valkey/pull/3303) ([tests](tests/valkey/3303-a731e45fd/)): Fix compatibility for OpenSSL < 3.0 and Almalinux version mismatch for daily tests (#3303): declined: The change is a compile-time compatibility fix plus CI config. The daily.yml edits only correct container names in the CI matrix. In src/tls.c, the preprocessor guards select SSL_get_peer_certificate()+X509_free() only when OPENSSL_VERSION_NUMBER < 0x30000000L; against OpenSSL 3.0+ (what t
+- [valkey-io/valkey#3301](https://github.com/valkey-io/valkey/pull/3301) ([tests](tests/valkey/3301-896e9c871/)): Fix compatibility issue for death test with Valgrind (#3301): declined: The change modifies only the C++ unit-test infrastructure: an example death test in src/unit/example_tests.cpp now uses serverAssert(false) instead of a raw SEGV, and src/unit/main.cpp sets GoogleTest's death_test_style to 'threadsafe' when running under Valgrind. These files are part of t
+- [valkey-io/valkey#3078](https://github.com/valkey-io/valkey/pull/3078) ([tests](tests/valkey/3078-7e110ae2b/)): Support TLS authentication using SAN URI (#3078): 2 of 4 test(s) reached the change, coverage 55%
+- [valkey-io/valkey#3257](https://github.com/valkey-io/valkey/pull/3257) ([tests](tests/valkey/3257-b1f590f90/)): Fix TSAN compatibility for module loading (#3257): declined: The change is a sanitizer-compatibility build fix with no behaviour change on regular builds: it defines VALKEY_THREAD_SANITIZER and uses it only to (a) exclude RTLD_DEEPBIND from dlopen in moduleLoad when compiling under TSAN, mirroring the existing ASAN exclusion, and (b) mark the string
+- [valkey-io/valkey#3278](https://github.com/valkey-io/valkey/pull/3278) ([tests](tests/valkey/3278-323ed0354/)): rename functions - prefix should be zset not zsl (#3278): declined: The change only renames two internal functions (zslParseLexRange -> zsetParseLexRange, zslFreeLexRange -> zsetFreeLexRange) and updates their declarations, call sites and comments. Every call site is updated identically with the same arguments and control flow; no command behavior, reply, 
+- [valkey-io/valkey#2924](https://github.com/valkey-io/valkey/pull/2924) ([tests](tests/valkey/2924-293791100/)): Show replica dual-channel replication buffer memory in INFO MEMORY and MEMORY STATS (#2924): 2 of 5 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3283](https://github.com/valkey-io/valkey/pull/3283) ([tests](tests/valkey/3283-ec5e8fa2b/)): Fix use-after-free in generateSyncSlotsEstablishCommand (#3283): 0 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3281](https://github.com/valkey-io/valkey/pull/3281) ([tests](tests/valkey/3281-dab36efd3/)): Fix use zfree in cli --eval path  (#3281): 1 of 1 test(s) reached the change, coverage 100%; crash, fixed by #3281 (recorded)
+- [valkey-io/valkey#3277](https://github.com/valkey-io/valkey/pull/3277) ([tests](tests/valkey/3277-74ad2f923/)): Suppress valgrind for BIO jobs (#3277): declined: The change is Valgrind test-tooling only: it removes the current_job field that existed solely to keep in-flight BIO jobs reachable for memcheck after thread cancellation, factors the identical zmalloc call into a noinline allocBioJob wrapper so its frame can be matched, and adds a matchin
+- [valkey-io/valkey#3241](https://github.com/valkey-io/valkey/pull/3241) ([tests](tests/valkey/3241-f3e957cee/)): Introduce GoogleTest for Valkey unit testing (#3241): declined: The change migrates Valkey's unit tests from the in-house framework to GoogleTest: CI workflow updates, CMake/Makefile plumbing, vendored gtest-parallel, and test_*.c -> test_*.cpp rewrites. The only runtime-source edits are mechanical C++-compatibility changes with no behavioral effect: t
+- [valkey-io/valkey#3072](https://github.com/valkey-io/valkey/pull/3072) ([tests](tests/valkey/3072-3a1e5d5ce/)): Lazy loading of RDMA libs in CLI/Benchmark when building as module (#3072): declined: Build-system-only change: it adds USE_DLOPEN_RDMA/ENABLE_DLOPEN_RDMA flags and drops RDMA_LIBS from the valkey-cli/valkey-benchmark link line when BUILD_RDMA=module, so the RDMA client library is dlopen'd lazily instead of being a hard link dependency. No source file changes; server comman
+- [valkey-io/valkey#3256](https://github.com/valkey-io/valkey/pull/3256) ([tests](tests/valkey/3256-39332bdac/)): Replace mutexQueuePeek with current_job field for BIO memcheck fix (#3256): 0 of 10 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3255](https://github.com/valkey-io/valkey/pull/3255) ([tests](tests/valkey/3255-c47136491/)): Fix type of now parameter in rdbLoadObject() to use mstime_t instead of time_t (#3255): declined: The change only widens the type of rdbLoadObject()'s 'now' parameter from time_t to mstime_t. On the 64-bit Linux platform the fuzzer runs on, time_t and mstime_t are both 64-bit signed integers, so the parent build's implicit conversion of the mstime() value loses nothing and the single u
+- [valkey-io/valkey#3029](https://github.com/valkey-io/valkey/pull/3029) ([tests](tests/valkey/3029-1ee434e63/)): Bugfix for GIL deadlock while unloading script engine, reenable memory test in crash report (#3029): declined: Both changes sit on paths the fuzzer cannot reach or observe. The GIL deadlock fix in scriptingEngineManagerUnregister is only invoked by VM_UnregisterScriptingEngine (unloading a module that registered a custom scripting engine while lazy-free jobs drain); this requires MODULE LOAD/UNLOAD
+- [valkey-io/valkey#3175](https://github.com/valkey-io/valkey/pull/3175) ([tests](tests/valkey/3175-262b371da/)): Abort and swap the tables if ht1 is very full during the hashtable shrink rehashing (#3175): 3 of 4 test(s) reached the change, coverage 93%, 1 skipped (required capability 'build' is unsupported)
+- [valkey-io/valkey#3091](https://github.com/valkey-io/valkey/pull/3091) ([tests](tests/valkey/3091-501b3153f/)): Skip expired hash fields when loading non-preamble RDB on primary (#3091): 3 of 5 test(s) reached the change, coverage 88%
+- [valkey-io/valkey#3192](https://github.com/valkey-io/valkey/pull/3192) ([tests](tests/valkey/3192-537cb0794/)): Logging fix or improvement around new shard ID generation (#3192): 3 of 3 test(s) reached the change, coverage 91%; [check, introduced by #3192](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/98)
+- [valkey-io/valkey@2565d445adf3](https://github.com/valkey-io/valkey/commit/2565d445adf3f256e7f124cc2387d9e15dd3bc39) ([tests](tests/valkey/2565d445a/)): Reset request type after handling empty requests: 2 of 5 test(s) reached the change, coverage 100%; crash, fixed by 2565d445adf3 (recorded)
+- [valkey-io/valkey@0d713a4edf5c](https://github.com/valkey-io/valkey/commit/0d713a4edf5cab11e5edded2c089d1c09b1ed256) ([tests](tests/valkey/0d713a4ed/)): Fix for [CVE-2025-67733] RESP Protocol Injectiton via Lua error_reply: 0 of 2 test(s) reached the change, coverage 0%
+- [valkey-io/valkey@61f990f1550c](https://github.com/valkey-io/valkey/commit/61f990f1550c6c69ad92ae3166d513bdccec0770) ([tests](tests/valkey/61f990f15/)): Fix for [CVE-2026-21863] Remote DoS with malformed Valkey Cluster bus message: declined: The fix hardens the cluster-bus binary parser (clusterIsValidPacket for PING/PONG/MEET) against malformed packets whose gossip count or EXT_DATA extension length exceeds the packet's totlen, causing an out-of-bounds read (CVE-2026-21863). The new rejection branches are reached only by deli
 
 ### valkey-io/valkey-bloom
 
@@ -73,11 +73,11 @@ Updated 2026-11-07T17:37+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 457 of 670 tested (68%)
-- Changed-line coverage: median 100% of 319 merge(s) measured, 20 under 50%
-- Recall: 134 parents flagged of 198 fix merges
-- Claude: $1789.20 in the last 24 hours, $4802.46 in the last 7 days, $4802.46 in all
-- Issues filed: 49
+- Merges whose tests reached the change: 464 of 680 tested (68%)
+- Changed-line coverage: median 100% of 329 merge(s) measured, 21 under 50%
+- Recall: 136 parents flagged of 203 fix merges
+- Claude: $1853.34 in the last 24 hours, $4866.60 in the last 7 days, $4866.60 in all
+- Issues filed: 50
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -127,6 +127,7 @@ Updated 2026-11-07T17:37+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/94
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/95
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/96
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/98
 
 ## Retries
 

@@ -1,0 +1,70 @@
+extends: [valkey.base]
+id: proposed.primary-killed-reloads-expired-hash-fields
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Kill the primary under writes after saving an RDB that holds expired
+    hash fields; on restart it must skip them, feed HDELs to the backlog, resync its
+    replicas, and lose no acknowledged write outside the crash window
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+components:
+- use: valkey.action.commands
+  id: seed
+  depends_on: [writes, kill-primary]
+  config:
+    instances: primary
+    timeout_s: 15
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [HSETEX, fuzzhash, PX, 50, FIELDS, 3, f1, v1, f2, v2, f3, v3], expect: {
+        equals: 1}}
+    - {command: [HSET, fuzzhash, permanent, pv], expect: {equals: 1}}
+    - {command: [HSETEX, allgone, PX, 50, FIELDS, 2, g1, a, g2, b], expect: {equals: 1}}
+    - {command: [HTTL, fuzzhash, FIELDS, 3, f1, f2, f3], wait_s: 10, expect: {equals: [
+          -2, -2, -2]}}
+    - {command: [SAVE], expect: {equals: OK}}
+- use: valkey.fault.process-signal
+  id: kill-primary
+  config:
+    when_event: seed.completed
+    instance: primary
+    signal: {$ref: inputs.signal}
+    restart: true
+    restart_mode: immediate
+- use: valkey.action.wait-event
+  id: primary-back
+  depends_on: [seed]
+  config: {event: kill-primary.recovered, only_after: kill-primary.injected, timeout_s: 90}
+- use: valkey.action.commands
+  id: verify-primary
+  depends_on: [primary-back]
+  config:
+    instances: primary
+    timeout_s: 15
+    commands:
+    - {command: [HLEN, fuzzhash], wait_s: 10, expect: {equals: 1}}
+    - {command: [HGET, fuzzhash, permanent], expect: {equals: pv}}
+    - {command: [EXISTS, allgone], wait_s: 10, expect: {equals: 0}}
+- use: valkey.action.commands
+  id: verify-replica
+  depends_on: [verify-primary]
+  config:
+    instances: replica
+    timeout_s: 15
+    commands:
+    - {command: [HLEN, fuzzhash], wait_s: 20, expect: {equals: 1}}
+    - {command: [EXISTS, allgone], wait_s: 20, expect: {equals: 0}}
+    - {command: [HGET, fuzzhash, permanent], expect: {equals: pv}}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_s: 15
+    loss_window_faults: [kill-primary]
+required_events: [seed.completed, kill-primary.recovered]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-primary}
+- {evidence_id: valkey.command.sequence, source: verify-replica}

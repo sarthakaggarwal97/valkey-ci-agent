@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0d713a4edf5c..2565d445adf3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6998d6613169
+seed: 7101
+experiment:
+  id: proposed.negative-mbulk-reqtype-crash
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

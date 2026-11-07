@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a731e45fd3940bf6e1c61b21b840e7ed5dd499f2",
+  "parent": "d49eac9cada3b605fd6968e0d7377566ce801c67",
+  "pr": 3303,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix compatibility for OpenSSL < 3.0 and Almalinux version mismatch for daily tests (#3303)",
+  "date": "2026-03-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3279,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a compile-time compatibility fix plus CI config. The daily.yml edits only correct container names in the CI matrix. In src/tls.c, the preprocessor guards select SSL_get_peer_certificate()+X509_free() only when OPENSSL_VERSION_NUMBER < 0x30000000L; against OpenSSL 3.0+ (what the fuzzer's builds link to) the compiled code is identical to the parent, so no runtime difference is reachable. Against OpenSSL < 3.0 the parent commit does not compile at all (SSL_get0_peer_certificate was added in 3.0), so no parent-vs-change comparison or fault run can exercise the new branch. No scenario"
+}

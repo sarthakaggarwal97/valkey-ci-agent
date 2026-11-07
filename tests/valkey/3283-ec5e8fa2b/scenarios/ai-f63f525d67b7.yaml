@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey dab36efd33e5..ec5e8fa2b16a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f63f525d67b7
+seed: 7001
+experiment:
+  id: proposed.syncslots-establish-uaf
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

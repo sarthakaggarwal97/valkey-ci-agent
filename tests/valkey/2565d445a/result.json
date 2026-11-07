@@ -1,0 +1,75 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2565d445adf3f256e7f124cc2387d9e15dd3bc39",
+  "parent": "0d713a4edf5cab11e5edded2c089d1c09b1ed256",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reset request type after handling empty requests",
+  "date": "2026-02-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 3,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 5.0264,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:3572 'c->querybuf[c->qb_pos] == '*'' is not true",
+      "scenario": "ai-b0a75908c4c3",
+      "seed": 7001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by 2565d445adf3",
+      "fingerprint": "17a459ad706f82597793",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:3572 'c->querybuf[c->qb_pos] == '*'' is not true",
+      "scenario": "ai-6998d6613169",
+      "seed": 7101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by 2565d445adf3",
+      "fingerprint": "17a459ad706f82597793",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-d9ecc506e441",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1323f10fb72a",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-27a81cd79c7b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    }
+  ]
+}

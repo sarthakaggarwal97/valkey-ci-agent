@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.rdb-load-skips-expired-hash-fields
+deployment:
+  modes: [standalone]
+metadata:
+  description: A primary restarting from an RDB holding expired hash fields drops
+    them at load (and drops a hash whose fields all expired), while an AOF preamble
+    load keeps them; import-mode keeps the parent's loaded fields observable
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {import-mode: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [HSETEX, myhash, PX, 50, FIELDS, 3, f1, v1, f2, v2, f3, v3], expect: {
+        equals: 1}}
+    - {command: [HSET, myhash, permanent, pv], expect: {equals: 1}}
+    - {command: [HSETEX, allgone, PX, 50, FIELDS, 2, g1, a, g2, b], expect: {equals: 1}}
+    - {command: [SET, anchor, 1], expect: {equals: OK}}
+    - {command: [HTTL, myhash, FIELDS, 3, f1, f2, f3], wait_s: 10, expect: {equals: [
+          -2, -2, -2]}}
+    - {command: [HTTL, allgone, FIELDS, 2, g1, g2], wait_s: 10, expect: {equals: [
+          -2, -2]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HLEN, myhash], expect_difference: true, expect: {equals: 1}}
+    - {command: [HGET, myhash, permanent], expect: {equals: pv}}
+    - {command: [EXISTS, allgone], expect_difference: true, expect: {equals: 0}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 2}}
+    - {command: [HSETEX, aofhash, PX, 50, FIELDS, 2, a1, x, a2, y], expect: {equals: 1}}
+    - {command: [HSET, aofhash, keep, kv], expect: {equals: 1}}
+    - {command: [HTTL, aofhash, FIELDS, 2, a1, a2], wait_s: 10, expect: {equals: [
+          -2, -2]}}
+    - {command: [CONFIG, SET, appendonly, "yes"], expect: {equals: OK}}
+    - {command: [INFO, persistence], wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"},
+      compare: skip}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HLEN, aofhash], expect: {equals: 3}}
+    - {command: [HGET, aofhash, keep], expect: {equals: kv}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

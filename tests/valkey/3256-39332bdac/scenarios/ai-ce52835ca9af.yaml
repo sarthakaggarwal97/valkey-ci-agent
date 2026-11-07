@@ -1,0 +1,24 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c471364910e7..39332bdac5ae.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ce52835ca9af
+seed: 32
+experiment:
+  id: proposed.bio-lazyfree-churn
+  inputs:
+    target: primary
+    signal: SIGKILL
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7100
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec
+    list-max-listpack-size: 1
+    set-max-listpack-entries: 0
+    lazyfree-lazy-expire: 'yes'
+    lazyfree-lazy-user-del: 'yes'
+    lazyfree-lazy-server-del: 'yes'
+    lazyfree-lazy-user-flush: 'yes'
+    repl-diskless-load: disabled
+    dual-channel-replication-enabled: 'no'

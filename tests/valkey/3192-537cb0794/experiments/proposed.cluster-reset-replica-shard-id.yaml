@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.cluster-reset-replica-shard-id
+deployment:
+  modes: [standalone]
+metadata:
+  description: Reset a data-holding replica (forget nodes, move to new shard, promote,
+    flush now run in a new order), hard-reset it, then soft-reset the old primary,
+    which now also moves to a new shard
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    lazyfree: {type: string, enum: ["no", "yes"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: reset
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    server_config: {lazyfree-lazy-user-flush: {$ref: inputs.lazyfree}}
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, MYSHARDID], node: 0, expect: {equals: "<node.0.shard-id>"}}
+    - {command: [CLUSTER, MYSHARDID], node: 1, expect: {equals: "<node.1.shard-id>"}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, MYSHARDID], node: 1, wait_s: 30, expect: {equals: "<node.0.shard-id>"}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [SET, foo, bar], node: 0, expect: {equals: OK}}
+    - {command: [DBSIZE], node: 1, wait_s: 30, expect: {equals: 1}}
+    - {command: [CLUSTER, RESET, SOFT], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, expect: {contains: "role:master"},
+      compare: skip}
+    - {command: [DBSIZE], node: 1, wait_s: 30, expect: {equals: 0}}
+    - {command: [CLUSTER, MYSHARDID], node: 1, compare: skip, expect: {not_equals: "<node.0.shard-id>"}}
+    - {command: [CLUSTER, SHARDS], node: 1, compare: skip}
+    - {command: [CLUSTER, RESET, HARD], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, MYSHARDID], node: 1, compare: skip, expect: {not_equals: "<node.1.shard-id>"}}
+    - {command: [FLUSHALL], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, RESET, SOFT], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, MYSHARDID], node: 0, expect_difference: true, expect: {
+        not_equals: "<node.0.shard-id>"}}
+    - {command: [CLUSTER, SHARDS], node: 0, compare: skip}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reset.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reset}

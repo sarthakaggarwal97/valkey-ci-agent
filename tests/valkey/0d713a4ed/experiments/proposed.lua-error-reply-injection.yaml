@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.lua-error-reply-injection
+deployment:
+  modes: [standalone]
+metadata:
+  description: Lua error replies carrying CRLF must not inject extra RESP replies
+    into the connection's stream
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: luaerr
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [EVAL, "return redis.error_reply('boomA'..string.char(13,10)..'+INJECTEDA')",
+        0], connection: a, expect_difference: true, expect: {error: "INJECTEDA"}}
+    - {command: [PING], connection: a, expect_difference: true, expect: {equals: PONG}}
+    - {command: [EVAL, "error(redis.error_reply('boomB'..string.char(13,10)..'+INJECTEDB'))",
+        0], connection: b, expect_difference: true, expect: {error: "INJECTEDB"}}
+    - {command: [PING], connection: b, expect_difference: true, expect: {equals: PONG}}
+    - {command: [EVAL, "error('boomC'..string.char(13,10)..'+INJECTEDC')", 0], connection: c,
+      expect_difference: true, expect: {error: "INJECTEDC"}}
+    - {command: [PING], connection: c, expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: luaerr}

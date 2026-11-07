@@ -1,0 +1,31 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "501b3153f26e4d8e5f9764d04abed624e2e655cf",
+  "parent": "537cb07942f1e4233e9e8a60a5015a6b3dee6e2d",
+  "pr": 3091,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Skip expired hash fields when loading non-preamble RDB on primary (#3091)",
+  "date": "2026-02-24",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 3,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 26,
+    "executed": 23,
+    "percent": 88,
+    "uncovered": [
+      "src/cluster.c:271",
+      "src/rdb.c:3570",
+      "src/valkey-check-rdb.c:791"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 7.8977,
+  "findings": [],
+  "recorded": []
+}

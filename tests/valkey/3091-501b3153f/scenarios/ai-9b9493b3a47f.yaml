@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 537cb07942f1..501b3153f26e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9b9493b3a47f
+seed: 101
+experiment:
+  id: proposed.rdb-load-skips-expired-hash-fields
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

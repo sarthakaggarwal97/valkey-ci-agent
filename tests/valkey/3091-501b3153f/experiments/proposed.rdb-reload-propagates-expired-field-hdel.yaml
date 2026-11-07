@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.rdb-reload-propagates-expired-field-hdel
+deployment:
+  modes: [standalone]
+metadata:
+  description: A primary of a primary-replica-subreplica chain restarts from an RDB
+    with expired hash fields; the skipped fields' HDELs, fed into the backlog during
+    load, must reach both replicas, which the parent never sends
+components:
+- use: valkey.action.commands
+  id: chain
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 3
+    server_config: {import-mode: "yes"}
+    timeout_s: 20
+    commands:
+    - {node: 1, command: [REPLICAOF, <node.0.host>, <node.0.port>], expect: {equals: OK}}
+    - {node: 2, command: [REPLICAOF, <node.1.host>, <node.1.port>], expect: {equals: OK}}
+    - {node: 1, command: [INFO, replication], wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {node: 2, command: [INFO, replication], wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [HSETEX, myhash, PX, 50, FIELDS, 3, f1, v1, f2, v2, f3, v3], expect: {
+        equals: 1}}
+    - {command: [HSET, myhash, permanent, pv], expect: {equals: 1}}
+    - {command: [HSETEX, gone, PX, 50, FIELDS, 2, g1, a, g2, b], expect: {equals: 1}}
+    - {node: 1, command: [HLEN, myhash], wait_s: 10, expect: {equals: 4}}
+    - {node: 2, command: [HLEN, myhash], wait_s: 10, expect: {equals: 4}}
+    - {command: [HTTL, myhash, FIELDS, 3, f1, f2, f3], wait_s: 10, expect: {equals: [
+          -2, -2, -2]}}
+    - {command: [HTTL, gone, FIELDS, 2, g1, g2], wait_s: 10, expect: {equals: [-2,
+          -2]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, node: 0, expect: {equals: OK}}
+    - {node: 1, command: [INFO, replication], wait_s: 60, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {node: 0, command: [HLEN, myhash], expect_difference: true, expect: {equals: 1}}
+    - {node: 0, command: [EXISTS, gone], expect_difference: true, expect: {equals: 0}}
+    - {node: 1, command: [HLEN, myhash], wait_s: 10, expect_difference: true, expect: {
+        equals: 1}}
+    - {node: 1, command: [EXISTS, gone], wait_s: 10, expect_difference: true, expect: {
+        equals: 0}}
+    - {node: 2, command: [HLEN, myhash], wait_s: 10, expect_difference: true, expect: {
+        equals: 1}}
+    - {node: 2, command: [HGET, myhash, permanent], expect: {equals: pv}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [chain.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: chain}

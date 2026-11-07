@@ -1,0 +1,25 @@
+extends: [valkey.liveness]
+id: proposed.cli-eval-free
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli --eval frees its zmalloc'd argv with the matching allocator
+    and exits cleanly instead of crashing
+components:
+- use: valkey.action.tools
+  id: cli-eval
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    files:
+      s1.lua: "return 1"
+      s2.lua: "return {KEYS[1], ARGV[1]}"
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, --eval, s1.lua], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "1"}}}
+    - {tool: valkey-cli, args: [-p, $port, --eval, s2.lua, k1, ',', a1], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "k1"}}}
+    - {tool: valkey-cli, args: [-p, $port, -3, --eval, s1.lua], expect_difference: true,
+      expect: {exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-eval}

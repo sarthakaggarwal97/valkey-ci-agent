@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.tls-auth-clients-user-uri
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    tls-auth-clients-user gains the URI enum value: CONFIG SET/GET accept it on the
+    new build while the parent rejects it, the enum error message now lists URI, and
+    CONFIG REWRITE plus a restart round-trip it through the startup config parser.
+    ACL users named like SAN URIs stay ordinary users.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    get_uri_reply:
+      description: "CONFIG GET reply once URI is set: RESP2 flat pair or RESP3 map"
+      default: [tls-auth-clients-user, URI]
+    get_cn_reply:
+      description: "CONFIG GET reply once CN is set"
+      default: [tls-auth-clients-user, CN]
+components:
+- use: valkey.action.commands
+  id: uri-config
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, tls-auth-clients-user, CN], expect: {equals: OK}}
+    - {command: [CONFIG, SET, tls-auth-clients-user, "off"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, tls-auth-clients-user, bogus-field], expect_difference: true,
+      expect: {error: "argument(s) must be one of the following"}}
+    - {command: [CONFIG, SET, tls-auth-clients-user, URI], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, tls-auth-clients-user], expect_difference: true, expect: {
+        equals: {$ref: inputs.get_uri_reply}}}
+    - {command: [CONFIG, SET, tls-auth-clients-user, uri], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [ACL, SETUSER, "urn:valkey:user:first", "on", ">pw", allcommands,
+        allkeys], expect: {equals: OK}}
+    - {command: [AUTH, "urn:valkey:user:first", pw], expect: {equals: OK}}
+    - {command: [ACL, WHOAMI], expect: {equals: "urn:valkey:user:first"}}
+    - {command: [AUTH, default, ""], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, tls-auth-clients-user], expect_difference: true, expect: {
+        equals: {$ref: inputs.get_uri_reply}}}
+    - {command: [ACL, WHOAMI], expect: {equals: default}}
+    - {command: [CONFIG, SET, tls-auth-clients-user, CN], expect: {equals: OK}}
+    - {command: [CONFIG, GET, tls-auth-clients-user], expect: {equals: {$ref: inputs.get_cn_reply}}}
+    - {command: [CONFIG, SET, tls-auth-clients-user, "off"], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [uri-config.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: uri-config}
