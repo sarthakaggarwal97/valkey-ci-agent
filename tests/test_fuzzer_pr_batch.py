@@ -147,6 +147,44 @@ def test_module_repositories_are_the_module_table_and_the_batch_builds_some():
     assert not module_repository("valkey-io/valkey") and not module_repository("valkey-io/other")
 
 
+def test_valkey_search_build_carries_the_741_declaration_fix(tmp_path, monkeypatch):
+    """valkey-search #621 (9ea236a) dropped schema_manager's declaration but kept its uses, so no commit until
+    #741 (b0e8a26) restored it compiles: the recipe applies that one-line fix first, and only where it is missing."""
+    broken = "  auto status = [&]() -> absl::Status {\n    vmsdk::ArgsIterator itr{argv + 1, argc - 1};\n"
+    fixed = broken.replace("absl::Status {\n", "absl::Status {\n    auto &schema_manager = SchemaManager::Instance();\n")
+    patch = textwrap.dedent("""\
+        diff --git a/src/commands/commands.cc b/src/commands/commands.cc
+        --- a/src/commands/commands.cc
+        +++ b/src/commands/commands.cc
+        @@ -1,2 +1,3 @@
+           auto status = [&]() -> absl::Status {
+        +    auto &schema_manager = SchemaManager::Instance();
+             vmsdk::ArgsIterator itr{argv + 1, argc - 1};
+    """)
+    # A git that answers the recipe's fetch and diff of #741 without the network, and delegates the rest.
+    stub = tmp_path / "bin" / "git"
+    stub.parent.mkdir()
+    stub.write_text(f'#!/bin/bash\ncase "$1" in\nfetch) exit 0 ;;\ndiff) cat {tmp_path}/741.patch ;;\n'
+                    f'*) exec {shutil.which("git")} "$@" ;;\nesac\n')
+    stub.chmod(0o755)
+    (tmp_path / "741.patch").write_text(patch)
+    monkeypatch.setenv("PATH", f"{stub.parent}:{os.environ['PATH']}")
+
+    def build(source: str) -> str:
+        src = tmp_path / "src"
+        shutil.rmtree(src, ignore_errors=True)
+        (src / "src" / "commands").mkdir(parents=True)
+        (src / "src" / "commands" / "commands.cc").write_text(source + "        schema_manager.GetIndexSchema(\n")
+        (src / "build.sh").write_text("#!/bin/bash\nexit 0\n")
+        (src / "build.sh").chmod(0o755)
+        subprocess.run(["bash", "-euo", "pipefail", "-c", pr_batch_mod.MODULES["valkey-search"].build],
+                       cwd=src, check=True, capture_output=True, text=True)
+        return (src / "src" / "commands" / "commands.cc").read_text()
+
+    assert "auto &schema_manager" in build(broken)
+    assert build(fixed).count("auto &schema_manager") == 1  # already declared: the patch is not applied twice
+
+
 def test_batch_names_keep_a_fitting_id_and_fix_the_rest():
     ids = ["ai-0123456789ab", "spec-register:lost-write", "spec-register-lost-write", "..x..y", ":::", "s" * 120,
            "s" * 130]

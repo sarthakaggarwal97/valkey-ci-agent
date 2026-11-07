@@ -164,9 +164,18 @@ fi
 sudo dpkg -i "${deb}"
 """,
         # build.sh finds /opt/valkey-search-deps itself since August 2026; before, it took --use-system-modules.
+        # #621 (9ea236a) dropped the schema_manager declaration from QueryCommand::Execute but kept its uses, so
+        # no commit until #741 (b0e8a26) restored it compiles: that fix is applied first, as a bisect carries a
+        # build fix.
         build="""deps=/opt/valkey-search-deps
 export CMAKE_PREFIX_PATH="${deps}/lib/cmake/protobuf:${deps}/lib/cmake/absl:${deps}/lib/cmake/grpc:\
 ${deps}/lib/cmake/GTest:${deps}/lib/cmake/utf8_range:${deps}/lib/cmake/benchmark:${deps}"
+if grep -q 'schema_manager\\.' src/commands/commands.cc 2> /dev/null \\
+    && ! grep -q '&schema_manager =' src/commands/commands.cc; then
+  git fetch -q --depth 2 https://github.com/valkey-io/valkey-search.git b0e8a26b5a2b1131062875be9e26153dd315aaaf
+  git diff b0e8a26b5a2b1131062875be9e26153dd315aaaf^ b0e8a26b5a2b1131062875be9e26153dd315aaaf -- src \\
+    | git apply --whitespace=nowarn
+fi
 if grep -q -- '--use-system-modules)' build.sh; then ./build.sh --use-system-modules; else ./build.sh; fi""",
         note="For valkey-search, FT.SEARCH returns its results in no fixed order: give it `compare: unordered`. "
              "Indexing is asynchronous: after writing the documents, send FT.INFO with `wait_s` and an `expect` "
