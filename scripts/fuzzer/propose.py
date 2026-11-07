@@ -37,7 +37,7 @@ import sys
 import tempfile
 import time
 from dataclasses import asdict, dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -121,6 +121,8 @@ PARENT_ARTIFACT_BLOCK = artifacts_block(("parent",))
 _MODULE_API_FILES = ("src/module.c", "src/valkeymodule.h")
 _TEST_MODULES_DIR = "tests/modules/"
 _DIFF_PATHS_RE = re.compile(r"^diff --git a/(\S+) b/(\S+)$", re.MULTILINE)
+# A file the diff adds: it does not exist at the change's parent.
+_DIFF_NEW_FILE_RE = re.compile(r"^diff --git a/(\S+) b/\S+\r?\nnew file mode ", re.MULTILINE)
 # A module tests/modules/Makefile builds: commandfilter.so, datatype.so, ...
 _TEST_MODULE_RE = re.compile(r"\b([A-Za-z0-9_-]+\.so)\b")
 _RANGE_REF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,99}$")
@@ -498,6 +500,13 @@ def built_test_modules(valkey_dir: Path) -> list[str]:
         return []
     names = _TEST_MODULE_RE.findall(makefile.read_text(errors="replace"))
     return sorted({f"{_TEST_MODULES_DIR}{name}" for name in names})
+
+
+def added_test_modules(diff: str) -> frozenset[str]:
+    """The test modules the change itself adds (their source is a new file): the parent commit cannot build
+    them, so a run that loads one at both builds fails to acquire the parent's."""
+    return frozenset(f"{_TEST_MODULES_DIR}{PurePosixPath(path).stem}.so" for path in _DIFF_NEW_FILE_RE.findall(diff)
+                     if path.startswith(_TEST_MODULES_DIR) and path.endswith(".c"))
 
 
 def _clean_rationale(value: Any) -> str:
@@ -1179,8 +1188,10 @@ def propose(
         raise ValueError(f"{change.repo} is a module: its proposals need the pinned Valkey commit, not {valkey_sha!r}")
     valkey_ok = prepare_workspace(workdir, change, fuzzer_dir=fuzzer_dir, catalog=catalog)
     source_note = describe_sources(change, valkey_ok)
-    # A change to the module API may load one of Valkey's tests/modules, which Claude names.
-    test_modules = (built_test_modules(workdir / "valkey")
+    # A change to the module API may load one of Valkey's tests/modules, which Claude names: only one both
+    # builds have, as a module the change adds does not build at the parent (valkey #3578, #2936, #3374).
+    test_modules = ([name for name in built_test_modules(workdir / "valkey")
+                     if name not in added_test_modules(change.diff)]
                     if not is_module and valkey_ok and touches_module_api(change.diff) else [])
     change_line = f"{change.describe()}: {change.title}" if change.title else change.describe()
     candidates = workdir / "candidates"

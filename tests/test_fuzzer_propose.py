@@ -1181,6 +1181,28 @@ def test_a_module_file_tests_modules_does_not_build_loads_nothing(tmp_path, fuzz
     assert result["scenarios"] == []
 
 
+def test_a_test_module_the_change_adds_is_not_offered(tmp_path, fuzzer_dir, valkey_checkout):
+    # valkey #3578, #2936, #3374 added their test module: the parent cannot build it, so every run's
+    # environment acquisition failed and the merge errored run after run.
+    diff = MODULE_API_DIFF + "diff --git a/tests/modules/datatype.c b/tests/modules/datatype.c\nnew file mode 100644\n"
+    runner = StubRunner(_answer([{"rationale": "r", "scenario": USES_MODULE}], [{"experiment": MODULE_PROPOSED}],
+                                module_file="tests/modules/datatype.so"),
+                        _answer([], []))
+    run, result, out = _propose(runner, tmp_path, fuzzer_dir, change=_change(diff=diff))
+    assert ('"module_file" to your JSON answer, beside\n"experiments" and "scenarios" and never inside their YAML, '
+            'one of\ntests/modules/commandfilter.so, as in') in runner.prompts[0]
+    assert result["module"] is None
+    assert result["module_file_error"] == "module_file 'tests/modules/datatype.so' is not a module tests/modules builds"
+
+
+def test_added_test_modules_reads_only_new_test_module_sources():
+    diff = ("diff --git a/tests/modules/one.c b/tests/modules/one.c\nnew file mode 100644\n"
+            "diff --git a/tests/modules/old.c b/tests/modules/old.c\nindex 1..2 100644\n"
+            "diff --git a/src/new.c b/src/new.c\nnew file mode 100644\n"
+            "diff --git a/tests/modules/doc.md b/tests/modules/doc.md\nnew file mode 100644\n")
+    assert propose_mod.added_test_modules(diff) == frozenset({"tests/modules/one.so"})
+
+
 def test_a_change_off_the_module_api_is_offered_no_module(tmp_path, fuzzer_dir, valkey_checkout):
     runner = StubRunner(_answer([{"rationale": "r", "scenario": GOOD}], module_file="tests/modules/datatype.so"))
     run, result, out = _propose(runner, tmp_path, fuzzer_dir)
