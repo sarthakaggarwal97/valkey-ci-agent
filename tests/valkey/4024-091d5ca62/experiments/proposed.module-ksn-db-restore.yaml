@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.module-ksn-db-restore
+deployment:
+  modes: [standalone]
+metadata:
+  description: Client's selected DB is restored after a module keyspace notification
+    fired on another DB (MOVE/COPY), on its own and inside MULTI/EXEC
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ksn
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k0marker, v0], expect: {equals: OK}}
+    - {command: [SET, movekey, value], expect: {equals: OK}}
+    - {command: [MOVE, movekey, "10"], expect: {equals: 1}}
+    - {command: [GET, k0marker], expect_difference: true, expect: {equals: v0}}
+    - {command: [MOVE, movekey, "10"], expect_difference: true, expect: {equals: 0}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [SET, copykey, value], expect: {equals: OK}}
+    - {command: [COPY, copykey, copykey, DB, "10"], expect: {equals: 1}}
+    - {command: [GET, k0marker], expect_difference: true, expect: {equals: v0}}
+    - {command: [COPY, copykey, copykey, DB, "10"], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [SET, txkey, value], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [MOVE, txkey, "11"], expect: {equals: QUEUED}}
+    - {command: [GET, k0marker], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [1, v0]}}
+    - {command: [GET, copykey], expect_difference: true, expect: {equals: value}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [ksn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ksn}

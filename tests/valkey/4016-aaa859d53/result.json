@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "aaa859d532e3ea56aa711de84d5784a60b7fde01",
+  "parent": "9cd063ee150d6c3f91f1efa1853ba99aa1542cc8",
+  "pr": 4016,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix build warnings with OpenSSL 4.0 (#4016)",
+  "date": "2026-06-26",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.9689,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a build-warning fix in src/tls.c for OpenSSL 4.0 API deprecations. The new isCertValid logic is compiled only under OPENSSL_VERSION_NUMBER >= 0x40000000L, so on the CI build (OpenSSL < 4.0) that code is dead and behavior is identical to the parent. The getCertSubjectFieldByName rewrite is a semantics-preserving replacement of the deprecated X509_NAME_get_text_by_NID, reachable only during TLS client-certificate ACL authentication. The fuzzer cannot reach any TLS path: tls-port is a provider-owned option rejected in every server_config, no component provisions certificates or open"
+}

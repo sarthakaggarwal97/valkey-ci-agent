@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "parent": "79aff7c07f331bd4a6dea484ed0027d2c7010c59",
+  "pr": 5320,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Revert \"Make unit tests independent of the order they run in\" (#5320)",
+  "date": "2026-11-06",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3197,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a revert touching only unit-test files (src/unit/test_*.cpp), the CI workflow, and the removal of a test-only helper function in src/object.c (unitTestOnly_objectResetMetadataSize) that is never called by server code. No runtime behaviour of valkey-server or its tools changes, so no fuzzer scenario can reach or distinguish it."
+}

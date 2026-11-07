@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.memory-purge-trim
+deployment:
+  modes: [standalone]
+metadata:
+  description: MEMORY PURGE and sync FLUSHALL/FLUSHDB now also malloc_trim the libc
+    main arena; replies stay OK, the server survives purge during a BGSAVE child and
+    during an async lazyfree, and MEMORY HELP shows the new text
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    activedefrag: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: purge
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    server_config: {activedefrag: {$ref: inputs.activedefrag}}
+    timeout_s: 60
+    commands:
+    - {command: [MEMORY, HELP], expect_difference: true, expect: {exists: true}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 100000, 'key:', 512], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 100000}}
+    - {command: [FLUSHDB, SYNC], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 100000, 'key:', 512], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: "Background saving started"}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [FLUSHALL, SYNC], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [DEBUG, POPULATE, 200000, 'key:', 128], expect: {equals: OK}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: QUEUED}}
+    - {command: [FLUSHALL, SYNC], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK]}}
+    - {command: [MEMORY, PURGE, extra], expect: {error: true}}
+    - {command: [MEMORY, DOCTOR], compare: skip, expect: {exists: true}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [purge.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: purge}

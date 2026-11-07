@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ed6e9a91d7ac5b6ba519a20555d1152709a546c4",
+  "parent": "b4ea71ee19c1e8af3177c7df3bce229e35359aba",
+  "pr": 3597,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Enable multi-command parsing for replicated clients (#3597)",
+  "date": "2026-06-13",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 13,
+    "executed": 11,
+    "percent": 84,
+    "uncovered": [
+      "src/networking.c:3522",
+      "src/networking.c:3775"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 5.2931,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-d09d1b27d8ce",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-4a61f07efeee",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

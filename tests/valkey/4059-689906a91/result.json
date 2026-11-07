@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "689906a9134b8576edfa85e95738fc3428a8dcb8",
+  "parent": "aaa859d532e3ea56aa711de84d5784a60b7fde01",
+  "pr": 4059,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Cleanup redundant incrRefCount and fix new_argv alloc size around HDEL (#4059)",
+  "date": "2026-06-29",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.629,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure cleanup with no behaviour change. incrRefCount(shared.hdel) was a no-op: shared.hdel is created with OBJ_SHARED_REFCOUNT (server.c:2219) and both incrRefCount and decrRefCount return early for shared objects (object.c:116,619,644), so adding or removing the call changes nothing on either build. The new_argv allocation in hexpireGenericCommand shrinks from num_fields+3 to num_fields+2, which is exactly sufficient: the vector holds shared.hdel, the key, and at most one entry per field, and num_fields is validated to equal the real field count (t_hash.c:1912), so no write can exceed num_fiel"
+}

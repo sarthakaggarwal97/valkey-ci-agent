@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 79bca53000d0..04737931942d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4db74c12f405
+seed: 3675
+experiment:
+  id: proposed.notkey-acl-and-getkeys
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

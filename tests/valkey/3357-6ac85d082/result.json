@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6ac85d08208246f3b75c37f943cc81ed5b978859",
+  "parent": "bee30d47de7af7a167ffef862b8aef532f9b0a18",
+  "pr": 3357,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove unused dict callback parameter from functionReset and related functions (#3357)",
+  "date": "2026-06-23",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.649,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure refactor: the change removes a callback parameter that every caller except emptyData already passed as NULL. The one non-NULL caller forwarded replicationEmptyDbCallback through an incompatible function-pointer cast (the deleted TODO), and that callback ignores its argument; its only side effect (a replication keepalive newline, invoked by dictEmpty once per 65,535 entries of the functions/libraries dicts) is unreachable in any realistic run. No command replies, data, persistence, or replication protocol behavior changes, so there is nothing a compared sequence or fault scenario could obs"
+}

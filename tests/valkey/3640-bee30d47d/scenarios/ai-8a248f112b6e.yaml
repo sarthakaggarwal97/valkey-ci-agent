@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fa62dce94f62..bee30d47de7a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8a248f112b6e
+seed: 404
+experiment:
+  id: proposed.memory-purge-under-writes
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7300
+  server_config:
+    lazyfree-lazy-user-del: 'yes'

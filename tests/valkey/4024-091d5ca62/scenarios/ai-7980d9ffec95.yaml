@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 33cf4a41334e..091d5ca6221c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7980d9ffec95
+seed: 40241
+experiment:
+  id: proposed.module-ksn-db-restore
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

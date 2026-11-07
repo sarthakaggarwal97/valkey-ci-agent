@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "21f5000e7361a46edb663ab2f62502fdb13a6b39",
+  "parent": "ead3dc6f290a9af3bf2e2b77a8f6c1699bdb61eb",
+  "pr": 2648,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make commandlog-request-larger-than and commandlog-reply-larger-than become SIGNED_MEMORY_CONFIG (#2648)",
+  "date": "2026-06-24",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.68,
+  "findings": [],
+  "recorded": []
+}

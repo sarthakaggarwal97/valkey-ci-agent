@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "436dcaeee95a9f38e8326049a7175e5e2929c7f1",
+  "parent": "5ae43a4038465e881332c486a07859b1cb391528",
+  "pr": 3588,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Improve maintainability for kvstoreScan (#3588)",
+  "date": "2026-06-17",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.8527,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure maintainability refactor of kvstoreScan's cursor packing with provably identical behavior. The old mask `num_hashtables - 1` equals the new `(1 << num_hashtables_bits) - 1` because num_hashtables is always exactly 2^num_hashtables_bits (kvstore.c:302-303); the removed `num_hashtables == 1` special cases are subsumed since bits==0 yields mask 0 and zero shifts; and the reordered KVSTORE_INDEX_NOT_FOUND / range-bound checks return 0 in exactly the same cases (NOT_FOUND is -1, so the old `-1 > last_idx` branch was never taken). The only other hunks are a renamed #define used in an existing a"
+}

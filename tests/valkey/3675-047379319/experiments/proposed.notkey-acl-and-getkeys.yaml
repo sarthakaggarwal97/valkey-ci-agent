@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.notkey-acl-and-getkeys
+deployment:
+  modes: [standalone]
+metadata:
+  description: NOT_KEY routing tokens (CLUSTERSCAN cursor, shard pub/sub channels)
+    under a key-restricted ACL user, plus COMMAND GETKEYS keyless reporting, compared
+    across builds. At this commit pair the parent replies identically for all built-ins,
+    so no command is marked expect_difference; the expects guard the rewritten doesCommandHaveKeys/ACLSelectorCheckKey
+    paths against regressions (ACL key checks skipped, or real-key commands misclassified
+    as keyless).
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: notkey
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SET, "foo:1", v1], expect: {equals: OK}}
+    - {command: [SET, bar, v2], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, scanner, on, ">pw", resetkeys, "~foo:*", resetchannels,
+        "&news*", "-@all", "+clusterscan", "+get", "+ssubscribe", "+spublish"], expect: {
+        equals: OK}}
+    - {command: [COMMAND, GETKEYS, clusterscan, "0"], expect: {error: "no key arguments"}}
+    - {command: [COMMAND, GETKEYS, clusterscan, "0-{06S}-0"], expect: {error: "no\
+          \ key arguments"}}
+    - {command: [COMMAND, GETKEYSANDFLAGS, clusterscan, "0"], expect: {error: "no\
+          \ key arguments"}}
+    - {command: [COMMAND, GETKEYS, ssubscribe, news1], expect: {error: "no key arguments"}}
+    - {command: [COMMAND, GETKEYS, sunsubscribe, news1], expect: {error: "no key arguments"}}
+    - {command: [COMMAND, GETKEYS, spublish, news1, msg], expect: {error: "no key\
+          \ arguments"}}
+    - {command: [COMMAND, GETKEYSANDFLAGS, spublish, news1, msg], expect: {error: "no\
+          \ key arguments"}}
+    - {command: [COMMAND, GETKEYS, get, "foo:1"], expect: {equals: ["foo:1"]}}
+    - {command: [COMMAND, GETKEYS, sort, mylist], expect: {equals: [mylist]}}
+    - {command: [COMMAND, GETKEYS, eval, script, "1", k1], expect: {equals: [k1]}}
+    - {command: [AUTH, scanner, pw], connection: user, expect: {equals: OK}}
+    - {command: [CLUSTERSCAN, "0"], connection: user, expect: {equals: ["0-{06S}-0",
+          []]}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", COUNT, "1000"], connection: user, compare: skip,
+      expect: {error: false}}
+    - {command: [CLUSTERSCAN, "0-{6ZJ}-0"], connection: user, compare: skip, expect: {
+        error: false}}
+    - {command: [CLUSTERSCAN, notacursor], connection: user, expect: {error: "Invalid\
+          \ cursor"}}
+    - {command: [GET, "foo:1"], connection: user, expect: {equals: v1}}
+    - {command: [GET, bar], connection: user, expect: {error: "NOPERM"}}
+    - {command: [SPUBLISH, news1, hello], connection: user, expect: {equals: 0}}
+    - {command: [AUTH, scanner, pw], connection: sub, expect: {equals: OK}}
+    - {command: [SSUBSCRIBE, news1], connection: sub, expect: {error: false}}
+    - {command: [SPUBLISH, news1, hello2], connection: user, expect: {equals: 1}}
+    - {command: [SPUBLISH, private1, x], connection: user, expect: {error: "NOPERM"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [notkey.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: notkey}

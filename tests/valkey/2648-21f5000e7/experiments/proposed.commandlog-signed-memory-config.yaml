@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.commandlog-signed-memory-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: commandlog-request-larger-than and commandlog-reply-larger-than as
+    SIGNED_MEMORY_CONFIG - memory suffixes accepted, -1 still disables, thresholds
+    fire, CONFIG REWRITE and restart round-trip both forms
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cmdlog
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, commandlog-reply-larger-than, 1kb], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, commandlog-reply-larger-than], expect_difference: true,
+      expect: {contains: "1024"}}
+    - {command: [SETRANGE, big, 99999, x], expect: {equals: 100000}}
+    - {command: [GET, big]}
+    - {command: [COMMANDLOG, LEN, large-reply], expect_difference: true, expect: {
+        min: 1}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, 1kb], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SET, pad, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],
+      expect: {equals: OK}}
+    - {command: [COMMANDLOG, LEN, large-request], expect_difference: true, expect: {
+        min: 1}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, 10mb], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, commandlog-reply-larger-than, 10mb], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, notamemoryvalue], expect_difference: true,
+      expect: {error: "must be a memory value"}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, ""], expect_difference: true,
+      expect: {error: "must be a memory value"}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, "-2"], expect: {error: "between\
+          \ -1 and"}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, "9223372036854775808"],
+      expect_difference: true, expect: {error: "between -1 and"}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, commandlog-request-larger-than], expect_difference: true,
+      expect: {contains: "10485760"}}
+    - {command: [CONFIG, GET, commandlog-reply-larger-than], expect_difference: true,
+      expect: {contains: "10485760"}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, "-1"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, commandlog-reply-larger-than, "-1"], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, commandlog-request-larger-than], expect: {contains: "-1"}}
+    - {command: [CONFIG, GET, commandlog-reply-larger-than], expect: {contains: "-1"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cmdlog.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cmdlog}

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "091d5ca6221c9c79ec1471d1ec7e94759d27a9dc",
+  "parent": "33cf4a41334edaeffffce87aee48ed6c7ca6f745",
+  "pr": 4024,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Restore client's selected DB after module keyspace notification (#4024)",
+  "date": "2026-06-30",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.8524,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fa62dce94f62..bee30d47de7a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e088492a6860
+seed: 303
+experiment:
+  id: proposed.memory-purge-trim
+  inputs:
+    resp: 2
+    activedefrag: 'yes'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

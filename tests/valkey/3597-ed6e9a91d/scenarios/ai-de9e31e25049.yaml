@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b4ea71ee19c1..ed6e9a91d7ac.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-de9e31e25049
+seed: 3597
+experiment:
+  id: proposed.repl-pipeline-chain
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

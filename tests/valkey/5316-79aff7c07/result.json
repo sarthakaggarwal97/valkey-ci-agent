@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "79aff7c07f331bd4a6dea484ed0027d2c7010c59",
+  "parent": "f1505f867a9276d8654b12182d8a84fd6f220fbf",
+  "pr": 5316,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Close bgIteration MULTI when no replication work is pending (#5316)",
+  "date": "2026-11-06",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 12.6683,
+  "findings": [],
+  "recorded": []
+}

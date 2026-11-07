@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9cd063ee150d6c3f91f1efa1853ba99aa1542cc8",
+  "parent": "d38ff73aa251432a0e58c179decca5365d85b345",
+  "pr": 4058,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add logging for rejected MFSTART messages in cluster primary (#4058)",
+  "date": "2026-06-26",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 6,
+    "executed": 2,
+    "percent": 33,
+    "uncovered": [
+      "src/cluster_legacy.c:4426",
+      "src/cluster_legacy.c:4427",
+      "src/cluster_legacy.c:4430",
+      "src/cluster_legacy.c:4432"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 5.1941,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6774c09978edca5178ecb215d9c13821d10afcfb",
+  "parent": "fa239232c81f2bff2a35a3f4ff2f899dd4abc5b6",
+  "pr": 3968,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add REUSE compliance for machine-readable licensing and SBOM generation (#3968)",
+  "date": "2026-06-16",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3406,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is licensing/CI metadata only: a new REUSE compliance GitHub Actions workflow, canonical license texts under LICENSES/, REUSE.toml, COPYING reformatting, a deps/README.md edit, and SPDX-identifier fixes inside source-file comment headers. No executable code, command behavior, reply format, replication, persistence, or tool behavior changes, so there is nothing a runtime scenario could exercise."
+}

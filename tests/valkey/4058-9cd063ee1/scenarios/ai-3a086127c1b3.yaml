@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d38ff73aa251..9cd063ee150d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3a086127c1b3
+seed: 101
+experiment:
+  id: proposed.mfstart-graceful-failover
+  inputs:
+    warmup_s: 2
+    failover_timeout_s: 60
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7000

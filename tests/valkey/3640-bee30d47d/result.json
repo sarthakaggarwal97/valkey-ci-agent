@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bee30d47de7af7a167ffef862b8aef532f9b0a18",
+  "parent": "fa62dce94f62f5f83371fa36b7af40e89f3e5f56",
+  "pr": 3640,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Extend zmalloc_purge to also trim the libc main arena (#3640)",
+  "date": "2026-06-22",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 3,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 13,
+    "executed": 13,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.076,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "lost-data: node 0 came back from a restart before command 4 with DEBUG DIGEST {\"reply\":\"0000000000000000000000000000000000000000\"}, not {\"reply\":\"32a04e9b5d5afbb6cbc8a7a492ac047325b570b2\"}",
+      "scenario": "ai-3bd895a760d5",
+      "seed": 202,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #3640",
+      "fingerprint": "e26e9a874f358e64033d",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/86"
+    },
+    {
+      "rule": "check",
+      "detail": "lost-data: node 0 came back from a restart before command 3 with DEBUG DIGEST {\"reply\":\"0000000000000000000000000000000000000000\"}, not {\"reply\":\"32a04e9b5d5afbb6cbc8a7a492ac047325b570b2\"}",
+      "scenario": "ai-e088492a6860",
+      "seed": 303,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #3640, since fixed",
+      "fingerprint": "e26e9a874f358e64033d",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

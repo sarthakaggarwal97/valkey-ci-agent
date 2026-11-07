@@ -1,0 +1,74 @@
+extends: [valkey.base]
+id: proposed.forkless-fullsync-txn-close
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Kill a replica so it must full-resync via a forkless socket save, and
+    run MULTI/EXEC and Lua writes that are inlined into that resync stream; the ledger
+    verifies the replica's data
+inputs:
+  properties:
+    stable_keys: {type: integer, minimum: 100, maximum: 100000, default: 4000}
+    mutable_keys: {type: integer, minimum: 1, maximum: 10000, default: 200}
+    mutation_rate: {type: number, minimum: 1, maximum: 5000, default: 800}
+    value_size: {type: integer, minimum: 1, maximum: 65536, default: 1024}
+    restart_delay_s: {type: number, minimum: 0, maximum: 10, default: 1.5}
+components:
+- use: valkey.workload.key-value
+  id: writes
+  config:
+    stable_keys: {$ref: inputs.stable_keys}
+    mutable_keys: {$ref: inputs.mutable_keys}
+    rate: {$ref: inputs.mutation_rate}
+    value_size: {$ref: inputs.value_size}
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: SIGKILL
+    restart: true
+    restart_mode: background
+    restart_delay_s: {$ref: inputs.restart_delay_s}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-replica]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: txns
+  depends_on: [warm-up]
+  config:
+    instances: primary
+    resp: 2
+    timeout_s: 10
+    commands:
+    - {command: [INFO, persistence], wait_s: 45, expect: {contains: "rdb_current_bgsave_type:forkless"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "txn:a", first], expect: {equals: QUEUED}}
+    - {command: [SET, "txn:empty", ""], expect: {equals: QUEUED}}
+    - {command: [DEL, "txn:a"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: true}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "txn:single", v1], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: true}}
+    - {command: [EVAL, "redis.call('SET', KEYS[1], ARGV[1]) return redis.call('INCR',\
+          \ KEYS[2])", 2, "txn:s1", "txn:ctr", scripted], expect: {equals: 1}}
+    - {command: [EXEC], expect: {error: true}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [INCR, "txn:ctr"], expect: {equals: QUEUED}}
+    - {command: [DEL, "txn:single"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: true}}
+    - {command: [INFO, replication], wait_s: 90, expect: {contains: "state=online"}}
+    - {command: [GET, "txn:empty"], expect: {equals: ""}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [txns]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed, kill-replica.recovered, txns.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}
+- {evidence_id: valkey.command.sequence, source: txns}

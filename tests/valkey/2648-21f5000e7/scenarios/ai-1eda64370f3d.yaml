@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ead3dc6f290a..21f5000e7361.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1eda64370f3d
+seed: 264802
+experiment:
+  id: proposed.commandlog-signed-memory-config
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.tracking-skips-not-key
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Client tracking must not remember the NOT_KEY cursor argument of CLUSTERSCAN.
+    On the parent build the cursor string is inserted into the tracking table, so
+    a write to a key named like the cursor sends a spurious invalidation push to the
+    tracking client; on the fixed build no push arrives. Real keys read by GET must
+    still be tracked on both builds.
+components:
+- use: valkey.action.commands
+  id: tracking
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: 3
+    timeout_s: 30
+    commands:
+    - {command: [CLIENT, TRACKING, ON], expect: {equals: OK}}
+    - {command: [CLUSTERSCAN, "0"], compare: skip}
+    - {command: [SET, "0", v1], connection: writer, expect: {equals: OK}}
+    - {command: [PING], connection: writer, expect: {equals: PONG}}
+    - {read: true, expect_difference: true, expect: {equals: []}}
+    - {command: [SET, k, v1], connection: writer, expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v1}}
+    - {command: [SET, k, v2], connection: writer, expect: {equals: OK}}
+    - {command: [PING], connection: writer, expect: {equals: PONG}}
+    - {read: true}
+    - {command: [CLIENT, TRACKING, OFF], expect: {equals: OK}}
+    - {command: [CLIENT, TRACKING, ON, OPTIN], expect: {equals: OK}}
+    - {command: [CLIENT, CACHING, YES], expect: {equals: OK}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0"], compare: skip}
+    - {command: [SET, "0-{06S}-0", w1], connection: writer, expect: {equals: OK}}
+    - {command: [PING], connection: writer, expect: {equals: PONG}}
+    - {read: true, expect_difference: true, expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [tracking.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tracking}

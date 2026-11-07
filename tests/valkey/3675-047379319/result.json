@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "04737931942da5ec27571061643f17ac2e92bb1f",
+  "parent": "79bca53000d0821f44777507e358eabd4519a65f",
+  "pr": 3675,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Tighten NOT_KEY handling and add test coverage for NOT_KEY commands (#3675)",
+  "date": "2026-06-25",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 9.8933,
+  "findings": [],
+  "recorded": []
+}

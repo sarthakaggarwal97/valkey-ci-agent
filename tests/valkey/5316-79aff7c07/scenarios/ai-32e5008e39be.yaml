@@ -1,0 +1,19 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f1505f867a92..79aff7c07f33.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-32e5008e39be
+seed: 53161
+experiment:
+  id: proposed.forkless-save-txn-close
+  inputs:
+    stable_keys: 4000
+    mutable_keys: 200
+    mutation_rate: 300
+    value_size: 128
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
+  server_config:
+    forkless-infrastructure-enabled: 'yes'
+    bgsave-default-method: forkless
+    rdb-key-save-delay: 800

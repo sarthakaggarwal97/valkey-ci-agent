@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2253589b2e2193390d1237d8240ff72a374639c1",
+  "parent": "21f5000e7361a46edb663ab2f62502fdb13a6b39",
+  "pr": 3843,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Increase max proctitle length from 255 to 1024 (#3843)",
+  "date": "2026-06-24",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.9811,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

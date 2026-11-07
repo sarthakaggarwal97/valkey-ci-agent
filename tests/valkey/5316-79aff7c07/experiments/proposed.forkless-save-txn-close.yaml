@@ -1,0 +1,67 @@
+extends: [valkey.base]
+id: proposed.forkless-save-txn-close
+deployment:
+  modes: [standalone]
+metadata:
+  description: MULTI/EXEC and Lua writes during a forkless BGSAVE with nothing else
+    pending; the bgIteration MULTI must still be closed, and a second save must start
+    cleanly
+inputs:
+  properties:
+    stable_keys: {type: integer, minimum: 100, maximum: 100000, default: 4000}
+    mutable_keys: {type: integer, minimum: 1, maximum: 10000, default: 200}
+    mutation_rate: {type: number, minimum: 1, maximum: 5000, default: 300}
+    value_size: {type: integer, minimum: 1, maximum: 65536, default: 128}
+components:
+- use: valkey.workload.key-value
+  id: writes
+  config:
+    stable_keys: {$ref: inputs.stable_keys}
+    mutable_keys: {$ref: inputs.mutable_keys}
+    rate: {$ref: inputs.mutation_rate}
+    value_size: {$ref: inputs.value_size}
+- use: valkey.action.bgsave
+  id: bgsave
+  depends_on: [writes]
+  config: {expect: ok, expect_type: forkless, instances: primary}
+- use: valkey.action.wait-event
+  id: save-started
+  config: {event: bgsave.save-started, timeout_s: 60}
+- use: valkey.action.commands
+  id: txns
+  depends_on: [save-started]
+  config:
+    instances: primary
+    resp: 2
+    timeout_s: 10
+    commands:
+    - {command: [INFO, persistence], wait_s: 15, expect: {contains: "rdb_current_bgsave_type:forkless"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "txn:a", first], expect: {equals: QUEUED}}
+    - {command: [SET, "txn:empty", ""], expect: {equals: QUEUED}}
+    - {command: [DEL, "txn:a"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: true}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "txn:single", v1], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: true}}
+    - {command: [EVAL, "redis.call('SET', KEYS[1], ARGV[1]) return redis.call('INCR',\
+          \ KEYS[2])", 2, "txn:s1", "txn:ctr", scripted], expect: {equals: 1}}
+    - {command: [EXEC], expect: {error: true}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [INCR, "txn:ctr"], expect: {equals: QUEUED}}
+    - {command: [PEXPIRE, "txn:ctr", 100], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: true}}
+    - {command: [SET, fields, keyword-key-name], expect: {equals: OK}}
+    - {command: [INFO, persistence], wait_s: 60, expect: {contains: "rdb_bgsave_in_progress:0"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "txn:post", done], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: true}}
+    - {command: [GET, "txn:empty"], expect: {equals: ""}}
+- use: valkey.action.bgsave
+  id: bgsave2
+  depends_on: [txns]
+  config: {expect: ok, expect_type: forkless, instances: primary}
+required_events: [bgsave.save-started, txns.completed, bgsave2.save-completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: txns}
+- {evidence_id: valkey.bgsave.result, source: bgsave}

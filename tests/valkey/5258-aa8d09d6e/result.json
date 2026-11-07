@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "aa8d09d6efb6ae2a78b293c9e95b086fbd631249",
+  "parent": "1a9a793c4336e6b11cc70820dab9f165329a9dd1",
+  "pr": 5258,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make unit tests independent of the order they run in (#5258)",
+  "date": "2026-11-06",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2967,
+  "findings": [],
+  "recorded": [],
+  "reason": "Test-and-CI-only change: it fixes gtest unit suites (test_bgiteration, test_cmdflags, test_networking, test_object, test_throttle, test_throttle_repl) to reset process-wide state so they pass in any order, and updates the CI workflow to run them in one shuffled process. The only non-test code change adds unitTestOnly_objectResetMetadataSize() in object.c, which is called exclusively from the unit tests and never from any server runtime path, so no server behaviour (replies, replication, persistence, cluster) changes and no fuzzer scenario can reach the change."
+}

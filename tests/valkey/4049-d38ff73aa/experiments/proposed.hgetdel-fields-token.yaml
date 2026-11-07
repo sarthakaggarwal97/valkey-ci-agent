@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.hgetdel-fields-token
+deployment:
+  modes: [standalone]
+metadata:
+  description: HGETDEL with a bogus FIELDS token must reply ERR syntax error instead
+    of executing the read-and-delete
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: hgetdel
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: {$ref: inputs.hash_listpack_entries}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [HGETDEL, h, fields, 1, f1], expect: {equals: [v1]}}
+    - {command: [HGETDEL, h, FiElDs, 1, f1]}
+    - {command: [HGETDEL, h, FIELDS, 0, f2], expect: {error: "numfields"}}
+    - {command: [HGETDEL, h, FIELDS, 3, f2, f3], expect: {error: "numfields"}}
+    - {command: [HGETDEL, h, FIELDS, 9223372036854775807, f2], expect: {error: "numfields"}}
+    - {command: [HGETDEL, h, FIELDS, 9223372036854775808, f2], expect: {error: "not\
+          \ an integer"}}
+    - {command: [HSET, fields, fields, vf], expect: {equals: 1}}
+    - {command: [HGETDEL, fields, fields, 1, fields], expect: {equals: [vf]}}
+    - {command: [SET, s, x], expect: {equals: OK}}
+    - {command: [HGETDEL, s, FIELDS, 1, f], expect: {error: WRONGTYPE}}
+    - {command: [HGETDEL, s, a, 1, f], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [HEXPIRE, h, 100, FIELDS, 1, f3], expect: {equals: [1]}}
+    - {command: [HGETDEL, h, a, 1, f2], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [HGET, h, f2], expect_difference: true, expect: {equals: v2}}
+    - {command: [HGETDEL, h, 2, 2, f2, f3], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [EXISTS, h], expect_difference: true, expect: {equals: 1}}
+    - {command: [HGETDEL, h, "", 1, f2], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [HGETDEL, h, a, b, c], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [HGETDEL, h, FIELDSX, 1, f2], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [HLEN, h], expect_difference: true, expect: {equals: 2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hgetdel.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hgetdel}

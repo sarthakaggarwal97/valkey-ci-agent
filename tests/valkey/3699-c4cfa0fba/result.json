@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c4cfa0fba252a9881ecf025edcca03d8e880f4b6",
+  "parent": "04737931942da5ec27571061643f17ac2e92bb1f",
+  "pr": 3699,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Skip NOT_KEY commands in client tracking (#3699)",
+  "date": "2026-06-25",
+  "unstable": "5b7984e9005b4deea3467b0b5cfe7a4adc2fa7ff",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.9816,
+  "findings": [],
+  "recorded": []
+}

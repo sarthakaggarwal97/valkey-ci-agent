@@ -1,0 +1,42 @@
+extends: [valkey.base]
+id: proposed.mfstart-graceful-failover
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Graceful CLUSTER FAILOVER under writes; the primary must accept the
+    replica's MFSTART (rewritten check) and never log the new rejection lines
+inputs:
+  properties:
+    warmup_s: {type: number, minimum: 0, maximum: 30, default: 2}
+    failover_timeout_s: {type: number, minimum: 5, maximum: 300, default: 60}
+components:
+- use: valkey.observer.log
+  id: mfstart-log
+  config:
+    instances: all
+    expect:
+    - {evidence_id: valkey.cluster.mfstart-accepted, pattern: "Manual failover requested\
+        \ by replica", required: true}
+    forbidden:
+    - {pattern: "Ignoring MFSTART message from unknown node"}
+    - {pattern: "Ignoring MFSTART message from node .* that is not my replica"}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, mfstart-log]
+  config: {seconds: {$ref: inputs.warmup_s}}
+- use: valkey.action.failover
+  id: graceful-failover
+  depends_on: [warm-up]
+  config:
+    shard: 0
+    force: false
+    timeout_s: {$ref: inputs.failover_timeout_s}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [graceful-failover]
+  config: {seconds: 3}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.failover.result, source: graceful-failover}
+- {evidence_id: valkey.cluster.mfstart-accepted, source: mfstart-log}

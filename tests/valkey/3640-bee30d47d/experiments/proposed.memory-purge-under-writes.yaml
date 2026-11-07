@@ -1,0 +1,51 @@
+extends: [valkey.base]
+id: proposed.memory-purge-under-writes
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Repeated MEMORY PURGE on the primaries while the key-value workload
+    writes and a BGSAVE runs; malloc_trim must not crash or hang the server, and no
+    acknowledged write may be lost
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 2}
+- use: valkey.action.bgsave
+  id: bgsave
+  depends_on: [warm-up]
+  config: {instances: primaries, capture_rdb: false, expect: ok}
+- use: valkey.action.commands
+  id: purge
+  depends_on: [warm-up]
+  config:
+    instances: primaries
+    timeout_s: 30
+    commands:
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [purge, bgsave]
+  config: {seconds: 2}
+required_events: [purge.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: purge}
