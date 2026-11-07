@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cea9354b56128f4353ef4865e9005c78f5cf8fed",
+  "parent": "46d37e4d5ee2dfdab263453c90fb64958f92d5de",
+  "pr": 3330,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Big Endian: add daily workflow UT job and fix UTs (#3330)",
+  "date": "2026-05-01",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4207,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely CI and unit-test work: it adds an s390x (big-endian) daily GitHub Actions job, adds/fixes gtest unit tests for endianness round-trips and raw byte layouts, and adds header prototypes (encodeTimeoutKey, decodeTimeoutKey, streamEncodeID) for functions whose definitions in timeout.c and t_stream.c are unchanged. No production code path, command behavior, reply, replication, persistence, or tool behavior is modified, so there is nothing for a fuzzer scenario to exercise."
+}

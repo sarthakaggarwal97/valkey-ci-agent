@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.tracking-prefix-self-overlap
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CLIENT TRACKING ON BCAST with a self-overlapping prefix at index >= 1 must reject
+    tracking with exactly one error reply. The parent build returned the overlap index
+    instead of 0, so it queued the error AND +OK (a protocol desync shifting every
+    later reply) and enabled tracking with overlapping prefixes anyway.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: tracking
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CLIENT, TRACKING, ON, BCAST, PREFIX, "", PREFIX, foo], expect: {
+        error: "overlaps"}}
+    - {command: [CLIENT, TRACKING, ON, BCAST, PREFIX, aaa, PREFIX, bbb, PREFIX, bbbc],
+      expect: {error: "overlaps"}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    - {command: [CLIENT, TRACKING, ON, BCAST, PREFIX, xxx, PREFIX, yyy, PREFIX, yyy],
+      expect_difference: true, expect: {error: "overlaps"}}
+    - {command: [ECHO, end], expect_difference: true, expect: {equals: end}}
+    - {command: [CLIENT, TRACKING, ON, BCAST, PREFIX, zzz], expect: {equals: OK}}
+    - {command: [ECHO, fin], expect_difference: true, expect: {equals: fin}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [tracking.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tracking}

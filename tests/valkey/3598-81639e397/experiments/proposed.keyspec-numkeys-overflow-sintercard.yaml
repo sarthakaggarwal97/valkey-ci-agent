@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.keyspec-numkeys-overflow-sintercard
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND GETKEYS on SINTERCARD with a near-INT_MAX numkeys must reject
+    the spec cleanly, not allocate a huge key array
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: getkeys
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [COMMAND, GETKEYS, SINTERCARD, "1", k], expect: {equals: [k]}}
+    - {command: [COMMAND, GETKEYS, SINTERCARD, "2147483647", key1], expect_difference: true,
+      expect: {error: "Invalid arguments"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [getkeys.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: getkeys}

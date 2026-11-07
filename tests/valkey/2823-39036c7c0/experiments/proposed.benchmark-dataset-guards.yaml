@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-dataset-guards
+deployment:
+  modes: [standalone]
+metadata:
+  description: 'valkey-benchmark --dataset argument guards reject misuse, candidate
+    vs parent'
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.tools
+  id: ds
+  config:
+    compare_with: {$ref: inputs.parent}
+    files:
+      err.csv: "name,value\nitem1,value1\n"
+    runs:
+    - {tool: valkey-benchmark, args: [-n, 1, --dataset, err.csv, --, SET, k, '__field:nope__'],
+      expect_difference: true, expect: {exit: {equals: 1}, stderr: {contains: 'not
+            found in dataset fields'}}}
+    - {tool: valkey-benchmark, args: [-n, 1, --dataset, err.csv, -t, set], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: 'Dataset mode requires a command'}}}
+    - {tool: valkey-benchmark, args: [-n, 1, --dataset, err.csv, --, SET, k, v], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: 'requires at least one field
+            placeholder'}}}
+    - {tool: valkey-benchmark, args: [-n, 1, --dataset, err.csv, --, SET, k, '__data__',
+        '__field:value__'], expect_difference: true, expect: {exit: {equals: 1}, stderr: {
+          contains: 'cannot be used with --dataset'}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: ds}

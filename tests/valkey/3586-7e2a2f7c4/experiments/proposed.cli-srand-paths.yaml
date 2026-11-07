@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.cli-srand-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    The valkey-cli paths whose srand(time(NULL)) seeding moved to main() (srand(time
+    ^ getpid()) once per process) still work end to end: --cluster fix drives clusterManagerNodePrimaryRandom
+    over six uncovered empty slots, and --pipe drives pipeMode's rand()-built ECHO
+    magic. The fix's observable effect is distributional (random spread across primaries,
+    per-process pipe magic), not a deterministic reply change, so on a one-node cluster
+    every run must behave the same on both builds: the runs are unmarked regression
+    checks, and the candidate must meet every expect (slot coverage restored, pipe
+    terminates with errors: 0).
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, DELSLOTS, 0, 1, 2, 5461, 10922,
+        16383], expect: {exit: {equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-p, $port, --cluster, fix, "127.0.0.1:$port"], stdin: "yes\n",
+      compare: unordered, expect: {stdout: {contains: "Covering slot"}}}
+    - {tool: valkey-cli, args: [-p, $port, --cluster, check, "127.0.0.1:$port"], expect: {
+        exit: {equals: 0}, stdout: {contains: "[OK] All 16384 slots covered"}}}
+    - {tool: valkey-cli, args: [-p, $port, --pipe], stdin: "SET pipe:k1 v1\r\nSET\
+        \ pipe:k2 v2\r\nSET pipe:k3 v3\r\n", expect: {exit: {equals: 0}, stdout: {
+          contains: "errors: 0, replies: 3"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

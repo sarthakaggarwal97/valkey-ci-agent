@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.stream-trim-inplace-minid
+deployment:
+  modes: [standalone]
+metadata:
+  description: Exact XTRIM MINID marks leading entries deleted inside a single surviving
+    listpack node, driving the delta-recalculation path
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, stream-node-max-entries, "100"], expect: {equals: OK}}
+    - {command: [DEL, s], expect: {min: 0}}
+    - {command: [XADD, s, 1-0, f, v], expect: {equals: "1-0"}}
+    - {command: [XADD, s, 2-0, f, v], expect: {equals: "2-0"}}
+    - {command: [XADD, s, 3-0, f, v], expect: {equals: "3-0"}}
+    - {command: [XADD, s, 4-0, f, v], expect: {equals: "4-0"}}
+    - {command: [XADD, s, 5-0, f, v], expect: {equals: "5-0"}}
+    - {command: [XTRIM, s, MINID, "=", 3-0], expect: {equals: 2}}
+    - {command: [XLEN, s], expect: {equals: 3}}
+    - {command: [XRANGE, s, "-", "+"], expect: {equals: [["3-0", [f, v]], ["4-0",
+            [f, v]], ["5-0", [f, v]]]}}
+    - {command: [XADD, s, 6-0, f, v], expect: {equals: "6-0"}}
+    - {command: [XADD, s, 7-0, f, v], expect: {equals: "7-0"}}
+    - {command: [XTRIM, s, MINID, "=", 5-0], expect: {equals: 2}}
+    - {command: [XLEN, s], expect: {equals: 3}}
+    - {command: [XRANGE, s, "-", "+"], expect: {equals: [["5-0", [f, v]], ["6-0",
+            [f, v]], ["7-0", [f, v]]]}}
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

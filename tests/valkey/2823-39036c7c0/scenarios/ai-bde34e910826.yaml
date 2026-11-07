@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 16ed690fec06..39036c7c06f4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-bde34e910826
+seed: 7002
+experiment:
+  id: proposed.benchmark-dataset-open-errors
+deployment:
+  mode: standalone
+  base_port: 7100

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "54bdf5737b3a4d9109d0b7ec6ad37e9adb52cb5a",
+  "parent": "cba05103de24cd5d49f2f4d80e337646c2c941b4",
+  "pr": 3591,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Handle NULL pointer in streamTrim listpack delta calculation (#3591)",
+  "date": "2026-05-01",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.3485,
+  "findings": [],
+  "recorded": []
+}

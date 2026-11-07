@@ -1,0 +1,84 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "797c62604698408653b2f3653c4b9f861572d1b5",
+  "parent": "8891441ab9fd3a75c3023ab87383793d9c5704fe",
+  "pr": 3610,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix SIGSEGV in VM_GetLRU/SetLRU/GetLFU/SetLFU on NULL key (#3610)",
+  "date": "2026-05-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 3.8087,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in VM_GetLRU",
+      "scenario": "ai-90f2696e3518",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3610",
+      "fingerprint": "f494e938664d753289e8",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in VM_GetLRU",
+      "scenario": "ai-0abe6b514de1",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3610",
+      "fingerprint": "f494e938664d753289e8",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in VM_GetLRU",
+      "scenario": "ai-ae710facbd8a",
+      "seed": 1001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3610",
+      "fingerprint": "f494e938664d753289e8",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in VM_GetLRU",
+      "scenario": "ai-7c108c1449d8",
+      "seed": 1002,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3610",
+      "fingerprint": "f494e938664d753289e8",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

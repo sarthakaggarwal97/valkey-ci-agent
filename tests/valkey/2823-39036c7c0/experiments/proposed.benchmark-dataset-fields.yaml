@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-dataset-fields
+deployment:
+  modes: [standalone]
+metadata:
+  description: 'valkey-benchmark --dataset loads CSV and TSV field values into keys,
+    candidate vs parent'
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.tools
+  id: ds
+  config:
+    compare_with: {$ref: inputs.parent}
+    server: true
+    files:
+      data.csv: "id,title\n1,\"Book, Part 1\"\n"
+      data.tsv: "name\tvalue\tcount\nitem1\tvalue1\t100\n"
+      empty.csv: "k,v\nx,\n"
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 1, --dataset, data.csv, --, SET,
+        doc, '__field:title__'], expect_difference: true, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, doc], expect_difference: true, expect: {
+        stdout: {contains: 'Book, Part 1'}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 1, --dataset, data.tsv, --, HSET,
+        h, name, '__field:name__', count, '__field:count__'], expect_difference: true,
+      expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, HGET, h, count], expect_difference: true,
+      expect: {stdout: {contains: '100'}}}
+    - {tool: valkey-cli, args: [-p, $port, HGET, h, name], expect_difference: true,
+      expect: {stdout: {contains: item1}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 1, --dataset, empty.csv, --,
+        SET, e, '__field:v__'], expect_difference: true, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, EXISTS, e], expect_difference: true, expect: {
+        stdout: {contains: '1'}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: ds}

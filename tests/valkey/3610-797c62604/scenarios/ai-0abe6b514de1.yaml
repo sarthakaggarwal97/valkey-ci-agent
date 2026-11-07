@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8891441ab9fd..797c62604698.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0abe6b514de1
+seed: 2
+experiment:
+  id: proposed.module-lrulfu-null-key
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

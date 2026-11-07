@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7817ca8a736e..678a06d21638.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-721d1283ffa3
+seed: 7001
+experiment:
+  id: proposed.primary-killed-during-fullsync-handshake
+  inputs:
+    gap_s: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7000
+  server_config:
+    repl-diskless-sync: 'yes'
+    repl-diskless-sync-delay: 5
+    dual-channel-replication-enabled: 'no'

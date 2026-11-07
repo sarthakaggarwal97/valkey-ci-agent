@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c7c92db43b63be0599a076590f012ed35d279a47",
+  "parent": "797c62604698408653b2f3653c4b9f861572d1b5",
+  "pr": 3625,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Delay full sync during yielding Lua scripts to prevent use-after-free (CVE-2026-23631) (#3625)",
+  "date": "2026-05-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.3644,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

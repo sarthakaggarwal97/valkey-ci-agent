@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c7c92db43b63..fea0b4064cf6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-509b49490e4b
+seed: 1001
+experiment:
+  id: proposed.restore-zipmap-overlong-field
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

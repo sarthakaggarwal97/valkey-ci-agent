@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.module-lrulfu-valid-and-missing
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_Get/SetLRU/LFU guard lines run on a valid key, and a missing key
+    crashes the parent but errors cleanly on the change
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+    policy: {type: string, default: allkeys-lru}
+components:
+- use: valkey.action.commands
+  id: lrulfu
+  config:
+    compare_with: {$ref: inputs.parent}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {maxmemory-policy: {$ref: inputs.policy}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SET, k, foo], expect: {equals: OK}}
+    - {command: [test.setlru, k, 100], expect: {exists: true}}
+    - {command: [test.getlru, k], compare: skip}
+    - {command: [test.setlfu, k, 100], expect: {exists: true}}
+    - {command: [test.getlfu, k], compare: skip}
+    - {command: [test.getlru, nope], expect_difference: true, expect: {error: "key\
+          \ not found"}}
+    - {command: [test.setlru, nope, 100], expect_difference: true, expect: {error: "key\
+          \ not found"}}
+    - {command: [test.getlfu, nope], expect_difference: true, expect: {error: "key\
+          \ not found"}}
+    - {command: [test.setlfu, nope, 100], expect_difference: true, expect: {error: "key\
+          \ not found"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [lrulfu.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lrulfu}

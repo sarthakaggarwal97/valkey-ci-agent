@@ -1,0 +1,71 @@
+extends: [valkey.base]
+id: proposed.primary-killed-during-fullsync-handshake
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: >-
+    Kill the primary twice under writes. The first SIGKILL with an immediate restart
+    forces every replica into a full resync with the restarted primary; repl-diskless-sync-delay
+    (set by the scenario) holds the replicas in the blocking connSyncReadLine wait
+    for the bulk-count line, and the second SIGKILL lands inside that window, so the
+    replicas read EOF in syncRead and take the new errno=ECONNRESET path, log the
+    I/O error, retry the sync, and converge with no acknowledged write lost outside
+    the fsync windows.
+inputs:
+  properties:
+    gap_s: {type: number, minimum: 0.5, maximum: 10, default: 2}
+components:
+- use: valkey.fault.process-signal
+  id: kill-1
+  config:
+    when_event: warm-up.completed
+    instance: primary
+    signal: SIGKILL
+    restart: true
+    restart_mode: immediate
+- use: valkey.fault.process-signal
+  id: kill-2
+  config:
+    when_event: gap.completed
+    instance: primary
+    signal: SIGKILL
+    restart: true
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-1, kill-2]
+  config: {seconds: 2}
+- use: valkey.action.wait-event
+  id: first-restart
+  depends_on: [warm-up]
+  config: {event: kill-1.recovered, timeout_s: 90}
+- use: valkey.action.sleep
+  id: gap
+  depends_on: [first-restart]
+  config: {seconds: {$ref: inputs.gap_s}}
+- use: valkey.action.wait-event
+  id: second-restart
+  depends_on: [gap]
+  config: {event: kill-2.recovered, timeout_s: 90}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [second-restart]
+  config: {seconds: 5}
+- use: valkey.observer.log
+  id: sync-logs
+  config:
+    instances: replicas
+    expect:
+    - {evidence_id: valkey.replication.sync-io-error-logged, pattern: "I/O error reading\
+        \ bulk count from PRIMARY"}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_s: 2.5
+    loss_window_faults: [kill-1, kill-2]
+required_events: [warm-up.completed, kill-1.recovered, kill-2.recovered]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-1, min_count: 1}
+- {evidence_id: valkey.fault.injected, source: kill-2, min_count: 1}

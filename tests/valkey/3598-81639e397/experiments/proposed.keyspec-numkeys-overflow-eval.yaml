@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.keyspec-numkeys-overflow-eval
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND GETKEYS on EVAL with a near-INT_MAX numkeys must validate the
+    key count before allocating the result array
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: getkeys
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [COMMAND, GETKEYS, EVAL, "return 1", "1", k], expect: {equals: [k]}}
+    - {command: [COMMAND, GETKEYSANDFLAGS, EVAL, "return 1", "1", k], expect: {exists: true}}
+    - {command: [COMMAND, GETKEYS, EVAL, "return 1", "2147483647", key1], expect_difference: true,
+      expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [getkeys.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: getkeys}

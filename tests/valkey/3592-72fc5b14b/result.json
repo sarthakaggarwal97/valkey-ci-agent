@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "72fc5b14b1f7bf7bd0ca2546bd6e636af151454f",
+  "parent": "81639e3975af905159d1b6b77b9257ef354df0cf",
+  "pr": 3592,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix compilation error: replace deprecated je_calloc with zcalloc_num (#3592)",
+  "date": "2026-04-30",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2874,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only swaps the deprecated je_calloc for zcalloc_num in allocatorDefragInit to fix a compilation error. zcalloc_num has the same semantics (zeroed memory, calloc signature, non-NULL or abort), so there is no runtime behaviour change to exercise: it is a build fix, and the fact that the fuzzer's builds compile and start already covers it."
+}

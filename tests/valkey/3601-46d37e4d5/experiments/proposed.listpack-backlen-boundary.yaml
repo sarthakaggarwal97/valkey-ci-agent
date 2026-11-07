@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.listpack-backlen-boundary
+deployment:
+  modes: [standalone]
+metadata:
+  description: Listpack entries whose content length hits the lpEncodeBacklen boundaries
+    (16383 and 2097151) must serialize to the same DUMP byte length on both builds;
+    the parent writes one extra backlen byte.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      rdbcompression: "no"
+      hash-max-listpack-value: 3000000
+      hash-max-listpack-entries: 1024
+      set-max-listpack-value: 3000000
+      set-max-listpack-entries: 1024
+      zset-max-listpack-value: 3000000
+      zset-max-listpack-entries: 1024
+    commands:
+    - {command: [EVAL, "redis.call('HSET', KEYS[1], 'f', string.rep('a', 16378));\
+          \ return #redis.call('DUMP', KEYS[1])", "1", h], expect_difference: true,
+      expect: {min: 16300}}
+    - {command: [EVAL, "redis.call('HSET', KEYS[1], 'f', string.rep('a', 2097146));\
+          \ return #redis.call('DUMP', KEYS[1])", "1", h2], expect_difference: true,
+      expect: {min: 2097000}}
+    - {command: [EVAL, "redis.call('SADD', KEYS[1], string.rep('a', 16378)); return\
+          \ #redis.call('DUMP', KEYS[1])", "1", s], expect_difference: true, expect: {
+        min: 16300}}
+    - {command: [EVAL, "redis.call('ZADD', KEYS[1], '1', string.rep('a', 16378));\
+          \ return #redis.call('DUMP', KEYS[1])", "1", z], expect_difference: true,
+      expect: {min: 16300}}
+    - {command: [OBJECT, ENCODING, h], compare: skip, expect: {equals: listpack}}
+    - {command: [OBJECT, ENCODING, h2], compare: skip, expect: {equals: listpack}}
+    - {command: [OBJECT, ENCODING, s], compare: skip, expect: {equals: listpack}}
+    - {command: [OBJECT, ENCODING, z], compare: skip, expect: {equals: listpack}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

@@ -1,0 +1,70 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "46d37e4d5ee2dfdab263453c90fb64958f92d5de",
+  "parent": "54bdf5737b3a4d9109d0b7ec6ad37e9adb52cb5a",
+  "pr": 3601,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix off-by-one boundary in lpEncodeBacklen() for 3 values (#3601)",
+  "date": "2026-05-01",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 4.0125,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 0 (EVAL redis.call('HSET', KEYS[1], 'f', string.rep('a', 16378)); return #redis.call('DUMP', KEYS[1]) 1 h) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpa",
+      "scenario": "ai-d1a8e11057d7",
+      "seed": 4242,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #3601",
+      "fingerprint": "45a1322f64cb6a97e433",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/90"
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 20452:M 07 Nov 2026 07:18:31.831 # Terminating server after rdb file reading failure.",
+      "scenario": "ai-37f81419c286",
+      "seed": 46037,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #3601, since fixed",
+      "fingerprint": "f4ace3818f636135ae9e",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 20452:M 07 Nov 2026 07:18:31.831 # Terminating server after rdb file reading failure.",
+      "scenario": "ai-37f81419c286",
+      "seed": 46037,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #3601, since fixed",
+      "fingerprint": "5f99e7ae11b196426ba3",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

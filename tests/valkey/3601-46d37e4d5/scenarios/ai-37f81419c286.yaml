@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 54bdf5737b3a..46d37e4d5ee2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-37f81419c286
+seed: 46037
+experiment:
+  id: proposed.listpack-backlen-4byte-boundary
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

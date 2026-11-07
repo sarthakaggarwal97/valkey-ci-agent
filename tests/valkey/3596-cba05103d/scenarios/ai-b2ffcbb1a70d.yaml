@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 72fc5b14b1f7..cba05103de24.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b2ffcbb1a70d
+seed: 73002
+experiment:
+  id: proposed.slot-export-target-vanishes
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

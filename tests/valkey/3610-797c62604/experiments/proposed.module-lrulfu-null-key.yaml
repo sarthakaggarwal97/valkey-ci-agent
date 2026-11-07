@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.module-lrulfu-null-key
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_GetLRU/SetLRU/GetLFU/SetLFU on a module key opened for a nonexistent
+    key must not crash the server
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lrulfu
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {maxmemory-policy: allkeys-lru}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [test.getlru, nonexistent_key], expect_difference: true, expect: {
+        error: "key not found"}}
+    - {command: [test.setlru, nonexistent_key, 100], expect_difference: true, expect: {
+        error: "key not found"}}
+    - {command: [test.getlfu, nonexistent_key], expect_difference: true, expect: {
+        error: "key not found"}}
+    - {command: [test.setlfu, nonexistent_key, 100], expect_difference: true, expect: {
+        error: "key not found"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [lrulfu.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lrulfu}

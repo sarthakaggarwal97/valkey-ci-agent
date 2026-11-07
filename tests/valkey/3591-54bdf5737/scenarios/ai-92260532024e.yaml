@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cba05103de24..54bdf5737b3a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-92260532024e
+seed: 1337
+experiment:
+  id: proposed.stream-trim-last-entry
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+    node_max: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

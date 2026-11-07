@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cba05103de24..54bdf5737b3a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f8d73690114a
+seed: 3
+experiment:
+  id: proposed.stream-trim-maxlen-split
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7200
+  replicas_per_primary: 0

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6dbb7f81a97f7d687cf7fcc88bdcbe78bf6cf170",
+  "parent": "28ecbd204fceec9f0bf1aa1b2d791b0f7e9fc7e5",
+  "pr": 3503,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix remove cached eval scripts on engine unregister (#3503)",
+  "date": "2026-04-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.199,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix only runs inside scriptingEngineManagerUnregister(), reachable solely via VM_UnregisterScriptingEngine() from a scripting-engine module's OnUnload \u2014 i.e. MODULE UNLOAD of an engine module (e.g. Lua built as a module). The fuzzer cannot reach it: valkey.action.commands refuses MODULE LOAD/LOADEX/UNLOAD, experiments may not use valkey.action.command, and no installed experiment or fault component loads or unloads a module. With the engine-unregister path untriggerable, no scenario can drive the change."
+}

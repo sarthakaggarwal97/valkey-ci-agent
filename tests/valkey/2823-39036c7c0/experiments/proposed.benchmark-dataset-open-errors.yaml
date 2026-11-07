@@ -1,0 +1,24 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-dataset-open-errors
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark --dataset on a missing file and an empty file fails
+    to initialize the dataset; the parent build has no --dataset
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    files:
+      empty.csv: ""
+    runs:
+    - {tool: valkey-benchmark, args: [-q, -n, 10, -c, 1, -p, "$port", --dataset, missing.csv,
+        SET, "doc:__rand_int__", "__field:x__"], expect_difference: true, expect: {
+        exit: {equals: 1}, stderr: {contains: "Cannot open dataset file"}}}
+    - {tool: valkey-benchmark, args: [-q, -n, 10, -c, 1, -p, "$port", --dataset, empty.csv,
+        SET, "doc:__rand_int__", "__field:x__"], expect_difference: true, expect: {
+        exit: {equals: 1}, stderr: {contains: "Cannot read header from dataset file"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

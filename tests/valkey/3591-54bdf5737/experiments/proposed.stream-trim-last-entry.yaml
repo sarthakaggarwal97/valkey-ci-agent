@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.stream-trim-last-entry
+deployment:
+  modes: [standalone]
+metadata:
+  description: XTRIM that marks the physically last entry of a listpack node as deleted
+    stays intact and non-crashing
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+    node_max: {type: integer, default: 3}
+components:
+- use: valkey.action.commands
+  id: trim
+  config:
+    compare_with: {$ref: inputs.parent}
+    server_config: {stream-node-max-entries: {$ref: inputs.node_max}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [XADD, mystream, '1-0', f, v], expect: {equals: '1-0'}}
+    - {command: [XADD, mystream, '2-0', f, v], expect: {equals: '2-0'}}
+    - {command: [XADD, mystream, '3-0', f, v], expect: {equals: '3-0'}}
+    - {command: [XADD, mystream, '4-0', f, v], expect: {equals: '4-0'}}
+    - {command: [XTRIM, mystream, MINID, '=', '4-0'], expect: {min: 0}}
+    - {command: [XLEN, mystream], expect_difference: true, expect: {equals: 1}}
+    - {command: [XRANGE, mystream, '-', '+'], expect_difference: true, expect: {equals: [
+          ['4-0', [f, v]]]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: trim}

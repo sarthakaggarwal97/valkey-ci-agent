@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fea0b4064cf612d1c365b032326832bff0946bd9",
+  "parent": "c7c92db43b63be0599a076590f012ed35d279a47",
+  "pr": 3619,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix invalid memory access in RESTORE with malformed zipmap (CVE-2026-25243) (#3619)",
+  "date": "2026-05-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.2001,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ff80b2d1dc7c7858e938ece683d5c3fcb8c9ed31",
+  "parent": "6dbb7f81a97f7d687cf7fcc88bdcbe78bf6cf170",
+  "pr": 3382,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Migrate the remaining cluster tests to the new framework and remove legacy files (#2297) (#3382)",
+  "date": "2026-04-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2313,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change migrates legacy Tcl cluster tests (failover loop, resharding, replica migration, cluster shards) to the new test framework and deletes the old tests/cluster/ harness, runtest-cluster, and updates the daily CI workflow accordingly. No file under src/ is modified, so no server, tool, or protocol behaviour changes; it is a test/CI-only refactor with nothing for the fuzzer to exercise."
+}

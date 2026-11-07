@@ -1,0 +1,31 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cba05103de24cd5d49f2f4d80e337646c2c941b4",
+  "parent": "72fc5b14b1f7bf7bd0ca2546bd6e636af151454f",
+  "pr": 3596,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix: prevent NULL dereference crash in connectSlotExportJob when target node disappears (#3596)",
+  "date": "2026-04-30",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 4,
+    "executed": 1,
+    "percent": 25,
+    "uncovered": [
+      "src/cluster_migrateslots.c:1307",
+      "src/cluster_migrateslots.c:1311",
+      "src/cluster_migrateslots.c:2005"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 8.1885,
+  "findings": [],
+  "recorded": []
+}

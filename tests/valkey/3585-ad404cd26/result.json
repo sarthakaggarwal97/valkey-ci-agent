@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ad404cd266e15add51007e38e75c0648a021198d",
+  "parent": "39036c7c06f4ac1942aa7a36058cc79e555c9fde",
+  "pr": 3585,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "fix compile warning in util.c (#3585)",
+  "date": "2026-04-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2142,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a build-level fix for a compile warning: it replaces the raw __attribute__((no_sanitize_address, no_sanitize(\"thread\"))) annotations on the string2ll ifunc resolver in src/util.c with the equivalent VALKEY_NO_SANITIZE macros. The resolver body and the string2ll implementations it selects are unchanged, so there is no behaviour change for any runtime path (replies, replication, persistence, cluster); the only effect is on compilation and sanitizer instrumentation. No scenario can distinguish the two builds."
+}

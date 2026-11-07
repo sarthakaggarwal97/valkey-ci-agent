@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.geosearch-bypolygon-count-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: GEOSEARCH BYPOLYGON error paths after the polygon buffer is allocated
+    must not leak it
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: geo
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [GEOADD, points, '151.2093', '-33.8688', Sydney], expect: {equals: 1}}
+    - {command: [GEOSEARCH, points, BYPOLYGON, '3', '151.2039', '-33.8744', '151.2132',
+        '-33.8829', '151.2229', '-33.8839', COUNT, notanumber], expect: {error: 'not
+          an integer'}}
+    - {command: [GEOSEARCH, points, BYPOLYGON, '3', '151.2039', '-33.8744', '151.2132',
+        '-33.8829', '151.2229', '-33.8839', COUNT, '-1'], expect: {error: 'COUNT must
+          be > 0'}}
+    - {command: [GEOSEARCH, points, BYPOLYGON, '3', '151.2039', '-33.8744', '151.2132',
+        '-33.8829', '151.2229', '-33.8839', ANY], expect: {error: 'ANY argument requires
+          COUNT'}}
+    - {command: [GEOSEARCH, points, BYPOLYGON, '3', '151.2039', '-33.8744', '151.2132',
+        '-33.8829', '151.2229', '-33.8839', BOGUSOPT], expect: {error: 'syntax error'}}
+    - {command: [GEOSEARCH, points, BYPOLYGON, '5', '151.20', '-33.80', '151.21',
+        '-33.81', '151.22', '-33.82', '151.23', '-33.83', '151.24', '-33.84', COUNT,
+        notanumber], expect: {error: 'not an integer'}}
+    - {command: [GEOSEARCH, points, BYPOLYGON, '5', '151.20', '-33.80', '151.21',
+        '-33.81', '151.22', '-33.82', '151.23', '-33.83', '151.24', '-33.84', COUNT,
+        '0'], expect: {error: 'COUNT must be > 0'}}
+    - {command: [GEOSEARCH, points, BYPOLYGON, '5', '151.20', '-33.80', '151.21',
+        '-33.81', '151.22', '-33.82', '151.23', '-33.83', '151.24', '-33.84', ANY],
+      expect: {error: 'ANY argument requires COUNT'}}
+required_events: [geo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: geo}

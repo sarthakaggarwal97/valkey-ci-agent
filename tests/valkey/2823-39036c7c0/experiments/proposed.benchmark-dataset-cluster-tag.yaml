@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-dataset-cluster-tag
+deployment:
+  modes: [standalone]
+metadata:
+  description: 'valkey-benchmark --cluster --dataset exercises the {tag} scanner,
+    candidate vs parent'
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.tools
+  id: ds
+  config:
+    compare_with: {$ref: inputs.parent}
+    server: true
+    cluster: true
+    files:
+      cluster.csv: "id,name\n1,Item1\n"
+    runs:
+    - {tool: valkey-benchmark, args: [--cluster, -p, $port, -n, 1, --dataset, cluster.csv,
+        --, HSET, 'doc:{tag}:k', name, '__field:name__'], expect_difference: true,
+      expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-c, -p, $port, DBSIZE], expect_difference: true, expect: {
+        stdout: {contains: '1'}}}
+    - {tool: valkey-cli, args: [-c, -p, $port, KEYS, 'doc:*'], expect_difference: true,
+      expect: {stdout: {contains: 'doc:'}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: ds}

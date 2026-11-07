@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.listpack-backlen-4byte-boundary
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    A hash kept in listpack encoding with one value whose forward-encoded entry length
+    is exactly 268435455 bytes exercises lpEncodeBacklen's 4-byte branch (l <= 268435455,
+    listpack.c:286). The parent's off-by-one encodes a 5-byte backlen there, so the
+    serialized listpack returned by DUMP differs from the fixed build. An earlier
+    ~3MB value reaches the same branch cheaply up front.
+components:
+- use: valkey.action.commands
+  id: backlen
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      hash-max-listpack-entries: 128
+      hash-max-listpack-value: 1073741824
+    resp: 2
+    timeout_s: 180
+    commands:
+    - command: [EVAL, "redis.call('hset', KEYS[1], 'f', string.rep('x', tonumber(ARGV[1])));\
+          \ return redis.call('hstrlen', KEYS[1], 'f')", "1", small, "3000000"]
+      expect: {equals: 3000000}
+    - command: [OBJECT, ENCODING, small]
+      expect: {equals: listpack}
+    - command: [EVAL, "redis.call('hset', KEYS[1], 'f', string.rep('x', tonumber(ARGV[1])));\
+          \ return redis.call('hstrlen', KEYS[1], 'f')", "1", big, "268435450"]
+      expect: {equals: 268435450}
+    - command: [HLEN, big]
+      expect: {equals: 1}
+    - command: [OBJECT, ENCODING, big]
+      expect: {equals: listpack}
+    - command: [DUMP, big]
+      expect_difference: true
+      expect: {exists: true}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [backlen.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: backlen}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8091c6c10a3bd80fcb639a036dde882580f61fcb",
+  "parent": "ff80b2d1dc7c7858e938ece683d5c3fcb8c9ed31",
+  "pr": 3573,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove redundant count division in genericHgetallCommand (#3573)",
+  "date": "2026-04-28",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2954,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change replaces `setDeferredMapLen(c, replylen, count /= 2); count /= 2;` with `setDeferredMapLen(c, replylen, count / 2);` in genericHgetallCommand. The old compound assignment already passed count/2 to setDeferredMapLen, and the second division only mutated a local variable that is never read again before the function returns (count is dead after this point, as shown at src/t_hash.c:1792-1799). The map length sent to clients is bit-for-bit identical on both builds for HGETALL, HKEYS and HVALS, so this is dead-code removal with no observable behaviour change and nothing a scenario could e"
+}

@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.restore-zipmap-overlong-value
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE of a hash-zipmap whose value length uses the overlong 5-byte
+    encoding for a small length (CVE-2026-25243)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: restore
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, "1"], expect: {equals: OK}}
+    - {command: [RESTORE, zm, "0", !!binary "CRgCA2FiY/4DAAAAAGRlZgNnaGkDAGprbP9QAAAAAAAAAAAA"],
+      expect_difference: true, expect: {error: "Bad data format"}}
+    - {command: [EXISTS, zm], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore}

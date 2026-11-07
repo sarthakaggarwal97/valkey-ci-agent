@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8891441ab9fd3a75c3023ab87383793d9c5704fe",
+  "parent": "f2f4e5dbfccdcefbc7d961bb28a1aef44068d3a6",
+  "pr": 3583,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix checkPrefixCollisionsOrReply returning non-zero on self-overlap (#3583)",
+  "date": "2026-05-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.2412,
+  "findings": [],
+  "recorded": []
+}
