@@ -39,9 +39,9 @@ on:
         default: valkey
     secrets:
       VALKEYRIE_BOT_APP_ID:
-        required: true
+        required: false
       VALKEYRIE_BOT_PRIVATE_KEY:
-        required: true
+        required: false
       AWS_ROLE_ARN:
         required: true
 
@@ -82,21 +82,10 @@ jobs:
 
       - name: Generate target repository token
         id: target-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: ${{ inputs.target_owner }}
-          repositories: ${{ inputs.target_repo }}
-          # The plan reads the PR, the run, its log and the workflow file,
-          # and reads target PR/issue state. It writes only when reporting a
-          # successfully recovered publication from an earlier attempt.
-          permission-members: read
-          permission-actions: read
-          permission-contents: read
-          permission-pull-requests: read
-          permission-issues: write
-          permission-metadata: read
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: echo "token=${PAT}" >> "$GITHUB_OUTPUT"  # E2E harness
 
       - name: Validate the request and plan its fix
         id: plan
@@ -179,7 +168,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: ci-fix-${{ github.run_id }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          role-duration-seconds: 18000
+          role-duration-seconds: 3000  # E2E harness
       - name: 'CI fix: prepare the fix in this job'
         shell: bash
         env:
@@ -275,7 +264,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: ci-fix-${{ github.run_id }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          role-duration-seconds: 18000
+          role-duration-seconds: 3000  # E2E harness
       - name: 'CI fix: prepare the fix in this job'
         shell: bash
         env:
@@ -352,7 +341,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: ci-fix-${{ github.run_id }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-          role-duration-seconds: 18000
+          role-duration-seconds: 3000  # E2E harness
       - name: 'CI fix: prepare the fix in this job'
         shell: bash
         env:
@@ -421,17 +410,10 @@ jobs:
       - name: Generate target repository token
         id: target-token
         if: needs.plan.outputs.ci_changes != 'true'
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: ${{ inputs.target_owner }}
-          repositories: ${{ inputs.target_repo }}
-          permission-actions: read
-          permission-contents: write
-          permission-pull-requests: write
-          permission-issues: write
-          permission-metadata: read
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: echo "token=${PAT}" >> "$GITHUB_OUTPUT"  # E2E harness
 
       # A bot-owned backport branch may take a CI change, often an upstream
       # one the release branch lacks (scripts/ci_fix/policy.py
@@ -439,18 +421,10 @@ jobs:
       - name: Generate target repository token with workflows
         id: ci-token
         if: needs.plan.outputs.ci_changes == 'true'
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: ${{ inputs.target_owner }}
-          repositories: ${{ inputs.target_repo }}
-          permission-actions: read
-          permission-contents: write
-          permission-workflows: write
-          permission-pull-requests: write
-          permission-issues: write
-          permission-metadata: read
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: echo "token=${PAT}" >> "$GITHUB_OUTPUT"  # E2E harness
 
       - name: Publish the fix and report it
         shell: bash
@@ -461,4 +435,4 @@ jobs:
           CI_FIX_ISSUES_PUBLISH: ${{ vars.CI_FIX_ISSUES_PUBLISH }}
         run: |
           set -euo pipefail
-          python -m scripts.ci_fix.run publish --plan ci-fix-plan --outcome ci-fix-result
+          cat ci-fix-result/outcome.json || echo none  # E2E harness: never publish
