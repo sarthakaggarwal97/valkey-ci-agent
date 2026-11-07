@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.clusterscan-cluster-topology
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTERSCAN on a slotless empty primary and on a replica after a full
+    sync, on two-node clusters compared with the parent build
+components:
+- use: valkey.action.commands
+  id: topo
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 60
+    commands:
+    - {command: [SET, "{06S}one", v1], expect: {equals: OK}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", SLOT, "0", COUNT, "100"], node: 1, expect_difference: true,
+      expect: {equals: ["0", []]}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [DBSIZE], node: 1, wait_s: 30, expect: {equals: 1}}
+    - {command: [CLUSTERSCAN, "0", SLOT, "0"], node: 1, expect_difference: true, expect: {
+        equals: ["0-{06S}-0", []]}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", SLOT, "0", COUNT, "100"], node: 1, expect_difference: true,
+      expect: {equals: ["0", ["{06S}one"]]}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", COUNT, "100"], node: 1, expect_difference: true,
+      expect: {equals: ["0-{Qi}-0", ["{06S}one"]]}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [topo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: topo}

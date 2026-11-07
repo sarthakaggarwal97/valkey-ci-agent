@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6414720504f689a3fc699338bf22565bb70c3829",
+  "parent": "8051de740dd38172476b04e892e5517630e3eaed",
+  "pr": 3329,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replace fast_float (C++) with ffc.h (#3329)",
+  "date": "2026-03-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 36,
+    "executed": 34,
+    "percent": 94,
+    "uncovered": [
+      "src/debug.c:883",
+      "src/t_zset.c:650"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 9.2787,
+  "findings": [],
+  "recorded": []
+}

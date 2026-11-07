@@ -1,0 +1,79 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "26522fc527d1f474d39bbd74482541aa54715bfb",
+  "parent": "2a12449105988c6c3a89c6c01e504c9d3c7ce105",
+  "pr": 3352,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add availability-zone to the reply schema for CLUSTER SHARDS/SLOTS (#3352)",
+  "date": "2026-03-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.5587,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "acl-bypass: command 6 (HELLO) as the user 'default +@all -@connection' ran, though its rule refuses it: {\"reply\":[\"server\",\"valkey\",\"version\",\"255.255.255\",\"proto\",2,\"id\",4,\"mode\",\"cluster\",\"role\",\"master\",\"modules\",[[\"name\",\"lua\",\"ver\",1,\"path\",\"lua\",\"args\",[]]],\"availability_zone\",\"az-east-1\"]}",
+      "scenario": "ai-fe89ab163fab",
+      "seed": 1101,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #3352",
+      "fingerprint": "fb9266a50264c2f9d4b0",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/95"
+    },
+    {
+      "rule": "check",
+      "detail": "acl-bypass: command 6 (HELLO) as the user 'default +@all -@connection' ran, though its rule refuses it: {\"reply\":[\"server\",\"valkey\",\"version\",\"255.255.255\",\"proto\",2,\"id\",4,\"mode\",\"cluster\",\"role\",\"master\",\"modules\",[[\"name\",\"lua\",\"ver\",1,\"path\",\"libvalkeylua.so\",\"args\",[]]],\"availability_zone\",\"az-",
+      "scenario": "ai-fe89ab163fab",
+      "seed": 1101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "aa91b8997da397d4da2d",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "acl-bypass: command 6 (HELLO) as the user 'default +@all -@connection' ran, though its rule refuses it: {\"reply\":{\"availability_zone\":\"az-east-1\",\"id\":4,\"mode\":\"cluster\",\"modules\":[{\"args\":[],\"name\":\"lua\",\"path\":\"lua\",\"ver\":1}],\"proto\":3,\"role\":\"master\",\"server\":\"valkey\",\"version\":\"255.255.255\"}}",
+      "scenario": "ai-c8bb629f3326",
+      "seed": 1102,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #3352",
+      "fingerprint": "e5edcf69d1f4b1ba3790",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/96"
+    },
+    {
+      "rule": "check",
+      "detail": "acl-bypass: command 6 (HELLO) as the user 'default +@all -@connection' ran, though its rule refuses it: {\"reply\":{\"availability_zone\":\"az-east-1\",\"id\":4,\"mode\":\"cluster\",\"modules\":[{\"args\":[],\"name\":\"lua\",\"path\":\"libvalkeylua.so\",\"ver\":1}],\"proto\":3,\"role\":\"master\",\"server\":\"valkey\",\"version\":\"255.2",
+      "scenario": "ai-c8bb629f3326",
+      "seed": 1102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "6cb5114370a76d5e2e1c",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

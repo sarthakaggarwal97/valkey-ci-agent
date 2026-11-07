@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8c397ea16770..fc217fca2d7d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-427509980afe
+seed: 328003
+experiment:
+  id: proposed.nofailover-kill-restart
+  inputs:
+    instance: primary
+    signal: SIGKILL
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    cluster-replica-no-failover: 'yes'
+    appendonly: 'yes'
+    appendfsync: everysec

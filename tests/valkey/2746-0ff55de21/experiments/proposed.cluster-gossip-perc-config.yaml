@@ -1,0 +1,84 @@
+extends: [valkey.liveness]
+id: proposed.cluster-gossip-perc-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: cluster-message-gossip-perc exists with default 10, enforces its 1-100
+    bounds, survives CONFIG REWRITE and a restart, and a 6-node cluster keeps pinging
+    at perc 100 and 1 without crashing
+components:
+- use: valkey.action.commands
+  id: gossip-config
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 6
+    server_config: {cluster-ping-interval: 100}
+    timeout_s: 90
+    commands:
+    - {command: [CONFIG, GET, cluster-message-gossip-perc], expect_difference: true,
+      expect: {equals: [cluster-message-gossip-perc, "10"]}}
+    - {command: [CONFIG, SET, cluster-message-gossip-perc, "0"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, cluster-message-gossip-perc, "101"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, cluster-message-gossip-perc, "100"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-message-gossip-perc, "100"], node: 1, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-message-gossip-perc, "100"], node: 2, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-message-gossip-perc, "100"], node: 3, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-message-gossip-perc, "100"], node: 4, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-message-gossip-perc, "100"], node: 5, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SET, dwell, "1", PX, "5000"], expect: {equals: OK}}
+    - {command: [EXISTS, dwell], wait_s: 20, expect: {equals: 0}}
+    - {command: [CONFIG, SET, cluster-message-gossip-perc, "1"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-message-gossip-perc, "1"], node: 1, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-message-gossip-perc, "1"], node: 2, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-message-gossip-perc, "1"], node: 3, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-message-gossip-perc, "1"], node: 4, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-message-gossip-perc, "1"], node: 5, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SET, dwell2, "1", PX, "4000"], expect: {equals: OK}}
+    - {command: [EXISTS, dwell2], wait_s: 20, expect: {equals: 0}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [PING], node: 5, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: gossip-rewrite
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, cluster-message-gossip-perc, "37"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, cluster-message-gossip-perc], expect_difference: true,
+      expect: {equals: [cluster-message-gossip-perc, "37"]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [gossip-config.completed, gossip-rewrite.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: gossip-config}
+- {evidence_id: valkey.command.sequence, source: gossip-rewrite}

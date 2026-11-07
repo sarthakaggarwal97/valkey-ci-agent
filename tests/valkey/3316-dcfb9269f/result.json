@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dcfb9269f5ba4cf2f851e75fba77dc189c4a15aa",
+  "parent": "a731e45fd3940bf6e1c61b21b840e7ed5dd499f2",
+  "pr": 3316,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix zset to operate defrag scan lexicographically (#3316)",
+  "date": "2026-03-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.3394,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: assertion failed: 14208:M 07 Nov 2026 16:32:55.429 # ==> defrag.c:286 'x->level[0].forward == node' is not true",
+      "scenario": "ai-23c2d3766069",
+      "seed": 1316,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3316",
+      "fingerprint": "c9ba54155ecb19b76ce8",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: assertion failed: 14353:M 07 Nov 2026 16:33:58.009 # ==> defrag.c:286 'x->level[0].forward == node' is not true",
+      "scenario": "ai-ba798f38be07",
+      "seed": 3316,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3316",
+      "fingerprint": "c9ba54155ecb19b76ce8",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

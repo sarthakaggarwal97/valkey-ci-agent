@@ -1,0 +1,36 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6fee1aa61cecadcdfe719a67d5a47981eb3c6ea9",
+  "parent": "5deebd0f131826124b3ab6231fafb5f9b188523b",
+  "pr": 3258,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use dictGetSomeKeys instead of dictGetRandomKey for gossip node population (#3258)",
+  "date": "2026-03-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 8,
+    "executed": 7,
+    "percent": 87,
+    "uncovered": [
+      "src/cluster_legacy.c:4812"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 2.0185,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-82c9f4a63e2e",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'save-behavior-support' is unsupported"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6b384e9a5b6cd4e4f8198f5df22a74feb1b70e0f",
+  "parent": "3741503557b1fff2072216812e61654b7d366409",
+  "pr": 3342,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix ZDIFF algorithm 2 memory leak on early exit (#3342)",
+  "date": "2026-03-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.2864,
+  "findings": [],
+  "recorded": []
+}

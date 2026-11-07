@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.module-unsigned-config-resp3
+deployment:
+  modes: [standalone]
+metadata:
+  description: "RESP3: unsigned module config set above INT64_MAX, boundary and parse\
+    \ errors, compared with the parent build"
+components:
+- use: valkey.action.commands
+  id: ucfg3
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: 3
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, "9223372036854775808"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, moduleconfigs.unsigned_numeric], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, "9223372036854776808"],
+      expect_difference: true, expect: {error: "must be between"}}
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, "-5"], expect_difference: true,
+      expect: {error: "unsigned"}}
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, "18446744073709551616"],
+      expect_difference: true, expect: {error: "unsigned"}}
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, "0"], expect_difference: true,
+      expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [ucfg3.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ucfg3}

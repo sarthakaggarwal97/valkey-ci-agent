@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.tsc-monotonic-clock
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The x86 TSC monotonic clock rewritten as a fixed-point multiply (mono_ticks_speed
+    = 2^24 / ticks_per_us) still keeps time at the right rate. INFO server shows the
+    TSC clock is active and reports the new fractional ticks/us format (the parent
+    prints an integer), and a real 300 ms DEBUG SLEEP, whose duration call() measures
+    with getMonotonicUs_x86 on the hardware-clock path, lands between two slowlog
+    thresholds that bracket it: above 100 ms (the clock is not running slow or returning
+    tiny values from a miscalibrated multiplier) and below 2 s (not running fast from
+    a wrong shift or inverted min/max calibration).
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: tsc
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      enable-debug-command: "yes"
+      slowlog-log-slower-than: 100000
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [INFO, server], expect_difference: true, expect: {contains: "X86 TSC\
+          \ @ "}}
+    - {command: [SLOWLOG, RESET], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [SLOWLOG, LEN], expect: {equals: 1}}
+    - {command: [CONFIG, SET, slowlog-log-slower-than, "2000000"], expect: {equals: OK}}
+    - {command: [SLOWLOG, RESET], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [SLOWLOG, LEN], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [tsc.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tsc}

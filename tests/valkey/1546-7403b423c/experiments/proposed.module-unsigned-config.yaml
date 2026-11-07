@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.module-unsigned-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: "Unsigned 64-bit module config: CONFIG SET/GET at u64 boundaries, REWRITE\
+    \ and restart round-trip, compared with the parent build"
+components:
+- use: valkey.action.commands
+  id: ucfg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: 2
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, moduleconfigs.unsigned_numeric], expect_difference: true,
+      expect: {equals: [moduleconfigs.unsigned_numeric, "1"]}}
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, "9223372036854775807"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, moduleconfigs.unsigned_numeric], expect_difference: true,
+      expect: {equals: [moduleconfigs.unsigned_numeric, "9223372036854775807"]}}
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, "9223372036854775808"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, moduleconfigs.unsigned_numeric], expect_difference: true,
+      expect: {equals: [moduleconfigs.unsigned_numeric, "9223372036854775808"]}}
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, "9223372036854776807"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, "9223372036854776808"],
+      expect_difference: true, expect: {error: "must be between"}}
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, "18446744073709551615"],
+      expect_difference: true, expect: {error: "must be between"}}
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, "18446744073709551616"],
+      expect_difference: true, expect: {error: "unsigned"}}
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, "-5"], expect_difference: true,
+      expect: {error: "unsigned"}}
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, ""], expect_difference: true,
+      expect: {error: "unsigned"}}
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, "+7"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, moduleconfigs.unsigned_numeric], expect_difference: true,
+      expect: {equals: [moduleconfigs.unsigned_numeric, "7"]}}
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, "-18446744073709551615"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, moduleconfigs.unsigned_numeric], expect_difference: true,
+      expect: {equals: [moduleconfigs.unsigned_numeric, "1"]}}
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, "0"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, "9223372036854775808"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, moduleconfigs.unsigned_numeric], expect_difference: true,
+      expect: {equals: [moduleconfigs.unsigned_numeric, "9223372036854775808"]}}
+    - {command: [CONFIG, GET, moduleconfigs.numeric], expect: {equals: [moduleconfigs.numeric,
+          "-1"]}}
+    - {command: [CONFIG, SET, moduleconfigs.unsigned_numeric, "1"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, moduleconfigs.unsigned_numeric], expect_difference: true,
+      expect: {equals: [moduleconfigs.unsigned_numeric, "1"]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [ucfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ucfg}

@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.availability-zone-slots-shards
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTER SLOTS and CLUSTER SHARDS expose a node's availability-zone
+    when set via CONFIG SET
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: az
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 1
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CLUSTER, SLOTS], expect: {exists: true}}
+    - {command: [CONFIG, SET, availability-zone, us-east-1a], expect: {equals: OK}}
+    - {command: [CLUSTER, SLOTS], expect_difference: true, expect: {contains: us-east-1a}}
+    - {command: [CLUSTER, SHARDS], expect_difference: true, expect: {contains: us-east-1a}}
+    - {command: [CONFIG, SET, availability-zone, ""], expect: {equals: OK}}
+    - {command: [CLUSTER, SLOTS], expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: az}

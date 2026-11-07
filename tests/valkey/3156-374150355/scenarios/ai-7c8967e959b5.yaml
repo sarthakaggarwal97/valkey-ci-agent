@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ba5854636996..3741503557b1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7c8967e959b5
+seed: 7200
+experiment:
+  id: proposed.availability-zone-reload-crash
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

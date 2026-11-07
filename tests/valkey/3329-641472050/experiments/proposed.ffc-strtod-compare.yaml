@@ -1,0 +1,94 @@
+extends: [valkey.liveness]
+id: proposed.ffc-strtod-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Double parsing via ffc.h vs the parent's strtod across ZADD, ZRANGEBYSCORE,
+    ZCOUNT, SORT, GEOADD, CONFIG SET and the RESP3 double parser
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: strtod
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ZADD, zr, "1", a, "2", b, "3", c], expect: {equals: 3}}
+    - {command: [ZRANGEBYSCORE, zr, " 1", "3"], expect_difference: true, expect: {
+        error: "min or max is not a float"}}
+    - {command: [ZRANGEBYSCORE, zr, "0x0", "0x20"], expect_difference: true, expect: {
+        error: "min or max is not a float"}}
+    - {command: [ZRANGEBYSCORE, zr, "(0x1", "3"], expect_difference: true, expect: {
+        error: "min or max is not a float"}}
+    - {command: [ZCOUNT, zr, "0x1", "3"], expect_difference: true, expect: {error: "min\
+          \ or max is not a float"}}
+    - {command: [ZRANGEBYSCORE, zr, "-inf", "+inf"], expect: {equals: [a, b, c]}}
+    - {command: [ZRANGEBYSCORE, zr, "", "3"], expect: {equals: [a, b, c]}}
+    - {command: [ZRANGEBYSCORE, zr, "nan", "3"], expect: {error: true}}
+    - {command: [ZRANGEBYSCORE, zr, "3.", "3"], expect: {equals: [c]}}
+    - {command: [ZADD, zh, "1e2", ok1], expect: {equals: 1}}
+    - {command: [ZADD, zh, "0x10", m1], expect_difference: true, expect: {error: "not\
+          \ a valid float"}}
+    - {command: [ZADD, zh, "0x1.8p1", m2], expect_difference: true, expect: {error: "not\
+          \ a valid float"}}
+    - {command: [ZINCRBY, zh, "0x5", ok1], expect_difference: true, expect: {error: "not\
+          \ a valid float"}}
+    - {command: [ZCARD, zh], expect_difference: true, expect: {equals: 1}}
+    - {command: [GEOADD, geo, "0x10", "0x10", pt], expect_difference: true, expect: {
+        error: "not a valid float"}}
+    - {command: [GEOADD, geo, "13.361389", "38.115556", palermo], expect: {equals: 1}}
+    - {command: [RPUSH, s1, "0x10", "2", "1"], expect: {equals: 3}}
+    - {command: [SORT, s1], expect_difference: true, expect: {error: "can't be converted\
+          \ into double"}}
+    - {command: [RPUSH, s2, " 1", "2"], expect: {equals: 2}}
+    - {command: [SORT, s2], expect_difference: true, expect: {error: "can't be converted\
+          \ into double"}}
+    - {command: [RPUSH, s3, "", "1"], expect: {equals: 2}}
+    - {command: [SORT, s3], expect_difference: true, expect: {error: "can't be converted\
+          \ into double"}}
+    - {command: [SORT, s3, ALPHA], expect: {equals: ["", "1"]}}
+    - {command: [CONFIG, SET, latency-tracking-info-percentiles, "0x50"], expect_difference: true,
+      expect: {error: "latency-tracking-info-percentiles"}}
+    - {command: [CONFIG, SET, latency-tracking-info-percentiles, "50 99 99.9"], expect: {
+        equals: OK}}
+    - {command: [ZADD, zp, "2.2250738585072011e-308", d1], expect: {equals: 1}}
+    - {command: [ZSCORE, zp, d1]}
+    - {command: [ZADD, zp, "1.7976931348623157e308", d2], expect: {equals: 1}}
+    - {command: [ZSCORE, zp, d2]}
+    - {command: [ZADD, zp, "1e-320", d3], expect: {equals: 1}}
+    - {command: [ZSCORE, zp, d3]}
+    - {command: [ZADD, zp, "9007199254740992.5", d4], expect: {equals: 1}}
+    - {command: [ZSCORE, zp, d4]}
+    - {command: [ZADD, zp, "0.1000000000000000055511151231257827021181583404541015625",
+        d5], expect: {equals: 1}}
+    - {command: [ZSCORE, zp, d5]}
+    - {command: [ZADD, zp, "12345678901234567890123456789", d6], expect: {equals: 1}}
+    - {command: [ZSCORE, zp, d6]}
+    - {command: [ZADD, zp, "1e309", d7], expect: {error: "not a valid float"}}
+    - {command: [ZADD, zp, "1e-400", d8], expect: {error: "not a valid float"}}
+    - {command: [ZADD, zp, ".", d9], expect: {error: "not a valid float"}}
+    - {command: [ZADD, zp, "+.5", d10], expect: {equals: 1}}
+    - {command: [ZADD, zp, "3.", d11], expect: {equals: 1}}
+    - {command: [ZADD, zp, "infinity", d12], expect: {equals: 1}}
+    - {command: [ZADD, zp, "nan", d13], expect: {error: "not a valid float"}}
+    - {command: [ZRANGEBYSCORE, zp, "1e-321", "0.2"], expect: {equals: [d3, d1, d5]}}
+    - {command: [EVAL, "redis.setresp(3) local r = redis.call('ZSCORE','zp','d5')\
+          \ return tostring(r['double'])", "0"], expect: {equals: "0.1"}}
+    - {command: [CONFIG, SET, zset-max-listpack-entries, "0"], expect: {equals: OK}}
+    - {command: [ZADD, zs, "2.2250738585072011e-308", e1, "1e-320", e2, "0.1", e3],
+      expect: {equals: 3}}
+    - {command: [ZSCORE, zs, e1]}
+    - {command: [ZRANGEBYSCORE, zs, "(1e-310", "1"], expect: {equals: [e1, e3]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [strtod.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: strtod}

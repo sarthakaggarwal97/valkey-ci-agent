@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8051de740dd38172476b04e892e5517630e3eaed",
+  "parent": "a7d919a5bbb311e04221ea29c460b5c40fc70169",
+  "pr": 3344,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Inherit LDFLAGS for TLS and RDMA modules (#3344)",
+  "date": "2026-03-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2158,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is build-only: it adds $(LDFLAGS) to the Makefile link lines for the optional valkey-tls.so and valkey-rdma.so modules so externally supplied linker flags are inherited when building those shared objects. No source code, command behavior, reply, replication, persistence, or configuration path changes; against an already-compiled binary there is no behavioral difference a scenario could reach, so no test is needed."
+}

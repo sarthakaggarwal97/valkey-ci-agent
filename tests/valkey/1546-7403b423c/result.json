@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7403b423c40e4bf2112a69fcef06b5f280a2d34c",
+  "parent": "6414720504f689a3fc699338bf22565bb70c3829",
+  "pr": 1546,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add unsigned 64-bit numeric config in module API (#1546)",
+  "date": "2026-03-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 48,
+    "executed": 47,
+    "percent": 97,
+    "uncovered": [
+      "src/module.c:13640"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 3.3551,
+  "findings": [],
+  "recorded": []
+}

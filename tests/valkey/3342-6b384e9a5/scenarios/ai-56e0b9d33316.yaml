@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3741503557b1..6b384e9a5b6c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-56e0b9d33316
+seed: 2920
+experiment:
+  id: proposed.zdiff-algo2-early-exit-leak
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
+  server_config:
+    zset-max-listpack-entries: 128
+    zset-max-listpack-value: 64
+    set-max-intset-entries: 512
+    set-max-listpack-entries: 128

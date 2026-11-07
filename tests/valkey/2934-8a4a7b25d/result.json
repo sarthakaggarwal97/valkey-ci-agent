@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8a4a7b25dc6e2ef62819029019254f70e9433774",
+  "parent": "fc217fca2d7de246ab8494d9d8619b7348235f47",
+  "pr": 2934,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "CLUSTERSCAN Command (#2934)",
+  "date": "2026-03-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 4,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.058,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "[Errno 2] No such file or directory: 'walk-work/coverage/src/crc16_slottable.c.gcov'"
+}

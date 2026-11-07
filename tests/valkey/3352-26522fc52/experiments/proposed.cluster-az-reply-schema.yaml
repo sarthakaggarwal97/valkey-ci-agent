@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.cluster-az-reply-schema
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS for CLUSTER SLOTS/SHARDS gains availability-zone history
+    entries, and the live CLUSTER SHARDS/SLOTS/HELLO replies carry the availability-zone
+    field the new schema documents, locally and via cluster-bus gossip
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: az
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [COMMAND, DOCS, "cluster|slots"], expect_difference: true, expect: {
+        contains: "availability-zone"}}
+    - {command: [COMMAND, DOCS, "cluster|shards"], expect_difference: true, expect: {
+        contains: "availability-zone"}}
+    - {command: [CLUSTER, SHARDS], compare: skip, expect: {contains: "health"}}
+    - {command: [CLUSTER, SLOTS], compare: skip, expect: {exists: true}}
+    - {command: [CONFIG, SET, availability-zone, az-east-1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, availability-zone, az-west-2], node: 1, expect: {equals: OK}}
+    - {command: [HELLO], compare: skip, expect: {contains: az-east-1}}
+    - {command: [CLUSTER, SLOTS], compare: skip, expect: {contains: az-east-1}}
+    - {command: [CLUSTER, SHARDS], compare: skip, expect: {contains: az-east-1}}
+    - {command: [CLUSTER, SHARDS], compare: skip, wait_s: 30, expect: {contains: az-west-2}}
+    - {command: [CLUSTER, SHARDS], node: 1, compare: skip, wait_s: 30, expect: {contains: az-east-1}}
+    - {command: [CONFIG, SET, availability-zone, ""], expect: {equals: OK}}
+    - {command: [HELLO], compare: skip, expect: {exists: true}}
+    - {command: [CLUSTER, SLOTS], compare: skip, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [az.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: az}

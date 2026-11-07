@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.zdiff-algo2-early-exit-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: ZDIFF/ZDIFFSTORE algorithm 2 that empties the result set on the last
+    source must not leak the dirty SDS of the final removed element
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zdiff
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [ZADD, a, 1, m0, 2, m1, 3, m2, 4, m3, 5, m4], expect: {equals: 5}}
+    - {command: [ZADD, b0, 1, m0], expect: {equals: 1}}
+    - {command: [ZADD, b1, 1, m1], expect: {equals: 1}}
+    - {command: [ZADD, b2, 1, m2], expect: {equals: 1}}
+    - {command: [ZADD, b3, 1, m3], expect: {equals: 1}}
+    - {command: [ZADD, b4, 1, m4], expect: {equals: 1}}
+    - {command: [ZDIFFSTORE, dst, 6, a, b0, b1, b2, b3, b4], expect: {equals: 0}}
+    - {command: [ZDIFF, 6, a, b0, b1, b2, b3, b4], expect: {equals: []}}
+    - {command: [ZADD, za, 1, 10, 2, 20, 3, 30, 4, 40, 5, 50], expect: {equals: 5}}
+    - {command: [SADD, s0, 10], expect: {equals: 1}}
+    - {command: [SADD, s1, 20], expect: {equals: 1}}
+    - {command: [SADD, s2, 30], expect: {equals: 1}}
+    - {command: [SADD, s3, 40], expect: {equals: 1}}
+    - {command: [SADD, s4, 50], expect: {equals: 1}}
+    - {command: [ZDIFFSTORE, dst2, 6, za, s0, s1, s2, s3, s4], expect: {equals: 0}}
+    - {command: [ZDIFF, 6, za, s0, s1, s2, s3, s4], expect: {equals: []}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zdiff}

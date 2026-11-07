@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ba5854636996..3741503557b1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2fd2c8c231da
+seed: 7000
+experiment:
+  id: proposed.availability-zone-slots-shards
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

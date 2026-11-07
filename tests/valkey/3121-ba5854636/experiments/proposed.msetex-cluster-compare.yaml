@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.msetex-cluster-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: MSETEX keynum key spec (COMMAND GETKEYS), CROSSSLOT refusal and slot-keyed
+    writes in cluster mode
+components:
+- use: valkey.action.commands
+  id: clu
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    timeout_s: 20
+    commands:
+    - {command: [COMMAND, GETKEYS, MSETEX, 2, "k1{t}", v1, "k2{t}", v2, EX, 10], expect_difference: true,
+      expect: {equals: ["k1{t}", "k2{t}"]}}
+    - {command: [COMMAND, GETKEYS, MSETEX, 3, "k1{t}", v1, "k2{t}", v2, "k3{t}", v3],
+      expect_difference: true, expect: {equals: ["k1{t}", "k2{t}", "k3{t}"]}}
+    - {command: [COMMAND, GETKEYS, MSETEX, 1, k, v, KEEPTTL], expect_difference: true,
+      expect: {equals: [k]}}
+    - {command: [COMMAND, GETKEYS, MSETEX, 2147483647, k, v], expect_difference: true,
+      expect: {error: true}}
+    - {command: [COMMAND, GETKEYS, MSETEX, 0, k, v], expect_difference: true, expect: {
+        error: true}}
+    - {command: [MSETEX, 2, "a{t}", "1", "b{t}", "2", EX, 100], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [MGET, "a{t}", "b{t}"], expect_difference: true, expect: {equals: [
+          "1", "2"]}}
+    - {command: [TTL, "a{t}"], expect_difference: true, expect: {min: 90, max: 100}}
+    - {command: [MSETEX, 2, foo, va, bar, vb], expect_difference: true, expect: {
+        error: "CROSSSLOT"}}
+    - {command: [MSETEX, 1, solo, sv, PX, 50000], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [PTTL, solo], expect_difference: true, expect: {min: 1000, max: 50000}}
+    - {command: [MSETEX, 2, "n1{t}", a, "n2{t}", b, NX, EX, 60], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [MSETEX, 2, "n1{t}", c, "n3{t}", d, NX], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [GET, "n1{t}"], expect_difference: true, expect: {equals: a}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [clu.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: clu}

@@ -1,0 +1,48 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3741503557b1fff2072216812e61654b7d366409",
+  "parent": "ba58546369965d8b0d5d14ef87d41531f4fe5bc2",
+  "pr": 3156,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add availability-zone field support to CLUSTER SHARDS / CLUSTER SLOTS (#3156)",
+  "date": "2026-03-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 3,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 39,
+    "executed": 34,
+    "percent": 87,
+    "uncovered": [
+      "src/cluster_legacy.c:493",
+      "src/cluster_legacy.c:494",
+      "src/cluster_legacy.c:495",
+      "src/cluster_legacy.c:497",
+      "src/cluster_legacy.c:498"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 6.3013,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: Unrecoverable error: corrupted cluster config file \"36915d94897294d1b2a0453607703b262f4c575e :64911@61207,,availability-zone=us-east-1a,extra=x,tls-port=0,shard-id=a1a3c3a06f382e2f0be3c8dccd1dce4df38e610e myself,master - 0 0 0 connected 0-16383",
+      "scenario": "ai-7c8967e959b5",
+      "seed": 7200,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "intended by #3156: a panic the change adds",
+      "fingerprint": "c754bc7418eeb0a16160",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

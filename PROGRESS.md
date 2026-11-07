@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-07T16:36+00:00.
+Updated 2026-11-07T16:44+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 670 | 1837 | #3352 (2026-03-11) | 289 | 95.7 |
+| valkey-io/valkey | 697 | 1810 | #3303 (2026-03-05) | 316 | 99.6 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
 | valkey-io/valkey-search | 435 | 234 | #401 (2025-11-21) | 180 | 62.1 |
@@ -13,28 +13,28 @@ Updated 2026-11-07T16:36+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-07T15:57:00+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42373181380): 20 merge(s) tested, 13 without a code change.
+[2026-11-07T16:44:05+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42388835142): 20 merge(s) tested, 7 without a code change.
 
-- [valkey-io/valkey#2936](https://github.com/valkey-io/valkey/pull/2936) ([tests](tests/valkey/2936-644471751/)): Module command result callback addition (#2936): 0 of 6 test(s) reached the change, coverage 30%; [check, predates #2936](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/92)
-- [valkey-io/valkey#3366](https://github.com/valkey-io/valkey/pull/3366) ([tests](tests/valkey/3366-fb655dbf5/)): Replace dict with thin wrapper around hashtable (#3366): 0 of 21 test(s) reached the change, coverage 69%; [crash, appeared after #3366](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/94); crash, predates #3366, since fixed (recorded)
-- [valkey-io/valkey#2811](https://github.com/valkey-io/valkey/pull/2811) ([tests](tests/valkey/2811-8bb8d9168/)): Enhance cluster stale packet detection to prevent sub-replica and empty primary (#2811): 0 of 3 test(s) reached the change, coverage 100%, 1 skipped (required capability 'save-behavior-support' is unsupported)
-- [valkey-io/valkey#3360](https://github.com/valkey-io/valkey/pull/3360) ([tests](tests/valkey/3360-95860937d/)): Optimize WATCH duplicate key check from O(N) to O(1) using per-db hashtable (#3360): 0 of 5 test(s) reached the change, coverage 82%; [check, predates #3360](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/93)
-- [valkey-io/valkey#3421](https://github.com/valkey-io/valkey/pull/3421): to retry, 1 of 25 run(s) could not start: the run could not start: runner execution failed during deployment.provision: LocalDeploymentError: the 10 cluster nodes did not all learn of each other within 30.00s o
-- [valkey-io/valkey#3416](https://github.com/valkey-io/valkey/pull/3416) ([tests](tests/valkey/3416-cf05c0d28/)): fix test_entry to consider diffrerent allocator size classes (#3416): declined: The change modifies only the unit test file src/unit/test_entry.cpp: it skips the entryUpdate gtest when jemalloc is not the allocator and lengthens two test strings so the test's size-class assumptions hold. No runtime server, command, replication, persistence, or tool behavior changes, s
-- [valkey-io/valkey#3419](https://github.com/valkey-io/valkey/pull/3419) ([tests](tests/valkey/3419-edce58c93/)): Improve listpack threshold guidance in valkey.conf (#3419): declined: The change only edits comment text in valkey.conf: it rewords the guidance around the listpack/intset threshold directives (hash-max-listpack-*, list-max-listpack-size, list-compress-depth, set-max-intset-entries, set-max-listpack-*, zset-max-listpack-*). All directive names and default va
-- [valkey-io/valkey#2227](https://github.com/valkey-io/valkey/pull/2227) ([tests](tests/valkey/2227-6822a676f/)): Do the failover immediately if the replica is the best ranked replica (#2227): 0 of 4 test(s) reached the change, coverage 93%, 2 skipped (required capability 'save-behavior-support' is unsupported)
-- [valkey-io/valkey#3033](https://github.com/valkey-io/valkey/pull/3033) ([tests](tests/valkey/3033-60c1b0b86/)): ARM NEON SIMD optimization for pvFind() in vset.c (#3033): 0 of 3 test(s) reached the change, coverage 85%
-- [valkey-io/valkey#3398](https://github.com/valkey-io/valkey/pull/3398) ([tests](tests/valkey/3398-f7a64c550/)): Fix EntryTest.entryUpdate failure on macOS due to allocator differences (#3398): declined: The change modifies only src/unit/test_entry.cpp, a unit test: it shortens test string values so EntryTest.entryUpdate's assumptions about embedded-entry allocation sizes (the 3/4 threshold cases) hold under macOS's allocator as well as jemalloc, and fixes a comment numbering typo. No serv
-- [valkey-io/valkey@78ee1f555d11](https://github.com/valkey-io/valkey/commit/78ee1f555d118907bf8fe0e547a4f7d43e0d521b) ([tests](tests/valkey/78ee1f555/)): ci: include gtests in code coverage report: declined: This is a pure CI/build change: it installs googletest in the codecov GitHub Actions workflow and makes the `lcov` Makefile target also run the gtest unit tests with coverage instrumentation before generating the coverage report. No server, command, replication, persistence, or tool code p
-- [valkey-io/valkey#3209](https://github.com/valkey-io/valkey/pull/3209) ([tests](tests/valkey/3209-3c46f667b/)): Fix `valkey-cli --cluster del-node` for unreachable nodes (#3209): declined: The change is confined to valkey-cli's cluster manager (--cluster del-node/add-node handling of unreachable or empty members) and only manifests on multi-node clusters containing an unreachable or empty-but-reachable node. The sole installed valkey-cli driver, valkey.action.tools, can only
-- [valkey-io/valkey#3276](https://github.com/valkey-io/valkey/pull/3276) ([tests](tests/valkey/3276-9000e26ec/)): Pin workflow pip/go/npm dependencies for OpenSSF compliance (#3276): declined: The change pins pip/go/npm dependency versions in GitHub Actions workflow files (.github/workflows/*.yml) and the reply-schema-linter's package.json/package-lock.json for OpenSSF compliance. It is purely a CI/build-infrastructure change: no Valkey server code, command behaviour, replicatio
-- [valkey-io/valkey#3380](https://github.com/valkey-io/valkey/pull/3380) ([tests](tests/valkey/3380-cd0b4c5e8/)): CLUSTERSCAN MATCH pattern maps to a specific slot optimizations (#3380): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3375](https://github.com/valkey-io/valkey/pull/3375) ([tests](tests/valkey/3375-543a6b83d/)): Ensure the daily workflow uses gtest-parallel to run unit tests in isolation (#3375): declined: The change is purely CI and build infrastructure: it updates .github/workflows/ci.yml and daily.yml to invoke unit tests through the `make test-unit` gtest-parallel target, adds flag plumbing (accurate/large_memory/valgrind/seed, UNIT_TEST_PATTERN) to src/unit/Makefile and src/unit/CMakeLi
-- [valkey-io/valkey#3379](https://github.com/valkey-io/valkey/pull/3379) ([tests](tests/valkey/3379-afe6ee11b/)): remove duplicated lline (#3379): declined: The change only removes a duplicated assignment `shared.integers[j]->encoding = OBJ_ENCODING_INT;` in createSharedObjects (src/server.c); the same value is assigned to the same field twice in a row, so removing the second assignment is a pure cleanup with no behaviour change to test.
-- [valkey-io/valkey#3359](https://github.com/valkey-io/valkey/pull/3359) ([tests](tests/valkey/3359-c921cb5aa/)): Fix incorrect memory overhead calculation for watched keys (#3359): declined: The change is a one-line correctness fix to a memory-accounting constant in multiStateMemOverhead() (sizeof(watchedKey) instead of sizeof(list)), altering the per-watched-key client-memory estimate by 8 bytes per key. It flows only into getClientMemoryUsage(), i.e. the tot-mem field of CLI
-- [valkey-io/valkey#3002](https://github.com/valkey-io/valkey/pull/3002) ([tests](tests/valkey/3002-b58083d9e/)): Optimize streams range hot path (#3002): 0 of 4 test(s) reached the change, coverage 96%
-- [valkey-io/valkey#3263](https://github.com/valkey-io/valkey/pull/3263) ([tests](tests/valkey/3263-c9ce3e091/)): Fix OOM aborts in large-memory ASAN tests on GitHub runners (#3263): declined: The change modifies only CI configuration and test code: .github/workflows/daily.yml gains memory monitoring and reduces test client parallelism, a quicklist gtest is skipped under ASAN, and the large-memory TCL tests reduce payload sizes (5GB to ~4.3GB, still above the 2^32 boundary they 
-- [valkey-io/valkey#1901](https://github.com/valkey-io/valkey/pull/1901) ([tests](tests/valkey/1901-4cbec4a1d/)): Reuse RDB file as AOF preamble on replica after disk-based full sync (#1901): 0 of 10 test(s) reached the change, coverage 63%
+- [valkey-io/valkey#3421](https://github.com/valkey-io/valkey/pull/3421) ([tests](tests/valkey/3421-2cde059da/)): Handle EAGAIN in clusterWriteHandler (#3421): 0 of 6 test(s) reached the change, coverage 0%, 1 skipped (required capability 'save-behavior-support' is unsupported)
+- [valkey-io/valkey#3352](https://github.com/valkey-io/valkey/pull/3352) ([tests](tests/valkey/3352-26522fc52/)): Add availability-zone to the reply schema for CLUSTER SHARDS/SLOTS (#3352): 2 of 2 test(s) reached the change; [check, appeared after #3352](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/95); check, introduced and since fixed (recorded); [check, appeared after #3352](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/96); check, introduced and since fixed (recorded)
+- [valkey-io/valkey#1546](https://github.com/valkey-io/valkey/pull/1546) ([tests](tests/valkey/1546-7403b423c/)): Add unsigned 64-bit numeric config in module API (#1546): 2 of 2 test(s) reached the change, coverage 97%
+- [valkey-io/valkey#3329](https://github.com/valkey-io/valkey/pull/3329) ([tests](tests/valkey/3329-641472050/)): Replace fast_float (C++) with ffc.h (#3329): 3 of 3 test(s) reached the change, coverage 94%
+- [valkey-io/valkey#3344](https://github.com/valkey-io/valkey/pull/3344) ([tests](tests/valkey/3344-8051de740/)): Inherit LDFLAGS for TLS and RDMA modules (#3344): declined: The change is build-only: it adds $(LDFLAGS) to the Makefile link lines for the optional valkey-tls.so and valkey-rdma.so modules so externally supplied linker flags are inherited when building those shared objects. No source code, command behavior, reply, replication, persistence, or conf
+- [valkey-io/valkey#3279](https://github.com/valkey-io/valkey/pull/3279) ([tests](tests/valkey/3279-a7d919a5b/)): Optimize SET key value EX/PX/EXAT ttl to reduce calls of rewriteClientCommandVector (#3279): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3342](https://github.com/valkey-io/valkey/pull/3342) ([tests](tests/valkey/3342-6b384e9a5/)): Fix ZDIFF algorithm 2 memory leak on early exit (#3342): 0 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3156](https://github.com/valkey-io/valkey/pull/3156) ([tests](tests/valkey/3156-374150355/)): Add availability-zone field support to CLUSTER SHARDS / CLUSTER SLOTS (#3156): 3 of 4 test(s) reached the change, coverage 87%; crash, intended by #3156: a panic the change adds (recorded)
+- [valkey-io/valkey#3121](https://github.com/valkey-io/valkey/pull/3121) ([tests](tests/valkey/3121-ba5854636/)): New MSETEX command allows to set an expiration time with MSET (#3121): 2 of 5 test(s) reached the change, coverage 83%; check, introduced and since fixed (recorded)
+- [valkey-io/valkey#3331](https://github.com/valkey-io/valkey/pull/3331) ([tests](tests/valkey/3331-1e2ca5ec5/)): fix alignment different between c and c++ in gtest (#3331): declined: The change rewrites _Atomic declarations in server.h from the qualifier form (_Atomic T) to the type-specifier form (_Atomic(T)), which are semantically identical in C, so the server binary's behavior is unchanged. The substantive edit is to src/unit/wrappers.h, a header used only when com
+- [valkey-io/valkey#3258](https://github.com/valkey-io/valkey/pull/3258) ([tests](tests/valkey/3258-6fee1aa61/)): Use dictGetSomeKeys instead of dictGetRandomKey for gossip node population (#3258): 0 of 3 test(s) reached the change, coverage 87%, 1 skipped (required capability 'save-behavior-support' is unsupported)
+- [valkey-io/valkey#2746](https://github.com/valkey-io/valkey/pull/2746) ([tests](tests/valkey/2746-0ff55de21/)): Make the number of healthy nodes in gossip section configurable (#2746): 1 of 4 test(s) reached the change, coverage 100%, 1 skipped (required capability 'save-behavior-support' is unsupported)
+- [valkey-io/valkey#3252](https://github.com/valkey-io/valkey/pull/3252) ([tests](tests/valkey/3252-3d8a1b55e/)): Replace long long timestamp references with more specific mstime_t/ustime_t (#3252): declined: The change only renames types: every edit replaces a `long long` declaration, cast or sizeof with `mstime_t` or `ustime_t`, both of which are `typedef long long` (src/util.h:71-72). Type sizes, alignment, signedness, arithmetic, the entry expiry memory layout and all format strings are unc
+- [valkey-io/valkey#3325](https://github.com/valkey-io/valkey/pull/3325) ([tests](tests/valkey/3325-9f0106755/)): Changed LUA module dependency (#3325): declined: The change touches only build files (deps/lua/src/Makefile, src/Makefile, src/modules/lua/Makefile): it reorders the engine_lua.so build dependency so the Lua module is built as a prerequisite of valkey-server rather than after it, filters the module out of the server link inputs, and adds
+- [valkey-io/valkey#2934](https://github.com/valkey-io/valkey/pull/2934) ([tests](tests/valkey/2934-8a4a7b25d/)): CLUSTERSCAN Command (#2934): 4 of 6 test(s) reached the change
+- [valkey-io/valkey#3280](https://github.com/valkey-io/valkey/pull/3280) ([tests](tests/valkey/3280-fc217fca2/)): Update cluster config file when NOFAILOVER changes (#3280): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3314](https://github.com/valkey-io/valkey/pull/3314) ([tests](tests/valkey/3314-8c397ea16/)): Fixed point arithmetic for x86 TSC (#3314): 1 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3311](https://github.com/valkey-io/valkey/pull/3311) ([tests](tests/valkey/3311-acb0b9b73/)): Recommend passwordless users for mTLS certificate-based authentication (#3311): declined: The change modifies only a Tcl test file (tests/unit/tls.tcl) and documentation comments in valkey.conf, rewording the tls-auth-clients-user docs to recommend passwordless users for mTLS certificate authentication. No server code, command behavior, config semantics, or protocol handling ch
+- [valkey-io/valkey#3307](https://github.com/valkey-io/valkey/pull/3307) ([tests](tests/valkey/3307-cb9e7c94e/)): Let script continue if busy-reply-threshold is zero (#3307): 3 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3316](https://github.com/valkey-io/valkey/pull/3316) ([tests](tests/valkey/3316-dcfb9269f/)): Fix zset to operate defrag scan lexicographically (#3316): 0 of 2 test(s) reached the change, coverage 100%; crash, fixed by #3316 (recorded)
 
 ### valkey-io/valkey-bloom
 
@@ -73,11 +73,11 @@ Updated 2026-11-07T16:36+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 442 of 648 tested (68%)
-- Changed-line coverage: median 100% of 306 merge(s) measured, 19 under 50%
-- Recall: 130 parents flagged of 193 fix merges
-- Claude: $1747.37 in the last 24 hours, $4648.95 in the last 7 days, $4648.95 in all
-- Issues filed: 47
+- Merges whose tests reached the change: 451 of 663 tested (68%)
+- Changed-line coverage: median 100% of 319 merge(s) measured, 20 under 50%
+- Recall: 132 parents flagged of 196 fix merges
+- Claude: $1821.67 in the last 24 hours, $4723.25 in the last 7 days, $4723.25 in all
+- Issues filed: 49
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -125,6 +125,8 @@ Updated 2026-11-07T16:36+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/92
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/93
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/94
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/95
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/96
 
 ## Retries
 
@@ -133,4 +135,3 @@ Updated 2026-11-07T16:36+00:00.
 - [valkey-io/valkey#3800](https://github.com/valkey-io/valkey/pull/3800): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
 - [valkey-io/valkey#3613](https://github.com/valkey-io/valkey/pull/3613): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
 - [valkey-io/valkey#3498](https://github.com/valkey-io/valkey/pull/3498): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
-- [valkey-io/valkey#3421](https://github.com/valkey-io/valkey/pull/3421): attempt 1 of 3, 1 of 25 run(s) could not start: the run could not start: runner execution failed during deployment.provision: LocalDeploymentError: the 10 cluster nodes did not all learn of each other within 30.00s o

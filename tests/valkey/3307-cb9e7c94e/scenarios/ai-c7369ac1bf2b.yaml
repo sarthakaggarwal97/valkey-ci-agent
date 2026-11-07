@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 35db3e1256fb..cb9e7c94e98f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c7369ac1bf2b
+seed: 101
+experiment:
+  id: proposed.script-busy-threshold-zero
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

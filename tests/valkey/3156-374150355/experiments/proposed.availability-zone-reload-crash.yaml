@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.availability-zone-reload-crash
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: availability-zone holding a comma persists to nodes.conf and must reload
+    without crashing
+components:
+- use: valkey.action.commands
+  id: az
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 1
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, availability-zone, "us-east-1a,extra=x"], expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SLOTS], expect_difference: true, expect: {contains: "us-east-1a,extra=x"}}
+    - {restart: true, expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_enabled:1"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: az}

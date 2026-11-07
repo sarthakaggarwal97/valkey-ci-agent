@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.fcall-busy-threshold-zero
+deployment:
+  modes: [standalone]
+metadata:
+  description: With busy-reply-threshold 0 a long FCALL function no longer refuses
+    other clients with BUSY
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: busy
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {busy-reply-threshold: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nredis.register_function('myfunc',\
+          \ function(keys, args) local x=0 for i=1,500000000 do x=x+1 end return x\
+          \ end)"], expect: {equals: mylib}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {connection: loop, raw: "FCALL myfunc 0\r\n"}
+    - {command: [GET, k], expect_difference: true, expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: busy}

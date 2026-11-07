@@ -1,0 +1,66 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ba58546369965d8b0d5d14ef87d41531f4fe5bc2",
+  "parent": "1e2ca5ec5dd6f97215e7acbcee14e89ea56a9e02",
+  "pr": 3121,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "New MSETEX command allows to set an expiration time with MSET (#3121)",
+  "date": "2026-03-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 61,
+    "executed": 51,
+    "percent": 83,
+    "uncovered": [
+      "src/server.c:7731",
+      "src/server.c:7732",
+      "src/server.c:7822",
+      "src/t_hash.c:1378",
+      "src/t_hash.c:1637",
+      "src/t_string.c:323",
+      "src/t_string.c:582",
+      "src/t_string.c:583",
+      "src/t_string.c:587",
+      "src/t_string.c:598"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 6.4406,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 13 (TTL ek on node 1) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":98205931429}, not {\"reply\":98205931440}",
+      "scenario": "ai-dfebcd3bc426",
+      "seed": 103,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "1f8da5e489eb4f93bf6f",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-225a4982242a",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-2ca90f6ee75e",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.clusterscan-standalone
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTERSCAN refused outside cluster mode, and SCAN/HSCAN/SSCAN/ZSCAN
+    regression on the modified scanGenericCommand, compared with the parent build
+components:
+- use: valkey.action.commands
+  id: nocluster
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTERSCAN, "0"], expect_difference: true, expect: {error: "cluster\
+          \ support disabled"}}
+    - {command: [CLUSTERSCAN, nonsense, SLOT, "99999"], expect_difference: true, expect: {
+        error: "cluster support disabled"}}
+    - {command: [SET, k1, v], expect: {equals: OK}}
+    - {command: [SCAN, "0", MATCH, "k*", COUNT, "100"], expect: {equals: ["0", [k1]]}}
+    - {command: [SCAN, "0", SLOT, "0"], expect: {error: "syntax error"}}
+    - {command: [SCAN, "0", COUNT, "0"], expect: {error: "syntax error"}}
+    - {command: [HSET, h, f, v], expect: {equals: 1}}
+    - {command: [HSCAN, h, "0"], expect: {equals: ["0", [f, v]]}}
+    - {command: [HSCAN, h, "0", NOVALUES], expect: {equals: ["0", [f]]}}
+    - {command: [HSCAN, h, "0", SLOT, "0"], expect: {error: "syntax error"}}
+    - {command: [SADD, s, m], expect: {equals: 1}}
+    - {command: [SSCAN, s, "0"], expect: {equals: ["0", [m]]}}
+    - {command: [ZADD, z, "1", m], expect: {equals: 1}}
+    - {command: [ZSCAN, z, "0"], expect: {equals: ["0", [m, "1"]]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [nocluster.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: nocluster}

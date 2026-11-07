@@ -1,0 +1,36 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2cde059da1b746eb7917147b16412678a9e5e12f",
+  "parent": "cf05c0d28ebe8964ad9d92d73fd6cd7b94ef2f1d",
+  "pr": 3421,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Handle EAGAIN in clusterWriteHandler (#3421)",
+  "date": "2026-03-31",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/cluster_legacy.c:4480"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 5.1888,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-0f1e5e636ce6",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'save-behavior-support' is unsupported"
+    }
+  ]
+}

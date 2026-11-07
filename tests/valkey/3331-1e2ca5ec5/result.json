@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1e2ca5ec5dd6f97215e7acbcee14e89ea56a9e02",
+  "parent": "6fee1aa61cecadcdfe719a67d5a47981eb3c6ea9",
+  "pr": 3331,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "fix alignment different between c and c++ in gtest (#3331)",
+  "date": "2026-03-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3345,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change rewrites _Atomic declarations in server.h from the qualifier form (_Atomic T) to the type-specifier form (_Atomic(T)), which are semantically identical in C, so the server binary's behavior is unchanged. The substantive edit is to src/unit/wrappers.h, a header used only when compiling the C++ gtest unit tests, where the _Atomic macro now preserves alignment via alignas instead of being defined away. This is a test/build infrastructure fix with no runtime behavior to exercise: a fuzzer scenario against a running server cannot reach it, and a compared sequence would show no difference"
+}

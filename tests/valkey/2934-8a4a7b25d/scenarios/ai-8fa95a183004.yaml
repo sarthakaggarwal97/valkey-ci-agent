@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fc217fca2d7d..8a4a7b25dc6e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8fa95a183004
+seed: 1101
+experiment:
+  id: proposed.clusterscan-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

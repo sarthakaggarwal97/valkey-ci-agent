@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fc217fca2d7de246ab8494d9d8619b7348235f47",
+  "parent": "8c397ea16770bb2b2d38fb6d071a10511cbcf9b3",
+  "pr": 3280,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update cluster config file when NOFAILOVER changes (#3280)",
+  "date": "2026-03-08",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 9.1689,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,116 @@
+extends: [valkey.liveness]
+id: proposed.clusterscan-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTERSCAN cursor parsing, fingerprint-mismatch restart, slot walk,
+    SLOT/MATCH/COUNT/TYPE options and error paths, compared with the parent build
+    on one-node clusters; SCAN regression checks ride along
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTERSCAN], expect_difference: true, expect: {error: "wrong number\
+          \ of arguments"}}
+    - {command: [CLUSTERSCAN, "0"], expect_difference: true, expect: {equals: ["0-{06S}-0",
+          []]}}
+    - {command: [CLUSTERSCAN, "0", SLOT, "1"], expect_difference: true, expect: {
+        equals: ["0-{Qi}-0", []]}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0"], expect_difference: true, expect: {equals: [
+          "0-{Qi}-0", []]}}
+    - {command: [CLUSTERSCAN, "0-{6ZJ}-0"], expect_difference: true, expect: {equals: [
+          "0", []]}}
+    - {command: [CLUSTERSCAN, abc], expect_difference: true, expect: {error: "Invalid\
+          \ cursor"}}
+    - {command: [CLUSTERSCAN, "---"], expect_difference: true, expect: {error: "Invalid\
+          \ cursor"}}
+    - {command: [CLUSTERSCAN, "0-{a-b}-0"], expect_difference: true, expect: {error: "Invalid\
+          \ cursor"}}
+    - {command: [CLUSTERSCAN, "0-{06S}-notanumber"], expect_difference: true, expect: {
+        error: "Invalid cursor"}}
+    - {command: [CLUSTERSCAN, "0-{06S}-"], expect_difference: true, expect: {error: "Invalid\
+          \ cursor"}}
+    - {command: [CLUSTERSCAN, "0-{06S}-18446744073709551616"], expect_difference: true,
+      expect: {error: "Invalid cursor"}}
+    - {command: [CLUSTERSCAN, "0", SLOT, "16384"], expect_difference: true, expect: {
+        error: "out of range"}}
+    - {command: [CLUSTERSCAN, "0", SLOT, "-1"], expect_difference: true, expect: {
+        error: "out of range"}}
+    - {command: [CLUSTERSCAN, "0", SLOT, "0", SLOT, "0"], expect_difference: true,
+      expect: {error: "specified once"}}
+    - {command: [CLUSTERSCAN, "0", SLOT], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [CLUSTERSCAN, "0", NOVALUES], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", SLOT, "5"], expect_difference: true, expect: {
+        error: "mismatch"}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", COUNT, "0"], expect_difference: true, expect: {
+        error: "syntax error"}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", COUNT, "-1"], expect_difference: true,
+      expect: {error: "syntax error"}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", COUNT, "9223372036854775808"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [SET, "{06S}one", v], expect: {equals: OK}}
+    - {command: [SET, "{Qi}a", v], expect: {equals: OK}}
+    - {command: [RPUSH, "{Qi}b", x], expect: {equals: 1}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", COUNT, "100"], expect_difference: true,
+      expect: {equals: ["0-{Qi}-0", ["{06S}one"]]}}
+    - {command: [CLUSTERSCAN, "AAAAAA-{06S}-999999", COUNT, "100"], expect_difference: true,
+      expect: {equals: ["0-{Qi}-0", ["{06S}one"]]}}
+    - {command: [CLUSTERSCAN, "0--123", COUNT, "100"], expect_difference: true, expect: {
+        equals: ["0-{Qi}-0", ["{06S}one"]]}}
+    - {command: [CLUSTERSCAN, "0-06S-0", COUNT, "100"], expect_difference: true, expect: {
+        equals: ["0-{Qi}-0", ["{06S}one"]]}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", COUNT, "2147483648"], expect_difference: true,
+      expect: {equals: ["0-{Qi}-0", ["{06S}one"]]}}
+    - {command: [CLUSTERSCAN, "0-{Qi}-0", TYPE, list, COUNT, "100"], expect_difference: true,
+      expect: {equals: ["0-{5L5}-0", ["{Qi}b"]]}}
+    - {command: [CLUSTERSCAN, "0-{Qi}-0", TYPE, string, COUNT, "100"], expect_difference: true,
+      expect: {equals: ["0-{5L5}-0", ["{Qi}a"]]}}
+    - {command: [CLUSTERSCAN, "0-{Qi}-0", TYPE, nosuchtype, COUNT, "100"], expect_difference: true,
+      expect: {equals: ["0-{5L5}-0", []]}}
+    - {command: [CLUSTERSCAN, "0-{Qi}-0", TYPE, "", COUNT, "100"], expect_difference: true,
+      expect: {equals: ["0-{5L5}-0", []]}}
+    - {command: [CLUSTERSCAN, "0-{Qi}-0", MATCH, "*a", COUNT, "100"], expect_difference: true,
+      expect: {equals: ["0-{5L5}-0", ["{Qi}a"]]}}
+    - {command: [CLUSTERSCAN, "0-{Qi}-0", MATCH, "", COUNT, "100"], expect_difference: true,
+      expect: {equals: ["0-{5L5}-0", []]}}
+    - {command: [CLUSTERSCAN, "0-{Qi}-0", COUNT, "1", COUNT, "100", MATCH, "*", MATCH,
+        "*a", TYPE, list, TYPE, string], expect_difference: true, expect: {equals: [
+          "0-{5L5}-0", ["{Qi}a"]]}}
+    - {command: [CLUSTERSCAN, "0", MATCH, slot, SLOT, "0"], expect_difference: true,
+      expect: {equals: ["0-{06S}-0", []]}}
+    - {command: [CLUSTERSCAN, "0-{Qi}-0", SLOT, "1", MATCH, "*a", COUNT, "100"], expect_difference: true,
+      expect: {equals: ["0", ["{Qi}a"]]}}
+    - {command: [SCAN, "0", MATCH, "{06S}*", COUNT, "1000"], expect: {equals: ["0",
+          ["{06S}one"]]}}
+    - {command: [SCAN, "0", SLOT, "0"], expect: {error: "syntax error"}}
+    - {command: [MSET, "{4Iu}k01", v, "{4Iu}k02", v, "{4Iu}k03", v, "{4Iu}k04", v,
+        "{4Iu}k05", v, "{4Iu}k06", v, "{4Iu}k07", v, "{4Iu}k08", v, "{4Iu}k09", v,
+        "{4Iu}k10", v, "{4Iu}k11", v, "{4Iu}k12", v, "{4Iu}k13", v, "{4Iu}k14", v,
+        "{4Iu}k15", v, "{4Iu}k16", v], expect: {equals: OK}}
+    - {command: [CLUSTERSCAN, "0-{4Iu}-0", COUNT, "5"], compare: skip, expect: {exists: true}}
+    - {command: [DEL, "{4Iu}k01", "{4Iu}k02", "{4Iu}k03", "{4Iu}k04", "{4Iu}k05",
+        "{4Iu}k06", "{4Iu}k07", "{4Iu}k08"], expect: {equals: 8}}
+    - {command: [CLUSTERSCAN, "0-{4Iu}-0", COUNT, "5"], compare: skip, expect: {exists: true}}
+    - {command: [CLUSTERSCAN, "0-{4Iu}-0", SLOT, "3", COUNT, "2"], compare: skip,
+      expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cscan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cscan}

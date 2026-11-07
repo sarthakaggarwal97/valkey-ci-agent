@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9f0106755b177f8eea3d62eed6f28f20fb54d459",
+  "parent": "8a4a7b25dc6e2ef62819029019254f70e9433774",
+  "pr": 3325,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Changed LUA module dependency (#3325)",
+  "date": "2026-03-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2706,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change touches only build files (deps/lua/src/Makefile, src/Makefile, src/modules/lua/Makefile): it reorders the engine_lua.so build dependency so the Lua module is built as a prerequisite of valkey-server rather than after it, filters the module out of the server link inputs, and adds quiet pretty-printing to the Lua compile/link rules. No runtime code changes, so no command reply, replication, persistence, or crash path can differ between the two builds; any breakage would surface as a compile/link failure, which the fuzzer's build step already exercises. No scenario is needed."
+}

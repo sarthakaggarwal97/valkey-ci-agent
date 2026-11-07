@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "acb0b9b73e3584ed6199525a7b892c5de7bc4f5d",
+  "parent": "747af1a85d6c1d43a749c59238a19d5b4b25e343",
+  "pr": 3311,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Recommend passwordless users for mTLS certificate-based authentication (#3311)",
+  "date": "2026-03-06",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2294,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only a Tcl test file (tests/unit/tls.tcl) and documentation comments in valkey.conf, rewording the tls-auth-clients-user docs to recommend passwordless users for mTLS certificate authentication. No server code, command behavior, config semantics, or protocol handling changes, so there is no runtime behavior to test."
+}

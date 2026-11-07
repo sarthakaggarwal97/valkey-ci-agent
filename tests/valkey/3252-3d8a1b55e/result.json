@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3d8a1b55ed072380655f18b0868a1edb20b08a64",
+  "parent": "9f0106755b177f8eea3d62eed6f28f20fb54d459",
+  "pr": 3252,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replace long long timestamp references with more specific mstime_t/ustime_t (#3252)",
+  "date": "2026-03-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5129,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames types: every edit replaces a `long long` declaration, cast or sizeof with `mstime_t` or `ustime_t`, both of which are `typedef long long` (src/util.h:71-72). Type sizes, alignment, signedness, arithmetic, the entry expiry memory layout and all format strings are unchanged, so no behaviour, reply, persistence or replication path differs from the parent build. A pure refactor with no observable effect needs no scenario."
+}

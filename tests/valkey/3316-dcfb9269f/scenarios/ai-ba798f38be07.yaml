@@ -1,0 +1,22 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a731e45fd394..dcfb9269f5ba.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ba798f38be07
+seed: 3316
+experiment:
+  id: proposed.zset-defrag-equal-score
+  inputs:
+    num_keys: 500
+    members_per_key: 300
+    value_pad: 200
+    defrag_seconds: 20
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
+  server_config:
+    busy-reply-threshold: '0'
+    zset-max-listpack-entries: '0'
+    active-defrag-ignore-bytes: '1'
+    active-defrag-threshold-lower: '0'
+    active-defrag-cycle-us: '50000'
+    active-defrag-max-scan-fields: '1000'
