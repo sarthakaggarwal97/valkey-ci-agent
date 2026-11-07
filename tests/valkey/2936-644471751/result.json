@@ -1,0 +1,118 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6444717517316ecd16712e5f50794f99f600cdfe",
+  "parent": "9d51f5ff8a8634a20f29fc38f39d592b848ddc14",
+  "pr": 2936,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Module command result callback addition (#2936)",
+  "date": "2026-04-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 7,
+  "recall": false,
+  "coverage": {
+    "lines": 127,
+    "executed": 39,
+    "percent": 30,
+    "uncovered": [
+      "src/module.c:11699",
+      "src/module.c:11700",
+      "src/module.c:11707",
+      "src/module.c:11708",
+      "src/module.c:11710",
+      "src/module.c:11711",
+      "src/module.c:11712",
+      "src/module.c:11713",
+      "src/module.c:11717",
+      "src/module.c:11718",
+      "src/module.c:11719",
+      "src/module.c:11720",
+      "src/module.c:11726",
+      "src/module.c:11728",
+      "src/module.c:11731",
+      "src/module.c:11732",
+      "src/module.c:11739",
+      "src/module.c:11740",
+      "src/module.c:11741",
+      "src/module.c:11743",
+      "src/module.c:11744",
+      "src/module.c:11745",
+      "src/module.c:11747",
+      "src/module.c:11758",
+      "src/module.c:11760",
+      "src/module.c:11763",
+      "src/module.c:11764",
+      "src/module.c:11765",
+      "src/module.c:11766",
+      "src/module.c:11770",
+      "src/module.c:11783",
+      "src/module.c:11784",
+      "src/module.c:11785",
+      "src/module.c:11786",
+      "src/module.c:11787",
+      "src/module.c:11788",
+      "src/module.c:11789",
+      "src/module.c:11791",
+      "src/module.c:11795",
+      "src/module.c:11797",
+      "src/module.c:11800",
+      "src/module.c:11801",
+      "src/module.c:11802",
+      "src/module.c:11803",
+      "src/module.c:11807",
+      "src/module.c:12707",
+      "src/module.c:12708",
+      "src/module.c:12709",
+      "src/module.c:12710",
+      "src/module.c:12711"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 18.663,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 28 (GET k on connection unauth) replies otherwise with resp 3: {\"error\":\"cannot connect: ResponseError: NOAUTH HELLO must be called with the client already authenticated, otherwise the HELLO <proto> AUTH <user> <pass> option can be used to authenticate the client and select",
+      "scenario": "ai-da205ed7a4a3",
+      "seed": 29361,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #2936",
+      "fingerprint": "8c0a21cda42126b6bf68",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/92"
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-a5794d3d7a70",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'rejections' returned ERROR: command 28 (GET k on connection unauth) got no reply: cannot connect: ResponseError: NOAUTH HELLO must be called with the client already authenticated, otherwise the HELLO <proto> AUTH <user> <pass> option ca"
+    },
+    {
+      "scenario": "ai-7fb04047ab30",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'replrej' returned ERROR: expectations both builds violate alike, so they are not about the change: 8 (GET k on node 1)"
+    },
+    {
+      "scenario": "ai-89444fe3c17a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'moved' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (EXEC on node 1)"
+    },
+    {
+      "scenario": "ai-cf746d54cd7f",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

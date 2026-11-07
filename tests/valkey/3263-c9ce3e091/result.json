@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c9ce3e09191305a455139f70b7807ebb0549b951",
+  "parent": "5133023b9815ec5aef7fac949e3dc9d8d6017c70",
+  "pr": 3263,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix OOM aborts in large-memory ASAN tests on GitHub runners (#3263)",
+  "date": "2026-03-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2906,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only CI configuration and test code: .github/workflows/daily.yml gains memory monitoring and reduces test client parallelism, a quicklist gtest is skipped under ASAN, and the large-memory TCL tests reduce payload sizes (5GB to ~4.3GB, still above the 2^32 boundary they exercise) and iteration counts to fit 16GB GitHub runners. No file under src/ that ships in the server, tools, or any runtime behaviour is changed, so no command reply, replication, persistence or cluster path differs between the parent and the change. There is nothing a scenario could reach or compare."
+}

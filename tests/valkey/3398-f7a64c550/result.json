@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f7a64c55099efb4ee3885a2df473ab89c3948abe",
+  "parent": "78ee1f555d118907bf8fe0e547a4f7d43e0d521b",
+  "pr": 3398,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix EntryTest.entryUpdate failure on macOS due to allocator differences (#3398)",
+  "date": "2026-03-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2328,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only src/unit/test_entry.cpp, a unit test: it shortens test string values so EntryTest.entryUpdate's assumptions about embedded-entry allocation sizes (the 3/4 threshold cases) hold under macOS's allocator as well as jemalloc, and fixes a comment numbering typo. No server code, command behaviour, reply, replication, persistence or memory-management path changes, so there is no runtime behaviour for a scenario to reach."
+}

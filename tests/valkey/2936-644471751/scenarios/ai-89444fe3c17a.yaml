@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9d51f5ff8a86..644471751731.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-89444fe3c17a
+seed: 29364
+experiment:
+  id: proposed.cluster-moved-rejection
+deployment:
+  mode: standalone
+  base_port: 7300

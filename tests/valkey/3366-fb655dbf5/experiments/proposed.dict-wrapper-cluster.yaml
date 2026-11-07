@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.dict-wrapper-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Cluster nodes, blacklist, shard and slot-migration dicts (clusterNodesDictType,
+    clusterNodesBlackListDictType, clusterSdsToListType, clusterSlotDictType) behave
+    identically on the hashtable-backed wrapper.
+components:
+- use: valkey.action.commands
+  id: slots
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, INFO], wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:2"}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:2"}}
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect: {equals: 1}}
+    - {command: [CLUSTER, GETKEYSINSLOT, 12182, 10], expect: {equals: [foo]}}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, <node.0.id>], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, MIGRATING, <node.1.id>], expect: {equals: OK}}
+    - {command: [MIGRATE, <node.1.host>, <node.1.port>, foo, 0, 5000], expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, <node.1.id>], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, <node.1.id>], expect: {equals: OK}}
+    - {command: [GET, foo], node: 1, expect: {equals: bar}}
+    - {command: [GET, foo], compare: skip, expect: {error: MOVED}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 1, expect: {equals: 1}}
+    - {command: [CLUSTER, SHARDS], compare: skip}
+    - {command: [CLUSTER, FORGET, <node.1.id>], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], wait_s: 15, compare: skip, expect: {contains: "cluster_known_nodes:1"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slots.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slots}

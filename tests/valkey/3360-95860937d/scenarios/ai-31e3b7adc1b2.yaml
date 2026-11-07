@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2cde059da1b7..95860937d555.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-31e3b7adc1b2
+seed: 93605
+experiment:
+  id: proposed.watch-many-dbs-stress
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

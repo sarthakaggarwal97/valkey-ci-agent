@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c921cb5aa5619cb4ae5cd4affb43a3a441e297b3",
+  "parent": "6c329dfe2c02d09b276fd5617acdb31e6169ebc1",
+  "pr": 3359,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix incorrect memory overhead calculation for watched keys (#3359)",
+  "date": "2026-03-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.7646,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a one-line correctness fix to a memory-accounting constant in multiStateMemOverhead() (sizeof(watchedKey) instead of sizeof(list)), altering the per-watched-key client-memory estimate by 8 bytes per key. It flows only into getClientMemoryUsage(), i.e. the tot-mem field of CLIENT INFO/CLIENT LIST, the mem_clients_normal/clients.normal figures in INFO memory and MEMORY STATS, and the maxmemory-clients eviction budget. There is no crash, data-loss, wrong-logical-reply, replication, or persistence effect. The only observables are memory numbers, which the fuzzer model treats as non-d"
+}

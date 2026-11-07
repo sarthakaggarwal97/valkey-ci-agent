@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.clusterscan-match-slot
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTERSCAN with a MATCH pattern that maps to a single slot starts
+    at, resumes to, and concludes after that slot instead of walking all slots
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, "{06S}-k", v0], expect: {equals: OK}}
+    - {command: [SET, "{Qi}-k", v1], expect: {equals: OK}}
+    - {command: [SET, "{5L5}-k", v2], expect: {equals: OK}}
+    - {command: [CLUSTERSCAN, "0", MATCH, "{5L5}-*"], expect_difference: true, expect: {
+        equals: ["0-{5L5}-0", []]}}
+    - {command: [CLUSTERSCAN, "0", MATCH, "{06S}-*"], expect: {equals: ["0-{06S}-0",
+          []]}}
+    - {command: [CLUSTERSCAN, "0", MATCH, "{Qi}-k"], expect_difference: true, expect: {
+        equals: ["0-{Qi}-0", []]}}
+    - {command: [CLUSTERSCAN, "0-{5L5}-0", MATCH, "{5L5}-*", COUNT, 100], expect_difference: true,
+      expect: {equals: ["0", ["{5L5}-k"]]}}
+    - {command: [CLUSTERSCAN, "0-{Qi}-0", MATCH, "{Qi}-k", COUNT, 100], expect_difference: true,
+      expect: {equals: ["0", ["{Qi}-k"]]}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", MATCH, "{5L5}-*"], expect_difference: true,
+      expect: {equals: ["0-{5L5}-0", []]}}
+    - {command: [CLUSTERSCAN, "0-{5L5}-0", MATCH, "{06S}-*"], expect_difference: true,
+      expect: {equals: ["0", []]}}
+    - {command: [CLUSTERSCAN, "0", SLOT, 0, MATCH, "{Qi}-*"], expect_difference: true,
+      expect: {equals: ["0", []]}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", SLOT, 0, MATCH, "{Qi}-*"], expect: {equals: [
+          "0", []]}}
+    - {command: [CLUSTERSCAN, "0-{06S}-0", SLOT, 1, MATCH, "{Qi}-*"], expect: {error: "Cursor\
+          \ slot mismatch"}}
+    - {command: [CLUSTERSCAN, "0-{Qi}-0", SLOT, 1, MATCH, "{Qi}-*", TYPE, string,
+        COUNT, 100], expect: {equals: ["0", ["{Qi}-k"]]}}
+    - {command: [CLUSTERSCAN, "0", MATCH, "*"], expect: {equals: ["0-{06S}-0", []]}}
+    - {command: [CLUSTERSCAN, "0", MATCH, "*{Qi}*"], expect: {equals: ["0-{06S}-0",
+          []]}}
+    - {command: [CLUSTERSCAN, "0", MATCH, "*", MATCH, "{Qi}-*"], expect_difference: true,
+      expect: {equals: ["0-{Qi}-0", []]}}
+    - {command: [CLUSTERSCAN, "0", MATCH, "{Qi}-*", MATCH, "*"], expect: {equals: [
+          "0-{06S}-0", []]}}
+    - {command: [CLUSTERSCAN, "0-{Qi}-0", MATCH, ""], expect_difference: true, expect: {
+        equals: ["0", []]}}
+    - {command: [CLUSTERSCAN, "0", SLOT, 2, MATCH, ""], expect_difference: true, expect: {
+        equals: ["0", []]}}
+    - {command: [CLUSTERSCAN, bogus, MATCH, "{Qi}-*"], expect: {error: "Invalid cursor"}}
+    - {command: [CLUSTERSCAN, "0", MATCH], expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cscan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cscan}

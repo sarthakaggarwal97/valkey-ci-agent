@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.dict-wrapper-hash-field-ttl
+deployment:
+  modes: [standalone]
+metadata:
+  description: 300 hash fields sharing one expiry push a vset bucket past 127 entries
+    into the keyCompare-less pointerHashtableType, hitting the new pointer-equality
+    default in hashtableCompareKeys; replies compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: hfe
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    server_config: {hash-max-listpack-entries: {$ref: inputs.hash_listpack_entries}}
+    timeout_s: 90
+    commands:
+    - {command: [EVAL, "for i=1,300 do redis.call('hset','h','f'..i,'v'..i) end return\
+          \ redis.call('hlen','h')", 0], expect: {equals: 300}}
+    - {command: [OBJECT, ENCODING, h], compare: skip}
+    - {command: [EVAL, "local a={'h','100','FIELDS','300'} for i=1,300 do a[#a+1]='f'..i\
+          \ end local r=redis.call('hexpire',unpack(a)) local s=0 for i=1,#r do s=s+r[i]\
+          \ end return s", 0], expect: {equals: 300}}
+    - {command: [EVAL, "local a={'h','FIELDS','150'} for i=1,150 do a[#a+1]='f'..i\
+          \ end local r=redis.call('hpersist',unpack(a)) local s=0 for i=1,#r do s=s+r[i]\
+          \ end return s", 0], expect: {equals: 150}}
+    - {command: [EVAL, "local a={'h','50','FIELDS','150'} for i=151,300 do a[#a+1]='f'..i\
+          \ end local r=redis.call('hpexpire',unpack(a)) local s=0 for i=1,#r do s=s+r[i]\
+          \ end return s", 0], expect: {equals: 150}}
+    - {command: [HLEN, h], wait_s: 20, expect: {equals: 150}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [EVAL, "local a={'h','100','FIELDS','150'} for i=1,150 do a[#a+1]='f'..i\
+          \ end local r=redis.call('hexpire',unpack(a)) local s=0 for i=1,#r do s=s+r[i]\
+          \ end return s", 0], expect: {equals: 150}}
+    - {command: [DEL, h], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [hfe.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hfe}

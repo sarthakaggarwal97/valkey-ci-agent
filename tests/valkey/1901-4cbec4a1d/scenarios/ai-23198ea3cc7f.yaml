@@ -1,0 +1,22 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 26522fc527d1..4cbec4a1d962.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-23198ea3cc7f
+seed: 404
+experiment:
+  id: proposed.aof-rdb-preamble-full-sync
+  inputs:
+    signal: SIGKILL
+    mutation_rate: 800
+    value_size: 1024
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7300
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec
+    aof-use-rdb-preamble: 'yes'
+    repl-diskless-sync: 'no'
+    repl-diskless-load: disabled
+    dual-channel-replication-enabled: 'no'
+    save: ''

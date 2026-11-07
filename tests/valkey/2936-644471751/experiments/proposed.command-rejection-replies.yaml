@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.command-rejection-replies
+deployment:
+  modes: [standalone]
+metadata:
+  description: Every pre-execution rejection path the command result event change
+    refactored, replies compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rejections
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-module-command: "no"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [NOSUCHCOMMANDXYZ, a, b], expect: {error: "unknown command"}}
+    - {command: ["", x], expect: {error: "unknown command"}}
+    - {command: [SET], expect: {error: "wrong number of arguments"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [MULTI], expect: {error: "not allowed inside a transaction"}}
+    - {command: [DISCARD], expect: {equals: OK}}
+    - {command: [EXEC], expect: {error: "without MULTI"}}
+    - {command: [MODULE, LIST], expect: {error: "not allowed"}}
+    - {command: [CONFIG, SET, maxmemory, 1], expect: {equals: OK}}
+    - {command: [SET, oomkey, v], expect: {error: "OOM"}}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: [CONFIG, SET, min-replicas-to-write, 1], expect: {equals: OK}}
+    - {command: [SET, k, v], expect: {error: "NOREPLICAS"}}
+    - {command: [CONFIG, SET, min-replicas-to-write, 0], expect: {equals: OK}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [SUBSCRIBE, ch1], connection: sub, expect: {exists: true}}
+    - {command: [SET, pk, v], connection: sub, expect: {exists: true}}
+    - {command: [ACL, SETUSER, limkeys, on, ">pw1", "~allowed:*", resetchannels, "&chan:ok",
+        "+@all"], expect: {equals: OK}}
+    - {command: [AUTH, limkeys, pw1], connection: aclkey, expect: {equals: OK}}
+    - {command: [SET, "allowed:1", v], connection: aclkey, expect: {equals: OK}}
+    - {command: [GET, denied_key], connection: aclkey, expect: {error: "NOPERM"}}
+    - {command: [GET, "12345"], connection: aclkey, expect: {error: "NOPERM"}}
+    - {command: [AUTH, limkeys, pw1], connection: aclchan, expect: {equals: OK}}
+    - {command: [SUBSCRIBE, "chan:secret"], connection: aclchan, expect: {error: "NOPERM"}}
+    - {command: [ACL, SETUSER, nocmd, on, ">pw2"], expect: {equals: OK}}
+    - {command: [AUTH, nocmd, pw2], connection: nocmdc, expect: {equals: OK}}
+    - {command: [GET, anykey], connection: nocmdc, expect: {error: "NOPERM"}}
+    - {command: [CONFIG, SET, requirepass, s3cret], expect: {equals: OK}}
+    - {command: [GET, k], connection: unauth, expect: {error: "NOAUTH"}}
+    - {command: [AUTH, s3cret], connection: unauth, expect: {equals: OK}}
+    - {command: [GET, k], connection: unauth, expect: {equals: v}}
+    - {command: [CONFIG, SET, requirepass, ""], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [GET, k], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rejections.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rejections}

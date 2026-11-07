@@ -1,0 +1,132 @@
+extends: [valkey.liveness]
+id: proposed.vset-pvfind-hash-field-ttl
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Hash field TTL churn drives pvFind() in vset.c over pointer vectors of many lengths:
+    removals at each NEON lane position (index 0-3), the scalar tail, shrinks across
+    the len>=8 SIMD threshold, rax-bucket vectors past the 127-entry conversion, TTL
+    updates, and active expiry's pop path. Replies are compared against the parent
+    build; a mis-indexed find crashes a serverAssert or changes HEXPIRETIME/HLEN/HGETALL
+    replies.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hz: {type: integer, minimum: 1, maximum: 500, default: 10}
+components:
+- use: valkey.action.commands
+  id: vset
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hz: {$ref: inputs.hz}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [HSET, h, f1, v, f2, v, f3, v, f4, v, f5, v, f6, v, f7, v, f8, v,
+        f9, v, f10, v, f11, v, f12, v, f13, v, f14, v, f15, v, f16, v, f17, v, f18,
+        v, f19, v, f20, v, f21, v, f22, v, f23, v, f24, v, f25, v, f26, v, f27, v,
+        f28, v, f29, v, f30, v, f31, v, f32, v, f33, v, f34, v, f35, v, f36, v, f37,
+        v, f38, v, f39, v, f40, v], expect: {equals: 40}}
+    - {command: [HEXPIREAT, h, 16000000000, FIELDS, 40, f1, f2, f3, f4, f5, f6, f7,
+        f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21, f22, f23,
+        f24, f25, f26, f27, f28, f29, f30, f31, f32, f33, f34, f35, f36, f37, f38,
+        f39, f40], expect: {equals: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1]}}
+    - {command: [HDEL, h, f1], expect: {equals: 1}}
+    - {command: [HDEL, h, f2, f3, f4, f5], expect: {equals: 4}}
+    - {command: [HDEL, h, f40], expect: {equals: 1}}
+    - {command: [HDEL, h, f20], expect: {equals: 1}}
+    - {command: [HPERSIST, h, FIELDS, 2, f6, f7], expect: {equals: [1, 1]}}
+    - {command: [HEXPIREAT, h, 16000010000, FIELDS, 1, f8], expect: {equals: [1]}}
+    - {command: [HGETEX, h, PERSIST, FIELDS, 1, f9], expect: {equals: [v]}}
+    - {command: [HGETDEL, h, FIELDS, 2, f10, f11], expect: {equals: [v, v]}}
+    - {command: [HSET, h, f12, w], expect: {equals: 0}}
+    - {command: [HEXPIRETIME, h, FIELDS, 8, f1, f6, f8, f9, f12, f13, f20, f40], expect: {
+        equals: [-2, -1, 16000010000, -1, -1, 16000000000, -2, -2]}}
+    - {command: [HLEN, h], expect: {equals: 31}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HDEL, h, f13, f14, f15, f16, f17, f18, f19, f21, f22, f23, f24, f25,
+        f26, f27, f28, f29, f30], expect: {equals: 17}}
+    - {command: [HDEL, h, f31, f32], expect: {equals: 2}}
+    - {command: [HDEL, h, f33], expect: {equals: 1}}
+    - {command: [HSETEX, h, KEEPTTL, FIELDS, 1, f34, v2]}
+    - {command: [HEXPIRETIME, h, FIELDS, 3, f34, f38, f39], expect: {equals: [16000000000,
+          16000000000, 16000000000]}}
+    - {command: [HTTL, h, FIELDS, 1, f35], compare: skip}
+    - {command: [HLEN, h], expect: {equals: 11}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HSET, h2, g1, v, g2, v, g3, v, g4, v, g5, v, g6, v, g7, v, g8, v,
+        g9, v], expect: {equals: 9}}
+    - {command: [HPEXPIREAT, h2, 16000000000000, FIELDS, 9, g1, g2, g3, g4, g5, g6,
+        g7, g8, g9], expect: {equals: [1, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [HDEL, h2, g5], expect: {equals: 1}}
+    - {command: [HDEL, h2, g1, g9], expect: {equals: 2}}
+    - {command: [HDEL, h2, g2, g3, g4, g6], expect: {equals: 4}}
+    - {command: [HEXPIRETIME, h2, FIELDS, 2, g7, g8], expect: {equals: [16000000000,
+          16000000000]}}
+    - {command: [HDEL, h2, g7], expect: {equals: 1}}
+    - {command: [HDEL, h2, g8], expect: {equals: 1}}
+    - {command: [EXISTS, h2], expect: {equals: 0}}
+    - {command: [HSET, h4, a1, v, a2, v, a3, v, a4, v, a5, v, a6, v, a7, v, a8, v,
+        a9, v, a10, v, a11, v, a12, v, a13, v, a14, v, a15, v, a16, v, a17, v, a18,
+        v, a19, v, a20, v, a21, v, a22, v, a23, v, a24, v, a25, v, a26, v, a27, v,
+        a28, v, a29, v, a30, v, a31, v, a32, v, a33, v, a34, v, a35, v, a36, v, a37,
+        v, a38, v, a39, v, a40, v, a41, v, a42, v, a43, v, a44, v, a45, v, a46, v,
+        a47, v, a48, v, a49, v, a50, v, a51, v, a52, v, a53, v, a54, v, a55, v, a56,
+        v, a57, v, a58, v, a59, v, a60, v, a61, v, a62, v, a63, v, a64, v, a65, v,
+        a66, v, a67, v, a68, v, a69, v, a70, v], expect: {equals: 70}}
+    - {command: [HSET, h4, b1, v, b2, v, b3, v, b4, v, b5, v, b6, v, b7, v, b8, v,
+        b9, v, b10, v, b11, v, b12, v, b13, v, b14, v, b15, v, b16, v, b17, v, b18,
+        v, b19, v, b20, v, b21, v, b22, v, b23, v, b24, v, b25, v, b26, v, b27, v,
+        b28, v, b29, v, b30, v, b31, v, b32, v, b33, v, b34, v, b35, v, b36, v, b37,
+        v, b38, v, b39, v, b40, v, b41, v, b42, v, b43, v, b44, v, b45, v, b46, v,
+        b47, v, b48, v, b49, v, b50, v, b51, v, b52, v, b53, v, b54, v, b55, v, b56,
+        v, b57, v, b58, v, b59, v, b60, v, b61, v, b62, v, b63, v, b64, v, b65, v,
+        b66, v, b67, v, b68, v, b69, v, b70, v], expect: {equals: 70}}
+    - {command: [HEXPIREAT, h4, 16000000000, FIELDS, 70, a1, a2, a3, a4, a5, a6, a7,
+        a8, a9, a10, a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23,
+        a24, a25, a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37, a38,
+        a39, a40, a41, a42, a43, a44, a45, a46, a47, a48, a49, a50, a51, a52, a53,
+        a54, a55, a56, a57, a58, a59, a60, a61, a62, a63, a64, a65, a66, a67, a68,
+        a69, a70], expect: {equals: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [HEXPIREAT, h4, 16000010000, FIELDS, 70, b1, b2, b3, b4, b5, b6, b7,
+        b8, b9, b10, b11, b12, b13, b14, b15, b16, b17, b18, b19, b20, b21, b22, b23,
+        b24, b25, b26, b27, b28, b29, b30, b31, b32, b33, b34, b35, b36, b37, b38,
+        b39, b40, b41, b42, b43, b44, b45, b46, b47, b48, b49, b50, b51, b52, b53,
+        b54, b55, b56, b57, b58, b59, b60, b61, b62, b63, b64, b65, b66, b67, b68,
+        b69, b70], expect: {equals: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [HDEL, h4, a1, a35, a70, b1, b35, b70], expect: {equals: 6}}
+    - {command: [HPERSIST, h4, FIELDS, 2, a2, b2], expect: {equals: [1, 1]}}
+    - {command: [HEXPIRETIME, h4, FIELDS, 6, a1, a2, a3, b1, b2, b3], expect: {equals: [
+          -2, -1, 16000000000, -2, -1, 16000010000]}}
+    - {command: [HLEN, h4], expect: {equals: 134}}
+    - {command: [HGETALL, h4], compare: unordered-pairs}
+    - {command: [HSET, h3, e1, v, e2, v, e3, v, e4, v, e5, v, e6, v, e7, v, e8, v,
+        e9, v, e10, v, e11, v, e12, v, e13, v, e14, v, e15, v, e16, v, e17, v, e18,
+        v, e19, v, e20, v, e21, v, e22, v, e23, v, e24, v], expect: {equals: 24}}
+    - {command: [HPEXPIRE, h3, 400, FIELDS, 12, e1, e2, e3, e4, e5, e6, e7, e8, e9,
+        e10, e11, e12], expect: {equals: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [HPEXPIRE, h3, 4000, FIELDS, 12, e13, e14, e15, e16, e17, e18, e19,
+        e20, e21, e22, e23, e24], expect: {equals: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1]}}
+    - {command: [HLEN, h3], wait_s: 10, expect: {equals: 12}}
+    - {command: [HLEN, h3], wait_s: 15, expect: {equals: 0}}
+    - {command: [EXISTS, h3], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [vset.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: vset}

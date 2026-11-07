@@ -1,0 +1,89 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "95860937d555ce13b6cad32b7c3510fceb809861",
+  "parent": "2cde059da1b746eb7917147b16412678a9e5e12f",
+  "pr": 3360,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize WATCH duplicate key check from O(N) to O(1) using per-db hashtable (#3360)",
+  "date": "2026-03-31",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 28,
+    "executed": 23,
+    "percent": 82,
+    "uncovered": [
+      "src/multi.c:573",
+      "src/multi.c:574",
+      "src/multi.c:575",
+      "src/multi.c:576",
+      "src/multi.c:577"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 3.1167,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "acl-bypass: command 53 (WATCH x) as the user 'default +@all resetkeys ~nomatch-*' ran, though its rule refuses it: {\"error\":\"ERR Command 'watch' not allowed inside a transaction\"}",
+      "scenario": "ai-10407da30b29",
+      "seed": 93601,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #3360",
+      "fingerprint": "3a44b700b0d83a1f83fb",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/93"
+    },
+    {
+      "rule": "check",
+      "detail": "acl-bypass: command 53 (WATCH x) as the user 'default +@all resetkeys ~nomatch-*' ran, though its rule refuses it: {\"error\":\"ERR Command 'watch' not allowed inside a transaction\"}",
+      "scenario": "ai-1caf37858e45",
+      "seed": 93602,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #3360",
+      "fingerprint": "3a44b700b0d83a1f83fb",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/93"
+    },
+    {
+      "rule": "check",
+      "detail": "acl-bypass: command 53 (WATCH x) as the user 'default +@all resetkeys ~nomatch-*' ran, though its rule refuses it: {\"error\":\"ERR Command 'watch' not allowed inside a transaction\"}",
+      "scenario": "ai-163b02af3452",
+      "seed": 93603,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #3360",
+      "fingerprint": "3a44b700b0d83a1f83fb",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/93"
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-10c4bf339378",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'stress' returned ERROR: expectations both builds violate alike, so they are not about the change: 37 (QUIT on connection w2)"
+    },
+    {
+      "scenario": "ai-31e3b7adc1b2",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'stress' returned ERROR: expectations both builds violate alike, so they are not about the change: 37 (QUIT on connection w2)"
+    }
+  ]
+}

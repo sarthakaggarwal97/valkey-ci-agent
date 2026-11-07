@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "543a6b83dffff9d35da046ad2067a94b60cf3f38",
+  "parent": "afe6ee11b1ecb2029b09ed9338d22a89a061b3ce",
+  "pr": 3375,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Ensure the daily workflow uses gtest-parallel to run unit tests in isolation (#3375)",
+  "date": "2026-03-19",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2836,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely CI and build infrastructure: it updates .github/workflows/ci.yml and daily.yml to invoke unit tests through the `make test-unit` gtest-parallel target, adds flag plumbing (accurate/large_memory/valgrind/seed, UNIT_TEST_PATTERN) to src/unit/Makefile and src/unit/CMakeLists.txt, and updates src/unit/README.md. No source compiled into valkey-server, valkey-cli, or any other shipped binary is touched, so there is no server or tool behavior for a scenario to reach."
+}

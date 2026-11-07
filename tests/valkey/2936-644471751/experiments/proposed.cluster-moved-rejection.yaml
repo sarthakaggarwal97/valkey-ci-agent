@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.cluster-moved-rejection
+deployment:
+  modes: [standalone]
+metadata:
+  description: Cluster MOVED redirects, the rejection call site that now fires moduleFireCommandRejectedEvent
+    with a NULL reply, inside and outside MULTI, replies compared across builds
+components:
+- use: valkey.action.commands
+  id: moved
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 60
+    commands:
+    - {command: [SET, foo, bar], node: 0, expect: {equals: OK}}
+    - {command: [GET, foo], node: 1, wait_s: 30, expect: {error: "MOVED"}}
+    - {command: [SET, foo, baz], node: 1, expect: {error: "MOVED"}}
+    - {command: [MULTI], node: 1, expect: {equals: OK}}
+    - {command: [GET, foo], node: 1, expect: {error: "MOVED"}}
+    - {command: [EXEC], node: 1, expect: {exists: true}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [GET, foo], node: 0, expect: {equals: bar}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [moved.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: moved}

@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.dict-wrapper-cli-bench-dicts
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli's help-groups dict (dictSdsHash, dictEntryDestructorSdsKeyNoVal
+    via --test_hint) and valkey-benchmark's cluster-nodes dict (dictSdsHash via --cluster),
+    compared across builds
+components:
+- use: valkey.action.tools
+  id: cli-hints
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, --test_hint, "SET"], expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --test_hint, "GET "], expect: {exit: {
+          equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --test_hint, "CLUSTER "], expect: {exit: {
+          equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --test_hint, "XADD k"], expect: {exit: {
+          equals: 0}}}
+- use: valkey.action.tools
+  id: bench-cluster
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 120
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, -n, 200, -c, 2, -t, "set,get",
+        -q], compare: skip, expect: {exit: {equals: 0}}}
+required_events: [cli-hints.completed, bench-cluster.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-hints}
+- {evidence_id: valkey.tool.runs, source: bench-cluster}

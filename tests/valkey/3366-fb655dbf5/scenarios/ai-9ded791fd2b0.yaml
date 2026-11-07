@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f3b647050269..fb655dbf5cfa.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9ded791fd2b0
+seed: 1107
+experiment:
+  id: proposed.dict-wrapper-benchmark-fuzz
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7600

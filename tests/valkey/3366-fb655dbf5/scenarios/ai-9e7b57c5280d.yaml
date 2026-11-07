@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f3b647050269..fb655dbf5cfa.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9e7b57c5280d
+seed: 102
+experiment:
+  id: proposed.dict-wrapper-defrag-lua-scripts
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

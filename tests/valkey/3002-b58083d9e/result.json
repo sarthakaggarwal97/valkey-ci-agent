@@ -1,0 +1,54 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b58083d9e906f9fdd0d694d77d1ebf9a8a677eda",
+  "parent": "c9ce3e09191305a455139f70b7807ebb0549b951",
+  "pr": 3002,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize streams range hot path (#3002)",
+  "date": "2026-03-13",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 32,
+    "executed": 31,
+    "percent": 96,
+    "uncovered": [
+      "src/t_stream.c:1295"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 2.5159,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-675a8064d35b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'stream-range' returned ERROR: expectations both builds violate alike, so they are not about the change: 22 (XREVRANGE s 4294967296-0 2-0)"
+    },
+    {
+      "scenario": "ai-92383860ab7b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'stream-range' returned ERROR: expectations both builds violate alike, so they are not about the change: 22 (XREVRANGE s 4294967296-0 2-0)"
+    },
+    {
+      "scenario": "ai-eee743fbc8f2",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'stream-range' returned ERROR: expectations both builds violate alike, so they are not about the change: 22 (XREVRANGE s 4294967296-0 2-0)"
+    },
+    {
+      "scenario": "ai-5b7d7a8732f1",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'stream-range' returned ERROR: expectations both builds violate alike, so they are not about the change: 22 (XREVRANGE s 4294967296-0 2-0)"
+    }
+  ]
+}

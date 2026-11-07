@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3c46f667bcc96f52f008371b7cfc2fc58d218268",
+  "parent": "07554d34d16e7ffa16552dbdb33cb3ba610c73e9",
+  "pr": 3209,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix `valkey-cli --cluster del-node` for unreachable nodes (#3209)",
+  "date": "2026-03-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.4874,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to valkey-cli's cluster manager (--cluster del-node/add-node handling of unreachable or empty members) and only manifests on multi-node clusters containing an unreachable or empty-but-reachable node. The sole installed valkey-cli driver, valkey.action.tools, can only stand up a single-node private cluster per build (one server holding all slots), so it cannot build the reachable-primary + empty-node + unreachable-node topology the fix operates on, and every reachable del-node invocation on one node ('not empty', 'No such node ID') is identical on both builds. A valkey.ac"
+}

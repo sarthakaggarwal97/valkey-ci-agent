@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9000e26ecfc50b5f5922085344d804cd1c9d177b",
+  "parent": "8ddc582d23406e18518a1e9d0da2822436d5a726",
+  "pr": 3276,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Pin workflow pip/go/npm dependencies for OpenSSF compliance (#3276)",
+  "date": "2026-03-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2161,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change pins pip/go/npm dependency versions in GitHub Actions workflow files (.github/workflows/*.yml) and the reply-schema-linter's package.json/package-lock.json for OpenSSF compliance. It is purely a CI/build-infrastructure change: no Valkey server code, command behaviour, replication, persistence, or bundled tool is modified, so no fuzzer scenario can exercise it and none is needed."
+}

@@ -1,0 +1,121 @@
+extends: [valkey.liveness]
+id: proposed.stream-range-hot-path
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Streams range hot path (#3002) rewrote the stream iterator range checks (streamCompareID
+    instead of 128-bit big-endian memcmp), the iterator re-seek after a deletion,
+    and stream ID reply formatting (streamID2string over the new memcpy-based ull2string).
+    Compare stream range, deletion, trim and consumer-group replies across the change
+    and its parent at the 2^31, 2^32, INT64 and UINT64_MAX ID boundaries; every reply
+    must be equal on both builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    node_max_entries:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 100
+      description: stream-node-max-entries on both private servers; 1 forces one rax
+        node per entry
+components:
+- use: valkey.action.commands
+  id: stream-range
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {stream-node-max-entries: {$ref: inputs.node_max_entries}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [XADD, s, "1-1", f, v], expect: {equals: "1-1"}}
+    - {command: [XADD, s, "1-2", f, v], expect: {equals: "1-2"}}
+    - {command: [XADD, s, "2-1", f, v], expect: {equals: "2-1"}}
+    - {command: [XADD, s, "99-99", f, v], expect: {equals: "99-99"}}
+    - {command: [XADD, s, "100-100", f, v], expect: {equals: "100-100"}}
+    - {command: [XADD, s, "101-18446744073709551615", f, v], expect: {equals: "101-18446744073709551615"}}
+    - {command: [XADD, s, "4294967295-4294967295", f, v], expect: {equals: "4294967295-4294967295"}}
+    - {command: [XADD, s, "4294967296-0", f, v], expect: {equals: "4294967296-0"}}
+    - {command: [XADD, s, "9223372036854775807-0", f, v], expect: {equals: "9223372036854775807-0"}}
+    - {command: [XADD, s, "9223372036854775808-0", f, v], expect: {equals: "9223372036854775808-0"}}
+    - {command: [XADD, s, "18446744073709551615-18446744073709551614", f, v], expect: {
+        equals: "18446744073709551615-18446744073709551614"}}
+    - {command: [XADD, s, "18446744073709551615-18446744073709551615", f, v], expect: {
+        equals: "18446744073709551615-18446744073709551615"}}
+    - {command: [XADD, s, "*", f, v], expect: {error: "exhausted"}}
+    - {command: [XLEN, s], expect: {equals: 12}}
+    - {command: [XRANGE, s, "-", "+"], expect: {equals: [["1-1", [f, v]], ["1-2",
+            [f, v]], ["2-1", [f, v]], ["99-99", [f, v]], ["100-100", [f, v]], ["101-18446744073709551615",
+            [f, v]], ["4294967295-4294967295", [f, v]], ["4294967296-0", [f, v]],
+          ["9223372036854775807-0", [f, v]], ["9223372036854775808-0", [f, v]], [
+            "18446744073709551615-18446744073709551614", [f, v]], ["18446744073709551615-18446744073709551615",
+            [f, v]]]}}
+    - {command: [XRANGE, s, "0-1", "1-1"], expect: {equals: [["1-1", [f, v]]]}}
+    - {command: [XRANGE, s, "1-2", "2-1"], expect: {equals: [["1-2", [f, v]], ["2-1",
+            [f, v]]]}}
+    - {command: [XRANGE, s, "(1-1", "(100-100"], expect: {equals: [["1-2", [f, v]],
+          ["2-1", [f, v]], ["99-99", [f, v]]]}}
+    - {command: [XRANGE, s, "101", "101"], expect: {equals: [["101-18446744073709551615",
+            [f, v]]]}}
+    - {command: [XRANGE, s, "-", "+", COUNT, "3"], expect: {equals: [["1-1", [f, v]],
+          ["1-2", [f, v]], ["2-1", [f, v]]]}}
+    - {command: [XREVRANGE, s, "+", "-"], expect: {equals: [["18446744073709551615-18446744073709551615",
+            [f, v]], ["18446744073709551615-18446744073709551614", [f, v]], ["9223372036854775808-0",
+            [f, v]], ["9223372036854775807-0", [f, v]], ["4294967296-0", [f, v]],
+          ["4294967295-4294967295", [f, v]], ["101-18446744073709551615", [f, v]],
+          ["100-100", [f, v]], ["99-99", [f, v]], ["2-1", [f, v]], ["1-2", [f, v]],
+          ["1-1", [f, v]]]}}
+    - {command: [XREVRANGE, s, "0-5", "-"], expect: {equals: []}}
+    - {command: [XREVRANGE, s, "4294967296-0", "2-0"], expect: {equals: [["4294967296-0",
+            [f, v]], ["4294967295-4294967295", [f, v]], ["100-100", [f, v]], ["99-99",
+            [f, v]], ["2-1", [f, v]]]}}
+    - {command: [XRANGE, s, "18446744073709551615", "+"], expect: {equals: [["18446744073709551615-18446744073709551614",
+            [f, v]], ["18446744073709551615-18446744073709551615", [f, v]]]}}
+    - {command: [XDEL, s, "2-1", "99-99"], expect: {equals: 2}}
+    - {command: [XRANGE, s, "1-1", "100-100"], expect: {equals: [["1-1", [f, v]],
+          ["1-2", [f, v]], ["100-100", [f, v]]]}}
+    - {command: [XREVRANGE, s, "100-100", "1-1"], expect: {equals: [["100-100", [
+              f, v]], ["1-2", [f, v]], ["1-1", [f, v]]]}}
+    - {command: [XDEL, s, "18446744073709551615-18446744073709551615"], expect: {
+        equals: 1}}
+    - {command: [XADD, s, "*", f, v], expect: {error: "exhausted"}}
+    - {command: [XLEN, s], expect: {equals: 9}}
+    - {command: [XRANGE, s, "-", "+"], expect: {equals: [["1-1", [f, v]], ["1-2",
+            [f, v]], ["100-100", [f, v]], ["101-18446744073709551615", [f, v]], [
+            "4294967295-4294967295", [f, v]], ["4294967296-0", [f, v]], ["9223372036854775807-0",
+            [f, v]], ["9223372036854775808-0", [f, v]], ["18446744073709551615-18446744073709551614",
+            [f, v]]]}}
+    - {command: [XGROUP, CREATE, s, g, "0"], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g, c1, COUNT, "5", STREAMS, s, ">"], expect: {
+        exists: true}}
+    - {command: [XACK, s, g, "1-1"], expect: {equals: 1}}
+    - {command: [XCLAIM, s, g, c2, "0", "1-2"], expect: {equals: [["1-2", [f, v]]]}}
+    - {command: [XDEL, s, "1-2"], expect: {equals: 1}}
+    - {command: [XCLAIM, s, g, c2, "0", "1-2"], expect: {equals: []}}
+    - {command: [XAUTOCLAIM, s, g, c3, "0", "0"], expect: {equals: ["0-0", [["100-100",
+              [f, v]], ["101-18446744073709551615", [f, v]], ["4294967295-4294967295",
+              [f, v]]], []]}}
+    - {command: [XINFO, GROUPS, s], compare: skip, expect: {exists: true}}
+    - {command: [XTRIM, s, MAXLEN, "2"], expect: {equals: 6}}
+    - {command: [XRANGE, s, "-", "+"], expect: {equals: [["9223372036854775808-0",
+            [f, v]], ["18446744073709551615-18446744073709551614", [f, v]]]}}
+    - {command: [XINFO, STREAM, s], compare: skip, expect: {exists: true}}
+    - {command: [XADD, s2, "0-0", f, v], expect: {error: "greater"}}
+    - {command: [XADD, s2, "0-1", f, v], expect: {equals: "0-1"}}
+    - {command: [XRANGE, s2, "-", "+"], expect: {equals: [["0-1", [f, v]]]}}
+    - {command: [XDEL, s2, "0-1"], expect: {equals: 1}}
+    - {command: [XRANGE, s2, "-", "+"], expect: {equals: []}}
+    - {command: [XREVRANGE, s2, "+", "-"], expect: {equals: []}}
+    - {command: [XLEN, s2], expect: {equals: 0}}
+    - {command: [XADD, s2, "*", f, v], compare: skip, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [stream-range.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: stream-range}

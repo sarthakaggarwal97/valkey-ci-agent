@@ -1,0 +1,92 @@
+extends: [valkey.base]
+id: proposed.aof-rdb-preamble-full-sync
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: >-
+    Disk-based full sync with AOF enabled must adopt the synced RDB as the AOF base
+    file; the replica is killed and restarted twice so it full-syncs a non-empty dataset
+    (reusing the RDB as base), appends new writes to the fresh incr file, and then
+    reloads the whole AOF manifest from disk, with no acknowledged write lost.
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+components:
+- use: valkey.observer.log
+  id: aof-logs
+  config:
+    instances: replicas
+    expect:
+    - {evidence_id: valkey.aof.rdb-reused-logged, pattern: "Reused RDB file from primary\
+        \ sync as AOF base file", required: true}
+    - {evidence_id: valkey.aof.reloaded, pattern: "DB loaded from append only file",
+      required: true}
+    forbidden:
+    - {pattern: "Bad file format reading the append only file"}
+    - {pattern: "Unrecoverable error reading the append only file"}
+    - {pattern: "Error trying to rename the RDB file"}
+    - {pattern: "Failed to rename AOF base back to RDB file"}
+- use: valkey.fault.process-signal
+  id: kill-replica-1
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart: true
+    restart_mode: immediate
+- use: valkey.fault.process-signal
+  id: kill-replica-2
+  config:
+    when_event: accumulate.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart: true
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, aof-logs, kill-replica-1, kill-replica-2]
+  config: {seconds: 2}
+- use: valkey.action.wait-event
+  id: replica-back-1
+  depends_on: [warm-up]
+  config: {event: kill-replica-1.recovered, only_after: kill-replica-1.injected, timeout_s: 90}
+- use: valkey.action.poll
+  id: resynced-1
+  depends_on: [replica-back-1]
+  config:
+    instances: replicas
+    section: replication
+    field: master_link_status
+    predicate: {equals: up}
+    timeout_s: 120
+- use: valkey.action.sleep
+  id: accumulate
+  depends_on: [resynced-1]
+  config: {seconds: 3}
+- use: valkey.action.wait-event
+  id: replica-back-2
+  depends_on: [accumulate]
+  config: {event: kill-replica-2.recovered, only_after: kill-replica-2.injected, timeout_s: 90}
+- use: valkey.action.poll
+  id: resynced-2
+  depends_on: [replica-back-2]
+  config:
+    instances: replicas
+    section: replication
+    field: master_link_status
+    predicate: {equals: up}
+    timeout_s: 120
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [resynced-2]
+  config: {seconds: 2}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed, kill-replica-1.recovered, accumulate.completed,
+  kill-replica-2.recovered]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica-1}
+- {evidence_id: valkey.fault.injected, source: kill-replica-2}
+- {evidence_id: valkey.aof.rdb-reused-logged, source: aof-logs}

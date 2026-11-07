@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f7a64c55099e..60c1b0b86bdb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-36614fbfc53a
+seed: 70003
+experiment:
+  id: proposed.vset-pvfind-hash-field-ttl
+  inputs:
+    resp: 2
+    hz: 100
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

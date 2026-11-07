@@ -1,0 +1,81 @@
+extends: [valkey.liveness]
+id: proposed.watch-many-dbs-stress
+deployment:
+  modes: [standalone]
+metadata:
+  description: WATCH stress with 256 databases, hashtable growth over 64 keys, full
+    duplicate passes, UNWATCH reuse in high dbs, and teardown of a sparse 256-entry
+    per-db array, compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: stress
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {databases: 256}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [WATCH, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, w13,
+        w14, w15], expect: {equals: OK}}
+    - {command: [WATCH, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, w13,
+        w14, w15], expect: {equals: OK}}
+    - {command: [WATCH, w16, w17, w18, w19, w20, w21, w22, w23, w24, w25, w26, w27,
+        w28, w29, w30, w31], expect: {equals: OK}}
+    - {command: [WATCH, w32, w33, w34, w35, w36, w37, w38, w39, w40, w41, w42, w43,
+        w44, w45, w46, w47], expect: {equals: OK}}
+    - {command: [WATCH, w48, w49, w50, w51, w52, w53, w54, w55, w56, w57, w58, w59,
+        w60, w61, w62, w63], expect: {equals: OK}}
+    - {command: [WATCH, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, w13,
+        w14, w15, w16, w17, w18, w19, w20, w21, w22, w23, w24, w25, w26, w27, w28,
+        w29, w30, w31, w32, w33, w34, w35, w36, w37, w38, w39, w40, w41, w42, w43,
+        w44, w45, w46, w47, w48, w49, w50, w51, w52, w53, w54, w55, w56, w57, w58,
+        w59, w60, w61, w62, w63], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [PONG]}}
+    - {command: [SELECT, 100], expect: {equals: OK}}
+    - {command: [WATCH, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, w13,
+        w14, w15], expect: {equals: OK}}
+    - {command: [SELECT, 255], expect: {equals: OK}}
+    - {command: [WATCH, w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, w10, w11, w12, w13,
+        w14, w15], expect: {equals: OK}}
+    - {command: [UNWATCH], expect: {equals: OK}}
+    - {command: [WATCH, w0], expect: {equals: OK}}
+    - {command: [SELECT, 255], connection: toucher, expect: {equals: OK}}
+    - {command: [SET, w0, t], connection: toucher, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: false}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [WATCH, w1], expect: {equals: OK}}
+    - {command: [SELECT, 100], connection: toucher, expect: {equals: OK}}
+    - {command: [SET, w1, t], connection: toucher, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [PONG]}}
+    - {command: [WATCH, d, d, d, d, d, d, d, d, d, d, d, d, d, d, d, d, d, d, d, d,
+        d, d, d, d], expect: {equals: OK}}
+    - {command: [SELECT, 0], connection: toucher, expect: {equals: OK}}
+    - {command: [SET, d, t], connection: toucher, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: false}}
+    - {command: [SELECT, 200], connection: w2, expect: {equals: OK}}
+    - {command: [WATCH, z0, z1], connection: w2, expect: {equals: OK}}
+    - {command: [SELECT, 37], connection: w2, expect: {equals: OK}}
+    - {command: [WATCH, z0], connection: w2, expect: {equals: OK}}
+    - {command: [QUIT], connection: w2, expect: {exists: false}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [stress.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: stress}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "afe6ee11b1ecb2029b09ed9338d22a89a061b3ce",
+  "parent": "0027b7d4533a90944d6175a83257f874d8ffd2a3",
+  "pr": 3379,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "remove duplicated lline (#3379)",
+  "date": "2026-03-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2164,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only removes a duplicated assignment `shared.integers[j]->encoding = OBJ_ENCODING_INT;` in createSharedObjects (src/server.c); the same value is assigned to the same field twice in a row, so removing the second assignment is a pure cleanup with no behaviour change to test."
+}

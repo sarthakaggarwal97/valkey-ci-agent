@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.dict-wrapper-defrag-scripts
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active defrag scans the Lua scripts dict through activeDefragDictCallback/hashtableScanDefrag,
+    moving dictEntry, key and script value while the server keeps serving EVAL
+components:
+- use: valkey.action.commands
+  id: defrag
+  config:
+    timeout_s: 180
+    commands:
+    - {command: [CONFIG, SET, active-defrag-ignore-bytes, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, active-defrag-threshold-lower, 0], expect: {equals: OK}}
+    - {command: [CONFIG, SET, active-defrag-cycle-min, 25], expect: {equals: OK}}
+    - {command: [CONFIG, SET, active-defrag-cycle-max, 75], expect: {equals: OK}}
+    - {command: [SCRIPT, LOAD, "return 1"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 2"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 3"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 4"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 5"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 6"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 7"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 8"], expect: {exists: true}}
+    - {command: [EVAL, "for i=1,60000 do redis.call('set','frag:'..i,string.rep('A',110+(i%4)*16))\
+          \ end return redis.call('dbsize')", 0], expect: {min: 60000}}
+    - {command: [EVAL, "local d=0 for i=1,60000,2 do d=d+redis.call('del','frag:'..i)\
+          \ end return d", 0], expect: {equals: 30000}}
+    - {command: [CONFIG, SET, activedefrag, "yes"], expect: {equals: OK}}
+    - {command: [EVAL, "local s=redis.call('info','stats') return tonumber(string.match(s,'active_defrag_hits:(%d+)'))",
+        0], wait_s: 90, expect: {min: 1}}
+    - {command: [EVAL, "local s=redis.call('info','stats') return tonumber(string.match(s,'active_defrag_hits:(%d+)'))",
+        0], wait_s: 60, expect: {min: 100}}
+    - {command: [EVAL, "return 42", 0], expect: {equals: 42}}
+    - {command: [SCRIPT, FLUSH, SYNC], expect: {equals: OK}}
+    - {command: [EVAL, "return 42", 0], expect: {equals: 42}}
+    - {command: [CONFIG, SET, activedefrag, "no"], expect: {equals: OK}}
+required_events: [defrag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: defrag}

@@ -1,0 +1,171 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fb655dbf5cfaf254e0b8bb6617f1f734dbebc07d",
+  "parent": "f3b647050269003cd0ae40c5ec359c62163aff2a",
+  "pr": 3366,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replace dict with thin wrapper around hashtable (#3366)",
+  "date": "2026-04-02",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 21,
+  "proven": 0,
+  "hunted": 13,
+  "dropped": 12,
+  "recall": false,
+  "coverage": {
+    "lines": 156,
+    "executed": 109,
+    "percent": 69,
+    "uncovered": [
+      "src/defrag.c:316",
+      "src/defrag.c:317",
+      "src/rdb.c:147",
+      "src/rdb.c:148",
+      "src/rdb.c:149",
+      "src/rdb.c:150",
+      "src/rdb.c:151",
+      "src/rdb.c:152",
+      "src/sentinel.c:443",
+      "src/sentinel.c:444",
+      "src/sentinel.c:445",
+      "src/sentinel.c:446",
+      "src/sentinel.c:447",
+      "src/sentinel.c:4028",
+      "src/server.c:498",
+      "src/server.c:533",
+      "src/server.c:534",
+      "src/server.c:535",
+      "src/server.c:536",
+      "src/server.c:537",
+      "src/server.c:570",
+      "src/server.c:571",
+      "src/server.c:572",
+      "src/server.c:573",
+      "src/server.c:574",
+      "src/server.c:575",
+      "src/server.c:586",
+      "src/server.c:587",
+      "src/server.c:588",
+      "src/server.c:589",
+      "src/server.c:590",
+      "src/server.c:591",
+      "src/valkey-cli.c:397",
+      "src/valkey-cli.c:398",
+      "src/valkey-cli.c:399",
+      "src/valkey-cli.c:400",
+      "src/valkey-cli.c:401",
+      "src/valkey-cli.c:403",
+      "src/valkey-cli.c:404",
+      "src/valkey-cli.c:405",
+      "src/valkey-cli.c:406",
+      "src/valkey-cli.c:407",
+      "src/valkey-cli.c:9223",
+      "src/valkey-cli.c:9224",
+      "src/valkey-cli.c:9225",
+      "src/valkey-cli.c:9226",
+      "src/valkey-cli.c:9227"
+    ],
+    "rounds": 3
+  },
+  "cost_usd": 41.1131,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: SEGV",
+      "scenario": "ai-b87e392d5abb",
+      "seed": 106,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #3366",
+      "fingerprint": "07f26e864f294100ec0b",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/94"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: killed by signal 11",
+      "scenario": "ai-b87e392d5abb",
+      "seed": 106,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #3366, since fixed",
+      "fingerprint": "3c9b6d82c5da2b04c973",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-2c3a983cdd69",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'dicts' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (SCRIPT LOAD return 1), 1 (EVALSHA E0E1F9FABFC9D4800C877A703B823AC0578FF831 0), 2 (SCRIPT EXISTS e0e1f9fabfc9d4800c877a703b823ac0578ff831"
+    },
+    {
+      "scenario": "ai-1e3c8756d909",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'dicts' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (SCRIPT LOAD return 1), 1 (EVALSHA E0E1F9FABFC9D4800C877A703B823AC0578FF831 0), 2 (SCRIPT EXISTS e0e1f9fabfc9d4800c877a703b823ac0578ff831"
+    },
+    {
+      "scenario": "ai-42152512f016",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-22fa15787e6d",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-37b9b35e6a14",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-573f576aeb78",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'blocking' returned ERROR: command 0 (BLPOP bk 0 on connection blk) got no reply: TimeoutError: Timeout reading from /tmp/vfc-qz8xuj2s/s.sock"
+    },
+    {
+      "scenario": "ai-0bca3d12667b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'blocking' returned ERROR: command 0 (BLPOP bk 0 on connection blk) got no reply: TimeoutError: Timeout reading from /tmp/vfc-tvzsf_rr/s.sock"
+    },
+    {
+      "scenario": "ai-12aa42f635dd",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'blocking' returned ERROR: command 0 (BLPOP bk1 0 on connection b1) got no reply: TimeoutError: Timeout reading from /tmp/vfc-1maecqzw/s.sock"
+    },
+    {
+      "scenario": "ai-d2049a7ccd4a",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'blocking' returned ERROR: command 0 (BLPOP bk1 0 on connection b1) got no reply: TimeoutError: Timeout reading from /tmp/vfc-z9mfjiot/s.sock"
+    },
+    {
+      "scenario": "ai-b87e392d5abb",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'bench-cluster' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (valkey-benchmark -p $port --cluster -n 200 -c 2 -t set,get -q)"
+    },
+    {
+      "scenario": "ai-dccd51e7e467",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    }
+  ]
+}

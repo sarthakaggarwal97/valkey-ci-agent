@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 543a6b83dfff..cd0b4c5e8374.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5cabce21bacc
+seed: 338002
+experiment:
+  id: proposed.clusterscan-match-slot
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

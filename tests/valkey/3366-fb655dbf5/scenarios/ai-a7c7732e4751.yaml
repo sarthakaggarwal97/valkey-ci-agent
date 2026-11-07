@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f3b647050269..fb655dbf5cfa.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a7c7732e4751
+seed: 1104
+experiment:
+  id: proposed.dict-wrapper-hash-field-ttl
+  inputs:
+    resp: 2
+    hash_listpack_entries: 128
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

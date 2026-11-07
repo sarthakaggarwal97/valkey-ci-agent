@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2cde059da1b7..95860937d555.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1caf37858e45
+seed: 93602
+experiment:
+  id: proposed.watch-dup-key-semantics
+  inputs:
+    resp: 3
+    databases: 16
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,118 @@
+extends: [valkey.liveness]
+id: proposed.watch-dup-key-semantics
+deployment:
+  modes: [standalone]
+metadata:
+  description: WATCH duplicate detection, cross-db isolation, rewatch after EXEC/UNWATCH
+    emptied the per-db hashtable, FLUSHALL/SWAPDB touch paths, and client teardown,
+    compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    databases: {type: integer, enum: [16, 64], default: 16}
+components:
+- use: valkey.action.commands
+  id: watch
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {databases: {$ref: inputs.databases}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, x, 10], expect: {equals: OK}}
+    - {command: [WATCH, x], expect: {equals: OK}}
+    - {command: [WATCH, x, x], expect: {equals: OK}}
+    - {command: [WATCH, x, x, x, x, x, x, x, x], expect: {equals: OK}}
+    - {command: [SET, x, 20], connection: toucher, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [INCR, x], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: false}}
+    - {command: [GET, x], expect: {equals: "20"}}
+    - {command: [WATCH, x], expect: {equals: OK}}
+    - {command: [SET, x, 30], connection: toucher, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [INCR, x], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: false}}
+    - {command: [WATCH, x], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [INCR, x], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [31]}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [SET, x, db1], expect: {equals: OK}}
+    - {command: [WATCH, x, x], expect: {equals: OK}}
+    - {command: [SET, x, touched0], connection: toucher, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, x], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [db1]}}
+    - {command: [WATCH, x], expect: {equals: OK}}
+    - {command: [SELECT, 1], connection: toucher, expect: {equals: OK}}
+    - {command: [SET, x, touched1], connection: toucher, expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: false}}
+    - {command: [SELECT, 15], expect: {equals: OK}}
+    - {command: [WATCH, hi], expect: {equals: OK}}
+    - {command: [SELECT, 15], connection: toucher, expect: {equals: OK}}
+    - {command: [SET, hi, v], connection: toucher, expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: false}}
+    - {command: [WATCH, a, b, c, a, b, c], expect: {equals: OK}}
+    - {command: [UNWATCH], expect: {equals: OK}}
+    - {command: [SELECT, 0], connection: toucher, expect: {equals: OK}}
+    - {command: [SET, a, zz], connection: toucher, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [PONG]}}
+    - {command: [WATCH, "", "123", "9223372036854775807", "", "123"], expect: {equals: OK}}
+    - {command: [SET, "", boom], connection: toucher, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: false}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [WATCH, x], expect: {error: "WATCH inside MULTI is not allowed"}}
+    - {command: [DISCARD], expect: {equals: OK}}
+    - {command: [EXEC], expect: {error: "without MULTI"}}
+    - {command: [WATCH, d1], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [DISCARD], expect: {equals: OK}}
+    - {command: [SET, d1, t], connection: toucher, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [PONG]}}
+    - {command: [WATCH, r1], expect: {equals: OK}}
+    - {command: [RESET], expect: {equals: RESET}}
+    - {command: [SET, r1, t], connection: toucher, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [PONG]}}
+    - {command: [SET, f1, v], expect: {equals: OK}}
+    - {command: [WATCH, f1], expect: {equals: OK}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: false}}
+    - {command: [SET, s0, v], expect: {equals: OK}}
+    - {command: [WATCH, s0], expect: {equals: OK}}
+    - {command: [SWAPDB, 0, 1], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: false}}
+    - {command: [WATCH, q0, q1], connection: w2, expect: {equals: OK}}
+    - {command: [SELECT, 5], connection: w2, expect: {equals: OK}}
+    - {command: [WATCH, q0, q5], connection: w2, expect: {equals: OK}}
+    - {command: [QUIT], connection: w2, expect: {exists: false}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [watch.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: watch}

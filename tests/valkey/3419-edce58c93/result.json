@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "edce58c934de635a69c7872d2d32a34e60cd5279",
+  "parent": "215b6c11dbd30b6481e12d721945528086ee18a0",
+  "pr": 3419,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Improve listpack threshold guidance in valkey.conf (#3419)",
+  "date": "2026-03-30",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2226,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits comment text in valkey.conf: it rewords the guidance around the listpack/intset threshold directives (hash-max-listpack-*, list-max-listpack-size, list-compress-depth, set-max-intset-entries, set-max-listpack-*, zset-max-listpack-*). All directive names and default values are identical before and after, and no source code or config parsing is modified, so there is no behaviour change to test."
+}

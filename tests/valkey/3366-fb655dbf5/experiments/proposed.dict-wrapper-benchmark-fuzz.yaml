@@ -1,0 +1,24 @@
+extends: [valkey.liveness]
+id: proposed.dict-wrapper-benchmark-fuzz
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark --fuzz builds and tears down its command/config dicts
+    on the dict wrapper (sdsHash, dictEntryDestructorSdsKeyConfigVal, dictGetRandomKey),
+    run against a private server of each build
+components:
+- use: valkey.action.tools
+  id: fuzz
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    ignore: ['(?s).*']
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, --fuzz, --fuzz-loglevel, error, -n,
+        400, -c, 2], expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --fuzz, --fuzz-mode, config-commands,
+        --fuzz-loglevel, error, -n, 400, -c, 2], expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --fuzz, --fuzz-mode, "malformed-commands,config-commands",
+        --fuzz-loglevel, error, -n, 400, -c, 2], expect: {exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: fuzz}

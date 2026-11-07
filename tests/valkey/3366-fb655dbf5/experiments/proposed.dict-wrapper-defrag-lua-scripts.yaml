@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.dict-wrapper-defrag-lua-scripts
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active defrag scans the eval scripts dict through the dict wrapper's
+    hashtableScanDefrag and activeDefragDictCallback, then scripts and data are verified
+    intact
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: defrag
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    server_config:
+      activedefrag: "no"
+      active-defrag-threshold-lower: 0
+      active-defrag-ignore-bytes: 1
+      active-defrag-cycle-min: 25
+      active-defrag-cycle-max: 75
+    commands:
+    - {command: [SCRIPT, LOAD, "-- a0 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\
+          return 100"]}
+    - {command: [SCRIPT, LOAD, "-- a1 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\
+          return 101"]}
+    - {command: [SCRIPT, LOAD, "-- a2 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\
+          return 102"]}
+    - {command: [SCRIPT, LOAD, "-- a3 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\
+          return 103"]}
+    - {command: [SCRIPT, LOAD, "-- a4 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\
+          return 104"]}
+    - {command: [SCRIPT, LOAD, "-- a5 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\
+          return 105"]}
+    - {command: [SCRIPT, LOAD, "-- a6 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\
+          return 106"]}
+    - {command: [SCRIPT, LOAD, "-- a7 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n\
+          return 107"]}
+    - {command: [EVAL, "for i=1,15000 do redis.call('set','k'..i,string.rep('v',64))\
+          \ end return 'OK'", 0], expect: {equals: OK}}
+    - {command: [EVAL, "for i=1,15000,2 do redis.call('del','k'..i) end return 'OK'",
+        0], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 7500}}
+    - {command: [CONFIG, SET, activedefrag, "yes"], expect: {equals: OK}}
+    - {command: [EVAL, "local s=redis.call('INFO','stats') local t=tonumber(string.match(s,'total_active_defrag_time:(%d+)')\
+          \ or '0') if t>0 then return 1 end return 0", 0], wait_s: 30, expect: {
+        equals: 1}}
+    - {command: [EVAL, "local m=redis.call('INFO','memory') local r=string.match(m,'active_defrag_running:(%d+)')\
+          \ or '1' local s=redis.call('INFO','stats') local t=tonumber(string.match(s,'total_active_defrag_time:(%d+)')\
+          \ or '0') if r=='0' or t>=200 then return 1 end return 0", 0], wait_s: 30,
+      expect: {equals: 1}}
+    - {command: [EVAL, "-- a0 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nreturn\
+          \ 100", 0], expect: {equals: 100}}
+    - {command: [EVAL, "-- a7 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\nreturn\
+          \ 107", 0], expect: {equals: 107}}
+    - {command: [EVAL, "local ok=0 for i=2,15000,2 do if redis.call('get','k'..i)==string.rep('v',64)\
+          \ then ok=ok+1 end end return ok", 0], expect: {equals: 7500}}
+    - {command: [DBSIZE], expect: {equals: 7500}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [defrag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: defrag}

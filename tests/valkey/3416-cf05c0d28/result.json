@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cf05c0d28ebe8964ad9d92d73fd6cd7b94ef2f1d",
+  "parent": "edce58c934de635a69c7872d2d32a34e60cd5279",
+  "pr": 3416,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "fix test_entry to consider diffrerent allocator size classes (#3416)",
+  "date": "2026-03-30",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2259,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only the unit test file src/unit/test_entry.cpp: it skips the entryUpdate gtest when jemalloc is not the allocator and lengthens two test strings so the test's size-class assumptions hold. No runtime server, command, replication, persistence, or tool behavior changes, so there is nothing a fuzzer scenario could exercise or compare across builds."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "78ee1f555d118907bf8fe0e547a4f7d43e0d521b",
+  "parent": "3c46f667bcc96f52f008371b7cfc2fc58d218268",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "ci: include gtests in code coverage report",
+  "date": "2026-03-24",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2118,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a pure CI/build change: it installs googletest in the codecov GitHub Actions workflow and makes the `lcov` Makefile target also run the gtest unit tests with coverage instrumentation before generating the coverage report. No server, command, replication, persistence, or tool code paths are touched, so there is no runtime behaviour for a fuzzer scenario to exercise."
+}

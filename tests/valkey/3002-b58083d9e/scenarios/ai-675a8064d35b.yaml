@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c9ce3e091913..b58083d9e906.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-675a8064d35b
+seed: 93002
+experiment:
+  id: proposed.stream-range-hot-path
+  inputs:
+    resp: 2
+    node_max_entries: 100
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

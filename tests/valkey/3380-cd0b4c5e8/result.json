@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cd0b4c5e83744931b714b3c048ecda286ec23125",
+  "parent": "543a6b83dffff9d35da046ad2067a94b60cf3f38",
+  "pr": 3380,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "CLUSTERSCAN MATCH pattern maps to a specific slot optimizations (#3380)",
+  "date": "2026-03-19",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 24,
+    "executed": 24,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.1045,
+  "findings": [],
+  "recorded": []
+}

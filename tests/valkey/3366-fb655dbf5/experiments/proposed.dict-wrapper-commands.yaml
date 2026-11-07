@@ -1,0 +1,100 @@
+extends: [valkey.liveness]
+id: proposed.dict-wrapper-commands
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Server dicts rebuilt on the hashtable wrapper (script cache, functions, watched
+    keys, pubsub patterns, latency events, data tables under the new configurable
+    hash seed) reply identically to the parent build.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dicts
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config:
+      hash-seed: dict-wrapper-regression
+      hash-max-listpack-entries: 0
+      set-max-listpack-entries: 0
+      set-max-intset-entries: 0
+      zset-max-listpack-entries: 0
+      latency-monitor-threshold: 100
+    commands:
+    - {command: [SCRIPT, LOAD, "return 1"], expect: {equals: e0e1f9fabfc9d4800c877a703b823ac0578ff831}}
+    - {command: [EVALSHA, E0E1F9FABFC9D4800C877A703B823AC0578FF831, 0], expect: {
+        equals: 1}}
+    - {command: [SCRIPT, EXISTS, e0e1f9fabfc9d4800c877a703b823ac0578ff831], expect: {
+        equals: [1]}}
+    - {command: [SCRIPT, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [SCRIPT, EXISTS, e0e1f9fabfc9d4800c877a703b823ac0578ff831], expect: {
+        equals: [0]}}
+    - {command: [EVAL, "return 2", 0], expect: {equals: 2}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nserver.register_function('myfunc',\
+          \ function(keys, args) return 42 end)"], expect: {equals: mylib}}
+    - {command: [FCALL, myfunc, 0], expect: {equals: 42}}
+    - {command: [FUNCTION, LOAD, REPLACE, "#!lua name=mylib\nserver.register_function('myfunc',\
+          \ function(keys, args) return 43 end)"], expect: {equals: mylib}}
+    - {command: [FCALL, myfunc, 0], expect: {equals: 43}}
+    - {command: [FUNCTION, LIST]}
+    - {command: [FUNCTION, STATS]}
+    - {command: [FUNCTION, DUMP]}
+    - {command: [FUNCTION, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [FUNCTION, LIST], expect: {equals: []}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nserver.register_function('myfunc',\
+          \ function(keys, args) return 44 end)"], expect: {equals: mylib}}
+    - {command: [FCALL, myfunc, 0], expect: {equals: 44}}
+    - {command: [SET, counter, 100], expect: {equals: OK}}
+    - {command: [WATCH, counter, missingkey], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, counter, 200], connection: toucher, expect: {equals: OK}}
+    - {command: [INCR, counter], expect: {equals: QUEUED}}
+    - {command: [EXEC]}
+    - {command: [GET, counter], expect: {equals: "200"}}
+    - {command: [WATCH, counter], expect: {equals: OK}}
+    - {command: [UNWATCH], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [INCR, counter], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [201]}}
+    - {command: [PSUBSCRIBE, "news.*"], connection: sub}
+    - {command: [PUBSUB, NUMPAT], expect: {equals: 1}}
+    - {command: [PUBLISH, news.tech, hello], expect: {equals: 1}}
+    - {connection: sub, read: true}
+    - {command: [PUNSUBSCRIBE, "news.*"], connection: sub}
+    - {command: [PUBSUB, NUMPAT], wait_s: 10, expect: {equals: 0}}
+    - {command: [BLPOP, nokey, 1], connection: blocker}
+    - {command: [DEBUG, SLEEP, 0.15], expect: {equals: OK}}
+    - {command: [LATENCY, HISTORY, command], compare: skip}
+    - {command: [LATENCY, RESET], compare: skip, expect: {min: 1}}
+    - {command: [CONFIG, GET, "maxmemory*"], compare: unordered-pairs}
+    - {command: [SET, "", emptyval], expect: {equals: OK}}
+    - {command: [GET, ""], expect: {equals: emptyval}}
+    - {command: [HSET, fields, fields, fields], expect: {equals: 1}}
+    - {command: [HSET, bigh, f1, v1, f2, v2, f3, v3, "", empty, dup, a, dup, b], expect: {
+        equals: 5}}
+    - {command: [HGETALL, bigh], compare: unordered-pairs}
+    - {command: [HGET, bigh, dup], expect: {equals: b}}
+    - {command: [SADD, bigs, 10, 20, 30, abc, "", abc], expect: {equals: 5}}
+    - {command: [SMEMBERS, bigs], compare: unordered}
+    - {command: [ZADD, bigz, 1, a, 2, b, 3, c], expect: {equals: 3}}
+    - {command: [ZRANGE, bigz, 0, -1, WITHSCORES], expect: {equals: [a, "1", b, "2",
+          c, "3"]}}
+    - {command: [KEYS, "*"], compare: unordered}
+    - {command: [DBSIZE], expect: {min: 6}}
+    - {command: [SCAN, 0, COUNT, 1000]}
+    - {command: [SET, pxk, v, PX, 80], expect: {equals: OK}}
+    - {command: [EXISTS, pxk], wait_s: 10, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dicts.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dicts}
