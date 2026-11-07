@@ -143,6 +143,9 @@ ROUNDS_WITHIN_S = 3 * 3600
 UNCOVERED_KEPT = 50
 CONTEXT_LINES = 3
 MERGE_KEYS = ("repo", "sha", "parent", "pr", "pr_repo", "subject", "date")
+# The coverage_reason values that mean "nothing to measure", not a measurement that failed: any other reason
+# (the gcov build, its runs or gcov itself failed) shows in PROGRESS.md, so a breakage is not silent.
+COVERAGE_NOT_APPLICABLE = ("not measured for modules yet", "the merge adds no line to a C file under src/")
 # The checks the walk turns on in every compared command sequence.
 CHECKS = {"variants": True, "replica": True, "acl": True, "concurrency": 4, "compat": True, "faults": True}
 # The diagnostics.reason a failed check gives.
@@ -1208,6 +1211,11 @@ def _summary(merge: dict[str, Any], result: dict[str, Any] | None, now: str) -> 
         return {**entry, "outcome": merge.get("skip_outcome", "no-code-change")}
     entry.update({key: result.get(key) for key in ("outcome", "proposed", "proven", "hunted", "recall", "cost_usd")})
     entry["coverage"] = (result.get("coverage") or {}).get("percent")
+    # A measurement that failed (the gcov build, its runs or gcov), kept so the failure shows in PROGRESS.md;
+    # a merge with nothing to measure keeps no reason.
+    reason = result.get("coverage_reason")
+    if entry["coverage"] is None and reason and reason not in COVERAGE_NOT_APPLICABLE:
+        entry["coverage_reason"] = str(reason)[:200]
     # Tests skipped as unsupported, most often a setting the build does not know: one reason, so a skip that
     # every merge hits (a renamed config) shows in PROGRESS.md, not only in a dropped count.
     skipped = [r for r in result.get("recorded") or [] if r.get("status") == "SKIP_UNSUPPORTED"]
@@ -1325,7 +1333,9 @@ def progress(states: list[dict[str, Any]], now: datetime) -> str:
             what = f"{entry.get('subject', '')}: "
             if entry["outcome"] == "tested":
                 what += f"{entry['proven']} of {entry['proposed']} test(s) reached the change"
-                what += f", coverage {entry['coverage']}%" if entry.get("coverage") is not None else ""
+                what += (f", coverage {entry['coverage']}%" if entry.get("coverage") is not None
+                         else f", coverage not measured ({entry['coverage_reason']})"
+                         if entry.get("coverage_reason") else "")
                 skipped = entry.get("skipped")
                 what += f", {skipped['count']} skipped ({skipped['reason']})" if skipped else ""
                 what += "".join(f"; [{f['rule']}, {f['verdict']}]({f['issue']})" if f.get("issue")

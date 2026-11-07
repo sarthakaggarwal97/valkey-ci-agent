@@ -1174,14 +1174,19 @@ def test_a_coverage_build_that_fails_leaves_the_coverage_unknown_and_the_merge_t
 
 
 def test_progress_shows_each_merges_coverage_and_the_median():
-    merges = [_merge(sha=c * 40, pr=i) for i, c in enumerate("bcde", 1)]
-    covered = [{"lines": 10, "executed": e, "percent": e * 10, "uncovered": []} for e in (9, 4, 7)] + [None]
+    merges = [_merge(sha=c * 40, pr=i) for i, c in enumerate("bcdef", 1)]
+    covered = [{"lines": 10, "executed": e, "percent": e * 10, "uncovered": []} for e in (9, 4, 7)] + [None, None]
+    reasons = [None, None, None, "the merge adds no line to a C file under src/",
+               "`make gcov` failed in coverage (exit 2)"]
     planned = {"repo": walk.VALKEY_REPO, "merges": merges, "skipped": [], "pointer": {}}
     state = update(initial_state(walk.VALKEY_REPO), planned,
-                   [_result(m, coverage=c, findings=[]) for m, c in zip(merges, covered)], now=NOW)
+                   [_result(m, coverage=c, coverage_reason=r, findings=[])
+                    for m, c, r in zip(merges, covered, reasons)], now=NOW)
     text = progress([state], datetime(2026, 11, 4, 18, tzinfo=timezone.utc))
     assert "2 of 3 test(s) reached the change, coverage 90%" in text
-    assert "2 of 3 test(s) reached the change\n" in text  # not measured: no coverage shown
+    assert "2 of 3 test(s) reached the change\n" in text  # nothing to measure: no coverage shown
+    # A measurement that failed is not silent: the merge's line says why (fuzzer-walk maintenance, 2026-11-07).
+    assert "2 of 3 test(s) reached the change, coverage not measured (`make gcov` failed in coverage (exit 2))" in text
     assert "- Changed-line coverage: median 70% of 3 merge(s) measured, 1 under 50%" in text
 
 
