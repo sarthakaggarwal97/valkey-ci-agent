@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.acl-kill-other-clients
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    ACL DELUSER and ACL SETUSER resetchannels kill clients other than the one issuing
+    the command, driving freeClientOrCloseLater's non-current-client branches (async
+    free via DELUSER, sync free via resetchannels on another user's subscriber), anchored
+    by the self-resetchannels kill the parent build crashes on.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: killothers
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [ACL, SETUSER, victim, on, nopass, "+@all", "~*", "&news"], expect: {
+        equals: OK}}
+    - {command: [AUTH, victim, x], connection: v1, expect: {equals: OK}}
+    - {command: [SUBSCRIBE, news], connection: v1}
+    - {command: [AUTH, victim, x], connection: v2, expect: {equals: OK}}
+    - {command: [PING], connection: v2, expect: {equals: PONG}}
+    - {command: [ACL, DELUSER, victim], expect: {equals: 1}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [PING], connection: v1, expect: {exists: false}}
+    - {command: [PING], connection: v2, expect: {exists: false}}
+    - {command: [ACL, SETUSER, sub2, on, nopass, "+@all", "~*", "&news"], expect: {
+        equals: OK}}
+    - {command: [AUTH, sub2, x], connection: w, expect: {equals: OK}}
+    - {command: [SUBSCRIBE, news], connection: w}
+    - {command: [ACL, SETUSER, sub2, resetchannels], expect: {equals: OK}}
+    - {command: [PING], connection: w, expect: {exists: false}}
+    - {command: [ACL, SETUSER, selfkill, on, nopass, "+@all", "~*", "&news"], expect: {
+        equals: OK}}
+    - {command: [AUTH, selfkill, x], connection: s, expect: {equals: OK}}
+    - {command: [SUBSCRIBE, news], connection: s}
+    - {command: [ACL, SETUSER, selfkill, resetchannels], connection: s, expect_difference: true,
+      expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [killothers.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: killothers}

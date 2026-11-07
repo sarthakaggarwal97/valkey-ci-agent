@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "24b67843ac5ef3b9d21e0a2ffdc757271c6a88bc",
+  "parent": "13dd4b8b99509a103ba2de65c9825707b89f162b",
+  "pr": 3216,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update deps/libvalkey to version 0.4.0 (#3216)",
+  "date": "2026-02-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.1486,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-baba07f3ded2",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'cluster-tools' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (valkey-benchmark -p $port --cluster -t set,get -n 1000 -c 16 --threads 4 -P 1 -q)"
+    },
+    {
+      "scenario": "ai-d60ddc45c568",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'cluster-tools' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (valkey-benchmark -p $port --cluster -t set,get -n 5000 -c 16 --threads 8 -P 16 -q)"
+    }
+  ],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

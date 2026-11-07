@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.acl-load-reduces-channels
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL LOAD that reduces a subscribed client's channel permissions closes
+    that client after the command instead of crashing the server.
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 2
+    timeout_s: 15
+    server_config: {aclfile: users.acl}
+    files: {users.acl: "user default on nopass ~* &* +@all\nuser chanuser on nopass\
+        \ ~* +@all\n"}
+    commands:
+    - {command: [ACL, SETUSER, chanuser, "&test"], expect: {equals: OK}}
+    - {command: [HELLO, "3"], connection: sub, compare: skip}
+    - {command: [AUTH, chanuser, blank], connection: sub, expect: {equals: OK}}
+    - {command: [SUBSCRIBE, test], connection: sub, compare: skip}
+    - {command: [ACL, LOAD], connection: sub, expect_difference: true, expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [acl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 13dd4b8b9950..24b67843ac5e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a32c4958b9fb
+seed: 303
+experiment:
+  id: proposed.libvalkey-cli-benchmark-compare
+  inputs:
+    threads: 1
+    clients: 1
+    pipeline: 1
+    value_size: 1
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

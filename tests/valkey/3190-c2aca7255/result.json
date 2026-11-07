@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c2aca7255dad84b267f227c7b53f95335ebfd389",
+  "parent": "0f5db6a5d17d8273d2535aeac2d9eaca23635861",
+  "pr": 3190,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Build Lua by default with make test (#3190)",
+  "date": "2026-02-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2139,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits src/Makefile: it factors the 'all' target's prerequisites into a variable and makes 'make test' build the same full prerequisite set (including the Lua/TLS/RDMA modules) before running the test suite. It alters what gets compiled before tests, not any runtime behaviour of valkey-server, the tools, replication, persistence or any command, so no fuzzer scenario can reach it and none is needed."
+}

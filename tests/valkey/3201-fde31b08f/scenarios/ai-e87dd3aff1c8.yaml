@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e0a467edabad..fde31b08f7b0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e87dd3aff1c8
+seed: 1001
+experiment:
+  id: proposed.endian-roundtrip
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

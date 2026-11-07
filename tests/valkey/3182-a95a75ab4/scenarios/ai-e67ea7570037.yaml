@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c2aca7255dad..a95a75ab4200.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e67ea7570037
+seed: 103
+experiment:
+  id: proposed.acl-load-kills-other-client
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.ustime-clock-invariants
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    ustime() TSC fast path keeps the wall clock sane. PTTL never exceeds the TTL just
+    set (the clock never runs backwards across the 1ms gettimeofday refresh boundary),
+    PTTL drops across a DEBUG SLEEP (the clock never stalls on the cached gettimeofday
+    value), and a millisecond expiry still fires, compared against the parent build
+    which uses gettimeofday on every call.
+components:
+- use: valkey.action.commands
+  id: clock
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k1, v1, PX, 10000], expect: {equals: OK}}
+    - {command: [PTTL, k1], compare: skip, expect: {min: 1, max: 10000}}
+    - {command: [INCR, c], expect: {equals: 1}}
+    - {command: [INCR, c], expect: {equals: 2}}
+    - {command: [INCR, c], expect: {equals: 3}}
+    - {command: [INCR, c], expect: {equals: 4}}
+    - {command: [INCR, c], expect: {equals: 5}}
+    - {command: [INCR, c], expect: {equals: 6}}
+    - {command: [INCR, c], expect: {equals: 7}}
+    - {command: [INCR, c], expect: {equals: 8}}
+    - {command: [PTTL, k1], compare: skip, expect: {min: 1, max: 10000}}
+    - {command: [DEBUG, SLEEP, 0.3], expect: {equals: OK}}
+    - {command: [PTTL, k1], compare: skip, expect: {min: 1, max: 9750}}
+    - {command: [SET, k2, v2, PX, 150], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.5], expect: {equals: OK}}
+    - {command: [GET, k2], expect: {exists: false}}
+    - {command: [EXISTS, k2], expect: {equals: 0}}
+    - {command: [SET, k3, v3, EX, 100], expect: {equals: OK}}
+    - {command: [TTL, k3], compare: skip, expect: {min: 95, max: 100}}
+    - {command: [TIME], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [clock.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: clock}

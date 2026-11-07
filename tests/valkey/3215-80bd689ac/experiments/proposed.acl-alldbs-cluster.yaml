@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.acl-alldbs-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    In cluster mode dbnum is 1, so on the parent build a user granted only db=5 (one
+    entry, count equals dbnum) passed the alldbs count check and could run FLUSHALL
+    and CLUSTER CANCELSLOTMIGRATIONS without access to db 0; the fixed build denies
+    both.
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    timeout_s: 30
+    commands:
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, cuser, on, nopass, "+@all", "~*", "&*", "db=5"], expect: {
+        equals: OK}}
+    - {command: [ACL, DRYRUN, cuser, FLUSHALL], expect_difference: true, expect: {
+        contains: database}}
+    - {command: [AUTH, cuser, x], expect: {equals: OK}}
+    - {command: [FLUSHALL], expect_difference: true, expect: {error: database}}
+    - {command: [CLUSTER, CANCELSLOTMIGRATIONS], expect_difference: true, expect: {
+        error: database}}
+    - {command: [GET, foo], expect_difference: true, expect: {equals: bar}}
+    - {command: [AUTH, default, x], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, cok, on, nopass, "+@all", "~*", "&*", "db=0"], expect: {
+        equals: OK}}
+    - {command: [AUTH, cok, x], expect: {equals: OK}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [acl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

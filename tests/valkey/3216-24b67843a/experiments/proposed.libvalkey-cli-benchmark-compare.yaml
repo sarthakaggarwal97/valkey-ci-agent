@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.libvalkey-cli-benchmark-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The libvalkey 0.2.1 -> 0.4.0 bump rewrites the client library linked into valkey-cli
+    and valkey-benchmark (conn.c connection-funcs registration now thread-safe via
+    pthread_once, valkeyBufferRead gains a zero-copy branch, sds.c ull2string/digits10
+    integer formatting hardened). No tool output is meant to change, so every run
+    must behave identically on the build under test and the parent: connect over TCP
+    and unix socket, RESP2 and RESP3, command formatting, the reply reader, --pipe
+    raw protocol, --rdb SYNC transfer through the libvalkey buffer wrapper, and threaded
+    benchmark runs.
+inputs:
+  properties:
+    threads: {type: integer, minimum: 1, maximum: 16, default: 4}
+    clients: {type: integer, minimum: 1, maximum: 64, default: 16}
+    pipeline: {type: integer, minimum: 1, maximum: 64, default: 1}
+    value_size: {type: integer, minimum: 1, maximum: 65536, default: 1024}
+components:
+- use: valkey.action.tools
+  id: tools
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 120
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, SET, k1, v1], expect: {exit: {equals: 0},
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-s, $socket, GET, k1], expect: {exit: {equals: 0},
+        stdout: {equals: "v1\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, -3, --json, GET, k1], expect: {exit: {
+          equals: 0}, stdout: {equals: "\"v1\"\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SET, empty, ""], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --json, GET, empty], expect: {stdout: {
+          equals: "\"\"\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --pipe], stdin: "*3\r\n$3\r\nSET\r\n$3\r\
+        \npk1\r\n$2\r\nv1\r\n*3\r\n$3\r\nSET\r\n$3\r\npk2\r\n$2\r\nv2\r\nPING\r\n",
+      expect: {exit: {equals: 0}, stdout: {contains: "errors: 0, replies: 3"}}}
+    - {tool: valkey-cli, args: [-p, $port, DEBUG, POPULATE, 1000], expect: {exit: {
+          equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect: {stdout: {equals: "1004\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --scan], compare: unordered, expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --rdb, sync-copy.rdb], compare: skip, expect: {
+        exit: {equals: 0}, stderr: {contains: "Transfer finished with success"}}}
+    - {tool: valkey-check-rdb, args: [sync-copy.rdb], compare: skip, expect: {exit: {
+          equals: 0}, stdout: {contains: "RDB looks OK"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, "set,get,incr,lpush,rpop,sadd,hset",
+        -n, 2000, -r, 100, -c, {$ref: inputs.clients}, --threads, {$ref: inputs.threads},
+        -d, {$ref: inputs.value_size}, -P, {$ref: inputs.pipeline}, -q], compare: skip,
+      expect: {exit: {equals: 0}, stdout: {contains: "requests per second"}}}
+    - {tool: valkey-benchmark, args: [-s, $socket, -t, ping, -n, 1000, -c, 8, --threads,
+        {$ref: inputs.threads}, -q], compare: skip, expect: {exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: tools}

@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.acl-load-kills-other-client
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    ACL LOAD from a file lacking two runtime-created users kills the other authenticated
+    client synchronously (freeClientOrCloseLater async=0 on a non-current client)
+    in the same pass that flags the current client for close-after-command, which
+    the parent build crashes on.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aclload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    server_config: {aclfile: users.acl}
+    files:
+      users.acl: "user default on nopass ~* &* +@all\n"
+    commands:
+    - {command: [ACL, SETUSER, u1, on, nopass, "+@all", "~*", "&*"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, u2, on, nopass, "+@all", "~*", "&*"], expect: {equals: OK}}
+    - {command: [AUTH, u2, x], connection: b, expect: {equals: OK}}
+    - {command: [PING], connection: b, expect: {equals: PONG}}
+    - {command: [AUTH, u1, x], connection: a, expect: {equals: OK}}
+    - {command: [ACL, LOAD], connection: a, expect_difference: true, expect: {equals: OK}}
+    - {command: [PING], connection: b, expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aclload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aclload}

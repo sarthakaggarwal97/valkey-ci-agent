@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 06ccdf99049d..06d30f29319c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f866611e6315
+seed: 20260901
+experiment:
+  id: proposed.pfadd-corrupted-sparse-hll
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

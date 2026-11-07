@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1f473323c8b6d51dcf5955125ba723437f2a8287",
+  "parent": "130befc8123b0cb98e3c2c87f604aca0e50755be",
+  "pr": 3197,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix getKeysUsingKeySpecs keynum case ignoring keystep when calc the last key (#3197)",
+  "date": "2026-02-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.1015,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix changes getKeysUsingKeySpecs's last-key formula from first+numkeys-1 to first+(numkeys-1)*step, which differs only when a KEYNUM key spec has keystep > 1. Every built-in command with a KEYNUM spec (EVAL/EVALSHA/FCALL families, ZUNION/ZINTER/ZDIFF/ZINTERCARD, SINTERCARD, LMPOP/BLMPOP, ZMPOP/BZMPOP) declares keystep = 1 (all .fk.keynum={0,1,1} in commands.def), so key extraction, COMMAND GETKEYS, ACL key checks and cluster routing are identical on both builds for every reachable command. The changed path is reachable only by a module command registering a KEYNUM spec with keystep > 1 via"
+}

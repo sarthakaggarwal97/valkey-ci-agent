@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.libvalkey-cluster-tools-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The libvalkey 0.4.0 bump rewrites cluster.c (SELECT support, CLUSTER NODES reply-type
+    handling) and command.c (valkey_lookup_cmd now bounds command names at 64 bytes
+    instead of alloca), plus a large cmddef.h refresh. The cluster-aware paths of
+    valkey-cli (-c redirect handling, --cluster check/call) and valkey-benchmark --cluster
+    against a one-node cluster must behave identically on the build under test and
+    on the parent build linked against libvalkey 0.2.1.
+inputs:
+  properties:
+    threads: {type: integer, minimum: 1, maximum: 16, default: 4}
+    requests: {type: integer, minimum: 100, maximum: 100000, default: 1000}
+    pipeline: {type: integer, minimum: 1, maximum: 64, default: 1}
+components:
+- use: valkey.action.tools
+  id: cluster-tools
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 120
+    runs:
+    - {tool: valkey-cli, args: [-c, -p, $port, SET, foo, bar], expect: {exit: {equals: 0},
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-c, -p, $port, GET, foo], expect: {exit: {equals: 0},
+        stdout: {equals: "bar\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, COUNTKEYSINSLOT, 12182], expect: {
+        stdout: {equals: "1\n"}}}
+    - {tool: valkey-cli, args: [--cluster, check, "127.0.0.1:$port"], expect: {exit: {
+          equals: 0}, stdout: {contains: "[OK] All 16384 slots covered"}}}
+    - {tool: valkey-cli, args: [--cluster, call, "127.0.0.1:$port", PING], compare: skip,
+      expect: {exit: {equals: 0}, stdout: {contains: PONG}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, -t, "set,get", -n, {$ref: inputs.requests},
+        -c, 16, --threads, {$ref: inputs.threads}, -P, {$ref: inputs.pipeline}, -q],
+      compare: skip, expect: {exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cluster-tools}

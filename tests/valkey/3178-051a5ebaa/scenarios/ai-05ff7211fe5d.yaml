@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 48419e46ea24..051a5ebaabdb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-05ff7211fe5d
+seed: 317801
+experiment:
+  id: proposed.bio-lazyfree-churn
+  inputs:
+    signal: SIGKILL
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7000
+  server_config:
+    list-max-listpack-size: 1

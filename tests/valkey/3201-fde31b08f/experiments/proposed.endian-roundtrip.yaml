@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.endian-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: Stream IDs and hash-field TTLs round-trip through htonu64/ntohu64 (bswap64)
+    unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [XADD, s, 1-1, f, v], expect: {equals: "1-1"}}
+    - {command: [XADD, s, 255-255, f, v], expect: {equals: "255-255"}}
+    - {command: [XADD, s, 4294967296-1, f, v], expect: {equals: "4294967296-1"}}
+    - {command: [XADD, s, 72057594037927936-0, f, v], expect: {equals: "72057594037927936-0"}}
+    - {command: [XADD, s, 18446744073709551615-18446744073709551614, f, v], expect: {
+        equals: "18446744073709551615-18446744073709551614"}}
+    - {command: [XLEN, s], expect: {equals: 5}}
+    - {command: [XRANGE, s, "-", "+"], expect: {equals: [["1-1", [f, v]], ["255-255",
+            [f, v]], ["4294967296-1", [f, v]], ["72057594037927936-0", [f, v]], [
+            "18446744073709551615-18446744073709551614", [f, v]]]}}
+    - {command: [XRANGE, s, 18446744073709551615-18446744073709551614, "+"], expect: {
+        equals: [["18446744073709551615-18446744073709551614", [f, v]]]}}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HPEXPIREAT, h, 99999999999999, FIELDS, 2, f1, f2], expect: {equals: [
+          1, 1]}}
+    - {command: [HPEXPIRETIME, h, FIELDS, 2, f1, f2], expect: {equals: [99999999999999,
+          99999999999999]}}
+    - {command: [HEXPIRETIME, h, FIELDS, 1, f1], expect: {equals: [99999999999]}}
+    - {command: [HTTL, h, FIELDS, 1, f1], expect: {min: 1}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

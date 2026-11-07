@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "223bfa840b31918c1aa4931846e3408c57b6e4a5",
+  "parent": "fde31b08f7b00ed0bc1bb153e7a315ff435270f2",
+  "pr": 1840,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Added comment to maxmemory-clients conf to mention the performance issue (#1840)",
+  "date": "2026-02-16",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2071,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits documentation comments in valkey.conf (rewording the maxmemory-clients description and adding a commented-out example line). No code path, config default, or parsing behaviour changes, so there is nothing a runtime scenario could exercise."
+}

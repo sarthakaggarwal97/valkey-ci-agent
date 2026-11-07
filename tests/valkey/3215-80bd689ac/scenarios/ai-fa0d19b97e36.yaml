@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 223bfa840b31..80bd689accbb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fa0d19b97e36
+seed: 3215
+experiment:
+  id: proposed.acl-alldbs-wrong-range
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

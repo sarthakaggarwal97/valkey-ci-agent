@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c2aca7255dad..a95a75ab4200.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-81880eee20ac
+seed: 3
+experiment:
+  id: proposed.acl-load-reduces-channels
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

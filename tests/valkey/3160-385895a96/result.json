@@ -1,0 +1,105 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "385895a965fb0c9e586a253e7ffcb9b6a5c8c7b6",
+  "parent": "b00c9367fff999188361aebba32c8732729e1178",
+  "pr": 3160,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "[BUG][issue-2797] Block module unload when ACL references module subcommands (#3160)",
+  "date": "2026-02-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 5,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 43,
+    "executed": 37,
+    "percent": 86,
+    "uncovered": [
+      "src/acl.c:760",
+      "src/acl.c:761",
+      "src/acl.c:762",
+      "src/acl.c:763",
+      "src/acl.c:764",
+      "src/acl.c:765"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 11.2602,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: acl.c:712 'res == C_OK' is not true",
+      "scenario": "ai-15b58696a914",
+      "seed": 7001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3160",
+      "fingerprint": "17c9e8155d7ae8aaf370",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: acl.c:712 'res == C_OK' is not true",
+      "scenario": "ai-1a4c7465a177",
+      "seed": 7002,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3160",
+      "fingerprint": "17c9e8155d7ae8aaf370",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: acl.c:712 'res == C_OK' is not true",
+      "scenario": "ai-c6a7a7c0a0c4",
+      "seed": 7003,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3160",
+      "fingerprint": "17c9e8155d7ae8aaf370",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: acl.c:712 'res == C_OK' is not true",
+      "scenario": "ai-e08aebfa414c",
+      "seed": 7004,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3160",
+      "fingerprint": "17c9e8155d7ae8aaf370",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: acl.c:712 'res == C_OK' is not true",
+      "scenario": "ai-9ac9f0637028",
+      "seed": 7005,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3160",
+      "fingerprint": "17c9e8155d7ae8aaf370",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

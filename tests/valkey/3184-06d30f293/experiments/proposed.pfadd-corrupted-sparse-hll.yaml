@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.pfadd-corrupted-sparse-hll
+deployment:
+  modes: [standalone]
+metadata:
+  description: PFADD on a corrupted sparse HLL must report an INVALIDOBJ error, not
+    success
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hll
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SET, hll, !!binary "SFlMTAEAAAAAAAAAAAAAAAA="], expect: {equals: OK}}
+    - {command: [PFADD, hll, a, b, c, d, e], expect_difference: true, expect: {error: "Corrupted\
+          \ HLL"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hll.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hll}

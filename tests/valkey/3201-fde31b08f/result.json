@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fde31b08f7b00ed0bc1bb153e7a315ff435270f2",
+  "parent": "e0a467edabad66c75dbfca5e9caaadc3d6848c36",
+  "pr": 3201,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize endian conversion functions (#3201)",
+  "date": "2026-02-15",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 6.9449,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-39e20ca55b29",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-dc8f6e89a8e7",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

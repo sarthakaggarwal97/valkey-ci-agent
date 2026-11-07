@@ -1,0 +1,55 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "130befc8123b0cb98e3c2c87f604aca0e50755be",
+  "parent": "24b67843ac5ef3b9d21e0a2ffdc757271c6a88bc",
+  "pr": 2846,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Dual-channel-replication announces itself at replica-announce-ip if configured (#2846)",
+  "date": "2026-02-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 6,
+  "recall": false,
+  "coverage": {
+    "lines": 14,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/replication.c:3035",
+      "src/replication.c:3036",
+      "src/replication.c:3037",
+      "src/replication.c:3038",
+      "src/replication.c:3039",
+      "src/replication.c:3081",
+      "src/replication.c:3082",
+      "src/replication.c:3083",
+      "src/replication.c:3084",
+      "src/replication.c:3085",
+      "src/replication.c:3086",
+      "src/replication.c:3088",
+      "src/replication.c:3089",
+      "src/replication.c:3090"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 16.7209,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-f5cff2379338",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-0fa6082b5b59",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

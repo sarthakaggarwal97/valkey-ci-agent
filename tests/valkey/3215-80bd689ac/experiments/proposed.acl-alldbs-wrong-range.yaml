@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.acl-alldbs-wrong-range
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    An alldbs command (FLUSHALL) must be denied when the selector's db intset has
+    dbnum entries that do not cover db 0..dbnum-1, and allowed when it covers them
+    with extra out-of-range IDs; the parent build only compared the intset count against
+    dbnum.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {databases: 16}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, d0key, d0val], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, missing0, on, nopass, "+@all", "~*", "&*", "db=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16"],
+      expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, missing0, FLUSHALL], expect_difference: true, expect: {
+        contains: database}}
+    - {command: [AUTH, missing0, x], expect: {equals: OK}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [FLUSHALL], expect_difference: true, expect: {error: database}}
+    - {command: [GET, k1], expect_difference: true, expect: {equals: v1}}
+    - {command: [AUTH, default, x], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [GET, d0key], expect_difference: true, expect: {equals: d0val}}
+    - {command: [ACL, SETUSER, super, on, nopass, "+@all", "~*", "&*", "db=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16"],
+      expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, super, FLUSHALL], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [AUTH, super, x], expect: {equals: OK}}
+    - {command: [FLUSHALL], expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, d0key]}
+    - {command: [AUTH, default, x], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, exact, on, nopass, "+@all", "~*", "&*", "db=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15"],
+      expect: {equals: OK}}
+    - {command: [AUTH, exact, x], expect: {equals: OK}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [acl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

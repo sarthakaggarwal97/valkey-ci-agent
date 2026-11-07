@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "42fc851b76c9eab40a161fc0df03cbe887f8ea34",
+  "parent": "9cbe1045d56e150d3d9745217634c37cbfb6ab2b",
+  "pr": 3186,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix pointer-to-int-cast warnings for RDMA address handling (#3186)",
+  "date": "2026-02-13",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.294,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only inserts intermediate (uintptr_t) casts when converting between pointers and uint64_t in src/rdma.c and tests/rdma/rdma-test.c to fix compiler pointer-to-int-cast warnings. On the supported 64-bit platforms the resulting values are bit-identical to the parent build, so there is no behaviour change to observe: no reply, replication, persistence or crash path differs. Moreover the touched code is the RDMA transport, which requires RDMA NICs/rdma_cm and cannot be reached by the fuzzer's local TCP deployments. A build-warning refactor with no behaviour change gets no scenario."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fd57c2171e1fea68ab2d444a556358a448abadec",
+  "parent": "42fc851b76c9eab40a161fc0df03cbe887f8ea34",
+  "pr": 3034,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "add option to use libbacktrace for backtraces in crash reports (#3034)",
+  "date": "2026-02-13",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6502,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is entirely behind a new compile-time flag USE_LIBBACKTRACE (default no) that the runner's standard build does not set, so the new symbolizeWithLibbacktrace code in src/debug.c is compiled out of both binaries under test. Everything else in the diff is CI workflow, .gitignore and README edits. Even when enabled, the code only alters how stack frames are symbolized in the crash report after a fatal signal \u2014 no command replies, data, replication, persistence or config behaviour changes, and the crash-report path itself is not something the fuzzer's oracles can exercise as a passing ru"
+}

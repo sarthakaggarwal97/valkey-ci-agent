@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 223bfa840b31..80bd689accbb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fbbaf04972a2
+seed: 3217
+experiment:
+  id: proposed.acl-alldbs-cluster
+deployment:
+  mode: standalone
+  base_port: 7200

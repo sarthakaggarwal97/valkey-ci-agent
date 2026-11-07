@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.module-unload-acl-ref
+deployment:
+  modes: [standalone]
+metadata:
+  description: MODULE UNLOAD is blocked when an ACL user references the module's commands
+    or subcommands; the parent either crashes in the ACL recompute or wrongly unloads
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    rule: {type: string, default: "+subcommands.sub|get_fullname"}
+components:
+- use: valkey.action.commands
+  id: unload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {enable-module-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [ACL, SETUSER, acluser, on, nopass, "+@read", "+ping", {$ref: inputs.rule}],
+      expect: {equals: OK}}
+    - {raw: "MODULE UNLOAD subcommands\r\n", expect_difference: true, expect: {error: "one\
+          \ or more ACL users reference commands from this module"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: unload}

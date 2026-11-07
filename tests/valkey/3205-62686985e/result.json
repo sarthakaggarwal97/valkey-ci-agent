@@ -1,0 +1,34 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "62686985e5d99996c9f9427524daed52e14cbec3",
+  "parent": "fd57c2171e1fea68ab2d444a556358a448abadec",
+  "pr": 3205,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix bug causing no response flush sometimes when IO threads are busy (#3205)",
+  "date": "2026-02-14",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.74,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-c3778bc1fbaf",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

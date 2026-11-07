@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 546020e54c98..e0a467edabad.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9227fc065307
+seed: 31931
+experiment:
+  id: proposed.ustime-clock-invariants
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

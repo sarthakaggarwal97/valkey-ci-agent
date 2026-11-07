@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.acl-resetchannels-self
+deployment:
+  modes: [standalone]
+metadata:
+  description: A subscribed RESP3 client that resets its own channel permissions is
+    closed after the command instead of crashing the server.
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 2
+    timeout_s: 15
+    commands:
+    - {command: [ACL, SETUSER, chanuser, "on", nopass, "+@all", "&test"], expect: {
+        equals: OK}}
+    - {command: [HELLO, "3"], connection: sub, compare: skip}
+    - {command: [AUTH, chanuser, blank], connection: sub, expect: {equals: OK}}
+    - {command: [SUBSCRIBE, test], connection: sub, compare: skip}
+    - {command: [ACL, SETUSER, chanuser, resetchannels], connection: sub, expect_difference: true,
+      expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [acl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

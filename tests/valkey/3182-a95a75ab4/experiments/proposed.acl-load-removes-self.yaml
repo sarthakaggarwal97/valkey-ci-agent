@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.acl-load-removes-self
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL LOAD that removes the currently authenticated user closes that
+    client after the command instead of crashing the server.
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 2
+    timeout_s: 15
+    server_config: {aclfile: users.acl}
+    files: {users.acl: "user default on nopass ~* &* +@all\n"}
+    commands:
+    - {command: [ACL, SETUSER, gone, "on", ">password", "+@all", "~*", "&*"], expect: {
+        equals: OK}}
+    - {command: [AUTH, gone, password], connection: sub, expect: {equals: OK}}
+    - {command: [ACL, LOAD], connection: sub, expect_difference: true, expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [acl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b00c9367fff9..385895a965fb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-15b58696a914
+seed: 7001
+experiment:
+  id: proposed.module-unload-acl-ref
+  inputs:
+    resp: 2
+    rule: +subcommands.sub|get_fullname
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

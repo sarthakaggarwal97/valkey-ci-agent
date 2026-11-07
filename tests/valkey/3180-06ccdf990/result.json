@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "06ccdf99049d938b6a6cabc0d69bf4ecc4fa506f",
+  "parent": "751a099643f9a4397a91cef2316468e7eed5bfeb",
+  "pr": 3180,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix remaining_repl_size should be in CLUSTER GETSLOTMIGRATIONS in conf (#3180)",
+  "date": "2026-02-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2121,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only a comment in valkey.conf, correcting the documented command name ('CLUSTER MIGRATESLOTS' -> 'CLUSTER GETSLOTMIGRATIONS') for where the remaining_repl_size field appears. No code, config parsing, command behaviour, replication, or persistence path is touched \u2014 the comment is never read by the server at runtime \u2014 so there is nothing a scenario could exercise or break."
+}

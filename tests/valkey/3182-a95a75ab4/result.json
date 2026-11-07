@@ -1,0 +1,135 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a95a75ab42002f1cb83620ddb6f39309efeee671",
+  "parent": "c2aca7255dad84b267f227c7b53f95335ebfd389",
+  "pr": 3182,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix server assert on ACL LOAD and resetchannels (#3182)",
+  "date": "2026-02-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 6,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 12,
+    "executed": 11,
+    "percent": 91,
+    "uncovered": [
+      "src/module.c:10008"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 4.8859,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:458 'c->conn' is not true",
+      "scenario": "ai-61fd889cc2de",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3182",
+      "fingerprint": "902fbc89b74cddfa587d",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:458 'c->conn' is not true",
+      "scenario": "ai-bbf5ae823e8b",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3182",
+      "fingerprint": "902fbc89b74cddfa587d",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:458 'c->conn' is not true",
+      "scenario": "ai-81880eee20ac",
+      "seed": 3,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3182",
+      "fingerprint": "902fbc89b74cddfa587d",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:458 'c->conn' is not true",
+      "scenario": "ai-0e11be68af98",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3182",
+      "fingerprint": "902fbc89b74cddfa587d",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:458 'c->conn' is not true",
+      "scenario": "ai-0478b93e9c6b",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3182",
+      "fingerprint": "902fbc89b74cddfa587d",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:458 'c->conn' is not true",
+      "scenario": "ai-e67ea7570037",
+      "seed": 103,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3182",
+      "fingerprint": "902fbc89b74cddfa587d",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:458 'c->conn' is not true",
+      "scenario": "ai-d064148105aa",
+      "seed": 104,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3182",
+      "fingerprint": "902fbc89b74cddfa587d",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-0e11be68af98",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'killothers' returned ERROR: expectations both builds violate alike, so they are not about the change: 17 (ACL SETUSER selfkill resetchannels on connection s)"
+    }
+  ]
+}

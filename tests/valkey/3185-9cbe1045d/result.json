@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9cbe1045d56e150d3d9745217634c37cbfb6ab2b",
+  "parent": "a95a75ab42002f1cb83620ddb6f39309efeee671",
+  "pr": 3185,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update and pin github actions to full SHAs for supply chain security (#3185)",
+  "date": "2026-02-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4349,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change pins GitHub Actions workflows to full SHAs (CI-only files under .github/workflows/) and fixes typos: comments, unit-test function/message spellings, TCL test comments, and semantically identical local variable renames (cpy->copy in sds.c/networking.c, aof_preable->aof_preamble in valkey-check-aof.c). No compiled behavior, command reply, replication, persistence, or tool output changes, so there is nothing for a scenario to exercise."
+}

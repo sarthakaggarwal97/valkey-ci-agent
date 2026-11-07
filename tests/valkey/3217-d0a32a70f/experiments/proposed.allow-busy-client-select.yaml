@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.allow-busy-client-select
+deployment:
+  modes: [standalone]
+metadata:
+  description: While an EVAL loop holds the server busy, SELECT and the newly ALLOW_BUSY
+    CLIENT subcommands must execute (parent answers -BUSY), and their effects must
+    persist past the busy window
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    busy_threshold_ms: {type: integer, minimum: 1, maximum: 1000, default: 100}
+components:
+- use: valkey.action.commands
+  id: busy
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {busy-reply-threshold: {$ref: inputs.busy_threshold_ms}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {connection: script, raw: "EVAL \"while true do end\" 0\r\n"}
+    - {command: [GET, probe], wait_s: 15, expect: {error: "BUSY"}}
+    - {command: [SELECT, 2], expect_difference: true, expect: {equals: OK}}
+    - {command: [SELECT, 17], expect_difference: true, expect: {error: "out of range"}}
+    - {command: [CLIENT, ID], expect_difference: true, expect: {min: 1}}
+    - {command: [CLIENT, SETNAME, busyconn], expect_difference: true, expect: {equals: OK}}
+    - {command: [CLIENT, GETNAME], expect_difference: true, expect: {equals: busyconn}}
+    - {command: [CLIENT, GETREDIR], expect_difference: true, expect: {equals: -1}}
+    - {command: [CLIENT, NO-EVICT, on], expect_difference: true, expect: {equals: OK}}
+    - {command: [CLIENT, NO-TOUCH, on], expect_difference: true, expect: {equals: OK}}
+    - {command: [CLIENT, SETINFO, lib-name, fuzzlib], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CLIENT, SETINFO, lib-name, "bad lib"], expect_difference: true, expect: {
+        error: "cannot contain spaces"}}
+    - {command: [CLIENT, CAPA, redirect], expect_difference: true, expect: {equals: OK}}
+    - {command: [CLIENT, REPLY, ON], expect_difference: true, expect: {equals: OK}}
+    - {command: [CLIENT, CACHING, yes], expect_difference: true, expect: {error: "OPTIN"}}
+    - {command: [CLIENT, TRACKING, on], expect: {error: "BUSY"}}
+    - {command: [SCRIPT, KILL], expect: {equals: OK}}
+    - {connection: script, read: true, compare: skip}
+    - {command: [SET, dbkey, after-busy], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [EXISTS, dbkey], expect_difference: true, expect: {equals: 0}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [GET, dbkey], expect_difference: true, expect: {equals: after-busy}}
+    - {command: [CLIENT, GETNAME], expect_difference: true, expect: {equals: busyconn}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [busy.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: busy}

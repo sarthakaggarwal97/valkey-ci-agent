@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "06d30f29319c55fd36fc2bd5ad61b0f0f1b79b20",
+  "parent": "06ccdf99049d938b6a6cabc0d69bf4ecc4fa506f",
+  "pr": 3184,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix PFADD corrupted sparse HLL handling by restoring hllSparseSet return type (#3184)",
+  "date": "2026-02-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.3368,
+  "findings": [],
+  "recorded": []
+}

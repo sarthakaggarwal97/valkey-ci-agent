@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "13dd4b8b99509a103ba2de65c9825707b89f162b",
+  "parent": "d0a32a70f858e6950e1606ead2881af09c13f13c",
+  "pr": 3230,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Skip large-memory unit test with ASan that got OOM (#3230)",
+  "date": "2026-02-19",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2106,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only the unit-test harness file src/unit/test_quicklist.c, adding an early return under VALKEY_ADDRESS_SANITIZER so the large-memory quicklist compress/decompress unit test is skipped in ASan CI runs to avoid OOM. No server, command, data-structure, replication, or persistence code changes; runtime behaviour of valkey-server and its tools is identical, so no scenario can exercise the change."
+}
