@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+import subprocess
 import time
 from pathlib import Path
 
@@ -465,3 +467,56 @@ def test_a_build_break_is_reproduced_by_the_jobs_build_alone_and_once(result, st
     assert reproduction.status is status
     assert plan.verify_loops(True) == 1 and plan.command(10) == commands[0]
     assert plan.ran(TestRun(passed=True, output="")) and not plan.tests
+
+
+_FILE_WITH_SETUP_BETWEEN_TESTS = """\
+proc helper {} { return helped }
+set shared 1
+
+start_server {tags {"repl"}} {
+    test {Earlier test that starts replication} { r slaveof 127.0.0.1 1 }
+    wait_for_sync r
+}
+
+start_server {tags {"repl"}} {
+    foreach mode {disabled swapdb} {
+        test "[string toupper flushdb] during sync replays (load=$mode)" { helper }
+    }
+}
+"""
+
+
+@pytest.mark.skipif(shutil.which("tclsh") is None, reason="needs tclsh")
+def test_a_test_that_only_cannot_reach_runs_alone_in_its_own_block(checkout):
+    """--only skips the earlier test but still runs wait_for_sync, which then never syncs (#5301)."""
+    path = Path(checkout) / "tests" / "integration" / "replication.tcl"
+    path.parent.mkdir()
+    path.write_text(_FILE_WITH_SETUP_BETWEEN_TESTS, encoding="utf-8")
+    test = FailedTest("FLUSHDB during sync replays (load=swapdb)", "tests/integration/replication.tcl")
+
+    plan = plan_for(checkout, (test,), scheduled=False,
+                    job=JobCommands(build="true", runtest="./runtest --valgrind --clients 1"))
+    isolated = plan.isolated
+
+    assert isolated is not None and isolated.valgrind
+    assert isolated.tests == (FailedTest(test.name, "tests/integration/replication.ci-fix-isolated.tcl"),)
+    # Generate the copy the way a run does, then stop before runtest.
+    command = isolated.command(1).replace("./runtest", "cat tests/integration/replication.ci-fix-isolated.tcl; true")
+    out = subprocess.run(["bash", "-c", command], cwd=checkout,
+                         capture_output=True, text=True, check=False)
+    assert out.returncode == 0, out.stderr
+    assert "proc helper" in out.stdout and "set shared 1" in out.stdout
+    assert "foreach mode" in out.stdout and "wait_for_sync" not in out.stdout
+    assert "--single integration/replication.ci-fix-isolated --fastfail --loops 1" in isolated.command(1)
+    assert not (path.parent / "replication.ci-fix-isolated.tcl").exists()  # removed after the run
+
+
+def test_only_one_named_tcl_file_gets_an_isolated_plan(checkout):
+    (Path(checkout) / "tests" / "unit").mkdir()
+    (Path(checkout) / "tests" / "unit" / "a.tcl").write_text("", encoding="utf-8")
+    (Path(checkout) / "tests" / "unit" / "b.tcl").write_text("", encoding="utf-8")
+    one = FailedTest("first named test", "tests/unit/a.tcl")
+    other = FailedTest("second named test", "tests/unit/b.tcl")
+
+    assert plan_for(checkout, (one,), scheduled=False).isolated is not None
+    assert plan_for(checkout, (one, other), scheduled=False).isolated is None

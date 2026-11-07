@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import time
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -23,7 +24,7 @@ from scripts.ci_fix.models import (
     ResultKind,
     TargetKind,
 )
-from scripts.ci_fix.reproduce import TestRun
+from scripts.ci_fix.reproduce import Reproduction, ReproPlan, ReproStatus, TestRun
 from tests.git_helpers import git
 
 _REAL_REPRODUCTION_REFUSAL = engine_mod._reproduction_refusal
@@ -1377,6 +1378,41 @@ def test_a_build_break_no_test_names_is_fixed_and_verified_by_the_jobs_build(tmp
     assert "the job's own build" in seen[0].reproduction and "the build failed" in seen[0].reproduction
     assert "error: unknown type name bool" in seen[0].reproduction_output
     assert f"the reproduction passed 1 loop(s): `{build}`" in candidate.verification
+
+
+def test_a_job_that_did_not_break_in_make_gets_no_build_plan(tmp_path, monkeypatch):
+    """A reply-schema validator failure names no test either, but its build passed (#5306)."""
+    monkeypatch.setattr(engine_mod, "_reproduction_refusal", _REAL_REPRODUCTION_REFUSAL)
+    source, head_sha = _source_repo(tmp_path)
+    _install_clone(monkeypatch, source)
+
+    candidate = engine_mod.prepare_fix(
+        _task(head_sha), "make[1]: [Makefile:849: distclean] Error 2 (ignored)\nJSON schema validation error",
+        agent_func=lambda *a, **k: pytest.fail("no edit"), job=JobCommands(build="false", runtest="./runtest"),
+    )
+
+    assert candidate.action is CandidateAction.REFUSE
+    assert "no code-owned reproduction command" in candidate.summary
+
+
+def test_an_unrunnable_reproduction_is_retried_in_the_tests_own_block(tmp_path, monkeypatch):
+    seen = []
+    isolated = ReproPlan(build="make", test="isolated", tests=())
+    plan = ReproPlan(build="make", test="only", tests=(), isolated=isolated)
+    monkeypatch.setattr(engine_mod, "plan_for", lambda *a, **k: plan)
+
+    def fake_reproduce(selected, run, *, deadline):
+        seen.append(selected.test)
+        status = ReproStatus.UNRUNNABLE if selected is plan else ReproStatus.REPRODUCED
+        return Reproduction(status, command=selected.test)
+
+    monkeypatch.setattr(engine_mod, "reproduce", fake_reproduce)
+    _context, chosen, reproduction = engine_mod._establish(
+        _task("a" * 40), str(tmp_path), (), (), lambda *a: None, repro_deadline=time.monotonic() + 60,
+    )
+
+    assert seen == ["only", "isolated"]
+    assert chosen is isolated and reproduction.reproduced
 
 
 def test_a_build_that_passes_when_no_test_names_the_failure_is_refused(tmp_path, monkeypatch):

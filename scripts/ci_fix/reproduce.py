@@ -22,10 +22,10 @@ from __future__ import annotations
 import re
 import shlex
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
 from scripts.ci_fix.ci_job import JobCommands
 from scripts.ci_fix.models import FailedTest
@@ -105,6 +105,10 @@ class ReproPlan:
     tests: tuple[FailedTest, ...] = ()
     # The failure is the job's build itself (``build_plan``): no test runs.
     build_only: bool = False
+    # The same tests run alone in their own top-level block of the file, for
+    # when ``--only`` cannot run them: a file whose code between tests relies
+    # on the tests it skips (``isolated_plan``).
+    isolated: Optional["ReproPlan"] = None
 
     def command(self, loops: int, *, under_load: bool = False) -> str:
         """The build and test command; ``under_load`` busies every core around it."""
@@ -304,7 +308,8 @@ def plan_for(
         notes.append("The failed job could not host the fix, so plain make and runtest stand in for it.")
     command = " ".join([base, *selection, "--loops", LOOPS, *options])
     return ReproPlan(build=_one_line_build(job.build), test=command, valgrind="--valgrind" in base.split(),
-                     notes=tuple(notes), tests=tests)
+                     notes=tuple(notes), tests=tests,
+                     isolated=_isolated_plan(repo_dir, tests, base, options, job.build, notes))
 
 
 def _one_line_build(build: str) -> str:
@@ -411,6 +416,84 @@ def _selection(repo_dir: str, tests: tuple[FailedTest, ...], notes: list[str]) -
     else:
         notes.append("This branch's runtest has no --fastfail, so every loop runs to the end.")
     return selection
+
+
+# Writes a copy of a Tcl test file with its procs and settings but only the
+# top-level block that holds the named tests. ``--only`` skips the other
+# tests but still runs the code between them, which in some files (like
+# integration/replication.tcl) waits on what a skipped test did, so the run
+# fails before it reaches the test at all. A name built from a variable is
+# found by the longest run of its words that one block alone contains.
+_ISOLATE_TCL = r"""
+set f [open [lindex $argv 0]]; set src [read $f]; close $f
+set prelude ""; set blocks {}; set cmd ""
+foreach line [split $src \n] {
+    append cmd $line \n
+    if {![info complete $cmd]} continue
+    regexp {^\s*(\S*)} $cmd -> word
+    if {$word in {start_server start_multiple_servers start_cluster tags run_solo foreach if test}} {
+        lappend blocks $cmd
+    } elseif {$word ne ""} {
+        append prelude $cmd
+    }
+    set cmd ""
+}
+set kept {}
+foreach name [lrange $argv 1 end] {
+    set words [split $name]
+    set found ""
+    for {set n [llength $words]} {$n >= 3 && $found eq ""} {incr n -1} {
+        for {set start 0} {$start + $n <= [llength $words]} {incr start} {
+            set fragment [join [lrange $words $start [expr {$start + $n - 1}]]]
+            set hits {}
+            foreach block $blocks { if {[string first $fragment $block] >= 0} { lappend hits $block } }
+            if {[llength $hits] == 1} { set found [lindex $hits 0]; break }
+        }
+    }
+    if {$found ne "" && $found ni $kept} { lappend kept $found }
+}
+if {![llength $kept]} { puts stderr "no block of [lindex $argv 0] holds the failing test"; exit 1 }
+puts -nonewline $prelude[join $kept ""]
+"""
+_ISOLATED_SUFFIX = ".ci-fix-isolated"
+
+
+def _isolated_plan(
+    repo_dir: str,
+    tests: tuple[FailedTest, ...],
+    base: str,
+    options: list[str],
+    build: str,
+    notes: list[str],
+) -> Optional["ReproPlan"]:
+    """``tests`` run in their own top-level block of their file, whole, or None.
+
+    Only for named tests in one Tcl file. The copy is written next to the file
+    for each run, from the file as it is then, and removed after it, so it
+    never reaches the patch; a fix to the test file is tested in its block.
+    """
+    files = {test.file for test in tests}
+    if len(files) != 1 or any(test.whole_file or test.is_unit_test for test in tests):
+        return None
+    source = next(iter(files))
+    if not (Path(repo_dir) / source).is_file():
+        return None
+    copy = source.removesuffix(".tcl") + _ISOLATED_SUFFIX + ".tcl"
+    unit = copy.removeprefix("tests/").removesuffix(".tcl")
+    tclsh = 'for v in 8.5 8.6 9.0; do t=$(command -v "tclsh$v") && ci_fix_tclsh=$t; done; '
+    generate = (
+        f"{tclsh}printf '%s' {shlex.quote(_ISOLATE_TCL)} | \"${{ci_fix_tclsh:-tclsh}}\" /dev/stdin "
+        f"{shlex.quote(source)} {' '.join(shlex.quote(test.name) for test in tests)} > {shlex.quote(copy)}"
+    )
+    fastfail = ["--fastfail"] if _runtest_supports(repo_dir, "--fastfail") else []
+    run = " ".join([base, "--single", shlex.quote(unit), *fastfail, "--loops", LOOPS, *options])
+    test = f"{{ {generate} && {run}; }}; ci_fix_status=$?; rm -f {shlex.quote(copy)}; exit $ci_fix_status"
+    return ReproPlan(
+        build=_one_line_build(build), test=test, valgrind="--valgrind" in base.split(),
+        notes=(*notes, f"With --only, {source} failed before reaching the test, so the test runs in its own "
+                       f"top-level block of the file, whole ({copy}, regenerated for each run)."),
+        tests=tuple(replace(test, file=copy) for test in tests),
+    )
 
 
 def build_plan(job: JobCommands) -> ReproPlan:

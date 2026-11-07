@@ -106,6 +106,8 @@ _MIN_ROUND_S = 8 * 60
 # verification (looped tests, possibly under valgrind) and review come after it.
 _VERIFY_RESERVE_S = 10 * 60
 _TEST_OUTPUT_CHARS = 6_000
+# A make that stopped on an error; ``make[1]: [...] Error 2 (ignored)`` is not one.
+_BUILD_BROKE_RE = re.compile(r"make(?:\[\d+\])?: \*\*\* .*Error \d+")
 # At most this many of a job's failing tests are searched for and reproduced.
 _MAX_TESTS = 3
 
@@ -166,7 +168,7 @@ def prepare_fix(
         context, plan, reproduction = _establish(
             task, repo_dir, tests, paths_in_log(repo_dir, job_log),
             run_test if runs_tests else None,
-            repro_deadline=min(deadline, time.monotonic() + REPRO_BUDGET_S), job=job,
+            repro_deadline=min(deadline, time.monotonic() + REPRO_BUDGET_S), job=job, job_log=job_log,
         )
         if runs_tests:
             refusal = _reproduction_refusal(context, plan, reproduction)
@@ -330,6 +332,7 @@ def _establish(
     *,
     repro_deadline: float,
     job: JobCommands | None = None,
+    job_log: str = "",
 ) -> tuple[FixContext, ReproPlan | None, Reproduction | None]:
     """Reproduce the failure and search for existing fixes, before any edit.
 
@@ -340,7 +343,7 @@ def _establish(
     described = ""
     if run_test is not None:
         plan = plan_for(repo_dir, tests, scheduled=task.failure.scheduled, job=job)
-        if plan is None and not tests and job is not None and job.build:
+        if plan is None and not tests and job is not None and job.build and _BUILD_BROKE_RE.search(job_log):
             plan = build_plan(job)
     if plan is not None:
         assert run_test is not None  # a plan is only made to be run
@@ -351,6 +354,15 @@ def _establish(
             deadline=repro_deadline,
         )
         logger.info("Reproduction: %s", reproduction.describe())
+        if reproduction.status is ReproStatus.UNRUNNABLE and plan.isolated is not None:
+            plan = plan.isolated
+            logger.info("Reproducing in the test's own block: %s", plan.command(1))
+            reproduction = reproduce(
+                plan,
+                lambda command, timeout: run_test(repo_dir, command, timeout),
+                deadline=repro_deadline,
+            )
+            logger.info("Reproduction: %s", reproduction.describe())
         described = " ".join([reproduction.describe(), *plan.notes])
     history = failing_test_history(repo_dir, tests)
     found = find_prior_fixes(
