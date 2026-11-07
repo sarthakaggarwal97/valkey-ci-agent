@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "e67f6c148ce3fbd05f16e5aeefd4558261133ffd",
+  "parent": "61499555df416f0278ada37d79816723980c18e3",
+  "pr": 325,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "change encoding version to version (#325)",
+  "date": "2025-08-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 10.0049,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change renames InfoIndexPartitionResponse field 16 from encoding_version to version and feeds it from the per-index monotonic entry.version() instead of the constant entry.encoding_version() (always 1). This value is used only for the internal cross-node consistency check in the FT.INFO <idx> PRIMARY/CLUSTER fanout OnResponse handlers and is never included in any client reply (neither GenerateReply nor local-scope FT.INFO emits it). In any converged coordinator cluster both builds return identical FT.INFO CLUSTER/PRIMARY output, so a compared command sequence would be an unreached-change e"
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "35be0592c7fdf8ea374f1e449599d4dc315371e1",
+  "parent": "641bca69e07b0801f68f99d3e40cdb44924478dd",
+  "pr": 321,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Update clang tidy/format github job and apply formatting (#321)",
+  "date": "2025-08-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7814,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a CI workflow update plus a repository-wide clang-format application. Every hunk in src/ and vmsdk/ is mechanical reformatting: line re-wrapping, indentation and brace placement, include reordering within the same translation unit, comment re-flow, and namespace closing comments; no string literal, command flag, control flow or logic changes. The only functional edits are to .github/workflows/clang_tidy_format.yml (base-branch detection, clang-tidy temporarily disabled), which does not ship in the module. There is no runtime behaviour change to reach, so no scenario is warranted."
+}

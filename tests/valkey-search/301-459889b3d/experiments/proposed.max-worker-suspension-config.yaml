@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.max-worker-suspension-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: The new search.max-worker-suspension-secs config registers with default
+    60, enforces its 0..3600 bounds, and survives CONFIG REWRITE plus restart; the
+    parent rejects it everywhere
+components:
+- use: valkey.action.commands
+  id: cfg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: 2
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, search.max-worker-suspension-secs], expect_difference: true,
+      expect: {equals: [search.max-worker-suspension-secs, "60"]}}
+    - {command: [CONFIG, SET, search.max-worker-suspension-secs, 0], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.max-worker-suspension-secs], expect_difference: true,
+      expect: {equals: [search.max-worker-suspension-secs, "0"]}}
+    - {command: [CONFIG, SET, search.max-worker-suspension-secs, 3600], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.max-worker-suspension-secs, 3601], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.max-worker-suspension-secs, -1], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.max-worker-suspension-secs, 9223372036854775808],
+      expect_difference: true, expect: {error: true}}
+    - {command: [CONFIG, SET, search.max-worker-suspension-secs, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.max-worker-suspension-secs], expect_difference: true,
+      expect: {equals: [search.max-worker-suspension-secs, "1"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cfg}

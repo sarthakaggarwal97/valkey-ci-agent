@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.ft-symbols-cluster-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT lifecycle on cluster-mode private servers (no coordinator), compared
+    between the module build that exports all symbols and its parent; drives the module's
+    cluster context-flag branches and the FT.INFO PRIMARY/CLUSTER rejection path,
+    expecting identical replies and no crash
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftc
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, tag, TAG, n, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [HSET, 'doc:1', v, !!binary 'AACAPwAAAAA=', tag, red, n, '5'], expect: {
+        equals: 3}}
+    - {command: [HSET, 'doc:2', v, !!binary 'AAAAAACAPw==', tag, blue, n, '7'], expect: {
+        equals: 3}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @v $BLOB]', NOCONTENT, PARAMS, 2, BLOB,
+        !!binary 'AACAPwAAAAA=', DIALECT, 2], wait_s: 30, compare: unordered, expect: {
+        equals: [2, 'doc:1', 'doc:2']}}
+    - {command: [FT.INFO, idx, PRIMARY], expect: {error: 'not valid in this configuration'}}
+    - {command: [FT.INFO, idx, CLUSTER], expect: {error: 'not valid in this configuration'}}
+    - {command: [FT.INFO, idx, LOCAL], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, '@tag:{blue}', NOCONTENT], compare: unordered, expect: {
+        equals: [1, 'doc:2']}}
+    - {command: [DEL, 'doc:1'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @v $BLOB]', NOCONTENT, PARAMS, 2, BLOB,
+        !!binary 'AACAPwAAAAA=', DIALECT, 2], wait_s: 30, compare: unordered, expect: {
+        equals: [1, 'doc:2']}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT._LIST], compare: unordered, expect: {equals: []}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftc.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftc}

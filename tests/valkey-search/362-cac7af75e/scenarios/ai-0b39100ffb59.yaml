@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search d71d44b9b3b3..cac7af75ed78.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0b39100ffb59
+seed: 1005
+experiment:
+  id: proposed.search-threadpool-fairness
+  inputs:
+    resp: 2
+    weight: 100
+    writer_threads: 1
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search e78b45d1e2c3..459889b3d33a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f74171f0bdb0
+seed: 7102
+experiment:
+  id: proposed.worker-resume-after-fork
+  inputs:
+    suspension_secs: 1
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

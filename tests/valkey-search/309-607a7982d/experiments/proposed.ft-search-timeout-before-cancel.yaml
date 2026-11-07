@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-timeout-before-cancel
+deployment:
+  modes: [standalone]
+metadata:
+  description: Async FT.SEARCH whose Valkey blocked-client timeout fires while the
+    reader is wedged must reply cleanly, not abort
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    query: {type: string, default: "*=>[KNN 10 @v $BLOB]"}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, flat, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, L2, n, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:1", v, !!binary 'AAAgQQAAIEEAACBB', n, 1], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", v, !!binary 'AAAgQQAAIEEAACBB', n, 2], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", v, !!binary 'AAAgQQAAIEEAACBB', n, 3], expect: {equals: 2}}
+    - {command: [HSET, "doc:4", v, !!binary 'AAAgQQAAIEEAACBB', n, 4], expect: {equals: 2}}
+    - {command: [HSET, "doc:5", v, !!binary 'AAAgQQAAIEEAACBB', n, 5], expect: {equals: 2}}
+    - {command: [FT.INFO, flat], wait_s: 10, compare: skip, expect: {contains: "5"}}
+    - {command: [CONFIG, SET, search.reader-threads, "2"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.timeout-poll-frequency, "1"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.test-force-timeout, no], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.enable-partial-results, no], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.test-force-pause, yes], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, flat, {$ref: inputs.query}, PARAMS, 2, BLOB, !!binary 'AAAgQQAAIEEAACBB',
+        TIMEOUT, "200"], expect_difference: true, compare: unordered, expect: {error: "Search\
+          \ operation cancelled due to timeout"}}
+    - {command: [CONFIG, SET, search.test-force-pause, no], expect_difference: true,
+      expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [search.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}

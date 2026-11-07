@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "c04c5bab0e9202246324b6877e5f2cc0667d43ef",
+  "parent": "35be0592c7fdf8ea374f1e449599d4dc315371e1",
+  "pr": 287,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add support to retrieving JSON values via the JSON shared API (#287)",
+  "date": "2025-08-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2039,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-21aa4bb53ac8",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-14f783be0d65",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-43df01eb4400",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

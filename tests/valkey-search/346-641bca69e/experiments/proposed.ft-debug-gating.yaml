@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.ft-debug-gating
+deployment:
+  modes: [standalone]
+metadata:
+  description: With search.debug-mode off (the default), FT._DEBUG now replies unknown
+    command and search.test-force-pause no longer exists
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: gating
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [FT._DEBUG, SHOW_INFO], expect_difference: true, expect: {error: "unknown\
+          \ command"}}
+    - {command: [CONFIG, SET, search.test-force-pause, "yes"], expect_difference: true,
+      expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [gating.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: gating}

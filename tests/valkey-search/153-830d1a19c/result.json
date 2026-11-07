@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "830d1a19cde3e5bcbcc31fd2910d8735076b7983",
+  "parent": "d8e943f6a2606c876284e9377504b74da0a7538d",
+  "pr": 153,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "feat: memory scope & memory usage for string interning store (#153)",
+  "date": "2025-08-16",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.3092,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

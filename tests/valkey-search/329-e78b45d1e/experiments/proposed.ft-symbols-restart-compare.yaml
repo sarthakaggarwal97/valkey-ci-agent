@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.ft-symbols-restart-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Full FT lifecycle (create, index, KNN/tag/numeric search, RDB SAVE,
+    restart and reload, delete, drop) compared between the module build that exports
+    all symbols and its parent that hides them; the change means to alter no reply,
+    so any difference or crash is a symbol-exposure regression
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ft
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, tag, TAG, n, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT._LIST], compare: unordered, expect: {equals: [idx]}}
+    - {command: [HSET, 'doc:1', v, !!binary 'AACAPwAAAAA=', tag, red, n, '5'], expect: {
+        equals: 3}}
+    - {command: [HSET, 'doc:2', v, !!binary 'AAAAAACAPw==', tag, blue, n, '7'], expect: {
+        equals: 3}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @v $BLOB]', NOCONTENT, PARAMS, 2, BLOB,
+        !!binary 'AACAPwAAAAA=', DIALECT, 2], wait_s: 30, compare: unordered, expect: {
+        equals: [2, 'doc:1', 'doc:2']}}
+    - {command: [FT.SEARCH, idx, '@n:[6 10]', NOCONTENT], compare: unordered, expect: {
+        equals: [1, 'doc:2']}}
+    - {command: [FT.SEARCH, idx, '@tag:{red}', NOCONTENT], compare: unordered, expect: {
+        equals: [1, 'doc:1']}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {error: true}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT._LIST], wait_s: 30, compare: unordered, expect: {equals: [idx]}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @v $BLOB]', NOCONTENT, PARAMS, 2, BLOB,
+        !!binary 'AACAPwAAAAA=', DIALECT, 2], wait_s: 30, compare: unordered, expect: {
+        equals: [2, 'doc:1', 'doc:2']}}
+    - {command: [DEL, 'doc:2'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @v $BLOB]', NOCONTENT, PARAMS, 2, BLOB,
+        !!binary 'AACAPwAAAAA=', DIALECT, 2], wait_s: 30, compare: unordered, expect: {
+        equals: [1, 'doc:1']}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@tag:{red}', NOCONTENT], expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ft.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ft}

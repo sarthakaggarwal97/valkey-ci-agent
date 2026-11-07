@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "446d9f85501773fd730b62a7d6a9b72faa5ddba0",
+  "parent": "67a985b5fe387b07a35cc68010f8dd50e2016fcf",
+  "pr": 330,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Enable ASan runs for OSS integ tests (#330)",
+  "date": "2025-08-19",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3625,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only build/CI scripts (build.sh, integration/run.sh, testing/integration/run.sh, scripts/common.rc) and Python integration-test scaffolding (test_info.py skip marker, LOGS_DIR handling in valkey_search_test_case.py) to enable ASan for OSS integration tests. No module source code is touched, so the valkey-search module's runtime behaviour \u2014 commands, replies, indexing, persistence \u2014 is identical on both builds; there is no changed path a scenario could reach and no reply that could legitimately differ between the change and its parent."
+}

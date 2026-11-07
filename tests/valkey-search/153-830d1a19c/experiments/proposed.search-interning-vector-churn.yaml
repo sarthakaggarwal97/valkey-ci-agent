@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.search-interning-vector-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: Allocator-backed interning churn for a FLAT vector index; add, search,
+    delete, re-intern, FLUSHALL, recreate and FT.DROPINDEX exercise both InternImpl
+    branches and the allocator Free path inside the destructor's IsolatedMemoryScope
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [FT.CREATE, vidx, ON, HASH, PREFIX, 1, 'v:', SCHEMA, v, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, 'v:1', v, !!binary 'AACAPwAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'v:2', v, !!binary 'AAAAAAAAgD8='], expect: {equals: 1}}
+    - {command: [HSET, 'v:3', v, !!binary 'AACAPwAAgD8='], expect: {equals: 1}}
+    - {command: [HSET, 'v:4', v, !!binary 'AAAAQAAAAAA='], expect: {equals: 1}}
+    - {command: [INFO, SEARCH], compare: skip, wait_s: 30, expect: {contains: 'search_total_indexed_documents:4'}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_string_interning_memory_bytes:'}}
+    - {command: ['FT.SEARCH', vidx, '*=>[KNN 3 @v $q]', PARAMS, 2, q, !!binary 'ZmZmP83MzD0='],
+      compare: unordered}
+    - {command: [DEL, 'v:1', 'v:2'], expect: {equals: 2}}
+    - {command: [INFO, SEARCH], compare: skip, wait_s: 30, expect: {contains: 'search_total_indexed_documents:2'}}
+    - {command: [HSET, 'v:1', v, !!binary 'AACAPwAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'v:2', v, !!binary 'AAAAAAAAgD8='], expect: {equals: 1}}
+    - {command: [INFO, SEARCH], compare: skip, wait_s: 30, expect: {contains: 'search_total_indexed_documents:4'}}
+    - {command: ['FT.SEARCH', vidx, '*=>[KNN 2 @v $q]', PARAMS, 2, q, !!binary 'ZmZmP83MzD0='],
+      compare: unordered}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], compare: skip, wait_s: 30, expect: {contains: 'search_string_interning_store_size:0'}}
+    - {command: [FT.CREATE, vidx, ON, HASH, PREFIX, 1, 'v:', SCHEMA, v, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, 'v:5', v, !!binary 'AACAPwAAAAA='], expect: {equals: 1}}
+    - {command: [INFO, SEARCH], compare: skip, wait_s: 30, expect: {contains: 'search_total_indexed_documents:1'}}
+    - {command: ['FT.DROPINDEX', vidx], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], compare: skip, wait_s: 30, expect: {contains: 'search_string_interning_store_size:0'}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: 'search_string_interning_memory_bytes:'}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

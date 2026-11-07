@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.ft-info-reply-types
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.INFO replies num_docs, num_terms and num_records as RESP integers
+    instead of bulk strings, on an empty index and on populated tag and vector indexes
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The valkey-search build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's valkey-search build, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftinfo
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tagf, TAG, SEPARATOR,
+        ","], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {contains: num_docs}}
+    - {command: [HSET, "doc:1", tagf, "a,b"], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", tagf, "a,c"], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", tagf, "a"], expect: {equals: 1}}
+    - {command: [HSET, "doc:4", tagf, "a,b,c"], expect: {equals: 1}}
+    - {command: [HSET, "doc:5", tagf, "a"], expect: {equals: 1}}
+    - {command: [HSET, "doc:6", tagf, "a,b"], expect: {equals: 1}}
+    - {command: [HSET, "doc:7", tagf, "a"], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect_difference: true, expect: {contains: 7}}
+    - {command: [FT.INFO, idx, LOCAL], expect_difference: true, expect: {contains: num_docs}}
+    - {command: [FT.SEARCH, idx, "@tagf:{a}", NOCONTENT], compare: unordered}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "v:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, num, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [HSET, "v:1", vec, !!binary "AAAAAAAAAAA=", num, 11], expect: {equals: 2}}
+    - {command: [HSET, "v:2", vec, !!binary "AACAPwAAAAA=", num, 12], expect: {equals: 2}}
+    - {command: [HSET, "v:3", vec, !!binary "AAAAAAAAgD8=", num, 13], expect: {equals: 2}}
+    - {command: [FT.INFO, idx2], wait_s: 30, expect_difference: true, expect: {contains: 3}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftinfo}

@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.search-debug-mode-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    valkey-search debug-mode change: use-coordinator switched from a registered IMMUTABLE
+    config to a Hidden unregistered one, debug-mode itself stays hidden, and the new
+    developer-config gate in Validate() must not block regular search configs or FT
+    commands.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dbgmode
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, GET, search.use-coordinator], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CONFIG, SET, search.use-coordinator, yes], expect_difference: true,
+      expect: {error: "Unknown option"}}
+    - {command: [CONFIG, SET, search.debug-mode, yes], expect: {error: true}}
+    - {command: [CONFIG, GET, search.debug-mode], expect: {error: false}}
+    - {command: [CONFIG, GET, "search.*"], expect_difference: true, compare: unordered-pairs,
+      expect: {error: false}}
+    - {command: [CONFIG, SET, search.log-level, debug], expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.log-level], expect: {error: false}}
+    - {command: [CONFIG, SET, search.log-level, bogus-level], expect: {error: true}}
+    - {command: [CONFIG, SET, search.hnsw-block-size, "1024"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.hnsw-block-size, "999999999999999"], expect: {
+        error: true}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, v, VECTOR,
+        FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2, t, TAG], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:1", v, !!binary "AACAPwAAgD8=", t, hello], expect: {equals: 2}}
+    - {command: [FT.INFO, idx], compare: skip, expect: {contains: num_docs}}
+    - {command: [FT.SEARCH, idx, "*"], wait_s: 30, compare: unordered, expect: {contains: "doc:1"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dbgmode.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbgmode}

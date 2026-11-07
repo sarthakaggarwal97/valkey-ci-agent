@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.ft-info-vector-format
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.INFO vector attribute reply flattened for HNSW and FLAT; compare
+    the reply and the connection's protocol integrity across module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftinfo
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, emb, VECTOR,
+        HNSW, 12, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, M, 16, EF_CONSTRUCTION,
+        100, EF_RUNTIME, 30], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxf, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, emb, VECTOR,
+        FLAT, 10, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, COSINE, INITIAL_CAP, 100,
+        BLOCK_SIZE, 512], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxm, ON, HASH, PREFIX, 1, 'mdoc:', SCHEMA, emb, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, IP, category, TAG, price,
+        NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', emb, !!binary 'AACAPwAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:2', emb, !!binary 'mpkZP83MTD8='], expect: {equals: 1}}
+    - {command: [HSET, 'mdoc:1', emb, !!binary 'AACAPwAAAAA=', category, a, price,
+        10], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @emb $v]', PARAMS, 2, v, !!binary 'AACAPwAAAAA=',
+        NOCONTENT, DIALECT, 2], wait_s: 30, expect: {contains: 'doc:2'}, compare: skip}
+    - {command: [FT.SEARCH, idxf, '*=>[KNN 2 @emb $v]', PARAMS, 2, v, !!binary 'AACAPwAAAAA=',
+        NOCONTENT, DIALECT, 2], wait_s: 30, expect: {contains: 'doc:2'}, compare: skip}
+    - {command: [FT.SEARCH, idxm, '*=>[KNN 1 @emb $v]', PARAMS, 2, v, !!binary 'AACAPwAAAAA=',
+        NOCONTENT, DIALECT, 2], wait_s: 30, expect: {contains: 'mdoc:1'}, compare: skip}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [FT.INFO, idxf], expect_difference: true, expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [FT.INFO, idxm], expect_difference: true, expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @emb $v]', PARAMS, 2, v, !!binary 'AACAPwAAAAA=',
+        NOCONTENT, DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idxf, '*=>[KNN 2 @emb $v]', PARAMS, 2, v, !!binary 'AACAPwAAAAA=',
+        NOCONTENT, DIALECT, 2], compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftinfo}

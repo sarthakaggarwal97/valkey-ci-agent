@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.ft-debug-pausepoint
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT._DEBUG PAUSEPOINT lifecycle and a malformed single-token subcommand,
+    change module vs parent module in one Valkey build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: pausepoint
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, search.debug-mode, "yes"], expect: {equals: OK}}
+    - {command: [FT._DEBUG, PAUSEPOINT, LIST], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [FT._DEBUG, PAUSEPOINT, SET, Cancel], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [FT._DEBUG, PAUSEPOINT, LIST], expect_difference: true, expect: {
+        equals: [Cancel, []]}}
+    - {command: [FT._DEBUG, PAUSEPOINT, TEST, Cancel], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [FT._DEBUG, PAUSEPOINT, TEST, Missing], expect_difference: true, expect: {
+        equals: "Pause Point not found"}}
+    - {command: [FT._DEBUG, PAUSEPOINT, RESET, Cancel], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [FT._DEBUG, PAUSEPOINT, LIST], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [FT._DEBUG, BOGUS], expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [pausepoint.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pausepoint}

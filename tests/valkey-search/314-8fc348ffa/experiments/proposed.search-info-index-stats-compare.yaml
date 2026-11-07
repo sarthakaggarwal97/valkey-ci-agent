@@ -1,0 +1,102 @@
+extends: [valkey.liveness]
+id: proposed.search-info-index-stats-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: The five new INFO search index_stats fields (active indexes, indexing,
+    active write threads) compared against the parent module build, across index create/drop,
+    a second DB, writer-pool resize, and fork suspension during BGSAVE
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: info-metrics
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {enable-debug-command: "yes"}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.writer-threads, "4"], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, tagf, TAG,
+        numf, NUMERIC, vec, VECTOR, FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", tagf, red, numf, "1", vec, !!binary "AACAPwAAgD8="],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:2", tagf, red, numf, "2", vec, !!binary "AACAPwAAAEA="],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:3", tagf, blue, numf, "3", vec, !!binary "AABAQAAAgD8="],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:4", tagf, blue, numf, "4", vec, !!binary "AACAQAAAgD8="],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:5", tagf, red, numf, "5", vec, !!binary "AACgQAAAgD8="],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:6", tagf, blue, numf, "6", vec, !!binary "AADAQAAAgD8="],
+      expect: {equals: 3}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - command: [EVAL, "local i=redis.call('INFO','SEARCH') local o={} for _,f in ipairs({'search_number_of_active_indexes','search_number_of_active_indexes_running_queries','search_number_of_active_indexes_indexing','search_total_active_write_threads','search_total_indexing_time'})\
+          \ do o[#o+1]=string.match(i,f..':(%d+)') or 'absent' end return o", "0"]
+      expect_difference: true
+      expect: {equals: ["1", "0", "0", "4", "0"]}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, "1", "doc:", SCHEMA, tagf, TAG,
+        numf, NUMERIC, vec, VECTOR, FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - command: [EVAL, "return string.match(redis.call('INFO','SEARCH'),'search_number_of_active_indexes_indexing:(%d+)')\
+          \ or 'absent'", "0"]
+      expect_difference: true
+      expect: {in: ["0", "1"]}
+    - command: [EVAL, "return string.match(redis.call('INFO','SEARCH'),'search_number_of_active_indexes:(%d+)')\
+          \ or 'absent'", "0"]
+      expect_difference: true
+      expect: {equals: "2"}
+    - {command: [FT.DROPINDEX, idx2], expect: {equals: OK}}
+    - command: [EVAL, "return string.match(redis.call('INFO','SEARCH'),'search_number_of_active_indexes:(%d+)')\
+          \ or 'absent'", "0"]
+      expect_difference: true
+      expect: {equals: "1"}
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [FT.CREATE, idxdb1, ON, HASH, PREFIX, "1", "d1:", SCHEMA, tagf, TAG,
+        vec, VECTOR, FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - command: [EVAL, "return string.match(redis.call('INFO','SEARCH'),'search_number_of_active_indexes:(%d+)')\
+          \ or 'absent'", "0"]
+      expect_difference: true
+      expect: {equals: "2"}
+    - {command: [FT.DROPINDEX, idxdb1], expect: {equals: OK}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, "2"], expect: {equals: OK}}
+    - command: [EVAL, "return string.match(redis.call('INFO','SEARCH'),'search_total_active_write_threads:(%d+)')\
+          \ or 'absent'", "0"]
+      expect_difference: true
+      expect: {equals: "2"}
+    - {command: [DEBUG, SLEEP-AFTER-FORK-SECONDS, "5"], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: Background saving started}}
+    - command: [EVAL, "return string.match(redis.call('INFO','SEARCH'),'search_total_active_write_threads:(%d+)')\
+          \ or 'absent'", "0"]
+      expect_difference: true
+      expect: {equals: "0"}
+    - {command: [CONFIG, SET, search.writer-threads, "3"], expect: {equals: OK}}
+    - command: [EVAL, "return string.match(redis.call('INFO','SEARCH'),'search_total_active_write_threads:(%d+)')\
+          \ or 'absent'", "0"]
+      expect_difference: true
+      expect: {equals: "0"}
+    - command: [EVAL, "local v=string.match(redis.call('INFO','SEARCH'),'search_total_active_write_threads:(%d+)')\
+          \ if v==nil or v=='3' then return 'resumed' end return v", "0"]
+      wait_s: 45
+      expect: {equals: resumed}
+    - command: [EVAL, "return string.match(redis.call('INFO','SEARCH'),'search_total_active_write_threads:(%d+)')\
+          \ or 'absent'", "0"]
+      expect_difference: true
+      expect: {equals: "3"}
+    - {command: [DEBUG, SLEEP-AFTER-FORK-SECONDS, "0"], expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [info-metrics.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: info-metrics}

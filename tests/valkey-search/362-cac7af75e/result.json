@@ -1,0 +1,142 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "cac7af75ed789f095d10301bf6e7215a37c15067",
+  "parent": "d71d44b9b3b36c0bcd653199ba8c5daa0f2e10ff",
+  "pr": 362,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add configurable thread pool fairness mechanism with comprehensive testing (#362)",
+  "date": "2025-09-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 5,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 6.3872,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-fae1f7f8c762",
+      "seed": 1004,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #362, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-0b39100ffb59",
+      "seed": 1005,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #362, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-9b701ab001aa",
+      "build": "unstable",
+      "seed": 1001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-9b701ab001aa",
+      "build": "unstable",
+      "seed": 1002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-9b701ab001aa",
+      "build": "unstable",
+      "seed": 1003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3438c786b8ea",
+      "build": "unstable",
+      "seed": 1002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3438c786b8ea",
+      "build": "unstable",
+      "seed": 1003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3438c786b8ea",
+      "build": "unstable",
+      "seed": 1004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-f568b24d5be0",
+      "build": "unstable",
+      "seed": 1003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-f568b24d5be0",
+      "build": "unstable",
+      "seed": 1004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-f568b24d5be0",
+      "build": "unstable",
+      "seed": 1005,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-fae1f7f8c762",
+      "build": "unstable",
+      "seed": 1004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-fae1f7f8c762",
+      "build": "unstable",
+      "seed": 1005,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-fae1f7f8c762",
+      "build": "unstable",
+      "seed": 1006,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0b39100ffb59",
+      "build": "unstable",
+      "seed": 1005,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0b39100ffb59",
+      "build": "unstable",
+      "seed": 1006,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0b39100ffb59",
+      "build": "unstable",
+      "seed": 1007,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

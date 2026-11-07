@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.ft-info-reply-types
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.INFO num_docs, num_terms and num_records revert from RESP integers
+    back to bulk strings
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftinfo
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    commands:
+    - command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, COSINE, tag, TAG, num, NUMERIC]
+      expect: {equals: OK}
+    - command: [FT.INFO, idx]
+      wait_s: 20
+      expect: {contains: ready}
+      expect_difference: true
+    - command: [HSET, "doc:1", vec, !!binary "AACAPwAAgD8AAIA/", tag, blue, num, "7"]
+      expect: {equals: 3}
+    - command: [HSET, "doc:2", vec, !!binary "AACAPwAAAAAAAAAA", tag, red, num, "9"]
+      expect: {equals: 3}
+    - command: [FT.INFO, idx]
+      wait_s: 30
+      expect: {contains: "2"}
+      expect_difference: true
+    - command: [FT.INFO, idx, LOCAL]
+      wait_s: 30
+      expect: {contains: "2"}
+      expect_difference: true
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftinfo}

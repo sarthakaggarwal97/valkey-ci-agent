@@ -1,0 +1,113 @@
+extends: [valkey.liveness]
+id: proposed.search-threadpool-fairness
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    search.high-priority-weight config and the new weighted kHigh/kLow/kMax task selection
+    in the reader and writer thread pools, driven by backfill (kLow), live mutations
+    (kHigh) and MULTI/EXEC flushes (kMax), compared against the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    weight: {type: integer, minimum: 0, maximum: 100, default: 0}
+    writer_threads: {type: integer, minimum: 1, maximum: 8, default: 1}
+components:
+- use: valkey.action.commands
+  id: fairness
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, GET, search.high-priority-weight], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CONFIG, SET, search.high-priority-weight, 150], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.high-priority-weight, -1], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.high-priority-weight, {$ref: inputs.weight}],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, {$ref: inputs.writer_threads}],
+      expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', price, 1, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:2', price, 2, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:3', price, 3, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:4', price, 4, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:5', price, 5, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:6', price, 6, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:7', price, 7, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:8', price, 8, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:9', price, 9, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:10', price, 10, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:11', price, 11, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:12', price, 12, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:13', price, 13, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:14', price, 14, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:15', price, 15, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:16', price, 16, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:17', price, 17, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:18', price, 18, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:19', price, 19, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:20', price, 20, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:21', price, 21, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:22', price, 22, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:23', price, 23, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:24', price, 24, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:25', price, 25, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:26', price, 26, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:27', price, 27, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:28', price, 28, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:29', price, 29, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:30', price, 30, category, a], expect: {equals: 2}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, price, NUMERIC,
+        category, TAG], expect: {equals: OK}}
+    - {command: [HSET, 'doc:31', price, 31, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:32', price, 32, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:33', price, 33, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:34', price, 34, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:35', price, 35, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:36', price, 36, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:37', price, 37, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:38', price, 38, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:39', price, 39, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:40', price, 40, category, a], expect: {equals: 2}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, 'doc:41', price, 41, category, a], expect: {equals: QUEUED}}
+    - {command: [HSET, 'doc:42', price, 42, category, a], expect: {equals: QUEUED}}
+    - {command: [HSET, 'doc:43', price, 43, category, a], expect: {equals: QUEUED}}
+    - {command: [HSET, 'doc:44', price, 44, category, a], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: true}}
+    - {command: [FT.SEARCH, idx, '@price:[1 100]', NOCONTENT, LIMIT, 0, 0], compare: skip,
+      expect: {exists: true}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: 44}}
+    - {command: [FT.SEARCH, idx, '@price:[1 5]', NOCONTENT, LIMIT, 0, 10], compare: unordered,
+      expect: {contains: 'doc:3'}}
+    - {command: [DEL, 'doc:44'], expect: {equals: 1}}
+    - {command: [CONFIG, SET, search.high-priority-weight, 25], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [HSET, 'doc:45', price, 45, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:46', price, 46, category, a], expect: {equals: 2}}
+    - {command: [CONFIG, SET, search.high-priority-weight, 100], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [HSET, 'doc:47', price, 47, category, a], expect: {equals: 2}}
+    - {command: [HSET, 'doc:48', price, 48, category, a], expect: {equals: 2}}
+    - {command: [CONFIG, SET, search.writer-threads, 4], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.reader-threads, 2], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.high-priority-weight, {$ref: inputs.weight}],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: 47}}
+    - {command: [FT.SEARCH, idx, '@price:[41 48]', NOCONTENT, LIMIT, 0, 10], compare: unordered,
+      expect: {contains: 'doc:45'}}
+    - {command: [FT.SEARCH, idx, '@category:{a}', NOCONTENT, LIMIT, 0, 100], compare: unordered,
+      expect: {contains: 'doc:48'}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [fairness.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fairness}

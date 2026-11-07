@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "e78b45d1e2c3cf0283b1795f927cc43ee9ad350b",
+  "parent": "446d9f85501773fd730b62a7d6a9b72faa5ddba0",
+  "pr": 329,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Expose global symbols so that crash dump backtraces are useful (#329)",
+  "date": "2025-08-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 6.7292,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

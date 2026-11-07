@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-oom-searchmode
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The SearchMode refactor made query::Search skip the module-side OOM check for
+    kLocal searches: FT.SEARCH executed inside MULTI/EXEC while used_memory > maxmemory
+    now returns results where the parent returned the OOM error, and a direct FT.SEARCH
+    under OOM must still be rejected by the command's deny-oom flag on both builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: search-oom
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, SCHEMA, embedding, VECTOR, FLAT, "6", TYPE, FLOAT32,
+        DIM, "2", DISTANCE_METRIC, L2, category, TAG], expect: {equals: OK}}
+    - {command: [HSET, "doc:0", embedding, !!binary 'AACAPwAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, "doc:1", embedding, !!binary 'AAAAAAAAgD8='], expect: {equals: 1}}
+    - {command: [HSET, "t:0", category, red], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @embedding $v]", PARAMS, "2", v, !!binary 'AACAPwAAAAA=',
+        NOCONTENT], wait_s: 30, expect: {equals: [2, "doc:0", "doc:1"]}}
+    - {command: [FT.SEARCH, idx, "@category:{red}"], wait_s: 30, expect: {equals: [
+          1, "t:0", [category, red]]}}
+    - {command: [CONFIG, SET, maxmemory, "1"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @embedding $v]", PARAMS, "2", v, !!binary 'AACAPwAAAAA=',
+        NOCONTENT], expect: {error: "OOM"}}
+    - {command: [CONFIG, SET, maxmemory, "0"], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, "1"], expect: {equals: QUEUED}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @embedding $v]", PARAMS, "2", v, !!binary 'AACAPwAAAAA=',
+        NOCONTENT], expect: {equals: QUEUED}}
+    - {command: [FT.SEARCH, idx, "@category:{red}"], expect: {equals: QUEUED}}
+    - {command: [CONFIG, SET, maxmemory, "0"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [OK, [1, "doc:0"],
+          [1, "t:0", [category, red]], OK]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @embedding $v]", PARAMS, "2", v, !!binary 'AACAPwAAAAA=',
+        NOCONTENT], expect: {equals: [2, "doc:0", "doc:1"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [search-oom.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search-oom}

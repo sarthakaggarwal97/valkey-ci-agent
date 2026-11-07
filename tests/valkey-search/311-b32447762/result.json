@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "b32447762f40aef76160ba9a73a64aaf5e69a25d",
+  "parent": "607a7982d5ef82630b94a23523a192e2ebbbc7be",
+  "pr": 311,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "feat: add integration tests for expired hashes and FT.INFO parser (#311)",
+  "date": "2025-08-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.358,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds Python integration tests and a test-suite FT.INFO parser (ft_info_parser.py, test_expired.py, refactors of test_cancel.py/test_flushall.py/indexes.py) plus a CMAKE_POLICY_VERSION_MINIMUM export in build.sh. No module source code under src/ changed, so the module's runtime behavior (FT.INFO replies, expired-hash index removal, FLUSHALL handling) is identical on both builds; there is no changed server-side path for a scenario to exercise."
+}

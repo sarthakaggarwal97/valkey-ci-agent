@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 8fc348ffacf0..607a7982d5ef.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8c5ed700daa3
+seed: 1001
+experiment:
+  id: proposed.ft-search-timeout-before-cancel
+  inputs:
+    resp: 2
+    query: (@n:[0 1000000])=>[KNN 10 @v $BLOB]
+deployment:
+  mode: standalone
+  base_port: 7000

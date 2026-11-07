@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.search-controlled-variables
+deployment:
+  modes: [standalone]
+metadata:
+  description: Removed test-force-timeout/timeout-poll-frequency/test-force-replicas-only
+    configs and renamed test counters, compared across the module change
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ctl
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.info-developer-visible, yes], expect: {equals: OK}}
+    - {command: [FT._DEBUG, CONTROLLED_VARIABLE, LIST], expect: {error: "unknown command"}}
+    - {command: [CONFIG, GET, search.test-force-timeout], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CONFIG, GET, search.timeout-poll-frequency], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CONFIG, GET, search.test-force-replicas-only], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CONFIG, SET, search.test-force-replicas-only, yes], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", v, !!binary "AACAPwAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", v, !!binary "AAAAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", v, !!binary "AABAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:4", v, !!binary "AACAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:5", v, !!binary "AACgQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:6", v, !!binary "AADAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:7", v, !!binary "AADgQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:8", v, !!binary "AAAAQQAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:9", v, !!binary "AAAQQQAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:10", v, !!binary "AAAgQQAAAAA="], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAAAA=",
+        NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {equals: [10]}}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: "test-counter-ForceCancels"}}
+    - {command: [CONFIG, SET, search.enable-partial-results, no], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.test-force-timeout, yes], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.timeout-poll-frequency, "1"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAAAA=",
+        NOCONTENT], expect_difference: true, expect: {equals: [1, "doc:1"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ctl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ctl}

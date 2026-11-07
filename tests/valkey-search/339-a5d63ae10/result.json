@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a5d63ae10f8d23953b6e5540880fd8d264096452",
+  "parent": "cbcb8b519a8c2e59dd7e7c83bca872d9aec82a91",
+  "pr": 339,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Introduced new \"debug-mode\" configuration entry. (#339)",
+  "date": "2025-08-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.8455,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-b2df725a9f76",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'dbgmode' returned ERROR: expectations both builds violate alike, so they are not about the change: 13 (FT.SEARCH idx *)"
+    },
+    {
+      "scenario": "ai-322f64caf91d",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'dbgmode' returned ERROR: expectations both builds violate alike, so they are not about the change: 13 (FT.SEARCH idx *)"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

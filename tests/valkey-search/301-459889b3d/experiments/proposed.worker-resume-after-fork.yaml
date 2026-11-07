@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.worker-resume-after-fork
+deployment:
+  modes: [standalone]
+metadata:
+  description: A BGSAVE fork child held alive 8s with DEBUG SLEEP-AFTER-FORK-SECONDS;
+    a document written during the fork becomes searchable within 4s on the change
+    build (resumed by the configured 1s expiry, or on fork-born with 0) while the
+    parent's writer pool stays suspended until the child dies
+inputs:
+  required: [suspension_secs]
+  properties:
+    suspension_secs:
+      type: integer
+      enum: [0, 1]
+      description: "1 drives the cron expiry path with the configured timeout; 0 drives\
+        \ the new resume-on-fork-born branch"
+components:
+- use: valkey.action.commands
+  id: forkresume
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: 2
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.max-worker-suspension-secs, {$ref: inputs.suspension_secs}],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TAG], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:1", t, hello], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:{hello}", NOCONTENT], wait_s: 15, compare: unordered,
+      expect: {contains: "doc:1"}}
+    - {command: [DEBUG, SLEEP-AFTER-FORK-SECONDS, 8], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {equals: "Background saving started"}}
+    - {command: [HSET, "doc:2", t, hello], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:{hello}", NOCONTENT], wait_s: 4, compare: unordered,
+      expect_difference: true, expect: {contains: "doc:2"}}
+    - {command: [DEBUG, SLEEP-AFTER-FORK-SECONDS, 0], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@t:{hello}", NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: "doc:2"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [forkresume.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: forkresume}
