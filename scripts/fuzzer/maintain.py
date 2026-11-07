@@ -65,6 +65,9 @@ MAX_REPORT = 5000
 # The walk runs read, the failed jobs' logs read from them at most, and each log's last lines kept.
 RUNS, MAX_LOGS, LOG_LINES = 30, 100, 200
 FAILED = frozenset({"failure", "timed_out", "startup_failure"})
+# Terminal escape sequences and control characters (but tabs and newlines), stripped from a log: gh refuses to
+# print a log holding them unless asked, and they could hide its text from whoever reads it.
+_ESCAPES = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b[@-_]|[\x00-\x08\x0b-\x1f\x7f]")
 CHECKOUTS = ("valkey-ci-agent", "valkey-fuzzer")
 AUTHOR_NAME, AUTHOR_EMAIL = "Sarthak Aggarwal", "sarthagg@amazon.com"
 # A patch touching these is never pushed: the workflows and actions, Claude's sandbox, and this file's checks.
@@ -269,7 +272,8 @@ def gather(out: Path, *, walk_repo: str, fuzzer_repo: str, state: Path, gh: Call
                 read += 1
                 name = f"{run['databaseId']}-{job['databaseId']}.log"
                 try:
-                    text = gh("api", f"repos/{walk_repo}/actions/jobs/{job['databaseId']}/logs")
+                    text = _ESCAPES.sub("", gh("api", "--allow-escape-sequences",
+                                               f"repos/{walk_repo}/actions/jobs/{job['databaseId']}/logs"))
                 except RuntimeError as exc:
                     text = f"(the log could not be read: {exc})"
                 (logs / name).write_text("\n".join(text.splitlines()[-LOG_LINES:]) + "\n", encoding="utf-8")

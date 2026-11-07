@@ -291,8 +291,11 @@ def test_gather_writes_the_state_the_open_walk_issues_and_the_failed_jobs_log_ta
                      {"databaseId": 71, "name": "walk (b)", "conclusion": "success"}]}
 
     def gh(*args):
-        return {"issue": json.dumps(issues), "api": "\n".join(f"line {i}" for i in range(300)),
-                "run": json.dumps(runs if args[1] == "list" else jobs)}[args[0]]
+        if args[0] == "api":
+            # gh prints a log holding escape sequences only when asked to (the maintenance log, fuzzer#51).
+            assert args[1] == "--allow-escape-sequences"
+            return "\r\n".join(f"\x1b[36;1mline\x1b[0m {i}\x07" for i in range(300))
+        return {"issue": json.dumps(issues), "run": json.dumps(runs if args[1] == "list" else jobs)}[args[0]]
 
     out = tmp_path / "in"
     maintain.gather(out, walk_repo="o/ci", fuzzer_repo="o/fz", state=state, gh=gh)
