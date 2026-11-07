@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.search-rdb-v2-backfill-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: SAVE while backfill is stopped mid-flight; V2 must record backfilling=true,
+    resume backfill after restart, and count backfill ingestion separately (StopBackfill
+    and backfill_hash_keys are new in the change)
+components:
+- use: valkey.action.commands
+  id: bf
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 180
+    commands:
+    - {command: [CONFIG, SET, search.debug-mode, "yes"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.info-developer-visible, "yes"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.rdb-write-v2, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.rdb-read-v2, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT._DEBUG, CONTROLLED_VARIABLE, SET, StopBackfill, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:0", v, !!binary "AACAPwAAAAAAAAAA", n, "0", t, Tag0],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:1", v, !!binary "AAAAAACAPwAAAAAA", n, "1", t, Tag1],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:2", v, !!binary "AAAAAAAAAACAPwAA", n, "2", t, Tag2],
+      expect: {equals: 3}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, L2, n, NUMERIC, t, TAG], expect: {
+        equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [INFO, search], expect_difference: true, expect: {contains: "search_rdb_save_backfilling_indexes:1"}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@n:[0 0]", NOCONTENT, LIMIT, 0, 10], wait_s: 60,
+      expect: {equals: [1, "doc:0"]}}
+    - {command: [FT.SEARCH, idx, "@n:[2 2]", NOCONTENT, LIMIT, 0, 10], wait_s: 60,
+      expect: {equals: [1, "doc:2"]}}
+    - {command: [INFO, search], expect_difference: true, expect: {contains: "search_rdb_load_backfilling_indexes:1"}}
+    - {command: [INFO, search], expect_difference: true, expect: {contains: "search_backfill_hash_keys:3"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [bf.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bf}

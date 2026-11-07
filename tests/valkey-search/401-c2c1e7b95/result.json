@@ -1,0 +1,80 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "c2c1e7b953f77bc8afa4930bf226e3a2303dba6c",
+  "parent": "0b8c620f2a5a740192d5042c84ae3362967931fb",
+  "pr": 401,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Revise Save/Restore for true pit snapshot. (#401)",
+  "date": "2025-11-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 3,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 12.9118,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "hang: command 14 (SAVE) on connection 0 of 4 got no reply, and the server answered no PING within 180s",
+      "scenario": "ai-33c642b69c3d",
+      "seed": 104,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "9d907278cb711be53f65",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-4d2f02654cae",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: ComponentTimeoutError: component 'v2' run did not return within 898.566s and was cancelled"
+    },
+    {
+      "scenario": "ai-f4fd5ac5b730",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: ComponentTimeoutError: component 'v2' run did not return within 899.299s and was cancelled"
+    },
+    {
+      "scenario": "ai-33c642b69c3d",
+      "build": "unstable",
+      "seed": 105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-33c642b69c3d",
+      "build": "unstable",
+      "seed": 106,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-dea138dd69af",
+      "build": "unstable",
+      "seed": 105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-dea138dd69af",
+      "build": "unstable",
+      "seed": 106,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-dea138dd69af",
+      "build": "unstable",
+      "seed": 107,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

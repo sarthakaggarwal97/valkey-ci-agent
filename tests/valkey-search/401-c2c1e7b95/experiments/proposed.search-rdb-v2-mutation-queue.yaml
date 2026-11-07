@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.search-rdb-v2-mutation-queue
+deployment:
+  modes: [standalone]
+metadata:
+  description: SAVE while the mutation queue is paused and MULTI/EXEC writes are queued,
+    then restart; V2 must persist and reload the mutation and multi/exec queues and
+    drain them on load without hanging
+components:
+- use: valkey.action.commands
+  id: mq
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 180
+    commands:
+    - {command: [CONFIG, SET, search.debug-mode, "yes"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.info-developer-visible, "yes"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.rdb-write-v2, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.rdb-read-v2, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, "20"], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, L2, n, NUMERIC, t, TAG], expect: {
+        equals: OK}}
+    - {command: [FT._DEBUG, PAUSEPOINT, SET, block_mutation_queue], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, "doc:0", v, !!binary "AACAPwAAAAAAAAAA", n, "0", t, Tag0],
+      expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:1", v, !!binary "AAAAAACAPwAAAAAA", n, "1", t, Tag1],
+      expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:2", v, !!binary "AAAAAAAAAACAPwAA", n, "2", t, Tag2],
+      expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:3", v, !!binary "AACAPwAAAAAAAAAA", n, "3", t, Tag3],
+      expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:4", v, !!binary "AAAAAACAPwAAAAAA", n, "4", t, Tag4],
+      expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [3, 3, 3, 3, 3]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [INFO, search], expect_difference: true, expect: {contains: "search_rdb_save_multi_exec_entries:5"}}
+    - {command: [INFO, search], expect_difference: true, expect: {contains: "search_rdb_save_mutation_entries:5"}}
+    - {command: [FT._DEBUG, PAUSEPOINT, RESET, block_mutation_queue], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@n:[0 0]", NOCONTENT, LIMIT, 0, 10], wait_s: 30,
+      expect: {equals: [1, "doc:0"]}}
+    - {command: [FT.SEARCH, idx, "@n:[4 4]", NOCONTENT, LIMIT, 0, 10], wait_s: 30,
+      expect: {equals: [1, "doc:4"]}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@n:[0 0]", NOCONTENT, LIMIT, 0, 10], wait_s: 60,
+      expect: {equals: [1, "doc:0"]}}
+    - {command: [FT.SEARCH, idx, "@n:[4 4]", NOCONTENT, LIMIT, 0, 10], wait_s: 60,
+      expect: {equals: [1, "doc:4"]}}
+    - {command: [INFO, search], expect_difference: true, expect: {contains: "search_rdb_load_multi_exec_entries:5"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [mq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mq}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "e8c6cd1f87b277553c68e6c000c94431d138af4d",
+  "parent": "b77384b55202f48330ceca8710c6c1db424de7f8",
+  "pr": 481,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix cluster map bugs (#481)",
+  "date": "2025-11-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 13.1249,
+  "findings": [],
+  "recorded": [],
+  "reason": "Every changed line is gated behind the valkey-search coordinator: the new ClusterMap::GetTargets modes, the ParseNodeInfo is_local fix, and the kOneReplicaPerShard fanout are only exercised by FT.SEARCH/FT.INFO/FT.CREATE/FT.DROPINDEX fanout paths that run only when UsingCoordinator() is true (commands.cc:128, ft_info_parser.cc:90, ft_create.cc:67, ft_dropindex.cc:130), and the cluster map is only ever built from those paths. UsingCoordinator() requires the '--use-coordinator' module load-time argument, which the fuzzer cannot pass: module artifacts load as a bare path with no arguments (both d"
+}

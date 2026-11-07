@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 0b8c620f2a5a..c2c1e7b953f7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-dea138dd69af
+seed: 105
+experiment:
+  id: proposed.search-rdb-v2-backfill-restart
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

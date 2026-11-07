@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "837f7d32e5636292c9e34e7321e52cce1724286a",
+  "parent": "65f6ed48e4c78c3bc31c531d7327a167a084f5bb",
+  "pr": 476,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix crash on aof (#476)",
+  "date": "2025-11-14",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.9984,
+  "findings": [],
+  "recorded": [],
+  "reason": "Every behavioral change in this diff is gated behind `ValkeySearch::Instance().IsCluster() && ValkeySearch::Instance().UsingCoordinator()`. In ft_create.cc and ft_dropindex.cc the fix only alters the `IsCluster && UsingCoordinator` branch (adding `!is_loading && !inside_multi_exec`); with the coordinator off, both the parent and the changed build take the else branch and reply a plain `OK`, the fix merely adding a log line there, so no reply differs and the crashing fanout is never started. In ft_info_parser.cc the changed `kPrimary`/`kCluster` scopes are rejected by ParseCommand unless `IsClu"
+}

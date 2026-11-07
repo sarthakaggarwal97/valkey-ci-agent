@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-arg-parse
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    FT.AGGREGATE parses its query string once, in QueryCommand::Execute. The parent's
+    bad merge re-parsed it in AggregateParameters::ParseCommand, consuming the argument
+    after the query string as the query: a bare FT.AGGREGATE errored with Missing
+    argument, and every stage clause (LOAD, SORTBY, GROUPBY, PARAMS, DIALECT) shifted
+    by one and failed.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC,
+        t, TAG, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:1", n, 1, t, alpha, v, !!binary "AACAPwAAAAA="], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:2", n, 2, t, beta, v, !!binary "AAAAAAAAgD8="], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:3", n, 3, t, alpha, v, !!binary "AACAPwAAgD8="], expect: {
+        equals: 3}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          3]}}
+    - {command: [FT.AGGREGATE, idx, "*"], expect_difference: true, expect: {equals: [
+          3, [], [], []]}}
+    - {command: [FT.AGGREGATE, idx, "@n:[1 3]", LOAD, 2, "@n", "@t", SORTBY, 1, "@n"],
+      expect_difference: true, expect: {equals: [3, [n, 1, t, alpha], [n, 2, t, beta],
+          [n, 3, t, alpha]]}}
+    - {command: [FT.AGGREGATE, idx, "@n:[$lo $hi]", PARAMS, 4, lo, 1, hi, 2, LOAD,
+        1, "@n", SORTBY, 1, "@n"], expect_difference: true, expect: {equals: [2, [
+            n, 1], [n, 2]]}}
+    - {command: [FT.AGGREGATE, idx, "@t:{alpha}", LOAD, 1, "@t", GROUPBY, 1, "@t",
+        REDUCE, COUNT, 0, AS, cnt], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*=>[KNN 2 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAAAA=",
+        LOAD, 1, "@n"], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "@n:[1 3]", LOAD, 1, "@n", SORTBY, 1, "@n", DIALECT,
+        3], expect_difference: true, expect: {equals: [3, [n, 1], [n, 2], [n, 3]]}}
+    - {command: [FT.AGGREGATE, idx, "*", BOGUS], expect_difference: true, expect: {
+        error: true}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.AGGREGATE, idx, "*"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [[3, [], [], []]]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

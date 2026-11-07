@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.search-rdb-v2-skip-on-v1-read
+deployment:
+  modes: [standalone]
+metadata:
+  description: A V2 RDB read back with rdb-read-v2 off must skip the INDEX_EXTENSION
+    section chunk-by-chunk and still load the index (forward-compat skip path)
+components:
+- use: valkey.action.commands
+  id: skipv1
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 180
+    commands:
+    - {command: [CONFIG, SET, search.debug-mode, "yes"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.info-developer-visible, "yes"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.rdb-write-v2, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.rdb-validate-on-write, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, L2, n, NUMERIC, t, TAG], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:0", v, !!binary "AACAPwAAAAAAAAAA", n, "0", t, Tag0],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:1", v, !!binary "AAAAAACAPwAAAAAA", n, "1", t, Tag1],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:2", v, !!binary "AAAAAAAAAACAPwAA", n, "2", t, Tag2],
+      expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, "@n:[0 0]", NOCONTENT, LIMIT, 0, 10], wait_s: 30,
+      expect: {equals: [1, "doc:0"]}}
+    - {command: [FT.SEARCH, idx, "@n:[1 1]", NOCONTENT, LIMIT, 0, 10], wait_s: 30,
+      expect: {equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, idx, "@n:[2 2]", NOCONTENT, LIMIT, 0, 10], wait_s: 30,
+      expect: {equals: [1, "doc:2"]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [INFO, search], expect_difference: true, expect: {contains: "search_rdb_save_keys:3"}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@n:[0 0]", NOCONTENT, LIMIT, 0, 10], wait_s: 60,
+      expect: {equals: [1, "doc:0"]}}
+    - {command: [FT.SEARCH, idx, "@n:[2 2]", NOCONTENT, LIMIT, 0, 10], wait_s: 60,
+      expect: {equals: [1, "doc:2"]}}
+    - {command: [INFO, search], expect_difference: true, expect: {contains: "search_rdb_load_sections_skipped:1"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [skipv1.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: skipv1}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a3aeb377553c1884e5f8fb12724ad7a6f703b623",
+  "parent": "90124dc91756b24cb2e58e5c4eea5b8d53004ea6",
+  "pr": 453,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix build script to work when directory path contains spaces (#453)",
+  "date": "2025-11-06",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3055,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only quotes paths and restructures argument passing in build.sh, scripts/common.rc and submodules/CMakeLists.txt so the build works when the directory path contains spaces. It touches no module source code, no command handling, no replies, no persistence or replication path: the produced module binary behaves identically at the change and at its parent, so there is no runtime behaviour for a scenario to reach. It is a pure build/CI change and needs no test."
+}

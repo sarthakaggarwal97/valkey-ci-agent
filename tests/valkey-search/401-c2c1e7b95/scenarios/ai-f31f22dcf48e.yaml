@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 0b8c620f2a5a..c2c1e7b953f7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f31f22dcf48e
+seed: 103
+experiment:
+  id: proposed.search-rdb-v2-skip-on-v1-read
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

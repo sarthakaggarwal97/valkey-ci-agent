@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "090c082a88ae9565068df7440fb0981e87acc617",
+  "parent": "f998b7959ed946c513479462acfdf09c163403af",
+  "pr": 415,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "prevent Valkey crash when module is loaded twice (#415)",
+  "date": "2025-10-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.6587,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely load-time: a static guard at the top of valkey-search's ValkeyModule_OnLoad that returns VALKEYMODULE_ERR instead of letting TrackCurrentAsMainThread's CHECK abort when the same libsearch.so is loaded a second time in one process. It alters no command reply, replication, persistence, or cluster behavior, and a single normal load never reaches it. The only path it changes -- a second OnLoad in one server process -- is unreachable by the fuzzer: runtime MODULE LOAD/LOADEX/UNLOAD (the real trigger) are refused by valkey.action.commands and issued by no other component, and no"
+}

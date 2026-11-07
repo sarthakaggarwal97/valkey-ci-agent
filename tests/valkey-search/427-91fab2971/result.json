@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "91fab297135067606ffdb860df0dfe340128af28",
+  "parent": "3e573801f46a62718bf856567c64516374927525",
+  "pr": 427,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Prevent crash on Valkey 7.2 when loading valkey-search (#427)",
+  "date": "2025-10-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4934,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters module load-time behaviour on Valkey servers older than 8.1.1 (e.g. 7.2): it moves the minimum-version check before the calls to ACL/command-registration APIs that don't exist there, and guards against ValkeyModule_GetServerVersion being null, so MODULE LOAD fails cleanly instead of crashing. The fuzzer loads both module builds into a single pinned modern Valkey build where the version check passes identically on the change and the parent, the module loads successfully on both, and no post-load behaviour is touched by the diff. No deployment, fault, or command sequence a"
+}

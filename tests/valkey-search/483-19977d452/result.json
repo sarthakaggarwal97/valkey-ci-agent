@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "19977d452d08dc0366e6f71ed0fb804afe5ab11c",
+  "parent": "e8c6cd1f87b277553c68e6c000c94431d138af4d",
+  "pr": 483,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix build.sh for cloud desktop (#483)",
+  "date": "2025-11-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2218,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change touches only build.sh, moving the BUILD_TOOL selection (ninja vs make) earlier so the script works on cloud desktop environments. It changes how the module is compiled, not any code that runs inside Valkey: no command, reply, index, persistence or replication behaviour differs between the two builds, so there is no runtime path for a scenario to exercise."
+}

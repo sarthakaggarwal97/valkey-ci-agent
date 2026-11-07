@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "6602e5cdf19e2711ea74a47803b162482237393a",
+  "parent": "837f7d32e5636292c9e34e7321e52cce1724286a",
+  "pr": 475,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add output files from original integration tests to github upload (#475)",
+  "date": "2025-11-15",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2245,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only ci/build_ubuntu.sh, adding cp commands so that the integration tests' output and tmp directories are included in the CI artifact upload. It is purely a CI/build-script change: no module code, command behaviour, replies, persistence, or replication paths are affected, so no fuzzer scenario can reach it and none is needed."
+}

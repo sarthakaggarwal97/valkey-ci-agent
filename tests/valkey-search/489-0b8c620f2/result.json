@@ -1,0 +1,37 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "0b8c620f2a5a740192d5042c84ae3362967931fb",
+  "parent": "19977d452d08dc0366e6f71ed0fb804afe5ab11c",
+  "pr": 489,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Update ProcessKeyspaceNotification to not return before trying out all attributes (#489)",
+  "date": "2025-11-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 6.4661,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in _ZNK13valkey_search11IndexSchema24InTrackedMutationRecordsERKSt10shared_ptrINS_14InternedStringEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE",
+      "scenario": "ai-13fc4c5fa64e",
+      "seed": 48902,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "592978c49d7544040c3b",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

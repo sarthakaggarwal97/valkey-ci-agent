@@ -1,0 +1,78 @@
+extends: [valkey.liveness]
+id: proposed.ft-query-aggregate-cleanup-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH and FT.AGGREGATE replies compared across the Aggregate Cleanup
+    refactor, which merged both commands into one QueryCommand::Execute path that
+    now parses the index name and query string itself before calling the per-command
+    ParseCommand, moved the ACL/MULTI/async dispatch, and gated the aggregate score
+    field on IsVectorQuery
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: ft
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, prodidx, ON, HASH, PREFIX, 1, 'product:', SCHEMA, price,
+        NUMERIC, rating, NUMERIC, category, TAG], expect: {equals: OK}}
+    - {command: [FT.CREATE, vecidx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, 'product:1', price, 10, rating, 5, category, a], expect: {
+        equals: 3}}
+    - {command: [HSET, 'product:2', price, 20, rating, 4, category, b], expect: {
+        equals: 3}}
+    - {command: [HSET, 'product:3', price, 30, rating, 3, category, a], expect: {
+        equals: 3}}
+    - {command: [HSET, 'product:4', price, 40, rating, 2, category, b], expect: {
+        equals: 3}}
+    - {command: [HSET, 'doc:1', vec, !!binary 'AACAPwAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:2', vec, !!binary 'AAAAAAAAgD8='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:3', vec, !!binary 'AACAPwAAgD8='], expect: {equals: 1}}
+    - {command: [FT.INFO, prodidx], wait_s: 30, expect: {contains: 4}, compare: skip}
+    - {command: [FT.INFO, vecidx], wait_s: 30, expect: {contains: 3}, compare: skip}
+    - {command: [FT.SEARCH, prodidx, '@price:[15 35]'], compare: unordered, expect: {
+        exists: true}}
+    - {command: [FT.SEARCH, prodidx, '@price:[15 35]', LIMIT, 0, 0], expect: {exists: true}}
+    - {command: [FT.SEARCH, vecidx, '*=>[KNN 2 @vec $q]', PARAMS, 2, q, !!binary 'AACAP83MzD0=',
+        DIALECT, 2], compare: unordered, expect: {exists: true}}
+    - {command: [FT.SEARCH, vecidx, '*=>[KNN 2 @vec $q]', PARAMS, 2, q, !!binary 'AACAP83MzD0=',
+        NOCONTENT, DIALECT, 2], compare: unordered, expect: {exists: true}}
+    - {command: [FT.SEARCH, prodidx, '@price:[15 35]', LIMIT, 0, 9223372036854775807],
+      compare: unordered}
+    - {command: [FT.SEARCH, nosuchindex, '*'], expect: {error: true}}
+    - {command: [FT.AGGREGATE, prodidx, '@price:[0 100]'], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.AGGREGATE, prodidx, '@price:[0 100]', LOAD, 2, '@price', '@rating'],
+      expect_difference: true, expect: {error: true}}
+    - {command: [FT.AGGREGATE, prodidx, '@price:[0 100]', GROUPBY, 1, '@category',
+        REDUCE, COUNT, 0, AS, cnt], expect_difference: true, expect: {error: true}}
+    - {command: [FT.AGGREGATE, prodidx, '@price:[0 100]', SORTBY, 2, '@price', DESC],
+      expect_difference: true, expect: {error: true}}
+    - {command: [FT.AGGREGATE, vecidx, '*=>[KNN 2 @vec $q]', PARAMS, 2, q, !!binary 'AACAP83MzD0=',
+        DIALECT, 2], expect_difference: true, expect: {error: true}}
+    - {command: [FT.AGGREGATE, prodidx, '@price:[0 100]', DIALECT, 1], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.AGGREGATE, nosuchindex, '*'], expect: {error: true}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.SEARCH, prodidx, '@price:[15 35]'], expect: {equals: QUEUED}}
+    - {command: [FT.AGGREGATE, prodidx, '@price:[0 100]', GROUPBY, 1, '@category',
+        REDUCE, COUNT, 0, AS, cnt], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ft.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ft}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "f998b7959ed946c513479462acfdf09c163403af",
+  "parent": "be801bb24b8fb8fa4c5165f65dd21e1545b4a505",
+  "pr": 419,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add inline keyword to ostream operator overloads for better linking on macOS and build compatibility. (#419)",
+  "date": "2025-10-16",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2571,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds the inline keyword to three ostream operator<< overloads defined in headers (fixing duplicate-symbol link errors on macOS) and adds a macOS CI workflow file. Adding inline to header-defined functions changes linkage, not semantics: the compiled module behaves identically at runtime, no command reply, indexing, replication or persistence path changes. It is a build/CI compatibility fix with no testable behaviour change, so no scenario is needed."
+}

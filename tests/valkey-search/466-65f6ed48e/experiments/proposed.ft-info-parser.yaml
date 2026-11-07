@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.ft-info-parser
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.INFO parser rewrite (KeyValueParser) changes arity handling, scope-vs-index
+    validation order, and unknown-scope error text; compared across module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: ftinfo
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 15
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, t, TAG, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, LOCAL, ON, HASH, PREFIX, 1, 'x:', SCHEMA, f, TAG], expect: {
+        equals: OK}}
+    - {command: [FT.INFO, idx], compare: skip, expect: {error: false}}
+    - {command: [FT.INFO, idx, LOCAL], compare: skip, expect: {error: false}}
+    - {command: [FT.INFO, idx, local], compare: skip, expect: {error: false}}
+    - {command: [FT.INFO, LOCAL], compare: skip, expect: {error: false}}
+    - {command: [FT.INFO, LOCAL, LOCAL], compare: skip, expect: {error: false}}
+    - {command: [FT.INFO, idx, CLUSTER], expect: {error: "CLUSTER option is not valid"}}
+    - {command: [FT.INFO, missing, LOCAL], expect: {error: "not found"}}
+    - {command: [FT.INFO], expect: {error: "wrong number of arguments"}}
+    - {command: [FT.INFO, idx, LOCAL, LOCAL], expect_difference: true, compare: skip,
+      expect: {error: false}}
+    - {command: [FT.INFO, LOCAL, LOCAL, LOCAL], expect_difference: true, compare: skip,
+      expect: {error: false}}
+    - {command: [FT.INFO, idx, PRIMARY, CLUSTER, LOCAL], expect_difference: true,
+      compare: skip, expect: {error: false}}
+    - {command: [FT.INFO, idx, LOCAL, PRIMARY], expect_difference: true, expect: {
+        error: "PRIMARY option is not valid"}}
+    - {command: [FT.INFO, idx, BADSCOPE], expect_difference: true, expect: {error: "Unexpected\
+          \ argument"}}
+    - {command: [FT.INFO, idx, ""], expect_difference: true, expect: {error: "Unexpected\
+          \ argument"}}
+    - {command: [FT.INFO, missing, PRIMARY], expect_difference: true, expect: {error: "not\
+          \ found"}}
+    - {command: [FT.INFO, missing, BADSCOPE], expect_difference: true, expect: {error: "not\
+          \ found"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftinfo}

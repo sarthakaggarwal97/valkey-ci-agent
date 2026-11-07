@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "b77384b55202f48330ceca8710c6c1db424de7f8",
+  "parent": "6602e5cdf19e2711ea74a47803b162482237393a",
+  "pr": 477,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Replace multiple utility libraries with unified vmsdklib dependency (#477)",
+  "date": "2025-11-16",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 8.4224,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a build-system refactor: it merges the many vmsdk static libraries into a single vmsdklib archive and rewrites CMake link lines, plus a CMAKE_GENERATOR option in build.sh. The only source edits are behavior-free: constant renames in vmsdk/src/cluster_map.cc/.h (VALKEY_MODULE_CALL_ERROR_MSG -> kValkeyModuleCallErrorMsg with identical string contents, k_num_slots -> kNumSlots still 16384), removal of unused #includes, and adding the 'override' keyword to PrimaryInfoFanoutOperation::GetTargets(), which already overrode the base class's pure virtual. The same source files are compile"
+}

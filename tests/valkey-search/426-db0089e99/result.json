@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "db0089e99125394481687c159e20b4a192e0c2be",
+  "parent": "090c082a88ae9565068df7440fb0981e87acc617",
+  "pr": 426,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Enable upload of integration test outputs (#426)",
+  "date": "2025-10-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2886,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only CI workflow files (.github/workflows/*), build.sh argument parsing, and ci/build_ubuntu.sh to upload unit/integration test outputs as GitHub artifacts and enable core dumps in CI containers. No source file of the valkey-search module is touched, so the loaded module's runtime behavior \u2014 commands, replies, indexing, replication, persistence \u2014 is identical on both builds. There is no server-reachable behavior change to test, so no scenario is needed."
+}

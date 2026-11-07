@@ -1,0 +1,92 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "65f6ed48e4c78c3bc31c531d7327a167a084f5bb",
+  "parent": "b9ddc9c81bc01f0561e8a3360f8261568edbad08",
+  "pr": 466,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "FT.INFO parser (#466)",
+  "date": "2025-11-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.9109,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-a07986960dc3",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #466, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-458d6a338c8a",
+      "build": "unstable",
+      "seed": 1,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-458d6a338c8a",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-458d6a338c8a",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a07986960dc3",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a07986960dc3",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a07986960dc3",
+      "build": "unstable",
+      "seed": 4,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-49b8eef33359",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-49b8eef33359",
+      "build": "unstable",
+      "seed": 4,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-49b8eef33359",
+      "build": "unstable",
+      "seed": 5,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

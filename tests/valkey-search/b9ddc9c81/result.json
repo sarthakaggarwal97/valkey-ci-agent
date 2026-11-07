@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "b9ddc9c81bc01f0561e8a3360f8261568edbad08",
+  "parent": "d7df48f07458311af842d3bd6cf901ac010e5d9b",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix bad merge on compatibility",
+  "date": "2025-11-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.4361,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

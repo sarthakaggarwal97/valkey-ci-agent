@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "c71e26a8307c11a0728167425ca34c1a201083df",
+  "parent": "a3aeb377553c1884e5f8fb12724ad7a6f703b623",
+  "pr": 435,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Cluster Map Implementation (#435)",
+  "date": "2025-11-06",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 6,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 10.5914,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

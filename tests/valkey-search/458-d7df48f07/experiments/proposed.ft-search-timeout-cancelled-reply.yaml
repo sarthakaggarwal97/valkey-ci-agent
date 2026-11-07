@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-timeout-cancelled-reply
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    An FT.SEARCH whose cancellation token fired must reply "Search operation cancelled
+    due to timeout" from the async Reply() path when search.enable-partial-results
+    is no, instead of silently returning the partial results the search produced before
+    it was cancelled. The parent lacks the cancelled check in Reply(), so it replies
+    the truncated result set with no error. Reached through the two search paths that
+    return OK with partial results on cancellation: a non-vector (numeric filter)
+    query and a FLAT KNN query, both over 150k documents with TIMEOUT 1, so the token's
+    1 ms deadline passes while the scan is still running and the sticky cancelled
+    flag is set when Reply() runs.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cancel
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC,
+        v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 32, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [EVAL, "local v = string.rep(string.char(0,0,128,63),32) for i=1,150000\
+          \ do redis.call('HSET','doc:'..i,'n',i,'v',v) end return 'OK'", 0], expect: {
+        equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 600, expect: {contains: "150000"}, compare: skip}
+    - {command: [FT.SEARCH, idx, "@n:[0 200000]", NOCONTENT, LIMIT, 0, 0, TIMEOUT,
+        60000], expect: {equals: [150000]}}
+    - {command: [CONFIG, SET, search.enable-partial-results, "no"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@n:[0 200000]", NOCONTENT, LIMIT, 0, 5, TIMEOUT,
+        1], expect_difference: true, expect: {error: "cancelled due to timeout"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @v $B]", NOCONTENT, LIMIT, 0, 5, TIMEOUT,
+        1, PARAMS, 2, B, !!binary "AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8AAIA/AACAPwAAgD8=",
+        DIALECT, 2], expect_difference: true, expect: {error: "cancelled due to timeout"}}
+    - {command: [CONFIG, SET, search.enable-partial-results, "yes"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cancel.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cancel}

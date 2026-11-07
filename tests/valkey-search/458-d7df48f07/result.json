@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "d7df48f07458311af842d3bd6cf901ac010e5d9b",
+  "parent": "809c8a4faaaef062747be0c10ad297b003dc3f5a",
+  "pr": 458,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "change FanoutSearchTargets to NodeInfo; fix fanout_test; add cancelled check in Reply() (#458)",
+  "date": "2025-11-07",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.3572,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-7c1ccc6c2f40",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #458, since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-43c58effc156",
+      "seed": 202,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #458, since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}
