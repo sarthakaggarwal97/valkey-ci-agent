@@ -1,0 +1,93 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "97a513224e6a7a5fafbb5e092e8181e25a9865b4",
+  "parent": "8b967a7dd5f53e86778ce1ce64555824f5ff5a80",
+  "pr": 521,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Use new command \"FT.Internal_update\" to replicate index create/drop (#521)",
+  "date": "2026-01-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 2,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.0328,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-8b4fc9492685",
+      "seed": 1,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #521",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-a39f7812c6ab",
+      "seed": 2,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #521",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-0c1768407639",
+      "seed": 3,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #521",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in _ZN13valkey_search11coordinator15MetadataManager16TriggerCallbacksESt17basic_string_viewIcSt11char_traitsIcEERKNS0_7ObjNameERKNS0_19GlobalMetadataEntryE",
+      "scenario": "ai-8bd20cf0df5d",
+      "seed": 4,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "4e5398071ddea967db93",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in _ZN13valkey_search11coordinator15MetadataManager16TriggerCallbacksESt17basic_string_viewIcSt11char_traitsIcEERKNS0_7ObjNameERKNS0_19GlobalMetadataEntryE",
+      "scenario": "ai-0988bfcb16c6",
+      "seed": 5,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "4e5398071ddea967db93",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

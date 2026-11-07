@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5431493cb6d9c1e2db199c6ca01360c77b737b8f",
+  "parent": "5a1f3ab6170c05821d3ae15e05ed83f57ea6b162",
+  "pr": 558,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Update PARAMS argument for ft.aggregate documentation (#558)",
+  "date": "2026-01-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7764,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only src/commands/ft.aggregate.json, a command-documentation metadata file describing FT.AGGREGATE's PARAMS argument. That file is not compiled into the module (src/commands/CMakeLists.txt lists only .cc sources), is referenced by no source, build, or load path, and the module exposes no command-docs API using it. The built module binary and all runtime behaviour (parsing, replies, indexing) are identical on both builds, so there is nothing a scenario could exercise."
+}

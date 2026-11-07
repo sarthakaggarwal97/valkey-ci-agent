@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "143f2c61eb3220f402821e6e67757c6c05c4b562",
+  "parent": "3f11e51a37ebc23cdc6abc97df614a803f1e2dc8",
+  "pr": 620,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add SeekForwardPosition API to TextIterator interface and all the derived iterators (#620)",
+  "date": "2026-01-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 5,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 7.5035,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

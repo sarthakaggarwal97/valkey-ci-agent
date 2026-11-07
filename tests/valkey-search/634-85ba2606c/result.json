@@ -1,0 +1,110 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "85ba2606cd3d2b42d70b7f985d034f92c6c66112",
+  "parent": "2d9a3b5393eb411b2c743eac14d030bd176e045f",
+  "pr": 634,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Update deduplication check to check Tag existence (#634)",
+  "date": "2026-01-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 4.7832,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-499f4cf0443a",
+      "seed": 634002,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #634, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-2e75f7cc10a4",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'tagdedup' returned ERROR: expectations both builds violate alike, so they are not about the change: 8 (FT.SEARCH idx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-2e75f7cc10a4",
+      "build": "unstable",
+      "seed": 634001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2e75f7cc10a4",
+      "build": "unstable",
+      "seed": 634002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2e75f7cc10a4",
+      "build": "unstable",
+      "seed": 634003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-499f4cf0443a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'tagdedup' returned ERROR: expectations both builds violate alike, so they are not about the change: 8 (FT.SEARCH idx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-499f4cf0443a",
+      "build": "unstable",
+      "seed": 634002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-499f4cf0443a",
+      "build": "unstable",
+      "seed": 634003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-499f4cf0443a",
+      "build": "unstable",
+      "seed": 634004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-014b198ae39d",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'tagdedup' returned ERROR: expectations both builds violate alike, so they are not about the change: 8 (FT.SEARCH idx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-014b198ae39d",
+      "build": "unstable",
+      "seed": 634003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-014b198ae39d",
+      "build": "unstable",
+      "seed": 634004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-014b198ae39d",
+      "build": "unstable",
+      "seed": 634005,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

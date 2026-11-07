@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "e41ee6069170fa9e44cdbac5033a675818871e01",
+  "parent": "f90b05072f9fe4a0a8f164bd09a84930b92e3c01",
+  "pr": 607,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Endurance test (#607)",
+  "date": "2026-01-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2766,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change \"Endurance test (#607)\" modifies only Python test-infrastructure files (testing/integration/stability_runner.py, stability_test.py, utils.py), adding new index-type variants and text attributes to valkey-search's own stability/endurance test harness. No module source code is changed, so the compiled module's behaviour \u2014 commands, replies, indexing, replication, persistence \u2014 is identical on both builds. There is no runtime path for a fuzzer scenario to reach; this is a test/CI-only change that needs no scenario."
+}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search c2c24916bd17..3f11e51a37eb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2a28a302c991
+seed: 2
+experiment:
+  id: proposed.ft-backslash-escape
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

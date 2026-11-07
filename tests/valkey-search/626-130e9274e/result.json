@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "130e9274e823a3be79d46dbd9081c13c06b93984",
+  "parent": "5431493cb6d9c1e2db199c6ca01360c77b737b8f",
+  "pr": 626,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add CMAKE_POLICY_VERSION_MINIMUM to build scripts and submodules (#626)",
+  "date": "2026-01-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2765,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds -DCMAKE_POLICY_VERSION_MINIMUM=3.5 to build.sh and to the submodules' common CMake arguments so that newer CMake (4.x) accepts the submodules' old cmake_minimum_required declarations at configure time. It is a build/CI configuration change with no modification to any source file, compiler optimization, or linked code: the produced module binary's runtime behaviour (commands, replies, indexing, persistence) is identical, so there is no reachable behaviour change for a fuzzer scenario to exercise."
+}

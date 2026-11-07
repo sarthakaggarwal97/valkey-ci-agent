@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-tag-dedup
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH tag-only and tag-under-AND/KNN queries returned duplicated
+    keys and inflated counts when a document carries more than one matched tag; the
+    change dedups any query containing a TAG predicate
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: tagdedup
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, tags, TAG, num,
+        NUMERIC, vec, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2],
+      expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', tags, 'alpha,beta', num, 1, vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:2', tags, alpha, num, 2, vec, !!binary 'AAAAQAAAAAA='],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:3', tags, beta, num, 3, vec, !!binary 'AABAQAAAAAA='],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:4', tags, 'alpha,algo', num, 4, vec, !!binary 'AACAQAAAAAA='],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:5', num, 5], expect: {equals: 1}}
+    - {command: [HSET, 'doc:6', num, 6], expect: {equals: 1}}
+    - {command: [HSET, 'doc:7', num, 7], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          7]}}
+    - {command: [FT.SEARCH, idx, '@tags:{alpha|beta}', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [4]}}
+    - {command: [FT.SEARCH, idx, '@tags:{alpha|beta}', NOCONTENT, LIMIT, 0, 10], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:2'}}
+    - {command: [FT.SEARCH, idx, '@tags:{al*}', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx, '@tags:{al*} @num:[0 100]', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [3]}}
+    - command: [FT.SEARCH, idx, '(@tags:{alpha|beta})=>[KNN 4 @vec $B]', PARAMS, 2,
+        B, !!binary 'AAAAAAAAAAA=', NOCONTENT, LIMIT, 0, 10, DIALECT, 2]
+      expect_difference: true
+      compare: unordered
+      expect: {contains: 'doc:4'}
+    - {command: [FT.SEARCH, idx, '@tags:{beta}', LIMIT, 0, 0], expect: {equals: [
+          2]}}
+    - {command: [FT.SEARCH, idx, '@tags:{alpha} | @tags:{beta}', LIMIT, 0, 0], expect: {
+        equals: [4]}}
+    - {command: [HSET, 'doc:2', tags, 'alpha,beta'], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, '@tags:{beta}', LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [3]}}
+    - {command: [FT.SEARCH, idx, '@tags:{alpha|beta}', LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [4]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [tagdedup.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tagdedup}

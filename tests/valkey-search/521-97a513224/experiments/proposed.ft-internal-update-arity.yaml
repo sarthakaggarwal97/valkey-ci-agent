@@ -1,0 +1,29 @@
+extends: [valkey.liveness]
+id: proposed.ft-internal-update-arity
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.INTERNAL_UPDATE with the wrong argument count hits CHECK_EQ(argc,4)
+    and aborts the whole server
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: arity
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [FT.INTERNAL_UPDATE], expect_difference: true, expect: {exists: false}}
+    - {command: [PING], expect_difference: true, expect: {exists: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: arity}

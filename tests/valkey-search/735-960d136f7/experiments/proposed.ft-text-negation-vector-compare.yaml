@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.ft-text-negation-vector-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Vector KNN hybrid queries with negated text prefilters, where the universal
+    set and the negation-aware PrefilterEvaluator decide the candidate set
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: knn-negation
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - command: [FT.CREATE, vidx, ON, HASH, PREFIX, "1", "vdoc:", SCHEMA, content,
+        TEXT, NOSTEM, vec, VECTOR, FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC,
+        L2]
+      expect: {equals: OK}
+    - command: [HSET, "vdoc:1", content, "apple banana", vec, !!binary "AACAPwAAAAA="]
+      expect: {equals: 2}
+    - command: [HSET, "vdoc:2", content, "apple cherry", vec, !!binary "AAAAQAAAAAA="]
+      expect: {equals: 2}
+    - command: [HSET, "vdoc:3", content, "banana cherry", vec, !!binary "AABAQAAAAAA="]
+      expect: {equals: 2}
+    - command: [HSET, "vdoc:4", content, "grape orange", vec, !!binary "AACAQAAAAAA="]
+      expect: {equals: 2}
+    - command: [FT.SEARCH, vidx, cherry, LIMIT, "0", "0", DIALECT, "2"]
+      wait_s: 30
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, vidx, banana, LIMIT, "0", "0", DIALECT, "2"]
+      wait_s: 30
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, vidx, orange, LIMIT, "0", "0", DIALECT, "2"]
+      wait_s: 30
+      expect: {equals: [1]}
+    - command: [FT.SEARCH, vidx, "(apple)=>[KNN 4 @vec $BLOB]", PARAMS, "2", BLOB,
+        !!binary "AAAAAAAAAAA=", NOCONTENT, DIALECT, "2"]
+      expect: {equals: [2, "vdoc:1", "vdoc:2"]}
+    - command: [FT.SEARCH, vidx, "(-apple)=>[KNN 4 @vec $BLOB]", PARAMS, "2", BLOB,
+        !!binary "AAAAAAAAAAA=", NOCONTENT, DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [2, "vdoc:3", "vdoc:4"]}
+    - command: [FT.SEARCH, vidx, "(banana -apple)=>[KNN 4 @vec $BLOB]", PARAMS, "2",
+        BLOB, !!binary "AAAAAAAAAAA=", NOCONTENT, DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [1, "vdoc:3"]}
+    - command: [FT.SEARCH, vidx, '(-"apple banana")=>[KNN 4 @vec $BLOB]', PARAMS,
+        "2", BLOB, !!binary "AAAAAAAAAAA=", NOCONTENT, DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [3, "vdoc:2", "vdoc:3", "vdoc:4"]}
+    - command: [FT.SEARCH, vidx, "(-apple | cherry)=>[KNN 4 @vec $BLOB]", PARAMS,
+        "2", BLOB, !!binary "AAAAAAAAAAA=", NOCONTENT, DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [3, "vdoc:2", "vdoc:3", "vdoc:4"]}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [knn-negation.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: knn-negation}

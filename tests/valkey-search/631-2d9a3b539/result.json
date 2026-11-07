@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "2d9a3b5393eb411b2c743eac14d030bd176e045f",
+  "parent": "016e983bea949d62113c82a66286c94c60d8dc10",
+  "pr": 631,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix ordering of neighbors in CME (#631)",
+  "date": "2026-01-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 10.6733,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix changes behaviour only inside SearchPartitionResultsTracker in src/query/fanout.cc, which is constructed solely by PerformSearchFanoutAsync, and that fanout runs only when UsingCoordinator() && IsCluster() (src/commands/commands.cc:139-167). UsingCoordinator() requires the hidden 'use-coordinator' config: it is registered with .Hidden() (src/valkey_search_options.cc:144), hidden configs are never registered with the server (vmsdk/src/module_config.cc:110-112), so it cannot be set via CONFIG SET or server_config, only as the '--use-coordinator' module load argument. The fuzzer cannot pa"
+}

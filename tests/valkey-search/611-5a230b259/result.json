@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5a230b259b7a75e83c2b840f9c04dccfb52c8c5f",
+  "parent": "423716ace5dccc6e88205f59ea8fb1b13fcd56d3",
+  "pr": 611,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Eliminate redundant mainthread filter invokations (#611)",
+  "date": "2026-01-15",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 5,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.1017,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

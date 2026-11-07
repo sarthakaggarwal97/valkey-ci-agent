@@ -1,0 +1,93 @@
+extends: [valkey.liveness]
+id: proposed.ft-text-negation-mutation-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Text negation after DEL, re-add and field update, so the universal
+    set must track index_key_info_ exactly; plus negation on an empty index
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: negation-mutation
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, content, TEXT,
+        NOSTEM]
+      expect: {equals: OK}
+    - command: [HSET, "doc:1", content, "apple banana"]
+      expect: {equals: 1}
+    - command: [HSET, "doc:2", content, "apple cherry"]
+      expect: {equals: 1}
+    - command: [HSET, "doc:3", content, "banana cherry"]
+      expect: {equals: 1}
+    - command: [HSET, "doc:4", content, "grape orange"]
+      expect: {equals: 1}
+    - command: [HSET, "doc:5", content, "application pear"]
+      expect: {equals: 1}
+    - command: [FT.SEARCH, idx, cherry, LIMIT, "0", "0", DIALECT, "2"]
+      wait_s: 30
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, idx, banana, LIMIT, "0", "0", DIALECT, "2"]
+      wait_s: 30
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, idx, orange, LIMIT, "0", "0", DIALECT, "2"]
+      wait_s: 30
+      expect: {equals: [1]}
+    - command: [FT.SEARCH, idx, pear, LIMIT, "0", "0", DIALECT, "2"]
+      wait_s: 30
+      expect: {equals: [1]}
+    - command: [FT.SEARCH, idx, "-apple", LIMIT, "0", "0", DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [3]}
+    - command: [DEL, "doc:4"]
+      expect: {equals: 1}
+    - command: [DEL, "doc:5"]
+      expect: {equals: 1}
+    - command: [FT.SEARCH, idx, orange, LIMIT, "0", "0", DIALECT, "2"]
+      wait_s: 30
+      expect: {equals: [0]}
+    - command: [FT.SEARCH, idx, pear, LIMIT, "0", "0", DIALECT, "2"]
+      wait_s: 30
+      expect: {equals: [0]}
+    - command: [FT.SEARCH, idx, "-apple", NOCONTENT, DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [1, "doc:3"]}
+    - command: [HSET, "doc:4", content, "grape orange"]
+      expect: {equals: 1}
+    - command: [FT.SEARCH, idx, orange, LIMIT, "0", "0", DIALECT, "2"]
+      wait_s: 30
+      expect: {equals: [1]}
+    - command: [FT.SEARCH, idx, "-grape", LIMIT, "0", "0", DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [3]}
+    - command: [HSET, "doc:3", content, "apple melon"]
+      expect: {equals: 0}
+    - command: [FT.SEARCH, idx, melon, LIMIT, "0", "0", DIALECT, "2"]
+      wait_s: 30
+      expect: {equals: [1]}
+    - command: [FT.SEARCH, idx, cherry, LIMIT, "0", "0", DIALECT, "2"]
+      wait_s: 30
+      expect: {equals: [1]}
+    - command: [FT.SEARCH, idx, "-apple", NOCONTENT, DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [1, "doc:4"]}
+    - command: [FT.CREATE, idx2, ON, HASH, PREFIX, "1", "none:", SCHEMA, content,
+        TEXT, NOSTEM]
+      expect: {equals: OK}
+    - command: [FT.SEARCH, idx2, "-apple", LIMIT, "0", "0", DIALECT, "2"]
+      expect: {equals: [0]}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [negation-mutation.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: negation-mutation}

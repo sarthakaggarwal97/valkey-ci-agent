@@ -1,0 +1,37 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "10d16a1b87d8c1d3f91edfae5770467b77180978",
+  "parent": "5a230b259b7a75e83c2b840f9c04dccfb52c8c5f",
+  "pr": 613,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "String Intern race fix, This is a recreation of PR #576. (#613)",
+  "date": "2026-01-16",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.6216,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak",
+      "scenario": "ai-7e2516c55c61",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #613, since fixed",
+      "fingerprint": "badc8ded22447957f884",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

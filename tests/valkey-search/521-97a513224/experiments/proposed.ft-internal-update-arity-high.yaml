@@ -1,0 +1,26 @@
+extends: [valkey.liveness]
+id: proposed.ft-internal-update-arity-high
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.INTERNAL_UPDATE with one extra argument (argc 5) hits CHECK_EQ(argc,4)
+    and aborts the server
+components:
+- use: valkey.action.commands
+  id: arity
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 20
+    commands:
+    - {command: [FT.INTERNAL_UPDATE, idx, a, b, c], expect_difference: true, expect: {
+        exists: false}}
+    - {command: [PING], expect_difference: true, expect: {exists: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: arity}

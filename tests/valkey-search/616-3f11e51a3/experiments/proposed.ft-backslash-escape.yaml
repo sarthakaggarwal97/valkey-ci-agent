@@ -1,0 +1,83 @@
+extends: [valkey.liveness]
+id: proposed.ft-backslash-escape
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    FT.SEARCH backslash escape handling compared across the change and its parent:
+    ingestion tokenization in the lexer and query-side parsing, under default punctuation
+    (backslash is punctuation) and a custom PUNCTUATION ".,!" index where backslash
+    is not punctuation. Covers escaped punctuation, double and quadruple backslashes,
+    backslash before a letter, quoted exact phrases, escape adjacent to a prefix wildcard,
+    trailing backslash error, and token removal on document update.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: escape
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [HSET, 'doc:1', content, 'test\,value'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:2', content, 'test2\nvalue2'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:3', content, 'test3\\value3'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:4', content, 'test4\\\word4'], expect: {equals: 1}}
+    - {command: [HSET, 'doc:5', content, 'test5\\\\word5'], expect: {equals: 1}}
+    - {command: [FT.CREATE, idx_default, ON, HASH, SCHEMA, content, TEXT, NOSTEM],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_no_bs, ON, HASH, PUNCTUATION, '.,!', SCHEMA, content,
+        TEXT, NOSTEM], expect: {equals: OK}}
+    - {command: [FT.INFO, idx_default], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.INFO, idx_no_bs], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx_default, '@content:test\,value', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx_default, '@content:value', NOCONTENT], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx_default, '@content:"test\,value"', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx_default, '@content:test3\\value3', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:3'}}
+    - {command: [FT.SEARCH, idx_default, '@content:test5\\\\word5', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:5'}}
+    - {command: [FT.SEARCH, idx_default, 'test4\\\word4', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:4'}}
+    - {command: [FT.SEARCH, idx_default, '@content:test2', NOCONTENT], compare: unordered,
+      expect: {contains: 'doc:2'}}
+    - {command: [FT.SEARCH, idx_default, '@content:nvalue2', NOCONTENT], compare: unordered,
+      expect: {contains: 'doc:2'}}
+    - {command: [FT.SEARCH, idx_default, '@content:test4\\*', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:4'}}
+    - {command: [FT.SEARCH, idx_default, '@content:foo\'], expect: {error: true}}
+    - {command: [FT.SEARCH, idx_default, '\\', NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx_no_bs, '@content:test2\nvalue2', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:2'}}
+    - {command: [FT.SEARCH, idx_no_bs, '@content:test2', NOCONTENT], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx_no_bs, '@content:test\,value', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx_no_bs, 'test4\\\word4', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:4'}}
+    - {command: [FT.SEARCH, idx_no_bs, '@content:test5\\\\word5', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:5'}}
+    - {command: [HSET, 'doc:1', content, 'alpha\,beta gamma'], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx_default, '@content:gamma', NOCONTENT], wait_s: 15,
+      compare: unordered, expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx_default, '@content:alpha\,beta', NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: 'doc:1'}}
+    - {command: [FT.SEARCH, idx_default, '@content:beta', NOCONTENT], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx_default, '@content:test\,value', NOCONTENT], expect: {
+        equals: [0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [escape.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: escape}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ffd4bf08d11a0394ecd809402f30bc98f184e0df",
+  "parent": "143f2c61eb3220f402821e6e67757c6c05c4b562",
+  "pr": 610,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Refactoring SendReply block (#610)",
+  "date": "2026-01-22",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 9.1162,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a pure behavior-preserving refactor of the reply-generation code in ft_aggregate.cc (SendReplyInner split into ProcessNeighborsForProcessing, ProcessFieldValue, CreateRecordsFromNeighbors, ExecuteAggregationStages, GenerateResponse) and ft_search.cc (SendReply split into HandleEarlyReplyScenarios and ProcessNeighborsForQuery). I traced every transformed path against the original: the goto drop_record became a should_drop_record flag with identical reachability and identical record-drop semantics (JSON unquote failure drops the record, invalid numeric skips only the field and keeps the "
+}

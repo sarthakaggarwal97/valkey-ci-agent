@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.text-composed-and-negate-crash
+deployment:
+  modes: [standalone]
+metadata:
+  description: A non-proximity composed AND text query with a negated term routes
+    to the new composed-AND fast path whose fetcher CHECKs every child is kText
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ft
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idxc, ON, HASH, PREFIX, 1, "c:", SCHEMA, desc, TEXT],
+      expect: {equals: OK}}
+    - {command: [HSET, "c:1", desc, "Great oaks grow tall"], expect: {equals: 1}}
+    - {command: [FT.INFO, idxc], wait_s: 30, expect: {contains: 1}, compare: skip}
+    - {command: [FT.SEARCH, idxc, '@desc:great @desc:grow', NOCONTENT], expect: {
+        exists: true}, compare: skip}
+    - {command: [FT.SEARCH, idxc, '@desc:great -@desc:nomatch', NOCONTENT], expect: {
+        exists: true}, compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ft.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ft}

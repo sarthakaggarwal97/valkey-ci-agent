@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "3570431895802f0aa02ab1ebec00b480793f20d0",
+  "parent": "97a513224e6a7a5fafbb5e092e8181e25a9865b4",
+  "pr": 633,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Allow local node to have no primary endpoint (#633)",
+  "date": "2026-01-28",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 11.1728,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

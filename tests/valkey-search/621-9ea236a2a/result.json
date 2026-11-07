@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "9ea236a2a33775f346502e28beb4989be7e2c9aa",
+  "parent": "9b29188d02c701af3478dde3c753da2799ff9632",
+  "pr": 621,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Minor code quality improvements (#621)",
+  "date": "2026-02-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3503,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure refactor with no behavior change in the module: it removes an unused local variable and renames a lambda parameter in QueryCommand::Execute (src/commands/commands.cc), and makes kDefaultMinStemSize constexpr in ft_create_parser.h \u2014 the constant is only ever read (ft_create_parser.cc:599), never written, so constexpr cannot change behavior. The remaining edits are to Python integration tests (keyword arguments, a shared verify_modules_loaded helper, graceful server.exit() in cleanup) and a README license-text update, none of which are compiled into the module. No observable"
+}

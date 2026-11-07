@@ -1,0 +1,28 @@
+extends: [valkey.liveness]
+id: proposed.ft-internal-update-aof-reload
+deployment:
+  modes: [standalone]
+metadata:
+  description: A valid FT.INTERNAL_UPDATE persisted to the AOF crashes the node on
+    reload via the uninitialized MetadataManager (coordinator off)
+components:
+- use: valkey.action.commands
+  id: aof
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {appendonly: "yes", appendfsync: "always"}
+    timeout_s: 40
+    commands:
+    - {command: [FT.INTERNAL_UPDATE, idx, "", ""], expect_difference: true, expect: {
+        equals: OK}}
+    - {restart: true, expect_difference: true, expect: {exists: false}}
+    - {command: [PING], wait_s: 10, expect_difference: true, expect: {exists: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof}

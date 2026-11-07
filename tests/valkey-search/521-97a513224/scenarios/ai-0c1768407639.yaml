@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 8b967a7dd5f5..97a513224e6a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0c1768407639
+seed: 3
+experiment:
+  id: proposed.ft-internal-update-arity-high
+deployment:
+  mode: standalone
+  base_port: 7200

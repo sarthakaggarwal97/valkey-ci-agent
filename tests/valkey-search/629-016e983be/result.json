@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "016e983bea949d62113c82a66286c94c60d8dc10",
+  "parent": "130e9274e823a3be79d46dbd9081c13c06b93984",
+  "pr": 629,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Avoid deadlock while processing  MULTI/EXEC mutations (#629)",
+  "date": "2026-01-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.1034,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

@@ -1,0 +1,165 @@
+extends: [valkey.liveness]
+id: proposed.intern-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: Overlapping FT.CREATE backfills, FT.DROPINDEX mass releases and HSET/DEL
+    churn race valkey-search's interned-string refcount 1->0 transition against re-interning
+    of the same key, tag and vector strings
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [CONFIG, SET, search.writer-threads, "64"], compare: skip}
+    - {command: [CONFIG, SET, search.reader-threads, "64"], compare: skip}
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, "1", "doc:", SCHEMA, t, TAG, SEPARATOR,
+        ",", v1, VECTOR, FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2,
+        v2, VECTOR, HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:1", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:2", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:3", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:4", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:5", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:6", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:7", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:8", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:9", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:10", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:11", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:12", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [FT.INFO, idx1], wait_s: 30, expect: {contains: 12}, compare: skip}
+    - {command: [HSET, "doc:1", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:2", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:3", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:4", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:5", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:6", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 0}}
+    - {command: [DEL, "doc:7", "doc:8", "doc:9", "doc:10", "doc:11", "doc:12"], expect: {
+        equals: 6}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, "1", "doc:", SCHEMA, t, TAG, SEPARATOR,
+        ",", v1, VECTOR, FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2,
+        v2, VECTOR, HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [FT.DROPINDEX, idx1], expect: {equals: OK}}
+    - {command: [HSET, "doc:7", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:8", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:9", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:10", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:11", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:12", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:1", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:2", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:3", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 0}}
+    - {command: [FT.CREATE, idx3, ON, HASH, PREFIX, "1", "doc:", SCHEMA, t, TAG, SEPARATOR,
+        ",", v1, VECTOR, FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2,
+        v2, VECTOR, HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [FT.DROPINDEX, idx2], expect: {equals: OK}}
+    - {command: [DEL, "doc:1", "doc:2", "doc:3", "doc:4", "doc:5", "doc:6", "doc:7",
+        "doc:8", "doc:9", "doc:10", "doc:11", "doc:12"], expect: {equals: 12}}
+    - {command: [HSET, "doc:1", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:2", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:3", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:4", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:5", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:6", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:7", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:8", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:9", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:10", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:11", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 3}}
+    - {command: [HSET, "doc:12", t, "blue,yellow", v1, !!binary "AABAQAAAgEA=", v2,
+        !!binary "AABAQAAAgEA="], expect: {equals: 3}}
+    - {command: [FT.CREATE, idx4, ON, HASH, PREFIX, "1", "doc:", SCHEMA, t, TAG, SEPARATOR,
+        ",", v1, VECTOR, FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2,
+        v2, VECTOR, HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [FT.DROPINDEX, idx3], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:2", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:3", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:4", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:5", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:6", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:7", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:8", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:9", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:10", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:11", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 0}}
+    - {command: [HSET, "doc:12", t, "red,green,blue", v1, !!binary "AACAPwAAAEA=",
+        v2, !!binary "AACAPwAAAEA="], expect: {equals: 0}}
+    - {command: [FT.INFO, idx4], wait_s: 30, expect: {contains: 12}, compare: skip}
+    - {command: [FT.SEARCH, idx4, "*=>[KNN 5 @v1 $B]", PARAMS, "2", B, !!binary "AACAPwAAAEA="],
+      compare: skip}
+    - {command: [FT.SEARCH, idx4, "@t:{red}", LIMIT, "0", "0"], compare: skip}
+    - {command: [FT.DROPINDEX, idx4], expect: {equals: OK}}
+    - {command: [DEL, "doc:1", "doc:2", "doc:3", "doc:4", "doc:5", "doc:6", "doc:7",
+        "doc:8", "doc:9", "doc:10", "doc:11", "doc:12"], expect: {equals: 12}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

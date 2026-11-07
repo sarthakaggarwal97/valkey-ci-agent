@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "b0e8a26b5a2b1131062875be9e26153dd315aaaf",
+  "parent": "960d136f7316df42d654680821476ce47886827e",
+  "pr": 741,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Minor fix for build failures (#741)",
+  "date": "2026-02-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.304,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a local declaration `auto &schema_manager = SchemaManager::Instance();` so the pre-existing `schema_manager.GetIndexSchema(...)` call in QueryCommand::Execute compiles \u2014 a pure build fix for a compile error introduced by the parent commit. It binds the same singleton that was being used, so there is no behaviour change to FT.SEARCH/FT.AGGREGATE or anything else: no reply, data, replication or persistence path differs between builds, and nothing can be exercised that would distinguish them."
+}

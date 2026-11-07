@@ -1,0 +1,99 @@
+extends: [valkey.liveness]
+id: proposed.ft-text-negation-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH text negation (universal set + filtering) compared with the
+    parent module build across term, field, phrase, prefix, OR, AND, tag and numeric
+    mixes
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: negation
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, content, TEXT,
+        NOSTEM, category, TAG, price, NUMERIC]
+      expect: {equals: OK}
+    - command: [HSET, "doc:1", content, "apple banana", category, fruit, price, "10"]
+      expect: {equals: 3}
+    - command: [HSET, "doc:2", content, "apple cherry", category, fruit, price, "60"]
+      expect: {equals: 3}
+    - command: [HSET, "doc:3", content, "banana cherry", category, veg, price, "20"]
+      expect: {equals: 3}
+    - command: [HSET, "doc:4", content, "grape orange", category, fruit, price, "30"]
+      expect: {equals: 3}
+    - command: [HSET, "doc:5", content, "application pear", category, fruit, price,
+        "45"]
+      expect: {equals: 3}
+    - command: [FT.SEARCH, idx, cherry, LIMIT, "0", "0", DIALECT, "2"]
+      wait_s: 30
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, idx, banana, LIMIT, "0", "0", DIALECT, "2"]
+      wait_s: 30
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, idx, orange, LIMIT, "0", "0", DIALECT, "2"]
+      wait_s: 30
+      expect: {equals: [1]}
+    - command: [FT.SEARCH, idx, pear, LIMIT, "0", "0", DIALECT, "2"]
+      wait_s: 30
+      expect: {equals: [1]}
+    - command: [FT.SEARCH, idx, "-apple", LIMIT, "0", "0", DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [3]}
+    - command: [FT.SEARCH, idx, "-apple", NOCONTENT, DIALECT, "2"]
+      expect_difference: true
+      compare: unordered
+      expect: {exists: true}
+    - command: [FT.SEARCH, idx, "-@content:apple", LIMIT, "0", "0", DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [3]}
+    - command: [FT.SEARCH, idx, "banana -apple", NOCONTENT, DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [1, "doc:3"]}
+    - command: [FT.SEARCH, idx, '-"apple banana"', LIMIT, "0", "0", DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [4]}
+    - command: [FT.SEARCH, idx, "-app*", LIMIT, "0", "0", DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, idx, "-apple | cherry", LIMIT, "0", "0", DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [4]}
+    - command: [FT.SEARCH, idx, "-apple -banana", LIMIT, "0", "0", DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, idx, "(-apple banana) | grape", NOCONTENT, DIALECT, "2"]
+      expect_difference: true
+      compare: unordered
+      expect: {exists: true}
+    - command: [FT.SEARCH, idx, "-apple @category:{fruit}", LIMIT, "0", "0", DIALECT,
+        "2"]
+      expect_difference: true
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, idx, "-apple @price:[0 50]", LIMIT, "0", "0", DIALECT,
+        "2"]
+      expect_difference: true
+      expect: {equals: [3]}
+    - command: [FT.SEARCH, idx, "-xyzzy", LIMIT, "0", "0", DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [5]}
+    - command: [FT.SEARCH, idx, "-@category:{fruit}", LIMIT, "0", "0", DIALECT, "2"]
+      expect: {equals: [1]}
+    - command: [FT.SEARCH, idx, "*", LIMIT, "0", "0", DIALECT, "2"]
+      expect: {equals: [5]}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [negation.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: negation}

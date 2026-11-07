@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.text-composed-and-correctness
+deployment:
+  modes: [standalone]
+metadata:
+  description: Non-nested pure-text composed AND FT.SEARCH queries must return identical
+    results on the change and the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ft
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idxa, ON, HASH, PREFIX, 1, "doc:", SCHEMA, desc, TEXT],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", desc, "1 2 3 4 5 6 7 8 9 0. Great oaks. Random Words.\
+          \ Random Words. Great oaks from little grey acorns grow. Impressive oak."],
+      expect: {equals: 1}}
+    - {command: [HSET, "doc:6", desc, "Poplog is a reflective, incrementally compiled\
+          \ software development environment for the programming languages POP-11,\
+          \ Common Lisp, Prolog, and Standard ML, originally created in the UK for\
+          \ teaching and research in artificial intelligence at the University of\
+          \ Sussex."], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", desc, "Random Words. Experience. Interesting desc,\
+          \ impressive tablet."], expect: {equals: 1}}
+    - {command: [HSET, "doc:4", desc, "Order Opposite. wonder of wonders. Uncommon\
+          \ random words."], expect: {equals: 1}}
+    - {command: [FT.INFO, idxa], wait_s: 30, expect: {contains: 4}, compare: skip}
+    - {command: [FT.SEARCH, idxa, '@desc:great @desc:acorn', NOCONTENT], expect: {
+        equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, idxa, '@desc:artificial @desc:intelligence @desc:research',
+        NOCONTENT], expect: {equals: [1, "doc:6"]}}
+    - {command: [FT.SEARCH, idxa, 'great oa* from lit* gr* acorn gr*', NOCONTENT],
+      expect: {equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, idxa, '@desc:artificial @desc:oak', NOCONTENT], expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idxa, '@desc:great @desc:great', NOCONTENT], expect: {
+        equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, idxa, '@desc:"great oak from littl"', NOCONTENT], expect: {
+        equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, idxa, 'great oa* from lit* gr* acorn grea*', SLOP, "0",
+        INORDER, NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.CREATE, idxb, ON, HASH, PREFIX, 1, "d2:", SCHEMA, desc, TEXT,
+        desc2, TEXT], expect: {equals: OK}}
+    - {command: [HSET, "d2:2", desc, "Good", desc2, "Hello, where are you here ?"],
+      expect: {equals: 2}}
+    - {command: [HSET, "d2:4", desc, "wonder", desc2, "Hello, what are you doing Great?"],
+      expect: {equals: 2}}
+    - {command: [HSET, "d2:1", desc, "Great. 1 2 3 4 5 6 7 8 9 10.", desc2, "wonder\
+          \ experience here. 2 4 6 8 10."], expect: {equals: 2}}
+    - {command: [HSET, "d2:3", desc, "Ok", desc2, "Hello, how are you doing?"], expect: {
+        equals: 2}}
+    - {command: [FT.INFO, idxb], wait_s: 30, expect: {contains: 4}, compare: skip}
+    - {command: [FT.SEARCH, idxb, '@desc:great @desc2:wonder', NOCONTENT], expect: {
+        equals: [1, "d2:1"]}}
+    - {command: [FT.SEARCH, idxb, '@desc:wonder @desc2:great', NOCONTENT], expect: {
+        equals: [1, "d2:4"]}}
+    - {command: [FT.SEARCH, idxb, '@desc:great @desc2:hello', NOCONTENT], expect: {
+        equals: [0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ft.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ft}

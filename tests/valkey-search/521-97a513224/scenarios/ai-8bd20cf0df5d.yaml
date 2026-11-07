@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 8b967a7dd5f5..97a513224e6a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8bd20cf0df5d
+seed: 4
+experiment:
+  id: proposed.ft-internal-update-replica
+deployment:
+  mode: standalone
+  base_port: 7300

@@ -1,0 +1,125 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-stage-metrics
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE stage metrics (agg_stats dev counters) report exact per-stage
+    input/output record counts in INFO SEARCH
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aggmetrics
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.info-developer-visible, yes], expect: {equals: OK}}
+    - {command: [FT.CREATE, products, ON, HASH, PREFIX, "1", "product:", SCHEMA, price,
+        NUMERIC, rating, NUMERIC, category, TAG], expect: {equals: OK}}
+    - {command: [HSET, "product:0", price, "100", rating, "3", category, cat0], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:1", price, "110", rating, "4", category, cat1], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:2", price, "120", rating, "5", category, cat2], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:3", price, "130", rating, "3", category, cat0], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:4", price, "140", rating, "4", category, cat1], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:5", price, "150", rating, "5", category, cat2], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:6", price, "160", rating, "3", category, cat0], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:7", price, "170", rating, "4", category, cat1], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:8", price, "180", rating, "5", category, cat2], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:9", price, "190", rating, "3", category, cat0], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:10", price, "200", rating, "4", category, cat1], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:11", price, "210", rating, "5", category, cat2], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:12", price, "220", rating, "3", category, cat0], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:13", price, "230", rating, "4", category, cat1], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:14", price, "240", rating, "5", category, cat2], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:15", price, "250", rating, "3", category, cat0], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:16", price, "260", rating, "4", category, cat1], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:17", price, "270", rating, "5", category, cat2], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:18", price, "280", rating, "3", category, cat0], expect: {
+        equals: 3}}
+    - {command: [HSET, "product:19", price, "290", rating, "4", category, cat1], expect: {
+        equals: 3}}
+    - {command: [FT.SEARCH, products, "@rating:[-inf inf]", LIMIT, "0", "0"], wait_s: 30,
+      expect: {equals: [20]}}
+    - {command: [FT.AGGREGATE, products, "@rating:[-inf inf]", LIMIT, "0", "5"], compare: skip}
+    - {command: [FT.AGGREGATE, products, "@rating:[-inf inf]", LOAD, "1", category,
+        GROUPBY, "1", "@category"], compare: skip}
+    - {command: [FT.AGGREGATE, products, "@rating:[-inf inf]", LOAD, "1", category,
+        GROUPBY, "1", "@category", REDUCE, COUNT, "0", AS, cnt], compare: skip}
+    - {command: [FT.AGGREGATE, products, "@rating:[-inf inf]", LOAD, "1", price, APPLY,
+        "@price * 2", AS, double_price], compare: skip}
+    - {command: [FT.AGGREGATE, products, "@rating:[-inf inf]", LOAD, "1", price, SORTBY,
+        "2", "@price", DESC, MAX, "20"], compare: skip}
+    - {command: [FT.AGGREGATE, products, "@rating:[-inf inf]", LOAD, "1", price, FILTER,
+        "@price >= 150"], compare: skip}
+    - {command: [FT.AGGREGATE, products, "@rating:[-inf inf]", LOAD, "2", price, rating,
+        FILTER, "@price > 100", SORTBY, "2", "@rating", ASC, MAX, "100", LIMIT, "0",
+        "10"], compare: skip}
+    - {command: [FT.AGGREGATE, products, "@rating:[-inf inf]", LIMIT, "3", "100"],
+      compare: skip}
+    - {command: [FT.AGGREGATE, products, "@rating:[-inf inf]", LOAD, "1", price, SORTBY,
+        "2", "@price", ASC, MAX, "5"], compare: skip}
+    - {command: [FT.AGGREGATE, products, "@price:[5000 inf]", LOAD, "1", category,
+        GROUPBY, "1", "@category", LIMIT, "0", "5"], expect: {equals: [0]}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_agg_input_records:180\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_agg_output_records:98\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_agg_limit_stages:4\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_agg_limit_input_records:59\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_agg_limit_output_records:32\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_agg_group_by_stages:3\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_agg_group_by_input_records:40\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_agg_group_by_output_records:6\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_agg_reducer_stages:3\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_agg_apply_stages:1\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_agg_apply_records:20\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_agg_sort_by_stages:3\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_agg_sort_by_records:59\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_agg_filter_stages:2\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_agg_filter_input_records:40\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_agg_filter_output_records:34\r\
+          \n"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aggmetrics.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aggmetrics}
