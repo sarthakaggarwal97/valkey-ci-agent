@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.ft-debug-list-configs
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT._DEBUG LIST_CONFIGS added by the change lists module configs with
+    VERBOSE and APP/DEV/HIDDEN filters; the parent answers Unknown subcommand to every
+    form
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: listconfigs
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT._DEBUG, LIST_CONFIGS], expect_difference: true, expect: {error: false}}
+    - {command: [FT._DEBUG, LIST_CONFIGS, VERBOSE], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT._DEBUG, LIST_CONFIGS, APP], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT._DEBUG, LIST_CONFIGS, DEV], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT._DEBUG, LIST_CONFIGS, HIDDEN], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT._DEBUG, LIST_CONFIGS, VERBOSE, APP], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT._DEBUG, LIST_CONFIGS, VERBOSE, HIDDEN], expect_difference: true,
+      expect: {error: false}}
+    - {command: [ft._debug, list_configs, verbose, dev], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT._DEBUG, LIST_CONFIGS, VERBOSE, MUT], expect_difference: true,
+      expect: {error: "Invalid filter"}}
+    - {command: [FT._DEBUG, LIST_CONFIGS, VERBOSE, ""], expect_difference: true, expect: {
+        error: "Invalid filter"}}
+    - {command: [FT._DEBUG, LIST_CONFIGS, IMMUT], expect_difference: true, expect: {
+        error: "Invalid argument"}}
+    - {command: [FT._DEBUG, LIST_CONFIGS, ""], expect_difference: true, expect: {
+        error: "Invalid argument"}}
+    - {command: [FT._DEBUG, LIST_CONFIGS, VERBOSE, APP, EXTRA], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT._DEBUG, LIST_CONFIGS, APP, DEV], expect_difference: true, expect: {
+        error: true}}
+    - {command: [CONFIG, SET, search.log-level, debug], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.query-string-bytes, "2147483648"], expect: {
+        equals: OK}}
+    - {command: [FT._DEBUG, LIST_CONFIGS, VERBOSE, APP], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT._DEBUG, HELP], expect_difference: true, expect: {error: false}}
+    - {command: [FT._DEBUG, LIST_CONFIG], expect: {error: "Unknown subcommand"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [listconfigs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: listconfigs}

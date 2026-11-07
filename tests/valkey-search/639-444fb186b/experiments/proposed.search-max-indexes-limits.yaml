@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.search-max-indexes-limits
+deployment:
+  modes: [standalone]
+metadata:
+  description: search.max-indexes default raised 10 to 1000 and max 10 to 10000000
+    - new default visible, 11th index admitted, new CONFIG SET range bounds, limit
+    still enforced when lowered below the live count
+components:
+- use: valkey.action.commands
+  id: limits
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: 2
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, GET, search.max-indexes], expect_difference: true, expect: {
+        equals: [search.max-indexes, "1000"]}}
+    - {command: [FT.CREATE, i0, ON, HASH, PREFIX, 1, "p:", SCHEMA, f, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, i1, ON, HASH, PREFIX, 1, "p:", SCHEMA, f, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, i2, ON, HASH, PREFIX, 1, "p:", SCHEMA, f, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, i3, ON, HASH, PREFIX, 1, "p:", SCHEMA, f, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, i4, ON, HASH, PREFIX, 1, "p:", SCHEMA, f, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, i5, ON, HASH, PREFIX, 1, "p:", SCHEMA, f, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, i6, ON, HASH, PREFIX, 1, "p:", SCHEMA, f, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, i7, ON, HASH, PREFIX, 1, "p:", SCHEMA, f, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, i8, ON, HASH, PREFIX, 1, "p:", SCHEMA, f, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, i9, ON, HASH, PREFIX, 1, "p:", SCHEMA, f, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, i10, ON, HASH, PREFIX, 1, "p:", SCHEMA, f, NUMERIC], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, i11, ON, HASH, PREFIX, 1, "p:", SCHEMA, f, NUMERIC], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT._LIST], expect_difference: true, compare: unordered, expect: {
+        contains: i11}}
+    - {command: [CONFIG, SET, search.max-indexes, "10000000"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.max-indexes, "10000001"], expect_difference: true,
+      expect: {error: "10000000"}}
+    - {command: [CONFIG, SET, search.max-indexes, "0"], expect_difference: true, expect: {
+        error: "10000000"}}
+    - {command: [CONFIG, SET, search.max-indexes, "5"], expect: {equals: OK}}
+    - {command: [FT.CREATE, i12, ON, HASH, PREFIX, 1, "p:", SCHEMA, f, NUMERIC], expect: {
+        error: "Maximum number of indexes reached"}}
+    - {command: [CONFIG, SET, search.max-indexes, "1000"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, i12, ON, HASH, PREFIX, 1, "p:", SCHEMA, f, NUMERIC], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, i10], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT._LIST], expect_difference: true, compare: unordered, expect: {
+        contains: i12}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [limits.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: limits}

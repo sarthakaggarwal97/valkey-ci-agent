@@ -1,0 +1,276 @@
+extends: [valkey.liveness]
+id: proposed.fulltext-inflight-blocking
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Fulltext FT.SEARCH must block on conflicting in-flight key mutations and re-verify
+    its results before replying. A single writer thread plus a MULTI/EXEC batch of
+    hash updates (MULTI mutations do not block the writing client) leaves a backlog
+    of tracked in-flight keys when the next FT.SEARCH runs: the parent replies with
+    stale fulltext matches whose fetched content no longer contains the term, the
+    change blocks in InFlightRetryContext, retries as mutations drain, re-verifies
+    and replies 0. Also covers the hybrid (vector+text) blocking path, prefix and
+    fuzzy predicates and NOCONTENT/TAG bypasses under churn, query TIMEOUT cancellation
+    while registered as a waiting query, FT.DROPINDEX with waiting queries still registered
+    (use-after-free probe), and the new INFO metrics fields.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ft
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.writer-threads, 1], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, content, TEXT,
+        category, TAG], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", content, "hello magic number 1 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", content, "hello magic number 2 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", content, "hello magic number 3 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:4", content, "hello magic number 4 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:5", content, "hello magic number 5 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:6", content, "hello magic number 6 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:7", content, "hello magic number 7 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:8", content, "hello magic number 8 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:9", content, "hello magic number 9 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:10", content, "hello magic number 10 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:11", content, "hello magic number 11 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:12", content, "hello magic number 12 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:13", content, "hello magic number 13 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:14", content, "hello magic number 14 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:15", content, "hello magic number 15 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:16", content, "hello magic number 16 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:17", content, "hello magic number 17 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:18", content, "hello magic number 18 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:19", content, "hello magic number 19 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:20", content, "hello magic number 20 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:21", content, "hello magic number 21 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:22", content, "hello magic number 22 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:23", content, "hello magic number 23 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [HSET, "doc:24", content, "hello magic number 24 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota", category, news], expect: {equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, "@content:hello", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [24]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", content, "revised entry number 1 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:2", content, "revised entry number 2 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:3", content, "revised entry number 3 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:4", content, "revised entry number 4 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:5", content, "revised entry number 5 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:6", content, "revised entry number 6 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:7", content, "revised entry number 7 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:8", content, "revised entry number 8 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:9", content, "revised entry number 9 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:10", content, "revised entry number 10 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:11", content, "revised entry number 11 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:12", content, "revised entry number 12 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:13", content, "revised entry number 13 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:14", content, "revised entry number 14 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:15", content, "revised entry number 15 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:16", content, "revised entry number 16 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:17", content, "revised entry number 17 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:18", content, "revised entry number 18 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:19", content, "revised entry number 19 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:20", content, "revised entry number 20 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:21", content, "revised entry number 21 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:22", content, "revised entry number 22 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:23", content, "revised entry number 23 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:24", content, "revised entry number 24 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [EXEC]}
+    - {command: [FT.SEARCH, idx, "@content:hello", LIMIT, 0, 60, TIMEOUT, 30000],
+      expect_difference: true, expect: {equals: [0]}, compare: unordered}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: search_fulltext_query_blocked_count}}
+    - {command: [FT.SEARCH, idx, "@content:revised", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [24]}}
+    - {command: [FT.SEARCH, idx, "@content:hello", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", content, "hello magic number 1 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:2", content, "hello magic number 2 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:3", content, "hello magic number 3 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:4", content, "hello magic number 4 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:5", content, "hello magic number 5 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:6", content, "hello magic number 6 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:7", content, "hello magic number 7 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:8", content, "hello magic number 8 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:9", content, "hello magic number 9 alpha beta gamma delta\
+          \ epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:10", content, "hello magic number 10 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:11", content, "hello magic number 11 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:12", content, "hello magic number 12 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:13", content, "hello magic number 13 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:14", content, "hello magic number 14 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:15", content, "hello magic number 15 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:16", content, "hello magic number 16 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:17", content, "hello magic number 17 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:18", content, "hello magic number 18 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:19", content, "hello magic number 19 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:20", content, "hello magic number 20 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:21", content, "hello magic number 21 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:22", content, "hello magic number 22 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:23", content, "hello magic number 23 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:24", content, "hello magic number 24 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [EXEC]}
+    - {command: [FT.SEARCH, idx, "@content:hel*", LIMIT, 0, 5, TIMEOUT, 50], compare: skip}
+    - {command: [FT.SEARCH, idx, "@content:%%halo%%", LIMIT, 0, 5, TIMEOUT, 100],
+      compare: skip}
+    - {command: [FT.SEARCH, idx, "@content:hello", NOCONTENT, LIMIT, 0, 5], compare: skip}
+    - {command: [FT.SEARCH, idx, "@category:{news}", LIMIT, 0, 0], compare: skip}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx3, ON, HASH, PREFIX, 1, "doc:", SCHEMA, content, TEXT],
+      expect: {equals: OK}}
+    - {command: [FT.INFO, idx3], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx3, "@content:hello", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [24]}}
+    - {command: [FT.CREATE, idxv, ON, HASH, PREFIX, 1, "v:", SCHEMA, content, TEXT,
+        vec, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [HSET, "v:1", content, "hello vector world", vec, !!binary "AACAPwAAgD8AAIA/AACAPw=="],
+      expect: {equals: 2}}
+    - {command: [HSET, "v:2", content, "plain vector entry", vec, !!binary "AAAAQAAAAEAAAABAAAAAQA=="],
+      expect: {equals: 2}}
+    - {command: [FT.INFO, idxv], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idxv, "(@content:hello)=>[KNN 2 @vec $BLOB]", PARAMS,
+        2, BLOB, !!binary "AACAPwAAgD8AAIA/AACAPw==", DIALECT, 2], compare: unordered}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", content, "revised entry number 1 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:2", content, "revised entry number 2 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:3", content, "revised entry number 3 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:4", content, "revised entry number 4 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:5", content, "revised entry number 5 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:6", content, "revised entry number 6 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:7", content, "revised entry number 7 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:8", content, "revised entry number 8 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:9", content, "revised entry number 9 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:10", content, "revised entry number 10 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:11", content, "revised entry number 11 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:12", content, "revised entry number 12 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:13", content, "revised entry number 13 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:14", content, "revised entry number 14 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:15", content, "revised entry number 15 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:16", content, "revised entry number 16 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:17", content, "revised entry number 17 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:18", content, "revised entry number 18 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:19", content, "revised entry number 19 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:20", content, "revised entry number 20 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:21", content, "revised entry number 21 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:22", content, "revised entry number 22 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:23", content, "revised entry number 23 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:24", content, "revised entry number 24 alpha beta gamma\
+          \ delta epsilon zeta eta theta iota"], expect: {equals: QUEUED}}
+    - {command: [HSET, "v:1", content, "updated vector entry"], expect: {equals: QUEUED}}
+    - {command: [EXEC]}
+    - {command: [FT.SEARCH, idxv, "(@content:hello)=>[KNN 2 @vec $BLOB]", PARAMS,
+        2, BLOB, !!binary "AACAPwAAgD8AAIA/AACAPw==", DIALECT, 2, TIMEOUT, 30000],
+      expect_difference: true, expect: {equals: [0]}, compare: unordered}
+    - {command: [FT.SEARCH, idxv, "@content:updated", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx3, "@content:hello", LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ft.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ft}

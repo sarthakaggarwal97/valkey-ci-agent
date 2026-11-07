@@ -1,0 +1,53 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "fa3ae057cfe1fe1837a2e23885ebfa142d4ac621",
+  "parent": "b383d752f4657688fe3771ee2867584956d71ba6",
+  "pr": 667,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Raise limit on number of attributes. Correct misnamed max-vector-attribute (#667)",
+  "date": "2026-02-13",
+  "unstable": "79aff7c07f331bd4a6dea484ed0027d2c7010c59",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 5,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.995,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-6fe3aa6bdda8",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'limits' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (FT.CREATE six ON HASH SCHEMA f1 TAG f2 TAG f3 TAG f4 TAG f5 TAG f6 TAG)"
+    },
+    {
+      "scenario": "ai-c32205602716",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'limits' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (FT.CREATE six ON HASH SCHEMA f1 TAG f2 TAG f3 TAG f4 TAG f5 TAG f6 TAG)"
+    },
+    {
+      "scenario": "ai-c7b6becbe2a6",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'limits' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (FT.CREATE six ON HASH SCHEMA f1 TAG f2 TAG f3 TAG f4 TAG f5 TAG f6 TAG)"
+    },
+    {
+      "scenario": "ai-61d96258ce9a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'numdocs' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (FT.SEARCH idx * LIMIT 0 0), 8 (FT.SEARCH idx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-1585eb2b6df9",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'numdocs' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (FT.SEARCH idx * LIMIT 0 0), 8 (FT.SEARCH idx * LIMIT 0 0)"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

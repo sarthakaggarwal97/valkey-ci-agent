@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.ft-num-docs-accounting
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.INFO num_docs now derived from the db-key-info map size instead
+    of per-index tracked counts; a key whose only attribute fails to index now counts,
+    compared across the two module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: numdocs
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, v, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 20, expect: {contains: ready}}
+    - {command: [HSET, 'doc:1', v, !!binary 'AACAPwAAAEA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:2', v, short], expect: {equals: 1}}
+    - {command: [HSET, 'doc:3', unrelated, x], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 20, expect: {equals: [
+          1]}}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {exists: true}}
+    - {command: [DEL, 'doc:1'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 20, expect: {equals: [
+          0]}}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {exists: true}}
+    - {command: [DEL, 'doc:2'], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], expect: {exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [numdocs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: numdocs}

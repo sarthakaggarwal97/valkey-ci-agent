@@ -1,0 +1,64 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a6a71b394033b8300e235fca3b44e67b1ed79e12",
+  "parent": "a2c814f7de8a98eadfe29e884692859b5e58e5ed",
+  "pr": 743,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": " ftdebug to list configs in search module (#743)",
+  "date": "2026-02-12",
+  "unstable": "79aff7c07f331bd4a6dea484ed0027d2c7010c59",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.4605,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-fc1a2ed2468c",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #743",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-5da8e10ee78d",
+      "seed": 202,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #743",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87"
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-fc1a2ed2468c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'listconfigs' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (FT._DEBUG LIST_CONFIGS), 1 (FT._DEBUG LIST_CONFIGS VERBOSE), 2 (FT._DEBUG LIST_CONFIGS APP), 3 (FT._DEBUG LIST_CONFIGS DEV), 4 (FT"
+    },
+    {
+      "scenario": "ai-5da8e10ee78d",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'listconfigs' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (FT._DEBUG LIST_CONFIGS), 1 (FT._DEBUG LIST_CONFIGS VERBOSE), 2 (FT._DEBUG LIST_CONFIGS APP), 3 (FT._DEBUG LIST_CONFIGS DEV), 4 (FT"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

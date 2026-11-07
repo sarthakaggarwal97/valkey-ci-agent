@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a2c814f7de8a98eadfe29e884692859b5e58e5ed",
+  "parent": "e015fa8742d01f9e3f49b23c954c6a65eeaba75d",
+  "pr": 674,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add grpc coordinator threads CPU time metric to INFO command (#674)",
+  "date": "2026-02-12",
+  "unstable": "79aff7c07f331bd4a6dea484ed0027d2c7010c59",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 8.1828,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only does anything when the module is loaded with the --use-coordinator module argument: the ThreadGroupCPUMonitor is created in ValkeySearch::Startup only under GetUseCoordinator(), and the new INFO field search_coordinator_threads_cpu_time_sec is VisibleIf(UsingCoordinator()), so its Computed callback (the only entry into the new /proc-reading monitor code) never runs otherwise. use-coordinator is a Hidden config: it is never registered with Valkey, so it cannot be set with CONFIG SET or a valkey.conf directive, only as a module load argument. The fuzzer loads modules by bare path"
+}

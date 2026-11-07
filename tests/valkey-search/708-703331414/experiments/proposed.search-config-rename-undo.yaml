@@ -1,0 +1,66 @@
+extends: [valkey.liveness]
+id: proposed.search-config-rename-undo
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    PR 708 renames the module configs search.prefer-partial-results and search.prefer-consistent-results
+    back to search.enable-partial-results and search.enable-consistent-results. CONFIG
+    SET and CONFIG GET of both the restored and the removed names are compared across
+    the two module builds, then an FT.CREATE/FT.SEARCH path checks the module still
+    indexes and searches identically on both sides.
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's module build, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cfg
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.enable-partial-results, no], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.enable-consistent-results, yes], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.enable-partial-results], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CONFIG, GET, search.enable-consistent-results], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CONFIG, SET, search.prefer-partial-results, no], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.prefer-consistent-results, yes], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, GET, search.prefer-partial-results], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CONFIG, GET, search.prefer-consistent-results], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CONFIG, SET, search.enable-partial-results, yes], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.enable-consistent-results, no], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, t, TAG], expect: {
+        equals: OK}}
+    - {command: [HSET, 'doc:1', t, red], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: "num_docs"}}
+    - {command: [FT.SEARCH, idx, '@t:{red}'], wait_s: 30, compare: unordered, expect: {
+        contains: "doc:1"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [cfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cfg}

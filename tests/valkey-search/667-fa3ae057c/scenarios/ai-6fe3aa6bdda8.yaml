@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search b383d752f465..fa3ae057cfe1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6fe3aa6bdda8
+seed: 1
+experiment:
+  id: proposed.ft-create-attribute-limits
+  inputs:
+    resp: 2
+    cluster: false
+deployment:
+  mode: standalone
+  base_port: 7000

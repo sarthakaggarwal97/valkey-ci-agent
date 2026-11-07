@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "cd722c45b87261243f655e53be26d91dd10a423f",
+  "parent": "aa8261ef06081ac8f6444ebf75eb427bdcbf51ea",
+  "pr": 685,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix OOM Handling for SearchBased ReadOnly commands (#685)",
+  "date": "2026-02-06",
+  "unstable": "79aff7c07f331bd4a6dea484ed0027d2c7010c59",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.258,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "da4e28f2d76101febb3e4a6209f8c9c7c748c780",
+  "parent": "a6a71b394033b8300e235fca3b44e67b1ed79e12",
+  "pr": 711,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Hybrid vector text query integration test (#711)",
+  "date": "2026-02-12",
+  "unstable": "79aff7c07f331bd4a6dea484ed0027d2c7010c59",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3659,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is test-and-CI only: it adds hybrid vector/text query cases to integration/test_fulltext.py (refactoring existing assertions into a shared HYBRID_QUERY_EXPECTED_RESULTS table and adding a KNN variant of the same queries) and amends scripts/common.rc to pip-install an extra requirements file. No module source (src/) is modified, so FT.SEARCH behaviour is identical on the change and its parent; there is no changed code path for a scenario to exercise."
+}

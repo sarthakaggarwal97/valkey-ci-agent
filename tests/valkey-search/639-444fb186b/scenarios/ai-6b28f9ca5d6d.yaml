@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search cff18a5a0256..444fb186b717.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6b28f9ca5d6d
+seed: 101
+experiment:
+  id: proposed.search-max-indexes-limits
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search b0e8a26b5a2b..e015fa8742d0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e0e7bfdb10c9
+seed: 303
+experiment:
+  id: proposed.ft-aggregate-slop-inorder
+  inputs:
+    resp: 2
+    cluster: true
+deployment:
+  mode: standalone
+  base_port: 7200

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "cff18a5a0256c7c5b3ee6bd50a42841f5c0599c4",
+  "parent": "0345b62683dfe67a28f180d27b2a51a5e4864a5b",
+  "pr": 671,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Endurance Testing - adding more search functionality testing. (#671)",
+  "date": "2026-02-10",
+  "unstable": "79aff7c07f331bd4a6dea484ed0027d2c7010c59",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3419,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only valkey-search's own integration-test harness: testing/integration/stability_runner.py (new memtier test documents, a different FT.SEARCH query mix for TEXT indexes, consolidated delete/expire memtier commands, and nostem/with_suffix_trie tweaks in the test's index schema) and an assertion message string in testing/integration/stability_test.py. No module source, command, indexing or query code changes, so the module builds at the change and at its parent are behaviorally identical; a compared sequence could mark no expect_difference and a fault scenario would exercise "
+}

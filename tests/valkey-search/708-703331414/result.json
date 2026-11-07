@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "703331414e7f201ef08a98ea21d9caca9c16d817",
+  "parent": "cd722c45b87261243f655e53be26d91dd10a423f",
+  "pr": 708,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Undo the renaming of an existing config (#708)",
+  "date": "2026-02-06",
+  "unstable": "79aff7c07f331bd4a6dea484ed0027d2c7010c59",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.5837,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

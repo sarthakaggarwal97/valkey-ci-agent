@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search cff18a5a0256..444fb186b717.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-03915487f6f7
+seed: 303
+experiment:
+  id: proposed.search-many-indexes-persistence
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7200

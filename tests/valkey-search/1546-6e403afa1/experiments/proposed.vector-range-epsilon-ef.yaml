@@ -1,0 +1,123 @@
+extends: [valkey.liveness]
+id: proposed.vector-range-epsilon-ef
+deployment:
+  modes: [standalone]
+metadata:
+  description: VECTOR_RANGE epsilon-aware HNSW traversal, EF_RUNTIME validation, per-shard
+    result cap and truncation counter, compared across the module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: vr
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idxf, ON, HASH, PREFIX, "1", "doc:", SCHEMA, v, VECTOR,
+        FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2, n, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idxh, ON, HASH, PREFIX, "1", "doc:", SCHEMA, v, VECTOR,
+        HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2, n, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:0", v, !!binary "zczMPQAAAAA=", n, "0"], expect: {equals: 2}}
+    - {command: [HSET, "doc:1", v, !!binary "zcxMPgAAAAA=", n, "1"], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", v, !!binary "mpkZPgAAAAA=", n, "2"], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", v, !!binary "zczMPgAAAAA=", n, "3"], expect: {equals: 2}}
+    - {command: [HSET, "doc:4", v, !!binary "AAAAPwAAAAA=", n, "4"], expect: {equals: 2}}
+    - {command: [HSET, "doc:5", n, "5"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idxf, "@v:[VECTOR_RANGE 1.0 $q]", NOCONTENT, PARAMS, "2",
+        q, !!binary "AAAAAAAAAAA=", LIMIT, "0", "10", DIALECT, "2"], wait_s: 60, expect: {
+        equals: [5, "doc:0", "doc:1", "doc:2", "doc:3", "doc:4"]}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 1.0 $q]", NOCONTENT, PARAMS, "2",
+        q, !!binary "AAAAAAAAAAA=", LIMIT, "0", "10", DIALECT, "2"], wait_s: 60, expect: {
+        equals: [5, "doc:0", "doc:1", "doc:2", "doc:3", "doc:4"]}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 1.0 $q EF_RUNTIME 50]", NOCONTENT,
+        PARAMS, "2", q, !!binary "AAAAAAAAAAA=", LIMIT, "0", "10", DIALECT, "2"],
+      expect: {equals: [5, "doc:0", "doc:1", "doc:2", "doc:3", "doc:4"]}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 1.0 $q EF_RUNTIME 0]", NOCONTENT,
+        PARAMS, "2", q, !!binary "AAAAAAAAAAA=", LIMIT, "0", "10", DIALECT, "2"],
+      expect_difference: true, expect: {error: "must be a positive integer greater\
+          \ than 0"}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 1.0 $q EF_RUNTIME abc]", NOCONTENT,
+        PARAMS, "2", q, !!binary "AAAAAAAAAAA=", LIMIT, "0", "10", DIALECT, "2"],
+      expect_difference: true, expect: {error: "is not a valid numeric value"}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 1.0 $q EF_RUNTIME 1000001]", NOCONTENT,
+        PARAMS, "2", q, !!binary "AAAAAAAAAAA=", LIMIT, "0", "10", DIALECT, "2"],
+      expect_difference: true, expect: {error: "cannot exceed"}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 1.0 $q EF_RUNTIME $]", NOCONTENT,
+        PARAMS, "2", q, !!binary "AAAAAAAAAAA=", LIMIT, "0", "10", DIALECT, "2"],
+      expect_difference: true, expect: {error: "EF_RUNTIME argument is missing"}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 1.0 $q EF_RUNTIME $ef]", NOCONTENT,
+        PARAMS, "4", q, !!binary "AAAAAAAAAAA=", ef, "0"], expect_difference: true,
+      expect: {error: "must be a positive integer greater than 0"}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 1.0 $q EF_RUNTIME $ef]", NOCONTENT,
+        PARAMS, "4", q, !!binary "AAAAAAAAAAA=", ef, "50", LIMIT, "0", "10", DIALECT,
+        "2"], expect: {equals: [5, "doc:0", "doc:1", "doc:2", "doc:3", "doc:4"]}}
+    - {command: [FT.SEARCH, idxf, "@v:[VECTOR_RANGE 1.0 $q]=>{$EPSILON: 0.5}", NOCONTENT,
+        PARAMS, "2", q, !!binary "AAAAAAAAAAA=", DIALECT, "2"], expect: {error: true}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 1.0 $q]=>{$EPSILON: 0}", NOCONTENT,
+        PARAMS, "2", q, !!binary "AAAAAAAAAAA=", DIALECT, "2"], expect: {error: true}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 1.0 $q]=>{$EPSILON: -1}", NOCONTENT,
+        PARAMS, "2", q, !!binary "AAAAAAAAAAA=", DIALECT, "2"], expect: {error: true}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 1.0 $q]=>{$EPSILON: 0.5}", NOCONTENT,
+        PARAMS, "2", q, !!binary "AAAAAAAAAAA=", LIMIT, "0", "10", DIALECT, "2"],
+      expect: {equals: [5, "doc:0", "doc:1", "doc:2", "doc:3", "doc:4"]}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 1.0 $q]=>{$EPSILON: 1e300}", NOCONTENT,
+        PARAMS, "2", q, !!binary "AAAAAAAAAAA=", LIMIT, "0", "10", DIALECT, "2"],
+      expect: {equals: [5, "doc:0", "doc:1", "doc:2", "doc:3", "doc:4"]}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 1.0 $q]=>{$EPSILON: 1e-300}",
+        NOCONTENT, PARAMS, "2", q, !!binary "AAAAAAAAAAA=", LIMIT, "0", "10", DIALECT,
+        "2"], expect: {equals: [5, "doc:0", "doc:1", "doc:2", "doc:3", "doc:4"]}}
+    - {command: [CONFIG, SET, search.max-nonvector-search-results-fetched, "2"], expect: {
+        equals: OK}}
+    - {command: [FT.SEARCH, idxf, "@v:[VECTOR_RANGE 1.0 $q]", NOCONTENT, PARAMS, "2",
+        q, !!binary "AAAAAAAAAAA=", LIMIT, "0", "10", DIALECT, "2"], expect_difference: true,
+      expect: {equals: [2, "doc:0", "doc:1"]}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 1.0 $q]=>{$EPSILON: 0.2}", NOCONTENT,
+        PARAMS, "2", q, !!binary "AAAAAAAAAAA=", LIMIT, "0", "10", DIALECT, "2"],
+      expect_difference: true, expect: {error: false}}
+    - {command: [FT.SEARCH, idxf, "@v:[VECTOR_RANGE 0.05 $q] | @n:[4 5]", NOCONTENT,
+        PARAMS, "2", q, !!binary "AAAAAAAAAAA=", LIMIT, "0", "10", DIALECT, "2"],
+      expect: {equals: [2, "doc:0", "doc:1"]}}
+    - {command: [INFO, search], expect_difference: true, expect: {contains: "search_vector_range_results_fetched_limited_count:"}}
+    - {command: [CONFIG, SET, search.max-nonvector-search-results-fetched, "0"], expect: {
+        equals: OK}}
+    - {command: [FT.SEARCH, idxf, "@v:[VECTOR_RANGE 1.0 $q]", NOCONTENT, PARAMS, "2",
+        q, !!binary "AAAAAAAAAAA=", LIMIT, "0", "10", DIALECT, "2"], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 1.0 $q]", NOCONTENT, PARAMS, "2",
+        q, !!binary "AAAAAAAAAAA=", LIMIT, "0", "10", DIALECT, "2"], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [CONFIG, SET, search.max-nonvector-search-results-fetched, "1"], expect: {
+        equals: OK}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 1.0 $q]", NOCONTENT, INKEYS, "2",
+        "doc:3", "doc:4", PARAMS, "2", q, !!binary "AAAAAAAAAAA=", LIMIT, "0", "10",
+        DIALECT, "2"], expect_difference: true, expect: {error: false}}
+    - {command: [CONFIG, SET, search.max-nonvector-search-results-fetched, "100000"],
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idxf, "@v:[VECTOR_RANGE 1.0 $q]", NOCONTENT, INKEYS, "2",
+        "doc:0", "doc:9", PARAMS, "2", q, !!binary "AAAAAAAAAAA=", LIMIT, "0", "10",
+        DIALECT, "2"], expect: {equals: [1, "doc:0"]}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 0.05 $q AS dist] | @n:[4 5]",
+        NOCONTENT, SORTBY, dist, ASC, PARAMS, "2", q, !!binary "AAAAAAAAAAA=", LIMIT,
+        "0", "10", DIALECT, "2"], compare: skip, expect: {error: false}}
+    - {command: [FT.SEARCH, idxh, "@v:[VECTOR_RANGE 0.05 $q AS dist] | @n:[4 5]",
+        NOCONTENT, SORTBY, dist, DESC, PARAMS, "2", q, !!binary "AAAAAAAAAAA=", LIMIT,
+        "0", "10", DIALECT, "2"], compare: skip, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idxh, "@v:[VECTOR_RANGE 0.05 $q]=>{$yield_distance_as:\
+          \ dist}", LOAD, "1", "@n", SORTBY, "2", "@dist", ASC, PARAMS, "2", q, !!binary "AAAAAAAAAAA=",
+        DIALECT, "2"], compare: skip, expect: {error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [vr.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: vr}

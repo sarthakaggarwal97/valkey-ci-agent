@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.async-fanout-threshold-config-resp3
+deployment:
+  modes: [standalone]
+metadata:
+  description: The new search.async-fanout-threshold config under RESP3, where CONFIG
+    GET replies as a map; the parent build replies with an empty map and rejects CONFIG
+    SET
+components:
+- use: valkey.action.commands
+  id: threshold3
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: 3
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, search.async-fanout-threshold], expect_difference: true,
+      expect: {equals: {search.async-fanout-threshold: "30"}}}
+    - {command: [CONFIG, SET, search.async-fanout-threshold, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.async-fanout-threshold], expect_difference: true,
+      expect: {equals: {search.async-fanout-threshold: "1"}}}
+    - {command: [CONFIG, SET, search.async-fanout-threshold, 0], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.async-fanout-threshold, 10001], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.async-fanout-threshold, 10000], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.async-fanout-threshold], expect_difference: true,
+      expect: {equals: {search.async-fanout-threshold: "10000"}}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [threshold3.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: threshold3}

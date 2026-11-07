@@ -1,0 +1,84 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-slop-inorder
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE SLOP and INORDER parsing and proximity semantics, compared
+    against the parent module build where both arguments are rejected as unexpected
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 90
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, body, TEXT,
+        cat, TAG], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "nox:", NOOFFSETS, SCHEMA,
+        body, TEXT, cat, TAG], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", body, "alpha beta gamma", cat, c], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", body, "beta alpha", cat, c], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", body, "alpha x0 x1 beta", cat, c], expect: {equals: 2}}
+    - {command: [HSET, "doc:4", body, "beta x0 x1 alpha", cat, c], expect: {equals: 2}}
+    - {command: [HSET, "nox:1", body, "alpha beta", cat, c], expect: {equals: 2}}
+    - {command: [HSET, "nox:2", body, "beta alpha", cat, c], expect: {equals: 2}}
+    - {command: [FT.AGGREGATE, idx, "*", GROUPBY, 1, "@cat", REDUCE, COUNT, 0, AS,
+        n], wait_s: 30, expect: {equals: [1, [cat, c, n, 4]]}}
+    - {command: [FT.AGGREGATE, idx2, "*", GROUPBY, 1, "@cat", REDUCE, COUNT, 0, AS,
+        n], wait_s: 30, expect: {equals: [1, [cat, c, n, 2]]}}
+    - {command: [FT.AGGREGATE, idx, "@body:(alpha beta)", GROUPBY, 1, "@cat", REDUCE,
+        COUNT, 0, AS, n], expect: {equals: [1, [cat, c, n, 4]]}}
+    - {command: [FT.AGGREGATE, idx, "@body:(alpha beta)", INORDER, GROUPBY, 1, "@cat",
+        REDUCE, COUNT, 0, AS, n], expect_difference: true, expect: {equals: [1, [
+            cat, c, n, 2]]}}
+    - {command: [FT.AGGREGATE, idx, "@body:(alpha beta)", SLOP, 0, GROUPBY, 1, "@cat",
+        REDUCE, COUNT, 0, AS, n], expect_difference: true, expect: {equals: [1, [
+            cat, c, n, 2]]}}
+    - {command: [FT.AGGREGATE, idx, "@body:(alpha beta)", SLOP, 2, GROUPBY, 1, "@cat",
+        REDUCE, COUNT, 0, AS, n], expect_difference: true, expect: {equals: [1, [
+            cat, c, n, 4]]}}
+    - {command: [FT.AGGREGATE, idx, "@body:(alpha beta)", slop, 0, inorder, GROUPBY,
+        1, "@cat", REDUCE, COUNT, 0, AS, n], expect_difference: true, expect: {equals: [
+          1, [cat, c, n, 1]]}}
+    - {command: [FT.AGGREGATE, idx, "@body:(alpha beta)", SLOP, 2, INORDER, GROUPBY,
+        1, "@cat", REDUCE, COUNT, 0, AS, n], expect_difference: true, expect: {equals: [
+          1, [cat, c, n, 2]]}}
+    - {command: [FT.AGGREGATE, idx, "@body:(alpha beta)", SLOP, 4294967295, GROUPBY,
+        1, "@cat", REDUCE, COUNT, 0, AS, n], expect_difference: true, expect: {equals: [
+          1, [cat, c, n, 4]]}}
+    - {command: [FT.AGGREGATE, idx, "@body:(alpha beta)", SLOP, 0, SLOP, 2, INORDER,
+        INORDER, GROUPBY, 1, "@cat", REDUCE, COUNT, 0, AS, n], expect_difference: true,
+      expect: {equals: [1, [cat, c, n, 2]]}}
+    - {command: [FT.AGGREGATE, idx, "@body:($t1 $t2)", PARAMS, 4, t1, alpha, t2, beta,
+        SLOP, 0, INORDER, DIALECT, 2, GROUPBY, 1, "@cat", REDUCE, COUNT, 0, AS, n],
+      expect_difference: true, expect: {equals: [1, [cat, c, n, 1]]}}
+    - {command: [FT.AGGREGATE, idx, "@body:gamma", SLOP, 0, GROUPBY, 1, "@cat", REDUCE,
+        COUNT, 0, AS, n], expect_difference: true, expect: {equals: [1, [cat, c, n,
+            1]]}}
+    - {command: [FT.AGGREGATE, idx, "@body:(alpha beta)", SLOP, fred, GROUPBY, 1,
+        "@cat", REDUCE, COUNT, 0, AS, n], expect_difference: true, expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx, "@body:(alpha beta)", GROUPBY, 1, "@cat", REDUCE,
+        COUNT, 0, AS, n, SLOP], expect_difference: true, expect: {error: true}}
+    - {command: [FT.AGGREGATE, idx2, "@body:(alpha beta)", INORDER, GROUPBY, 1, "@cat",
+        REDUCE, COUNT, 0, AS, n], expect_difference: true, expect: {error: "offsets"}}
+    - {command: [FT.AGGREGATE, idx2, "@body:(alpha beta)", SLOP, 0, GROUPBY, 1, "@cat",
+        REDUCE, COUNT, 0, AS, n], expect_difference: true, expect: {error: "offsets"}}
+    - {command: [FT.AGGREGATE, idx, "@body:\"alpha beta\"", GROUPBY, 1, "@cat", REDUCE,
+        COUNT, 0, AS, n], expect: {equals: [1, [cat, c, n, 1]]}}
+    - {command: [FT.SEARCH, idx, "@body:(alpha beta)", SLOP, 0, INORDER, NOCONTENT],
+      compare: unordered, expect: {equals: [1, "doc:1"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

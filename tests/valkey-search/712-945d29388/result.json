@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "945d29388c0bf15dff0716f1488fc0d66df2886f",
+  "parent": "65086177164e5c9486976a52d09f733cb4d4b80d",
+  "pr": 712,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Ensure content is always retrieved on correct DB during search (#712)",
+  "date": "2026-02-06",
+  "unstable": "79aff7c07f331bd4a6dea484ed0027d2c7010c59",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.9247,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

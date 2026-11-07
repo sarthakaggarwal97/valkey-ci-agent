@@ -1,0 +1,71 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "b383d752f4657688fe3771ee2867584956d71ba6",
+  "parent": "311be1eb3908aae362b893a1a6b6f4c1a7c8a41f",
+  "pr": 749,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Make fanout async threshold configurable (#749)",
+  "date": "2026-02-13",
+  "unstable": "79aff7c07f331bd4a6dea484ed0027d2c7010c59",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 14.2728,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-716de1bff605",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'threshold' returned ERROR: expectations both builds violate alike, so they are not about the change: 19 (FT.SEARCH idx * NOCONTENT LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-716de1bff605",
+      "build": "unstable",
+      "seed": 10601,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-716de1bff605",
+      "build": "unstable",
+      "seed": 10602,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-716de1bff605",
+      "build": "unstable",
+      "seed": 10603,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-bbdd613783bd",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'threshold' returned ERROR: expectations both builds violate alike, so they are not about the change: 19 (FT.SEARCH idx * NOCONTENT LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-bbdd613783bd",
+      "build": "unstable",
+      "seed": 10602,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-bbdd613783bd",
+      "build": "unstable",
+      "seed": 10603,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-bbdd613783bd",
+      "build": "unstable",
+      "seed": 10604,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

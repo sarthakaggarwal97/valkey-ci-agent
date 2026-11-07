@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.search-many-indexes-persistence
+deployment:
+  modes: [standalone]
+metadata:
+  description: 15 indexes under the new default limit backfill over existing docs,
+    serve FT.SEARCH past the old cap of 10, and survive SAVE and a restart from RDB
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: many
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 240
+    commands:
+    - {command: [HSET, "doc:1", tag, red, num, "1"], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", tag, blue, num, "2"], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", tag, red, num, "3"], expect: {equals: 2}}
+    - {command: [FT.CREATE, idx0, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tag, TAG, num,
+        NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tag, TAG, num,
+        NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tag, TAG, num,
+        NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx3, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tag, TAG, num,
+        NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx4, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tag, TAG, num,
+        NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx5, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tag, TAG, num,
+        NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx6, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tag, TAG, num,
+        NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx7, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tag, TAG, num,
+        NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx8, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tag, TAG, num,
+        NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx9, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tag, TAG, num,
+        NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx10, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tag, TAG,
+        num, NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idx11, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tag, TAG,
+        num, NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idx12, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tag, TAG,
+        num, NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idx13, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tag, TAG,
+        num, NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idx14, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tag, TAG,
+        num, NUMERIC], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.INFO, idx0], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.INFO, idx14], wait_s: 20, expect_difference: true, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx0, "*", NOCONTENT], compare: unordered, expect: {contains: "doc:2"}}
+    - {command: [FT.SEARCH, idx14, "@tag:{red}", NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: "doc:3"}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT._LIST], expect_difference: true, compare: unordered, expect: {
+        contains: idx14}}
+    - {command: [FT.INFO, idx0], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.INFO, idx14], wait_s: 15, expect_difference: true, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx0, "*", NOCONTENT], compare: unordered, expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx14, "@num:[2 3]", NOCONTENT], expect_difference: true,
+      compare: unordered, expect: {contains: "doc:2"}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [many.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: many}

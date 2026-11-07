@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.ft-create-attribute-limits
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.CREATE attribute-count limit raised to 1000/10000, new search.max-attributes
+    config, deprecated search.max-vector-attributes still honoured when set, compared
+    across the two module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: limits
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, big, ON, HASH, PREFIX, 1, 'b:', SCHEMA, a1, TAG, a2, TAG,
+        a3, TAG, a4, TAG, a5, TAG, a6, TAG, a7, TAG, a8, TAG, a9, TAG, a10, TAG, a11,
+        TAG, a12, TAG, a13, TAG, a14, TAG, a15, TAG, a16, TAG, a17, TAG, a18, TAG,
+        a19, TAG, a20, TAG, a21, TAG, a22, TAG, a23, TAG, a24, TAG, a25, TAG, a26,
+        TAG, a27, TAG, a28, TAG, a29, TAG, a30, TAG, a31, TAG, a32, TAG, a33, TAG,
+        a34, TAG, a35, TAG, a36, TAG, a37, TAG, a38, TAG, a39, TAG, a40, TAG, a41,
+        TAG, a42, TAG, a43, TAG, a44, TAG, a45, TAG, a46, TAG, a47, TAG, a48, TAG,
+        a49, TAG, a50, TAG, a51, TAG], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, big], expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.max-attributes], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [CONFIG, GET, search.max-vector-attributes], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CONFIG, SET, search.max-attributes, 5], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, six, ON, HASH, SCHEMA, f1, TAG, f2, TAG, f3, TAG, f4,
+        TAG, f5, TAG, f6, TAG], expect_difference: true, expect: {error: 'cannot exceed
+          5'}}
+    - {command: [FT.CREATE, five, ON, HASH, SCHEMA, g1, TAG, g2, TAG, g3, TAG, g4,
+        TAG, g5, TAG], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.max-vector-attributes, 3], expect: {equals: OK}}
+    - {command: [FT.CREATE, four, ON, HASH, SCHEMA, h1, TAG, h2, TAG, h3, TAG, h4,
+        TAG], expect: {error: 'cannot exceed 3'}}
+    - {command: [FT.CREATE, three, ON, HASH, SCHEMA, i1, TAG, i2, TAG, i3, TAG], expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, search.max-vector-attributes, 101], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, ten, ON, HASH, SCHEMA, j1, TAG, j2, TAG, j3, TAG, j4,
+        TAG, j5, TAG, j6, TAG, j7, TAG, j8, TAG, j9, TAG, j10, TAG], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.max-attributes, 10000], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.max-attributes, 10001], expect_difference: true,
+      expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [limits.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: limits}

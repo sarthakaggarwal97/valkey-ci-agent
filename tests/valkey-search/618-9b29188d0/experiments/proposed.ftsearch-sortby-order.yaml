@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.ftsearch-sortby-order
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH SORTBY on numeric and tag fields orders results and reshapes
+    the reply, compared against the parent module that lacks SORTBY
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sortby
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n1, NUMERIC,
+        t1, TAG], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", n1, "30", t1, "charlie"], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", n1, "10", t1, "alpha"], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", n1, "20", t1, "bravo"], expect: {equals: 2}}
+    - {command: [HSET, "doc:4", n1, "5", t1, "delta"], expect: {equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 20, expect: {contains: "4"}}
+    - {command: [FT.SEARCH, idx, "*", SORTBY, n1, ASC, RETURN, 1, n1, DIALECT, 2],
+      expect_difference: true, expect: {equals: [4, "doc:4", [n1, "5"], "doc:2", [
+            n1, "10"], "doc:3", [n1, "20"], "doc:1", [n1, "30"]]}}
+    - {command: [FT.SEARCH, idx, "*", SORTBY, n1, DESC, RETURN, 1, n1, DIALECT, 2],
+      expect_difference: true, expect: {equals: [4, "doc:1", [n1, "30"], "doc:3",
+          [n1, "20"], "doc:2", [n1, "10"], "doc:4", [n1, "5"]]}}
+    - {command: [FT.SEARCH, idx, "*", SORTBY, t1, ASC, RETURN, 1, t1, DIALECT, 2],
+      expect_difference: true, expect: {equals: [4, "doc:2", [t1, "alpha"], "doc:3",
+          [t1, "bravo"], "doc:1", [t1, "charlie"], "doc:4", [t1, "delta"]]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [sortby.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sortby}

@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.ftsearch-sortby-ties-limit
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH SORTBY DESC over many tied values with a LIMIT offset drives
+    the partial_sort/stable_sort path whose comparator is not a strict weak ordering
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ties
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "k:", SCHEMA, n, NUMERIC, g,
+        TAG], expect: {equals: OK}}
+    - {command: [HSET, "k:1", n, "7", g, "same"], expect: {equals: 2}}
+    - {command: [HSET, "k:2", n, "7", g, "same"], expect: {equals: 2}}
+    - {command: [HSET, "k:3", n, "7", g, "same"], expect: {equals: 2}}
+    - {command: [HSET, "k:4", n, "7", g, "same"], expect: {equals: 2}}
+    - {command: [HSET, "k:5", n, "7", g, "same"], expect: {equals: 2}}
+    - {command: [HSET, "k:6", n, "7", g, "same"], expect: {equals: 2}}
+    - {command: [HSET, "k:7", n, "7", g, "same"], expect: {equals: 2}}
+    - {command: [HSET, "k:8", n, "7", g, "same"], expect: {equals: 2}}
+    - {command: [HSET, "k:9", n, "7", g, "same"], expect: {equals: 2}}
+    - {command: [HSET, "k:10", n, "7", g, "same"], expect: {equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 20, expect: {contains: "10"}}
+    - {command: [FT.SEARCH, idx, "@g:{same}", SORTBY, n, DESC, LIMIT, 2, 3, NOCONTENT,
+        DIALECT, 2], expect_difference: true, compare: unordered, expect: {contains: "k:"}}
+    - {command: [FT.SEARCH, idx, "@g:{same}", SORTBY, g, DESC, LIMIT, 0, 10, NOCONTENT,
+        DIALECT, 2], expect_difference: true, compare: unordered, expect: {contains: "k:1"}}
+    - {command: [FT.SEARCH, idx, "@n:[7 7]", SORTBY, n, ASC, LIMIT, 5, 5, NOCONTENT,
+        DIALECT, 2], expect_difference: true, compare: unordered, expect: {exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [ties.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ties}

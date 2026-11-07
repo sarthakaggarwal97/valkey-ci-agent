@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.async-fanout-threshold-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: search.async-fanout-threshold is registered with default 30, enforces
+    bounds 1..10000, keeps its value past rejected sets, survives CONFIG REWRITE and
+    a restart, and search still works at the minimum threshold; the parent build knows
+    no such config
+inputs:
+  properties:
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: threshold
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: {$ref: inputs.cluster}
+    resp: 2
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, search.async-fanout-threshold], expect_difference: true,
+      expect: {equals: [search.async-fanout-threshold, "30"]}}
+    - {command: [CONFIG, SET, search.async-fanout-threshold, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.async-fanout-threshold], expect_difference: true,
+      expect: {equals: [search.async-fanout-threshold, "1"]}}
+    - {command: [CONFIG, SET, search.async-fanout-threshold, 10000], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.async-fanout-threshold, 0], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.async-fanout-threshold, 10001], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.async-fanout-threshold, -1], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.async-fanout-threshold, 2147483648], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.async-fanout-threshold, 9223372036854775807],
+      expect_difference: true, expect: {error: true}}
+    - {command: [CONFIG, SET, search.async-fanout-threshold, notanumber], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, GET, search.async-fanout-threshold], expect_difference: true,
+      expect: {equals: [search.async-fanout-threshold, "10000"]}}
+    - {command: [CONFIG, SET, search.async-fanout-threshold, 7], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.async-fanout-threshold], expect_difference: true,
+      expect: {equals: [search.async-fanout-threshold, "7"]}}
+    - {command: [CONFIG, SET, search.async-fanout-threshold, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAAAAAgD8="], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, LIMIT, 0, 0], wait_s: 30, expect: {
+        equals: [2]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $v]", PARAMS, 2, v, !!binary "AACAPwAAAAA=",
+        NOCONTENT, DIALECT, 2], compare: unordered, expect: {exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [threshold.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: threshold}

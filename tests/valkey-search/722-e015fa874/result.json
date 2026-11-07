@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "e015fa8742d01f9e3f49b23c954c6a65eeaba75d",
+  "parent": "b0e8a26b5a2b1131062875be9e26153dd315aaaf",
+  "pr": 722,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Implement SLOP and INORDER in FT.AGGREGATE (#722)",
+  "date": "2026-02-11",
+  "unstable": "79aff7c07f331bd4a6dea484ed0027d2c7010c59",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 6.2127,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

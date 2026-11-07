@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.search-casefold-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH query tokens are Unicode-casefolded like ingestion; non-ASCII
+    uppercase, sharp-s and final-sigma queries must match on the fixed build and miss
+    on the parent, while ASCII queries stay identical
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: casefold
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [HSET, "doc:1", content, "caf\xE9"], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", content, "CAF\xC9"], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", content, "na\xEFve"], expect: {equals: 1}}
+    - {command: [HSET, "doc:4", content, "NA\xCFVE"], expect: {equals: 1}}
+    - {command: [HSET, "doc:5", content, "stra\xDFe"], expect: {equals: 1}}
+    - {command: [HSET, "doc:6", content, "STRASSE"], expect: {equals: 1}}
+    - {command: [HSET, "doc:7", content, "\u03C6\u03C9\u03C2"], expect: {equals: 1}}
+    - {command: [HSET, "doc:8", content, "\u03A6\u03A9\u03A3"], expect: {equals: 1}}
+    - {command: [HSET, "doc:9", content, "\u0130stanbul"], expect: {equals: 1}}
+    - {command: [HSET, "doc:10", content, "hello world"], expect: {equals: 1}}
+    - {command: [HSET, "d2:1", content, "stra\xDFe"], expect: {equals: 1}}
+    - {command: [HSET, "d2:2", content, "STRASSE"], expect: {equals: 1}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, content, TEXT],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "d2:", SCHEMA, content, TEXT,
+        NOSTEM], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.INFO, idx2], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, hello, LIMIT, 0, 0], wait_s: 15, expect: {equals: [
+          1]}}
+    - {command: [FT.SEARCH, idx, HELLO, LIMIT, 0, 0], expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, "CaF\xE9", LIMIT, 0, 0], expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx2, STRASSE, LIMIT, 0, 0], expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, !!binary "Y2Fmww==", LIMIT, 0, 0], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, "CAF\xC9", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "CAF\xC9", NOCONTENT], expect_difference: true, compare: unordered,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx, "\"CAF\xC9\"", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "NA\xCFVE", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "@content:NA\xCFVE", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "NA\xCF*", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "\u03C6\u03C9\u03C2", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "\u03A6\u03A9\u03A3", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "stra\xDFe", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx2, "stra\xDFe", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "\u0130STANBUL", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [1]}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [casefold.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: casefold}

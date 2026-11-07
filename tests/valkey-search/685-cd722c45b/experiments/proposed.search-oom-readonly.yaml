@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.search-oom-readonly
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH and FT.AGGREGATE no longer carry denyoom and must succeed
+    under maxmemory pressure, where the parent returns OOM
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: oom
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [COMMAND, INFO, FT.SEARCH], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, INFO, FT.AGGREGATE], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, L2, tag, TAG], expect: {
+        equals: OK}}
+    - {command: [HSET, 'doc:1', vec, !!binary 'AACAPwAAAEAAAEBA', tag, a], expect: {
+        equals: 2}}
+    - {command: [HSET, 'doc:2', vec, !!binary 'AACAQAAAAKBAAMBA', tag, b], expect: {
+        equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: ['FT.SEARCH', idx, '@tag:{a}'], wait_s: 30, compare: unordered, expect: {
+        contains: 'doc:1'}}
+    - {command: [CONFIG, SET, maxmemory, 1mb], expect: {equals: OK}}
+    - {command: ['FT.SEARCH', idx, '*=>[KNN 2 @vec $bv]', PARAMS, 2, bv, !!binary 'AACAPwAAAEAAAEBA',
+        DIALECT, 2], expect_difference: true, compare: unordered, expect: {error: false}}
+    - {command: ['FT.SEARCH', idx, '@tag:{a}'], expect_difference: true, compare: unordered,
+      expect: {error: false}}
+    - {command: ['FT.AGGREGATE', idx, '*', LOAD, 1, '@tag'], expect_difference: true,
+      compare: unordered, expect: {error: false}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: ['FT.SEARCH', idx, '@tag:{a}'], expect_difference: true, expect: {
+        equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {error: false}}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: ['FT.SEARCH', idx, '@tag:{b}'], compare: unordered, expect: {contains: 'doc:2'}}
+    checks:
+      acl: true
+      concurrency: 4
+      replica: true
+      variants: true
+required_events: [oom.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: oom}

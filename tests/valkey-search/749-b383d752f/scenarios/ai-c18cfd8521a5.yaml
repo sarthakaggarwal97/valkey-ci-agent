@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 311be1eb3908..b383d752f465.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c18cfd8521a5
+seed: 10603
+experiment:
+  id: proposed.async-fanout-threshold-config-resp3
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7200
