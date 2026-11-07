@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 0e4b6dbb863f..df918dd23b7f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-edf23503f785
+seed: 556002
+experiment:
+  id: proposed.search-dropindex-async-cleanup
+  inputs:
+    resp: 3
+    concurrency: 16
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

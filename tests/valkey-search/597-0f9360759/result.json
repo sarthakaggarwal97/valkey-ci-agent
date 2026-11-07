@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "0f936075990030da950c862e91d5e4a7894d8fec",
+  "parent": "7c28ad201adb8fe16ba2429e495b2c57744d65ac",
+  "pr": 597,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Update QueryOperations to be sent via protobuf allowing remote nodes to benefit from optimizations (#597)",
+  "date": "2026-01-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 8.0445,
+  "findings": [
+    {
+      "rule": "regressed-fix",
+      "detail": "regressed fix: the change of valkey-io/valkey-search#597 no longer shows on 6e403afa19bd (commands search 7, search 9, search 10)",
+      "scenario": "ai-b09074cc2ade",
+      "seed": 597001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "the fix of #597 regressed",
+      "fingerprint": "bc514ca9f6ff06b5b5b1",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/91"
+    },
+    {
+      "rule": "regressed-fix",
+      "detail": "regressed fix: the change of valkey-io/valkey-search#597 no longer shows on 6e403afa19bd (commands search 7, search 9, search 10)",
+      "scenario": "ai-bccd7547ab52",
+      "seed": 597002,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "the fix of #597 regressed",
+      "fingerprint": "bc514ca9f6ff06b5b5b1",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/91"
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

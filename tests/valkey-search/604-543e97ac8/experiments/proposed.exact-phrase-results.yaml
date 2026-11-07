@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.exact-phrase-results
+deployment:
+  modes: [standalone]
+metadata:
+  description: Pure exact-phrase FT.SEARCH results match between the change and parent
+    module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: phrase
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, body, TEXT,
+        title, TEXT], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", body, "quick brown fox jumps", title, "news today"],
+      expect: {equals: 2}}
+    - {command: [HSET, "doc:2", body, "brown quick fox runs", title, "sports daily"],
+      expect: {equals: 2}}
+    - {command: [HSET, "doc:3", body, "red brown fox sits", title, "quick brown report"],
+      expect: {equals: 2}}
+    - {command: [HSET, "doc:4", body, "quick brown", title, "simple"], expect: {equals: 2}}
+    - {command: [HSET, "doc:5", body, "quick brown fox quick brown dog", title, "animal\
+          \ story"], expect: {equals: 2}}
+    - {command: [HSET, "doc:6", body, "lazy canine", title, "brown fox weekly"], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:7", body, "brown whale", title, "silver fox"], expect: {
+        equals: 2}}
+    - {command: [FT.INFO, idx], compare: skip, wait_s: 30, expect: {contains: 7}}
+    - {command: [FT.SEARCH, idx, '@body:"quick brown"', NOCONTENT], compare: unordered,
+      expect: {contains: "doc:4"}}
+    - {command: [FT.SEARCH, idx, '@title:"quick brown"', NOCONTENT], expect: {equals: [
+          1, "doc:3"]}}
+    - {command: [FT.SEARCH, idx, '"brown fox"', NOCONTENT], compare: unordered, expect: {
+        contains: "doc:6"}}
+    - {command: [FT.SEARCH, idx, '@body:"quick brown fox"', NOCONTENT], compare: unordered,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx, '@body:"fox quick"', NOCONTENT], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, '@body:"brown dog"', NOCONTENT], expect: {equals: [
+          1, "doc:5"]}}
+    - {command: [FT.SEARCH, idx, '@title:"silver fox"', NOCONTENT], expect: {equals: [
+          1, "doc:7"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [phrase.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: phrase}

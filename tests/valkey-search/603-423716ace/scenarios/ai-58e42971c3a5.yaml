@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 1ba297abc3c2..423716ace5dc.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-58e42971c3a5
+seed: 603002
+experiment:
+  id: proposed.text-position-iteration-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

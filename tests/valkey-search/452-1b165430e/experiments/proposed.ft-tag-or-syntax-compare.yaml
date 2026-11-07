@@ -1,0 +1,143 @@
+extends: [valkey.liveness]
+id: proposed.ft-tag-or-syntax-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Tag OR '|' syntax, escape handling and hybrid-query pre-filters compared
+    across the module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - command: [FT.CREATE, idxa, ON, HASH, PREFIX, "1", "doc:", SCHEMA, country, TAG,
+        price, NUMERIC, embedding, VECTOR, FLAT, "6", TYPE, FLOAT32, DIM, "3", DISTANCE_METRIC,
+        COSINE]
+      expect: {equals: OK}
+    - command: [HSET, "doc:1", country, USA, price, "100", embedding, !!binary 'AACAPwAAAAAAAAAA']
+      expect: {equals: 3}
+    - command: [HSET, "doc:2", country, GBR, price, "200", embedding, !!binary 'AAAAAAAAgD8AAAAA']
+      expect: {equals: 3}
+    - command: [HSET, "doc:3", country, CAN, price, "300", embedding, !!binary 'AAAAAAAAAAAAAIA/']
+      expect: {equals: 3}
+    - command: [HSET, "doc:4", country, FRA, price, "400", embedding, !!binary 'AACAPwAAAAAAAAAA']
+      expect: {equals: 3}
+    - command: [HSET, "doc:5", country, DEU, price, "500", embedding, !!binary 'AAAAAAAAgD8AAAAA']
+      expect: {equals: 3}
+    - command: [HSET, "doc:6", country, "A|B", price, "50", embedding, !!binary 'AAAAAAAAAAAAAIA/']
+      expect: {equals: 3}
+    - command: [FT.SEARCH, idxa, "*", LIMIT, 0, 0]
+      wait_s: 30
+      expect: {equals: [6]}
+    - command: [FT.SEARCH, idxa, "@country:{USA|GBR|CAN}", LIMIT, 0, 0]
+      expect_difference: true
+      expect: {equals: [3]}
+    - command: [FT.SEARCH, idxa, "@country:{ USA | GBR }", LIMIT, 0, 0]
+      expect_difference: true
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, idxa, "@country:{USA,GBR}", LIMIT, 0, 0]
+      expect_difference: true
+      expect: {equals: [0]}
+    - command: [FT.SEARCH, idxa, "-@country:{USA|GBR}", LIMIT, 0, 0]
+      expect_difference: true
+      expect: {equals: [4]}
+    - command: [FT.SEARCH, idxa, "@country:{FRA}", LIMIT, 0, 0]
+      expect: {equals: [1]}
+    - command: [FT.SEARCH, idxa, "@country:{FRA}", NOCONTENT]
+      expect: {equals: [1, "doc:4"]}
+    - command: [FT.SEARCH, idxa, '@country:{A\|B}', LIMIT, 0, 0]
+      expect_difference: true
+      expect: {equals: [1]}
+    - command: [FT.SEARCH, idxa, "@country:{USA|USA|USA|USA}", LIMIT, 0, 0]
+      expect_difference: true
+      expect: {equals: [1]}
+    - command: [FT.SEARCH, idxa, "@country:{USA|GBR|CAN} @price:[0 250]", LIMIT, 0,
+        0]
+      expect_difference: true
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, idxa, "@country:{USA|GBR} | @price:[450 600]", LIMIT, 0,
+        0]
+      expect_difference: true
+      expect: {equals: [3]}
+    - command: [FT.SEARCH, idxa, "@country:{USA|zz**}", LIMIT, 0, 0]
+      expect_difference: true
+      expect: {error: "ends with multiple"}
+    - command: [FT.SEARCH, idxa, "@country:{USA|GBR|CAN}=>[KNN 5 @embedding $vec]",
+        PARAMS, 2, vec, !!binary 'AACAPwAAAAAAAAAA', LIMIT, 0, 0]
+      expect_difference: true
+      expect: {equals: [3]}
+    - command: [FT.SEARCH, idxa, "(@country:{USA} | @country:{GBR} | @country:{CAN})=>[KNN\
+          \ 5 @embedding $vec]", PARAMS, 2, vec, !!binary 'AACAPwAAAAAAAAAA', LIMIT,
+        0, 0]
+      expect: {equals: [3]}
+    - command: [FT.SEARCH, idxa, "@country:{FRA|DEU}=>[KNN 5 @embedding $vec]", PARAMS,
+        2, vec, !!binary 'AACAPwAAAAAAAAAA', LIMIT, 0, 0]
+      expect_difference: true
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, idxa, "(@country:{USA|GBR} @price:[0 150])=>[KNN 5 @embedding\
+          \ $vec]", PARAMS, 2, vec, !!binary 'AACAPwAAAAAAAAAA', LIMIT, 0, 0]
+      expect_difference: true
+      expect: {equals: [1]}
+    - command: [FT.SEARCH, idxa, "(@country:{FRA})=>[KNN 5 @embedding $vec]", PARAMS,
+        2, vec, !!binary 'AACAPwAAAAAAAAAA', NOCONTENT]
+      expect: {equals: [1, "doc:4"]}
+    - command: [FT.CREATE, idxb, ON, HASH, PREFIX, "1", "prod:", SCHEMA, tags, TAG,
+        SEPARATOR, ";"]
+      expect: {equals: OK}
+    - command: [HSET, "prod:1", tags, "red;large"]
+      expect: {equals: 1}
+    - command: [HSET, "prod:2", tags, "blue;small"]
+      expect: {equals: 1}
+    - command: [HSET, "prod:3", tags, "red;small"]
+      expect: {equals: 1}
+    - command: [HSET, "prod:4", tags, "green;large"]
+      expect: {equals: 1}
+    - command: [FT.SEARCH, idxb, "*", LIMIT, 0, 0]
+      wait_s: 30
+      expect: {equals: [4]}
+    - command: [FT.SEARCH, idxb, "@tags:{red|blue}", LIMIT, 0, 0]
+      expect_difference: true
+      expect: {equals: [3]}
+    - command: [FT.SEARCH, idxb, "@tags:{large|small}", LIMIT, 0, 0]
+      expect_difference: true
+      expect: {equals: [4]}
+    - command: [FT.SEARCH, idxb, "@tags:{red;blue}", LIMIT, 0, 0]
+      expect_difference: true
+      expect: {equals: [0]}
+    - command: [FT.SEARCH, idxb, "@tags:{green}", LIMIT, 0, 0]
+      expect: {equals: [1]}
+    - command: [FT.CREATE, idxc, ON, HASH, PREFIX, "1", "esc:", SCHEMA, t, TAG, SEPARATOR,
+        "|"]
+      expect: {equals: OK}
+    - command: [HSET, "esc:1", t, "red|blue"]
+      expect: {equals: 1}
+    - command: [HSET, "esc:2", t, solo]
+      expect: {equals: 1}
+    - command: [FT.SEARCH, idxc, "*", LIMIT, 0, 0]
+      wait_s: 30
+      expect: {equals: [2]}
+    - command: [FT.SEARCH, idxc, "@t:{red}", LIMIT, 0, 0]
+      expect: {equals: [1]}
+    - command: [FT.SEARCH, idxc, '@t:{red\|blue}', LIMIT, 0, 0]
+      expect_difference: true
+      expect: {equals: [0]}
+    - command: [FT.SEARCH, idxc, "@t:{red|solo}", LIMIT, 0, 0]
+      expect: {equals: [2]}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [search.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}

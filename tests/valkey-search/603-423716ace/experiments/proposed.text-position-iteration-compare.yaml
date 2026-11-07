@@ -1,0 +1,97 @@
+extends: [valkey.liveness]
+id: proposed.text-position-iteration-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Phrase, SLOP/INORDER and field-filtered FT.SEARCH queries plus document deletes
+    over FlatPositionMaps large enough to span many 128-byte partitions, replies compared
+    between the change's and the parent's module build. The PR rewrites PositionIterator::NextPosition
+    to cache and reload partition offsets at every boundary crossing; any decode drift
+    shows as a differing search reply, a CHECK abort, or a sanitizer report on the
+    partition-map reads.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: positions
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, 1, "d1:", SCHEMA, body, TEXT,
+        NOSTEM], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "d2:", SCHEMA, t1, TEXT, NOSTEM,
+        t2, TEXT, NOSTEM], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx3, ON, HASH, PREFIX, 1, "d3:", SCHEMA, body, TEXT,
+        NOSTEM], expect: {equals: OK}}
+    - {command: [EVAL, "redis.call('HSET', KEYS[1], 'body', string.rep('aa ', 300)\
+          \ .. 'ee ff ' .. string.rep('aa ', 300) .. 'ee gg') return 1", 1, "d1:a"],
+      expect: {equals: 1}}
+    - {command: [EVAL, "redis.call('HSET', KEYS[1], 't1', string.rep('qq pp ', 300))\
+          \ redis.call('HSET', KEYS[1], 't2', string.rep('pp qq ', 300)) return 1",
+        1, "d2:a"], expect: {equals: 1}}
+    - {command: [EVAL, "local s = {} for i = 1, 50 do s[#s+1] = 'mm ' .. string.rep('xx\
+          \ ', 200) end redis.call('HSET', KEYS[1], 'body', table.concat(s)) return\
+          \ 1", 1, "d3:a"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx1, '@body:"ee ff"', NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "d1:a"]}}
+    - {command: [FT.SEARCH, idx2, '@t1:"qq pp"', NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "d2:a"]}}
+    - {command: [FT.SEARCH, idx3, '@body:"mm xx"', NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "d3:a"]}}
+    - {command: [FT.SEARCH, idx1, '@body:"ee gg"', NOCONTENT], expect: {equals: [
+          1, "d1:a"]}}
+    - {command: [FT.SEARCH, idx1, '@body:"ff gg"', NOCONTENT], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx1, '@body:"aa ee"', NOCONTENT], expect: {equals: [
+          1, "d1:a"]}}
+    - {command: [FT.SEARCH, idx1, '@body:"gg aa"', NOCONTENT], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx1, '@body:"aa aa aa aa aa"', NOCONTENT], expect: {
+        equals: [1, "d1:a"]}}
+    - {command: [FT.SEARCH, idx1, '@body:"ff aa"', NOCONTENT], expect: {equals: [
+          1, "d1:a"]}}
+    - {command: [FT.SEARCH, idx1, "ee aa", SLOP, 5, NOCONTENT], expect: {equals: [
+          1, "d1:a"]}}
+    - {command: [FT.SEARCH, idx2, '@t1:"qq qq"', NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx2, '@t1:"pp qq"', NOCONTENT], expect: {equals: [1,
+          "d2:a"]}}
+    - {command: [FT.SEARCH, idx2, '@t2:"qq pp"', NOCONTENT], expect: {equals: [1,
+          "d2:a"]}}
+    - {command: [FT.SEARCH, idx2, '@t1:"qq pp qq pp qq"', NOCONTENT], expect: {equals: [
+          1, "d2:a"]}}
+    - {command: [FT.SEARCH, idx2, "qq pp", SLOP, 0, INORDER, NOCONTENT], expect: {
+        equals: [1, "d2:a"]}}
+    - {command: [FT.SEARCH, idx2, "pp qq", SLOP, 0, INORDER, NOCONTENT], expect: {
+        equals: [1, "d2:a"]}}
+    - {command: [FT.SEARCH, idx3, '@body:"xx mm"', NOCONTENT], expect: {equals: [
+          1, "d3:a"]}}
+    - {command: [FT.SEARCH, idx3, '@body:"mm mm"', NOCONTENT], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx3, "mm mm", SLOP, 200, INORDER, NOCONTENT], expect: {
+        equals: [1, "d3:a"]}}
+    - {command: [FT.SEARCH, idx3, "mm mm", SLOP, 100, INORDER, NOCONTENT], expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idx3, '@body:"xx xx xx xx xx xx xx xx xx xx"', NOCONTENT],
+      expect: {equals: [1, "d3:a"]}}
+    - {command: [DEL, "d1:a"], expect: {equals: 1}}
+    - {command: [DEL, "d2:a"], expect: {equals: 1}}
+    - {command: [DEL, "d3:a"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx1, '@body:"ee ff"', NOCONTENT], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idx2, '@t1:"qq pp"', NOCONTENT], wait_s: 30, expect: {
+        equals: [0]}}
+    - {command: [FT.SEARCH, idx3, '@body:"mm xx"', NOCONTENT], wait_s: 30, expect: {
+        equals: [0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: positions}

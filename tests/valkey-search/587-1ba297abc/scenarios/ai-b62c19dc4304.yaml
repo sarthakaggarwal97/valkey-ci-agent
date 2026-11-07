@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search b5341f6b20d2..1ba297abc3c2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b62c19dc4304
+seed: 7002
+experiment:
+  id: proposed.drain-mutation-queue-on-save
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

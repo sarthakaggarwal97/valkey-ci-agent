@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "c812cc4c6342edfcd67dc75ef22bbdc43a31e1a7",
+  "parent": "f31c52efb747f172df118dc47a3ebc7bdad0c155",
+  "pr": 504,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Update arguments for ft.create and ft.search json (#369) (#504)",
+  "date": "2025-12-22",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7608,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only the command-documentation metadata files src/commands/ft.aggregate.json, ft.create.json and ft.search.json, which document the existing argument grammar for the valkey.io command reference. These JSON files are not consumed anywhere: src/commands/CMakeLists.txt compiles only the .cc/.h parser sources, no build step embeds or generates code from the JSON, and the module registers its commands in src/module_loader.cc via vmsdk::CreateCommand without calling ValkeyModule_SetCommandInfo, so COMMAND DOCS/INFO output and all FT.CREATE/FT.SEARCH/FT.AGGREGATE parsing and replies "
+}

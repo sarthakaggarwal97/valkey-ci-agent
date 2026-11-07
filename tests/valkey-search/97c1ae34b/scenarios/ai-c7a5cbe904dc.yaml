@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 1b165430e7ed..97c1ae34bc5c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c7a5cbe904dc
+seed: 101
+experiment:
+  id: proposed.ft-text-search-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

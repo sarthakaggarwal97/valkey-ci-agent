@@ -1,0 +1,71 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "1c993128468c2df312d8f571b4ab6c0979f521dc",
+  "parent": "3b15005be6b7f8cc4cdd2b405b6590fdb92abf06",
+  "pr": 542,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add general utility thread pool for \"execute later at low priority\" routines and schedule Search Result deletions on this  (#542)",
+  "date": "2025-12-16",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 3,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 10.3103,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-c0053fd38bc5",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'search' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (FT.SEARCH idx * LIMIT 0 0), 32 (FT.SEARCH idx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-c0053fd38bc5",
+      "build": "unstable",
+      "seed": 7001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c0053fd38bc5",
+      "build": "unstable",
+      "seed": 7002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c0053fd38bc5",
+      "build": "unstable",
+      "seed": 7003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c920e2d5de89",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'search' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (FT.SEARCH idx * LIMIT 0 0), 32 (FT.SEARCH idx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-c920e2d5de89",
+      "build": "unstable",
+      "seed": 7103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c920e2d5de89",
+      "build": "unstable",
+      "seed": 7104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c920e2d5de89",
+      "build": "unstable",
+      "seed": 7105,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

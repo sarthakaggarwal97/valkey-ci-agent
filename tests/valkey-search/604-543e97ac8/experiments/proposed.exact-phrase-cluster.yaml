@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.exact-phrase-cluster
+deployment:
+  modes: [cluster]
+metadata:
+  description: Pure exact-phrase FT.SEARCH on clustered module builds, results compared
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: phrase
+  config:
+    cluster: true
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, body, TEXT],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", body, "quick brown fox jumps"], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", body, "brown quick fox runs"], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", body, "red brown fox sits"], expect: {equals: 1}}
+    - {command: [HSET, "doc:4", body, "quick brown"], expect: {equals: 1}}
+    - {command: [HSET, "doc:5", body, "quick brown fox quick brown dog"], expect: {
+        equals: 1}}
+    - {command: [FT.INFO, idx], compare: skip, wait_s: 30, expect: {contains: 5}}
+    - {command: [FT.SEARCH, idx, '@body:"quick brown"', NOCONTENT], compare: unordered,
+      expect: {contains: "doc:4"}}
+    - {command: [FT.SEARCH, idx, '@body:"brown fox"', NOCONTENT], compare: unordered,
+      expect: {contains: "doc:3"}}
+    - {command: [FT.SEARCH, idx, '@body:"fox quick"', NOCONTENT], expect: {equals: [
+          0]}}
+    - {command: [FT.SEARCH, idx, '@body:"brown dog"', NOCONTENT], expect: {equals: [
+          1, "doc:5"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [phrase.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: phrase}

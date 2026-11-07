@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.search-query-operations-cluster-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    FT.SEARCH dedup and predicate re-evaluation now follow the parsed QueryOperations
+    flags instead of IsCluster(); compare cluster-mode FT.SEARCH results between the
+    module build at the change and at its parent on a single-node cluster, where the
+    parent always deduplicated and re-evaluated.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TAG, n, NUMERIC,
+        v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:1", t, "a,b", n, 5, v, !!binary "AACAPwAAAAA="], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:2", t, b, n, 5, v, !!binary "AACAPwAAAAA="], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:3", t, a, n, 20, v, !!binary "AACAPwAAAAA="], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:4", n, 5, v, !!binary "AACAPwAAAAA="], expect: {equals: 2}}
+    - {command: [HSET, "doc:5", n, 7, v, !!binary "AACAPwAAAAA="], expect: {equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: 5}, compare: skip}
+    - {command: [FT.SEARCH, idx, "@t:{a|b}", NOCONTENT], compare: unordered, expect_difference: true,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx, "-@t:{a}", NOCONTENT], compare: unordered, expect_difference: true,
+      expect: {contains: "doc:2"}}
+    - {command: [FT.SEARCH, idx, "@t:{a|b} @n:[0 100]", NOCONTENT], compare: unordered,
+      expect_difference: true, expect: {contains: "doc:3"}}
+    - {command: [FT.SEARCH, idx, "(@t:{a|b})=>[KNN 10 @v $B]", PARAMS, 2, B, !!binary "AACAPwAAAAA=",
+        NOCONTENT, DIALECT, 2], compare: unordered, expect_difference: true, expect: {
+        contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx, "@t:{a} | @t:{b}", NOCONTENT], compare: unordered,
+      expect: {contains: "doc:1"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [search.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}

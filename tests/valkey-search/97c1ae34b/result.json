@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "97c1ae34bc5c02a6ca85f28c1a24131af3a1147e",
+  "parent": "1b165430e7eda1f70ea1e15234f6660fae735abf",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Merge pull request #594 from valkey-io/fulltext",
+  "date": "2026-01-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 2,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 7.5836,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

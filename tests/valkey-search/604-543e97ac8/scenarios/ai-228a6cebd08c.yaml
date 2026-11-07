@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 4b6878bf7963..543e97ac89a3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-228a6cebd08c
+seed: 103
+experiment:
+  id: proposed.exact-phrase-cluster
+  inputs:
+    resp: 2
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 0
+  base_port: 7200

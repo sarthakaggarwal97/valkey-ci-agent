@@ -1,0 +1,92 @@
+extends: [valkey.liveness]
+id: proposed.ft-text-search-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: New TEXT field type and full-text query language (phrases, prefix/suffix/infix,
+    fuzzy, SLOP/INORDER) compared against the parent module build, where TEXT does
+    not exist
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ft
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, products, ON, HASH, PREFIX, "1", "product:", SCHEMA, desc,
+        TEXT, title, TEXT, NOSTEM, WITHSUFFIXTRIE], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [HSET, "product:4", desc, "Order Opposite. Random Words. Random Words.\
+          \ wonder of wonders. Uncommon random words. Random Words.", title, alpha],
+      expect: {equals: 2}}
+    - {command: [HSET, "product:1", desc, "1 2 3 4 5 6 7 8 9 0. Great oaks. Random\
+          \ Words. Great oaks from little grey acorns grow. Impressive oak.", title,
+        beta], expect: {equals: 2}}
+    - {command: [HSET, "product:5", desc, "Unique slop word. Random Words. greased\
+          \ the inspector's palm", title, "running shoes"], expect: {equals: 2}}
+    - {command: [FT.SEARCH, products, '@desc:"wonder"', NOCONTENT], wait_s: 30, expect_difference: true,
+      expect: {equals: [1, "product:4"]}}
+    - {command: [FT.SEARCH, products, '@desc:wond*', NOCONTENT], expect_difference: true,
+      expect: {equals: [1, "product:4"]}}
+    - {command: [FT.SEARCH, products, '@desc:grea*', NOCONTENT], expect_difference: true,
+      expect: {contains: "product:5"}}
+    - {command: [FT.SEARCH, products, '@desc:"great oak from littl"', NOCONTENT],
+      expect_difference: true, expect: {equals: [1, "product:1"]}}
+    - {command: [FT.SEARCH, products, '@desc:"opposit order"', NOCONTENT], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, products, '@desc:"uniqu slop word"', NOCONTENT], expect_difference: true,
+      expect: {equals: [1, "product:5"]}}
+    - {command: [FT.SEARCH, products, '@desc:"word uniqu"', NOCONTENT], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, products, '@desc:"1 2 3 4 5 6 7 8 9 0"', NOCONTENT], expect_difference: true,
+      expect: {equals: [1, "product:1"]}}
+    - {command: [FT.SEARCH, products, '@desc:"1 2 3 4 5 6 7 9"', NOCONTENT], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, products, "@desc:\"inspector's palm\"", NOCONTENT], expect_difference: true,
+      expect: {equals: [1, "product:5"]}}
+    - {command: [FT.SEARCH, products, '@desc:%wander%', NOCONTENT], expect_difference: true,
+      expect: {equals: [1, "product:4"]}}
+    - {command: [FT.SEARCH, products, 'great oa* from lit* gr* acorn gr*', NOCONTENT],
+      expect_difference: true, expect: {equals: [1, "product:1"]}}
+    - {command: [FT.SEARCH, products, 'great oa* from lit* gr* acorn grea*', SLOP,
+        "0", INORDER, NOCONTENT], expect_difference: true, expect: {equals: [0]}}
+    - {command: [FT.SEARCH, products, '@title:"running"', NOCONTENT], expect_difference: true,
+      expect: {equals: [1, "product:5"]}}
+    - {command: [FT.SEARCH, products, '@title:"run"', NOCONTENT], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, products, '@title:*hoes', NOCONTENT], expect_difference: true,
+      expect: {equals: [1, "product:5"]}}
+    - {command: [FT.SEARCH, products, '@title:*unning*', NOCONTENT], expect_difference: true,
+      expect: {equals: [1, "product:5"]}}
+    - {command: [FT.SEARCH, products, '@desc:"wonder" | @desc:"palm"', NOCONTENT],
+      expect_difference: true, expect: {contains: "product:4"}}
+    - {command: [FT.SEARCH, products, '@desc:"random" -@desc:"wonder"', NOCONTENT],
+      expect_difference: true, expect: {contains: "product:5"}}
+    - {command: [CONFIG, GET, search.fuzzy-max-distance], expect_difference: true,
+      expect: {contains: "3"}}
+    - {command: [FT.INFO, products], expect_difference: true, expect: {contains: "num_total_terms"}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PUNCTUATION, "", SCHEMA, f, TEXT], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.CREATE, idx3, ON, HASH, STOPWORDS, "5", the, SCHEMA, f, TEXT],
+      expect_difference: true, expect: {error: true}}
+    - {command: [FT.CREATE, idx4, ON, HASH, SCHEMA, f, TEXT, MINSTEMSIZE, "0"], expect_difference: true,
+      expect: {error: "positive"}}
+    - {command: [HSET, "product:8", desc, "", title, ""], expect: {equals: 2}}
+    - {command: [HSET, "product:9", desc, "!!! ,,, ...", title, "..."], expect: {
+        equals: 2}}
+    - {command: [FT.SEARCH, products, '@desc:"wonder"', NOCONTENT], wait_s: 15, expect_difference: true,
+      expect: {equals: [1, "product:4"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ft.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ft}

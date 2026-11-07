@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "96ad1caada2e3cc7473b44dd8b2b3adb0cab1067",
+  "parent": "0f936075990030da950c862e91d5e4a7894d8fec",
+  "pr": 600,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix build warnings (#600)",
+  "date": "2026-01-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2556,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds the `override` specifier to five already-overriding virtual methods in src/query/predicate.h (no change to dispatch or behavior, just warning suppression) and moves a Snowball include directory from PUBLIC to PRIVATE in third_party/snowball/CMakeLists.txt (build-time include propagation only). It is a pure build-warning/CI fix with no runtime behavior change, so no scenario is needed."
+}

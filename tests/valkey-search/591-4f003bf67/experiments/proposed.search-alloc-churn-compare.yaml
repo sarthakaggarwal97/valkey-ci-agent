@@ -1,0 +1,79 @@
+extends: [valkey.liveness]
+id: proposed.search-alloc-churn-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT index create/backfill/mutate/drop churn on both module builds, driving
+    the rewritten malloc/realloc/free wrappers and the mass-deallocation fast path
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 300
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, vec, VECTOR,
+        HNSW, 12, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, INITIAL_CAP, 64, M,
+        16, EF_CONSTRUCTION, 100, tag, TAG, num, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', vec, !!binary 'AACAPwAAAAA=', tag, 't1,common', num,
+        1], expect: {equals: 3}}
+    - {command: [HSET, 'doc:2', vec, !!binary 'AAAAQAAAAAA=', tag, 't2,common', num,
+        2], expect: {equals: 3}}
+    - {command: [HSET, 'doc:3', vec, !!binary 'AABAQAAAAAA=', tag, 't3,common', num,
+        3], expect: {equals: 3}}
+    - {command: [HSET, 'doc:4', vec, !!binary 'AACAQAAAAAA=', tag, 't4,common', num,
+        4], expect: {equals: 3}}
+    - {command: [HSET, 'doc:5', vec, !!binary 'AACgQAAAAAA=', tag, 't5,common', num,
+        5], expect: {equals: 3}}
+    - {command: [HSET, 'doc:6', vec, !!binary 'AADAQAAAAAA=', tag, 't6,common', num,
+        6], expect: {equals: 3}}
+    - {command: [HSET, 'doc:7', vec, !!binary 'AADgQAAAAAA=', tag, 't7,common', num,
+        7], expect: {equals: 3}}
+    - {command: [HSET, 'doc:8', vec, !!binary 'AAAAQQAAAAA=', tag, 't8,common', num,
+        8], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          8]}}
+    - {command: [FT.SEARCH, idx, '@tag:{common}', LIMIT, 0, 0], expect: {equals: [
+          8]}}
+    - {command: [FT.SEARCH, idx, '@num:[2 5]', LIMIT, 0, 0], expect: {equals: [4]}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 3 @vec $B AS score]', NOCONTENT, PARAMS,
+        2, B, !!binary 'AACAPwAAAAA=', DIALECT, 2], expect: {equals: [3, 'doc:1',
+          'doc:2', 'doc:3']}}
+    - {command: [FT.INFO, idx], compare: skip}
+    - {command: [DEL, 'doc:1'], expect: {equals: 1}}
+    - {command: [DEL, 'doc:2'], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          6]}}
+    - {command: [HSET, 'doc:3', vec, !!binary 'AACAPwAAAAA='], expect: {equals: 0}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 1 @vec $B AS score]', NOCONTENT, PARAMS,
+        2, B, !!binary 'AACAPwAAAAA=', DIALECT, 2], wait_s: 30, expect: {equals: [
+          1, 'doc:3']}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, vec, VECTOR,
+        HNSW, 12, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, INITIAL_CAP, 64, M,
+        16, EF_CONSTRUCTION, 100, tag, TAG, num, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          6]}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, tag, TAG],
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx2, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          6]}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx2, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          0]}}
+    - {command: [FT.DROPINDEX, idx2], expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

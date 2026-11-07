@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.ft-nonvector-return-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Behavior changes reachable on both module builds - RETURN now honored
+    for non-vector queries, query-string-terms-count default 16 to 1000, new fuzzy-max-distance
+    config, FT.INFO text fields, TAG SEPARATOR quoted-separator leniency removed,
+    SLOP rejected without text offsets
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ret
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, category,
+        TAG, price, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", category, red, price, "10", name, widget], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:2", category, blue, price, "20", name, gadget], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:3", category, RETURN, price, "5", name, keyword], expect: {
+        equals: 3}}
+    - {command: [FT.SEARCH, idx, '@category:{red}', NOCONTENT], wait_s: 30, expect: {
+        equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, idx, '@category:{RETURN}', NOCONTENT], wait_s: 15, expect: {
+        equals: [1, "doc:3"]}}
+    - {command: [FT.SEARCH, idx, '@category:{red}', RETURN, "1", price], expect_difference: true,
+      expect: {equals: [1, "doc:1", ["price", "10"]]}}
+    - {command: [FT.SEARCH, idx, '@category:{red}', RETURN, "2", price, category],
+      expect_difference: true, expect: {equals: [1, "doc:1", ["price", "10", "category",
+            "red"]]}}
+    - {command: [FT.SEARCH, idx, '@category:{red}', RETURN, "1", bogusfield], expect_difference: true,
+      expect: {equals: [1, "doc:1", []]}}
+    - {command: [FT.SEARCH, idx, '@category:{t01} | @category:{t02} | @category:{t03}
+          | @category:{t04} | @category:{t05} | @category:{t06} | @category:{t07}
+          | @category:{t08} | @category:{t09} | @category:{t10} | @category:{t11}
+          | @category:{t12} | @category:{t13} | @category:{t14} | @category:{t15}
+          | @category:{t16} | @category:{t17} | @category:{t18} | @category:{t19}
+          | @category:{t20}', NOCONTENT], expect_difference: true, expect: {equals: [
+          0]}}
+    - {command: [CONFIG, GET, search.query-string-terms-count], expect_difference: true,
+      expect: {contains: "1000"}}
+    - {command: [CONFIG, GET, search.fuzzy-max-distance], expect_difference: true,
+      expect: {contains: "3"}}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {contains: "num_total_terms"}}
+    - {command: [FT.SEARCH, idx, '@category:{red}', VERBATIM, NOCONTENT], expect_difference: true,
+      expect: {equals: [1, "doc:1"]}}
+    - {command: [FT.SEARCH, idx, '@category:{red}', SLOP, "1", NOCONTENT], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, "1", "x:", SCHEMA, tags, TAG,
+        SEPARATOR, '"|"'], expect_difference: true, expect: {error: "single character"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ret.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ret}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 7c28ad201adb..0f9360759900.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b09074cc2ade
+seed: 597001
+experiment:
+  id: proposed.search-query-operations-cluster-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

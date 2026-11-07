@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 3b15005be6b7..1c993128468c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c920e2d5de89
+seed: 7103
+experiment:
+  id: proposed.search-result-cleanup-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

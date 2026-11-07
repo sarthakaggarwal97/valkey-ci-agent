@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-nonvector-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Non-vector FT.AGGREGATE (numeric/tag queries, LOAD, SORTBY, GROUPBY,
+    APPLY) returns records on the fixed build where the parent replies "Index field
+    `` does not exist"; vector aggregates and FT.SEARCH stay identical
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC,
+        t, TAG, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:1", n, 1, t, red, v, !!binary "AACAPwAAAEA="], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:2", n, 2, t, red, v, !!binary "AABAQAAAgEA="], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:3", n, 3, t, blue, v, !!binary "AACgQAAAwEA="], expect: {
+        equals: 3}}
+    - {command: [FT.SEARCH, idx, "@n:[-inf inf]", NOCONTENT, DIALECT, 2], wait_s: 30,
+      compare: unordered, expect: {contains: 3}}
+    - {command: [FT.AGGREGATE, idx, "@n:[-inf inf]", LOAD, 1, "@__key", SORTBY, 2,
+        "@__key", ASC, DIALECT, 2], expect_difference: true, expect: {equals: [3,
+          ["__key", "doc:1"], ["__key", "doc:2"], ["__key", "doc:3"]]}}
+    - {command: [FT.AGGREGATE, idx, "-@n:[-inf inf]", LOAD, 1, "@__key", DIALECT,
+        2], expect_difference: true, expect: {equals: [0]}}
+    - {command: [FT.AGGREGATE, idx, "@t:{red}", LOAD, 3, "@__key", "@t", "@n", GROUPBY,
+        1, "@t", REDUCE, SUM, 1, "@n", AS, sum, DIALECT, 2], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "@t:{r*}", LOAD, 2, "@__key", "@t", SORTBY, 2,
+        "@__key", ASC, DIALECT, 2], expect_difference: true, expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "@n:[1 2]", LOAD, 2, "@__key", "@n", APPLY, "@n*2",
+        AS, nn, SORTBY, 2, "@nn", DESC, DIALECT, 2], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT.AGGREGATE, idx, "@n:[3 3]", LOAD, "*", DIALECT, 2], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.AGGREGATE, idx, "*=>[KNN 3 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAAEA=",
+        LOAD, 1, "@__key", SORTBY, 2, "@__key", ASC, DIALECT, 2], expect: {error: false}}
+    - {command: [FT.SEARCH, idx, "@t:{red}", NOCONTENT, DIALECT, 2], compare: unordered,
+      expect: {contains: 2}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

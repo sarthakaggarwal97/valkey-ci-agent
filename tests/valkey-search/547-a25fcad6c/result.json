@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a25fcad6cf68da1b4e8601c82b400eb192ca4f72",
+  "parent": "f06b8b2ca78bcacda4244a35ba07f672e293b27f",
+  "pr": 547,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add getter in config for the default value (#547)",
+  "date": "2025-12-16",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.6478,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds an internal GetDefaultValue() accessor to the vmsdk config classes that no production code in valkey-search calls (only the new unit test uses it), fixes a comment, and reworks String::FromString to record the default \u2014 a path reachable only when a string-typed module config is set from module arguments, and valkey-search registers no string config anywhere in src/ (all its configs are Number, Boolean or Enum, whose FromString and CONFIG GET/SET paths are unchanged). There is no externally observable behavior difference between the change and its parent through any command, sta"
+}

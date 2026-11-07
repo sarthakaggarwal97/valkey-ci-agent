@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 1832febac024..f31c52efb747.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-966b2e2d9e8b
+seed: 11
+experiment:
+  id: proposed.ft-search-limit-trim
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.exact-phrase-negate-crash
+deployment:
+  modes: [standalone]
+metadata:
+  description: A top-level negated pure exact phrase hits the new fast-path CHECK
+    on composed-AND
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: negate
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, body, TEXT],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", body, "quick brown fox"], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", body, "lazy dog sleeps"], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], compare: skip, wait_s: 30, expect: {contains: 2}}
+    - {command: [FT.SEARCH, idx, '-@body:"quick brown"', NOCONTENT], expect_difference: true,
+      expect: {exists: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [negate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: negate}

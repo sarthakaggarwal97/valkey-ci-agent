@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-score-as-race
+deployment:
+  modes: [cluster]
+metadata:
+  description: Concurrent FT.SEARCH KNN with no AS clause races on the cached default
+    score-as string
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    server_config: {use-coordinator: yes, reader-threads: 8}
+    timeout_s: 60
+    checks: {concurrency: 16}
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:2", vec, !!binary "AACAPwAAgD8AAIA/AACAPw=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:3", vec, !!binary "AABAQAAAQEAAAEBAAABAQA=="], expect: {
+        equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: num_docs}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @vec $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAAAAAAAAAAAAA==",
+        DIALECT, 2], compare: unordered}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}

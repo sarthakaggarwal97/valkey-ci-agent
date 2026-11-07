@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "4b6878bf7963a97d3687442a60bd076d90362c3a",
+  "parent": "96ad1caada2e3cc7473b44dd8b2b3adb0cab1067",
+  "pr": 602,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fixing tag query parsing (#602)",
+  "date": "2026-01-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.1578,
+  "findings": [],
+  "recorded": [],
+  "reason": "The only behavioral change is in src/coordinator/search_converter.cc: gRPC fanout requests now re-parse tag query strings with the query-language '|' separator (FilterParser::ParseQueryTags) instead of the index's schema separator. That code runs only when the coordinator is active, which requires the hidden `use-coordinator` config \u2014 settable solely via the `--use-coordinator` module startup argument after the module path on the loadmodule directive (it is built Hidden, so CONFIG SET and config-file lines are rejected, and no FT._DEBUG controlled variable enables it). The fuzzer loads modules"
+}

@@ -1,0 +1,142 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "4f003bf6731c90629f474c86162bc67542a75141",
+  "parent": "543e97ac89a34cf02256723c21ab5271246af64d",
+  "pr": 591,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Addressing memory deallocation overhead by minimizing the mutex contension (#591)",
+  "date": "2026-01-13",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 11.9719,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-1173a3da649e",
+      "seed": 104,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #591, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-81e4c9caf517",
+      "seed": 105,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #591, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-5a31e1c7fd55",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'churn' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (FT.SEARCH idx * LIMIT 0 0), 16 (FT.SEARCH idx * LIMIT 0 0), 21 (FT.SEARCH idx * LIMIT 0 0), 24 (FT.SEARCH idx2 * LIMIT 0 0), 26 (FT.SEAR"
+    },
+    {
+      "scenario": "ai-9c344d07102a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'churn' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (FT.SEARCH idx * LIMIT 0 0), 16 (FT.SEARCH idx * LIMIT 0 0), 21 (FT.SEARCH idx * LIMIT 0 0), 24 (FT.SEARCH idx2 * LIMIT 0 0), 26 (FT.SEAR"
+    },
+    {
+      "scenario": "ai-366b71ec1dbe",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'reload' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (FT.SEARCH idx * LIMIT 0 0), 13 (FT.SEARCH idx * LIMIT 0 0), 16 (FT.SEARCH idx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-366b71ec1dbe",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-366b71ec1dbe",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-366b71ec1dbe",
+      "build": "unstable",
+      "seed": 105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1173a3da649e",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'reload' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (FT.SEARCH idx * LIMIT 0 0), 13 (FT.SEARCH idx * LIMIT 0 0), 16 (FT.SEARCH idx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-1173a3da649e",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1173a3da649e",
+      "build": "unstable",
+      "seed": 105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1173a3da649e",
+      "build": "unstable",
+      "seed": 106,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-81e4c9caf517",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'reload' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (FT.SEARCH idx * LIMIT 0 0), 13 (FT.SEARCH idx * LIMIT 0 0), 16 (FT.SEARCH idx * LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-81e4c9caf517",
+      "build": "unstable",
+      "seed": 105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-81e4c9caf517",
+      "build": "unstable",
+      "seed": 106,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-81e4c9caf517",
+      "build": "unstable",
+      "seed": 107,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3ab81e055e50",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'sync' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (FT.SEARCH ridx * LIMIT 0 0 on node 1), 12 (FT.SEARCH idx * LIMIT 0 0), 15 (FT.SEARCH idx * LIMIT 0 0 on node 1), 17 (FT.INFO ridx on node"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

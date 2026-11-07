@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "567f32e546ce50e21c3de1444e43b652c2e0af4c",
+  "parent": "1c993128468c2df312d8f571b4ab6c0979f521dc",
+  "pr": 550,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Better handling of nullptr in FromString String config (#550)",
+  "date": "2025-12-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.0073,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change hardens vmsdk config::String::FromString to reject a string_view with a null data pointer instead of silently ignoring it. This path is unreachable from any server-visible input: FromString is only invoked by ModuleConfigManager::UpdateConfigFromKeyVal when parsing module-load argv, valkey-search registers no String-typed config in production code (config::StringBuilder appears only in unit tests; all registered configs are Number, Boolean or Enum), and ParseAndLoadArgv always passes a string_view built from a real ValkeyModuleString or the literal \"yes\", whose data pointer is never"
+}

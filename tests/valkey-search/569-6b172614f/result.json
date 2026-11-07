@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "6b172614fd948786007638f274456f8e7da18620",
+  "parent": "a3fdb5c8f36164b3271d39bdf8ac17bd36e7de8f",
+  "pr": 569,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix cross-module memory allocator crash by hiding wrapper symbols (#569)",
+  "date": "2025-12-30",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 6.0162,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a build/link change only: the linker version script now hides __wrap_*, __real_* and operator new/delete symbols from libsearch.so's dynamic symbol table (plus a new Python integration test). Its sole behavioural effect is on ELF symbol interposition when a second module (valkey-json) using the same malloc-wrapping scheme is loaded into the same server after valkey-search. The fuzzer environment supplies only valkey-search builds (change and parent) loaded into one pinned Valkey build: there is no valkey-json artifact, MODULE LOAD is refused in command sequences, and two builds of valk"
+}

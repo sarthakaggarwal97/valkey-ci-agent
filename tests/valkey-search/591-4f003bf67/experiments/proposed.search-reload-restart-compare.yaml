@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.search-reload-restart-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Index serialization and reload across a restart (RDB aux save/load
+    or AOF replay), exercising allocations that straddle the module-load allocator
+    switch on both builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    appendonly: {type: string, enum: ['yes', 'no'], default: 'no'}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {appendonly: {$ref: inputs.appendonly}, appendfsync: everysec}
+    timeout_s: 300
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, vec, VECTOR,
+        HNSW, 12, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, INITIAL_CAP, 64, M,
+        16, EF_CONSTRUCTION, 100, tag, TAG, num, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', vec, !!binary 'AACAPwAAAAA=', tag, 't1,common', num,
+        1], expect: {equals: 3}}
+    - {command: [HSET, 'doc:2', vec, !!binary 'AAAAQAAAAAA=', tag, 't2,common', num,
+        2], expect: {equals: 3}}
+    - {command: [HSET, 'doc:3', vec, !!binary 'AABAQAAAAAA=', tag, 't3,common', num,
+        3], expect: {equals: 3}}
+    - {command: [HSET, 'doc:4', vec, !!binary 'AACAQAAAAAA=', tag, 't4,common', num,
+        4], expect: {equals: 3}}
+    - {command: [HSET, 'doc:5', vec, !!binary 'AACgQAAAAAA=', tag, 't5,common', num,
+        5], expect: {equals: 3}}
+    - {command: [HSET, 'doc:6', vec, !!binary 'AADAQAAAAAA=', tag, 't6,common', num,
+        6], expect: {equals: 3}}
+    - {command: [HSET, 'doc:7', vec, !!binary 'AADgQAAAAAA=', tag, 't7,common', num,
+        7], expect: {equals: 3}}
+    - {command: [HSET, 'doc:8', vec, !!binary 'AAAAQQAAAAA=', tag, 't8,common', num,
+        8], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          8]}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 3 @vec $B AS score]', NOCONTENT, PARAMS,
+        2, B, !!binary 'AACAPwAAAAA=', DIALECT, 2], expect: {equals: [3, 'doc:1',
+          'doc:2', 'doc:3']}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 60, expect: {equals: [
+          8]}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 3 @vec $B AS score]', NOCONTENT, PARAMS,
+        2, B, !!binary 'AACAPwAAAAA=', DIALECT, 2], expect: {equals: [3, 'doc:1',
+          'doc:2', 'doc:3']}}
+    - {command: [HSET, 'doc:9', vec, !!binary 'AACgQAAAAAA=', tag, 't9,common', num,
+        9], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          9]}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '*', LIMIT, 0, 0], expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

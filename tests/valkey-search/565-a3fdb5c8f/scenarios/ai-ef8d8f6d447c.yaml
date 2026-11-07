@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search df918dd23b7f..a3fdb5c8f361.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ef8d8f6d447c
+seed: 7001
+experiment:
+  id: proposed.ft-search-score-as-race
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 2
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 0
+  base_port: 7000

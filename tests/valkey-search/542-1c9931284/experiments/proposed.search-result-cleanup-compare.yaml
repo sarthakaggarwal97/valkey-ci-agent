@@ -1,0 +1,86 @@
+extends: [valkey.liveness]
+id: proposed.search-result-cleanup-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH result deletion deferred to the new utility thread pool,
+    its configs, DROPINDEX after a search burst, the MULTI sync path, and a BGSAVE
+    fork, compared against the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    checks: {concurrency: 8, faults: true}
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, category, TAG,
+        price, NUMERIC, vec, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", category, a, price, 1, vec, !!binary "AACAPwAAAAA="],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:2", category, b, price, 2, vec, !!binary "AAAAAAAAgD8="],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:3", category, a, price, 3, vec, !!binary "AACAPwAAgD8="],
+      expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          3]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], expect: {equals: [2, "doc:1", "doc:3"]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @vec $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAAAA=",
+        DIALECT, 2], compare: skip}
+    - {command: [FT.SEARCH, idx, "@category:{a}", NOCONTENT], compare: unordered}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], expect: {equals: QUEUED}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], expect: {equals: QUEUED}}
+    - {command: [EXEC], compare: skip}
+    - {command: [CONFIG, SET, search.search-result-background-cleanup, "no"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, "@category:{a}", NOCONTENT], compare: unordered}
+    - {command: [CONFIG, SET, search.search-result-background-cleanup, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.utility-threads, 8], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], compare: unordered}
+    - {command: [CONFIG, SET, search.utility-threads, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], compare: unordered}
+    - {command: [CONFIG, SET, search.utility-threads, 0], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], expect: {error: true}}
+    - {command: [BGSAVE], expect: {contains: "Background saving started"}}
+    - {command: [INFO, persistence], wait_s: 30, expect: {contains: "rdb_bgsave_in_progress:0"},
+      compare: skip}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*", LIMIT, 0, 0], wait_s: 30, expect: {equals: [
+          3]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], expect: {equals: [2, "doc:1", "doc:3"]}}
+    - {command: [PING], expect: {equals: PONG}}
+required_events: [search.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}

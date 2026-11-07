@@ -1,0 +1,37 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "423716ace5dccc6e88205f59ea8fb1b13fcd56d3",
+  "parent": "1ba297abc3c252c5bbecbe137fc96eb82378cac7",
+  "pr": 603,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Followup of #441 Position Optimization (#603)",
+  "date": "2026-01-15",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 13.3644,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-9594664c61ba",
+      "seed": 603001,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #603, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

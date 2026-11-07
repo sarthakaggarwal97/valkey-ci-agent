@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "0e4b6dbb863f40c6a124f8fee8ebc86d90d73c4e",
+  "parent": "c812cc4c6342edfcd67dc75ef22bbdc43a31e1a7",
+  "pr": 548,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix deprecated std::atomic_load/store warnings for shared_ptr (#548)",
+  "date": "2025-12-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.251,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds #pragma GCC diagnostic push/ignored(-Wdeprecated-declarations)/pop around the existing std::atomic_load/std::atomic_store calls on cluster_map_ in valkey_search.cc and valkey_search.h. No code path, argument, or logic changes: the same atomic load/store calls execute identically; only compile-time warning emission is suppressed. A warning-suppression build change has no observable runtime behavior to compare or stress, so no scenario is needed."
+}

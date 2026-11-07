@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a3fdb5c8f36164b3271d39bdf8ac17bd36e7de8f",
+  "parent": "df918dd23b7f209beb2d5be57539663052cc15aa",
+  "pr": 565,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix use-after-free race in DefaultReplyScoreAs() (#565)",
+  "date": "2025-12-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.4841,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

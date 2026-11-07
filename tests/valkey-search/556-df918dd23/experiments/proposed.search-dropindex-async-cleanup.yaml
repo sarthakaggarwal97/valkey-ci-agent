@@ -1,0 +1,111 @@
+extends: [valkey.liveness]
+id: proposed.search-dropindex-async-cleanup
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH async result cleanup racing FT.DROPINDEX/FLUSHALL; last IndexSchema
+    reference must not be destroyed on a background thread
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    concurrency: {type: integer, minimum: 0, maximum: 16, default: 8}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 15
+    checks: {concurrency: {$ref: inputs.concurrency}}
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, t, TAG, n,
+        NUMERIC, v, VECTOR, HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2],
+      expect: {equals: OK}}
+    - {command: [FT._LIST], wait_s: 10, expect: {equals: [idx]}}
+    - {command: [HSET, "doc:1", t, red, n, "1", v, !!binary "AACAPwAAAEA="], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:2", t, red, n, "2", v, !!binary "AABAQAAAgEA="], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:3", t, red, n, "3", v, !!binary "AACgQAAAwEA="], expect: {
+        equals: 3}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], compare: skip}
+    - {command: [FT.SEARCH, idx, "@t:{red}", NOCONTENT], wait_s: 20, expect: {contains: "doc:3"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "@n:[0 5]", NOCONTENT], wait_s: 20, expect: {contains: "doc:2"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @v $B]", PARAMS, "2", B, !!binary "AACAPwAAAEA=",
+        NOCONTENT], wait_s: 20, expect: {contains: "doc:1"}, compare: unordered}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT._LIST], wait_s: 10, expect: {equals: []}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, t, TAG, n,
+        NUMERIC, v, VECTOR, HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2],
+      expect: {equals: OK}}
+    - {command: [FT._LIST], wait_s: 10, expect: {equals: [idx]}}
+    - {command: [HSET, "doc:1", t, red, n, "1", v, !!binary "AACAPwAAAEA="], expect: {
+        equals: 0}}
+    - {command: [HSET, "doc:2", t, red, n, "2", v, !!binary "AABAQAAAgEA="], expect: {
+        equals: 0}}
+    - {command: [HSET, "doc:3", t, red, n, "3", v, !!binary "AACgQAAAwEA="], expect: {
+        equals: 0}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@t:{red}", NOCONTENT], wait_s: 20, expect: {contains: "doc:3"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @v $B]", PARAMS, "2", B, !!binary "AACAPwAAAEA=",
+        NOCONTENT], wait_s: 20, expect: {contains: "doc:1"}, compare: unordered}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [FT._LIST], wait_s: 10, expect: {equals: []}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, t, TAG, n,
+        NUMERIC, v, VECTOR, HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", t, red, n, "1", v, !!binary "AACAPwAAAEA="], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:2", t, red, n, "2", v, !!binary "AABAQAAAgEA="], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:3", t, red, n, "3", v, !!binary "AACgQAAAwEA="], expect: {
+        equals: 3}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@n:[0 5]", NOCONTENT], wait_s: 20, expect: {contains: "doc:2"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @v $B]", PARAMS, "2", B, !!binary "AACAPwAAAEA=",
+        NOCONTENT], wait_s: 20, expect: {contains: "doc:1"}, compare: unordered}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT._LIST], wait_s: 10, expect: {equals: []}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, t, TAG, n,
+        NUMERIC, v, VECTOR, HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2],
+      expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT._LIST], wait_s: 10, expect: {equals: []}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, t, TAG, n,
+        NUMERIC, v, VECTOR, HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2],
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@t:{red}", NOCONTENT], compare: skip}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @v $B]", PARAMS, "2", B, !!binary "AACAPwAAAEA=",
+        NOCONTENT], compare: skip}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@t:{red}", NOCONTENT], wait_s: 10, expect: {error: true}}
+    - {command: [FT._LIST], wait_s: 10, expect: {equals: []}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, t, TAG, n,
+        NUMERIC, v, VECTOR, HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2],
+      expect: {equals: OK}}
+    - {command: [FT._LIST], wait_s: 10, expect: {equals: [idx]}}
+    - {command: [HSET, "doc:1", t, red, n, "1", v, !!binary "AACAPwAAAEA="], expect: {
+        equals: 0}}
+    - {command: [HSET, "doc:2", t, red, n, "2", v, !!binary "AABAQAAAgEA="], expect: {
+        equals: 0}}
+    - {command: [HSET, "doc:3", t, red, n, "3", v, !!binary "AACgQAAAwEA="], expect: {
+        equals: 0}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@t:{red}", NOCONTENT], wait_s: 20, expect: {contains: "doc:3"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @v $B]", PARAMS, "2", B, !!binary "AACAPwAAAEA=",
+        NOCONTENT], wait_s: 20, expect: {contains: "doc:1"}, compare: unordered}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [FT._LIST], wait_s: 10, expect: {equals: []}}
+    - {command: [PING], expect: {equals: PONG}}
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

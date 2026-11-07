@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-07T11:25+00:00.
+Updated 2026-11-07T11:46+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 612 | 1895 | #3509 (2026-04-17) | 300 | 87.4 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
-| valkey-io/valkey-search | 393 | 276 | #603 (2026-01-15) | 165 | 56.1 |
+| valkey-io/valkey-search | 415 | 254 | #536 (2025-12-10) | 187 | 59.3 |
 
 ## Last runs
 
@@ -48,36 +48,36 @@ Updated 2026-11-07T11:25+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-07T07:50:34+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42342331075): 20 merge(s) tested, 1 without a code change.
+[2026-11-07T11:46:02+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42352953225): 20 merge(s) tested, 2 without a code change.
 
-- [valkey-io/valkey-search#741](https://github.com/valkey-io/valkey-search/pull/741) ([tests](tests/valkey-search/741-b0e8a26b5/)): Minor fix for build failures (#741): declined: The change only adds a local declaration `auto &schema_manager = SchemaManager::Instance();` so the pre-existing `schema_manager.GetIndexSchema(...)` call in QueryCommand::Execute compiles — a pure build fix for a compile error introduced by the parent commit. It binds the same singleton t
-- [valkey-io/valkey-search#735](https://github.com/valkey-io/valkey-search/pull/735) ([tests](tests/valkey-search/735-960d136f7/)): Solving Text Negation by using a Universal Set + Filtering (#735): 6 of 6 test(s) reached the change; crash, predates #735, since fixed (recorded)
-- [valkey-io/valkey-search#734](https://github.com/valkey-io/valkey-search/pull/734) ([tests](tests/valkey-search/734-c5e1e78f1/)): Remove redundant has_text_predicate field (#734): declined: Pure refactor with no reachable behaviour change. The removed has_text_predicate boolean was set only at the end of FilterParser::ParseTextTokens, the exact function whose every successful exit already sets QueryOperations::kContainsText (filter_parser.cc:874,882), so the new QueryHasTextP
-- [valkey-io/valkey-search#621](https://github.com/valkey-io/valkey-search/pull/621) ([tests](tests/valkey-search/621-9ea236a2a/)): Minor code quality improvements (#621): declined: The change is a pure refactor with no behavior change in the module: it removes an unused local variable and renames a lambda parameter in QueryCommand::Execute (src/commands/commands.cc), and makes kDefaultMinStemSize constexpr in ft_create_parser.h — the constant is only ever read (ft_cr
-- [valkey-io/valkey-search#607](https://github.com/valkey-io/valkey-search/pull/607) ([tests](tests/valkey-search/607-e41ee6069/)): Endurance test (#607): declined: The change "Endurance test (#607)" modifies only Python test-infrastructure files (testing/integration/stability_runner.py, stability_test.py, utils.py), adding new index-type variants and text attributes to valkey-search's own stability/endurance test harness. No module source code is cha
-- [valkey-io/valkey-search#638](https://github.com/valkey-io/valkey-search/pull/638) ([tests](tests/valkey-search/638-f90b05072/)): Optimize non nested pure text composed and queries by skipping pre filtering (#638): 0 of 3 test(s) reached the change; crash, introduced and since fixed (recorded)
-- [valkey-io/valkey-search#633](https://github.com/valkey-io/valkey-search/pull/633) ([tests](tests/valkey-search/633-357043189/)): Allow local node to have no primary endpoint (#633): declined: no proposed test validated
-- [valkey-io/valkey-search#521](https://github.com/valkey-io/valkey-search/pull/521) ([tests](tests/valkey-search/521-97a513224/)): Use new command "FT.Internal_update" to replicate index create/drop (#521): 2 of 5 test(s) reached the change; [crash, introduced by #521](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87); crash, introduced and since fixed (recorded)
-- [valkey-io/valkey-search#634](https://github.com/valkey-io/valkey-search/pull/634) ([tests](tests/valkey-search/634-85ba2606c/)): Update deduplication check to check Tag existence (#634): 3 of 3 test(s) reached the change; crash, predates #634, since fixed (recorded)
-- [valkey-io/valkey-search#631](https://github.com/valkey-io/valkey-search/pull/631) ([tests](tests/valkey-search/631-2d9a3b539/)): Fix ordering of neighbors in CME (#631): declined: The fix changes behaviour only inside SearchPartitionResultsTracker in src/query/fanout.cc, which is constructed solely by PerformSearchFanoutAsync, and that fanout runs only when UsingCoordinator() && IsCluster() (src/commands/commands.cc:139-167). UsingCoordinator() requires the hidden '
-- [valkey-io/valkey-search#629](https://github.com/valkey-io/valkey-search/pull/629) ([tests](tests/valkey-search/629-016e983be/)): Avoid deadlock while processing  MULTI/EXEC mutations (#629): declined: no proposed test validated
-- [valkey-io/valkey-search#626](https://github.com/valkey-io/valkey-search/pull/626) ([tests](tests/valkey-search/626-130e9274e/)): Add CMAKE_POLICY_VERSION_MINIMUM to build scripts and submodules (#626): declined: The change only adds -DCMAKE_POLICY_VERSION_MINIMUM=3.5 to build.sh and to the submodules' common CMake arguments so that newer CMake (4.x) accepts the submodules' old cmake_minimum_required declarations at configure time. It is a build/CI configuration change with no modification to any s
-- [valkey-io/valkey-search#558](https://github.com/valkey-io/valkey-search/pull/558) ([tests](tests/valkey-search/558-5431493cb/)): Update PARAMS argument for ft.aggregate documentation (#558): declined: The change edits only src/commands/ft.aggregate.json, a command-documentation metadata file describing FT.AGGREGATE's PARAMS argument. That file is not compiled into the module (src/commands/CMakeLists.txt lists only .cc sources), is referenced by no source, build, or load path, and the mo
-- [valkey-io/valkey-search#624](https://github.com/valkey-io/valkey-search/pull/624) ([tests](tests/valkey-search/624-5a1f3ab61/)): Optimize all proximity queries and pure OR queries (#624): 0 of 2 test(s) reached the change
-- [valkey-io/valkey-search#610](https://github.com/valkey-io/valkey-search/pull/610) ([tests](tests/valkey-search/610-ffd4bf08d/)): Refactoring SendReply block (#610): declined: This is a pure behavior-preserving refactor of the reply-generation code in ft_aggregate.cc (SendReplyInner split into ProcessNeighborsForProcessing, ProcessFieldValue, CreateRecordsFromNeighbors, ExecuteAggregationStages, GenerateResponse) and ft_search.cc (SendReply split into HandleEarl
-- [valkey-io/valkey-search#620](https://github.com/valkey-io/valkey-search/pull/620) ([tests](tests/valkey-search/620-143f2c61e/)): Add SeekForwardPosition API to TextIterator interface and all the derived iterators (#620): declined: no proposed test validated
-- [valkey-io/valkey-search#616](https://github.com/valkey-io/valkey-search/pull/616) ([tests](tests/valkey-search/616-3f11e51a3/)): Implement backslash escape character handling (#616): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#617](https://github.com/valkey-io/valkey-search/pull/617) ([tests](tests/valkey-search/617-c2c24916b/)): Implement aggregation_metrics (#617): 2 of 2 test(s) reached the change; crash, predates #617, since fixed (recorded)
-- [valkey-io/valkey-search#613](https://github.com/valkey-io/valkey-search/pull/613) ([tests](tests/valkey-search/613-10d16a1b8/)): String Intern race fix, This is a recreation of PR #576. (#613): 0 of 3 test(s) reached the change; crash, predates #613, since fixed (recorded)
-- [valkey-io/valkey-search#611](https://github.com/valkey-io/valkey-search/pull/611) ([tests](tests/valkey-search/611-5a230b259/)): Eliminate redundant mainthread filter invokations (#611): declined: no proposed test validated
+- [valkey-io/valkey-search#603](https://github.com/valkey-io/valkey-search/pull/603) ([tests](tests/valkey-search/603-423716ace/)): Followup of #441 Position Optimization (#603): 0 of 2 test(s) reached the change; crash, predates #603, since fixed (recorded)
+- [valkey-io/valkey-search#587](https://github.com/valkey-io/valkey-search/pull/587) ([tests](tests/valkey-search/587-1ba297abc/)): Add a new config to enable mutation queue draining before RDB save (#587): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#591](https://github.com/valkey-io/valkey-search/pull/591) ([tests](tests/valkey-search/591-4f003bf67/)): Addressing memory deallocation overhead by minimizing the mutex contension (#591): 0 of 6 test(s) reached the change; crash, predates #591, since fixed (recorded)
+- [valkey-io/valkey-search#604](https://github.com/valkey-io/valkey-search/pull/604) ([tests](tests/valkey-search/604-543e97ac8/)): Add optimization for pure exact phrase queries by avoiding the filtering step and finishing the search in entries fetcher (#604): 0 of 5 test(s) reached the change; crash, predates #604, since fixed (recorded); crash, introduced and since fixed (recorded)
+- [valkey-io/valkey-search#602](https://github.com/valkey-io/valkey-search/pull/602) ([tests](tests/valkey-search/602-4b6878bf7/)): fixing tag query parsing (#602): declined: The only behavioral change is in src/coordinator/search_converter.cc: gRPC fanout requests now re-parse tag query strings with the query-language '|' separator (FilterParser::ParseQueryTags) instead of the index's schema separator. That code runs only when the coordinator is active, which 
+- [valkey-io/valkey-search#600](https://github.com/valkey-io/valkey-search/pull/600) ([tests](tests/valkey-search/600-96ad1caad/)): Fix build warnings (#600): declined: The change only adds the `override` specifier to five already-overriding virtual methods in src/query/predicate.h (no change to dispatch or behavior, just warning suppression) and moves a Snowball include directory from PUBLIC to PRIVATE in third_party/snowball/CMakeLists.txt (build-time i
+- [valkey-io/valkey-search#597](https://github.com/valkey-io/valkey-search/pull/597) ([tests](tests/valkey-search/597-0f9360759/)): Update QueryOperations to be sent via protobuf allowing remote nodes to benefit from optimizations (#597): 2 of 2 test(s) reached the change; [regressed-fix, the fix of #597 regressed](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/91)
+- [valkey-io/valkey-search#596](https://github.com/valkey-io/valkey-search/pull/596) ([tests](tests/valkey-search/596-7c28ad201/)): Apply clang format to text_index.* (#596): declined: The change only applies clang-format to text_index.cc and text_index.h: every hunk merely moves '&' and '*' from the type to the identifier (whitespace/style placement). No declaration, logic, locking, or data structure changes semantically, so the module's behavior is identical on both bu
+- [valkey-io/valkey-search@97c1ae34bc5c](https://github.com/valkey-io/valkey-search/commit/97c1ae34bc5c02a6ca85f28c1a24131af3a1147e) ([tests](tests/valkey-search/97c1ae34b/)): Merge pull request #594 from valkey-io/fulltext: 4 of 4 test(s) reached the change
+- [valkey-io/valkey-search#452](https://github.com/valkey-io/valkey-search/pull/452) ([tests](tests/valkey-search/452-1b165430e/)): Fix tag OR syntax in hybrid queries and add filter expression tests (#452): 3 of 3 test(s) reached the change; crash, predates #452, since fixed (recorded)
+- [valkey-io/valkey-search#569](https://github.com/valkey-io/valkey-search/pull/569) ([tests](tests/valkey-search/569-6b172614f/)): Fix cross-module memory allocator crash by hiding wrapper symbols (#569): declined: This is a build/link change only: the linker version script now hides __wrap_*, __real_* and operator new/delete symbols from libsearch.so's dynamic symbol table (plus a new Python integration test). Its sole behavioural effect is on ELF symbol interposition when a second module (valkey-js
+- [valkey-io/valkey-search#565](https://github.com/valkey-io/valkey-search/pull/565) ([tests](tests/valkey-search/565-a3fdb5c8f/)): Fix use-after-free race in DefaultReplyScoreAs() (#565): 0 of 2 test(s) reached the change
+- [valkey-io/valkey-search#556](https://github.com/valkey-io/valkey-search/pull/556) ([tests](tests/valkey-search/556-df918dd23/)): Fix delete bug (#556): 0 of 2 test(s) reached the change
+- [valkey-io/valkey-search#548](https://github.com/valkey-io/valkey-search/pull/548) ([tests](tests/valkey-search/548-0e4b6dbb8/)): Fix deprecated std::atomic_load/store warnings for shared_ptr (#548): declined: The change only adds #pragma GCC diagnostic push/ignored(-Wdeprecated-declarations)/pop around the existing std::atomic_load/std::atomic_store calls on cluster_map_ in valkey_search.cc and valkey_search.h. No code path, argument, or logic changes: the same atomic load/store calls execute i
+- [valkey-io/valkey-search#504](https://github.com/valkey-io/valkey-search/pull/504) ([tests](tests/valkey-search/504-c812cc4c6/)): Update arguments for ft.create and ft.search json (#369) (#504): declined: The change edits only the command-documentation metadata files src/commands/ft.aggregate.json, ft.create.json and ft.search.json, which document the existing argument grammar for the valkey.io command reference. These JSON files are not consumed anywhere: src/commands/CMakeLists.txt compil
+- [valkey-io/valkey-search#537](https://github.com/valkey-io/valkey-search/pull/537) ([tests](tests/valkey-search/537-f31c52efb/)): Implement background search neighbor deque limiting optimization  (#537): 2 of 2 test(s) reached the change; crash, predates #537, since fixed (recorded)
+- [valkey-io/valkey-search#550](https://github.com/valkey-io/valkey-search/pull/550) ([tests](tests/valkey-search/550-567f32e54/)): Better handling of nullptr in FromString String config (#550): declined: The change hardens vmsdk config::String::FromString to reject a string_view with a null data pointer instead of silently ignoring it. This path is unreachable from any server-visible input: FromString is only invoked by ModuleConfigManager::UpdateConfigFromKeyVal when parsing module-load a
+- [valkey-io/valkey-search#542](https://github.com/valkey-io/valkey-search/pull/542) ([tests](tests/valkey-search/542-1c9931284/)): Add general utility thread pool for "execute later at low priority" routines and schedule Search Result deletions on this  (#542): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#549](https://github.com/valkey-io/valkey-search/pull/549) ([tests](tests/valkey-search/549-3b15005be/)): Fix non-vector aggregation result. Enhance Aggregation tests (#549): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#547](https://github.com/valkey-io/valkey-search/pull/547) ([tests](tests/valkey-search/547-a25fcad6c/)): Add getter in config for the default value (#547): declined: The change adds an internal GetDefaultValue() accessor to the vmsdk config classes that no production code in valkey-search calls (only the new unit test uses it), fixes a comment, and reworks String::FromString to record the default — a path reachable only when a string-typed module confi
 
 ## Totals
 
-- Merges whose tests reached the change: 416 of 605 tested (69%)
+- Merges whose tests reached the change: 423 of 617 tested (69%)
 - Changed-line coverage: median 100% of 286 merge(s) measured, 18 under 50%
-- Recall: 124 parents flagged of 182 fix merges
-- Claude: $1677.00 in the last 24 hours, $4290.50 in the last 7 days, $4290.50 in all
-- Issues filed: 43
+- Recall: 126 parents flagged of 186 fix merges
+- Claude: $1785.90 in the last 24 hours, $4399.40 in the last 7 days, $4399.40 in all
+- Issues filed: 44
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -121,6 +121,7 @@ Updated 2026-11-07T11:25+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/89
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/90
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/91
 
 ## Retries
 

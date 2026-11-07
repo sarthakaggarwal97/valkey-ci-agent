@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search a25fcad6cf68..3b15005be6b7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1e3dddfe4783
+seed: 549
+experiment:
+  id: proposed.ft-aggregate-nonvector-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

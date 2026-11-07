@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "7c28ad201adb8fe16ba2429e495b2c57744d65ac",
+  "parent": "97c1ae34bc5c02a6ca85f28c1a24131af3a1147e",
+  "pr": 596,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Apply clang format to text_index.* (#596)",
+  "date": "2026-01-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2682,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only applies clang-format to text_index.cc and text_index.h: every hunk merely moves '&' and '*' from the type to the identifier (whitespace/style placement). No declaration, logic, locking, or data structure changes semantically, so the module's behavior is identical on both builds and no test can distinguish them."
+}
