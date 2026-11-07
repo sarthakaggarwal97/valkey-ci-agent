@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b2d08c9ef9acf793d9a4bb6776ff8a645d0f5ee5",
+  "parent": "8a91a123980bf7715a851792b5f00c45b993aeba",
+  "pr": 3464,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix use-after-unload crash in test auth module's blocking thread (#3464)",
+  "date": "2026-04-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.439,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to a test module's unload cleanup (tests/modules/auth.c ValkeyModule_OnUnload), adding a pthread_join to avoid a use-after-unload crash when dlclose unmaps the module while a 500ms blocking-auth thread is still sleeping. The crash is only reachable via MODULE UNLOAD on a live server (module.c dlclose with the process still running), which valkey.action.commands explicitly refuses and no installed component issues. The only other unload path, graceful shutdown (moduleUnloadAllModules), calls exit(0) immediately after dlclose, destroying the whole process and the sleeping "
+}

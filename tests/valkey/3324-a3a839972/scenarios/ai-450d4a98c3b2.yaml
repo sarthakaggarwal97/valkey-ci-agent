@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0ec173351658..a3a839972ff1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-450d4a98c3b2
+seed: 93002
+experiment:
+  id: proposed.io-threads-burst-idle
+  inputs:
+    operations: 60000
+    mutation_rate: 30000
+    value_size: 64
+    idle_s: 4
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7100
+  server_config:
+    io-threads: 2
+    hz: 100

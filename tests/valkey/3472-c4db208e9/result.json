@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c4db208e9b2c1d41b3a8c6db8a8b982df2dc11c0",
+  "parent": "a3a839972ff10a68b1a7069d70d8ce1fffb8f02a",
+  "pr": 3472,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "enhance raxLowWalk: use memchr() for child-edge lookup in non-compressed nodes (#3472)",
+  "date": "2026-04-13",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4655,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change replaces the open-coded first-match byte scan in raxLowWalk's non-compressed branch with memchr(), which returns the same first-occurrence index and the same not-found condition; the only divergent state, the local j after a not-found break, is never observable because *splitpos is only written when the stop node is compressed and the break occurs only in the non-compressed branch. All outputs of raxLowWalk (return length, stopnode, plink, splitpos, parent stack) are identical to the parent build on every input, and memchr reads exactly the same h->size bytes the loop read (the loop"
+}

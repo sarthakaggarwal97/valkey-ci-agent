@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.cli-env-host-port
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli reads VALKEYCLI_HOST and VALKEYCLI_PORT from the environment,
+    command-line flags override them, and the unvalidated atoi port path fails cleanly
+components:
+- use: valkey.action.tools
+  id: cli-env
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 30
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {exit: {equals: 0}, stdout: {
+          equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], env: {VALKEYCLI_HOST: valkeycli-env.invalid},
+      expect_difference: true, expect: {exit: {equals: 1}, stderr: {contains: "valkeycli-env.invalid"}}}
+    - {tool: valkey-cli, args: [-h, 127.0.0.1, -p, $port, PING], env: {VALKEYCLI_HOST: valkeycli-env.invalid},
+      expect: {exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [PING], env: {VALKEYCLI_PORT: "1"}, expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "127.0.0.1:1"}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], env: {VALKEYCLI_PORT: "1"}, expect: {
+        exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [PING], env: {VALKEYCLI_PORT: "65536"}, expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "127.0.0.1:65536"}}}
+    - {tool: valkey-cli, args: [PING], env: {VALKEYCLI_PORT: notaport}, expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "127.0.0.1:0"}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], env: {VALKEYCLI_HOST: ""}, expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "Could not connect to Valkey\
+            \ at :"}}}
+    - {tool: valkey-cli, args: [-s, $socket, PING], env: {VALKEYCLI_HOST: valkeycli-env.invalid,
+        VALKEYCLI_PORT: "1"}, expect: {exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-env}

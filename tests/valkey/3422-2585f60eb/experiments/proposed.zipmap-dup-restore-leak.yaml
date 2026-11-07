@@ -1,0 +1,21 @@
+extends: [valkey.liveness]
+id: proposed.zipmap-dup-restore-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE of a structurally-valid HASH_ZIPMAP payload with a duplicate
+    field reaches the zipmap-to-listpack conversion's error branch; the current build
+    must free the partial listpack and neither crash nor leak.
+components:
+- use: valkey.action.commands
+  id: restore
+  config:
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, "1"], expect: {equals: OK}}
+    - {command: [RESTORE, zmk, "0", !!binary "CQwCAWEBAHgBYQEAef9QAAAAAAAAAAAA"],
+      expect: {error: true}}
+    - {command: [EXISTS, zmk], expect: {equals: 0}}
+    - {command: [PING], expect: {equals: PONG}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore}

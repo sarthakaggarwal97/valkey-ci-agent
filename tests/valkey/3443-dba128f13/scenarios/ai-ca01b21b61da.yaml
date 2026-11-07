@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e6bbd4e0d223..dba128f13b74.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ca01b21b61da
+seed: 102
+experiment:
+  id: proposed.signed-memory-config-negative
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0ec173351658..a3a839972ff1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8ff98ba0e61d
+seed: 93004
+experiment:
+  id: proposed.io-threads-inbox-saturation
+  inputs:
+    threads: 2
+    clients: 4700
+    pipeline: 16
+    requests: 2000000
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

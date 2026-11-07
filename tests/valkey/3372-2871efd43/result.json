@@ -1,0 +1,46 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2871efd43644f9bf222dca882a184e36f3e28d4a",
+  "parent": "c0289c6a7225ed7e1aee59712d4546e33c05a813",
+  "pr": 3372,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add cluster-config-save-behavior option to control nodes.conf save behavior (#3372)",
+  "date": "2026-04-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.6847,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-ab622ec85cad",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'saves' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (CLUSTER BUMPEPOCH), 7 (CLUSTER BUMPEPOCH)"
+    },
+    {
+      "scenario": "ai-0e90947fc873",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'election-safety' returned ERROR: cannot check that 2 election winner(s) reached quorum: no 'Failover auth ACK' line was published as 'cluster.vote.acked' (Valkey logs them since 9.2)"
+    },
+    {
+      "scenario": "ai-0456e4544af0",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'election-safety' returned ERROR: cannot check that 2 election winner(s) reached quorum: no 'Failover auth ACK' line was published as 'cluster.vote.acked' (Valkey logs them since 9.2)"
+    }
+  ]
+}

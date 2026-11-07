@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.slot-migration-repl-bytes-disabled
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTER MIGRATESLOTS completes with slot-migration-max-failover-repl-bytes
+    -1 set on the source, so the failover pause gate runs with the limit disabled
+    and the keys land on the target
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: 2
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, slot-migration-max-failover-repl-bytes, -1], node: 0,
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, slot-migration-max-failover-repl-bytes], node: 0, expect_difference: true,
+      expect: {contains: "-1"}}
+    - {command: [SET, "{6ZJ}k1", v1], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{6ZJ}k2", v2], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{6ZJ}k3", v3], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 16383, 16383, NODE, "<node.1.id>"],
+      node: 0, expect: {equals: OK}}
+    - {command: [GET, "{6ZJ}k1"], node: 1, wait_s: 30, expect: {equals: v1}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16383], node: 1, wait_s: 30, expect: {
+        equals: 3}}
+    - {command: [GET, "{6ZJ}k3"], node: 1, expect: {equals: v3}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [migrate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

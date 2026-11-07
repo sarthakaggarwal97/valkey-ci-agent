@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.cluster-config-save-behavior-saves
+deployment:
+  modes: [standalone]
+metadata:
+  description: Trigger nodes.conf saves through clusterBeforeSleep (BUMPEPOCH, SETSLOT)
+    under sync and best-effort on two-node private clusters, nodes must stay live
+    and answer, compared against the parent
+components:
+- use: valkey.action.commands
+  id: saves
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, cluster-config-save-behavior], expect_difference: true,
+      expect: {equals: [cluster-config-save-behavior, sync]}}
+    - {command: [CLUSTER, BUMPEPOCH], compare: skip, expect: {contains: BUMPED}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CLUSTER, SETSLOT, "16383", NODE, "<node.1.id>"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, cluster-config-save-behavior, best-effort], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-config-save-behavior, best-effort], node: 1,
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, BUMPEPOCH], compare: skip, expect: {contains: BUMPED}}
+    - {command: [CLUSTER, BUMPEPOCH], node: 1, compare: skip, expect: {contains: BUMPED}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [saves.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: saves}

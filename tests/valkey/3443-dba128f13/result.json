@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dba128f13b7486322fe3b52a8358bd9188ec613a",
+  "parent": "e6bbd4e0d22399a24135419c0a20e52e459a2240",
+  "pr": 3443,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix slot-migration-max-failover-repl-bytes unable to accept -1 (#3443)",
+  "date": "2026-04-08",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 3,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 9,
+    "executed": 9,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.2085,
+  "findings": [],
+  "recorded": []
+}

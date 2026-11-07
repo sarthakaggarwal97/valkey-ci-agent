@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f6b5461b7348..890b82ac3356.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-912536e0b24e
+seed: 202
+experiment:
+  id: proposed.config-rewrite-unsigned-memory
+  inputs:
+    maxmemory_value: '9223372036854775809'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

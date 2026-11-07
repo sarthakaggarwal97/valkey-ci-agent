@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.zipmap-dup-conversion-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE of a structurally valid HASH_ZIPMAP payload whose fields duplicate
+    is rejected without leaking the conversion listpack
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: restore-zipmap
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, set-skip-checksum-validation, "1"], expect: {equals: OK}}
+    - {command: [RESTORE, h, "0", !!binary "CQwCAWEBAGIBYQEAY/9QAAAAAAAAAAAA"], expect: {
+        error: "Bad data format"}}
+    - {command: [EXISTS, h], expect: {equals: 0}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [restore-zipmap.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore-zipmap}

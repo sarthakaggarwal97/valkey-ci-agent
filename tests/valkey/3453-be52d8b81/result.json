@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "be52d8b81a82b81d3b3482ff89236513d195e3b1",
+  "parent": "890b82ac335672cb545f38ee6ebc4fb6cafd6e31",
+  "pr": 3453,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix trivial double-free issue in rdbLoadObject (#3453)",
+  "date": "2026-04-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.3233,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix removes a double-free in rdbLoadObject's HASH_ZIPMAP->listpack conversion (src/rdb.c:2409-2421). The only sub-condition that actually reaches the double-free is lpSafeToAdd() failing after the field was already added to dupSearchHashtable; the other error-branch triggers (duplicate field, allocation failure) leave the field out of the table and were already freed correctly, so they behave identically on both builds. lpSafeToAdd only fails when the listpack would exceed LISTPACK_MAX_SAFETY_SIZE (a fixed 1<<30 ~1GB limit), and zipmapValidateIntegrity's deep OUT_OF_RANGE checks force ever"
+}

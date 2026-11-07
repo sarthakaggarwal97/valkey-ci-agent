@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2585f60ebc93c7b44a23e4df9fb02f2012e185fd",
+  "parent": "034d16ac44e8f722b26d30ea7be9422427092d05",
+  "pr": 3422,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix RDB expiry write length and leak when loading zipmap (#3422)",
+  "date": "2026-04-07",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 7.2901,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 034d16ac44e8..2585f60ebc93.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-892611d92563
+seed: 20260101
+experiment:
+  id: proposed.zipmap-dup-conversion-leak
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

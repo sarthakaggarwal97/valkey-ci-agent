@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a34f125d8e18201bc51878e2848c6b6187a8a3cb",
+  "parent": "baa5a48b5acb2afebdf463ca5b91f3ad77bdaec6",
+  "pr": 3499,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Change rdbSaveStreamConsumers return type from size_t to ssize_t (#3499)",
+  "date": "2026-04-15",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.309,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters the declared return type of rdbSaveStreamConsumers from size_t to ssize_t. The function already returned -1 on error and its sole caller assigns the result to an ssize_t and compares with -1; the previous implicit size_t/ssize_t conversions round-tripped -1 unchanged on all supported platforms, so error detection, the RDB bytes written, and all observable behaviour are identical. This is a pure type-correctness refactor with no behaviour change, so no scenario is needed."
+}

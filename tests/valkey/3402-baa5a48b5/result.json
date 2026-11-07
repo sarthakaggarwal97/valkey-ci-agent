@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "baa5a48b5acb2afebdf463ca5b91f3ad77bdaec6",
+  "parent": "c4db208e9b2c1d41b3a8c6db8a8b982df2dc11c0",
+  "pr": 3402,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Env: Read VALKEYCLI_HOST and VALKEYCLI_PORT environment variables (#3402)",
+  "date": "2026-04-14",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 8,
+    "executed": 8,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.946,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: LeakSanitizer: detected",
+      "scenario": "ai-b003ce06a138",
+      "seed": 3402,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #3402",
+      "fingerprint": "407cf7f564b273e3887a",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/81"
+    }
+  ],
+  "recorded": []
+}

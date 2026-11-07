@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.cluster-bus-byte-stats
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CLUSTER INFO reports the new cluster bus byte counters: totals grow with gossip,
+    pubsub counters grow on sender and receiver after a large light-header PUBLISH,
+    module counters stay zero, and CONFIG RESETSTAT zeroes them and counting resumes.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: busbytes
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    server_config: {cluster-node-timeout: 2000}
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [CLUSTER, INFO], expect_difference: true, expect: {contains: "cluster_stats_bytes_sent:"}}
+    - {command: [EVAL, "local i=redis.call('CLUSTER','INFO') local m=string.match(i,'cluster_stats_bytes_sent:(%d+)')\
+          \ if m then return tonumber(m) end return -1", 0], expect_difference: true,
+      expect: {min: 1}, wait_s: 10}
+    - {command: [EVAL, "local i=redis.call('CLUSTER','INFO') local m=string.match(i,'cluster_stats_bytes_received:(%d+)')\
+          \ if m then return tonumber(m) end return -1", 0], expect_difference: true,
+      expect: {min: 1}, wait_s: 10}
+    - {command: [EVAL, "return redis.call('PUBLISH', 'busbytes', string.rep('x', 100000))",
+        0], expect: {equals: 0}}
+    - {command: [EVAL, "local i=redis.call('CLUSTER','INFO') local m=string.match(i,'cluster_stats_pubsub_bytes_sent:(%d+)')\
+          \ if m then return tonumber(m) end return -1", 0], expect_difference: true,
+      expect: {min: 100000}, wait_s: 15}
+    - {command: [EVAL, "local i=redis.call('CLUSTER','INFO') local m=string.match(i,'cluster_stats_pubsub_bytes_received:(%d+)')\
+          \ if m then return tonumber(m) end return -1", 0], node: 1, expect_difference: true,
+      expect: {min: 100000}, wait_s: 15}
+    - {command: [CLUSTER, INFO], expect_difference: true, expect: {contains: "cluster_stats_module_bytes_sent:0"}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [EVAL, "local i=redis.call('CLUSTER','INFO') local m=string.match(i,'cluster_stats_pubsub_bytes_sent:(%d+)')\
+          \ if m then return tonumber(m) end return -1", 0], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [EVAL, "local i=redis.call('CLUSTER','INFO') local m=string.match(i,'cluster_stats_bytes_sent:(%d+)')\
+          \ if m then return tonumber(m) end return -1", 0], expect_difference: true,
+      expect: {min: 1}, wait_s: 15}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [busbytes.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: busbytes}

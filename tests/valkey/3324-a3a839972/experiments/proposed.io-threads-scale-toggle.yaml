@@ -1,0 +1,54 @@
+extends: [valkey.base]
+id: proposed.io-threads-scale-toggle
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Toggle io-threads-always-active and resize io-threads under sustained
+    writes, driving the scaling policy, the drain spin, and the over-9-threads SPSC
+    poll path
+inputs:
+  properties:
+    mutation_rate: {type: number, minimum: 1, maximum: 50000, default: 5000}
+    value_size: {type: integer, minimum: 1, maximum: 65536, default: 4096}
+components:
+- use: valkey.action.commands
+  id: toggle-on
+  depends_on: [writes]
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, io-threads-always-active, "yes"], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: soak-active
+  depends_on: [toggle-on]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: toggle-off
+  depends_on: [soak-active]
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, io-threads-always-active, "no"], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: soak-policy
+  depends_on: [toggle-off]
+  config: {seconds: 4}
+- use: valkey.action.commands
+  id: resize
+  depends_on: [soak-policy]
+  config:
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, io-threads, "2"], expect: {exists: true}}
+    - {command: [CONFIG, SET, io-threads, "16"], expect: {exists: true}}
+    - {command: [CONFIG, SET, io-threads, "1"], expect: {exists: true}}
+    - {command: [CONFIG, SET, io-threads, "12"], expect: {exists: true}}
+    - {command: [CONFIG, SET, io-threads-always-active, "yes"], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: soak-wide
+  depends_on: [resize]
+  config: {seconds: 3}
+required_events: [toggle-on.completed, toggle-off.completed, resize.completed, soak-wide.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: toggle-on}
+- {evidence_id: valkey.command.sequence, source: resize}

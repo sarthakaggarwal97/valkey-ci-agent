@@ -1,0 +1,62 @@
+extends: [valkey.base]
+id: proposed.lua-callargv-writes-under-replica-kill
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: EVAL server.call writes through the new VM_CallArgv borrowed-argv path
+    while a replica is killed and resyncs; no acknowledged write lost, no crash
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM, SIGSTOP], default: SIGKILL}
+components:
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.commands
+  id: lua-seed
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "for i = 1, 50 do server.call('set', KEYS[1] .. i, 'seed' ..\
+          \ i) end return 'OK'", 1, "lua:seed:"], expect: {equals: OK}}
+    - {command: [EVAL, "return server.call('mset', KEYS[1], 'a', KEYS[2], 'b')", 2,
+        "lua:m1", "lua:m2"], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, lua-seed, kill-replica]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: lua-writes
+  depends_on: [warm-up]
+  config:
+    timeout_s: 60
+    commands:
+    - {command: [EVAL, "for i = 1, 200 do server.call('set', KEYS[1] .. i, string.rep('v',\
+          \ 128)) end return server.call('dbsize')", 1, "lua:w:"], expect: {min: 1}}
+    - {command: [EVAL, "return server.call('append', KEYS[1], 'hello')", 1, "lua:ap"],
+      expect: {equals: 5}}
+    - {command: [EVAL, "return server.call('getset', KEYS[1], 'gs')", 1, "lua:m1"],
+      expect: {equals: a}}
+    - {command: [EVAL, "return server.call('setex', KEYS[1], '1000', 'sv')", 1, "lua:se"],
+      expect: {equals: OK}}
+    - {command: [EVAL, "return server.call('msetnx', KEYS[1], 'x', KEYS[2], 'y')",
+        2, "lua:n1", "lua:n2"], expect: {equals: 1}}
+    - {command: [EVAL, "return server.call('incr', KEYS[1])", 1, "lua:ctr"], expect: {
+        equals: 1}}
+    - {command: [GET, "lua:ap"], expect: {equals: hello}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [lua-writes]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed, lua-writes.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}
+- {evidence_id: valkey.command.sequence, source: lua-writes}

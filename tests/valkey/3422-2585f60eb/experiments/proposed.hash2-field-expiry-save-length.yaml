@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.hash2-field-expiry-save-length
+deployment:
+  modes: [standalone]
+metadata:
+  description: DUMP of a hashtable-encoded hash with a field TTL serializes each field
+    expiry (RDB_TYPE_HASH_2 save path)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dump-hash2
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 2}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, h], compare: skip, expect: {equals: hashtable}}
+    - {command: [HEXPIREAT, h, "99999999999", FIELDS, "1", f1], expect: {equals: [
+          1]}}
+    - {command: [DUMP, h], compare: skip, expect: {error: false}}
+    - {command: [HTTL, h, FIELDS, "1", f1], compare: skip, expect: {error: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dump-hash2.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dump-hash2}

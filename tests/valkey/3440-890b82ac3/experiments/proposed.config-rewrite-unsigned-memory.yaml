@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.config-rewrite-unsigned-memory
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG REWRITE of an unsigned memory config above LLONG_MAX survives
+    a restart (parent writes it as a negative number and exits at startup)
+inputs:
+  properties:
+    maxmemory_value:
+      type: string
+      enum: ["9223372036854775808", "9223372036854775809", "9223372036854776832"]
+      default: "9223372036854775808"
+      description: value above LLONG_MAX for the unsigned memory configs; 2^63 hits
+        the gb format branch, 2^63+1 the plain-bytes branch, 2^63+1024 the kb branch
+components:
+- use: valkey.action.commands
+  id: rewrite-unsigned
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, maxmemory, {$ref: inputs.maxmemory_value}], expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, cluster-link-sendbuf-limit, {$ref: inputs.maxmemory_value}],
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-clients, "100%"], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, maxmemory], expect_difference: true, expect: {equals: [
+          maxmemory, {$ref: inputs.maxmemory_value}]}}
+    - {command: [CONFIG, GET, cluster-link-sendbuf-limit], expect_difference: true,
+      expect: {equals: [cluster-link-sendbuf-limit, {$ref: inputs.maxmemory_value}]}}
+    - {command: [CONFIG, GET, maxmemory-clients], expect_difference: true, expect: {
+        equals: [maxmemory-clients, "100%"]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rewrite-unsigned.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rewrite-unsigned}

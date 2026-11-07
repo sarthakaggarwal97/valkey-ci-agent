@@ -1,0 +1,85 @@
+extends: [valkey.liveness]
+id: proposed.lua-callargv-replies
+deployment:
+  modes: [standalone]
+metadata:
+  description: EVAL server.call replies now cross the new VM_CallArgv reply-handler
+    path; compare every RESP type, error path and borrowed-argv string write against
+    the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: lua
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "return server.call('set', KEYS[1], '12345')", 1, s1], expect: {
+        equals: OK}}
+    - {command: [OBJECT, ENCODING, s1], expect_difference: true, expect: {in: [embstr,
+          raw]}}
+    - {command: [GET, s1], expect: {equals: "12345"}}
+    - {command: [EVAL, "return server.call('get', KEYS[1])", 1, s1], expect: {equals: "12345"}}
+    - {command: [EVAL, "return server.call('incr', KEYS[1])", 1, ctr], expect: {equals: 1}}
+    - {command: [EVAL, "local v = server.call('get', KEYS[1]) if v == false then return\
+          \ 'nilok' end return v", 1, missing], expect: {equals: nilok}}
+    - {command: [RPUSH, mylist, a, b, c], expect: {equals: 3}}
+    - {command: [EVAL, "return server.call('lrange', KEYS[1], 0, -1)", 1, mylist],
+      expect: {equals: [a, b, c]}}
+    - {command: [EVAL, "return #server.call('lrange', KEYS[1], 0, -1)", 1, nolist],
+      expect: {equals: 0}}
+    - {command: [XADD, st, "1-1", f, v], expect: {equals: "1-1"}}
+    - {command: [XADD, st, "2-2", f2, v2], expect: {equals: "2-2"}}
+    - {command: [EVAL, "return server.call('xrange', KEYS[1], '-', '+')", 1, st]}
+    - {command: [EVAL, "return server.call('nosuchcmd')", 0], expect: {error: true}}
+    - {command: [EVAL, "local t = server.pcall('nosuchcmd') return t.err", 0], expect: {
+        exists: true}}
+    - {command: [EVAL, "local t = server.pcall('set', KEYS[1]) return t.err", 1, k],
+      expect: {exists: true}}
+    - {command: [EVAL, "local v = server.call('blpop', KEYS[1], '0') if v == false\
+          \ then return 'noblock' end return 'unexpected'", 1, bl], expect: {equals: noblock}}
+    - {command: [EVAL, "server.setresp(3) local m = server.call('config', 'get', 'maxmemory')\
+          \ return m.map['maxmemory']", 0], expect: {equals: "0"}}
+    - {command: [EVAL, "server.setresp(3) server.call('zadd', KEYS[1], '1.5', 'a')\
+          \ local s = server.call('zscore', KEYS[1], 'a') return tostring(s.double)",
+        1, z], expect: {equals: "1.5"}}
+    - {command: [EVAL, "server.setresp(3) server.call('sadd', KEYS[1], 'only') local\
+          \ s = server.call('smembers', KEYS[1]) for k, v in pairs(s.set) do return\
+          \ k end", 1, st1], expect: {equals: only}}
+    - {command: [EVAL, "server.setresp(3) local b = server.call('sismember', KEYS[1],\
+          \ 'only') if b == true then return 'bool-true' end return type(b)", 1, st1],
+      expect: {equals: bool-true}}
+    - {command: [EVAL, "server.call('set', KEYS[1], string.rep('x', 100000)) local\
+          \ v = server.call('get', KEYS[1]) return #v", 1, big], expect: {equals: 100000}}
+    - {command: [EVAL, "return server.call('append', KEYS[1], 'hello')", 1, ap], expect: {
+        equals: 5}}
+    - {command: [EVAL, "return server.call('append', KEYS[1], 'world')", 1, ap], expect: {
+        equals: 10}}
+    - {command: [EVAL, "return server.call('getset', KEYS[1], 'new')", 1, s1], expect: {
+        equals: "12345"}}
+    - {command: [EVAL, "return server.call('setex', KEYS[1], '100', 'sv')", 1, se],
+      expect: {equals: OK}}
+    - {command: [EVAL, "return server.call('setnx', KEYS[1], 'zz')", 1, se], expect: {
+        equals: 0}}
+    - {command: [EVAL, "return server.call('msetnx', KEYS[1], 'a', KEYS[2], 'b')",
+        2, "{m}1", "{m}2"], expect: {equals: 1}}
+    - {command: [EVAL, "return server.call('mset', KEYS[1], '111', KEYS[2], '222')",
+        2, "{m}3", "{m}4"], expect: {equals: OK}}
+    - {command: [GET, "{m}3"], expect: {equals: "111"}}
+    - {command: [EVAL, "server.call('set', KEYS[1], '') return server.call('strlen',\
+          \ KEYS[1])", 1, empty], expect: {equals: 0}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [EVAL, "return server.call('incr', KEYS[1])", 1, ctr], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [2]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [lua.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lua}

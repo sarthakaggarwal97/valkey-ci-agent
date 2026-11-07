@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.eviction-sampling-storm
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Mass eviction under maxmemory drives the new contiguous-cursor hashtableSampleEntries
+    path thousands of times over a growing, shrinking and rehashing keyspace, then
+    drains the table to empty so sampling passes through the count-capped (count >
+    hashtableSize) and cursor-wrap edges; RANDOMKEY touches the split-out sampleRandomBuckets
+    path. A sampling loop that stalls shows up as a timeout or an unrelieved OOM;
+    a crash or overrun is the liveness oracle's.
+components:
+- use: valkey.action.commands
+  id: evict
+  config:
+    timeout_s: 180
+    commands:
+    - {command: [DEBUG, POPULATE, 200000], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 200000}}
+    - {command: [RANDOMKEY], expect: {exists: true}}
+    - {command: [CONFIG, SET, maxmemory, 8mb], expect: {equals: OK}}
+    - {command: [SET, trigger1, x], expect: {equals: OK}}
+    - {command: [DBSIZE], wait_s: 60, expect: {max: 150000}}
+    - {command: [DBSIZE], expect: {min: 1}}
+    - {command: [RANDOMKEY], expect: {exists: true}}
+    - {command: [CONFIG, SET, maxmemory, "0"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 200000], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {min: 200000, max: 200001}}
+    - {command: [CONFIG, SET, maxmemory, 100kb], expect: {equals: OK}}
+    - {command: [DBSIZE], wait_s: 90, expect: {max: 10}}
+    - {command: [CONFIG, SET, maxmemory, "0"], expect: {equals: OK}}
+required_events: [evict.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evict}

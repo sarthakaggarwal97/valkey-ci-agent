@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3ed6e5f8441b..034d16ac44e8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-70d9dd1b0451
+seed: 3397
+experiment:
+  id: proposed.embstr-threshold-128
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

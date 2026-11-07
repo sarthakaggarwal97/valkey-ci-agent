@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.redact-bleed-multi-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: Redaction bits from CONFIG SET of a sensitive config in a MULTI/EXEC
+    must not bleed into a later command's commandlog entry
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, commandlog-execution-slower-than, "0"], expect: {equals: OK}}
+    - {command: [SLOWLOG, RESET], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [CONFIG, SET, masterauth, topsecretvalue], expect: {equals: QUEUED}}
+    - {command: [MSET, k1, v1, k2, v2], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK]}}
+    - {command: [EVAL, "local r=redis.call('SLOWLOG','GET') local o={} for i=1,#r\
+          \ do o[i]=r[i][4] end return o", "0"], expect_difference: true, expect: {
+        contains: "(redacted)"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

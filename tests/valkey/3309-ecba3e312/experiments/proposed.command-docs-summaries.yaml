@@ -1,0 +1,89 @@
+extends: [valkey.liveness]
+id: proposed.command-docs-summaries
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS serves the corrected summary string for every command
+    whose summary the change edits, compared against the parent build where the old
+    text still is
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [COMMAND, DOCS, brpoplpush], expect_difference: true, expect: {contains: "Blocks\
+          \ until an element is available otherwise."}}
+    - {command: [COMMAND, DOCS, bzpopmax], expect_difference: true, expect: {contains: "Blocks\
+          \ until a member is available otherwise. Deletes the sorted set"}}
+    - {command: [COMMAND, DOCS, "client|import-source"], expect_difference: true,
+      expect: {contains: "Marks this client as an import source when the server is\
+          \ in import mode."}}
+    - {command: [COMMAND, DOCS, "cluster|flushslot"], expect_difference: true, expect: {
+        contains: "Removes all keys from the target slot."}}
+    - {command: [COMMAND, DOCS, "cluster|getslotmigrations"], expect_difference: true,
+      expect: {contains: "Gets the status of ongoing and recently finished slot import\
+          \ and export operations."}}
+    - {command: [COMMAND, DOCS, "cluster|replicate"], expect_difference: true, expect: {
+        contains: "Configures a node as replica of a primary node or detaches a replica\
+          \ from its primary."}}
+    - {command: [COMMAND, DOCS, "commandlog|help"], expect_difference: true, expect: {
+        contains: "Shows helpful text about the different subcommands."}}
+    - {command: [COMMAND, DOCS, decrby], expect_difference: true, expect: {contains: "Decrements\
+          \ the integer value of a key by a number."}}
+    - {command: [COMMAND, DOCS, flushdb], expect_difference: true, expect: {contains: "Removes\
+          \ all keys from the current database."}}
+    - {command: [COMMAND, DOCS, hexpire], expect_difference: true, expect: {contains: "Sets\
+          \ expiry time on hash fields."}}
+    - {command: [COMMAND, DOCS, hexpireat], expect_difference: true, expect: {contains: "Sets\
+          \ expiry time on hash fields."}}
+    - {command: [COMMAND, DOCS, hexpiretime], expect_difference: true, expect: {contains: "seconds\
+          \ since the epoch at which the given key's field(s) will expire."}}
+    - {command: [COMMAND, DOCS, hgetex], expect_difference: true, expect: {contains: "Gets\
+          \ the value of one or more fields of a given hash key, and optionally sets\
+          \ their expiration time or time-to-live (TTL)."}}
+    - {command: [COMMAND, DOCS, hpexpire], expect_difference: true, expect: {contains: "Sets\
+          \ expiry time on hash object."}}
+    - {command: [COMMAND, DOCS, hpexpireat], expect_difference: true, expect: {contains: "Sets\
+          \ expiration time on hash field."}}
+    - {command: [COMMAND, DOCS, hpexpiretime], expect_difference: true, expect: {
+        contains: "milliseconds since Unix epoch at which the given key's field(s)\
+          \ will expire."}}
+    - {command: [COMMAND, DOCS, hsetex], expect_difference: true, expect: {contains: "Sets\
+          \ the value of one or more fields of a given hash key, and optionally sets\
+          \ their expiration time."}}
+    - {command: [COMMAND, DOCS, incrbyfloat], expect_difference: true, expect: {contains: "Increments\
+          \ the floating point value of a key by a number."}}
+    - {command: [COMMAND, DOCS, lolwut], expect_difference: true, expect: {contains: "Displays\
+          \ computer art and the server version."}}
+    - {command: [COMMAND, DOCS, ltrim], expect_difference: true, expect: {contains: "Removes\
+          \ elements from both ends of a list."}}
+    - {command: [COMMAND, DOCS, setnx], expect_difference: true, expect: {contains: "Sets\
+          \ the string value of a key only when the key doesn't exist."}}
+    - {command: [COMMAND, DOCS, "slowlog|help"], expect_difference: true, expect: {
+        contains: "Shows helpful text about the different subcommands."}}
+    - {command: [COMMAND, DOCS, spublish], expect_difference: true, expect: {contains: "Posts\
+          \ a message to a shard channel."}}
+    - {command: [COMMAND, DOCS, srandmember], expect_difference: true, expect: {contains: "Gets\
+          \ one or multiple random members from a set."}}
+    - {command: [COMMAND, DOCS, xautoclaim], expect_difference: true, expect: {contains: "as\
+          \ if the messages were delivered to a consumer group member."}}
+    - {command: [COMMAND, DOCS, xclaim], expect_difference: true, expect: {contains: "as\
+          \ if the message was delivered to a consumer group member."}}
+    - {command: [COMMAND, DOCS, xlen], expect_difference: true, expect: {contains: "Returns\
+          \ the number of messages in a stream."}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

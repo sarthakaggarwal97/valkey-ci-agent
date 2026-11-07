@@ -1,0 +1,23 @@
+extends: [valkey.liveness]
+id: proposed.redact-monitor-feed
+deployment:
+  modes: [standalone]
+metadata:
+  description: A MONITOR client sees (redacted) for AUTH's password arguments via
+    the deferred redaction bitmap, and plain argument names via the non-redacted branch
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: monitor
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {raw: "MONITOR\r\n", connection: mon, expect: {contains: OK}}
+    - {command: [SET, mk, mv], expect: {equals: OK}}
+    - {command: [AUTH, user1, s3cr3t], expect: {error: true}}
+    - {read: true, connection: mon, expect: {contains: redacted}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: monitor}

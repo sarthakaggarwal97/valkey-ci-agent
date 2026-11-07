@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.lua-server-call-resp3-handlers
+deployment:
+  modes: [standalone]
+metadata:
+  description: EVAL with server.setresp(3) then server.call drives the new RESP3 reply-handler
+    callbacks (null, map, verbatim, double, set, error) that the rewired Lua reply
+    conversion now dispatches through VM_CallArgv.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 3}
+components:
+- use: valkey.action.commands
+  id: luacall
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [HSET, h, a, "1", b, "2"], expect: {equals: 2}}
+    - {command: [HSET, h2, fields, "", k2, v2], expect: {equals: 2}}
+    - {command: [SADD, s, x, y, z], expect: {equals: 3}}
+    - {command: [ZADD, z, "1", a], expect: {equals: 1}}
+    - {command: [EVAL, "server.setresp(3); local v = server.call('GET','missing');\
+          \ if v == nil then return 'nil' else return 'notnil' end", "0"], expect: {
+        equals: "nil"}}
+    - {command: [EVAL, "server.setresp(3); local t = server.call('HGETALL','h'); return\
+          \ t.map.a", "0"], expect: {equals: "1"}}
+    - {command: [EVAL, "server.setresp(3); local t = server.call('HGETALL','h2');\
+          \ return t.map.fields", "0"], expect: {equals: ""}}
+    - {command: [EVAL, "server.setresp(3); local t = server.call('LOLWUT'); return\
+          \ t.verbatim_string.format", "0"], expect: {equals: "txt"}}
+    - {command: [EVAL, "server.setresp(3); local t = server.call('ZSCORE','z','a');\
+          \ if t.double == 1 then return 'one' else return 'other' end", "0"], expect: {
+        equals: "one"}}
+    - {command: [EVAL, "server.setresp(3); local t = server.call('SMEMBERS','s');\
+          \ if t.set.x then return 'yes' else return 'no' end", "0"], expect: {equals: "yes"}}
+    - {command: [EVAL, "server.setresp(3); local ok, e = pcall(function() return server.call('GET')\
+          \ end); if ok then return 'ok' else return 'err' end", "0"], expect: {equals: "err"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: luacall}

@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.lua-callargv-resp3-bool-bignum-attribute
+deployment:
+  modes: [standalone]
+metadata:
+  description: Lua server.call now runs over VM_CallArgv; RESP3 bool, big number and
+    attribute replies from DEBUG PROTOCOL must flow through the new replyHandlersBool/BigNumber/Attribute
+    adapters and convert to the same Lua values as the parent's CallReply path
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 3}
+components:
+- use: valkey.action.commands
+  id: luaresp3
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - command: [DEBUG, SET-DISABLE-DENY-SCRIPTS, "1"]
+      expect: {equals: OK}
+    - command: [EVAL, "return server.call('debug','protocol','true')", "0"]
+    - command: [EVAL, "return server.call('debug','protocol','false')", "0"]
+    - command: [EVAL, "local t = server.call('debug','protocol','bignum') return t.big_number",
+        "0"]
+      expect: {equals: "1234567999999999999999999999999999999"}
+    - command: [EVAL, "return server.call('debug','protocol','bignum')", "0"]
+    - command: [EVAL, "local t = server.call('debug','protocol','map') return t.map[1]",
+        "0"]
+    - command: [EVAL, "return server.call('debug','protocol','attrib')", "0"]
+      expect: {equals: "Some real reply following the attribute"}
+    - command: [EVAL, "local t = server.call('debug','protocol','attrib') local u\
+          \ = server.call('debug','protocol','true') return {t}", "0"]
+    - command: [EVAL, "return server.call('debug','protocol','double')", "0"]
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [luaresp3.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: luaresp3}

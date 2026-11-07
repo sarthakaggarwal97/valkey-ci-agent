@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.signed-memory-config-negative
+deployment:
+  modes: [standalone]
+metadata:
+  description: slot-migration-max-failover-repl-bytes accepts -1 via CONFIG SET, CONFIG
+    GET returns -1, CONFIG REWRITE and a restart keep it, and other memory configs
+    still reject plain negatives
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: signed-mem
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, GET, slot-migration-max-failover-repl-bytes]}
+    - {command: [CONFIG, SET, slot-migration-max-failover-repl-bytes, -1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, slot-migration-max-failover-repl-bytes], expect_difference: true,
+      expect: {contains: "-1"}}
+    - {command: [CONFIG, SET, slot-migration-max-failover-repl-bytes, -2], expect_difference: true,
+      expect: {error: "argument must be between -1 and"}}
+    - {command: [CONFIG, SET, slot-migration-max-failover-repl-bytes, "-9223372036854775808"],
+      expect_difference: true, expect: {error: "argument must be between -1 and"}}
+    - {command: [CONFIG, GET, slot-migration-max-failover-repl-bytes], expect_difference: true,
+      expect: {contains: "-1"}}
+    - {command: [CONFIG, SET, slot-migration-max-failover-repl-bytes, "-1kb"], expect: {
+        error: "argument must be a memory value"}}
+    - {command: [CONFIG, SET, slot-migration-max-failover-repl-bytes, 100mb], expect: {
+        equals: OK}}
+    - {command: [CONFIG, GET, slot-migration-max-failover-repl-bytes], expect: {contains: "104857600"}}
+    - {command: [CONFIG, SET, maxmemory-clients, -1], expect: {error: true}}
+    - {command: [CONFIG, SET, slot-migration-max-failover-repl-bytes, -1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, slot-migration-max-failover-repl-bytes], expect_difference: true,
+      expect: {contains: "-1"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [signed-mem.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: signed-mem}

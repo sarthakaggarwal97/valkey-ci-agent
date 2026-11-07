@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e6bbd4e0d223..dba128f13b74.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ba79fb3c29bd
+seed: 103
+experiment:
+  id: proposed.slot-migration-repl-bytes-disabled
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7200

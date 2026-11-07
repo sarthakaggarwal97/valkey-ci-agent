@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.io-threads-config-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Exercise the redesigned IO-thread queues across runtime io-threads
+    resizes, and compare the config surface change (events-per-io-thread removed,
+    io-threads-always-active added) against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: iothreads
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      io-threads: 4
+      events-per-io-thread: 0
+      min-io-threads-avoid-copy-reply: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, GET, io-threads], expect: {equals: [io-threads, "4"]}}
+    - {command: [CONFIG, SET, io-threads-always-active, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, events-per-io-thread, "0"], expect_difference: true,
+      expect: {error: "Unknown option"}}
+    - {command: [SETRANGE, big, 99999, A], expect: {equals: 100000}}
+    - {command: [GET, big], connection: c1, expect: {exists: true}}
+    - {command: [GET, big], connection: c2, expect: {exists: true}}
+    - {command: [GET, big], connection: c3, expect: {exists: true}}
+    - {command: [SET, k1, v1], connection: c1, expect: {equals: OK}}
+    - {command: [SET, k2, v2], connection: c2, expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.3], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "8"], expect: {equals: OK}}
+    - {command: [GET, big], connection: c1, expect: {exists: true}}
+    - {command: [GET, big], connection: c2, expect: {exists: true}}
+    - {command: [CONFIG, SET, io-threads, "2"], expect: {equals: OK}}
+    - {command: [GET, big], connection: c3, expect: {exists: true}}
+    - {command: [CONFIG, SET, io-threads, "1"], expect: {equals: OK}}
+    - {command: [GET, big], expect: {exists: true}}
+    - {command: [MGET, k1, k2], expect: {equals: [v1, v2]}}
+    - {command: [CONFIG, SET, io-threads, "6"], expect: {equals: OK}}
+    - {command: [SETRANGE, big2, 200000, B], expect: {equals: 200001}}
+    - {command: [GET, big2], connection: c1, expect: {exists: true}}
+    - {command: [GET, big2], connection: c2, expect: {exists: true}}
+    - {command: [GET, big2], connection: c3, expect: {exists: true}}
+    - {command: [DEBUG, SLEEP, 0.3], expect: {equals: OK}}
+    - {command: [GET, big2], expect: {exists: true}}
+    - {command: [CONFIG, GET, io-threads-always-active], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [DEL, big, big2, k1, k2], expect: {equals: 4}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [iothreads.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: iothreads}

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c0289c6a7225ed7e1aee59712d4546e33c05a813",
+  "parent": "b020b03c69874bfb0b24dfdb6eb20765f4e2cfba",
+  "pr": 3471,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Defer argument redaction by storing indices instead of rewriting argv (#3471)",
+  "date": "2026-04-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 3,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 17,
+    "executed": 17,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 10.1742,
+  "findings": [],
+  "recorded": []
+}

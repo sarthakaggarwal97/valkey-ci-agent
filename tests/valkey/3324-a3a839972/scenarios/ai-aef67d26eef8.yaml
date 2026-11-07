@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0ec173351658..a3a839972ff1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-aef67d26eef8
+seed: 93002
+experiment:
+  id: proposed.io-threads-ignition-benchmark
+  inputs:
+    threads_first: 12
+    threads_second: 10
+    clients: 150
+    pipeline: 64
+    requests: 1500000
+    value_size: 4096
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

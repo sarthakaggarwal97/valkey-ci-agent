@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0ec173351658..a3a839972ff1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-88e17dc96eb1
+seed: 93004
+experiment:
+  id: proposed.io-threads-scale-toggle
+  inputs:
+    mutation_rate: 10000
+    value_size: 512
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300
+  server_config:
+    io-threads: 16
+    hz: 100

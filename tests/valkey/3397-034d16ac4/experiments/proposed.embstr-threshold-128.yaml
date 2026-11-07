@@ -1,0 +1,92 @@
+extends: [valkey.liveness]
+id: proposed.embstr-threshold-128
+deployment:
+  modes: [standalone]
+metadata:
+  description: Strings of ~49-116 bytes switch from RAW to EMBSTR at the new 128-byte
+    threshold; walk the boundary with keys, expires and long key names, and hammer
+    the embed/unembed transition paths (EXPIRE, PERSIST, RENAME, APPEND, SETRANGE,
+    SETBIT) on newly-embedded sizes, comparing replies against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: embstr
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k, "01234567890123456789012345678901234567890123456789012345678901234567890123456789"],
+      expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, k], expect_difference: true, expect: {equals: embstr}}
+    - {command: [STRLEN, k], expect: {equals: 80}}
+    - {command: [GET, k], expect: {equals: "01234567890123456789012345678901234567890123456789012345678901234567890123456789"}}
+    - {command: [EXPIRE, k, 1000], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, k], expect_difference: true, expect: {equals: embstr}}
+    - {command: [PERSIST, k], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, k], expect_difference: true, expect: {equals: embstr}}
+    - {command: [TTL, k], compare: skip}
+    - {command: [APPEND, k, "01234567890123456789"], expect: {equals: 100}}
+    - {command: [GET, k], expect: {equals: "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"}}
+    - {command: [OBJECT, ENCODING, k], compare: skip}
+    - {command: [SET, s, "012345678901234567890123456789012345678901234567890123456789"],
+      expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, s], expect_difference: true, expect: {equals: embstr}}
+    - {command: [SETRANGE, s, 10, XXXXX], expect: {equals: 60}}
+    - {command: [GET, s], expect: {equals: "0123456789XXXXX567890123456789012345678901234567890123456789"}}
+    - {command: [SETRANGE, s, 58, YYYY], expect: {equals: 62}}
+    - {command: [STRLEN, s], expect: {equals: 62}}
+    - {command: [GET, s], expect: {equals: "0123456789XXXXX5678901234567890123456789012345678901234567YYYY"}}
+    - {command: [SET, e, "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789",
+        EX, 100], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, e], expect_difference: true, expect: {equals: embstr}}
+    - {command: [TTL, e], compare: skip}
+    - {command: [GET, e], expect: {equals: "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"}}
+    - {command: [SET, g, "01234567890123456789012345678901234567890123456789012345678901234567890123456789"],
+      expect: {equals: OK}}
+    - {command: [GETEX, g, EX, 50], expect: {equals: "01234567890123456789012345678901234567890123456789012345678901234567890123456789"}}
+    - {command: [OBJECT, ENCODING, g], expect_difference: true, expect: {equals: embstr}}
+    - {command: [SET, b, "01234567890123456789012345678901234567890123456789012345678901234567890123456789"],
+      expect: {equals: OK}}
+    - {command: [SETBIT, b, 5, 1], expect: {equals: 0}}
+    - {command: [GETRANGE, b, 0, 9], expect: {equals: "4123456789"}}
+    - {command: [STRLEN, b], expect: {equals: 80}}
+    - {command: [SET, r1, "012345678901234567890123456789"], expect: {equals: OK}}
+    - {command: [RENAME, r1, "012345678901234567890123456789012345678901234567890123456789"],
+      expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, "012345678901234567890123456789012345678901234567890123456789"],
+      expect_difference: true, expect: {equals: embstr}}
+    - {command: [GET, "012345678901234567890123456789012345678901234567890123456789"],
+      expect: {equals: "012345678901234567890123456789"}}
+    - {command: [SET, "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789",
+        "0123456789"], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"],
+      expect_difference: true, expect: {equals: embstr}}
+    - {command: [GET, "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"],
+      expect: {equals: "0123456789"}}
+    - {command: [SET, q, "01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"],
+      expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, q], expect_difference: true, expect: {equals: embstr}}
+    - {command: [EXPIRE, q, 500], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, q], compare: skip}
+    - {command: [GET, q], expect: {equals: "01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"}}
+    - {command: [SET, w, "0123456789012345678901234567890123456789"], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, w], expect: {equals: embstr}}
+    - {command: [SET, x, "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"],
+      expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, x], expect: {equals: raw}}
+    - {command: [SET, z, ""], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, z], expect: {equals: embstr}}
+    - {command: [GET, z], expect: {equals: ""}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [embstr.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: embstr}

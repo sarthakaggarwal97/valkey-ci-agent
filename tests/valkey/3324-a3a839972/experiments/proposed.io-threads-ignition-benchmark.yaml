@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.io-threads-ignition-benchmark
+deployment:
+  modes: [standalone]
+metadata:
+  description: Drive CPU-based IO-thread ignition and queue-based scale-up with valkey-benchmark,
+    then rescale io-threads at runtime while threads are active, comparing candidate
+    and parent builds
+inputs:
+  properties:
+    threads_first: {type: integer, minimum: 2, maximum: 64, default: 9}
+    threads_second: {type: integer, minimum: 1, maximum: 64, default: 4}
+    clients: {type: integer, minimum: 1, maximum: 2000, default: 64}
+    pipeline: {type: integer, minimum: 1, maximum: 512, default: 32}
+    requests: {type: integer, minimum: 1000, maximum: 5000000, default: 1000000}
+    value_size: {type: integer, minimum: 1, maximum: 65536, default: 1024}
+components:
+- use: valkey.action.tools
+  id: load
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 600
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, io-threads, {$ref: inputs.threads_first}],
+      expect: {exit: {equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, {$ref: inputs.clients}, -P, {
+          $ref: inputs.pipeline}, -n, {$ref: inputs.requests}, -d, {$ref: inputs.value_size},
+        -t, "set,get", -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {exit: {equals: 0}, stdout: {
+          contains: PONG}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, io-threads, {$ref: inputs.threads_second}],
+      expect: {exit: {equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, {$ref: inputs.clients}, -P, {
+          $ref: inputs.pipeline}, -n, 300000, -d, {$ref: inputs.value_size}, -t, "set,get",
+        -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, io-threads, 1], expect: {
+        exit: {equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {exit: {equals: 0}, stdout: {
+          contains: PONG}}}
+required_events: [load.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: load}

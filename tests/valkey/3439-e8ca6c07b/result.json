@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e8ca6c07b22ceb89692c17b7f51c4a8f03a268ba",
+  "parent": "1db8bab50851cc22aa97d91aeccb4b8385be1672",
+  "pr": 3439,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix VLA warning in linenoise and enable -Werror (#3439)",
+  "date": "2026-04-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2233,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is build-only with no behavior change: it replaces a const-int VLA dimension in deps/linenoise/linenoise.c with an equivalent #define of the same value (8), leaving the buffer size, loop bounds and escape-sequence parsing identical, and adds -Werror to the linenoise Makefile. Compiled output and runtime behavior are unchanged; the touched code is valkey-cli's interactive terminal line editing, not server behavior, so no scenario can or should test it."
+}

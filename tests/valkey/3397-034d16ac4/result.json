@@ -1,0 +1,34 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "034d16ac44e8f722b26d30ea7be9422427092d05",
+  "parent": "3ed6e5f8441be4e33ccb4b8310d8a22f6cdf492f",
+  "pr": 3397,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Increase embedded string threshold from 64 to 128 bytes (#3397)",
+  "date": "2026-04-07",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.9966,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-d4fcf3a81c12",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

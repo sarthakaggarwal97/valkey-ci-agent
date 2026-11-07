@@ -1,0 +1,19 @@
+extends: [valkey.drained-writes]
+id: proposed.io-threads-burst-idle
+deployment:
+  modes: [standalone]
+metadata:
+  description: A heavy write burst from a cold start ignites IO threads and scales
+    them up, then an idle window scales them back down to one
+inputs:
+  properties:
+    operations: {type: integer, minimum: 1, maximum: 500000, default: 80000}
+    mutation_rate: {type: number, minimum: 1, maximum: 50000, default: 20000}
+    value_size: {type: integer, minimum: 1, maximum: 65536, default: 1024}
+    idle_s: {type: number, minimum: 1, maximum: 60, default: 5}
+components:
+- use: valkey.action.sleep
+  id: idle
+  depends_on: [drained]
+  config: {seconds: {$ref: inputs.idle_s}}
+required_events: [idle.completed]

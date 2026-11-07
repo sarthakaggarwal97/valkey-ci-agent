@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.io-threads-inbox-saturation
+deployment:
+  modes: [standalone]
+metadata:
+  description: Saturate the 4096-entry shared SPMC inbox with thousands of concurrent
+    benchmark clients against few IO threads, so spmcEnqueue fails and the read, write,
+    and poll offload fallbacks run; then shut IO threads down and verify the server
+    still answers
+inputs:
+  properties:
+    threads: {type: integer, minimum: 2, maximum: 64, default: 2}
+    clients: {type: integer, minimum: 100, maximum: 9000, default: 4700}
+    pipeline: {type: integer, minimum: 1, maximum: 512, default: 16}
+    requests: {type: integer, minimum: 1000, maximum: 10000000, default: 2000000}
+components:
+- use: valkey.action.tools
+  id: storm
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 600
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, io-threads, {$ref: inputs.threads}],
+      expect: {exit: {equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, {$ref: inputs.clients}, -P, {
+          $ref: inputs.pipeline}, -n, {$ref: inputs.requests}, -d, 128, -t, "set,get",
+        --threads, 4, -q], compare: skip}
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {exit: {equals: 0}, stdout: {
+          contains: PONG}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], compare: skip, expect: {exit: {
+          equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, io-threads, 1], expect: {
+        exit: {equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {exit: {equals: 0}, stdout: {
+          contains: PONG}}}
+required_events: [storm.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: storm}

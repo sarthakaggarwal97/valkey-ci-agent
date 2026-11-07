@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.cluster-config-save-behavior-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: cluster-config-save-behavior lifecycle - default, CONFIG SET, invalid
+    values, CONFIG REWRITE and restart - compared against the parent, which rejects
+    the option
+components:
+- use: valkey.action.commands
+  id: cfg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, cluster-config-save-behavior], expect_difference: true,
+      expect: {equals: [cluster-config-save-behavior, sync]}}
+    - {command: [CONFIG, SET, cluster-config-save-behavior, best-effort], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, cluster-config-save-behavior], expect_difference: true,
+      expect: {equals: [cluster-config-save-behavior, best-effort]}}
+    - {command: [CONFIG, SET, cluster-config-save-behavior, bogus-mode], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, cluster-config-save-behavior, ""], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, cluster-config-save-behavior], expect_difference: true,
+      expect: {equals: [cluster-config-save-behavior, best-effort]}}
+    - {command: [CONFIG, SET, cluster-config-save-behavior, sync], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, cluster-config-save-behavior], expect_difference: true,
+      expect: {equals: [cluster-config-save-behavior, sync]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cfg}

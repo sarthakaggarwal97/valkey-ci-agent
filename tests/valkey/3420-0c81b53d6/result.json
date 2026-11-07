@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0c81b53d6af3bcffecbcbadf50639e5969178333",
+  "parent": "e8ca6c07b22ceb89692c17b7f51c4a8f03a268ba",
+  "pr": 3420,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Avoid having server.h being included by cli and benchmark (#3420)",
+  "date": "2026-04-06",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3379,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure refactor with no behavior change: the diff moves the COMMAND_* and CMD_* macro definitions verbatim from server.h to commands.h so cli/benchmark need not include server.h, swaps server.h for stdint.h/zmalloc.h/util.h includes in crc16.c and fuzzer_command_generator.c, and reformats the crc16 table and loop with identical values and logic. No command reply, protocol, replication, persistence, cluster-slot hashing, or tool output changes, so no scenario can observe a difference between the builds."
+}

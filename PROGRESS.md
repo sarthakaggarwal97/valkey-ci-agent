@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-07T12:27+00:00.
+Updated 2026-11-07T12:35+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 612 | 1895 | #3509 (2026-04-17) | 300 | 87.4 |
+| valkey-io/valkey | 638 | 1869 | #3366 (2026-04-02) | 326 | 91.1 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
 | valkey-io/valkey-search | 415 | 254 | #536 (2025-12-10) | 187 | 59.3 |
@@ -13,28 +13,28 @@ Updated 2026-11-07T12:27+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-07T10:39:11+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42354781729): 20 merge(s) tested, 5 without a code change.
+[2026-11-07T12:35:33+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42364860296): 20 merge(s) tested, 7 without a code change.
 
-- [valkey-io/valkey#3578](https://github.com/valkey-io/valkey/pull/3578): Fix Deferred Reply Placeholders in Active Deferred Buffers (#3578): error: 2 of 2 run(s) could not start: the run could not start: environment acquisition failed
-- [valkey-io/valkey#3554](https://github.com/valkey-io/valkey/pull/3554) ([tests](tests/valkey/3554-28ecbd204/)): Ensure client slot migration pointer is cleared during reset (#3554): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3548](https://github.com/valkey-io/valkey/pull/3548) ([tests](tests/valkey/3548-a3e44a55d/)): Fix lua-enable-insecure-api default value cannot be changed to yes (#3548): declined: no proposed test validated
-- [valkey-io/valkey#3557](https://github.com/valkey-io/valkey/pull/3557) ([tests](tests/valkey/3557-ac9ca9de3/)): Fix rdmaServer leaks when create listen cm id error (#3557): declined: The change only fixes a resource leak (event channel and addrinfo not freed) on an error path in rdmaServer when rdma_create_id fails during RDMA listener setup. It has no observable behaviour change: the listen attempt fails with the same error either way. Reaching the path requires an RD
-- [valkey-io/valkey#3533](https://github.com/valkey-io/valkey/pull/3533) ([tests](tests/valkey/3533-bb8866557/)): hashtable: fix dismissHashtable madvise size (#3533): 0 of 6 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3555](https://github.com/valkey-io/valkey/pull/3555) ([tests](tests/valkey/3555-edc0d26ad/)): Strip LTO flags from static Lua module build (#3555): declined: The change is build-system only: it strips LTO flags (-flto, -flto=auto, -ffat-lto-objects) from the static Lua module Makefile so that archiving into libvalkeylua.a does not produce LTO bitcode objects the system linker cannot read. No runtime behaviour, command reply, replication, persis
-- [valkey-io/valkey@a7d495352ac0](https://github.com/valkey-io/valkey/commit/a7d495352ac0ba724eeec51fd57b615e8e805f52) ([tests](tests/valkey/a7d495352/)): extra UT: declined: The change adds only a new unit test (safe_iterator_release_before_cleanup) to src/unit/test_hashtable.cpp; no server, tool, or library code changes. There is no runtime behaviour to exercise, so no scenario is needed.
-- [valkey-io/valkey@54980ece3a46](https://github.com/valkey-io/valkey/commit/54980ece3a46a1bf83eea40870542c09c843b8fa) ([tests](tests/valkey/54980ece3/)): hashtable iterator safety: invalidate on exhaustion: 0 of 9 test(s) reached the change, coverage 100%, 4 skipped (required capability 'build' is unsupported)
-- [valkey-io/valkey#3545](https://github.com/valkey-io/valkey/pull/3545) ([tests](tests/valkey/3545-d2db0c268/)): Fix module commandresult event cleanup during unsubscribe and module unload (#3545): 0 of 5 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3504](https://github.com/valkey-io/valkey/pull/3504) ([tests](tests/valkey/3504-5abf79e0e/)): Add zmalloc_aligned() and fix SPMC queue buffer alignment (#3504): 0 of 5 test(s) reached the change, coverage 81%
-- [valkey-io/valkey#3535](https://github.com/valkey-io/valkey/pull/3535) ([tests](tests/valkey/3535-970984344/)): Optimize HGETDEL to pause auto shrink when deleting multiple items (#3535): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3541](https://github.com/valkey-io/valkey/pull/3541) ([tests](tests/valkey/3541-651c40a89/)): Fix FD leak in connSocketBlockingConnect on timeout (#3541): declined: The change only moves conn->fd = fd before the aeWait timeout check in connSocketBlockingConnect, closing an fd that was previously leaked on a connect timeout. Its sole caller is MIGRATE to an unresponsive target. The client-visible behaviour is identical on both builds: both send -IOERR 
-- [valkey-io/valkey#3498](https://github.com/valkey-io/valkey/pull/3498): to retry, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
-- [valkey-io/valkey#3458](https://github.com/valkey-io/valkey/pull/3458) ([tests](tests/valkey/3458-3ab9d9797/)): Fix race condition during async client freeing with IO threading enabled (#3458): 0 of 3 test(s) reached the change, coverage 33%
-- [valkey-io/valkey#3518](https://github.com/valkey-io/valkey/pull/3518) ([tests](tests/valkey/3518-fc00f7be0/)): Fix VLA warning in io_threads (#3518): declined: The change only replaces a `const int BATCH_SIZE = 32` local with `#define BATCH_SIZE 32` in io_threads.c so the `batch_jobs[BATCH_SIZE]` array is no longer a compiler-flagged VLA. The array size and all runtime behavior are identical; this is a warning-silencing refactor with no observabl
-- [valkey-io/valkey#2936](https://github.com/valkey-io/valkey/pull/2936): to retry, 5 of 5 run(s) could not start: the run could not start: environment acquisition failed
-- [valkey-io/valkey#3520](https://github.com/valkey-io/valkey/pull/3520) ([tests](tests/valkey/3520-9d51f5ff8/)): Document VALKEYCLI_HOST/PORT variables in help (#3520): declined: The change only edits the static usage/help text printed by valkey-cli (documenting the pre-existing VALKEYCLI_HOST/VALKEYCLI_PORT environment variables for -h and -p). No code path that parses options, reads the environment variables, connects, or executes commands is modified, so there i
-- [valkey-io/valkey#3392](https://github.com/valkey-io/valkey/pull/3392) ([tests](tests/valkey/3392-0327c2713/)): Add Static Module Support (#3392): 6 of 15 test(s) reached the change, coverage 59%
-- [valkey-io/valkey#3306](https://github.com/valkey-io/valkey/pull/3306) ([tests](tests/valkey/3306-269b1c5ed/)): Improve COB memory tracking with copy avoidance (#3306): 0 of 4 test(s) reached the change, coverage 95%
-- [valkey-io/valkey#3516](https://github.com/valkey-io/valkey/pull/3516) ([tests](tests/valkey/3516-4a42c9585/)): Fix HPERSIST RESP protocol violation on wrong-type key (#3516): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2936](https://github.com/valkey-io/valkey/pull/2936): to retry, 6 of 6 run(s) could not start: the run could not start: environment acquisition failed
+- [valkey-io/valkey#3464](https://github.com/valkey-io/valkey/pull/3464) ([tests](tests/valkey/3464-b2d08c9ef/)): Fix use-after-unload crash in test auth module's blocking thread (#3464): declined: The change is confined to a test module's unload cleanup (tests/modules/auth.c ValkeyModule_OnUnload), adding a pthread_join to avoid a use-after-unload crash when dlclose unmaps the module while a 500ms blocking-auth thread is still sleeping. The crash is only reachable via MODULE UNLOAD 
+- [valkey-io/valkey#3460](https://github.com/valkey-io/valkey/pull/3460) ([tests](tests/valkey/3460-8a91a1239/)): Unique samples in hashtableSampleEntries (#3460): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3396](https://github.com/valkey-io/valkey/pull/3396) ([tests](tests/valkey/3396-b2e0f6322/)): Add cluster bus network traffic usage metric in bytes (#3396): 2 of 4 test(s) reached the change, coverage 92%
+- [valkey-io/valkey#3499](https://github.com/valkey-io/valkey/pull/3499) ([tests](tests/valkey/3499-a34f125d8/)): Change rdbSaveStreamConsumers return type from size_t to ssize_t (#3499): declined: The change only alters the declared return type of rdbSaveStreamConsumers from size_t to ssize_t. The function already returned -1 on error and its sole caller assigns the result to an ssize_t and compares with -1; the previous implicit size_t/ssize_t conversions round-tripped -1 unchanged
+- [valkey-io/valkey#3402](https://github.com/valkey-io/valkey/pull/3402) ([tests](tests/valkey/3402-baa5a48b5/)): Env: Read VALKEYCLI_HOST and VALKEYCLI_PORT environment variables (#3402): 1 of 1 test(s) reached the change, coverage 100%; [crash, appeared after #3402](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/81)
+- [valkey-io/valkey#3472](https://github.com/valkey-io/valkey/pull/3472) ([tests](tests/valkey/3472-c4db208e9/)): enhance raxLowWalk: use memchr() for child-edge lookup in non-compressed nodes (#3472): declined: The change replaces the open-coded first-match byte scan in raxLowWalk's non-compressed branch with memchr(), which returns the same first-occurrence index and the same not-found condition; the only divergent state, the local j after a not-found break, is never observable because *splitpos
+- [valkey-io/valkey#3324](https://github.com/valkey-io/valkey/pull/3324) ([tests](tests/valkey/3324-a3a839972/)): Redesign IO threading communication model (#3324): 2 of 20 test(s) reached the change, coverage 84%
+- [valkey-io/valkey#3122](https://github.com/valkey-io/valkey/pull/3122) ([tests](tests/valkey/3122-0ec173351/)): Adds new (hidden) ValkeyModule_CallArgv API functions (#3122): 2 of 12 test(s) reached the change, coverage 70%
+- [valkey-io/valkey#3372](https://github.com/valkey-io/valkey/pull/3372) ([tests](tests/valkey/3372-2871efd43/)): Add cluster-config-save-behavior option to control nodes.conf save behavior (#3372): 2 of 5 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3471](https://github.com/valkey-io/valkey/pull/3471) ([tests](tests/valkey/3471-c0289c6a7/)): Defer argument redaction by storing indices instead of rewriting argv (#3471): 3 of 6 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3453](https://github.com/valkey-io/valkey/pull/3453) ([tests](tests/valkey/3453-be52d8b81/)): Fix trivial double-free issue in rdbLoadObject (#3453): declined: The fix removes a double-free in rdbLoadObject's HASH_ZIPMAP->listpack conversion (src/rdb.c:2409-2421). The only sub-condition that actually reaches the double-free is lpSafeToAdd() failing after the field was already added to dupSearchHashtable; the other error-branch triggers (duplicate
+- [valkey-io/valkey#3440](https://github.com/valkey-io/valkey/pull/3440) ([tests](tests/valkey/3440-890b82ac3/)): Fix config rewrite producing negative values for unsigned memory configs (#3440): 3 of 3 test(s) reached the change, coverage 100%; crash, fixed by #3440 (recorded)
+- [valkey-io/valkey#3443](https://github.com/valkey-io/valkey/pull/3443) ([tests](tests/valkey/3443-dba128f13/)): Fix slot-migration-max-failover-repl-bytes unable to accept -1 (#3443): 3 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3422](https://github.com/valkey-io/valkey/pull/3422) ([tests](tests/valkey/3422-2585f60eb/)): Fix RDB expiry write length and leak when loading zipmap (#3422): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3397](https://github.com/valkey-io/valkey/pull/3397) ([tests](tests/valkey/3397-034d16ac4/)): Increase embedded string threshold from 64 to 128 bytes (#3397): 2 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3309](https://github.com/valkey-io/valkey/pull/3309) ([tests](tests/valkey/3309-ecba3e312/)): Grammar, spelling, and punctuation fixes across the summary fields for Valkey commands. (#3309): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#3420](https://github.com/valkey-io/valkey/pull/3420) ([tests](tests/valkey/3420-0c81b53d6/)): Avoid having server.h being included by cli and benchmark (#3420): declined: Pure refactor with no behavior change: the diff moves the COMMAND_* and CMD_* macro definitions verbatim from server.h to commands.h so cli/benchmark need not include server.h, swaps server.h for stdint.h/zmalloc.h/util.h includes in crc16.c and fuzzer_command_generator.c, and reformats th
+- [valkey-io/valkey#3439](https://github.com/valkey-io/valkey/pull/3439) ([tests](tests/valkey/3439-e8ca6c07b/)): Fix VLA warning in linenoise and enable -Werror (#3439): declined: The change is build-only with no behavior change: it replaces a const-int VLA dimension in deps/linenoise/linenoise.c with an equivalent #define of the same value (8), leaving the buffer size, loop bounds and escape-sequence parsing identical, and adds -Werror to the linenoise Makefile. Co
+- [valkey-io/valkey#3401](https://github.com/valkey-io/valkey/pull/3401) ([tests](tests/valkey/3401-1db8bab50/)): Big endian bitmap byte order mismatch fix (#3401): 0 of 3 test(s) reached the change, 1 skipped (required capability 'save-behavior-support' is unsupported)
 
 ### valkey-io/valkey-bloom
 
@@ -73,10 +73,10 @@ Updated 2026-11-07T12:27+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 423 of 617 tested (69%)
-- Changed-line coverage: median 100% of 286 merge(s) measured, 18 under 50%
-- Recall: 126 parents flagged of 186 fix merges
-- Claude: $1785.90 in the last 24 hours, $4399.40 in the last 7 days, $4399.40 in all
+- Merges whose tests reached the change: 433 of 630 tested (69%)
+- Changed-line coverage: median 100% of 297 merge(s) measured, 18 under 50%
+- Recall: 129 parents flagged of 191 fix merges
+- Claude: $1873.07 in the last 24 hours, $4486.58 in the last 7 days, $4486.58 in all
 - Issues filed: 44
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
@@ -128,4 +128,4 @@ Updated 2026-11-07T12:27+00:00.
 - [valkey-io/valkey#3800](https://github.com/valkey-io/valkey/pull/3800): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
 - [valkey-io/valkey#3613](https://github.com/valkey-io/valkey/pull/3613): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
 - [valkey-io/valkey#3498](https://github.com/valkey-io/valkey/pull/3498): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
-- [valkey-io/valkey#2936](https://github.com/valkey-io/valkey/pull/2936): attempt 1 of 3, 5 of 5 run(s) could not start: the run could not start: environment acquisition failed
+- [valkey-io/valkey#2936](https://github.com/valkey-io/valkey/pull/2936): attempt 2 of 3, 6 of 6 run(s) could not start: the run could not start: environment acquisition failed

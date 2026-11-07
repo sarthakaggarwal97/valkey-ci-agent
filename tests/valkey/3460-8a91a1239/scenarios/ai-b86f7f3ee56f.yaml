@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 087280e3f87c..8a91a123980b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b86f7f3ee56f
+seed: 346002
+experiment:
+  id: proposed.eviction-sampling-storm
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
+  server_config:
+    maxmemory-policy: allkeys-lfu
+    maxmemory-samples: 1

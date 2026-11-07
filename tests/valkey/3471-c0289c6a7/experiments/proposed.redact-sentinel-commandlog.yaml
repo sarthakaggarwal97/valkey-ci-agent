@@ -1,0 +1,28 @@
+extends: [valkey.liveness]
+id: proposed.redact-sentinel-commandlog
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL SETUSER with 38 arguments redacts past bitmap index 32 (the sentinel
+    bit) and the commandlog shows (redacted) without a crash
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: redact
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, commandlog-execution-slower-than, 0], expect: {equals: OK}}
+    - {command: [COMMANDLOG, RESET, slow], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, u1, on, nopass, "~k0", "~k1", "~k2", "~k3", "~k4",
+        "~k5", "~k6", "~k7", "~k8", "~k9", "~k10", "~k11", "~k12", "~k13", "~k14",
+        "~k15", "~k16", "~k17", "~k18", "~k19", "~k20", "~k21", "~k22", "~k23", "~k24",
+        "~k25", "~k26", "~k27", "~k28", "~k29", "~k30", "~k31", "+@all"], expect: {
+        equals: OK}}
+    - {command: [COMMANDLOG, GET, slow], expect: {contains: redacted}}
+    - {command: [ACL, GETUSER, u1], expect: {exists: true}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: redact}

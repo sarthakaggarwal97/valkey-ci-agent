@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2871efd43644..0ec173351658.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-79304dbe9cd0
+seed: 90008
+experiment:
+  id: proposed.lua-callargv-writes-under-replica-kill
+  inputs:
+    signal: SIGSTOP
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7700
