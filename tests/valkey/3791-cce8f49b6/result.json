@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cce8f49b6f10d3d43e4e322c73be9e65fc683a55",
+  "parent": "c59b247132a5ee5a9bc476b8e195e59e41b3cb73",
+  "pr": 3791,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Restrict zmadvise_dontneed_range() to jemalloc builds (#3791)",
+  "date": "2026-05-24",
+  "unstable": "58a6ddc9dd45a3309ae2e8ab15c97475569b90cc",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5085,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only narrows a preprocessor condition so madvise(MADV_DONTNEED) in zmadvise_dontneed_range() compiles on jemalloc Linux builds instead of all Linux builds. Its sole caller, dismissRehashedBucketsIfNeeded() in hashtable.c, releases pages of already-rehashed, dead hashtable buckets back to the OS during rehashing. On the default jemalloc build the compiled code is identical before and after the change; on non-jemalloc builds the only effect is that those dead pages are no longer released, which changes RSS but no command reply, stored data, replication, failover, or persistence behavi"
+}

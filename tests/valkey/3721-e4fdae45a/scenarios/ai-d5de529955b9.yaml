@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8ee3fd704ce3..e4fdae45ab0d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d5de529955b9
+seed: 4
+experiment:
+  id: proposed.rdb-reload-listpack-types
+  inputs:
+    resp: 3
+    rdbcompression: lz4
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

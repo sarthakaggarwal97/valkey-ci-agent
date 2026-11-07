@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.sanitize-dump-payload-config-removed
+deployment:
+  modes: [standalone]
+metadata:
+  description: sanitize-dump-payload is no longer a runtime config - CONFIG GET returns
+    nothing and CONFIG SET is refused on the change build
+components:
+- use: valkey.action.commands
+  id: config-seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {sanitize-dump-payload: no}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, GET, sanitize-dump-payload], expect_difference: true, expect: {
+        equals: []}}
+    - {command: [CONFIG, SET, sanitize-dump-payload, "yes"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: config-seq}

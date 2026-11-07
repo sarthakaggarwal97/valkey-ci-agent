@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ad3b33e3ba95..5a604b3ef2a5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1a2ef4ec57a7
+seed: 3
+experiment:
+  id: proposed.hash-seed-null-clusterscan-fingerprint
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5a604b3ef2a5..69bd02b2e490.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-62142366bc9d
+seed: 103
+experiment:
+  id: proposed.capa-redirect-exec-failover
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7200

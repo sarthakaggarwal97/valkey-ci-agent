@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0ff817e8cc7f3c1980ee3c7b9245d13241e388fc",
+  "parent": "f25ec5e40aaabc5c9bffe59b9fb9449304ffa8da",
+  "pr": 3658,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "CMake: Plain and keyword can not be mixed (#3658)",
+  "date": "2026-05-31",
+  "unstable": "58a6ddc9dd45a3309ae2e8ab15c97475569b90cc",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2394,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely a build-system fix: it adds the PRIVATE keyword to target_link_libraries calls in the CMake files so plain and keyword signatures are not mixed, which CMake requires. The set and order of linked libraries is unchanged, so the produced binaries behave identically; no command, reply, replication, persistence, or tool behaviour is affected, and there is no runtime path for a scenario to reach."
+}

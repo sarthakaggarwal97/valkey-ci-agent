@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bfeb3685e95b..29468070036a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fe2b8294b96f
+seed: 3679
+experiment:
+  id: proposed.lua-error-code-prefix
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.capa-redirect-exec-failover
+deployment:
+  modes: [standalone]
+metadata:
+  description: EXEC of an all-keyless transaction queued on a primary that was then
+    demoted by CLUSTER FAILOVER is answered with REDIRECT and the transaction discarded,
+    leaving the connection usable
+components:
+- use: valkey.action.commands
+  id: execredirect
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 180
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 60, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [CLIENT, CAPA, redirect], node: 0, expect: {equals: OK}}
+    - {command: [MULTI], node: 0, expect: {equals: OK}}
+    - {command: [DBSIZE], node: 0, expect: {equals: QUEUED}}
+    - {command: [RANDOMKEY], node: 0, expect: {equals: QUEUED}}
+    - {command: [CLUSTER, FAILOVER], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 0, connection: watch, wait_s: 90, compare: skip,
+      expect: {contains: "role:slave"}}
+    - {command: [EXEC], node: 0, expect_difference: true, expect: {error: "REDIRECT"}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [MULTI], node: 0, expect: {equals: OK}}
+    - {command: [PING], node: 0, expect: {equals: QUEUED}}
+    - {command: [EXEC], node: 0, expect: {equals: [PONG]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [execredirect.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: execredirect}

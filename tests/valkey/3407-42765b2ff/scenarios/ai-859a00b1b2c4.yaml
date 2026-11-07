@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cce8f49b6f10..42765b2ff63d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-859a00b1b2c4
+seed: 1
+experiment:
+  id: proposed.wait-numreplicas-overflow
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

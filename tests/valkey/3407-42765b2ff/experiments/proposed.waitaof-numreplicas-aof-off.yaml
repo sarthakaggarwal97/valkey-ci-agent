@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.waitaof-numreplicas-aof-off
+deployment:
+  modes: [standalone]
+metadata:
+  description: With appendonly off, WAITAOF numreplicas range validation fires before
+    the appendonly-disabled check
+components:
+- use: valkey.action.commands
+  id: waitaofoff
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "no"}
+    timeout_s: 20
+    commands:
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 0], expect: {error: "appendonly is disabled"}}
+    - {command: [WAITAOF, 0, 2147483648, 100], expect_difference: true, expect: {
+        error: "out of range"}}
+    - {command: [WAITAOF, 0, -1, 0], expect_difference: true, expect: {error: "between\
+          \ 0 and 2147483647"}}
+    - {command: [WAITAOF, 1, 2147483648, 100], expect_difference: true, expect: {
+        error: "out of range"}}
+    - {command: [WAIT, 2147483648, 100], expect_difference: true, expect: {error: "out\
+          \ of range"}}
+    - {command: [WAIT, -9223372036854775808, 0], expect_difference: true, expect: {
+        error: "out of range"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [waitaofoff.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: waitaofoff}

@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.listpack-iterate-deep-validation
+deployment:
+  modes: [standalone]
+metadata:
+  description: Iterate listpack- and intset-encoded collections and confirm the sanitize-dump-payload
+    config is gone
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    server_config:
+      set-max-listpack-entries: 128
+      set-max-intset-entries: 512
+      hash-max-listpack-entries: 128
+      zset-max-listpack-entries: 128
+      list-max-listpack-size: 128
+    commands:
+    - {command: [CONFIG, SET, sanitize-dump-payload, "no"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [SADD, s, alpha, beta, gamma], expect: {equals: 3}}
+    - {command: [SISMEMBER, s, alpha], expect: {equals: 1}}
+    - {command: [SISMEMBER, s, missing], expect: {equals: 0}}
+    - {command: [SMEMBERS, s], compare: unordered, expect: {contains: alpha}}
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [HGET, h, f2], expect: {equals: v2}}
+    - {command: [HGET, h, absent], expect: {exists: false}}
+    - {command: [HKEYS, h], compare: unordered, expect: {contains: f1}}
+    - {command: [ZADD, z, 1, a, 2, b, 3, c], expect: {equals: 3}}
+    - {command: [ZSCORE, z, b], expect: {exists: true}}
+    - {command: [ZRANGE, z, 0, -1], expect: {equals: [a, b, c]}}
+    - {command: [RPUSH, l, x, y, w], expect: {equals: 3}}
+    - {command: [LRANGE, l, 0, -1], expect: {equals: [x, y, w]}}
+    - {command: [SADD, si, 10, 20, 30], expect: {equals: 3}}
+    - {command: [SISMEMBER, si, 20], expect: {equals: 1}}
+    - {command: [SMEMBERS, si], compare: unordered, expect: {contains: "20"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

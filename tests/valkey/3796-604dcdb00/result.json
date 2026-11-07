@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "604dcdb00df81dacf2520ac85fe1c53897fe2baf",
+  "parent": "8d3e6c306bf15de84496e173399424b411672783",
+  "pr": 3796,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "hashtable: disallow insert during safe iteration (fixes #2302) (#3796)",
+  "date": "2026-05-22",
+  "unstable": "58a6ddc9dd45a3309ae2e8ab15c97475569b90cc",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.9909,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds an internal invariant assertion (assert(ht->safe_iterators == NULL) in hashtable.c's insert()), a doc rewrite, and a rewritten unit test. It forbids inserting into a hashtable during safe iteration; delete/replace are unchanged. No command-reachable path in this build violates the invariant: every HASHTABLE_ITER_SAFE caller (KEYS, DEBUG DIGEST, rdbSaveDb, pubsub unsubscribe, vset expiry, module/latency command listings, kvstore) only reads/deletes/replaces during iteration and never inserts; dict.c safe iterators are a separate structure untouched by the change; there is no for"
+}

@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.syncslots-finish-resp
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER SYNCSLOTS FINISH for an unknown job must reply exactly once,
+    not OK followed by an error
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: finish
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CLUSTER, SYNCSLOTS, FINISH, STATE, success, NAME, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      expect_difference: true, expect: {error: "No such slot migration job"}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [finish.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: finish}

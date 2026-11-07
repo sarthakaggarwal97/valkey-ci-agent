@@ -1,0 +1,52 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f25ec5e40aaabc5c9bffe59b9fb9449304ffa8da",
+  "parent": "01034bfff4528ecb433fe08838de2b8fe9c1180a",
+  "pr": 3846,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix use-after-free in VM_RegisterClusterMessageReceiver (#3846)",
+  "date": "2026-05-31",
+  "unstable": "58a6ddc9dd45a3309ae2e8ab15c97475569b90cc",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.0725,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-63854117ae63",
+      "build": "unstable",
+      "seed": 1101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-63854117ae63",
+      "build": "unstable",
+      "seed": 1102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-63854117ae63",
+      "build": "unstable",
+      "seed": 1103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e04dd791fe7f",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    }
+  ]
+}

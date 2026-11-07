@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.io-threads-scale-down
+deployment:
+  modes: [standalone]
+metadata:
+  description: A burst of load ignites extra IO threads, then an idle period drains
+    the shared and private queues and drives the dynamic scale-down path
+inputs:
+  properties:
+    rate: {type: number, default: 20000}
+    value_size: {type: integer, default: 4096}
+    max_ops: {type: integer, default: 80000}
+components:
+- use: valkey.workload.key-value
+  id: writes
+  config:
+    rate: {$ref: inputs.rate}
+    mutable_keys: 2000
+    value_size: {$ref: inputs.value_size}
+    max_ops: {$ref: inputs.max_ops}
+    op_timeout_s: 5
+    mix: {set: 0.6, get: 0.3, del: 0.1}
+- use: valkey.action.sleep
+  id: burst
+  depends_on: [writes]
+  config: {seconds: 4}
+- use: valkey.action.sleep
+  id: idle
+  depends_on: [burst]
+  config: {seconds: 6}
+required_events: [burst.completed, idle.completed]
+required_evidence:
+- {evidence_id: valkey.workload.ledger, source: writes}

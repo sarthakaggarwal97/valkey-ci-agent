@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.syncslots-finish-ownership
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTER SYNCSLOTS FINISH replies once and reaches the import ownership-change
+    else branch
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: finish
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+        SLOTSRANGE, 16383, 16383], node: 1, connection: jobA, expect: {equals: OK}}
+    - {command: [CLUSTER, SYNCSLOTS, FINISH, STATE, success, NAME, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
+        SLOTSRANGE, 16382, 16382], node: 1, connection: jobB, expect: {equals: OK}}
+    - {command: [CLUSTER, RESET, SOFT], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, SYNCSLOTS, FINISH, STATE, success, NAME, cccccccccccccccccccccccccccccccccccccccc],
+      node: 1, connection: fin, expect_difference: true, expect: {error: "No such\
+          \ slot migration job"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: finish}

@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 01034bfff452..f25ec5e40aaa.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-63854117ae63
+seed: 1101
+experiment:
+  id: proposed.cluster-receiver-reregister-uaf
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,53 @@
+extends: [valkey.base]
+id: proposed.io-threads-resize-under-writes
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 0, maximum: 2}
+metadata:
+  description: >-
+    Grow and shrink io-threads repeatedly while the key-value workload writes and
+    replicas sync: every resize kills and re-creates the IO threads and re-initializes
+    the SPSC/SPMC/MPSC offload queues, draining in-flight write, free-argv and free-obj
+    jobs. Large GETs between resizes push multi-block replies through the offloaded
+    write path. No crash, no stuck client, no acknowledged write lost.
+inputs:
+  properties:
+    threads_high: {type: integer, minimum: 2, maximum: 32, default: 12}
+    threads_low: {type: integer, minimum: 1, maximum: 16, default: 2}
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: resize
+  depends_on: [warm-up]
+  config:
+    timeout_s: 90
+    commands:
+    - {command: [SETRANGE, io-resize-probe, 200000, x], expect: {equals: 200001}}
+    - {command: [GET, io-resize-probe], expect: {exists: true}}
+    - {command: [CONFIG, SET, io-threads, {$ref: inputs.threads_high}], expect: {
+        exists: true}}
+    - {command: [GET, io-resize-probe], expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, io-threads, {$ref: inputs.threads_low}], expect: {exists: true}}
+    - {command: [GET, io-resize-probe], expect: {exists: true}}
+    - {command: [CONFIG, SET, io-threads, {$ref: inputs.threads_high}], expect: {
+        exists: true}}
+    - {command: [GET, io-resize-probe], expect: {exists: true}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {exists: true}}
+    - {command: [GET, io-resize-probe], expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, io-threads, {$ref: inputs.threads_high}], expect: {
+        exists: true}}
+    - {command: [GET, io-resize-probe], expect: {exists: true}}
+    - {command: [CONFIG, SET, io-threads, {$ref: inputs.threads_low}], expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [resize]
+  config: {seconds: 3}
+required_events: [resize.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: resize}

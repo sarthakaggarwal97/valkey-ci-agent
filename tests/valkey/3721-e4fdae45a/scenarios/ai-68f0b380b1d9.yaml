@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8ee3fd704ce3..e4fdae45ab0d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-68f0b380b1d9
+seed: 103
+experiment:
+  id: proposed.sanitize-dump-payload-config-removed
+deployment:
+  mode: standalone
+  base_port: 7200

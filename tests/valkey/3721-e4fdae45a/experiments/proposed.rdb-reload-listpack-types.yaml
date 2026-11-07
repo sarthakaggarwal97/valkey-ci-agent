@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.rdb-reload-listpack-types
+deployment:
+  modes: [standalone]
+metadata:
+  description: A full RDB reload drives the now-unconditional deep listpack/intset/stream
+    validation for every type, and the stream consumer-group PEL scan
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    rdbcompression: {type: string, enum: [no, yes, lzf, lz4, zstd], default: yes}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config:
+      list-max-listpack-size: 4
+      set-max-intset-entries: 512
+      set-max-listpack-entries: 128
+      zset-max-listpack-entries: 128
+      hash-max-listpack-entries: 128
+      rdbcompression: {$ref: inputs.rdbcompression}
+    commands:
+    - {command: [SADD, si, "1", "2", "3", "4", "5"], expect: {equals: 5}}
+    - {command: [OBJECT, ENCODING, si], compare: skip}
+    - {command: [SADD, sl, a, b, c], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, sl], compare: skip}
+    - {command: [ZADD, z, "1", a, "2", b, "3", c], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, z], compare: skip}
+    - {command: [RPUSH, l, a, b, c, d, e, f, g, h], expect: {equals: 8}}
+    - {command: [OBJECT, ENCODING, l], compare: skip}
+    - {command: [XADD, st, "1-1", f, v], expect: {equals: "1-1"}}
+    - {command: [XADD, st, "2-1", f, v], expect: {equals: "2-1"}}
+    - {command: [XGROUP, CREATE, st, g, "0"], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g, c1, COUNT, "10", STREAMS, st, ">"], compare: skip}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [SCARD, si], expect: {equals: 5}}
+    - {command: [SCARD, sl], expect: {equals: 3}}
+    - {command: [ZCARD, z], expect: {equals: 3}}
+    - {command: [LLEN, l], expect: {equals: 8}}
+    - {command: [XLEN, st], expect: {equals: 2}}
+    - {command: [XPENDING, st, g], compare: skip}
+    - {command: [DBSIZE], expect: {equals: 5}}
+    - {command: [CONFIG, GET, sanitize-dump-payload], expect_difference: true, expect: {
+        equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c59b247132a5ee5a9bc476b8e195e59e41b3cb73",
+  "parent": "355d30642bd299f6ea1fbfcaacba02d2e4646f3a",
+  "pr": 3808,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Document database-level ACL rules in valkey.conf and acl.c (#3808)",
+  "date": "2026-05-23",
+  "unstable": "58a6ddc9dd45a3309ae2e8ab15c97475569b90cc",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2339,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only comments: doc comments in src/acl.c describing the db=/alldbs/resetdbs ACL rules and the reset action, and the matching commented documentation text in valkey.conf. No executable code, parsing, or reply behaviour changes, so there is nothing a scenario could exercise."
+}

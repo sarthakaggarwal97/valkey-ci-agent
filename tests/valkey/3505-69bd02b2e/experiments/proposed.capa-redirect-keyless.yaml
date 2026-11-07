@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.capa-redirect-keyless
+deployment:
+  modes: [standalone]
+metadata:
+  description: CAPA REDIRECT makes keyless read/write commands on a cluster replica
+    answer -REDIRECT unless READONLY is set; keyed commands still answer MOVED
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: keyless
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 60, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [SET, k1, v1], node: 0, expect: {equals: OK}}
+    - {command: [DBSIZE], node: 1, wait_s: 30, expect: {equals: 1}}
+    - {command: [FLUSHDB], node: 1, expect: {error: "READONLY"}}
+    - {command: [CLIENT, CAPA, redirect], node: 1, expect: {equals: OK}}
+    - {command: [DBSIZE], node: 1, expect_difference: true, expect: {error: "REDIRECT"}}
+    - {command: [RANDOMKEY], node: 1, expect_difference: true, expect: {error: "REDIRECT"}}
+    - {command: [SCAN, "0"], node: 1, expect_difference: true, expect: {error: "REDIRECT"}}
+    - {command: [FLUSHDB], node: 1, expect_difference: true, expect: {error: "REDIRECT"}}
+    - {command: [EVAL, "return 1", "0"], node: 1, expect_difference: true, expect: {
+        error: "REDIRECT"}}
+    - {command: [EVAL_RO, "return 1", "0"], node: 1, expect_difference: true, expect: {
+        error: "REDIRECT"}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [GET, k1], node: 1, expect: {error: "MOVED"}}
+    - {command: [READONLY], node: 1, expect: {equals: OK}}
+    - {command: [DBSIZE], node: 1, expect: {equals: 1}}
+    - {command: [GET, k1], node: 1, expect: {equals: v1}}
+    - {command: [READWRITE], node: 1, expect: {equals: OK}}
+    - {command: [DBSIZE], node: 1, expect_difference: true, expect: {error: "REDIRECT"}}
+    - {command: [MULTI], node: 1, expect: {equals: OK}}
+    - {command: [DBSIZE], node: 1, expect_difference: true, expect: {error: "REDIRECT"}}
+    - {command: [RANDOMKEY], node: 1, expect_difference: true, expect: {error: "REDIRECT"}}
+    - {command: [EXEC], node: 1, expect_difference: true, expect: {error: "EXECABORT"}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [keyless.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: keyless}

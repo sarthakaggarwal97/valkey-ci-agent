@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 12e12c6cb56d..8ee3fd704ce3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f6ca164b66d1
+seed: 1001
+experiment:
+  id: proposed.full-coverage-toggle-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

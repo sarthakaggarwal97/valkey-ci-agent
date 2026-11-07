@@ -1,0 +1,81 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f2fe917bb8953dcd378f05d58c5e1e878c30a5b2",
+  "parent": "29468070036a0449b713842b6930609962439b2c",
+  "pr": 3756,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Revert \"IO-Threads redesign cleanup work (#3544)\" (#3756)",
+  "date": "2026-05-18",
+  "unstable": "58a6ddc9dd45a3309ae2e8ab15c97475569b90cc",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 12,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 6,
+  "recall": false,
+  "coverage": {
+    "lines": 67,
+    "executed": 51,
+    "percent": 76,
+    "uncovered": [
+      "src/networking.c:6532",
+      "src/networking.c:6535",
+      "src/networking.c:6536",
+      "src/networking.c:6541",
+      "src/networking.c:6543",
+      "src/networking.c:6544",
+      "src/networking.c:6549",
+      "src/networking.c:6551",
+      "src/networking.c:6553",
+      "src/networking.c:6554",
+      "src/queues.c:24",
+      "src/queues.c:53",
+      "src/queues.c:118",
+      "src/queues.c:128",
+      "src/queues.c:141",
+      "src/queues.c:275"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 11.2334,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-8075f971bd1d",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-d0afe715757b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-5c1ac1342c49",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-bb55ab1f3870",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during workload.start: RunnerError: workload 'writes' returned ERROR: preload failed: Error 104 while writing to socket. Connection reset by peer."
+    },
+    {
+      "scenario": "ai-fa14fcefcf77",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during workload.start: RunnerError: workload 'writes' returned ERROR: preload failed: Error 104 while writing to socket. Connection reset by peer."
+    },
+    {
+      "scenario": "ai-94c488d63e91",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during workload.start: RunnerError: workload 'writes' returned ERROR: preload failed: Error 104 while writing to socket. Connection reset by peer."
+    }
+  ]
+}

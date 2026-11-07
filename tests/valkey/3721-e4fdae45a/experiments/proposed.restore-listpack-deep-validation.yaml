@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.restore-listpack-deep-validation
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE of a listpack hash carrying duplicate fields is now rejected
+    at load instead of loading and deferring a crash to a later access
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: restore-seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {sanitize-dump-payload: no}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, 1], expect: {equals: OK}}
+    - {command: [RESTORE, _hash, 0, !!binary "EBcXAAAABACCYQADgmIAA4JhAAOCZAAD/woAwM+mh+Wnxb4="],
+      expect_difference: true, expect: {error: "Bad data format"}}
+    - {command: [HLEN, _hash], expect_difference: true, expect: {equals: 0}}
+    - {command: [SET, probe, alive], expect: {equals: OK}}
+    - {command: [GET, probe], expect: {equals: alive}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore-seq}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8d3e6c306bf15de84496e173399424b411672783",
+  "parent": "fa57b3c5ebb81579edbc19378a2c628d79e3e308",
+  "pr": 3787,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix \"time_t' different  typedef  on 32-bit /64-bit systems (#3787)",
+  "date": "2026-05-22",
+  "unstable": "58a6ddc9dd45a3309ae2e8ab15c97475569b90cc",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3162,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only corrects printf format specifiers for time_t/long on 32-bit builds (valkey-check-aof messages, INFO lru_clock cast, internal fuzzer generator) and adds a 32-bit Alpine CI job. On the 64-bit platform the fuzzer runs on, time_t is a 64-bit long, so %ld and %jd with an intmax_t cast, and %u with or without the unsigned-int cast of a 24-bit masked value, produce byte-identical output: no reply, tool output, crash, or data behavior differs between the parent and the change, so any expect_difference would be unreachable. The behavior it fixes exists only on 32-bit builds, which the c"
+}

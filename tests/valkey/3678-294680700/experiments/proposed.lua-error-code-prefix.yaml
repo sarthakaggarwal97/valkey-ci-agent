@@ -1,0 +1,65 @@
+extends: [valkey.liveness]
+id: proposed.lua-error-code-prefix
+deployment:
+  modes: [standalone]
+metadata:
+  description: Lua engine errors carry an ERR code and preserve existing error codes
+    (PR
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: luaerr
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SET, 'scriptkey:wt', string], expect: {equals: OK}}
+    - {command: [EVAL, "return redis.call('HGET', KEYS[1], 'f')", 1, 'scriptkey:wt'],
+      expect: {error: "WRONGTYPE"}}
+    - {command: [EVAL, "return redis.pcall('INCR', KEYS[1])", 1, 'scriptkey:wt'],
+      expect: {error: "ERR value is not an integer"}}
+    - {command: [EVAL, "return redis.call('SET', KEYS[1], true)", 1, 'scriptkey:wt'],
+      expect: {error: "Command arguments must be strings or integers"}}
+    - {command: [EVAL, 'return redis.call()', 0], expect_difference: true, expect: {
+        error: "ERR Please specify at least one argument"}}
+    - {command: [EVAL, 'local ok, err = pcall(redis.setresp, 4); return err', 0],
+      expect_difference: true, expect: {error: "ERR RESP version must be 2 or 3"}}
+    - {command: [EVAL, "local ok, err = pcall(redis.log, 10, 'msg'); return err",
+        0], expect_difference: true, expect: {error: "ERR Invalid log level"}}
+    - {command: [EVAL, 'local ok, err = pcall(redis.log, 1); return err', 0], expect_difference: true,
+      expect: {error: "ERR server.log() requires two arguments"}}
+    - {command: [EVAL, 'local ok, err = pcall(redis.set_repl); return err', 0], expect_difference: true,
+      expect: {error: "ERR server.set_repl() requires one argument"}}
+    - {command: [EVAL, 'local ok, err = pcall(redis.sha1hex); return err', 0], expect_difference: true,
+      expect: {error: "ERR wrong number of arguments"}}
+    - {command: [EVAL, "local ok, err = pcall(redis.acl_check_cmd, 'no-such-cmd-xyz');\
+          \ return err", 0], expect_difference: true, expect: {error: "ERR Invalid\
+          \ command passed to server.acl_check_cmd"}}
+    - {command: [EVAL, "return redis.call('incr')", 0], expect_difference: true, expect: {
+        error: "ERR Wrong number of args calling command from script"}}
+    - {command: [EVAL, "return redis.call('no-such-command-xyz')", 0], expect_difference: true,
+      expect: {error: "ERR Unknown command called from script"}}
+    - {command: [EVAL, "return redis.call('exec')", 0], expect_difference: true, expect: {
+        error: "ERR This Valkey command is not allowed from script"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=errlib\nredis.register_function('errfn',\
+          \ function(keys, args) return redis.call('incr') end)"], expect: {equals: errlib}}
+    - {command: [FCALL, errfn, 0], expect_difference: true, expect: {error: "ERR Wrong\
+          \ number of args calling command from script"}}
+    - {command: [ACL, SETUSER, scriptuser, on, '>pw1', '~*', '+eval'], expect: {equals: OK}}
+    - {command: [AUTH, scriptuser, pw1], expect: {equals: OK}}
+    - {command: [EVAL, "return redis.call('SET', KEYS[1], 'v')", 1, aclkey], expect_difference: true,
+      expect: {error: "ERR ACL failure in script"}}
+    - {command: [AUTH, default, pw1], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [luaerr.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: luaerr}

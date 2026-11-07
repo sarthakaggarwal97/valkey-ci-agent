@@ -1,0 +1,74 @@
+extends: [valkey.base]
+id: proposed.no-failover-flip-failover
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Kill or freeze a primary whose replicas have cluster-replica-no-failover
+    yes, then CONFIG SET it off and verify the ASAP failover check elects the replica
+    with no crash or acknowledged-write loss
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGSTOP], default: SIGKILL}
+    pause_s: {type: number, minimum: 0, maximum: 60, default: 1}
+    restart_delay_s: {type: number, minimum: 0, maximum: 60, default: 10}
+    wait_for_fail_s: {type: number, minimum: 0, maximum: 60, default: 6}
+    victim: {type: string, default: valkey-0}
+    successor: {type: string, default: valkey-1}
+    loss_window_after_s: {type: number, minimum: 0, maximum: 600, default: 5}
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-primary]
+  config: {seconds: 2}
+- use: valkey.fault.process-signal
+  id: kill-primary
+  config:
+    when_event: warm-up.completed
+    instance: {$ref: inputs.victim}
+    signal: {$ref: inputs.signal}
+    pause_s: {$ref: inputs.pause_s}
+    restart: true
+    restart_mode: background
+    restart_delay_s: {$ref: inputs.restart_delay_s}
+- use: valkey.action.sleep
+  id: wait-for-fail
+  depends_on: [warm-up]
+  config: {seconds: {$ref: inputs.wait_for_fail_s}}
+- use: valkey.action.commands
+  id: flip
+  depends_on: [wait-for-fail]
+  config:
+    instances: replicas
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, cluster-replica-no-failover, no], expect: {equals: OK}}
+- use: valkey.action.poll
+  id: promoted
+  depends_on: [flip]
+  config:
+    instances: {$ref: inputs.successor}
+    section: replication
+    field: role
+    predicate: {equals: master}
+    timeout_s: 60
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [promoted]
+  config: {seconds: 5}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_s: 1.0
+    loss_window_after_s: {$ref: inputs.loss_window_after_s}
+    loss_window_faults: [kill-primary]
+    loss_window_until: [promoted]
+    loss_window_scope: fault_targets
+    window_reads: written
+    converge_timeout_s: 60
+required_events: [warm-up.completed, kill-primary.injected, flip.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-primary}
+- {evidence_id: valkey.command.sequence, source: flip}
+- {evidence_id: valkey.poll.satisfied, source: promoted}

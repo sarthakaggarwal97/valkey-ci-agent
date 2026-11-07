@@ -1,0 +1,20 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 68ed258a527d..1c49ca05c46b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2fa7c8061612
+seed: 382701
+experiment:
+  id: proposed.no-failover-flip-failover
+  inputs:
+    signal: SIGKILL
+    wait_for_fail_s: 6
+    restart_delay_s: 12
+    victim: valkey-0
+    successor: valkey-1
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7000
+  server_config:
+    cluster-replica-no-failover: 'yes'
+    cluster-node-timeout: '2000'

@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.full-coverage-toggle-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG SET cluster-require-full-coverage triggers an immediate cluster
+    state update instead of leaving the node stuck OK with uncovered slots
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: toggle
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    server_config: {cluster-require-full-coverage: "no"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CLUSTER, DELSLOTS, 0], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "cluster_state:ok"}}
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-require-full-coverage, "yes"], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], expect_difference: true, expect: {contains: "cluster_state:fail"}}
+    - {command: [SET, foo, baz], expect_difference: true, expect: {error: "CLUSTERDOWN"}}
+    - {command: [GET, foo], expect_difference: true, expect: {error: "CLUSTERDOWN"}}
+    - {command: [CONFIG, SET, cluster-require-full-coverage, "no"], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], compare: skip, wait_s: 5, expect: {contains: "cluster_state:ok"}}
+    - {command: [SET, foo, qux], expect: {equals: OK}}
+    - {command: [GET, foo], expect: {equals: qux}}
+    - {command: [CLUSTER, ADDSLOTS, 0], expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-require-full-coverage, "yes"], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "cluster_state:ok"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: standalone-toggle
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, cluster-require-full-coverage, "no"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-require-full-coverage, "yes"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [toggle.completed, standalone-toggle.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: toggle}
+- {evidence_id: valkey.command.sequence, source: standalone-toggle}

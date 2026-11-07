@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "355d30642bd299f6ea1fbfcaacba02d2e4646f3a",
+  "parent": "604dcdb00df81dacf2520ac85fe1c53897fe2baf",
+  "pr": 3804,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove MIGRATE command dead code in ACLSelectorCheckCmd (#3804)",
+  "date": "2026-05-23",
+  "unstable": "58a6ddc9dd45a3309ae2e8ab15c97475569b90cc",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3881,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change deletes an unreachable branch: the removed `cmd->proc == migrateCommand` case is inside the `if (cmd->get_dbid_args)` block in ACLSelectorCheckCmd, and MIGRATE does not define get_dbid_args in migrate.json (only SELECT, MOVE, SWAPDB and COPY do), so the branch could never execute. It is a pure dead-code removal with no behaviour change \u2014 no ACL decision, error index, reply or other path differs between the builds, so a compared sequence could never show a difference and no scenario is needed."
+}

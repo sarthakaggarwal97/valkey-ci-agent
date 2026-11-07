@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8ee3fd704ce3d42854cae55005433ff711206015",
+  "parent": "12e12c6cb56d77e5bb26d2adae8777ec183897f0",
+  "pr": 3676,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Trigger cluster state update immediately when cluster-require-full-coverage changes (#3676)",
+  "date": "2026-05-27",
+  "unstable": "58a6ddc9dd45a3309ae2e8ab15c97475569b90cc",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 9.1288,
+  "findings": [],
+  "recorded": []
+}

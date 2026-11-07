@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.hash-seed-null-clusterscan-fingerprint
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The CLUSTERSCAN cursor fingerprint is derived from the configurable hash seed;
+    with a hash-seed holding an embedded NUL the fixed build and the parent derive
+    different seeds, so mid-scan cursors carry different fingerprints and slot-local
+    key order differs. The hashtag 06S maps to slot 0, so a wrong-fingerprint cursor
+    restarts the scan from slot 0, where the sequence concentrates keys.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fp
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      hash-seed: '"valkey\x00AAAAA"'
+      hash-max-listpack-entries: 0
+    commands:
+    - {command: [CONFIG, GET, hash-seed], expect: {exists: true}}
+    - {command: [DEBUG, POPULATE, 300], expect: {equals: OK}}
+    - {command: [MSET, "{06S}:0", v, "{06S}:1", v, "{06S}:2", v, "{06S}:3", v, "{06S}:4",
+        v, "{06S}:5", v, "{06S}:6", v, "{06S}:7", v, "{06S}:8", v, "{06S}:9", v, "{06S}:10",
+        v, "{06S}:11", v, "{06S}:12", v, "{06S}:13", v, "{06S}:14", v, "{06S}:15",
+        v, "{06S}:16", v, "{06S}:17", v, "{06S}:18", v, "{06S}:19", v, "{06S}:20",
+        v, "{06S}:21", v, "{06S}:22", v, "{06S}:23", v], expect: {equals: OK}}
+    - {command: [HSET, "{06S}:h", "f:0", 0, "f:1", 1, "f:2", 2, "f:3", 3, "f:4", 4,
+        "f:5", 5, "f:6", 6, "f:7", 7, "f:8", 8, "f:9", 9, "f:10", 10, "f:11", 11,
+        "f:12", 12, "f:13", 13, "f:14", 14, "f:15", 15, "f:16", 16, "f:17", 17, "f:18",
+        18, "f:19", 19, "f:20", 20, "f:21", 21, "f:22", 22, "f:23", 23], expect: {
+        equals: 24}}
+    - {command: [CLUSTERSCAN, "0"], expect: {exists: true}}
+    - {command: [CLUSTERSCAN, "AAAAAA-{06S}-0", COUNT, 5], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CLUSTERSCAN, "AAAAAA-{06S}-0", COUNT, 2000], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [HSCAN, "{06S}:h", 0, COUNT, 1000], expect_difference: true, expect: {
+        exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [fp.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fp}

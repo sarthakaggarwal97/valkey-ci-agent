@@ -1,0 +1,29 @@
+extends: [valkey.liveness]
+id: proposed.cluster-receiver-reregister-uaf
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Re-registering a module cluster message receiver after unregistering
+    the head of its type list must not dereference freed memory
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: true
+    nodes: 1
+    timeout_s: 20
+    commands:
+    - {command: [test.register_receiver], expect: {equals: OK}}
+    - {command: [test.unregister_receiver], expect: {equals: OK}}
+    - {command: [test.register_receiver], expect_difference: true, expect: {equals: OK}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

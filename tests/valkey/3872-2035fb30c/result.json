@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2035fb30c6250836a8ef5f18d7357cabedd5c41f",
+  "parent": "7c3821f188773115f475e89d0c35f493e604d5cc",
+  "pr": 3872,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Redacting customer information when hide_user_data_from_log is true in rdb.c, networking.c, debug.c and t_hash  (#3872)",
+  "date": "2026-05-28",
+  "unstable": "58a6ddc9dd45a3309ae2e8ab15c97475569b90cc",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7529,
+  "findings": [],
+  "recorded": [],
+  "reason": "Every hunk only alters the text of a server log message (serverLog/serverLogHexDump/rdbReportCorruptRDB) based on hide-user-data-from-log, redacting the user's key name, consumer-group name, query-buffer bytes, or listpack hexdump. The surrounding control flow is identical on both branches: keys are still saved or rejected the same way, RESTORE still returns the static \"Bad data format\" reply (rdbReportError in RESTORE context only logs at VERBOSE and returns), the over-limit client is still freed, and serverPanic still fires for duplicate-key and listpack-corruption regardless of the config. "
+}

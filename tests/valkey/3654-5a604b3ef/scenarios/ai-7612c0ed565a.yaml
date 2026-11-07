@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ad3b33e3ba95..5a604b3ef2a5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7612c0ed565a
+seed: 1
+experiment:
+  id: proposed.hash-seed-null-scan-order
+  inputs:
+    resp: 2
+    hash_seed: '"valkey\x00AAAAA"'
+deployment:
+  mode: standalone
+  base_port: 7000

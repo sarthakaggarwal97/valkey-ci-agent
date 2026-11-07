@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-07T04:45+00:00.
+Updated 2026-11-07T04:58+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 512 | 1992 | #3658 (2026-05-31) | 243 | 73.1 |
+| valkey-io/valkey | 542 | 1963 | #3683 (2026-05-18) | 273 | 77.4 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
 | valkey-io/valkey-search | 351 | 318 | #707 (2026-02-05) | 181 | 50.1 |
@@ -13,28 +13,28 @@ Updated 2026-11-07T04:45+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-07T02:48:53+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42321212483): 20 merge(s) tested, 8 without a code change.
+[2026-11-07T04:58:35+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42331067903): 20 merge(s) tested, 12 without a code change.
 
-- [valkey-io/valkey#3811](https://github.com/valkey-io/valkey/pull/3811) ([tests](tests/valkey/3811-b4ea71ee1/)): Fix off_t to int truncation in bio repl transfer size reporting (#3811): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3939](https://github.com/valkey-io/valkey/pull/3939) ([tests](tests/valkey/3939-ce8d17759/)): Fix RESP3 type violation in addReplyCommandSubCommands (#3939): 3 of 3 test(s) reached the change, coverage 66%
-- [valkey-io/valkey#3945](https://github.com/valkey-io/valkey/pull/3945) ([tests](tests/valkey/3945-69d3f50c8/)): Exit with error when getRDB ftruncate fails (#3945): declined: The change only alters valkey-cli's exit status (exit 1 instead of a silent exit 0) when ftruncate() fails while stripping the EOF marker from an RDB downloaded via the diskless-sync path in getRDB(). On the normal success path both builds are byte-for-byte identical. No installed fuzzer c
-- [valkey-io/valkey#3921](https://github.com/valkey-io/valkey/pull/3921) ([tests](tests/valkey/3921-98005d1c8/)): Reject NAN scores in listpack/ziplist-encoded sorted sets on RDB load (#3921): 2 of 2 test(s) reached the change, coverage 90%; crash, fixed by #3921 (recorded)
-- [valkey-io/valkey#3920](https://github.com/valkey-io/valkey/pull/3920) ([tests](tests/valkey/3920-63dc7484b/)): Reject integer overflow of length fields in zipmapValidateIntegrity (#3920): 0 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3964](https://github.com/valkey-io/valkey/pull/3964) ([tests](tests/valkey/3964-f3bdf50db/)): Omit alldbs rule in ACL SAVE/LIST and CONFIG REWRITE for compatibility (#3964): 3 of 3 test(s) reached the change
-- [valkey-io/valkey#3374](https://github.com/valkey-io/valkey/pull/3374): to retry, 2 of 2 run(s) could not start: the run could not start: environment acquisition failed
-- [valkey-io/valkey#3950](https://github.com/valkey-io/valkey/pull/3950) ([tests](tests/valkey/3950-e1bc58c72/)): Fix crash when active field-expiry leaves a single-entry HT vset bucket (#3950): 0 of 3 test(s) reached the change, coverage 0%
-- [valkey-io/valkey#3947](https://github.com/valkey-io/valkey/pull/3947) ([tests](tests/valkey/3947-c3766df27/)): Align THP advice in createLatencyReport with checkTHPEnabled (#3947): declined: The change only rewords the human-readable THP advice string inside createLatencyReport (LATENCY DOCTOR output); no logic, reply structure, data path, or config behaviour changes. The message is also emitted only when the kernel has allocated anonymous huge pages to the process, an environ
-- [valkey-io/valkey#3938](https://github.com/valkey-io/valkey/pull/3938) ([tests](tests/valkey/3938-859649d9a/)): Fix IO-Threads redesign cleanup perf regression from #3544 (#3938): 0 of 8 test(s) reached the change, coverage 85%
-- [valkey-io/valkey#3941](https://github.com/valkey-io/valkey/pull/3941) ([tests](tests/valkey/3941-d0ffbabb0/)): Avoid random() % 0 undefined behaviour when cluster-node-timeout < 30 (#3941): 0 of 2 test(s) reached the change, coverage 100%; crash, fixed by #3941 (recorded)
-- [valkey-io/valkey#3942](https://github.com/valkey-io/valkey/pull/3942) ([tests](tests/valkey/3942-69004cae7/)): Fix shard_id format specifier in UPDATE message log (#3942): declined: Logging-only fix: it changes the printf format specifier for the fixed 40-byte, non-NUL-terminated shard_id buffer from %s to %.40s in one cluster UPDATE-message LL_NOTICE log line. The pre-fix %s over-reads past the 40-byte array, but only into adjacent fields of the same clusterNode heap
-- [valkey-io/valkey#3897](https://github.com/valkey-io/valkey/pull/3897) ([tests](tests/valkey/3897-d9a80af14/)): Assertion check on null key for volatile fields based object (#3897): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#3937](https://github.com/valkey-io/valkey/pull/3937) ([tests](tests/valkey/3937-f7b236dfe/)): Fix typo option name in repl-ping-replica-period comment in valkey.conf (#3937): declined: The change edits only a comment line in valkey.conf, correcting the spelling of the repl-ping-replica-period option name in documentation text. No code path, config parsing, default value, or runtime behaviour changes, so there is nothing a scenario could exercise or compare.
-- [valkey-io/valkey#3925](https://github.com/valkey-io/valkey/pull/3925) ([tests](tests/valkey/3925-2013e029c/)): Fix server crash on FUNCTION DELETE after case-only function name collision (#3925): 2 of 2 test(s) reached the change; crash, fixed by #3925 (recorded)
-- [valkey-io/valkey#3888](https://github.com/valkey-io/valkey/pull/3888) ([tests](tests/valkey/3888-b0137ef85/)): Report exact dbid for COPY in ACL LOG when db= access is denied (#3888): 4 of 4 test(s) reached the change, coverage 100%; check, not reproduced (recorded); check, introduced and since fixed (recorded); check, not reproduced (recorded); check, introduced and since fixed (recorded)
-- [valkey-io/valkey#3848](https://github.com/valkey-io/valkey/pull/3848) ([tests](tests/valkey/3848-d7384b919/)): Fix cluster AUX-field control-character and delimiter injection (#3848): declined: no proposed test validated
-- [valkey-io/valkey#3801](https://github.com/valkey-io/valkey/pull/3801) ([tests](tests/valkey/3801-12061032d/)): Validate every DB clause in COPY against ACL db= permissions (#3801): 3 of 3 test(s) reached the change, coverage 94%
-- [valkey-io/valkey#3847](https://github.com/valkey-io/valkey/pull/3847) ([tests](tests/valkey/3847-e71299d59/)): Harden SENTINEL commands and config rewrite against control-character injection (#3847): declined: The change is entirely inside src/sentinel.c and only executes when valkey-server runs in Sentinel mode: sentinelValidateArgs guards SENTINEL SET / SENTINEL MONITOR / SENTINEL CONFIG SET, and the sdscatrepr escaping runs in rewriteConfigSentinelOption, which rewrites sentinel state. Sentin
-- [valkey-io/valkey#3806](https://github.com/valkey-io/valkey/pull/3806) ([tests](tests/valkey/3806-7abe49a6c/)): Add ALL_DBS flag to CLUSTER FLUSHSLOT for database-level ACL (#3806): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#3374](https://github.com/valkey-io/valkey/pull/3374): to retry, 1 of 1 run(s) could not start: the run could not start: environment acquisition failed
+- [valkey-io/valkey#3658](https://github.com/valkey-io/valkey/pull/3658) ([tests](tests/valkey/3658-0ff817e8c/)): CMake: Plain and keyword can not be mixed (#3658): declined: The change is purely a build-system fix: it adds the PRIVATE keyword to target_link_libraries calls in the CMake files so plain and keyword signatures are not mixed, which CMake requires. The set and order of linked libraries is unchanged, so the produced binaries behave identically; no co
+- [valkey-io/valkey#3846](https://github.com/valkey-io/valkey/pull/3846) ([tests](tests/valkey/3846-f25ec5e40/)): Fix use-after-free in VM_RegisterClusterMessageReceiver (#3846): 1 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3872](https://github.com/valkey-io/valkey/pull/3872) ([tests](tests/valkey/3872-2035fb30c/)): Redacting customer information when hide_user_data_from_log is true in rdb.c, networking.c, debug.c and t_hash  (#3872): declined: Every hunk only alters the text of a server log message (serverLog/serverLogHexDump/rdbReportCorruptRDB) based on hide-user-data-from-log, redacting the user's key name, consumer-group name, query-buffer bytes, or listpack hexdump. The surrounding control flow is identical on both branches
+- [valkey-io/valkey#3721](https://github.com/valkey-io/valkey/pull/3721) ([tests](tests/valkey/3721-e4fdae45a/)): Force listpack validation on load to prevent deferred assertions (#3721): 10 of 14 test(s) reached the change, coverage 87%; crash, fixed by #3721 (recorded)
+- [valkey-io/valkey#3676](https://github.com/valkey-io/valkey/pull/3676) ([tests](tests/valkey/3676-8ee3fd704/)): Trigger cluster state update immediately when cluster-require-full-coverage changes (#3676): 1 of 1 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3827](https://github.com/valkey-io/valkey/pull/3827) ([tests](tests/valkey/3827-1c49ca05c/)): Trigger failover check ASAP when cluster-replica-no-failover is disabled (#3827): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3407](https://github.com/valkey-io/valkey/pull/3407) ([tests](tests/valkey/3407-42765b2ff/)): Fix integer overflow in WAIT and WAITAOF numreplicas parameter (#3407): 3 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3791](https://github.com/valkey-io/valkey/pull/3791) ([tests](tests/valkey/3791-cce8f49b6/)): Restrict zmadvise_dontneed_range() to jemalloc builds (#3791): declined: The change only narrows a preprocessor condition so madvise(MADV_DONTNEED) in zmadvise_dontneed_range() compiles on jemalloc Linux builds instead of all Linux builds. Its sole caller, dismissRehashedBucketsIfNeeded() in hashtable.c, releases pages of already-rehashed, dead hashtable bucket
+- [valkey-io/valkey#3808](https://github.com/valkey-io/valkey/pull/3808) ([tests](tests/valkey/3808-c59b24713/)): Document database-level ACL rules in valkey.conf and acl.c (#3808): declined: The change edits only comments: doc comments in src/acl.c describing the db=/alldbs/resetdbs ACL rules and the reset action, and the matching commented documentation text in valkey.conf. No executable code, parsing, or reply behaviour changes, so there is nothing a scenario could exercise.
+- [valkey-io/valkey#3804](https://github.com/valkey-io/valkey/pull/3804) ([tests](tests/valkey/3804-355d30642/)): Remove MIGRATE command dead code in ACLSelectorCheckCmd (#3804): declined: The change deletes an unreachable branch: the removed `cmd->proc == migrateCommand` case is inside the `if (cmd->get_dbid_args)` block in ACLSelectorCheckCmd, and MIGRATE does not define get_dbid_args in migrate.json (only SELECT, MOVE, SWAPDB and COPY do), so the branch could never execut
+- [valkey-io/valkey#3796](https://github.com/valkey-io/valkey/pull/3796) ([tests](tests/valkey/3796-604dcdb00/)): hashtable: disallow insert during safe iteration (fixes #2302) (#3796): declined: The change adds an internal invariant assertion (assert(ht->safe_iterators == NULL) in hashtable.c's insert()), a doc rewrite, and a rewritten unit test. It forbids inserting into a hashtable during safe iteration; delete/replace are unchanged. No command-reachable path in this build viola
+- [valkey-io/valkey#3787](https://github.com/valkey-io/valkey/pull/3787) ([tests](tests/valkey/3787-8d3e6c306/)): Fix "time_t' different  typedef  on 32-bit /64-bit systems (#3787): declined: The change only corrects printf format specifiers for time_t/long on 32-bit builds (valkey-check-aof messages, INFO lru_clock cast, internal fuzzer generator) and adds a 32-bit Alpine CI job. On the 64-bit platform the fuzzer runs on, time_t is a 64-bit long, so %ld and %jd with an intmax_
+- [valkey-io/valkey#3723](https://github.com/valkey-io/valkey/pull/3723) ([tests](tests/valkey/3723-d778b3771/)): Fix double-finish and RESP reply violation in cluster slot migration (#3723): 4 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3800](https://github.com/valkey-io/valkey/pull/3800): to retry, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
+- [valkey-io/valkey#3756](https://github.com/valkey-io/valkey/pull/3756) ([tests](tests/valkey/3756-f2fe917bb/)): Revert "IO-Threads redesign cleanup work (#3544)" (#3756): 0 of 12 test(s) reached the change, coverage 76%
+- [valkey-io/valkey#3678](https://github.com/valkey-io/valkey/pull/3678) ([tests](tests/valkey/3678-294680700/)): Restore ERR prefix and error-code preservation in Lua scripting (#3678): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#3743](https://github.com/valkey-io/valkey/pull/3743) ([tests](tests/valkey/3743-bfeb3685e/)): Fix buffered_reply assert in HFE commands with module keyspace notifications (#3743): declined: The change adds initDeferredReplyBuffer/commitDeferredReplyBuffer around the reply-building in HGETDEL, the hexpireGenericCommand family, and HPERSIST (src/t_hash.c) to defer the array reply when a module blocks the client inside a keyspace-notification callback. Both helpers are strict no
+- [valkey-io/valkey#3505](https://github.com/valkey-io/valkey/pull/3505) ([tests](tests/valkey/3505-69bd02b2e/)): Extend CAPA REDIRECT to cover keyless commands on cluster replicas (#3505): 3 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#3654](https://github.com/valkey-io/valkey/pull/3654) ([tests](tests/valkey/3654-5a604b3ef/)): Use full hash-seed bytes when deriving SipHash seed (#3654): 0 of 4 test(s) reached the change, coverage 100%
 
 ### valkey-io/valkey-bloom
 
@@ -73,10 +73,10 @@ Updated 2026-11-07T04:45+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 382 of 542 tested (70%)
-- Changed-line coverage: median 100% of 245 merge(s) measured, 16 under 50%
-- Recall: 112 parents flagged of 159 fix merges
-- Claude: $1511.19 in the last 24 hours, $3708.15 in the last 7 days, $3708.15 in all
+- Merges whose tests reached the change: 389 of 552 tested (70%)
+- Changed-line coverage: median 100% of 254 merge(s) measured, 16 under 50%
+- Recall: 115 parents flagged of 162 fix merges
+- Claude: $1605.16 in the last 24 hours, $3802.11 in the last 7 days, $3802.11 in all
 - Issues filed: 41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
@@ -126,4 +126,5 @@ Updated 2026-11-07T04:45+00:00.
 - [valkey-io/valkey-search#735](https://github.com/valkey-io/valkey-search/pull/735): attempt 1 of 3, `deps=/opt/valkey-search-deps` failed in merge (exit 1): [138/223] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/commands
 - [valkey-io/valkey-search#734](https://github.com/valkey-io/valkey-search/pull/734): attempt 1 of 3, `deps=/opt/valkey-search-deps` failed in merge (exit 1): [137/221] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/commands
 - [valkey-io/valkey-search#621](https://github.com/valkey-io/valkey-search/pull/621): attempt 1 of 3, `deps=/opt/valkey-search-deps` failed in merge (exit 1): [136/221] Building CXX object src/commands/CMakeFiles/commands.dir/commands.cc.o FAILED: [code=1] src/commands/CMakeFiles/commands.dir/commands
-- [valkey-io/valkey#3374](https://github.com/valkey-io/valkey/pull/3374): attempt 1 of 3, 2 of 2 run(s) could not start: the run could not start: environment acquisition failed
+- [valkey-io/valkey#3374](https://github.com/valkey-io/valkey/pull/3374): attempt 2 of 3, 1 of 1 run(s) could not start: the run could not start: environment acquisition failed
+- [valkey-io/valkey#3800](https://github.com/valkey-io/valkey/pull/3800): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
