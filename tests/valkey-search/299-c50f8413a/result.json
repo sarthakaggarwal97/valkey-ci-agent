@@ -1,0 +1,107 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "c50f8413a38fe44fcd105e51b826a0cbe00aa589",
+  "parent": "de6457112d6aa3b796f4b6cce379f7ffa5f80e13",
+  "pr": 299,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "feat: set command info for ft.create (#299)",
+  "date": "2025-11-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.1109,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in objectGetVal",
+      "scenario": "ai-007c35d75fad",
+      "seed": 7301,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "6e9c1e4bcef6b19e928b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: unknown-crash (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server+0x27766f) (BuildId: b6590001af08d94c3813ed4a65f07bae218567cf) in __asan_memcpy",
+      "scenario": "ai-007c35d75fad",
+      "seed": 7301,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #299",
+      "fingerprint": "3e7345c8dafcf1a68e2b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in objectGetVal",
+      "scenario": "ai-007c35d75fad",
+      "seed": 7301,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #299",
+      "fingerprint": "06a8530a9b15189de1f0",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in objectGetVal",
+      "scenario": "ai-4a4a31381e50",
+      "seed": 7302,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "6e9c1e4bcef6b19e928b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: unknown-crash (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server+0x27766f) (BuildId: b6590001af08d94c3813ed4a65f07bae218567cf) in __asan_memcpy",
+      "scenario": "ai-4a4a31381e50",
+      "seed": 7302,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #299",
+      "fingerprint": "3e7345c8dafcf1a68e2b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in objectGetVal",
+      "scenario": "ai-4a4a31381e50",
+      "seed": 7302,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #299",
+      "fingerprint": "06a8530a9b15189de1f0",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

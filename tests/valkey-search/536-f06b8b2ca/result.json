@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "f06b8b2ca78bcacda4244a35ba07f672e293b27f",
+  "parent": "3f444fae03da6f9e8944593724ac8acda35e71fe",
+  "pr": 536,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "ignore venv (#536)",
+  "date": "2025-12-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2158,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds venv/, env/, .venv/ and .env/ entries to .gitignore. It is a repository housekeeping change with no code, build, or runtime behaviour change in the valkey-search module, so there is nothing a scenario could exercise or compare."
+}

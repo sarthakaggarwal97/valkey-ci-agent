@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-shard-consistency-keywords
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH SOMESHARDS/ALLSHARDS/CONSISTENT/INCONSISTENT keywords and
+    the prefer-partial/consistent-results config rename, module build compared with
+    its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftsearch
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, L2, n, NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", v, !!binary "AACAPwAAgD8AAIA/", n, 1], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", v, !!binary "AAAAQAAAAEAAAABA", n, 2], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", v, !!binary "AABAQAAAQEAAAEBA", n, 3], expect: {equals: 2}}
+    - {command: [HSET, "doc:4", v, !!binary "AACAQAAAgEAAAIBA", n, 4], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAgD8AAIA/",
+        LIMIT, 0, 0], wait_s: 30, expect: {equals: [4]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAgD8AAIA/",
+        LIMIT, 0, 0, SOMESHARDS], expect_difference: true, expect: {equals: [4]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAgD8AAIA/",
+        LIMIT, 0, 0, ALLSHARDS], expect_difference: true, expect: {equals: [4]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAgD8AAIA/",
+        LIMIT, 0, 0, CONSISTENT], expect_difference: true, expect: {equals: [4]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAgD8AAIA/",
+        LIMIT, 0, 0, INCONSISTENT], expect_difference: true, expect: {equals: [4]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAgD8AAIA/",
+        LIMIT, 0, 0, someshards, consistent], expect_difference: true, expect: {equals: [
+          4]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAgD8AAIA/",
+        LIMIT, 0, 0, SOMESHARDS, ALLSHARDS, CONSISTENT, INCONSISTENT, SOMESHARDS],
+      expect_difference: true, expect: {equals: [4]}}
+    - {command: [CONFIG, SET, search.prefer-partial-results, no], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.prefer-partial-results], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CONFIG, SET, search.prefer-consistent-results, yes], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.enable-partial-results, no], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, GET, search.enable-partial-results], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAgD8AAIA/",
+        LIMIT, 0, 0], expect: {equals: [4]}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAgD8AAIA/",
+        LIMIT, 0, 0], expect: {error: true}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftsearch.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftsearch}

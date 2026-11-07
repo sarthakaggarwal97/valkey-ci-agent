@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.ft-create-command-info
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.CREATE registers command info - COMMAND INFO reports arity -2, COMMAND
+    DOCS the argument tree, and the core now enforces the arity before the module
+    parser runs, including at MULTI queue time
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftcreate
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [COMMAND, INFO, FT.CREATE], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, FT.CREATE], expect_difference: true, expect: {contains: "Creates\
+          \ an empty search index"}}
+    - {command: [COMMAND, INFO, FT.DROPINDEX], expect: {exists: true}}
+    - {command: [COMMAND, DOCS, FT.SEARCH], expect: {exists: true}}
+    - {command: [FT.CREATE], expect_difference: true, expect: {error: "wrong number\
+          \ of arguments"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.CREATE], expect_difference: true, expect: {error: "wrong number\
+          \ of arguments"}}
+    - {command: [EXEC], expect_difference: true, expect: {error: true}}
+    - {command: [FT.CREATE, idx], expect: {error: true}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, tagf, TAG, n,
+        NUMERIC, vec, VECTOR, HNSW, 6, DIM, 2, TYPE, FLOAT32, DISTANCE_METRIC, L2],
+      expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', tagf, hello, n, 42, vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, '@tagf:{hello}'], wait_s: 30, expect: {contains: 'doc:1'},
+      compare: skip}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftcreate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftcreate}

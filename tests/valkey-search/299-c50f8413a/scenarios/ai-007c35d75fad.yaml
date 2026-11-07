@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search de6457112d6a..c50f8413a38f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-007c35d75fad
+seed: 7301
+experiment:
+  id: proposed.ft-create-command-info
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

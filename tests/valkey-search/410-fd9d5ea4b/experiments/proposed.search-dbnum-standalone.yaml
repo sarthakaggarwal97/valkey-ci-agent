@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.search-dbnum-standalone
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-search index lifecycle across SELECTed DBs compared with the
+    parent module build; per-DB error texts, cross-DB isolation, brace-named index
+    names, and an RDB save/restart through the new per-content min-version header
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dbnum
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {appendonly: "no"}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TAG], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TAG], expect_difference: true,
+      expect: {error: "in database 0 already exists"}}
+    - {command: [FT.INFO, nosuch], expect_difference: true, expect: {error: "not found\
+          \ in database 0"}}
+    - {command: [FT.SEARCH, nosuch, "*"], expect_difference: true, expect: {error: "not\
+          \ found in database 0"}}
+    - {command: [FT.AGGREGATE, nosuch, "*"], expect_difference: true, expect: {error: "not\
+          \ found in database 0"}}
+    - {command: [FT.DROPINDEX, nosuch], expect_difference: true, expect: {error: "not\
+          \ found in database 0"}}
+    - {command: [FT.CREATE, "{5}idx", ON, HASH, PREFIX, 1, "tag:", SCHEMA, t, TAG],
+      expect: {equals: OK}}
+    - {command: [SELECT, 5], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TAG], expect: {
+        equals: OK}}
+    - {command: [FT._LIST], expect: {equals: [idx]}}
+    - {command: [HSET, "doc:1", t, blue], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:{blue}"], wait_s: 30, expect: {equals: [1, "doc:1",
+          [t, blue]]}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", t, red], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "@t:{red}"], wait_s: 30, expect: {equals: [1, "doc:1",
+          [t, red]]}}
+    - {command: [FT.SEARCH, idx, "@t:{blue}"], expect: {equals: [0]}}
+    - {command: [FT._LIST], compare: unordered}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true}
+    - {command: [FT._LIST], compare: unordered}
+    - {command: [SELECT, 5], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: [idx]}}
+    - {command: [FT.SEARCH, idx, "@t:{blue}"], wait_s: 30, expect: {equals: [1, "doc:1",
+          [t, blue]]}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, idx], expect_difference: true, expect: {error: "not\
+          \ found in database 5"}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [FT._LIST], compare: unordered}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dbnum.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbnum}

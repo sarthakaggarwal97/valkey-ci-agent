@@ -1,0 +1,163 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "fd9d5ea4b75c2f0f94f0ce7a22e6c6f1b6231aec",
+  "parent": "a48d310eec4d1c482ba12e04a978434547cb3681",
+  "pr": 410,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Full support for DB numbers other than zero in cluster mode. (#410)",
+  "date": "2025-12-07",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 7.9334,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in objectGetVal",
+      "scenario": "ai-adbf230adcec",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "6e9c1e4bcef6b19e928b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: unknown-crash (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server+0x27766f) (BuildId: b6590001af08d94c3813ed4a65f07bae218567cf) in __asan_memcpy",
+      "scenario": "ai-adbf230adcec",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #410",
+      "fingerprint": "3e7345c8dafcf1a68e2b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in objectGetVal",
+      "scenario": "ai-adbf230adcec",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #410",
+      "fingerprint": "06a8530a9b15189de1f0",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-adbf230adcec",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #410",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in objectGetVal",
+      "scenario": "ai-906b4a8a9d9f",
+      "seed": 102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "6e9c1e4bcef6b19e928b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: unknown-crash (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server+0x27766f) (BuildId: b6590001af08d94c3813ed4a65f07bae218567cf) in __asan_memcpy",
+      "scenario": "ai-906b4a8a9d9f",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #410",
+      "fingerprint": "3e7345c8dafcf1a68e2b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in objectGetVal",
+      "scenario": "ai-906b4a8a9d9f",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #410",
+      "fingerprint": "06a8530a9b15189de1f0",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-906b4a8a9d9f",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #410",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-3c70fdb52a68",
+      "seed": 103,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #410, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-7e864d4bd1e4",
+      "seed": 104,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #410, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "0026dfcf150a24342bab6ea77b27d02eca4150f9",
+  "parent": "c50f8413a38fe44fcd105e51b826a0cbe00aa589",
+  "pr": 464,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "FT.SEARCH partition and consistency controls (#464)",
+  "date": "2025-12-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.9986,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

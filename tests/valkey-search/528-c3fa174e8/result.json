@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "c3fa174e8d8579e6cb6824123cbda4b8388a3c80",
+  "parent": "ed0648404934bc3c2a3dce6869d157f871757d63",
+  "pr": 528,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Change default Valkey to 9.0.1 release (#528)",
+  "date": "2025-12-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4236,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a CI version bump (scripts/common.rc, testing/integration/run.sh set default Valkey to 9.0.1) plus raising kMinimumServerVersion in src/version.h from 8.1.1 to 9.0.1. That constant is read only once, in vmsdk/src/module.cc's load-time gate: if the server version is below it, module load fails with VALKEYMODULE_ERR; nothing after a successful load uses it. The only observable difference is on a server whose version lies in [8.1.1, 9.0.1), where the parent module loads and the changed one is refused. The fuzzer loads both module builds into one pinned Valkey build, so the server ve"
+}

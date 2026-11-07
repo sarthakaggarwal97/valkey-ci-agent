@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "b81574a2022f8f2b9037c256f0304cebb872e96d",
+  "parent": "0026dfcf150a24342bab6ea77b27d02eca4150f9",
+  "pr": 469,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "FT.INFO partition and consistency controls (#469)",
+  "date": "2025-12-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 9.1947,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-b9a5e32b2315",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #469, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-f43edc1eb06b",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #469, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

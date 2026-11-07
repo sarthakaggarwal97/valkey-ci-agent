@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "57e5dfde0e3c569b6ab410fd216b046e4404ad00",
+  "parent": "cad62657f888dc602d80dad2e991940503aa2f6e",
+  "pr": 480,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Populate fingerprint and version to IndexSchema (#480)",
+  "date": "2025-11-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 6.7993,
+  "findings": [],
+  "recorded": [],
+  "reason": "Every behavioral change sits behind the coordinator, which only the module load-time argument --use-coordinator can enable: the 'use-coordinator' config is built Hidden (valkey_search_options.cc:129) and ModuleConfigManager::Init skips hidden entries, so it is not registered with Valkey's config system and cannot be set via server_config or CONFIG SET, and the fuzzer loads modules by bare path only, with no module arguments (deployment server_config.loadmodule and the modules/modules_parent of valkey.action.commands are bare paths; MODULE LOADEX with ARGS is refused). Without the coordinator, "
+}

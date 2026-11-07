@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.search-fanout-configs
+deployment:
+  modes: [standalone]
+metadata:
+  description: New search.local-fanout-queue-wait-threshold and search.thread-pool-wait-time-samples
+    configs exist with correct defaults and bounds, and resizing the wait-time sample
+    queue while the reader and writer pools index and search is safe
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cfg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, search.local-fanout-queue-wait-threshold], expect_difference: true,
+      expect: {equals: [search.local-fanout-queue-wait-threshold, "50"]}}
+    - {command: [CONFIG, GET, search.thread-pool-wait-time-samples], expect_difference: true,
+      expect: {equals: [search.thread-pool-wait-time-samples, "100"]}}
+    - {command: [CONFIG, SET, search.local-fanout-queue-wait-threshold, 0], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.local-fanout-queue-wait-threshold, 10000], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.local-fanout-queue-wait-threshold, 10001], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.local-fanout-queue-wait-threshold, -1], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.thread-pool-wait-time-samples, 10], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.thread-pool-wait-time-samples, 9], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.thread-pool-wait-time-samples, 10000], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.thread-pool-wait-time-samples, 2147483648], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", v, !!binary "AACAPwAAAEA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", v, !!binary "AAAAQAAAAEA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", v, !!binary "AABAQAAAQEA="], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: 3}, compare: skip}
+    - {command: [CONFIG, SET, search.thread-pool-wait-time-samples, 10], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAgD8=",
+        NOCONTENT], compare: unordered}
+    - {command: [CONFIG, SET, search.thread-pool-wait-time-samples, 10000], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:4", v, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAgD8=",
+        NOCONTENT], compare: unordered, wait_s: 30, expect: {contains: "doc:4"}}
+    - {command: [CONFIG, SET, search.thread-pool-wait-time-samples, 100], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4 @v $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAgD8=",
+        NOCONTENT], compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cfg}

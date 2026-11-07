@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.search-dbnum-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-search on private cluster servers with cluster-databases 16,
+    compared with the parent module build; non-zero-DB FT.CREATE/SEARCH/DROPINDEX/FLUSHDB
+    that the parent restricted to DB 0, and a cluster-node restart with indexes in
+    two DBs through the new min-version RDB header
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cdbnum
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: true
+    resp: {$ref: inputs.resp}
+    server_config: {appendonly: "no", cluster-databases: 16}
+    timeout_s: 60
+    commands:
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TAG], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TAG], expect_difference: true,
+      expect: {error: "in database 1 already exists"}}
+    - {command: [FT.INFO, ghost], expect_difference: true, expect: {error: "not found\
+          \ in database 1"}}
+    - {command: [FT.SEARCH, ghost, "*"], expect_difference: true, expect: {error: "not\
+          \ found in database 1"}}
+    - {command: [FT._LIST], expect: {equals: [idx1]}}
+    - {command: [HSET, "doc:1", t, one], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx1, "@t:{one}"], wait_s: 30, expect: {equals: [1, "doc:1",
+          [t, one]]}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    - {command: [FT.SEARCH, idx1, "@t:{one}"], expect_difference: true, expect: {
+        error: "not found in database 0"}}
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, 1, "k:", SCHEMA, t, TAG], expect: {
+        equals: OK}}
+    - {command: [HSET, "k:1", t, zero], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx1, "@t:{zero}"], wait_s: 30, expect: {equals: [1, "k:1",
+          [t, zero]]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true}
+    - {command: [FT._LIST], expect: {equals: [idx1]}}
+    - {command: [FT.SEARCH, idx1, "@t:{zero}"], wait_s: 30, expect: {equals: [1, "k:1",
+          [t, zero]]}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: [idx1]}}
+    - {command: [FT.SEARCH, idx1, "@t:{one}"], wait_s: 30, expect: {equals: [1, "doc:1",
+          [t, one]]}}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: [idx1]}}
+    - {command: [FT.DROPINDEX, idx1], expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, idx1], expect_difference: true, expect: {error: "not\
+          \ found in database 0"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cdbnum.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cdbnum}

@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.ft-create-sortable
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.CREATE accepts and ignores SORTABLE after each field type (numeric,
+    tag, vector); the parent rejects it, and a field literally named SORTABLE after
+    another field is now swallowed
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sortable
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, 1, "doc:", SCHEMA, price, NUMERIC,
+        SORTABLE], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "doc:", SCHEMA, tags, TAG,
+        SEPARATOR, "|", CASESENSITIVE, sortable, vec, VECTOR, HNSW, 6, TYPE, FLOAT32,
+        DIM, 2, DISTANCE_METRIC, L2, SORTABLE], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idxc, ON, HASH, PREFIX, 1, "doc:", SCHEMA, price, NUMERIC,
+        tags, TAG, SEPARATOR, "|"], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx3, ON, HASH, SCHEMA, f1, NUMERIC, SORTABLE, NUMERIC],
+      expect_difference: true, expect: {error: true}}
+    - {command: [FT.INFO, idx3], expect_difference: true, expect: {error: "not found"}}
+    - {command: [FT.CREATE, idx4, ON, HASH, SCHEMA, f1, NUMERIC, SORTABLE, SORTABLE],
+      expect_difference: true, expect: {error: true}}
+    - {command: [FT.CREATE, idx5, ON, HASH, SCHEMA, SORTABLE, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idx6, ON, HASH, SCHEMA, v, VECTOR, HNSW, 7, TYPE, FLOAT32,
+        DIM, 2, DISTANCE_METRIC, L2, SORTABLE], expect: {error: true}}
+    - {command: [HSET, "doc:1", price, 10, tags, "a|b", vec, !!binary "AACAPwAAAAA="],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:2", price, 25, tags, "b|c", vec, !!binary "AAAAAAAAgD8="],
+      expect: {equals: 3}}
+    - {command: [FT.SEARCH, idxc, "@price:[0 20]", NOCONTENT], wait_s: 20, compare: unordered,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx1, "@price:[0 20]", NOCONTENT], wait_s: 20, compare: unordered,
+      expect_difference: true, expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx2, "@tags:{b}", NOCONTENT], wait_s: 20, compare: unordered,
+      expect_difference: true, expect: {contains: "doc:2"}}
+    - {command: [FT.SEARCH, idx2, "*=>[KNN 2 @vec $qv]", NOCONTENT, PARAMS, 2, qv,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], wait_s: 20, compare: unordered, expect_difference: true,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.INFO, idx1], compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [sortable.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sortable}

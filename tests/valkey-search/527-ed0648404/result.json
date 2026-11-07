@@ -1,0 +1,37 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ed0648404934bc3c2a3dce6869d157f871757d63",
+  "parent": "31d37d91d7bf48b99c68d35a5a1c7ade35d19ead",
+  "pr": 527,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix Aggregation processing of LOAD clause and validation of vector query parameters. (#527)",
+  "date": "2025-12-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 9.8689,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-7212288d453e",
+      "seed": 527001,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #527, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

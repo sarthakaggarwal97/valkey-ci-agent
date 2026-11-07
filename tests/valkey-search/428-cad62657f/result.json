@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "cad62657f888dc602d80dad2e991940503aa2f6e",
+  "parent": "be8b2368f6a40cc783307bde28899e391803f90a",
+  "pr": 428,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Implement queue wait time aware local node preference in fanout operations (#428)",
+  "date": "2025-11-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.4138,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

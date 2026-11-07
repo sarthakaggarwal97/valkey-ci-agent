@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search fd9d5ea4b75c..990efa0ee4f8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c4f382911fde
+seed: 101
+experiment:
+  id: proposed.ftcreate-replica-apply
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.ft-info-partition-consistency-flags
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: FT.INFO ALLSHARDS/SOMESHARDS/CONSISTENT/INCONSISTENT keywords parse
+    on the change and are rejected by the parent, including case-insensitive, repeated,
+    conflicting and keyword-named-index forms, and parse order versus PRIMARY/CLUSTER
+    scope validation
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: ftinfo
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC,
+        v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:1", n, 1, v, !!binary "AACAPwAAAEA="], expect: {equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.INFO, idx, SOMESHARDS], expect_difference: true, expect: {error: false}}
+    - {command: [FT.INFO, idx, ALLSHARDS], expect_difference: true, expect: {error: false}}
+    - {command: [FT.INFO, idx, CONSISTENT], expect_difference: true, expect: {error: false}}
+    - {command: [FT.INFO, idx, INCONSISTENT], expect_difference: true, expect: {error: false}}
+    - {command: [FT.INFO, idx, someshards, consistent], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT.INFO, idx, ALLSHARDS, SOMESHARDS, INCONSISTENT, CONSISTENT, ALLSHARDS],
+      expect_difference: true, expect: {error: false}}
+    - {command: [FT.INFO, idx, PRIMARY, ALLSHARDS], expect_difference: true, expect: {
+        error: "not valid in this configuration"}}
+    - {command: [FT.INFO, idx, CLUSTER, SOMESHARDS, CONSISTENT], expect_difference: true,
+      expect: {error: "not valid in this configuration"}}
+    - {command: [FT.INFO, idx, SOMESHARDS, BOGUS], expect_difference: true, expect: {
+        error: true}}
+    - {command: [FT.INFO, idx, BOGUS], expect: {error: true}}
+    - {command: [FT.CREATE, ALLSHARDS, ON, HASH, PREFIX, 1, "kw:", SCHEMA, t, TAG],
+      expect: {equals: OK}}
+    - {command: [FT.INFO, ALLSHARDS], expect: {error: false}, compare: skip}
+    - {command: [FT.INFO, ALLSHARDS, ALLSHARDS, SOMESHARDS], expect_difference: true,
+      expect: {error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftinfo}

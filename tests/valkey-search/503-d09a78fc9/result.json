@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "d09a78fc9b326f28953e7c86081aa44f80437268",
+  "parent": "57e5dfde0e3c569b6ab410fd216b046e4404ad00",
+  "pr": 503,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix warnings and formatting (#503)",
+  "date": "2025-11-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3621,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a warnings-and-formatting cleanup with no behaviour change. The only production-code edit adds `default: CHECK(false)` to the KeyAccessToStringView switch in src/acl.cc, which is unreachable: acl::KeyAccess has exactly two enumerators (kRead, kWrite) and every call site passes one of them as a literal, so the default exists only to silence the compiler's missing-return warning. The remaining edits are pointer-formatting in vmsdk/src/testing_infra/utils.cc and gmock Invoke() shorthand in vmsdk/testing/cluster_map_test.cc, both test-infrastructure files not compiled into the shippe"
+}

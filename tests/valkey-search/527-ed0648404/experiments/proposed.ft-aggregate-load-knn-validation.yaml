@@ -1,0 +1,81 @@
+extends: [valkey.liveness]
+id: proposed.ft-aggregate-load-knn-validation
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE LOAD of only __key/score no longer returns every field;
+    FT.AGGREGATE now validates KNN, EF_RUNTIME, TIMEOUT and unused PARAMS; max-vector-knn
+    default 128->10000 and max 1000->100000
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftagg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, GET, search.max-vector-knn], expect_difference: true, expect: {
+        contains: "10000"}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v1, VECTOR,
+        HNSW, 6, DIM, 3, TYPE, FLOAT32, DISTANCE_METRIC, L2, n1, NUMERIC, t1, TAG],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", v1, !!binary "AACAPwAAAAAAAAAAAAAA", n1, 42, t1, red],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:2", v1, !!binary "AAAAAACAPwAAAAAA", n1, 7, t1, blue],
+      expect: {equals: 3}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, "@t1:{red}", DIALECT, 2], wait_s: 30, expect: {contains: "doc:1"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "@t1:{blue}", DIALECT, 2], wait_s: 30, expect: {
+        contains: "doc:2"}, compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @v1 $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAAAAAAAAAAAAA",
+        DIALECT, 2], wait_s: 30, expect: {contains: "doc:2"}, compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 200 @v1 $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAAAAAAAAAAAAA",
+        DIALECT, 2], expect_difference: true, compare: unordered, expect: {error: false}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 0 @v1 $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAAAAAAAAAAAAA",
+        DIALECT, 2], expect_difference: true, expect: {error: "KNN parameter"}}
+    - {command: [FT.AGGREGATE, idx, "*=>[KNN 0 @v1 $BLOB]", LOAD, 1, __key, PARAMS,
+        2, BLOB, !!binary "AACAPwAAAAAAAAAAAAAA", DIALECT, 2], expect_difference: true,
+      expect: {error: "KNN parameter"}}
+    - {command: [FT.AGGREGATE, idx, "*=>[KNN 1 @v1 $BLOB EF_RUNTIME 0]", LOAD, 1,
+        __key, PARAMS, 2, BLOB, !!binary "AACAPwAAAAAAAAAAAAAA", DIALECT, 2], expect_difference: true,
+      expect: {error: "EF_RUNTIME"}}
+    - {command: [FT.AGGREGATE, idx, "*=>[KNN 1 @v1 $BLOB EF_RUNTIME 100000]", LOAD,
+        1, __key, PARAMS, 2, BLOB, !!binary "AACAPwAAAAAAAAAAAAAA", DIALECT, 2], expect_difference: true,
+      expect: {error: "EF_RUNTIME"}}
+    - {command: [FT.AGGREGATE, idx, "*=>[KNN 1 @v1 $BLOB]", LOAD, 1, __key, TIMEOUT,
+        60001, PARAMS, 2, BLOB, !!binary "AACAPwAAAAAAAAAAAAAA", DIALECT, 2], expect_difference: true,
+      expect: {error: "cannot exceed 60000"}}
+    - {command: [FT.AGGREGATE, idx, "*=>[KNN 1 @v1 $BLOB]", LOAD, 1, __key, PARAMS,
+        4, BLOB, !!binary "AACAPwAAAAAAAAAAAAAA", STRAY, zzz, DIALECT, 2], expect_difference: true,
+      expect: {error: "not used"}}
+    - {command: [FT.AGGREGATE, idx, "*=>[KNN 1 @v1 $BLOB]", LOAD, 1, __key, PARAMS,
+        2, BLOB, !!binary "AACAPwAAAAAAAAAAAAAA", DIALECT, 2], expect_difference: true,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.AGGREGATE, idx, "*=>[KNN 1 @v1 $BLOB]", LOAD, 2, __v1_score, __key,
+        PARAMS, 2, BLOB, !!binary "AACAPwAAAAAAAAAAAAAA", DIALECT, 2], expect_difference: true,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.AGGREGATE, idx, "*=>[KNN 1 @v1 $BLOB]", LOAD, 2, "@__key", "@n1",
+        PARAMS, 2, BLOB, !!binary "AACAPwAAAAAAAAAAAAAA", DIALECT, 2], expect: {contains: "doc:1"}}
+    - {command: [FT.AGGREGATE, idx, "*=>[KNN 1 @v1 $BLOB]", LOAD, 0, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAAAAAAAAAAA", DIALECT, 2], expect: {contains: __v1_score}}
+    - {command: [FT.AGGREGATE, idx, "*=>[KNN 1 @v1 $BLOB]", LOAD, "*", PARAMS, 2,
+        BLOB, !!binary "AACAPwAAAAAAAAAAAAAA", DIALECT, 2], expect: {contains: "doc:1"},
+      compare: skip}
+    - {command: [CONFIG, SET, search.max-vector-knn, 100000], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 99999 @v1 $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAAAAAAAAAAAAA",
+        DIALECT, 2], expect_difference: true, compare: unordered, expect: {error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftagg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftagg}

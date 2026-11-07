@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "31d37d91d7bf48b99c68d35a5a1c7ade35d19ead",
+  "parent": "990efa0ee4f8b15f452f74bbad68a99e23c73548",
+  "pr": 524,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "use negate flag parser in ft.info parser (#524)",
+  "date": "2025-12-08",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3352,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure refactor with no behaviour change: the diff replaces two inline lambda parsers for FT.INFO's ALLSHARDS and INCONSISTENT keywords with the GENERATE_NEGATED_FLAG_PARSER macro, which expands (vmsdk/src/command_parser.h:211-216) to an identical lambda that sets the same field (enable_partial_results / require_consistency) to false and returns OkStatus, consuming no arguments. Parsing semantics, accepted syntax, and FT.INFO replies are unchanged on both builds, so a compared sequence could never show a difference and no fault path is touched."
+}

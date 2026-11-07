@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search be8b2368f6a4..cad62657f888.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1465bb2adfa9
+seed: 42802
+experiment:
+  id: proposed.search-fanout-configs
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

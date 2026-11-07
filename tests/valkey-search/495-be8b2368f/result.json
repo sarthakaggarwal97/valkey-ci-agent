@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "be8b2368f6a40cc783307bde28899e391803f90a",
+  "parent": "cdfe0c4b76afc5015359238f6097ca83e2a10706",
+  "pr": 495,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix flaky save/restore test (#495)",
+  "date": "2025-11-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3632,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a test fix plus diagnostics: the integration test gains a wait for index backfill after restart (test code only), log.cc loses a blank line, and module OnLoad gains a read-only loop over /proc/self/maps that logs each loaded .so's base address at NOTICE level to make addr2line work on crash dumps. No command, reply, indexing, persistence or replication behaviour changes; the new code runs once at module load, reads procfs with bounds-checked parsing, and only emits log lines, which no fuzzer oracle observes beyond module load succeeding \u2014 something every run already exercises."
+}

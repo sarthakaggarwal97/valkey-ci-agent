@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "d90a3580253b97411138ccf7ed0a1d2225a5b871",
+  "parent": "c2c1e7b953f77bc8afa4930bf226e3a2303dba6c",
+  "pr": 492,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix mem leak in unit test (#492)",
+  "date": "2025-11-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2294,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change touches only testing/valkey_search_test.cc, the module's own gtest unit test: it replaces a raw heap allocation of a mock CLUSTER SLOTS reply with a std::unique_ptr so the mock reply is freed when the test doesn't delete it, fixing a leak in the test harness itself. No shipped module code, command, reply, indexing, persistence or cluster path changes, so no server behaviour can differ between the two builds and there is nothing for a scenario to exercise."
+}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 31d37d91d7bf..ed0648404934.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8213068fdd1f
+seed: 527002
+experiment:
+  id: proposed.ft-aggregate-load-knn-validation
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 0026dfcf150a..b81574a2022f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a211a75fe3aa
+seed: 3
+experiment:
+  id: proposed.ft-info-partition-consistency-flags
+  inputs:
+    resp: 2
+    cluster: true
+deployment:
+  mode: standalone
+  base_port: 7200

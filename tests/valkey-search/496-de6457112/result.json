@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "de6457112d6aa3b796f4b6cce379f7ffa5f80e13",
+  "parent": "d09a78fc9b326f28953e7c86081aa44f80437268",
+  "pr": 496,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix Override Specifier and Suppress MacOS Compiler Warning (#496)",
+  "date": "2025-11-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.242,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only CMakeLists.txt: it reformats the SAN_BUILD cache variable and sanitizer messages, and adds -Wno-defaulted-function-deleted on Apple builds to suppress a macOS compiler warning. The diff is complete (diff_truncated: false) and contains no C++ source changes, so no runtime behaviour, command reply, indexing, replication or persistence path is affected \u2014 it is purely a build/CI change that needs no scenario."
+}

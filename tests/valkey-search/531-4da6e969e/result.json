@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "4da6e969e671106e784191ea4f44036c5f108732",
+  "parent": "c3fa174e8d8579e6cb6824123cbda4b8388a3c80",
+  "pr": 531,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "refresh cluster map in background (#531)",
+  "date": "2025-12-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 7.8531,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds one branch in ValkeySearch::OnServerCronCallback that refreshes the cluster map in the background, gated on IsCluster() && UsingCoordinator(). UsingCoordinator() is true only when the hidden, startup-only 'use-coordinator' config is set, and the only mechanism that sets it is the module load argument '--use-coordinator' placed after the module path on the loadmodule directive (the config is built Hidden() and ModuleConfigManager::Init never registers hidden entries with Valkey, so no CONFIG SET or config-file name for it exists). The fuzzer can only load modules by bare path: v"
+}

@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-limit-nocontent
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH on non-vector (numeric) queries applies LIMIT and NOCONTENT,
+    compared across the module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 40
+    commands:
+    - {command: [FT.CREATE, products, ON, HASH, PREFIX, 1, "product:", SCHEMA, price,
+        NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "product:1", price, 1], expect: {equals: 1}}
+    - {command: [HSET, "product:2", price, 2], expect: {equals: 1}}
+    - {command: [HSET, "product:3", price, 3], expect: {equals: 1}}
+    - {command: [HSET, "product:4", price, 4], expect: {equals: 1}}
+    - {command: [HSET, "product:5", price, 5], expect: {equals: 1}}
+    - {command: [HSET, "product:6", price, 6], expect: {equals: 1}}
+    - {command: [HSET, "product:7", price, 7], expect: {equals: 1}}
+    - {command: [HSET, "product:8", price, 8], expect: {equals: 1}}
+    - {command: [HSET, "product:9", price, 9], expect: {equals: 1}}
+    - {command: [HSET, "product:10", price, 10], expect: {equals: 1}}
+    - {command: [HSET, "product:11", price, 11], expect: {equals: 1}}
+    - {command: [HSET, "product:12", price, 12], expect: {equals: 1}}
+    - {command: [FT.INFO, products], wait_s: 30, compare: skip, expect: {contains: 12}}
+    - {command: [FT.SEARCH, products, "@price:[1 1]"], expect: {contains: "product:1"}}
+    - {command: [FT.SEARCH, products, "@price:[2 2]", NOCONTENT], expect_difference: true,
+      expect: {equals: [1, "product:2"]}}
+    - {command: [FT.SEARCH, products, "@price:[1 12]", LIMIT, 0, 0], expect_difference: true,
+      expect: {equals: [12]}}
+    - {command: [FT.SEARCH, products, "@price:[1 12]", LIMIT, 4294967296, 10], expect_difference: true,
+      expect: {equals: [12]}}
+    - {command: [FT.SEARCH, products, "@price:[1 12]", NOCONTENT], compare: unordered,
+      expect_difference: true, expect: {contains: 12}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [search.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}
