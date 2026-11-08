@@ -213,30 +213,43 @@ def test_valkey_search_build_lets_cmake_4_configure_the_older_vendored_c_ares(tm
     assert (src / "policy").read_text().strip() == "3.5"
 
 
-def test_valkey_search_build_retries_once_after_the_pre_172_grpc_header_race(tmp_path):
+def test_valkey_search_build_builds_the_grpc_header_after_the_pre_172_race(tmp_path):
     """Before valkey-search #172 (0730baa), nothing ordered the compiles after protoc's gRPC output: ninja could
-    stop on a missing coordinator.grpc.pb.h that the same build generated. The recipe retries once when that
-    header landed, and lets any other failure stand."""
-    src = tmp_path / "src"
+    compile an includer of coordinator.grpc.pb.h and stop before generating it. A failed build builds that
+    header's target, coordinator_grpc_proto, and runs once more; a commit without that target lets its error
+    stand."""
+    src, bin_dir = tmp_path / "src", tmp_path / "bin"
     src.mkdir()
-    # A stand-in for the racy build.sh: the first run fails after generating the header; the second succeeds.
-    (src / "build.sh").write_text(
-        '#!/bin/bash\nif [ ! -f .build-release/src/coordinator/coordinator.grpc.pb.h ]; then\n'
-        '  mkdir -p .build-release/src/coordinator && touch .build-release/src/coordinator/coordinator.grpc.pb.h\n'
-        '  exit 1\nfi\necho "$@" > built\n'
-    )
+    bin_dir.mkdir()
+    header = ".build-release/src/coordinator/coordinator.grpc.pb.h"
+    # A stand-in for the racy build.sh: it fails, with no header made, until the header is there.
+    (src / "build.sh").write_text(f'#!/bin/bash\necho attempt >> attempts\n[ -f {header} ] || exit 1\n'
+                                  'echo "$@" > built\n')
     (src / "build.sh").chmod(0o755)
+    # A stand-in for ninja: only the gRPC target makes the header.
+    (bin_dir / "ninja").write_text(f'#!/bin/bash\n[ "$*" == "-C .build-release coordinator_grpc_proto" ] || exit 1\n'
+                                   f'mkdir -p $(dirname {header}) && touch {header}\n')
+    (bin_dir / "ninja").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
     subprocess.run(["bash", "-euo", "pipefail", "-c", pr_batch_mod.MODULES["valkey-search"].build],
-                   cwd=src, check=True, capture_output=True, text=True)
+                   cwd=src, env=env, check=True, capture_output=True, text=True)
     assert (src / "built").exists()
+    assert (src / "attempts").read_text() == "attempt\nattempt\n"
 
-    # A failure that leaves no gRPC header is not the race: it stands, with no retry.
+    # A commit without that target: ninja fails, and so does the build, with no second run.
+    (src / "attempts").unlink()
     shutil.rmtree(src / ".build-release")
-    (src / "build.sh").write_text('#!/bin/bash\necho attempt >> attempts\nexit 1\n')
+    (bin_dir / "ninja").write_text("#!/bin/bash\necho \"ninja: error: unknown target 'coordinator_grpc_proto'\"\n"
+                                   "exit 1\n")
     done = subprocess.run(["bash", "-euo", "pipefail", "-c", pr_batch_mod.MODULES["valkey-search"].build],
-                          cwd=src, capture_output=True, text=True)
+                          cwd=src, env=env, capture_output=True, text=True)
     assert done.returncode != 0
     assert (src / "attempts").read_text() == "attempt\n"
+
+
+def test_valkey_search_setup_installs_libsystemd_for_older_commits():
+    """Older valkey-search commits (#75 to #85 at least) find_library systemd while configuring."""
+    assert "libsystemd-dev" in pr_batch_mod.MODULES["valkey-search"].setup
 
 
 def test_batch_names_keep_a_fitting_id_and_fix_the_rest():
