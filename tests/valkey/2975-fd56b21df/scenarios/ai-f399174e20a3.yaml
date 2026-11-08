@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 263d9ea41972..fd56b21df0c5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f399174e20a3
+seed: 106
+experiment:
+  id: proposed.sdsnsplitargs-function-meta
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7500

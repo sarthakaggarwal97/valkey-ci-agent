@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e4a3e9f0a298..dbe07b7c9879.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-adfedcf99061
+seed: 30072
+experiment:
+  id: proposed.hash-ttl-overwrite-swap
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

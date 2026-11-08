@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.sort-empty-by-pattern-store-cluster
+deployment:
+  modes: [cluster]
+metadata:
+  description: SORT ... BY pattern STORE on an empty slot key in cluster mode must
+    not trigger the pqsort UB
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sortstore
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SORT, '{t}src', BY, '{t}w_*', GET, '{t}d_*', STORE, '{t}dst'], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [EXISTS, '{t}dst'], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [sortstore.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sortstore}

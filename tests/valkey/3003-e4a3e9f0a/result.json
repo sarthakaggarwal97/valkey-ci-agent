@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e4a3e9f0a298fbaa7320e76dbdd4b790425c148e",
+  "parent": "fd56b21df0c5130e11647e907a4ef31d5fd81584",
+  "pr": 3003,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "fix(hash): Untrack hash with volatile fields when it is overwritten  (#3003)",
+  "date": "2026-01-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.0783,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: assertion failed: 14483:M 08 Nov 2026 02:21:44.651 # ==> expire.c:168 'hashTypeHasVolatileFields(o)' is not true",
+      "scenario": "ai-18466beaba29",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3003",
+      "fingerprint": "5039a93b3c01fb23266b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: assertion failed: 15198:M 08 Nov 2026 02:22:59.848 # ==> expire.c:168 'hashTypeHasVolatileFields(o)' is not true",
+      "scenario": "ai-26e5b31859a7",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3003",
+      "fingerprint": "5039a93b3c01fb23266b",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

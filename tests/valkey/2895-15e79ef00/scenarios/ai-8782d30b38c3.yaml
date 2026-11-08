@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e843c18f1e42..15e79ef00a5e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8782d30b38c3
+seed: 53
+experiment:
+  id: proposed.bio-burst-kill
+  inputs:
+    set_size: 20000
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7400

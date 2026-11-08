@@ -1,0 +1,46 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "75707ac4323b30f112e862b734e3436fa03b620c",
+  "parent": "b70d98c43bf516d986434090886376b0d7be7e94",
+  "pr": 2966,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Avoid hgetall deferred response (#2966)",
+  "date": "2025-12-24",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 11,
+    "executed": 11,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.0693,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-d63a73e6873c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hgetall' returned ERROR: expectations both builds violate alike, so they are not about the change: 24 (HLEN h4)"
+    },
+    {
+      "scenario": "ai-e00c44ffbda6",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hgetall' returned ERROR: expectations both builds violate alike, so they are not about the change: 24 (HLEN h4)"
+    },
+    {
+      "scenario": "ai-35eb54d9f0ef",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hgetall' returned ERROR: expectations both builds violate alike, so they are not about the change: 24 (HLEN h4)"
+    }
+  ]
+}

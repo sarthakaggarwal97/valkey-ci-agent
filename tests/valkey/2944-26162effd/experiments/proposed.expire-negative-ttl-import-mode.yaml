@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.expire-negative-ttl-import-mode
+metadata:
+  description: Negative TTL under import-mode stores a non-negative expire, so disabling
+    import-mode expires the key without the active-expire assert crash
+deployment:
+  modes: [standalone]
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    lazy_expire: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: negttl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hz: 100, lazyfree-lazy-expire: {$ref: inputs.lazy_expire}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 40
+    commands:
+    - {command: [CONFIG, SET, import-mode, "yes"], expect: {equals: OK}}
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [PEXPIREAT, foo, "-1"], expect: {equals: 1}}
+    - {command: [SET, foo2, bar], expect: {equals: OK}}
+    - {command: [EXPIREAT, foo2, "-10000"], expect: {equals: 1}}
+    - {command: [SET, foo3, bar], expect: {equals: OK}}
+    - {command: [PEXPIRE, foo3, "-9999999999999"], expect: {equals: 1}}
+    - {command: [DBSIZE], expect: {equals: 3}}
+    - {command: [CONFIG, SET, import-mode, "no"], expect: {equals: OK}}
+    - {command: [DBSIZE], wait_s: 30, expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: negttl}

@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.acl-db-scripting
+deployment:
+  modes: [standalone]
+metadata:
+  description: database ACLs inside Lua, server.call SELECT denial and db-aware server.acl_check_cmd
+    (now VM_ACLCheckPermissions)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lua
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ACL, SETUSER, luauser, on, nopass, "~*", "&*", "+@all"], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, luauser, "db=0,1"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [AUTH, luauser, x], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [EVAL, "return server.call('SET', KEYS[1], 'v')", "1", k], expect: {
+        equals: OK}}
+    - {command: [EVAL, "server.call('SELECT','2'); return 'x'", "0"], expect_difference: true,
+      expect: {error: "database"}}
+    - {command: [EVAL, "server.call('SELECT','1'); return server.call('SET','k1','v1')",
+        "0"], expect: {equals: OK}}
+    - {command: [EVAL, "if server.acl_check_cmd('select','2') then return 1 else return\
+          \ 0 end", "0"], expect_difference: true, expect: {equals: 0}}
+    - {command: [EVAL, "if server.acl_check_cmd('set','x','y') then return 1 else\
+          \ return 0 end", "0"], expect: {equals: 1}}
+    - {command: [ACL, SETUSER, luauser, resetdbs, "db=1"], connection: admin, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [EVAL, "return 1", "0"], expect_difference: true, expect: {error: "database"}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [EVAL, "return server.call('GET','k1')", "0"], expect: {equals: v1}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [lua.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lua}

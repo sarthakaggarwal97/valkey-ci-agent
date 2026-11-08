@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b56543285e3d..e843c18f1e42.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6b1065f8c268
+seed: 404
+experiment:
+  id: proposed.benchmark-fuzz
+  inputs:
+    modes: malformed-commands
+    loglevel: info
+    clients: 50
+    requests: 25
+    keyspace: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

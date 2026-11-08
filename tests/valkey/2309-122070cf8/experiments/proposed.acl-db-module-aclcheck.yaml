@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.acl-db-module-aclcheck
+deployment:
+  modes: [standalone]
+metadata:
+  description: new VM_ACLCheckPermissions dbid checks and the changed VM_ACLCheckCommandPermissions
+    dbid=-1 semantics, via tests/modules/aclcheck.so
+components:
+- use: valkey.action.commands
+  id: modcheck
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 30
+    commands:
+    - {command: [ACL, SETUSER, moduser, on, nopass, "~*", "&*", "+@all"], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, moduser, "db=0"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [AUTH, moduser, x], expect: {equals: OK}}
+    - {command: [aclcheck.check.permissions, "0", set, x, "5"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [aclcheck.check.permissions, "3", set, y, "1"], expect_difference: true,
+      expect: {error: NOPERM}}
+    - {command: [aclcheck.check.permissions, "999", set, y, "1"], expect_difference: true,
+      expect: {error: "invalid arguments"}}
+    - {command: [aclcheck.check.permissions, "0", nosuchcmd, a], expect_difference: true,
+      expect: {error: "invalid arguments"}}
+    - {command: [aclcheck.rm_call.check.cmd, set, k, v], expect_difference: true,
+      expect: {error: DENIED}}
+    - {command: [AUTH, default, x], expect: {equals: OK}}
+    - {command: [aclcheck.rm_call.check.cmd, set, k2, v2], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modcheck.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modcheck}

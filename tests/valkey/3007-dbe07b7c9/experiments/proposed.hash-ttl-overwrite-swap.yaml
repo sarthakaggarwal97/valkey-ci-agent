@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.hash-ttl-overwrite-swap
+deployment:
+  modes: [standalone]
+metadata:
+  description: Overwriting a hashtable-encoded hash that has per-field TTLs with a
+    long (non-embstr) string drives dbSetValue's swap branch, where the old object
+    loses its embedded key and must be untracked from keys_with_volatile_items via
+    the new object's key. The parent untracks the keyless object (NULL key) and crashes;
+    the change untracks via new->key.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [HSET, h, f1, v1], expect: {equals: 1}}
+    - {command: [HEXPIRE, h, 100000, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [SET, h, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [GET, h], expect_difference: true, expect: {equals: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}}
+    - {command: [TYPE, h], expect_difference: true, expect: {equals: string}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

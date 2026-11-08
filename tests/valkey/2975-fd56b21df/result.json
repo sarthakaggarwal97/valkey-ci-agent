@@ -1,0 +1,70 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fd56b21df0c5130e11647e907a4ef31d5fd81584",
+  "parent": "263d9ea41972d8005e739324b826efe945549acc",
+  "pr": 2975,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add sdsnsplitargs to reduce sds allocation. (#2975)",
+  "date": "2026-01-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 0,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 50,
+    "executed": 45,
+    "percent": 90,
+    "uncovered": [
+      "src/sds.c:1063",
+      "src/sds.c:1071",
+      "src/sds.c:1076",
+      "src/sds.c:1082",
+      "src/sds.c:1084"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 10.2951,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-c3b3beceaaa8",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c3b3beceaaa8",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c3b3beceaaa8",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-211746b8d08b",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-211746b8d08b",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-211746b8d08b",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

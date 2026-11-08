@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e843c18f1e42..15e79ef00a5e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9bd72f8de9f5
+seed: 101
+experiment:
+  id: proposed.bio-lazyfree-burst
+  inputs:
+    mutation_rate: 500
+    mutable_keys: 200
+    stable_keys: 1000
+    value_size: 64
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

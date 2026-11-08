@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.sort-nonempty-cluster-limit
+deployment:
+  modes: [cluster]
+metadata:
+  description: SORT BY a real pattern with LIMIT over a non-empty list in cluster
+    mode reaches the partial-range pqsort call
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sort
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [RPUSH, "mylist{t}", "3", "1", "2", "5", "4"], expect: {equals: 5}}
+    - {command: [MSET, "weight{t}_1", "50", "weight{t}_2", "40", "weight{t}_3", "30",
+        "weight{t}_4", "20", "weight{t}_5", "10"], expect: {equals: OK}}
+    - {command: [SORT, "mylist{t}", BY, "weight{t}_*", LIMIT, "1", "2"], expect: {
+        equals: ["4", "3"]}}
+    - {command: [SORT_RO, "mylist{t}", BY, "weight{t}_*"], expect: {equals: ["5",
+          "4", "3", "2", "1"]}}
+    - {command: [SORT, "mylist{t}"], expect: {equals: ["1", "2", "3", "4", "5"]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [sort.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sort}

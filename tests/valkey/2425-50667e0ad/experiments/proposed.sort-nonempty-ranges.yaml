@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.sort-nonempty-ranges
+deployment:
+  modes: [standalone]
+metadata:
+  description: SORT and SORT_RO over non-empty lists reach the pqsort and qsort calls;
+    replies must match across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sort
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [RPUSH, mylist, "3", "1", "2", "5", "4"], expect: {equals: 5}}
+    - {command: [MSET, weight_1, "50", weight_2, "40", weight_3, "30", weight_4, "20",
+        weight_5, "10"], expect: {equals: OK}}
+    - {command: [MSET, data_1, a, data_2, b, data_3, c, data_4, d, data_5, e], expect: {
+        equals: OK}}
+    - {command: [SORT, mylist], expect: {equals: ["1", "2", "3", "4", "5"]}}
+    - {command: [SORT, mylist, ALPHA], expect: {equals: ["1", "2", "3", "4", "5"]}}
+    - {command: [SORT, mylist, BY, "weight_*"], expect: {equals: ["5", "4", "3", "2",
+          "1"]}}
+    - {command: [SORT, mylist, BY, "weight_*", LIMIT, "1", "3"], expect: {equals: [
+          "4", "3", "2"]}}
+    - {command: [SORT, mylist, BY, "weight_*", LIMIT, "0", "2", GET, "data_*"], expect: {
+        equals: [e, d]}}
+    - {command: [SORT_RO, mylist, DESC], expect: {equals: ["5", "4", "3", "2", "1"]}}
+    - {command: [SORT_RO, mylist, BY, "weight_*", LIMIT, "2", "2"], expect: {equals: [
+          "3", "2"]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [sort.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sort}

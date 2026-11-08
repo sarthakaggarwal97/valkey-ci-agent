@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.sort-empty-by-pattern
+deployment:
+  modes: [standalone]
+metadata:
+  description: SORT with a BY pattern on a missing/empty key must not form an out-of-bounds
+    pqsort range
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sort
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {list-max-listpack-size: 4}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [RPUSH, l, a, b, c], expect: {equals: 3}}
+    - {command: [DEL, l], expect: {equals: 1}}
+    - {command: [SORT, l, BY, 'weight_*', GET, '#', GET, 'data_*'], expect_difference: true,
+      expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [sort.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sort}

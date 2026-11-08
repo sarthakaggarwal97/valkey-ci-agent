@@ -1,0 +1,64 @@
+extends: [valkey.base]
+id: proposed.cli-asm-rebalance
+deployment:
+  modes: [cluster]
+metadata:
+  description: >
+    valkey-cli --cluster rebalance with the new --cluster-use-atomic-slot-migration
+    flag, run against the deployment's live cluster while the key-value workload writes.
+    The candidate CLI must take the ASM path (clusterApplyReshardTable -> clusterManagerMoveSlotRangesASM
+    -> clusterManagerMigrateSlots, then polling CLUSTER GETSLOTMIGRATIONS through
+    clusterManagerGetSlotMigration and the parse/slot-range-string helpers) and finish
+    with exit 0 printing the '#' progress marks; the parent CLI rejects the unknown
+    flag (exit 1), which is the expected difference showing the run reached the change.
+    The fuzzer's cluster splits 16384 slots over a primary count that does not divide
+    it evenly, so a tiny --cluster-threshold always forces a real ASM migration of
+    the off-by-one slots; a second rebalance forces another. The ledger, deployment-state
+    and liveness oracles from valkey.base judge that no acknowledged write is lost
+    across the atomic migration and the cluster stays healthy; the final --cluster
+    check (compare skip, since live key counts differ between the two sides' run times)
+    requires all 16384 slots still covered on the candidate.
+inputs:
+  required: [host_port]
+  properties:
+    host_port:
+      type: string
+      description: "address of the deployment's first node, 127.0.0.1:<base_port>"
+    threshold:
+      type: number
+      default: 0.01
+      description: rebalance threshold; must be below the ~0.02% natural imbalance
+        so slots always move
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 2}
+- use: valkey.action.tools
+  id: asm
+  depends_on: [warm-up]
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 300
+    runs:
+    - tool: valkey-cli
+      args: [--cluster, rebalance, {$ref: inputs.host_port}, --cluster-threshold,
+        {$ref: inputs.threshold}, --cluster-use-atomic-slot-migration, --cluster-yes]
+      expect_difference: true
+      expect: {exit: {equals: 0}, stdout: {contains: "#"}}
+    - tool: valkey-cli
+      args: [--cluster, rebalance, {$ref: inputs.host_port}, --cluster-threshold,
+        {$ref: inputs.threshold}, --cluster-use-atomic-slot-migration, --cluster-yes]
+      expect_difference: true
+      expect: {exit: {equals: 0}, stdout: {contains: "#"}}
+    - tool: valkey-cli
+      args: [--cluster, check, {$ref: inputs.host_port}]
+      compare: skip
+      expect: {exit: {equals: 0}, stdout: {contains: "16384 slots covered"}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [asm]
+  config: {seconds: 3}
+required_events: [asm.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: asm}

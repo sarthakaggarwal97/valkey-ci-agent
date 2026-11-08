@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.hexpire-nonexisting-fields-no-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: HEXPIRE-family with a past/zero expiration that deletes no field (absent
+    fields or a missing key) must not leak the rewrite argv
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: leak
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HEXPIRE, h, 0, FIELDS, 1, absent1], expect: {equals: [-2]}}
+    - {command: [HPEXPIRE, h, 0, FIELDS, 1, absent2], expect: {equals: [-2]}}
+    - {command: [HEXPIREAT, h, 1, FIELDS, 1, absent3], expect: {equals: [-2]}}
+    - {command: [HPEXPIREAT, h, 1, FIELDS, 1, absent4], expect: {equals: [-2]}}
+    - {command: [HEXPIRE, h, 0, FIELDS, 8, a1, a2, a3, a4, a5, a6, a7, a8], expect: {
+        equals: [-2, -2, -2, -2, -2, -2, -2, -2]}}
+    - {command: [HPEXPIREAT, h, -9223372036854775808, FIELDS, 2, b1, b2], expect: {
+        equals: [-2, -2]}}
+    - {command: [HEXPIREAT, missingkey, 1, FIELDS, 3, x, y, z], expect: {equals: [
+          -2, -2, -2]}}
+    - {command: [HPEXPIRE, missingkey, 0, FIELDS, 1, q], expect: {equals: [-2]}}
+    - {command: [HSET, fields, g1, w1], expect: {equals: 1}}
+    - {command: [HEXPIRE, fields, 0, FIELDS, 1, nope], expect: {equals: [-2]}}
+    - {command: [HEXPIRE, h, 0, FIELDS, 2, f1, absent5], expect: {equals: [2, -2]}}
+    - {command: [HGET, h, f2], expect: {equals: v2}}
+    - {command: [HEXPIRE, h, 0, FIELDS, 2, f2, absent6], expect: {equals: [2, -2]}}
+    - {command: [EXISTS, h], expect: {equals: 0}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: leak}

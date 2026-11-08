@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fd56b21df0c5..e4a3e9f0a298.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-26e5b31859a7
+seed: 2
+experiment:
+  id: proposed.hash-volatile-untrack-on-overwrite
+  inputs:
+    resp: 2
+    hash_max_entries: 0
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

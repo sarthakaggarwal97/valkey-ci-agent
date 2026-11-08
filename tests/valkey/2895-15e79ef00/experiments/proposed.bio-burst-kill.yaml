@@ -1,0 +1,62 @@
+extends: [valkey.base]
+id: proposed.bio-burst-kill
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    SIGKILL the primary the instant a 24-job lazy-free burst sits on the bio worker's
+    multi-block fifo, restart it at once: the process must die cleanly mid-drain,
+    the AOF reload must replay the burst (queueing the fifo again during loading),
+    and no acknowledged write outside the fsync window may be lost.
+inputs:
+  properties:
+    set_size: {type: integer, minimum: 1000, maximum: 100000, default: 50000}
+components:
+- use: valkey.fault.process-signal
+  id: kill-primary
+  config:
+    when_event: burst.completed
+    instance: primary
+    signal: SIGKILL
+    restart_mode: immediate
+- use: valkey.action.commands
+  id: burst
+  depends_on: [writes, kill-primary]
+  timeout_s: 600
+  config:
+    instances: primary
+    timeout_s: 120
+    commands:
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) for k=0,3\
+          \ do local key='big:'..(b+k) for i=1,n do redis.call('SADD',key,'m:'..i)\
+          \ end end return 1", 0, 1, {$ref: inputs.set_size}], expect: {equals: 1}}
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) for k=0,3\
+          \ do local key='big:'..(b+k) for i=1,n do redis.call('SADD',key,'m:'..i)\
+          \ end end return 1", 0, 5, {$ref: inputs.set_size}], expect: {equals: 1}}
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) for k=0,3\
+          \ do local key='big:'..(b+k) for i=1,n do redis.call('SADD',key,'m:'..i)\
+          \ end end return 1", 0, 9, {$ref: inputs.set_size}], expect: {equals: 1}}
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) for k=0,3\
+          \ do local key='big:'..(b+k) for i=1,n do redis.call('SADD',key,'m:'..i)\
+          \ end end return 1", 0, 13, {$ref: inputs.set_size}], expect: {equals: 1}}
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) for k=0,3\
+          \ do local key='big:'..(b+k) for i=1,n do redis.call('SADD',key,'m:'..i)\
+          \ end end return 1", 0, 17, {$ref: inputs.set_size}], expect: {equals: 1}}
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) for k=0,3\
+          \ do local key='big:'..(b+k) for i=1,n do redis.call('SADD',key,'m:'..i)\
+          \ end end return 1", 0, 21, {$ref: inputs.set_size}], expect: {equals: 1}}
+    - {command: [UNLINK, "big:1", "big:2", "big:3", "big:4", "big:5", "big:6", "big:7",
+        "big:8", "big:9", "big:10", "big:11", "big:12", "big:13", "big:14", "big:15",
+        "big:16", "big:17", "big:18", "big:19", "big:20", "big:21", "big:22", "big:23",
+        "big:24"], expect: {equals: 24}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [burst]
+  config: {seconds: 15}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [burst.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-primary}
+- {evidence_id: valkey.command.sequence, source: burst}

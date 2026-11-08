@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 15e79ef00a5e..50667e0ad5b7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f9589c5d96a3
+seed: 7203
+experiment:
+  id: proposed.sort-empty-by-pattern-store-cluster
+  inputs:
+    resp: 2
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 0
+  base_port: 7200

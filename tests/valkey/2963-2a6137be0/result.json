@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2a6137be033b01bff4b99a733c09e56b5c758028",
+  "parent": "26162effd4be179497843049566f3fa9c40b625d",
+  "pr": 2963,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix compile overflow warnings (#2963)",
+  "date": "2025-12-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.683,
+  "findings": [],
+  "recorded": [],
+  "reason": "The only change adds a defensive guard (`sdslen(parts[0]) < 2`) in evalExtractShebangFlags to silence a compiler integer-underflow warning on `sdslen(parts[0]) - 2`. The function body only runs when the script starts with the literal `#!`, and the first token from sdssplitargs always begins with those two ordinary characters, so parts[0] is always at least 2 bytes. The new branch is unreachable and the subtraction never underflowed; EVAL/FUNCTION produce identical engines, flags, and errors on both builds. This is a compile-warning fix with no reachable behavior change, so no scenario can dist"
+}

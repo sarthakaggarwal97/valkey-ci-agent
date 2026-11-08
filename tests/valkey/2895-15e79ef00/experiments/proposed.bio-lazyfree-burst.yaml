@@ -1,0 +1,122 @@
+extends: [valkey.base]
+id: proposed.bio-lazyfree-burst
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Bursts of FLUSHDB ASYNC lazy-free jobs across ten databases push the new bio mutexQueue/fifo
+    past 7 queued jobs (multi-block growth, multi-block pop, block release, single-block
+    memmove pops as it drains), and appendfsync/appendonly toggles call bioDrainWorker
+    with AOF fsync and close jobs pending, all under a concurrent key-value workload
+    judged by the ledger, deployment-state and liveness oracles.
+components:
+- use: valkey.action.commands
+  id: burst
+  config:
+    timeout_s: 180
+    commands:
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "50000"], expect: {equals: OK}}
+    - {command: [SELECT, "2"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "50000"], expect: {equals: OK}}
+    - {command: [SELECT, "3"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "50000"], expect: {equals: OK}}
+    - {command: [SELECT, "4"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "50000"], expect: {equals: OK}}
+    - {command: [SELECT, "5"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "50000"], expect: {equals: OK}}
+    - {command: [SELECT, "6"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "50000"], expect: {equals: OK}}
+    - {command: [SELECT, "7"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "50000"], expect: {equals: OK}}
+    - {command: [SELECT, "8"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "50000"], expect: {equals: OK}}
+    - {command: [SELECT, "9"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "50000"], expect: {equals: OK}}
+    - {command: [SELECT, "10"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "50000"], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SELECT, "1"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "2"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "3"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "4"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "5"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "6"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "7"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "8"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "9"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "10"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK, OK, OK, OK, OK, OK, OK, OK, OK,
+          OK, OK, OK, OK, OK, OK, OK, OK, OK, OK]}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [SET, "bio:k1", v1], expect: {equals: OK}}
+    - {command: [SET, "bio:k2", v2], expect: {equals: OK}}
+    - {command: [SET, "bio:k3", v3], expect: {equals: OK}}
+    - {command: [CONFIG, SET, appendfsync, always], expect: {equals: OK}}
+    - {command: [SET, "bio:k4", v4], expect: {equals: OK}}
+    - {command: [CONFIG, SET, appendfsync, everysec], expect: {equals: OK}}
+    - {command: [CONFIG, SET, appendonly, "no"], expect: {equals: OK}}
+    - {command: [SET, "bio:k5", v5], expect: {equals: OK}}
+    - {command: [CONFIG, SET, appendonly, "yes"], expect: {equals: OK}}
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "30000"], expect: {equals: OK}}
+    - {command: [SELECT, "2"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "30000"], expect: {equals: OK}}
+    - {command: [SELECT, "3"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "30000"], expect: {equals: OK}}
+    - {command: [SELECT, "4"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "30000"], expect: {equals: OK}}
+    - {command: [SELECT, "5"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "30000"], expect: {equals: OK}}
+    - {command: [SELECT, "6"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "30000"], expect: {equals: OK}}
+    - {command: [SELECT, "7"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "30000"], expect: {equals: OK}}
+    - {command: [SELECT, "8"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "30000"], expect: {equals: OK}}
+    - {command: [SELECT, "9"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "30000"], expect: {equals: OK}}
+    - {command: [SELECT, "10"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "30000"], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SELECT, "1"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "2"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "3"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "4"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "5"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "6"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "7"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "8"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "9"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [SELECT, "10"], expect: {equals: QUEUED}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK, OK, OK, OK, OK, OK, OK, OK, OK,
+          OK, OK, OK, OK, OK, OK, OK, OK, OK, OK]}}
+    - {command: [CONFIG, SET, appendfsync, always], expect: {equals: OK}}
+    - {command: [CONFIG, SET, appendfsync, everysec], expect: {equals: OK}}
+    - {command: [SELECT, "7"], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [GET, "bio:k5"], expect: {equals: v5}}
+required_events: [burst.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: burst}

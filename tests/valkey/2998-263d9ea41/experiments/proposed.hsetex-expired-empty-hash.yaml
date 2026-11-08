@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.hsetex-expired-empty-hash
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: HSETEX with an already-elapsed TTL on a missing key must not leave
+    a zero-length hash in the keyspace (valkey-io/valkey#2998)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: hsetex
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {notify-keyspace-events: gE}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 15
+    commands:
+    - {command: [HSETEX, h, PX, 0, FIELDS, 1, f1, v1], expect: {equals: 0}}
+    - {command: [EXISTS, h], expect_difference: true, expect: {equals: 0}}
+    - {command: [TYPE, h], expect_difference: true, expect: {equals: none}}
+    - {command: [TTL, h], expect_difference: true, expect: {equals: -2}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 0}}
+    - {command: [KEYS, "*"], compare: unordered, expect_difference: true, expect: {
+        equals: []}}
+    - {command: [HSETEX, h, NX, EX, 100, FIELDS, 1, f1, v1], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [HGET, h, f1], expect_difference: true, expect: {equals: v1}}
+    - {command: [DEL, h], expect: {equals: 1}}
+    - {command: [HSETEX, h4, EXAT, 1, FIELDS, 1, f, v], expect: {equals: 0}}
+    - {command: [HSETEX, h4, XX, EX, 100, FIELDS, 1, f, v], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [EXISTS, h4], expect_difference: true, expect: {equals: 0}}
+    - {command: [HSETEX, hm, PXAT, 1, FIELDS, 3, a, 1, b, 2, c, 3], expect: {equals: 0}}
+    - {command: [EXISTS, hm], expect_difference: true, expect: {equals: 0}}
+    - {command: [HSET, pre, x, y], expect: {equals: 1}}
+    - {command: [HSETEX, pre, PX, 0, FIELDS, 1, x, ignored], expect: {equals: 1}}
+    - {command: [EXISTS, pre], expect: {equals: 0}}
+    - {command: [HSET, pre2, a, 1], expect: {equals: 1}}
+    - {command: [HSETEX, pre2, PX, 0, FIELDS, 1, zz, vv], expect: {equals: 0}}
+    - {command: [EXISTS, pre2], expect: {equals: 1}}
+    - {command: [SUBSCRIBE, "__keyevent@0__:del"], connection: notif, expect: {exists: true}}
+    - {command: [HSETEX, hx, PX, 0, FIELDS, 1, f, v], expect: {equals: 0}}
+    - {command: [EXISTS, hx], expect_difference: true, expect: {equals: 0}}
+    - {connection: notif, read: true, expect_difference: true, expect: {contains: hx}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hsetex.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hsetex}

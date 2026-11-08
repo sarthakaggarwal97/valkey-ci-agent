@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.sdsnsplitargs-acl-selector
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL selector parentheses are tokenized by sdsnsplitargs; quotes/hex-escapes
+    and malformed tokens must parse identically on both builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [ACL, SETUSER, u1, on, ">p1", "~k1", "~k2", "+@read", "(+set ~w1)"],
+      expect: {equals: OK}}
+    - {command: [ACL, GETUSER, u1], expect: {exists: true}}
+    - {command: [ACL, SETUSER, u2, on, ">p2", "(+get ~\"\\x77\\x31\")"], expect: {
+        equals: OK}}
+    - {command: [ACL, GETUSER, u2], expect: {exists: true}}
+    - {command: [ACL, SETUSER, u3, on, ">p3", "()"], expect: {equals: OK}}
+    - {command: [ACL, GETUSER, u3], expect: {exists: true}}
+    - {command: [ACL, SETUSER, u4, on, ">p4", "(+get badmodifier)"], expect: {error: true}}
+    - {command: [ACL, SETUSER, u5, on, ">p5", "(~\"a b\")"], expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

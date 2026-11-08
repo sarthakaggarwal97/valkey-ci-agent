@@ -1,0 +1,65 @@
+extends: [valkey.base]
+id: proposed.bio-fifo-multiblock
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Bursts of UNLINKed hashtable sets and scripted FLUSHDB ASYNC queue more than 7
+    jobs at once on the bio lazy-free worker, so the new fifo must allocate new blocks
+    on push, pop across block boundaries, and free spent blocks; every queued job
+    must drain (lazyfree_pending_objects back to 0), with no crash and no acknowledged
+    write lost.
+inputs:
+  properties:
+    set_size: {type: integer, minimum: 1000, maximum: 200000, default: 100000}
+components:
+- use: valkey.action.commands
+  id: burst
+  depends_on: [writes]
+  timeout_s: 900
+  config:
+    instances: primary
+    timeout_s: 120
+    commands:
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) for k=0,3\
+          \ do local key='big:'..(b+k) for i=1,n do redis.call('SADD',key,'m:'..i)\
+          \ end end return 1", 0, 1, {$ref: inputs.set_size}], expect: {equals: 1}}
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) for k=0,3\
+          \ do local key='big:'..(b+k) for i=1,n do redis.call('SADD',key,'m:'..i)\
+          \ end end return 1", 0, 5, {$ref: inputs.set_size}], expect: {equals: 1}}
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) for k=0,3\
+          \ do local key='big:'..(b+k) for i=1,n do redis.call('SADD',key,'m:'..i)\
+          \ end end return 1", 0, 9, {$ref: inputs.set_size}], expect: {equals: 1}}
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) for k=0,3\
+          \ do local key='big:'..(b+k) for i=1,n do redis.call('SADD',key,'m:'..i)\
+          \ end end return 1", 0, 13, {$ref: inputs.set_size}], expect: {equals: 1}}
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) for k=0,3\
+          \ do local key='big:'..(b+k) for i=1,n do redis.call('SADD',key,'m:'..i)\
+          \ end end return 1", 0, 17, {$ref: inputs.set_size}], expect: {equals: 1}}
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) for k=0,3\
+          \ do local key='big:'..(b+k) for i=1,n do redis.call('SADD',key,'m:'..i)\
+          \ end end return 1", 0, 21, {$ref: inputs.set_size}], expect: {equals: 1}}
+    - {command: [UNLINK, "big:1", "big:2", "big:3", "big:4", "big:5", "big:6", "big:7",
+        "big:8", "big:9", "big:10", "big:11", "big:12", "big:13", "big:14", "big:15",
+        "big:16", "big:17", "big:18", "big:19", "big:20", "big:21", "big:22", "big:23",
+        "big:24"], expect: {equals: 24}}
+    - {command: [INFO, memory], wait_s: 90, expect: {contains: "lazyfree_pending_objects:0\r"}}
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) for k=0,3\
+          \ do local key='big:'..(b+k) for i=1,n do redis.call('SADD',key,'m:'..i)\
+          \ end end return 1", 0, 1, {$ref: inputs.set_size}], expect: {equals: 1}}
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) for k=0,3\
+          \ do local key='big:'..(b+k) for i=1,n do redis.call('SADD',key,'m:'..i)\
+          \ end end return 1", 0, 5, {$ref: inputs.set_size}], expect: {equals: 1}}
+    - {command: [UNLINK, "big:1", "big:2", "big:3"], expect: {equals: 3}}
+    - {command: [UNLINK, "big:4", "big:5", "big:6", "big:7", "big:8"], expect: {equals: 5}}
+    - {command: [INFO, memory], wait_s: 90, expect: {contains: "lazyfree_pending_objects:0\r"}}
+    - {command: [EVAL, "for d=1,9 do redis.call('SELECT',d) for i=1,30000 do redis.call('SET','f:'..i,i)\
+          \ end end return 1", 0], expect: {equals: 1}}
+    - {command: [EVAL, "for d=1,9 do redis.call('SELECT',d) redis.call('FLUSHDB','ASYNC')\
+          \ end return 1", 0], expect: {equals: 1}}
+    - {command: [INFO, memory], wait_s: 90, expect: {contains: "lazyfree_pending_objects:0\r"}}
+    - {command: [CONFIG, SET, appendfsync, always], expect: {equals: OK}}
+    - {command: [CONFIG, SET, appendfsync, everysec], expect: {equals: OK}}
+required_events: [burst.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: burst}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "992b886260685b9eed669ad8bb5dce74ebc1070c",
+  "parent": "82d7b7e40c18d6f18ddf59d6759e9cfde16067ac",
+  "pr": 2935,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix incorrect comment about STATS_METRIC_* Macro in server.h (#2935)",
+  "date": "2025-12-22",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.1991,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits two comments in server.h describing the STATS_METRIC_NET_INPUT and STATS_METRIC_NET_INPUT_REPLICATION enum values ('read to network' \u2192 'read from network'). No code, behaviour, reply, or binary output changes, so there is nothing to test."
+}

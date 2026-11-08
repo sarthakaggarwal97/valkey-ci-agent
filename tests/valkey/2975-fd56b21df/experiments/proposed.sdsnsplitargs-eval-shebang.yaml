@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.sdsnsplitargs-eval-shebang
+deployment:
+  modes: [standalone]
+metadata:
+  description: The EVAL script shebang line is tokenized by sdsnsplitargs at the newline
+    boundary; quoted flags and unterminated quotes must parse identically on both
+    builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: eval
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [EVAL, "#!lua flags=no-writes\nreturn 1", 0], expect: {equals: 1}}
+    - {command: [EVAL, "#!lua \"flags=no-writes\"\nreturn 2", 0], expect: {equals: 2}}
+    - {command: [EVAL, "#!lua flags=allow-stale,no-writes\nreturn 3", 0], expect: {
+        equals: 3}}
+    - {command: [EVAL, "#!lua flags=bogusflag\nreturn 4", 0], expect: {error: true}}
+    - {command: [EVAL, "#!lua \"flags\nreturn 5", 0], expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: eval}

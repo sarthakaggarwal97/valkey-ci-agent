@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "26162effd4be179497843049566f3fa9c40b625d",
+  "parent": "75707ac4323b30f112e862b734e3436fa03b620c",
+  "pr": 2944,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Restrict ttl from being negative and avoid crash in import-mode (#2944)",
+  "date": "2025-12-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.4914,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: expire.c:67 't >= 0' is not true",
+      "scenario": "ai-5d4b4f505f8b",
+      "seed": 7001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2944",
+      "fingerprint": "993716f3d54c9c6752ca",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: expire.c:67 't >= 0' is not true",
+      "scenario": "ai-849b98be9cec",
+      "seed": 7101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2944",
+      "fingerprint": "993716f3d54c9c6752ca",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

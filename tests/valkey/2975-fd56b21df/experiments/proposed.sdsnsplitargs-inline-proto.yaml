@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.sdsnsplitargs-inline-proto
+deployment:
+  modes: [standalone]
+metadata:
+  description: Inline-protocol requests are tokenized by sdsnsplitargs over the raw
+    buffer; quoted args, hex and single-quote escapes and unbalanced quotes must behave
+    identically on both builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: inline
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {raw: "PING\r\n", connection: inline, expect: {equals: PONG}}
+    - {raw: "SET \"k one\" v1\r\n", connection: inline, expect: {equals: OK}}
+    - {raw: "GET \"k one\"\r\n", connection: inline, expect: {equals: v1}}
+    - {raw: "SET k2 \"a\\x41b\"\r\n", connection: inline, expect: {equals: OK}}
+    - {raw: "GET k2\r\n", connection: inline, expect: {equals: aAb}}
+    - {raw: "SET k3 'it\\'s'\r\n", connection: inline, expect: {equals: OK}}
+    - {raw: "GET k3\r\n", connection: inline, expect: {equals: "it's"}}
+    - {raw: "SET k4 \"unterminated\r\n", connection: inline, expect: {error: "unbalanced"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: inline}

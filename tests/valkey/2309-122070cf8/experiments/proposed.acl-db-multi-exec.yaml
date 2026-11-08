@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.acl-db-multi-exec
+deployment:
+  modes: [standalone]
+metadata:
+  description: transaction_db_id tracks SELECT inside MULTI; queue-time and exec-time
+    database ACL checks, EXECABORT, ACL narrowed between queue and exec
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: txn
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ACL, SETUSER, txuser, on, nopass, "~*", "&*", "+@all"], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, txuser, "db=0,1"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [AUTH, txuser, x], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, a, 1], expect: {equals: QUEUED}}
+    - {command: [SELECT, 1], expect: {equals: QUEUED}}
+    - {command: [GET, b], expect: {equals: QUEUED}}
+    - {command: [SELECT, 0], expect: {equals: QUEUED}}
+    - {command: [EXEC]}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, a, 2], expect: {equals: QUEUED}}
+    - {command: [SELECT, 2], expect_difference: true, expect: {error: "database"}}
+    - {command: [EXEC], expect_difference: true, expect: {error: EXECABORT}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [GET, a], expect_difference: true, expect: {equals: "1"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SELECT, 1], expect: {equals: QUEUED}}
+    - {command: [SET, t1, v], expect: {equals: QUEUED}}
+    - {command: [ACL, SETUSER, txuser, resetdbs, "db=0"], connection: admin, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: true}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [GET, t1], expect_difference: true, expect: {equals: v}}
+    - {command: [SET, w, 1], expect: {equals: OK}}
+    - {command: [WATCH, w], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: QUEUED}}
+    - {command: [SET, w2, x], expect: {equals: QUEUED}}
+    - {command: [SET, w, 2], connection: admin, expect: {equals: OK}}
+    - {command: [EXEC]}
+    - {command: [GET, w2]}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [txn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: txn}

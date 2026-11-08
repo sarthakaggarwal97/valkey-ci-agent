@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d10b06009f32..263d9ea41972.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a6cfa35bafa1
+seed: 29985
+experiment:
+  id: proposed.hsetex-expired-empty-hash
+  inputs:
+    resp: 2
+    cluster: true
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 0
+  base_port: 7200

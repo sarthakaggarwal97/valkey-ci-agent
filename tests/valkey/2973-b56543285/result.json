@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b56543285e3d99ff7b2b123f818353e3315647a4",
+  "parent": "7cef1e8ee21bf67190a48fccdcbe73ba69b42a19",
+  "pr": 2973,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "avoid memory leak of new argv when hexpire commands target only non-exiting fields (#2973)",
+  "date": "2025-12-31",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.5295,
+  "findings": [],
+  "recorded": []
+}

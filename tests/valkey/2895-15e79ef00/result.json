@@ -1,0 +1,139 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "15e79ef00a5e98a062776e7656ed34f834dd2d8a",
+  "parent": "e843c18f1e42dbb96860eed171d13eddad93a0ab",
+  "pr": 2895,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add FIFO and mutexQueue with bio.c refactored (#2895)",
+  "date": "2026-01-01",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 18,
+  "proven": 0,
+  "hunted": 8,
+  "dropped": 12,
+  "recall": false,
+  "coverage": {
+    "lines": 175,
+    "executed": 84,
+    "percent": 48,
+    "uncovered": [
+      "src/fifo.c:161",
+      "src/fifo.c:162",
+      "src/fifo.c:163",
+      "src/fifo.c:164",
+      "src/fifo.c:165",
+      "src/fifo.c:236",
+      "src/fifo.c:237",
+      "src/fifo.c:238",
+      "src/fifo.c:239",
+      "src/fifo.c:240",
+      "src/fifo.c:241",
+      "src/fifo.c:242",
+      "src/fifo.c:243",
+      "src/fifo.c:246",
+      "src/fifo.c:247",
+      "src/fifo.c:251",
+      "src/fifo.c:252",
+      "src/fifo.c:253",
+      "src/fifo.c:254",
+      "src/fifo.c:255",
+      "src/fifo.c:256",
+      "src/fifo.c:257",
+      "src/fifo.c:260",
+      "src/fifo.c:313",
+      "src/fifo.c:315",
+      "src/fifo.c:317",
+      "src/fifo.c:318",
+      "src/fifo.c:321",
+      "src/fifo.c:325",
+      "src/fifo.c:326",
+      "src/fifo.c:329",
+      "src/fifo.c:330",
+      "src/fifo.c:332",
+      "src/fifo.c:333",
+      "src/fifo.c:334",
+      "src/fifo.c:338",
+      "src/fifo.c:339",
+      "src/fifo.c:342",
+      "src/fifo.c:343",
+      "src/fifo.c:344",
+      "src/fifo.c:345",
+      "src/fifo.c:349",
+      "src/fifo.c:350",
+      "src/fifo.c:351",
+      "src/fifo.c:352",
+      "src/mutexqueue.c:39",
+      "src/mutexqueue.c:40",
+      "src/mutexqueue.c:41",
+      "src/mutexqueue.c:43",
+      "src/mutexqueue.c:44"
+    ],
+    "rounds": 3
+  },
+  "cost_usd": 21.4666,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-84dad3dd3fa4",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-fdec85cc0ff8",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-b1ea1ce12f11",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-332c57a99779",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-79ad80cc6ae9",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-780f06528dce",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-74739af7fb1a",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-ba540f127177",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-4f0389f1f771",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-26650de93cd8",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

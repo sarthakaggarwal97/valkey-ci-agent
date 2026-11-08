@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e843c18f1e42..15e79ef00a5e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f067f79ca0a8
+seed: 11
+experiment:
+  id: proposed.bio-fifo-multiblock
+  inputs:
+    set_size: 100000
+deployment:
+  mode: standalone
+  base_port: 7000

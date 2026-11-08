@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "263d9ea41972d8005e739324b826efe945549acc",
+  "parent": "d10b06009f32dcbcf9473cfdb0ba6d45c5ee2b0f",
+  "pr": 2998,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix zero length hash creation with HSETEX (#2998)",
+  "date": "2026-01-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.0705,
+  "findings": [],
+  "recorded": []
+}

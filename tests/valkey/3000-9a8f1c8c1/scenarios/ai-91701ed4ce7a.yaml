@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 50667e0ad5b7..9a8f1c8c1b19.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-91701ed4ce7a
+seed: 2
+experiment:
+  id: proposed.hsetex-lowercase-flag-propagation
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+    hash_max: 128
+deployment:
+  mode: standalone
+  base_port: 7100

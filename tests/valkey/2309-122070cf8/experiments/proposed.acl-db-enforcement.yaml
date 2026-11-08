@@ -1,0 +1,73 @@
+extends: [valkey.liveness]
+id: proposed.acl-db-enforcement
+deployment:
+  modes: [standalone]
+metadata:
+  description: db=/alldbs/resetdbs ACL rules parse and display, and SELECT/MOVE/COPY/SWAPDB/FLUSHALL
+    and keyspace commands are denied by database
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dbacl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ACL, SETUSER, dbuser, on, nopass, "~*", "&*", "+@all"], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, dbuser, "db=0,1"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [ACL, GETUSER, dbuser], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, LIST], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, SETUSER, dup, on, nopass, "~*", "+@all", "db=1,1,0,0,1"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [ACL, SETUSER, bad, "db=,0"], expect: {error: true}}
+    - {command: [ACL, SETUSER, bad, "db=0,"], expect: {error: true}}
+    - {command: [ACL, SETUSER, bad, "db=0,,1"], expect: {error: true}}
+    - {command: [ACL, SETUSER, bad, "db=-1"], expect_difference: true, expect: {error: "out\
+          \ of range"}}
+    - {command: [ACL, SETUSER, bad, "db=2147483648"], expect_difference: true, expect: {
+        error: "out of range"}}
+    - {command: [ACL, SETUSER, edge, on, nopass, "~*", "+@all", "db=2147483647"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, dbuser, SELECT, "5"], expect_difference: true, expect: {
+        equals: "User dbuser has no permissions to access database 5"}}
+    - {command: [ACL, DRYRUN, dbuser, SET, k, v], expect: {equals: OK}}
+    - {command: [AUTH, dbuser, x], expect: {equals: OK}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [SELECT, 2], expect_difference: true, expect: {error: "database"}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SET, k0, v0], expect: {equals: OK}}
+    - {command: [COPY, k0, kc, DB, 1], expect: {equals: 1}}
+    - {command: [COPY, k0, kc2, DB, 5], expect_difference: true, expect: {error: "database"}}
+    - {command: [MOVE, k0, 5], expect_difference: true, expect: {error: "database"}}
+    - {command: [EXISTS, k0], expect_difference: true, expect: {equals: 1}}
+    - {command: [SWAPDB, 0, 1], expect: {equals: OK}}
+    - {command: [SWAPDB, 0, 2], expect_difference: true, expect: {error: "database"}}
+    - {command: [FLUSHALL], expect_difference: true, expect: {error: "database"}}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [SELECT, 99], expect: {error: "out of range"}}
+    - {command: [ACL, SETUSER, dbuser, resetdbs, "db=1"], connection: admin, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [GET, anykey], expect_difference: true, expect: {error: "database"}}
+    - {command: [EXISTS, anykey], expect_difference: true, expect: {error: "database"}}
+    - {command: [WATCH, anykey], expect_difference: true, expect: {error: "database"}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [SET, ok1, v], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, cover, on, nopass, "~*", "+@all", "db=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15"],
+      connection: admin, expect_difference: true, expect: {equals: OK}}
+    - {command: [AUTH, cover, x], expect_difference: true, expect: {equals: OK}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [SELECT, 7], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [dbacl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbacl}

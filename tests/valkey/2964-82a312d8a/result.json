@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "82a312d8a595b71cc818fb045c84121cc13835ec",
+  "parent": "dbe07b7c98790400dc0f895deac2c277aa378175",
+  "pr": 2964,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "replace info cluster info in a dedicated new section (#2964)",
+  "date": "2026-01-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.1728,
+  "findings": [],
+  "recorded": []
+}

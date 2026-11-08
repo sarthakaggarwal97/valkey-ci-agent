@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.sdsnsplitargs-function-meta
+deployment:
+  modes: [standalone]
+metadata:
+  description: FUNCTION LOAD library-metadata shebang is tokenized by sdsnsplitargs;
+    quoted names, missing names and unterminated quotes must parse identically on
+    both builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: func
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [FUNCTION, LOAD, "#!lua name=lib1\nserver.register_function('f1',\
+          \ function(keys, args) return 1 end)"], expect: {equals: lib1}}
+    - {command: [FCALL, f1, 0], expect: {equals: 1}}
+    - {command: [FUNCTION, LOAD, "#!lua name=\"lib2\"\nserver.register_function('f2',\
+          \ function(keys, args) return 2 end)"], expect: {equals: lib2}}
+    - {command: [FCALL, f2, 0], expect: {equals: 2}}
+    - {command: [FUNCTION, LOAD, "#!lua\nserver.register_function('f3', function(keys,\
+          \ args) return 3 end)"], expect: {error: true}}
+    - {command: [FUNCTION, LOAD, "#!lua name=\"lib4\nserver.register_function('f4',\
+          \ function(keys, args) return 4 end)"], expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: func}

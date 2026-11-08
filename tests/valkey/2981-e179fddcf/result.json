@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e179fddcfdf1ff52e92a5d575196fb9453ae6227",
+  "parent": "2a6137be033b01bff4b99a733c09e56b5c758028",
+  "pr": 2981,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Revert hgetall dynamic deferred response  (#2981)",
+  "date": "2025-12-28",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.6235,
+  "findings": [],
+  "recorded": []
+}

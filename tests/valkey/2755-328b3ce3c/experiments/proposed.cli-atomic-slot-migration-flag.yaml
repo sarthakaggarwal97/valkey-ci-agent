@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.cli-atomic-slot-migration-flag
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    valkey-cli accepts --cluster-use-atomic-slot-migration for reshard and rebalance
+    (the parent rejects it with 'Unrecognized option', exit 1), and the refactored
+    legacy reshard/rebalance paths behave exactly as the parent without the flag.
+    Each side runs its own valkey-cli against a one-node cluster private server of
+    its own build.
+components:
+- use: valkey.action.tools
+  id: cli-asm
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [--cluster, check, "127.0.0.1:$port"], expect: {exit: {
+          equals: 0}, stdout: {contains: "16384 slots covered"}}}
+    - {tool: valkey-cli, args: [--cluster, rebalance, "127.0.0.1:$port"], expect: {
+        exit: {equals: 0}, stdout: {contains: "No rebalancing needed"}}}
+    - {tool: valkey-cli, args: [--cluster, reshard, "127.0.0.1:$port", --cluster-from,
+        all, --cluster-to, 0123456789abcdef0123456789abcdef01234567, --cluster-slots,
+        16, --cluster-yes], expect: {exit: {equals: 1}, stdout: {contains: "not known\
+            \ or not a primary"}}}
+    - {tool: valkey-cli, args: [--cluster, rebalance, "127.0.0.1:$port", --cluster-use-atomic-slot-migration],
+      expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: "No\
+            \ rebalancing needed"}}}
+    - {tool: valkey-cli, args: [--cluster, reshard, "127.0.0.1:$port", --cluster-from,
+        all, --cluster-to, 0123456789abcdef0123456789abcdef01234567, --cluster-slots,
+        16, --cluster-yes, --cluster-use-atomic-slot-migration], expect_difference: true,
+      expect: {exit: {equals: 1}, stdout: {contains: "not known or not a primary"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-asm}

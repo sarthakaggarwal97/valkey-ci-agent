@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2a6137be033b..e179fddcfdf1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2cdc3681b0c2
+seed: 3
+experiment:
+  id: proposed.hgetall-deferred-reply-revert
+  inputs:
+    resp: 3
+    io_threads: 4
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

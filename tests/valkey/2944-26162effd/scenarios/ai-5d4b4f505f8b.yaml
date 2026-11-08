@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 75707ac4323b..26162effd4be.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5d4b4f505f8b
+seed: 7001
+experiment:
+  id: proposed.expire-negative-ttl-import-mode
+  inputs:
+    resp: 2
+    lazy_expire: 'no'
+deployment:
+  mode: standalone
+  base_port: 7000

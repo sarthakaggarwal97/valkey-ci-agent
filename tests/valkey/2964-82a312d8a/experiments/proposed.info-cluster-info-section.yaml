@@ -1,0 +1,65 @@
+extends: [valkey.liveness]
+id: proposed.info-cluster-info-section
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO moves genClusterInfoString fields out of the Cluster section into
+    a new Cluster Info section; compare INFO section replies across builds in cluster
+    and standalone mode
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cluster-mode
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [INFO, cluster], expect_difference: true, expect: {equals: "# Cluster\r\
+          \ncluster_enabled:1\r\n"}}
+    - {command: [INFO, cluster_info], expect_difference: true, expect: {contains: "#\
+          \ Cluster Info"}}
+    - {command: [INFO, cluster_info], expect_difference: true, expect: {contains: "cluster_state:ok"}}
+    - {command: [INFO, cluster_info], expect_difference: true, expect: {contains: "cluster_slots_assigned:16384"}}
+    - {command: [INFO, CLUSTER_INFO], expect_difference: true, expect: {contains: "cluster_known_nodes:1"}}
+    - {command: [INFO, cluster, cluster_info], expect_difference: true, expect: {
+        contains: "# Cluster Info"}}
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "cluster_state:ok"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: standalone
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [INFO, cluster], expect: {equals: "# Cluster\r\ncluster_enabled:0\r\
+          \n"}}
+    - {command: [INFO, cluster_info], expect_difference: true, expect: {equals: "#\
+          \ Cluster Info\r\n"}}
+    - {command: [INFO, cluster, cluster_info], expect_difference: true, expect: {
+        equals: "# Cluster\r\ncluster_enabled:0\r\n\r\n# Cluster Info\r\n"}}
+    - {command: [INFO, everything], expect_difference: true, expect: {contains: "#\
+          \ Cluster Info"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cluster-mode.completed, standalone.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cluster-mode}
+- {evidence_id: valkey.command.sequence, source: standalone}

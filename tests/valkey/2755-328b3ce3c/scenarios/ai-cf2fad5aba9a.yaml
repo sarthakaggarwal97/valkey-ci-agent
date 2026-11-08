@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 992b88626068..328b3ce3c8fd.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-cf2fad5aba9a
+seed: 303
+experiment:
+  id: proposed.cli-asm-rebalance
+  inputs:
+    host_port: 127.0.0.1:7200
+deployment:
+  mode: cluster
+  primaries: 6
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    appendonly: 'yes'
+    cluster-node-timeout: 5000

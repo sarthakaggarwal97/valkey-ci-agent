@@ -1,0 +1,78 @@
+extends: [valkey.liveness]
+id: proposed.hgetall-direct-reply-len
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    HGETALL/HKEYS/HVALS replies compared across builds after the change that writes
+    the reply length directly from hashTypeLength when the hash has no volatile fields,
+    instead of a deferred length. Covers listpack, listpackex and hashtable encodings,
+    hashes flipping between volatile and non-volatile state, lazy field expiry, and
+    large replies.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_max_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: hgetall
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      hash-max-listpack-entries: {$ref: inputs.hash_max_listpack_entries}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [HGETALL, missing], compare: unordered-pairs}
+    - {command: [HKEYS, missing], compare: unordered}
+    - {command: [HVALS, missing], compare: unordered}
+    - {command: [HSET, h1, a, 1, b, 2, c, 3], expect: {equals: 3}}
+    - {command: [HGETALL, h1], compare: unordered-pairs}
+    - {command: [HKEYS, h1], compare: unordered}
+    - {command: [HVALS, h1], compare: unordered}
+    - {command: [HSET, h1, "", ""], expect: {equals: 1}}
+    - {command: [HGETALL, h1], compare: unordered-pairs}
+    - {command: [HSET, h2, f1, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [HGETALL, h2], compare: unordered-pairs}
+    - {command: [HKEYS, h2], compare: unordered}
+    - {command: [HVALS, h2], compare: unordered}
+    - {command: [HSET, h3, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HEXPIRE, h3, 10000, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HGETALL, h3], compare: unordered-pairs}
+    - {command: [HKEYS, h3], compare: unordered}
+    - {command: [HVALS, h3], compare: unordered}
+    - {command: [HPERSIST, h3, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HGETALL, h3], compare: unordered-pairs}
+    - {command: [HSET, h4, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HPEXPIRE, h4, 10, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [HGETALL, h4], compare: unordered-pairs}
+    - {command: [HLEN, h4], expect: {equals: 1}}
+    - {command: [HSET, h5, g1, v1], expect: {equals: 1}}
+    - {command: [HPEXPIRE, h5, 10, FIELDS, 1, g1], expect: {equals: [1]}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [HGETALL, h5], compare: unordered-pairs}
+    - {command: [EXISTS, h5], expect: {equals: 0}}
+    - {command: [HSET, h6, x, 1, y, 2], expect: {equals: 2}}
+    - {command: [HEXPIRE, h6, 10000, FIELDS, 1, x], expect: {equals: [1]}}
+    - {command: [HDEL, h6, x], expect: {equals: 1}}
+    - {command: [HGETALL, h6], compare: unordered-pairs}
+    - {command: [HKEYS, h6], compare: unordered}
+    - {command: [EVAL, "for i=1,500 do redis.call('HSET', KEYS[1], 'f'..i, i) end\
+          \ return redis.call('HLEN', KEYS[1])", 1, big], expect: {equals: 500}}
+    - {command: [HGETALL, big], compare: unordered-pairs}
+    - {command: [HKEYS, big], compare: unordered}
+    - {command: [HVALS, big], compare: unordered}
+    - {command: [SET, s1, v], expect: {equals: OK}}
+    - {command: [HGETALL, s1], expect: {error: WRONGTYPE}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hgetall.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hgetall}

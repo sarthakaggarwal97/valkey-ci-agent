@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7cef1e8ee21bf67190a48fccdcbe73ba69b42a19",
+  "parent": "9c5d004bfebe44d8ec6d3e616dd380d70df708e9",
+  "pr": 2974,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "fix hincrby* update volatile key tracking (#2974)",
+  "date": "2025-12-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.2301,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"f73e320d27b23d7858f2595591f9fbcb92ab5cfb\"},\"offset\":\"370\"}, replica {\"digest\":{\"reply\":\"83e34499cc8989e4f17ca8dc330faf5a2e15d2e8\"},\"offset\":\"370\"}, link up",
+      "scenario": "ai-1a6971956cb1",
+      "seed": 1001,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"f73e320d27b23d7858f2595591f9fbcb92ab5cfb\"},\"offset\":\"370\"}, replica {\"digest\":{\"reply\":\"83e34499cc8989e4f17ca8dc330faf5a2e15d2e8\"},\"offset\":\"370\"}, link up",
+      "scenario": "ai-9d5c37d7da83",
+      "seed": 1002,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

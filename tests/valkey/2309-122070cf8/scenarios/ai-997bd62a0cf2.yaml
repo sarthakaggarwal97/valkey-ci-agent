@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 328b3ce3c8fd..122070cf8f98.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-997bd62a0cf2
+seed: 101
+experiment:
+  id: proposed.acl-db-enforcement
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

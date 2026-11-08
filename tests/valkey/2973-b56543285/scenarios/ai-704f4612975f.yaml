@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7cef1e8ee21b..b56543285e3d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-704f4612975f
+seed: 7001
+experiment:
+  id: proposed.hexpire-nonexisting-fields-no-leak
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
+  server_config:
+    hash-max-listpack-entries: 128

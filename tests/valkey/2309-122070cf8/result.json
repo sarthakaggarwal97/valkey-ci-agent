@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "122070cf8f98febbc31e2daf8f2cd2bdd9ce078b",
+  "parent": "328b3ce3c8fd7f48eac6fd301612157bd00bfa90",
+  "pr": 2309,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Database-level access control (#2309)",
+  "date": "2025-12-22",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 7,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.9524,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "[Errno 2] No such file or directory: 'walk-work/coverage/src/cli_commands.c.gcov'"
+}

@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.hash-volatile-untrack-on-overwrite
+deployment:
+  modes: [standalone]
+metadata:
+  description: Overwriting a hash that has volatile (TTL) fields must untrack it from
+    keys_with_volatile_items; the parent leaves a stale entry
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_max_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: overwrite
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: {$ref: inputs.hash_max_entries}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [HSETEX, h1, EX, 100, FIELDS, 1, f1, v1], expect: {equals: 1}}
+    - {command: [HSETEX, h2, EX, 100, FIELDS, 2, a, 1, b, 2], expect: {equals: 1}}
+    - {command: [INFO, keyspace], expect: {contains: "keys_with_volatile_items=2"}}
+    - {command: [SET, h1, "i-am-a-string-now"], expect: {equals: OK}}
+    - {command: [INFO, keyspace], expect_difference: true, expect: {contains: "keys_with_volatile_items=1"}}
+    - {command: [TYPE, h1], expect: {equals: string}}
+    - {command: [GET, h1], expect: {equals: "i-am-a-string-now"}}
+    - {command: [DEL, h2], expect: {equals: 1}}
+    - {command: [INFO, keyspace], expect_difference: true, expect: {contains: "keys_with_volatile_items=0"}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 1], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: overwrite}

@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.acl-db-aclfile-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: db= and selector db rules round-trip through ACL SAVE and a restart
+    from the ACL file, and are enforced after reload
+components:
+- use: valkey.action.commands
+  id: persist
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {aclfile: users.acl}
+    files: {users.acl: "user default on nopass ~* &* +@all\n"}
+    timeout_s: 60
+    commands:
+    - {command: [ACL, SETUSER, fileuser, on, nopass, "~*", "&*", "+@all"], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, fileuser, "db=2,3"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, seluser, on, nopass, "(db=4 +get ~r*)"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [ACL, SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ACL, GETUSER, fileuser], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, GETUSER, seluser], expect_difference: true, expect: {exists: true}}
+    - {command: [ACL, LIST], expect_difference: true, expect: {exists: true}}
+    - {command: [AUTH, fileuser, x], expect: {equals: OK}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [SET, p, v], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect_difference: true, expect: {error: "database"}}
+    - {command: [SELECT, 3], expect: {equals: OK}}
+    - {command: [FLUSHALL], expect_difference: true, expect: {error: "database"}}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [persist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: persist}

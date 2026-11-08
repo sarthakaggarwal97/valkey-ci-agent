@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.hincrby-volatile-tracking
+deployment:
+  modes: [standalone]
+metadata:
+  description: HINCRBY/HINCRBYFLOAT that clears a hash's last volatile field must
+    stop tracking the key in keys_with_volatile_items
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hincr
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [HSET, h1, f1, "5"], expect: {equals: 1}}
+    - {command: [HPEXPIRE, h1, 40, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HSET, h2, g1, "2"], expect: {equals: 1}}
+    - {command: [HPEXPIRE, h2, 40, FIELDS, 1, g1], expect: {equals: [1]}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [HINCRBY, h1, f1, 1], expect: {equals: 1}}
+    - {command: [HINCRBYFLOAT, h2, g1, "1.5"], expect: {equals: "1.5"}}
+    - {command: [HPTTL, h1, FIELDS, 1, f1], expect: {equals: [-1]}}
+    - {command: [HPTTL, h2, FIELDS, 1, g1], expect: {equals: [-1]}}
+    - {command: [INFO, keyspace], expect_difference: true, expect: {contains: "keys_with_volatile_items=0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hincr}

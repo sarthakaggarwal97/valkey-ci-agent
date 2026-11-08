@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-fuzz-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark --cluster --fuzz against a one-node cluster, exercising
+    the changed cluster-mode branch that skips topology fetch under --fuzz, slot-tagged
+    keys, and CLUSTER command generation
+inputs:
+  properties:
+    modes: {type: string, default: malformed-commands}
+    loglevel: {type: string, enum: [info, debug], default: info}
+    clients: {type: integer, default: 8}
+    requests: {type: integer, default: 2000}
+    keyspace: {type: integer, default: 5}
+components:
+- use: valkey.action.tools
+  id: fuzz
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 600
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, -c, {$ref: inputs.clients},
+        -n, {$ref: inputs.requests}, -r, {$ref: inputs.keyspace}, --fuzz, --fuzz-loglevel,
+        {$ref: inputs.loglevel}], expect_difference: true, expect: {exit: {max: 100},
+        stdout: {contains: "Malformed replies: 0"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, -c, {$ref: inputs.clients},
+        -n, {$ref: inputs.requests}, -r, {$ref: inputs.keyspace}, --fuzz, --fuzz-loglevel,
+        {$ref: inputs.loglevel}, --fuzz-mode, {$ref: inputs.modes}], expect_difference: true,
+      expect: {exit: {max: 100}, stdout: {contains: "Malformed replies: 0"}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {exit: {equals: 0}, stdout: {
+          equals: "PONG\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: fuzz}

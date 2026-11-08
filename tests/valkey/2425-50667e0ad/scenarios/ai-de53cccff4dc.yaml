@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 15e79ef00a5e..50667e0ad5b7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-de53cccff4dc
+seed: 410001
+experiment:
+  id: proposed.sort-nonempty-ranges
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

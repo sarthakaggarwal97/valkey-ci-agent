@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d10b06009f32dcbcf9473cfdb0ba6d45c5ee2b0f",
+  "parent": "9a8f1c8c1b194eff17f937b569f1b15b8efbc202",
+  "pr": 2985,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Avoid useless seek in xtrim (#2985)",
+  "date": "2026-01-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3306,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds an early return in streamTrim when trim_strategy is MAXLEN and s->length <= maxlen, purely to skip allocating and seeking a rax iterator. The identical condition was already the first check inside the trim loop (t_stream.c:726), so the old code broke out of the loop on the first iteration with deleted=0 and no mutation; the new code returns 0 before the loop. Return value, stream state, replies, keyspace notifications and replication/AOF propagation are byte-identical on both builds for every input (maxlen 0, empty stream, approx trim, LIMIT, XADD and XTRIM paths). It is a perf"
+}

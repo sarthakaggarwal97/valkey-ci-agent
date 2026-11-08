@@ -1,0 +1,69 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dbe07b7c98790400dc0f895deac2c277aa378175",
+  "parent": "e4a3e9f0a298fbaa7320e76dbdd4b790425c148e",
+  "pr": 3007,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Untrack key based on old->hasembkey (#3007)",
+  "date": "2026-01-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.5829,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in hashtableSdsHash",
+      "scenario": "ai-c1e9d6e72c48",
+      "seed": 30071,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3007",
+      "fingerprint": "9a4c60890e0d1ddb0510",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in hashtableSdsHash",
+      "scenario": "ai-adfedcf99061",
+      "seed": 30072,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3007",
+      "fingerprint": "9a4c60890e0d1ddb0510",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-c02eb64a348d",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5b9e989e511d",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    }
+  ]
+}

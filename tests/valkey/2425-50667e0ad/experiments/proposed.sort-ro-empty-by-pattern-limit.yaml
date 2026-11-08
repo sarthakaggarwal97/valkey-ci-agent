@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.sort-ro-empty-by-pattern-limit
+deployment:
+  modes: [standalone]
+metadata:
+  description: SORT_RO BY pattern with LIMIT on a never-created key must not trigger
+    the pqsort UB
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sortro
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SORT_RO, nokey, BY, 'w_*', LIMIT, 0, 10, ALPHA, DESC], expect_difference: true,
+      expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [sortro.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sortro}

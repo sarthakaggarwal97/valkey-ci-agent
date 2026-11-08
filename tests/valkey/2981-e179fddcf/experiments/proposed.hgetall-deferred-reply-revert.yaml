@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.hgetall-deferred-reply-revert
+deployment:
+  modes: [standalone]
+metadata:
+  description: HGETALL/HKEYS/HVALS replies across listpack and hashtable encodings,
+    with and without field TTLs, compared between the revert build and its parent;
+    the revert must change no reply
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, default: 1}
+components:
+- use: valkey.action.commands
+  id: hgetall
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      hash-max-listpack-entries: 8
+      io-threads: {$ref: inputs.io_threads}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [HSET, h, f1, v1, f2, "", f3, "4294967296"], expect: {equals: 3}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HKEYS, h], compare: unordered}
+    - {command: [HVALS, h], compare: unordered}
+    - {command: [HSET, h, "", empty-name-field], expect: {equals: 1}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HSET, big, f1, 1, f2, 2, f3, 3, f4, 4, f5, 5, f6, 6, f7, 7, f8, 8,
+        f9, 9, f10, 10, f11, 11, f12, 12, f13, 13, f14, 14, f15, 15, f16, 16, f17,
+        17, f18, 18, f19, 19, f20, 20], expect: {equals: 20}}
+    - {command: [OBJECT, ENCODING, big], compare: skip, expect: {equals: hashtable}}
+    - {command: [HGETALL, big], compare: unordered-pairs}
+    - {command: [HKEYS, big], compare: unordered}
+    - {command: [HVALS, big], compare: unordered}
+    - {command: [HEXPIRE, big, 1000, FIELDS, 2, f1, f2], expect: {equals: [1, 1]}}
+    - {command: [HGETALL, big], compare: unordered-pairs}
+    - {command: [HKEYS, big], compare: unordered}
+    - {command: [HVALS, big], compare: unordered}
+    - {command: [HEXPIREAT, big, 1, FIELDS, 1, f3], expect: {equals: [2]}}
+    - {command: [HGETALL, big], compare: unordered-pairs}
+    - {command: [HLEN, big], expect: {equals: 19}}
+    - {command: [HPERSIST, big, FIELDS, 2, f1, f2], expect: {equals: [1, 1]}}
+    - {command: [HGETALL, big], compare: unordered-pairs}
+    - {command: [HKEYS, big], compare: unordered}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HGETALL, big], expect: {equals: QUEUED}}
+    - {command: [HVALS, big], expect: {equals: QUEUED}}
+    - {command: [EXEC], compare: skip, expect: {exists: true}}
+    - {command: [HSET, FIELDS, FIELDS, FIELDS], expect: {equals: 1}}
+    - {command: [HGETALL, FIELDS], compare: unordered-pairs}
+    - {command: [SET, str, x], expect: {equals: OK}}
+    - {command: [HGETALL, str], expect: {error: WRONGTYPE}}
+    - {command: [HKEYS, str], expect: {error: WRONGTYPE}}
+    - {command: [HGETALL, nosuchkey]}
+    - {command: [HKEYS, nosuchkey]}
+    - {command: [HDEL, h, f1, f2, f3, ""], expect: {equals: 4}}
+    - {command: [HGETALL, h]}
+    - {command: [HLEN, h], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hgetall.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hgetall}
