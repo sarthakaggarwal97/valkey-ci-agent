@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 1e30f711473d..a87755dd725a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f50a9359c2b9
+seed: 1002
+experiment:
+  id: proposed.vectorsearch-flat-modify-uaf
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

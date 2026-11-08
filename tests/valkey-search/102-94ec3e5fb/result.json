@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "94ec3e5fb372a65cf338aa38f66a641f37372e90",
+  "parent": "aa37bda4318c65176abb3c1edeed964a2b2d2a62",
+  "pr": 102,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "More ASan build improvements (#102)",
+  "date": "2025-04-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2885,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only build tooling: build.sh (clearer output messages and continuing past unit-test failures in ASan runs), a CMake refactor extracting the unchanged ASan compile flags into a helper function, and applying those flags to the test-only testing_common static library. No runtime code of the valkey-search module is touched, so the module's commands, indexing, persistence and replication behaviour are identical between the parent and the change; there is nothing a scenario could exercise or compare."
+}

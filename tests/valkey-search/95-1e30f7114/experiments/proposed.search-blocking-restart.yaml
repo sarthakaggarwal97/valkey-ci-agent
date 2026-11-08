@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.search-blocking-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: Notifications during RDB/AOF loading come from a fake client and must
+    not block; the index rebuilds across a restart and blocking still works afterwards
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    appendonly: {type: string, enum: ["no", "yes"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    server_config: {appendonly: {$ref: inputs.appendonly}}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary 'AACAPwAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", vec, !!binary 'AAAAAAAAgD8='], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", vec, !!binary 'AACAPwAAgD8='], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        DIALECT, 2, LIMIT, 0, 0], wait_s: 30, expect: {equals: [3]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        DIALECT, 2, LIMIT, 0, 0], wait_s: 30, expect: {equals: [3]}}
+    - {command: [HSET, "doc:4", vec, !!binary 'AAAAQAAAAAA='], expect: {equals: 1}}
+    - {command: [DEL, "doc:1"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        DIALECT, 2, LIMIT, 0, 0], wait_s: 30, expect: {equals: [3]}}
+    - {command: [FT.INFO, idx], compare: skip}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

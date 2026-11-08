@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "aa37bda4318c65176abb3c1edeed964a2b2d2a62",
+  "parent": "15e26b65e16f59304c1f14aed0324b77e2f98496",
+  "pr": 100,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add ASAN build option (#100)",
+  "date": "2025-04-24",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3189,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds an opt-in ASAN build option: a build.sh flag, CMake options that add -fsanitize=address, and #ifndef ASAN_BUILD guards around the vmsdk operator new/delete overrides. ASAN_BUILD is OFF by default and the runner builds the module without it, so the compiled module at the change is behaviourally identical to the parent: no command, reply, replication, or persistence path changes. The only runtime difference (disabled allocation overrides) exists solely in an ASAN build that these runs never produce, so no scenario can reach it and none is needed."
+}

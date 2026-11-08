@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search a87755dd725a..8a391acfc399.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-18b14ed14bee
+seed: 7302
+experiment:
+  id: proposed.ft-search-knn-order-asc
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

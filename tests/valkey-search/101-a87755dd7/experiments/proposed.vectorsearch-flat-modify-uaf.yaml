@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.vectorsearch-flat-modify-uaf
+deployment:
+  modes: [standalone]
+metadata:
+  description: Updating a FLAT-indexed vector field re-tracks then reads the old vector;
+    the parent frees it first (use-after-free). FT.DROPINDEX tears the index down.
+inputs:
+  required: [module, module_parent]
+  properties:
+    module: {type: environment_reference, reference_kinds: [artifacts]}
+    module_parent: {type: environment_reference, reference_kinds: [artifacts]}
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flat
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idxf, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:2", v, !!binary "AAAAAAAAgD8AAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [FT.SEARCH, idxf, "*=>[KNN 2 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAAAAAAAAAAAAAAA==",
+        NOCONTENT, DIALECT, 2], wait_s: 15, compare: unordered, expect: {contains: "doc:1"}}
+    - {command: [HSET, "doc:1", v, !!binary "AAAAAAAAgD8AAAAAAAAAAA=="], expect: {
+        equals: 0}}
+    - {command: [FT.SEARCH, idxf, "*=>[KNN 2 @v $q]", PARAMS, 2, q, !!binary "AAAAAAAAgD8AAAAAAAAAAA==",
+        NOCONTENT, DIALECT, 2], wait_s: 15, compare: unordered, expect: {contains: "doc:1"}}
+    - {command: [HSET, "doc:1", v, !!binary "AAAAAAAAgD8AAAAAAAAAAA=="], expect: {
+        equals: 0}}
+    - {command: [HSET, "doc:1", v, !!binary "AAAAAAAAAAAAAIA/AAAAAA=="], expect: {
+        equals: 0}}
+    - {command: [HSET, "doc:2", v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 0}}
+    - {command: [FT.SEARCH, idxf, "*=>[KNN 2 @v $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAAAAIA/AAAAAA==",
+        NOCONTENT, DIALECT, 2], wait_s: 15, compare: unordered, expect: {contains: "doc:1"}}
+    - {command: [FT.DROPINDEX, idxf], expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [flat.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flat}

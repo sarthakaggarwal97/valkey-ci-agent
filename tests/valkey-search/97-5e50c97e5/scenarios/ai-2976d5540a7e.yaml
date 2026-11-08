@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 8a391acfc399..5e50c97e51f3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2976d5540a7e
+seed: 2
+experiment:
+  id: proposed.search-hnsw-resize-integrity
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

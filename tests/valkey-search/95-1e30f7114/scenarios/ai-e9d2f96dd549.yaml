@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 3a36767480d2..1e30f711473d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e9d2f96dd549
+seed: 95005
+experiment:
+  id: proposed.search-blocking-restart
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    appendonly: 'yes'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.vectorsearch-hnsw-modify-drop
+deployment:
+  modes: [standalone]
+metadata:
+  description: HNSW with low M to promote nodes above graph level 0, then modify several
+    vectors and FT.DROPINDEX; the parent frees new char[] link lists with free() (alloc/dealloc
+    mismatch) in clear().
+inputs:
+  required: [module, module_parent]
+  properties:
+    module: {type: environment_reference, reference_kinds: [artifacts]}
+    module_parent: {type: environment_reference, reference_kinds: [artifacts]}
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hnsw
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 40
+    commands:
+    - {command: [FT.CREATE, idxh, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v, VECTOR,
+        HNSW, 8, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2, M, 4], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:2", v, !!binary "AAAAAAAAgD8AAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:3", v, !!binary "AAAAAAAAAAAAAIA/AAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:4", v, !!binary "AAAAQAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:5", v, !!binary "AAAAAAAAAEAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:6", v, !!binary "AAAAAAAAAAAAAABAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:7", v, !!binary "AACAPwAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:8", v, !!binary "AAAAAAAAgD8AAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:9", v, !!binary "AAAAAAAAAAAAAIA/AAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [HSET, "doc:10", v, !!binary "AAAAQAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 1}}
+    - {command: [FT.SEARCH, idxh, "*=>[KNN 4 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAAAAAAAAAAAAAAA==",
+        NOCONTENT, DIALECT, 2], wait_s: 20, compare: unordered, expect: {contains: "doc:1"}}
+    - {command: [HSET, "doc:1", v, !!binary "AAAAAAAAAAAAAIA/AAAAAA=="], expect: {
+        equals: 0}}
+    - {command: [HSET, "doc:2", v, !!binary "AAAAQAAAAAAAAAAAAAAAAA=="], expect: {
+        equals: 0}}
+    - {command: [HSET, "doc:3", v, !!binary "AAAAAAAAAEAAAAAAAAAAAA=="], expect: {
+        equals: 0}}
+    - {command: [HSET, "doc:3", v, !!binary "AAAAAAAAAEAAAAAAAAAAAA=="], expect: {
+        equals: 0}}
+    - {command: [FT.SEARCH, idxh, "*=>[KNN 4 @v $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAAAAIA/AAAAAA==",
+        NOCONTENT, DIALECT, 2], wait_s: 20, compare: unordered, expect: {contains: "doc:1"}}
+    - {command: [FT.DROPINDEX, idxh], expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hnsw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hnsw}

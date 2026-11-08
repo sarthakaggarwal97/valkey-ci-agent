@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.search-subscription-info-hidden
+deployment:
+  modes: [standalone]
+metadata:
+  description: The module's subscription INFO section is absent unless built with
+    DEBUG_INFO, while neighboring sections and FT.INFO stats are unchanged
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: subinfo
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [INFO, search_subscription], expect_difference: true, expect: {in: [
+          "", "\r\n"]}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAAAAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", vec, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", vec, !!binary "AAAAAAAAAAA="], expect: {equals: 0}}
+    - {command: [DEL, "doc:2"], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAAAAAgD8="], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 45, compare: skip, expect: {contains: "3"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @vec $BLOB]", NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], compare: unordered, expect: {exists: true}}
+    - {command: [INFO, search_subscription], expect_difference: true, expect: {in: [
+          "", "\r\n"]}}
+    - {command: [INFO, search_hnswlib], expect: {contains: hnsw_add_exceptions_count}}
+    - {command: [INFO, search_ingestion], compare: skip, expect: {contains: background_indexing_status}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [subinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: subinfo}

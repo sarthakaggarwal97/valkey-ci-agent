@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.search-hnsw-block-size-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: search.hnsw-block-size config exists, mutates, and enforces its 10240..UINT32_MAX
+    bounds only on the change build
+components:
+- use: valkey.action.commands
+  id: cfg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: 2
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, GET, search.hnsw-block-size], expect_difference: true, expect: {
+        equals: [search.hnsw-block-size, "10240"]}}
+    - {command: [CONFIG, SET, search.hnsw-block-size, 50000], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.hnsw-block-size], expect_difference: true, expect: {
+        equals: [search.hnsw-block-size, "50000"]}}
+    - {command: [CONFIG, SET, search.hnsw-block-size, 1], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.hnsw-block-size, 0], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.hnsw-block-size, 4294967296], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.hnsw-block-size, 4294967295], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.hnsw-block-size], expect_difference: true, expect: {
+        equals: [search.hnsw-block-size, "4294967295"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cfg}

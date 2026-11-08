@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "3a36767480d2c3d55de6b06ecbff3e759e1a0e61",
+  "parent": "94ec3e5fb372a65cf338aa38f66a641f37372e90",
+  "pr": 98,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "avoid unsafe code in ValkeySearch::Info  during crashdump (#98)",
+  "date": "2025-04-28",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.7132,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only affects ValkeySearch::Info when invoked with for_crash_report set, i.e. from inside Valkey's crash-dump signal handler: it skips module INFO sections that take locks, allocate, or need the main thread. The normal INFO path (for_crash_report=0) emits exactly the same sections and fields on both builds, so no client-visible reply, replication, persistence or topology behaviour differs \u2014 a compared sequence would have no command that could carry expect_difference. The changed path can only be reached by crashing the server mid-dump, which the fuzzer's liveness oracle treats as a f"
+}

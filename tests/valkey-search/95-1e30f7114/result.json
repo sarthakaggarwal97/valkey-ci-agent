@@ -1,0 +1,79 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "1e30f711473dccfa9643d1e7570b264b8cf05b82",
+  "parent": "3a36767480d2c3d55de6b06ecbff3e759e1a0e61",
+  "pr": 95,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "adding support for blocking clients during keyspace notification (#95)",
+  "date": "2025-04-28",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 13.06,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-1a7a45480067",
+      "seed": 95001,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #95",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-1a7a45480067",
+      "seed": 95001,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-ebc0c7359042",
+      "seed": 95003,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #95",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-7e9099a6dabb",
+      "seed": 95004,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #95, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

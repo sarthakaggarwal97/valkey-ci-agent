@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "15e26b65e16f59304c1f14aed0324b77e2f98496",
+  "parent": "508b0cf54a1d4199651f3b71fc7c137a9e015c4e",
+  "pr": 89,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Don't suppress error when running python integration tests. (#89)",
+  "date": "2025-04-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2282,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only testing/integration/CMakeLists.txt, removing OUTPUT_QUIET/ERROR_QUIET from execute_process calls so pip/venv setup errors are no longer suppressed during CMake configuration of the python integration tests (plus a trailing-newline fix). It is a build/CI change with no effect on the valkey-search module binary, its commands, replies, indexing, or any server behaviour, so no scenario can reach it and none is needed."
+}

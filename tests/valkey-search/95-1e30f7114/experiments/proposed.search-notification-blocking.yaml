@@ -1,0 +1,87 @@
+extends: [valkey.liveness]
+id: proposed.search-notification-blocking
+deployment:
+  modes: [standalone]
+metadata:
+  description: Client blocking during keyspace notifications (HSET/DEL/RENAME/COPY,
+    MULTI, Lua, expiry, failed indexing, drop with pending mutations, backfill) compared
+    across the module builds
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: blocking
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary 'AACAPwAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, "doc:1", vec, !!binary 'AAAAAAAAgD8='], expect: {equals: 0}}
+    - {command: [HSET, "doc:2", vec, !!binary 'AACAPwAAgD8='], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        DIALECT, 2, LIMIT, 0, 0], wait_s: 30, expect: {equals: [2]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        DIALECT, 2, NOCONTENT], compare: unordered, expect: {contains: "doc:1"}}
+    - {command: [DEL, "doc:1"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        DIALECT, 2, LIMIT, 0, 0], wait_s: 30, expect: {equals: [1]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, "doc:3", vec, !!binary 'AACAPwAAAAA='], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:4", vec, !!binary 'AAAAAAAAAEA='], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [1, 1]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        DIALECT, 2, LIMIT, 0, 0], wait_s: 30, expect: {equals: [3]}}
+    - {command: [EVAL, "return redis.call('HSET', KEYS[1], 'vec', ARGV[1])", 1, "doc:5",
+        !!binary 'AAAAQAAAgD8='], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        DIALECT, 2, LIMIT, 0, 0], wait_s: 30, expect: {equals: [4]}}
+    - {command: [HSET, "doc:3", note, hello], expect: {equals: 1}}
+    - {command: [HSET, "doc:bad", vec, ""], expect: {equals: 1}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [DEL, "doc:bad"], expect: {equals: 1}}
+    - {command: [HSET, "doc:6", vec, !!binary 'AABAQAAAAAA='], expect: {equals: 1}}
+    - {command: [PEXPIRE, "doc:6", 50], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        DIALECT, 2, LIMIT, 0, 0], wait_s: 30, expect: {equals: [4]}}
+    - {command: [RENAME, "doc:2", "doc:7"], expect: {equals: OK}}
+    - {command: [COPY, "doc:7", "doc:8"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        DIALECT, 2, LIMIT, 0, 0], wait_s: 30, expect: {equals: [5]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        DIALECT, 2, TIMEOUT, 60001, LIMIT, 0, 0], expect: {error: "cannot exceed"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        DIALECT, 2, TIMEOUT, 1, LIMIT, 0, 0], compare: skip}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, "doc:9", vec, !!binary 'AACAPwAAAEA='], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [1]}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        DIALECT, 2, LIMIT, 0, 0], wait_s: 30, expect: {equals: [6]}}
+    - {command: [FT.INFO, idx], compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [blocking.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: blocking}

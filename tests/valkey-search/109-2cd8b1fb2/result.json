@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "2cd8b1fb24fa22c50f8a9f98fecead694e38e5ee",
+  "parent": "0a803337b9c390d4142b66f0d56134b6322f04f5",
+  "pr": 109,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Exposing search subscription info just if built with the macro DEBUG_INFO (#109)",
+  "date": "2025-05-06",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.5291,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

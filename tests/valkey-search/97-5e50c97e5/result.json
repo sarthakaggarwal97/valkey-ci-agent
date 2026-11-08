@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5e50c97e51f37a41021e766f70795fb4f53e86d8",
+  "parent": "8a391acfc39989fe72e69d4f2d234736b73f4f43",
+  "pr": 97,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Make backfill batch/block size configurable (#97)",
+  "date": "2025-05-02",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.4623,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-2976d5540a7e",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #97, since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-2976d5540a7e",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2976d5540a7e",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2976d5540a7e",
+      "build": "unstable",
+      "seed": 4,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

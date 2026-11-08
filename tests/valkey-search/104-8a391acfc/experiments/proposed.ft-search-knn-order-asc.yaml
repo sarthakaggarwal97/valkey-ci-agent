@@ -1,0 +1,83 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-knn-order-asc
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH KNN neighbors are returned ascending by distance; the parent
+    returned them descending, so ordered replies and LIMIT windows differ
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: knn
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx_hnsw, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_flat, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", vec, !!binary "AABAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:4", vec, !!binary "AACAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:5", vec, !!binary "AACgQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:6", vec, !!binary "AADAQAAAAAA="], expect: {equals: 1}}
+    - {command: [FT.INFO, idx_hnsw], wait_s: 30, compare: skip, expect: {contains: "6"}}
+    - {command: [FT.INFO, idx_flat], wait_s: 30, compare: skip, expect: {contains: "6"}}
+    - {command: [FT.SEARCH, idx_hnsw, "*=>[KNN 6 @vec $BLOB AS score]", NOCONTENT,
+        PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], wait_s: 30, compare: unordered,
+      expect: {contains: "doc:6"}}
+    - {command: [FT.SEARCH, idx_flat, "*=>[KNN 6 @vec $BLOB AS score]", NOCONTENT,
+        PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], wait_s: 30, compare: unordered,
+      expect: {contains: "doc:6"}}
+    - {command: [FT.SEARCH, idx_hnsw, "*=>[KNN 6 @vec $BLOB AS score]", NOCONTENT,
+        PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {equals: [6, "doc:1", "doc:2", "doc:3", "doc:4", "doc:5", "doc:6"]}}
+    - {command: [FT.SEARCH, idx_hnsw, "*=>[KNN 6 @vec $BLOB AS score]", NOCONTENT,
+        LIMIT, 0, 2, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {equals: [6, "doc:1", "doc:2"]}}
+    - {command: [FT.SEARCH, idx_hnsw, "*=>[KNN 6 @vec $BLOB AS score]", NOCONTENT,
+        LIMIT, 2, 2, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {equals: [6, "doc:3", "doc:4"]}}
+    - {command: [FT.SEARCH, idx_hnsw, "*=>[KNN 6 @vec $BLOB AS score]", LIMIT, 0,
+        1, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {contains: "doc:1"}}
+    - {command: [FT.SEARCH, idx_flat, "*=>[KNN 6 @vec $BLOB AS score]", NOCONTENT,
+        PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect_difference: true,
+      expect: {equals: [6, "doc:1", "doc:2", "doc:3", "doc:4", "doc:5", "doc:6"]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx_flat, "*=>[KNN 6 @vec $BLOB AS score]", NOCONTENT,
+        LIMIT, 0, 2, PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], expect: {
+        equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [[6, "doc:1", "doc:2"]]}}
+    - {command: [FT.CREATE, idx_cos, ON, HASH, PREFIX, 1, "cdoc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, COSINE], expect: {equals: OK}}
+    - {command: [HSET, "cdoc:1", vec, !!binary "AAAAAAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "cdoc:2", vec, !!binary "AACAPwAAAAA="], expect: {equals: 1}}
+    - {command: [FT.INFO, idx_cos], wait_s: 30, compare: skip, expect: {contains: "2"}}
+    - {command: [FT.SEARCH, idx_cos, "*=>[KNN 2 @vec $BLOB AS score]", NOCONTENT,
+        PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=", DIALECT, 2], wait_s: 30, compare: unordered,
+      expect: {contains: "cdoc:1"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [knn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: knn}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "eff3e03bfad48f929863d5e5547e80a662692272",
+  "parent": "2cd8b1fb24fa22c50f8a9f98fecead694e38e5ee",
+  "pr": 105,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "chore: avoid reserved gid, group name when setup for local dev env (#105)",
+  "date": "2025-05-06",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2285,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only the local development environment setup (.devcontainer/Dockerfile group-GID conflict handling and a setup.sh echo typo). It is a build/dev-tooling change with no effect on the valkey-search module's runtime behavior, commands, replies, or data handling, so no scenario can exercise it."
+}

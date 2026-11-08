@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "356ece8c6962b8b1cc659ea8b7222369d2437b05",
+  "parent": "5e50c97e51f37a41021e766f70795fb4f53e86d8",
+  "pr": 106,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fixed crash in UT (#106)",
+  "date": "2025-05-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2462,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only unit-test infrastructure: cmake/Modules/valkey_search.cmake drops a strip linker flag for test targets, and vmsdk/src/testing_infra/module.h adds a mock for RedisModule_RegisterNumericConfig used by googletest-based unit tests. Neither is compiled into the shipped valkey-search module, so no runtime behavior changes and no scenario can exercise it against a real server."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "4e3fa7f2b2902b4a93b7c69472860dfccb525031",
+  "parent": "033fd4beaab77e0a345e00e4ce2124035bc1065f",
+  "pr": 119,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Rename ValkeySearch to valkey-search (#119)",
+  "date": "2025-05-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6015,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely cosmetic: it renames 'ValkeySearch' to 'valkey-search' in copyright headers, LICENSE, QUICK_START.md and the CMake project() name, plus a few clang-format whitespace fixes (ternary spacing in vector_base.cc, brace spacing in tag.h, indentation in status_builder.h and valkey_module.h). No command handling, parsing, indexing, serialization, replication or reply code changes semantically; the compiled module behaves identically at the change and its parent, so there is no behavior for a scenario to reach."
+}
