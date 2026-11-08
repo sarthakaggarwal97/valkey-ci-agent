@@ -1,6 +1,7 @@
 """Tests for the fuzzer walk: its plan, its state, its filing rules, and the template that turns checks on."""
 from __future__ import annotations
 
+import dataclasses
 import json
 import subprocess
 from datetime import datetime, timezone
@@ -155,6 +156,36 @@ def test_a_modules_first_code_drop_on_a_readme_stub_is_skipped(tmp_path):
     assert planned["skipped"][0]["skip_outcome"] == "no-parent-code"
     state = update(initial_state(BLOOM), planned, [], now=NOW)
     assert state["done"][planned["skipped"][0]["sha"]]["outcome"] == "no-parent-code"
+
+
+def test_a_merge_predating_the_build_recipe_is_skipped(tmp_path, monkeypatch):
+    # valkey-search before #33 (0805ebc) builds only with Bazel: the recipe needs build.sh, so those merges (and
+    # #33 itself, whose parent lacks it) are done without a job instead of failing the build until given up.
+    search = "valkey-io/valkey-search"
+    repo = _repo(tmp_path, "valkey-search", [("Initial commit", "src/a.cc"), ("Bazel fix (#2)", "src/b.cc"),
+                                             ("CMake support (#3)", "build.sh"), ("Fix FT.SEARCH (#4)", "src/c.cc")])
+    monkeypatch.setitem(walk.MODULES, "valkey-search",
+                        dataclasses.replace(walk.MODULES["valkey-search"], buildable="build.sh"))
+    planned = plan(repo, search, initial_state(search), 5, UNSTABLE, now=NOW)
+    assert _jobs(planned) == [4]
+    assert [(m["pr"], m["skip_outcome"]) for m in planned["skipped"] if m.get("skip_outcome")] == [
+        (3, "predates-build-recipe"), (2, "predates-build-recipe")]
+    state = update(initial_state(search), planned, [], now=NOW)
+    assert state["done"][planned["skipped"][0]["sha"]]["outcome"] == "predates-build-recipe"
+
+    # A merge already waiting to be retried (its builds failed before the recipe learnt this) is skipped too,
+    # and leaves the retries.
+    shas = _shas(repo)
+    state = initial_state(search)
+    state["pointer"] = {"head": shas[0], "cursor": shas[-1], "end": shas[-1]}
+    state["failed"][shas[2]] = {**{k: None for k in walk.MERGE_KEYS}, "repo": search, "sha": shas[2],
+                                "parent": shas[3], "attempts": 2, "error": "build.sh: No such file or directory"}
+    planned = plan(repo, search, state, 5, UNSTABLE, now=NOW)
+    assert _jobs(planned) == []
+    assert [m["skip_outcome"] for m in planned["skipped"]] == ["predates-build-recipe"]
+    state = update(state, planned, [], now=NOW)
+    assert shas[2] not in state["failed"]
+    assert state["done"][shas[2]]["outcome"] == "predates-build-recipe"
 
 
 def test_a_pointer_off_the_history_stops_the_plan(json_repo):

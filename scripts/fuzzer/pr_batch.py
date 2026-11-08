@@ -112,7 +112,9 @@ class Module:
     """A Valkey module repository: its default branch, the file its build leaves in its checkout, the bash
     commands that build it there against a Valkey checkout (``$VALKEY_SRC``), what the proposal prompt says of
     its commands and pitfalls, and what the runner needs first: ``setup``, bash run once before any build, which
-    may keep downloads in ``$DEPS_DIR``, a directory cached under ``deps`` (the version of what it fetches)."""
+    may keep downloads in ``$DEPS_DIR``, a directory cached under ``deps`` (the version of what it fetches).
+    ``buildable`` names a file the build commands need: a commit whose tree lacks it predates the recipe's
+    reach, so the walk does its merge without a job instead of failing the build forever."""
 
     branch: str
     file: str
@@ -120,6 +122,7 @@ class Module:
     note: str
     setup: str = ""
     deps: str = ""
+    buildable: str = ""
 
 
 # The module repositories, by repository name (a fork builds as its upstream). Adding a module is one entry.
@@ -154,6 +157,8 @@ fi""",
     ),
     "valkey-search": Module(
         branch="main", file=".build-release/libsearch.so", deps="1.0.0-rc1",
+        # Before #33 (0805ebc) brought CMake and build.sh, the tree builds only with Bazel: nothing to run.
+        buildable="build.sh",
         # The project's own prebuilt gRPC, Protobuf and Abseil (its devcontainer installs the same package).
         setup="""sudo apt-get install -y cmake ninja-build
 deb="${DEPS_DIR}/valkey-search-deps-ubuntu-noble-amd64.deb"

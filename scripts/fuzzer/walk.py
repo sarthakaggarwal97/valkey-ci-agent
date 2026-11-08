@@ -242,6 +242,10 @@ def no_code_change(paths: list[str], repo: str) -> bool:
     return not any(_code(path, repo) for path in paths)
 
 
+def _has_file(repo_dir: Path, sha: str, path: str) -> bool:
+    return bool(_git(repo_dir, "ls-tree", "--name-only", sha, "--", path))
+
+
 def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey_head: str, *,
          now: str) -> dict[str, Any]:
     """The run's merges, the merges done without a job, the repository's new pointer, and the heads the run
@@ -264,11 +268,23 @@ def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey
     backlog = [(i, "backlog") for i in range(index[pointer["cursor"]], index[pointer["end"]])]
     jobs: list[dict[str, Any]] = []
     skipped: list[dict[str, Any]] = []
+    buildable = MODULES[_name(repo)].buildable if module_repository(repo) else ""
+
+    def predates_recipe(merge: dict[str, Any]) -> bool:
+        # The merge or its parent predates the recipe's reach (valkey-search before #33 builds only with
+        # Bazel): its build can never succeed, so it is done without a job instead of retried forever.
+        return bool(buildable) and not (_has_file(repo_dir, merge["sha"], buildable)
+                                        and _has_file(repo_dir, merge["parent"], buildable))
+
     for item, kind in [*new, *retries, *backlog]:
         if len(jobs) >= max_jobs:
             break
         if kind == "retry":
-            jobs.append({key: item.get(key) for key in MERGE_KEYS})
+            merge = {key: item.get(key) for key in MERGE_KEYS}
+            if predates_recipe(merge):
+                skipped.append({**merge, "skip_outcome": "predates-build-recipe"})
+            else:
+                jobs.append(merge)
             continue
         merge = history[item]
         if kind == "new":
@@ -283,6 +299,8 @@ def plan(repo_dir: Path, repo: str, state: dict[str, Any], max_jobs: int, valkey
                 _git(repo_dir, "ls-tree", "-r", "--name-only", merge["parent"]).split(), repo):
             # The module's first code drop: its parent, a README-only stub, has nothing to build or compare with.
             skipped.append({**merge, "skip_outcome": "no-parent-code"})
+        elif predates_recipe(merge):
+            skipped.append({**merge, "skip_outcome": "predates-build-recipe"})
         else:
             jobs.append(merge)
     cursor = history[index[pointer["cursor"]]]
@@ -1259,6 +1277,7 @@ def update(state: dict[str, Any], planned: dict[str, Any], results: list[dict[st
     cost = 0.0
     for merge in planned["skipped"]:
         state["done"][merge["sha"]] = _summary(merge, None, now)
+        state["failed"].pop(merge["sha"], None)
     for merge in planned["merges"]:
         sha = merge["sha"]
         result = by_sha.get(sha)
