@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "3fc34f17d71fa58a3e29a5ab742293a3967e7935",
+  "parent": "95ac6148764558dda5a471c62332ffc9c6f79958",
+  "pr": 131,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fixed dumpring corrupted dump.rdb file (#131)",
+  "date": "2025-05-19",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.7908,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff only changes MetadataManager's RDB aux-section count (hardcoded 1 -> GetSectionsCount(), which returns 0 when the global metadata has no entries), fixing an RDB header/body mismatch that corrupts dump.rdb. MetadataManager and its GLOBAL_METADATA aux-save callback are registered only when valkey-search runs with --use-coordinator in cluster mode (valkey_search.cc:514 guards instantiation; RegisterRDBCallback lives in its constructor). The fuzzer loads modules by bare path only -- valkey.artifact.local-module and valkey.action.commands' modules both forbid module arguments -- and --use-"
+}

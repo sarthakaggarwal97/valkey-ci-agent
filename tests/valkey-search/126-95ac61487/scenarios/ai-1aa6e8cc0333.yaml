@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search aea2b9e667d0..95ac61487645.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1aa6e8cc0333
+seed: 11
+experiment:
+  id: proposed.ft-pool-fork-suspend-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

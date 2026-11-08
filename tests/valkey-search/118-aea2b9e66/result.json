@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "aea2b9e667d0dc7b6f7209517141962f40435f7b",
+  "parent": "934beb3c9e4ae135ae6e4255922ce705c70bfabe",
+  "pr": 118,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Valkey-Search doc related files (#118)",
+  "date": "2025-05-14",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3824,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds five JSON command-documentation files (ft._list.json, ft.create.json, ft.dropindex.json, ft.info.json, ft.search.json) under src/commands/. Nothing in the valkey-search build system or source consumes these files: CMakeLists.txt has no rule for them and no C++ code reads them; the module's command registration, arity checks and ACL categories are defined in code, unchanged by this PR. These are documentation metadata for the docs pipeline, so the built module is behaviorally identical at the change and at its parent, and no scenario can reach a behavior difference."
+}

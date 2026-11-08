@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.ft-create-db-rdb-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: The index's db number is saved to RDB and restored on restart; the
+    reloaded index serves searches and indexes new writes in its db
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftrdb
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", v, !!binary "AACAPwAAAAA="], expect: {equals: 1}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @v $BLOB]", NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], wait_s: 20, expect_difference: true,
+      expect: {contains: "doc:1"}, compare: unordered}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT._LIST], expect_difference: true, expect: {equals: []}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [FT._LIST], expect_difference: true, expect: {equals: [idx]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @v $BLOB]", NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], wait_s: 20, expect_difference: true,
+      expect: {contains: "doc:1"}, compare: unordered}
+    - {command: [HSET, "doc:2", v, !!binary "AAAAAAAAgD8="], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @v $BLOB]", NOCONTENT, PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], wait_s: 20, expect_difference: true,
+      expect: {contains: "doc:2"}, compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftrdb.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftrdb}

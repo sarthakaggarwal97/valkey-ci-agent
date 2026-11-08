@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "95ac6148764558dda5a471c62332ffc9c6f79958",
+  "parent": "aea2b9e667d0dc7b6f7209517141962f40435f7b",
+  "pr": 126,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Dynamic thread pool (#126)",
+  "date": "2025-05-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 4,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 7.6186,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

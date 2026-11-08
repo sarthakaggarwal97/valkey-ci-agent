@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "934beb3c9e4ae135ae6e4255922ce705c70bfabe",
+  "parent": "b1c7da23cc038d1e27a4607159b085d561c1b8c9",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Merge branch '1.0' into main",
+  "date": "2025-05-13",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3847,
+  "findings": [],
+  "recorded": [],
+  "reason": "The merge changes only release metadata: release notes text, the CMake project version (99.99.99 -> 1.0.0), the MODULE_VERSION constant (999999 -> 10000) and MODULE_RELEASE_STAGE string (\"dev\" -> \"rc1\") passed to RedisModule_Init, plus a whitespace-only reformat in vmsdk/src/module.cc. No command behaviour, reply format, indexing, persistence, replication or cluster path changes; the only observable difference is the constant version number reported in MODULE LIST, which is a deliberate build/release change with nothing to break. No scenario is needed."
+}

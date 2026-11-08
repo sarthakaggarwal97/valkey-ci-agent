@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.ft-create-db-lifecycle
+deployment:
+  modes: [standalone]
+metadata:
+  description: Same index name in two dbs, SWAPDB moves an index with its db, FLUSHDB
+    deletes only the flushed db's index
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftlc
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "a:", SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [SELECT, 15], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "b:", SCHEMA, v, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, COSINE], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT._LIST], expect_difference: true, expect: {equals: [idx]}}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {error: false}}
+    - {command: [SWAPDB, 15, 2], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [FT._LIST], expect_difference: true, expect: {equals: [idx]}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: [idx]}}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [FT._LIST], expect_difference: true, expect: {equals: [idx]}}
+    - {command: [FT.DROPINDEX, idx], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "c:", SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, IP], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "c:", SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, IP], expect: {error: "already exists"}}
+    - {command: [SWAPDB, 2, 2], expect: {equals: OK}}
+    - {command: [FT._LIST], expect_difference: true, expect: {equals: [idx]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftlc.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftlc}

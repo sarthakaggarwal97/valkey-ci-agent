@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.ft-pool-fork-suspend-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT indexing, KNN search, and three BGSAVE fork suspend/resume cycles
+    of the module's reader and writer thread pools, replies compared between the dynamic-thread-pool
+    build and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ft
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", vec, !!binary "AABAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:4", vec, !!binary "AACAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:5", vec, !!binary "AACgQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:6", vec, !!binary "AADAQAAAAAA="], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @vec $q]", NOCONTENT, PARAMS, 2, q, !!binary "AADAQAAAAAA=",
+        DIALECT, 2], wait_s: 30, expect: {equals: [1, "doc:6"]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @vec $q]", NOCONTENT, PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        DIALECT, 2], wait_s: 30, expect: {equals: [1, "doc:1"]}}
+    - {command: [FT.INFO, idx], compare: skip}
+    - {command: [BGSAVE], expect: {equals: "Background saving started"}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "rdb_bgsave_in_progress:0"}}
+    - {command: [HSET, "doc:7", vec, !!binary "AADgQAAAAAA="], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @vec $q]", NOCONTENT, PARAMS, 2, q, !!binary "AADgQAAAAAA=",
+        DIALECT, 2], wait_s: 30, expect: {equals: [1, "doc:7"]}}
+    - {command: [BGSAVE], expect: {equals: "Background saving started"}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "rdb_bgsave_in_progress:0"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @vec $q]", NOCONTENT, PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        DIALECT, 2], compare: unordered, expect: {exists: true}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {equals: "Background saving started"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @vec $q]", NOCONTENT, PARAMS, 2, q, !!binary "AADgQAAAAAA=",
+        DIALECT, 2], wait_s: 60, expect: {equals: [1, "doc:7"]}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "rdb_bgsave_in_progress:0"}}
+    - {command: [FT.INFO, idx], compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ft.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ft}
