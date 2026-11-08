@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.lua-insecure-api
+deployment:
+  modes: [standalone]
+metadata:
+  description: Deprecated Lua builtins (getfenv/setfenv/newproxy) are blocked by default
+    and gated behind lua-enable-insecure-api, and basic-type metatables are readonly
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lua
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-protected-configs: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [EVAL, "return getfenv ~= nil", 0], expect_difference: true, expect: {
+        error: "getfenv"}}
+    - {command: [EVAL, "return setfenv ~= nil", 0], expect_difference: true, expect: {
+        error: "setfenv"}}
+    - {command: [EVAL, "return newproxy ~= nil", 0], expect_difference: true, expect: {
+        error: "newproxy"}}
+    - {command: [EVAL, "getmetatable('').__index = function() return 1 end return\
+          \ 'ok'", 0], expect_difference: true, expect: {error: true}}
+    - {command: [CONFIG, SET, lua-enable-insecure-api, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [EVAL, "return getfenv ~= nil and 'yes' or 'no'", 0], expect: {equals: "yes"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [lua.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lua}

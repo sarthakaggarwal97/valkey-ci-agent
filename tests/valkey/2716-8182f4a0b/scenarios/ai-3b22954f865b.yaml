@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 18214be4902c..8182f4a0b9c9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3b22954f865b
+seed: 4
+experiment:
+  id: proposed.hsetex-fxx-replica-divergence
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

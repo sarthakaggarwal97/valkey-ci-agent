@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 18214be4902c..8182f4a0b9c9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-50bdfa9b1749
+seed: 3
+experiment:
+  id: proposed.hsetex-fxx-no-create
+  inputs:
+    resp: 2
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

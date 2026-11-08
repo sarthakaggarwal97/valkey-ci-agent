@@ -1,0 +1,20 @@
+extends: [valkey.liveness]
+id: proposed.check-rdb-slot-import-opcode
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-rdb on an RDB carrying the new slot-import opcode (243),
+    compared across builds
+components:
+- use: valkey.action.tools
+  id: check
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    ignore: ['^\d+:[A-Z] .*\n']
+    files:
+      slotimport.rdb: !!binary 'UkVESVMwMDEx8yhhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhAQUF/wAAAAAAAAAA'
+    runs:
+    - {tool: valkey-check-rdb, args: [slotimport.rdb], expect_difference: true, expect: {
+        exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check}

@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.client-filter-duplicate-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CLIENT LIST/KILL with repeated filter keywords must not leak the earlier allocation
+    each duplicate overwrites. Replies are identical on both builds; the leak only
+    exists on the parent and is caught by the sanitizer/liveness oracle when the private
+    comparison server tears down.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dupfilters
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CLIENT, SETINFO, lib-name, mylib], expect: {equals: OK}}
+    - {command: [CLIENT, SETINFO, lib-ver, 1.2.3], expect: {equals: OK}}
+    - command: [CLIENT, LIST, flags, N, flags, S, flags, N, not-flags, O, not-flags,
+        S, not-flags, N, capa, r, capa, r, capa, r, not-capa, r, not-capa, r, not-capa,
+        r, lib-name, a, lib-name, b, lib-name, c, not-lib-name, x, not-lib-name, y,
+        not-lib-name, z, lib-ver, 1, lib-ver, 2, lib-ver, 3, not-lib-ver, 4, not-lib-ver,
+        5, not-lib-ver, 6, ip, 1.2.3.4, ip, 5.6.7.8, ip, 9.9.9.9, not-ip, 8.8.8.8,
+        not-ip, 7.7.7.7, not-ip, 6.6.6.6]
+      compare: skip
+    - command: [CLIENT, KILL, skipme, yes, flags, N, flags, S, flags, N, not-flags,
+        O, not-flags, S, not-flags, N, capa, r, capa, r, capa, r, not-capa, r, not-capa,
+        r, not-capa, r, lib-name, a, lib-name, b, lib-name, c, not-lib-name, x, not-lib-name,
+        y, not-lib-name, z, lib-ver, 1, lib-ver, 2, lib-ver, 3, not-lib-ver, 4, not-lib-ver,
+        5, not-lib-ver, 6, ip, 1.2.3.4, ip, 5.6.7.8, ip, 9.9.9.9, not-ip, 8.8.8.8,
+        not-ip, 7.7.7.7, not-ip, 6.6.6.6]
+      compare: skip
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dupfilters.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dupfilters}

@@ -1,0 +1,59 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d5bb986fd592733330ff4042c011f7c64da543ec",
+  "parent": "307397904fe0ec7a31e6fe15cd3a6723e93a9b4b",
+  "pr": 2639,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add slot migration client flags and module context flags (#2639)",
+  "date": "2025-10-02",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 6,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 13,
+    "executed": 11,
+    "percent": 84,
+    "uncovered": [
+      "src/module.c:4027",
+      "src/module.c:4029"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 10.4038,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2023 'ln != NULL' is not true",
+      "scenario": "ai-1db4e630d65f",
+      "seed": 1,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "d561349a3376f67bd3f4",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2023 'ln != NULL' is not true",
+      "scenario": "ai-4f9c6fbfa3f5",
+      "seed": 2,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "d561349a3376f67bd3f4",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

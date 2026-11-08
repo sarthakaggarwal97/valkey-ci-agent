@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 064674945d6c..383ffe4874d5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8fa82f65ec1f
+seed: 26356
+experiment:
+  id: proposed.slot-migration-validation-errors
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7500

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 80cec0a18459..ae58b3d5bee7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ef5290007200
+seed: 11083
+experiment:
+  id: proposed.cluster-failover-blocked-moved
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

@@ -1,0 +1,44 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ae58b3d5bee7c8bc4de529da3d89dd07a29a6e0a",
+  "parent": "80cec0a18459af92cf0f613e5bbe4a52892ce15d",
+  "pr": 2329,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Redirect blocked clients after failover (#2329)",
+  "date": "2025-09-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 6,
+  "hunted": 8,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 29,
+    "executed": 26,
+    "percent": 89,
+    "uncovered": [
+      "src/cluster_legacy.c:2723",
+      "src/cluster_legacy.c:2817",
+      "src/cluster_legacy.c:5962"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 20.4191,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-bd6a655c006b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'failover' returned ERROR: expectations both builds violate alike, so they are not about the change: 13 (read on connection blk-plain)"
+    },
+    {
+      "scenario": "ai-e34887cd38de",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'failover' returned ERROR: expectations both builds violate alike, so they are not about the change: 13 (read on connection blk-plain)"
+    }
+  ]
+}

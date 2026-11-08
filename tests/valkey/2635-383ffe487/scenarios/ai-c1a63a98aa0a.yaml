@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 064674945d6c..383ffe4874d5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c1a63a98aa0a
+seed: 26351
+experiment:
+  id: proposed.slot-import-rdb-persist
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

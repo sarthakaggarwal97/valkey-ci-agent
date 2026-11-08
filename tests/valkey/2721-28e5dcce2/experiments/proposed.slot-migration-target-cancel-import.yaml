@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.slot-migration-target-cancel-import
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    The target of a slot migration cancels the import while the source's snapshot
+    child is active. The source must drop the target client, kill the snapshot child
+    exactly once (the freeClient path the change moved into unlinkClient), fail the
+    job and keep serving; the parent build leaves server.slot_migration_pipe_conn
+    dangling after freeClient and sometimes crashes in slotMigrationPipeReadHandler.
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: drop
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, rdb-key-save-delay, "10000"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "400", "{YY}:", "512"], expect: {equals: OK}}
+    - {command: [SET, "{wu}:probe", v1], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, "16379", "16379", NODE, "<node.1.id>"],
+      expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], wait_s: 20, expect: {contains: snapshotting},
+      compare: skip}
+    - {command: [CLUSTER, CANCELSLOTMIGRATIONS], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], wait_s: 30, expect: {contains: failed},
+      expect_difference: true}
+    - {command: [CONFIG, SET, rdb-key-save-delay, "0"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, "16380", "16380", NODE, "<node.1.id>"],
+      expect: {equals: OK}}
+    - {command: [GET, "{wu}:probe"], node: 1, wait_s: 30, expect: {equals: v1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [drop.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: drop}

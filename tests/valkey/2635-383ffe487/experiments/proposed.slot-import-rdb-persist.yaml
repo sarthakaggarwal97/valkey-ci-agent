@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.slot-import-rdb-persist
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active slot import jobs are saved to the RDB (RDB_OPCODE_SLOT_IMPORT),
+    reloaded on restart, and cleaned up by a primary after load
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rdbpersist
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    server_config: {save: ""}
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+        SLOTSRANGE, 100, 200, 300, 300, 16383, 16383], node: 1, connection: job1,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
+        SLOTSRANGE, 0, 0], node: 1, connection: job2, expect: {equals: OK}}
+    - {command: [SAVE], node: 1, expect: {equals: OK}}
+    - {restart: true, node: 1, expect: {equals: OK}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 1, expect_difference: true, expect: {
+        contains: "Process restarted"}}
+    - {command: [DBSIZE], node: 1, expect: {equals: 0}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rdbpersist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rdbpersist}

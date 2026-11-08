@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 22247f611952..5bbbc6bd9a3e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-56eb93fce91e
+seed: 101
+experiment:
+  id: proposed.cluster-shards-id
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8182f4a0b9c92639f7528f4ae412e957c7600bb4",
+  "parent": "18214be4902cb4c3792d27567a00db5365643fc9",
+  "pr": 2716,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "HSETEX with FXX should not create an object if it does not exist (#2716)",
+  "date": "2025-10-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 11,
+    "executed": 11,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.223,
+  "findings": [],
+  "recorded": []
+}

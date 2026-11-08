@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.syncslots-capa
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER SYNCSLOTS CAPA is silently accepted and no longer fails an
+    in-progress slot import
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: capa
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {raw: "CLUSTER SYNCSLOTS CAPA capa1 capa2\r\n", connection: capa, expect_difference: true,
+      expect: {exists: false}}
+    - {raw: "*4\r\n$7\r\nCLUSTER\r\n$9\r\nSYNCSLOTS\r\n$4\r\nCAPA\r\n$0\r\n\r\n",
+      connection: capa, expect_difference: true, expect: {exists: false}}
+    - {command: [PING], connection: capa, expect: {equals: PONG}}
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+        SLOTSRANGE, 16383, 16383], node: 1, connection: job, expect: {equals: OK}}
+    - {raw: "CLUSTER SYNCSLOTS CAPA some-future-capability\r\n", node: 1, connection: job,
+      expect_difference: true, expect: {exists: false}}
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
+        SLOTSRANGE, 16383, 16383], node: 1, connection: job2, expect_difference: true,
+      expect: {error: "already being imported"}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 1, compare: skip}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [capa.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: capa}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 383ffe4874d5..a4317e91159c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-dc2fd836f668
+seed: 268802
+experiment:
+  id: proposed.syncslots-capa
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ccf6fca5f426..54da8344c1a9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-27e44afd8d86
+seed: 2734
+experiment:
+  id: proposed.failover-unblock-moved
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

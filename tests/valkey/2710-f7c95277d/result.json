@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f7c95277dac5433af7a9c1c3106b23002e82648f",
+  "parent": "155b0bb82196c8fc70245823856a8e966525d55a",
+  "pr": 2710,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add invalid RDB signature to log statement (#2710)",
+  "date": "2025-10-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3656,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only appends the first 9 bytes of the rejected RDB header to an existing LL_WARNING log line in rdbLoadRioWithLoadingCtx (src/rdb.c:3111). The buffer is NUL-terminated at buf[9] and the format is bounded with %.9s, so there is no memory-safety risk; the function still returns C_ERR on the same path, and no reply, persistence, replication or loading behaviour changes. Server log text is not observable by the fuzzer's oracles or by a compared command/tools run, so no scenario can meaningfully reach or distinguish this change."
+}

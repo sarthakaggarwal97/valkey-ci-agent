@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.hsetex-fxx-no-create
+deployment:
+  modes: [standalone]
+metadata:
+  description: HSETEX with FXX or an invalid expire on a missing key must not leave
+    an empty hash in the keyspace
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: hsetex
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [HSETEX, h1, EX, 100, FXX, FIELDS, 1, f, v], expect: {equals: 0}}
+    - {command: [EXISTS, h1], expect_difference: true, expect: {equals: 0}}
+    - {command: [TYPE, h1], expect_difference: true, expect: {equals: none}}
+    - {command: [LPUSH, h1, a], expect_difference: true, expect: {equals: 1}}
+    - {command: [DEL, h1], expect: {equals: 1}}
+    - {command: [HSETEX, h2, EX, 100, FXX, FIELDS, 2, a, 1, b, 2], expect: {equals: 0}}
+    - {command: [EXISTS, h2], expect_difference: true, expect: {equals: 0}}
+    - {command: [DEL, h2], expect_difference: true, expect: {equals: 0}}
+    - {command: [HSETEX, h3, KEEPTTL, FXX, FIELDS, 1, f, v], expect: {equals: 0}}
+    - {command: [EXISTS, h3], expect_difference: true, expect: {equals: 0}}
+    - {command: [HSETEX, h4, EX, -1, FIELDS, 1, f, v], expect: {error: "invalid expire"}}
+    - {command: [EXISTS, h4], expect_difference: true, expect: {equals: 0}}
+    - {command: [HSETEX, h5, EX, notanumber, FIELDS, 1, f, v], expect: {error: "not\
+          \ an integer"}}
+    - {command: [EXISTS, h5], expect_difference: true, expect: {equals: 0}}
+    - {command: [HSETEX, h9, EX, 9223372036854775807, FXX, FIELDS, 1, f, v], expect: {
+        error: "invalid expire"}}
+    - {command: [EXISTS, h9], expect_difference: true, expect: {equals: 0}}
+    - {command: [HSETEX, h6, EXAT, 1, FXX, FIELDS, 1, f, v], expect: {equals: 0}}
+    - {command: [EXISTS, h6], expect_difference: true, expect: {equals: 0}}
+    - {command: [HSETEX, h10, EX, 100, FXX, FIELDS, 1, '', v], expect: {equals: 0}}
+    - {command: [EXISTS, h10], expect_difference: true, expect: {equals: 0}}
+    - {command: [HSETEX, h7, EX, 100, FNX, FIELDS, 2, a, 1, b, 2], expect: {equals: 1}}
+    - {command: [HGETALL, h7], compare: unordered-pairs}
+    - {command: [HSET, h8, f, v], expect: {equals: 1}}
+    - {command: [HSETEX, h8, EX, 100, FXX, FIELDS, 1, f, v2], expect: {equals: 1}}
+    - {command: [HGET, h8, f], expect: {equals: v2}}
+    - {command: [HSETEX, h8, EX, 100, FXX, FIELDS, 2, f, x, g, y], expect: {equals: 0}}
+    - {command: [EXISTS, h8], expect: {equals: 1}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hsetex.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hsetex}

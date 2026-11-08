@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d5bb986fd592..6dd003e88fea.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-db8f87610a71
+seed: 202
+experiment:
+  id: proposed.lua-insecure-api
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

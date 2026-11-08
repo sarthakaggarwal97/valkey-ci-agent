@@ -1,0 +1,25 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a9a65abc85b3..307397904fe0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-35a233a681c6
+seed: 2
+experiment:
+  id: proposed.active-defrag-churn
+  inputs:
+    churn_s: 30
+    command_rate: 400
+    mutable_keys: 15000
+    stable_keys: 3000
+    mutation_rate: 2500
+    value_size: 512
+    defrag_hits_timeout_s: 180
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7100
+  server_config:
+    activedefrag: 'yes'
+    active-defrag-ignore-bytes: '1'
+    active-defrag-threshold-lower: '1'
+    active-defrag-cycle-min: '15'
+    active-defrag-cycle-max: '60'

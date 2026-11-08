@@ -1,0 +1,65 @@
+extends: [valkey.liveness]
+id: proposed.lolwut9-julia
+deployment:
+  modes: [standalone]
+metadata:
+  description: LOLWUT VERSION 9 renders a Julia set with argument validation and clamping;
+    the parent build falls back to the unstable banner for version 9
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lolwut
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [LOLWUT, VERSION, '9', '10', '5', '0.3', '0.5'], expect_difference: true,
+      expect: {contains: "Julia set with constant 0.30 + 0.50i"}}
+    - {command: [LOLWUT, VERSION, '9', '1', '1', '0', '0'], expect_difference: true,
+      expect: {contains: "constant 0.00 + 0.00i"}}
+    - {command: [LOLWUT, VERSION, '9', '80'], expect_difference: true, expect: {error: "Syntax\
+          \ error"}}
+    - {command: [LOLWUT, VERSION, '9', '10', '5', '0.3'], expect_difference: true,
+      expect: {error: "Syntax error"}}
+    - {command: [LOLWUT, VERSION, '9', '10', '5', '0.3', '0.5', extra], expect_difference: true,
+      expect: {error: "Syntax error"}}
+    - {command: [LOLWUT, VERSION, '9', '9223372036854775807', '-9223372036854775808',
+        '0.25', '-0.6'], expect_difference: true, expect: {contains: "constant 0.25\
+          \ + -0.60i"}}
+    - {command: [LOLWUT, VERSION, '9', '0', '0', '0.5', '-0.5'], expect_difference: true,
+      expect: {contains: "constant 0.50 + -0.50i"}}
+    - {command: [LOLWUT, VERSION, '9', '9223372036854775808', '1', '0.1', '0.1'],
+      expect_difference: true, expect: {error: true}}
+    - {command: [LOLWUT, VERSION, '9', '', '1', '0.1', '0.1'], expect_difference: true,
+      expect: {error: true}}
+    - {command: [LOLWUT, VERSION, '9', '2', '2', abc, '0.1'], expect_difference: true,
+      expect: {error: true}}
+    - {command: [LOLWUT, VERSION, '9', '2', '2', nan, '0'], expect_difference: true,
+      expect: {error: true}}
+    - {command: [LOLWUT, VERSION, '9', '4', '2', inf, -inf], expect_difference: true,
+      expect: {contains: "inf"}}
+    - {command: [LOLWUT, VERSION, '9'], expect_difference: true, expect: {contains: "Don't\
+          \ forget to have fun!"}}
+    - {command: [LOLWUT, VERSION, '9', '3', '2'], expect_difference: true, expect: {
+        contains: "Julia set"}}
+    - {command: [LOLWUT, VERSION, '90'], expect_difference: true, expect: {contains: "Julia\
+          \ set"}}
+    - {command: [CONFIG, SET, extended-redis-compat, 'yes'], expect: {equals: OK}}
+    - {command: [LOLWUT, VERSION, '9', '5', '5', '0.1', '0.1'], expect_difference: true,
+      expect: {contains: "Redis ver."}}
+    - {command: [CONFIG, SET, extended-redis-compat, 'no'], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [lolwut.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lolwut}

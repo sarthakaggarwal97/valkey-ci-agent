@@ -1,0 +1,51 @@
+extends: [valkey.base]
+id: proposed.active-defrag-churn
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Aggressive active defrag under delete-heavy key churn; the new slab
+    1/8-full rule must move allocations with no crash, no lost or corrupted data
+inputs:
+  properties:
+    churn_s: {type: number, minimum: 1, maximum: 300, default: 25}
+    command_rate: {type: number, minimum: 0, maximum: 5000, default: 0}
+    defrag_hits_timeout_s: {type: number, minimum: 5, maximum: 600, default: 120}
+components:
+- use: valkey.workload.key-value
+  id: writes
+  config:
+    mix: {set: 0.4, del: 0.5, get: 0.1}
+    mutable_keys: {$ref: inputs.mutable_keys}
+    stable_keys: {$ref: inputs.stable_keys}
+    rate: {$ref: inputs.mutation_rate}
+    value_size: {$ref: inputs.value_size}
+    op_timeout_s: 2.0
+- use: valkey.workload.command-table
+  id: commands
+  config:
+    rate: {$ref: inputs.command_rate}
+- use: valkey.observer.info
+  id: defrag-info
+  config:
+    instances: primaries
+    sections: [stats, memory]
+    interval_s: 0.5
+    expectations:
+    - {evidence_id: valkey.defrag.hits-advanced, field: active_defrag_hits, delta_min: 1}
+- use: valkey.action.sleep
+  id: churn
+  depends_on: [writes, commands, defrag-info]
+  config:
+    seconds: {$ref: inputs.churn_s}
+- use: valkey.action.poll
+  id: defrag-ran
+  depends_on: [churn]
+  config:
+    instances: primaries
+    section: stats
+    field: active_defrag_hits
+    predicate: {min: 1}
+    timeout_s: {$ref: inputs.defrag_hits_timeout_s}
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.poll.satisfied, source: defrag-ran, min_count: 1}

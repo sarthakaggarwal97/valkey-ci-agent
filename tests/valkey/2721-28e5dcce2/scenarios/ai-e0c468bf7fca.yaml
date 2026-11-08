@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 19474c867a67..28e5dcce2caa.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e0c468bf7fca
+seed: 101
+experiment:
+  id: proposed.slot-migration-target-cancel-import
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

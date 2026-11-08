@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.slot-import-aof-replay
+deployment:
+  modes: [standalone]
+metadata:
+  description: SYNCSLOTS ESTABLISH is propagated to AOF and replayed as a tracking-only
+    job (CLIENT_ID_AOF skips SOURCE), then cleaned up after load
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aofreplay
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    server_config: {appendonly: "yes", appendfsync: always, save: ""}
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, cccccccccccccccccccccccccccccccccccccccc,
+        SLOTSRANGE, 42, 42, 500, 600], node: 1, connection: job, expect: {equals: OK}}
+    - {restart: true, node: 1, expect: {equals: OK}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 1, expect_difference: true, expect: {
+        contains: "cccccccccccccccccccccccccccccccccccccccc"}}
+    - {command: [DBSIZE], node: 1, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aofreplay.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofreplay}

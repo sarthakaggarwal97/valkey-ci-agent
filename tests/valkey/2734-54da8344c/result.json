@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "54da8344c1a923aeb54022dae2b19b111841c590",
+  "parent": "ccf6fca5f426d3deebbcd45b3c48b11c09a66a72",
+  "pr": 2734,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix double MOVED reply on unblock at failover (#2734)",
+  "date": "2025-10-14",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.6387,
+  "findings": [],
+  "recorded": []
+}

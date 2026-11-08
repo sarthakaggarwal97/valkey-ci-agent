@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "064674945d6c1667b85103be514facf88f5a10c4",
+  "parent": "6dd003e88feace83e55491f32376f6927896e31e",
+  "pr": 2679,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix format issues with CVE fix (#2679)",
+  "date": "2025-10-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2376,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely cosmetic: it reformats whitespace and switch-case indentation in luaSetTableProtectionForBasicTypes in src/lua/script_lua.c with byte-for-byte identical semantics (same pushed values, same loop, same calls), and adds an external:skip tag to one TCL test. No server behavior, reply, protocol, persistence or replication path differs between the parent and head builds, so a compared sequence or fault scenario would find no reachable difference."
+}

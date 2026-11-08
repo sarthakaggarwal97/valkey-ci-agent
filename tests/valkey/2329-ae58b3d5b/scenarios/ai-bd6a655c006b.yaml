@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 80cec0a18459..ae58b3d5bee7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-bd6a655c006b
+seed: 11081
+experiment:
+  id: proposed.standalone-failover-blocked-redirect
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

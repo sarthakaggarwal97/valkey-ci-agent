@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.cluster-failover-blocked-moved
+deployment:
+  modes: [standalone]
+metadata:
+  description: After CLUSTER FAILOVER demotes a cluster primary, a client blocked
+    on keys gets -MOVED to the new slot owner and a readonly client blocked on a read
+    stays blocked and is served by replication; the parent disconnects both with -UNBLOCKED
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: failover
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {raw: "BLPOP mylist 0\r\n", node: 0, connection: blk}
+    - {command: [READONLY], node: 0, connection: blk-ro, expect: {equals: OK}}
+    - {raw: "XREAD BLOCK 0 STREAMS mystream 0-0\r\n", node: 0, connection: blk-ro}
+    - {command: [INFO, clients], node: 0, wait_s: 10, expect: {contains: "blocked_clients:2"},
+      compare: skip}
+    - {command: [CLUSTER, FAILOVER], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 0, wait_s: 60, expect: {contains: "role:slave"},
+      compare: skip}
+    - {command: [INFO, replication], node: 1, wait_s: 60, expect: {contains: "role:master"},
+      compare: skip}
+    - {read: true, node: 0, connection: blk, expect_difference: true, expect: {contains: "MOVED"}}
+    - {read: true, node: 0, connection: blk-ro, expect_difference: true, expect: {
+        equals: []}}
+    - {command: [XADD, mystream, "1-1", f, v], node: 1, expect: {equals: "1-1"}}
+    - {command: [WAIT, 1, 5000], node: 1, expect: {min: 1}}
+    - {read: true, node: 0, connection: blk-ro, expect_difference: true, expect: {
+        contains: mystream}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [failover.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: failover}

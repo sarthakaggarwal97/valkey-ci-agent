@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.cluster-shards-history-version
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS for CLUSTER SHARDS reports the shard-id history entry
+    as since 9.1.0 on the change build, 9.0.0 on the parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, DOCS, "cluster|shards"], expect_difference: true, expect: {
+        contains: "9.1.0"}}
+    - {command: [COMMAND, DOCS, "cluster"], expect_difference: true, expect: {contains: "9.1.0"}}
+    - {command: [COMMAND, INFO, "cluster|shards"]}
+    - {command: [COMMAND, COUNT], expect: {min: 100}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

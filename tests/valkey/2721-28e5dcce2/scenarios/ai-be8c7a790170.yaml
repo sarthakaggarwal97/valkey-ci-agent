@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 19474c867a67..28e5dcce2caa.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-be8c7a790170
+seed: 2
+experiment:
+  id: proposed.cancel-slot-migration-snapshotting
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+    save_delay_us: 400000
+deployment:
+  mode: standalone
+  base_port: 7100

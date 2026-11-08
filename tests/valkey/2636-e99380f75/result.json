@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e99380f75c3f61f7a4762873202d52e24382f1c7",
+  "parent": "ae58b3d5bee7c8bc4de529da3d89dd07a29a6e0a",
+  "pr": 2636,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix atomic slot migration snapshot never proceeding with hz 1 (#2636)",
+  "date": "2025-09-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.9913,
+  "findings": [],
+  "recorded": []
+}

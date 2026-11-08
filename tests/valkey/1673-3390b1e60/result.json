@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3390b1e608f2cf39c00cf66a2e975b756c5e8b02",
+  "parent": "b3da88e94dbc88080cca808a831841f58e421ad2",
+  "pr": 1673,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Allow TCL 9.0 for tests (#1673)",
+  "date": "2025-10-08",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2653,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely to the project's own test infrastructure and CI: runtest launcher scripts now accept Tcl 9.0, 'package require Tcl 8.5' is removed from test-support TCL files, the test harness switches fconfigure from -encoding binary to -translation binary, and a Fedora-specific CI action for building tcltls against Tcl 8 is deleted. No file under src/ or any shipped tool is touched, so no server behaviour, command reply, replication, persistence, or cluster path changes. There is nothing for a fuzzer scenario against a running server to exercise."
+}

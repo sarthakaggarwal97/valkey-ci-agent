@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a9a65abc85b396e6b1b2ebf68564dabc251bc06e",
+  "parent": "f39a809711ded971fb7abfc36dd294ea6183e34d",
+  "pr": 2646,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Implement a lolwut for version 9 (#2646)",
+  "date": "2025-09-30",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 43,
+    "executed": 43,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.7479,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6dd003e88feace83e55491f32376f6927896e31e",
+  "parent": "d5bb986fd592733330ff4042c011f7c64da543ec",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Merge commit from fork",
+  "date": "2025-10-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.3373,
+  "findings": [],
+  "recorded": []
+}

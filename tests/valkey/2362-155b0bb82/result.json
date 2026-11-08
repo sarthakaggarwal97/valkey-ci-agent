@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "155b0bb82196c8fc70245823856a8e966525d55a",
+  "parent": "5bbbc6bd9a3ec44c9a47b0cbb91219370e798088",
+  "pr": 2362,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix memory leak with CLIENT LIST/KILL duplicate filters (#2362)",
+  "date": "2025-10-08",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 30,
+    "executed": 30,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.5922,
+  "findings": [],
+  "recorded": []
+}

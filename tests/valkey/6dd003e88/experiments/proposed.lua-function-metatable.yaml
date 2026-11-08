@@ -1,0 +1,29 @@
+extends: [valkey.liveness]
+id: proposed.lua-function-metatable
+deployment:
+  modes: [standalone]
+metadata:
+  description: Mutating a basic-type metatable from a FUNCTION library errors on the
+    change where the parent allowed the sandbox escape
+components:
+- use: valkey.action.commands
+  id: fn
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 2
+    timeout_s: 15
+    commands:
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nredis.register_function('f1',\
+          \ function(keys, args) getmetatable('').__index = function() return 1 end\
+          \ return 'ok' end)"], expect: {equals: mylib}}
+    - {command: [FCALL, f1, 0], expect_difference: true, expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [fn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fn}

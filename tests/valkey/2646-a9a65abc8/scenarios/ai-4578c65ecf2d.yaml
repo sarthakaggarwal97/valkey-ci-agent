@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f39a809711de..a9a65abc85b3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4578c65ecf2d
+seed: 90001
+experiment:
+  id: proposed.lolwut9-julia
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

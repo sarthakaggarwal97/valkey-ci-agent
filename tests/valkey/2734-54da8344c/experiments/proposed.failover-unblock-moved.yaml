@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.failover-unblock-moved
+deployment:
+  modes: [standalone]
+metadata:
+  description: A client blocked on a key when a cluster primary is demoted by a manual
+    failover gets exactly one MOVED reply, not two
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: unblock
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 60, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [INFO, replication], node: 0, wait_s: 60, expect: {contains: "slave0:"},
+      compare: skip}
+    - {raw: "BLPOP foo 0\r\n", node: 0, connection: blocked-list, expect: {exists: false}}
+    - {raw: "BZPOPMIN bar 0\r\n", node: 0, connection: blocked-zset, expect: {exists: false}}
+    - {command: [CLUSTER, FAILOVER], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 60, expect: {contains: "role:master"},
+      compare: skip}
+    - {command: [INFO, replication], node: 0, wait_s: 60, expect: {contains: "role:slave"},
+      compare: skip}
+    - {read: true, node: 0, connection: blocked-list, expect_difference: true, expect: {
+        equals: [{$error: "MOVED 12182 127.0.0.1:<node.1.port>"}]}}
+    - {read: true, node: 0, connection: blocked-zset, expect_difference: true, expect: {
+        equals: [{$error: "MOVED 5061 127.0.0.1:<node.1.port>"}]}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [unblock.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: unblock}

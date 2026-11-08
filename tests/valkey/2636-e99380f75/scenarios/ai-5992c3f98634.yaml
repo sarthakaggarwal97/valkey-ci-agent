@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ae58b3d5bee7..e99380f75c3f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5992c3f98634
+seed: 2636
+experiment:
+  id: proposed.slot-migration-hz1-roundtrip
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

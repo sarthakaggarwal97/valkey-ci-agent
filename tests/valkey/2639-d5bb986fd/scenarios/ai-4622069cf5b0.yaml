@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 307397904fe0..d5bb986fd592.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4622069cf5b0
+seed: 103
+experiment:
+  id: proposed.slot-migration-module-ctx-flags
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

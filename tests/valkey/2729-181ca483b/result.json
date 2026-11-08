@@ -1,0 +1,59 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "181ca483b9d8d37ad49792de162516ab09b84f35",
+  "parent": "0d500c2cc13830f3fba2e039e584f921a229089f",
+  "pr": 2729,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Bump CLUSTER SHARDS command update version to 9.1.0 (#2729)",
+  "date": "2025-10-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 0.7102,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-a6788166a669",
+      "build": "unstable",
+      "seed": 1,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a6788166a669",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a6788166a669",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e02c09722c52",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e02c09722c52",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e02c09722c52",
+      "build": "unstable",
+      "seed": 4,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

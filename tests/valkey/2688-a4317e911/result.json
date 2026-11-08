@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a4317e91159cde7ce0aea06402fc783087bdf5ca",
+  "parent": "383ffe4874d5062602a68d40cbe8a08359c1879a",
+  "pr": 2688,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Introduce SYNCSLOTS CAPA for forwards compatibility (#2688)",
+  "date": "2025-10-07",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.7109,
+  "findings": [],
+  "recorded": []
+}

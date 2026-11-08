@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.slot-migration-validation-errors
+deployment:
+  modes: [standalone]
+metadata:
+  description: Unified validateSlotMigrationCanStartOrReply error messages for SYNCSLOTS
+    ESTABLISH (manual import/migrate state, replica, ownership, missing SOURCE)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: valerr
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, SETSLOT, 5, IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+        SLOTSRANGE, 100, 100], node: 1, expect_difference: true, expect: {error: "Slots\
+          \ are being manually imported"}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 5, 5, NODE, "<node.0.id>"], node: 1,
+      expect: {error: "Slots are being manually imported"}}
+    - {command: [CLUSTER, SETSLOT, 5, STABLE], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 6, MIGRATING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.1.id>", NAME, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
+        SLOTSRANGE, 7, 7], node: 0, expect_difference: true, expect: {error: "Slots\
+          \ are being manually migrated"}}
+    - {command: [CLUSTER, SETSLOT, 6, STABLE], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, NAME, cccccccccccccccccccccccccccccccccccccccc,
+        SLOTSRANGE, 8, 8], node: 1, expect: {error: "syntax error"}}
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, dddddddddddddddddddddddddddddddddddddddd,
+        NAME, cccccccccccccccccccccccccccccccccccccccc, SLOTSRANGE, 8, 8], node: 1,
+      expect: {error: "does not know the source node"}}
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.1.id>", NAME, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee,
+        SLOTSRANGE, 10, 10], node: 0, expect: {error: "does not agree about current\
+          \ slot ownership"}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, ffffffffffffffffffffffffffffffffffffffff,
+        SLOTSRANGE, 9, 9], node: 1, expect_difference: true, expect: {error: "can\
+          \ only be used on primary nodes"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [valerr.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: valerr}

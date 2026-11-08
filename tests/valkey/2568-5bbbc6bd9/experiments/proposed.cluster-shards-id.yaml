@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.cluster-shards-id
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER SHARDS reply carries a shard id field per shard, for shards
+    with slots, empty shards, and shards with replicas, from every node's view
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shards
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 30, expect: {contains: "cluster_known_nodes:3"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 30, expect: {contains: "cluster_state:ok"},
+      compare: skip}
+    - {command: [CLUSTER, MYSHARDID], node: 0, compare: skip}
+    - {command: [CLUSTER, SHARDS], node: 0, expect_difference: true, expect: {exists: true}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 2, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 2, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [CLUSTER, SHARDS], node: 0, expect_difference: true, expect: {exists: true}}
+    - {command: [CLUSTER, SHARDS], node: 2, expect_difference: true, expect: {exists: true}}
+    - {command: [CLUSTER, SHARDS], node: 1, expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shards.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shards}

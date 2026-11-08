@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 064674945d6c..383ffe4874d5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-492bd43c1a5d
+seed: 26354
+experiment:
+  id: proposed.slot-import-aof-replay
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7300

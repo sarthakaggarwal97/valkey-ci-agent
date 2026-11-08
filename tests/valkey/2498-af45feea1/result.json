@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "af45feea12bb7ec852f2265582dd4e9250724ec1",
+  "parent": "981b8fe1bdd1a58e1a06eb80186cd890b557f98a",
+  "pr": 2498,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove the outupdated unknown key/value pairs comment in CLUSTER SYNCSLOTS ESTABLISH (#2498)",
+  "date": "2025-10-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2128,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits a code comment in clusterCommandSyncSlotsEstablish (src/cluster_migrateslots.c), removing an outdated note about skipping unknown key/value pairs. No executable code, replies, parsing, or configuration are modified, so there is no behaviour to exercise or regress."
+}
