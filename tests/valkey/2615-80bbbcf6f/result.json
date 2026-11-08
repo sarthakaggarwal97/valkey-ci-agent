@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "80bbbcf6fe321b513b95d68c15d270de4f18edf6",
+  "parent": "73d5b0ed9b2d860a895ab7c6d64b3063fd17fc86",
+  "pr": 2615,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix memory leak in deferred reply buffer (#2615)",
+  "date": "2025-09-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.5236,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix only adds a free method to the deferred reply list in initDeferredReplyBuffer(), which is created solely when a module has subscribed to keyspace notifications (moduleNotifyKeyspaceSubscribersCnt() > 0). No installed experiment loads a module, MODULE LOAD is refused in command sequences, and scenarios/experiments here may not declare module artifacts, so no runnable scenario can execute the changed line on either build. Even on the parent build the bug is a pure memory leak with byte-identical replies, data and topology, so a compared sequence would have no command that could correctly"
+}

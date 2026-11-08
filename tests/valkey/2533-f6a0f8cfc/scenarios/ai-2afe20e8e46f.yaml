@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 80bbbcf6fe32..f6a0f8cfc007.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2afe20e8e46f
+seed: 20334
+experiment:
+  id: proposed.slot-migration-cancel-while-stalled
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9b11d3d9edf6..2b7d5f77607d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7873878083aa
+seed: 106
+experiment:
+  id: proposed.asm-source-restart-aborts-import
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7500

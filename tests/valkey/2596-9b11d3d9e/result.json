@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9b11d3d9edf6b1f1f18976305c0923c5aad60297",
+  "parent": "3213f48fd694c201a1ba974bcad0ad7703b44510",
+  "pr": 2596,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Evict client only when limit is breached (#2596)",
+  "date": "2025-09-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.3467,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a single `>=`-to-`>` edit in evictClients()'s loop guard; the old and new builds differ only when the summed NORMAL+PUBSUB client memory exactly equals the eviction limit (otherwise both evict the same clients or neither does). That boundary is measure-zero and not constructible: the summed client memory is allocator-rounded and includes transient per-command buffers, there is no primitive to set maxmemory-clients to the live total, and any command used to read the total inflates that client's own buffers so the read value never matches the total present at the next evictClients("
+}

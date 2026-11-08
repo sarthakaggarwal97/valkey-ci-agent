@@ -1,0 +1,86 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b44de37b7d2a2f6f313fd58f88bd1b1bddce195a",
+  "parent": "c039b691c42810a39b08bc8223daba45a665d17f",
+  "pr": 2237,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "New module API event for tracking authentication attempts (#2237)",
+  "date": "2025-09-01",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 3,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 25,
+    "executed": 15,
+    "percent": 60,
+    "uncovered": [
+      "src/module.c:8015",
+      "src/module.c:8050",
+      "src/module.c:8095",
+      "src/module.c:8103",
+      "src/module.c:8107",
+      "src/module.c:8108",
+      "src/module.c:8112",
+      "src/module.c:8113",
+      "src/module.c:8114",
+      "src/module.c:8118"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 8.0623,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 30 (AUTH testuser nope) replies otherwise with resp 3: null, not {\"error\":\"WRONGPASS invalid username-password pair or user is disabled.\"}",
+      "scenario": "ai-6782923d2db6",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #2237",
+      "fingerprint": "8f7fe048d664ac15a959",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/106"
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 30 (AUTH testuser nope) replies otherwise with resp 3: null, not {\"error\":\"WRONGPASS invalid username-password pair or user is disabled.\"}",
+      "scenario": "ai-a14f6957d086",
+      "seed": 303,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #2237",
+      "fingerprint": "8f7fe048d664ac15a959",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/106"
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-d4d42b56765c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'modauth' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (testmoduleone.rm_register_auth_cb), 2 (AUTH foo allow), 3 (AUTH foo deny), 6 (testmoduleone.rm_register_blocking_auth_cb), 7 (AUTH foo"
+    },
+    {
+      "scenario": "ai-3b979f6854fb",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'modauth' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (testmoduleone.rm_register_auth_cb), 2 (AUTH foo allow), 3 (AUTH foo deny), 6 (testmoduleone.rm_register_blocking_auth_cb), 7 (AUTH foo"
+    },
+    {
+      "scenario": "ai-d9030cfc2498",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'modauth' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (testmoduleone.rm_register_auth_cb), 2 (AUTH foo allow), 3 (AUTH foo deny), 6 (testmoduleone.rm_register_blocking_auth_cb), 7 (AUTH foo"
+    }
+  ]
+}

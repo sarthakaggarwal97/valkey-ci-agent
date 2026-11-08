@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9b11d3d9edf6..2b7d5f77607d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b5947af5405a
+seed: 103
+experiment:
+  id: proposed.asm-module-optin-gate
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7200

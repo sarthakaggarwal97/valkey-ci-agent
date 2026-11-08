@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c039b691c42810a39b08bc8223daba45a665d17f",
+  "parent": "e19fc4d1e6d1262531ddb77fb62087d91223394d",
+  "pr": 2358,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix module context object re-usage in scripting engines (#2358)",
+  "date": "2025-09-01",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 7.7353,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

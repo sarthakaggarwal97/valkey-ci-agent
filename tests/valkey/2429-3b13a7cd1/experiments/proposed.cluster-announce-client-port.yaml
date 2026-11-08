@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.cluster-announce-client-port
+deployment:
+  modes: [standalone]
+metadata:
+  description: cluster-announce-client-(tls-)port set at runtime, propagated over
+    the cluster bus ping extension, shown in MOVED redirects and CLUSTER NODES, persisted
+    through nodes.conf and CONFIG REWRITE across restarts, cleared back to the real
+    port, and boundary-checked
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: announce
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    server_config: {cluster-ping-interval: 100, cluster-node-timeout: 3000}
+    commands:
+    - {command: [CONFIG, SET, cluster-announce-client-tls-port, 21213], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-announce-client-port, 21212], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, NODES], expect_difference: true, expect: {contains: ":21212@"}}
+    - {command: [GET, foo], node: 1, wait_s: 25, expect_difference: true, expect: {
+        error: "21212"}}
+    - {command: [CONFIG, SET, cluster-announce-client-port, 21214], node: 1, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, NODES], wait_s: 25, expect_difference: true, expect: {contains: ":21214@"}}
+    - {command: [CONFIG, REWRITE], node: 1, expect: {equals: OK}}
+    - {restart: true, node: 1, expect: {equals: OK}}
+    - {command: [GET, foo], node: 1, wait_s: 25, expect_difference: true, expect: {
+        error: "21212"}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CLUSTER, NODES], expect_difference: true, expect: {contains: ":21212@"}}
+    - {command: [CLUSTER, NODES], wait_s: 25, expect_difference: true, expect: {contains: ":21214@"}}
+    - {command: [CONFIG, SET, cluster-announce-client-port, 0], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [GET, foo], node: 1, wait_s: 25, expect: {error: "<node.0.port>"}}
+    - {command: [CONFIG, SET, cluster-announce-client-port, 65535], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, NODES], expect_difference: true, expect: {contains: ":65535@"}}
+    - {command: [CONFIG, GET, cluster-announce-client-port], expect_difference: true,
+      expect: {equals: [cluster-announce-client-port, "65535"]}}
+    - {command: [CONFIG, SET, cluster-announce-client-port, 65536], expect_difference: true,
+      expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [announce.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: announce}

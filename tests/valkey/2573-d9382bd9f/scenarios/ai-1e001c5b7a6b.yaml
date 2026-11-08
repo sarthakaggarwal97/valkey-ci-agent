@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9d10abfbded4..d9382bd9f3ce.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1e001c5b7a6b
+seed: 1101
+experiment:
+  id: proposed.hashtable-neon-findbucket
+  inputs:
+    resp: 2
+    activerehashing: 'yes'
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

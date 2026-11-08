@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a47e8fa15055..93d7ccab0377.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3d8f524dce9a
+seed: 2602
+experiment:
+  id: proposed.dual-channel-repl-output-bytes
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

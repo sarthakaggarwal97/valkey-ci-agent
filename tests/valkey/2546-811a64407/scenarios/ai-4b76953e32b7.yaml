@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 971cdb78363b..811a64407be0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4b76953e32b7
+seed: 254602
+experiment:
+  id: proposed.command-docs-undeprecate
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 80bbbcf6fe32..f6a0f8cfc007.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e19a93e7291c
+seed: 20333
+experiment:
+  id: proposed.slot-migration-bulk-complete
+  inputs:
+    resp: 2
+    stall_s: '3'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

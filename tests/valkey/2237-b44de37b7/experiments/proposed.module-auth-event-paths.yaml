@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.module-auth-event-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: AUTH driven through module auth callbacks (non-blocking grant/deny,
+    blocking grant/deny/abort, skipped, MULTI) so checkModuleAuthentication fires
+    the new authentication-attempt event with the module name; replies must stay identical
+    to the parent build and the server must stay alive
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: modauth
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [testmoduleone.rm_register_auth_cb], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, foo, on, '>pwd', '~*', '&*', '+@all'], expect: {equals: OK}}
+    - {command: [AUTH, foo, allow], expect: {equals: OK}}
+    - {command: [AUTH, foo, deny], expect: {error: "Auth denied by Misc Module"}}
+    - {command: [AUTH, foo, nomatch], expect: {error: "WRONGPASS"}}
+    - {command: [AUTH, foo, pwd], expect: {equals: OK}}
+    - {command: [testmoduleone.rm_register_blocking_auth_cb], expect: {equals: OK}}
+    - {command: [AUTH, foo, block_allow], expect: {equals: OK}}
+    - {command: [AUTH, foo, block_deny], expect: {error: "Auth denied by Misc Module"}}
+    - {command: [AUTH, foo, block_abort], expect: {error: "WRONGPASS"}}
+    - {command: [AUTH, foo, pwd], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [AUTH, foo, allow], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: true}}
+    - {command: [AUTH, nosuchuser, whatever], expect: {error: "WRONGPASS"}}
+    - {command: [AUTH, "", ""], expect: {error: "WRONGPASS"}}
+    - {command: [HELLO, '3', AUTH, foo, allow], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modauth.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modauth}

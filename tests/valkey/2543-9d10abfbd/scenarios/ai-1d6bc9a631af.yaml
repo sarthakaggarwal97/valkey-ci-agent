@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 811a64407be0..9d10abfbded4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1d6bc9a631af
+seed: 7001
+experiment:
+  id: proposed.rdb-foreign-startup-reload
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

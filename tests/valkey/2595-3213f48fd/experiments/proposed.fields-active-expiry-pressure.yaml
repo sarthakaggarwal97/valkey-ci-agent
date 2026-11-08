@@ -1,0 +1,81 @@
+extends: [valkey.base]
+id: proposed.fields-active-expiry-pressure
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Seed hashes holding tens of thousands of short-TTL volatile fields so the FIELDS
+    active expire cycle does heavy per-key work; with the new per-iteration time check
+    it must keep reclaiming fields without stalling, crashing, or losing acknowledged
+    writes.
+inputs:
+  properties:
+    hashes: {type: integer, minimum: 1, maximum: 32, default: 16}
+    fields_per_hash: {type: integer, minimum: 100, maximum: 10000, default: 3000}
+    dbs: {type: integer, minimum: 1, maximum: 16, default: 1}
+    reclaim_fields:
+      type: integer
+      minimum: 1
+      maximum: 500000
+      default: 40000
+      description: value INFO stats expired_fields on the primary must reach
+components:
+- use: valkey.action.commands
+  id: seed-volatile-fields
+  config:
+    instances: primaries
+    timeout_s: 60
+    commands:
+    - command:
+      - EVAL
+      - |
+        local hashes = tonumber(ARGV[1])
+        local fields = tonumber(ARGV[2])
+        local dbs = tonumber(ARGV[3])
+        local created = 0
+        for d = 0, dbs - 1 do
+          redis.call('SELECT', d)
+          for h = 1, hashes do
+            local key = 'volhash:' .. h
+            for i = 1, fields do
+              local f = 'f' .. i
+              redis.call('HSET', key, f, 'v')
+              local ttl = 100 + ((i * 7919 + h * 104729) % 3000)
+              redis.call('HPEXPIRE', key, ttl, 'FIELDS', 1, f)
+              created = created + 1
+            end
+          end
+        end
+        redis.call('SELECT', 0)
+        return created
+      - 0
+      - {$ref: inputs.hashes}
+      - {$ref: inputs.fields_per_hash}
+      - {$ref: inputs.dbs}
+      expect: {min: 100}
+- use: valkey.observer.info
+  id: expiry-info
+  config:
+    instances: primary
+    sections: [stats]
+    interval_s: 0.25
+    expectations:
+    - {evidence_id: proposed.fields.time-cap-reached, field: expired_time_cap_reached_count,
+      delta_min: 1}
+- use: valkey.action.poll
+  id: fields-reclaimed
+  depends_on: [seed-volatile-fields]
+  config:
+    instances: primary
+    section: stats
+    field: expired_fields
+    predicate: {min: {$ref: inputs.reclaim_fields}}
+    timeout_s: 120
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [fields-reclaimed]
+  config: {seconds: 2}
+required_events: [seed-volatile-fields.completed, fields-reclaimed.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seed-volatile-fields}
+- {evidence_id: valkey.poll.satisfied, source: fields-reclaimed}

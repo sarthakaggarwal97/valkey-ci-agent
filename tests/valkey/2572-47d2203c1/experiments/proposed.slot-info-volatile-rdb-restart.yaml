@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.slot-info-volatile-rdb-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: On a cluster-enabled server, hashes with field TTLs are saved to RDB
+    with the new 4-field slot-info aux (slot,keys,expires,keys_with_volatile_items);
+    a restart reloads it, parsing the aux and pre-sizing the keys_with_volatile_items
+    hashtable, with identical data on both builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_max_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: roundtrip
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    server_config: {hash-max-listpack-entries: {$ref: inputs.hash_max_listpack_entries}}
+    timeout_s: 30
+    commands:
+    - {command: [HSET, h1, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [HEXPIREAT, h1, 9999999999, FIELDS, 2, f1, f2], expect: {equals: [
+          1, 1]}}
+    - {command: [HSET, h2, f1, v1], expect: {equals: 1}}
+    - {command: [HEXPIREAT, h2, 9999999999, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HSET, h4, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HEXPIREAT, h4, 9999999999, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HDEL, h4, f1], expect: {equals: 1}}
+    - {command: [SET, s1, v1], expect: {equals: OK}}
+    - {command: [EXPIREAT, s1, 9999999999], expect: {equals: 1}}
+    - {command: [SET, s2, v2], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 5}}
+    - {command: [HGETALL, h1], compare: unordered-pairs, expect: {exists: true}}
+    - {command: [HEXPIRETIME, h1, FIELDS, 3, f1, f2, f3], expect: {equals: [9999999999,
+          9999999999, -1]}}
+    - {command: [HEXPIRETIME, h2, FIELDS, 1, f1], expect: {equals: [9999999999]}}
+    - {command: [HEXPIRETIME, h4, FIELDS, 1, f2], expect: {equals: [-1]}}
+    - {command: [HGET, h4, f2], expect: {equals: v2}}
+    - {command: [EXPIRETIME, s1], expect: {equals: 9999999999}}
+    - {command: [HPERSIST, h2, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HSET, h3, a, b], expect: {equals: 1}}
+    - {command: [HEXPIREAT, h3, 9999999999, FIELDS, 1, a], expect: {equals: [1]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 6}}
+    - {command: [HEXPIRETIME, h2, FIELDS, 1, f1], expect: {equals: [-1]}}
+    - {command: [HEXPIRETIME, h3, FIELDS, 1, a], expect: {equals: [9999999999]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [roundtrip.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: roundtrip}

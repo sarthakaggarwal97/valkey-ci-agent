@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9b11d3d9edf6..2b7d5f77607d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-33c55a406695
+seed: 104
+experiment:
+  id: proposed.asm-getslotmigrations-reply
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7300

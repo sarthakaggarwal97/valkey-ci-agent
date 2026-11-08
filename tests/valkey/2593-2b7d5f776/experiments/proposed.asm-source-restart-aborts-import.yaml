@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.asm-source-restart-aborts-import
+deployment:
+  modes: [standalone]
+metadata:
+  description: Restart the source node while an export is pinned in streaming state;
+    the target's import must fail, run the deferred abort cleanup (the state!=SUCCESS
+    fix and the import-abort event path), delete the imported keys, and both nodes
+    must stay alive
+components:
+- use: valkey.action.commands
+  id: asm-restart
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 15
+    commands:
+    - {command: [DEBUG, SLOTMIGRATION, PREVENT-PAUSE, 1], expect: {equals: OK}}
+    - {command: [SET, bar, v2], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 5061, 5061, NODE, <node.1.id>],
+      expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 1, wait_s: 10, expect_difference: true,
+      expect: {contains: source_node}}
+    - {restart: true, node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 0, expect: {equals: []}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 5061], node: 1, wait_s: 15, expect: {equals: 0}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [asm-restart.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: asm-restart}

@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "811a64407be0e3f8e7d7ad597612eee179e86c46",
+  "parent": "971cdb78363ba19306bb610efa9eca44543f6b70",
+  "pr": 2546,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Un-deprecate commands (#2546)",
+  "date": "2025-09-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.7612,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-91f1b1206c53",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'docs' returned ERROR: expectations both builds violate alike, so they are not about the change: 50 (ZRANGE geodest 0 -1)"
+    },
+    {
+      "scenario": "ai-4b76953e32b7",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'docs' returned ERROR: expectations both builds violate alike, so they are not about the change: 50 (ZRANGE geodest 0 -1)"
+    }
+  ],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

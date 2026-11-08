@@ -1,0 +1,127 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f6a0f8cfc0079407d9df05ec50cedac8f9c684b6",
+  "parent": "80bbbcf6fe321b513b95d68c15d270de4f18edf6",
+  "pr": 2533,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Separate RDB snapshotting from atomic slot migration (#2533)",
+  "date": "2025-09-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 18,
+  "proven": 8,
+  "hunted": 18,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 195,
+    "executed": 153,
+    "percent": 78,
+    "uncovered": [
+      "src/cluster_migrateslots.c:1282",
+      "src/cluster_migrateslots.c:1326",
+      "src/cluster_migrateslots.c:1327",
+      "src/cluster_migrateslots.c:1328",
+      "src/cluster_migrateslots.c:1362",
+      "src/cluster_migrateslots.c:1363",
+      "src/cluster_migrateslots.c:1364",
+      "src/cluster_migrateslots.c:1365",
+      "src/cluster_migrateslots.c:1366",
+      "src/cluster_migrateslots.c:1367",
+      "src/cluster_migrateslots.c:1373",
+      "src/cluster_migrateslots.c:1379",
+      "src/cluster_migrateslots.c:1387",
+      "src/rdb.c:3781",
+      "src/rdb.c:3782",
+      "src/rdb.c:3783",
+      "src/rdb.c:3784",
+      "src/rdb.c:3785",
+      "src/rdb.c:3788",
+      "src/rdb.c:3793",
+      "src/rdb.c:3794",
+      "src/replication.c:1723",
+      "src/replication.c:1824",
+      "src/replication.c:1825",
+      "src/replication.c:1826",
+      "src/replication.c:1827",
+      "src/replication.c:1832",
+      "src/replication.c:1833",
+      "src/replication.c:1841",
+      "src/replication.c:1856",
+      "src/replication.c:1857",
+      "src/replication.c:1858",
+      "src/replication.c:1859",
+      "src/replication.c:1860",
+      "src/replication.c:1861",
+      "src/replication.c:1879",
+      "src/replication.c:1880",
+      "src/replication.c:1882",
+      "src/replication.c:1883",
+      "src/replication.c:1884",
+      "src/replication.c:1887",
+      "src/server.c:827"
+    ],
+    "rounds": 2
+  },
+  "cost_usd": 22.2665,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "lost-data: node 0 came back from a restart before command 6 with DEBUG DIGEST {\"reply\":\"75a8805742dc58bf9447ffc65d03ff75fdfec10c\"}, not {\"reply\":\"0134de29e3d729ca803cb4301ab620187998faa9\"}",
+      "scenario": "ai-93180143fdd8",
+      "seed": 20332,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "e26e9a874f358e64033d",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "lost-data: node 0 came back from DEBUG RELOAD before command 12 with DEBUG DIGEST {\"reply\":\"0134de29e3d729ca803cb4301ab620187998faa9\"}, not {\"reply\":\"75a8805742dc58bf9447ffc65d03ff75fdfec10c\"}",
+      "scenario": "ai-e19a93e7291c",
+      "seed": 20333,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "9ee96b917c3f12cb6625",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: Duplicated key found in RDB file #rdb.c:3448",
+      "scenario": "ai-2afe20e8e46f",
+      "seed": 20334,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "2834af404e5a231f35c3",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in pthread_cancel",
+      "scenario": "ai-2afe20e8e46f",
+      "seed": 20334,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2533",
+      "fingerprint": "bc6f524c6189a2a2eada",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

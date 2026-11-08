@@ -1,0 +1,27 @@
+extends: [valkey.liveness]
+id: proposed.check-rdb-foreign
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-rdb on foreign and future RDB files, exit status and output
+    compared
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    ignore: ['^\d+:[A-Z] .*\n']
+    files:
+      redis12.rdb: !!binary "UkVESVMwMDEy/wAAAAAAAAAA"
+      valkey987.rdb: !!binary "VkFMS0VZOTg3/wAAAAAAAAAA"
+      redis75.rdb: !!binary "UkVESVMwMDc1/gCW/wAAAAAAAAAA"
+    runs:
+    - {tool: valkey-check-rdb, args: [redis12.rdb], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "Foreign RDB version 12 detected"}}}
+    - {tool: valkey-check-rdb, args: [valkey987.rdb], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "Future RDB version 987 detected"}}}
+    - {tool: valkey-check-rdb, args: [redis75.rdb], expect_difference: true, expect: {
+        stdout: {contains: "Unknown object type 150 in RDB file with foreign version\
+            \ 75"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

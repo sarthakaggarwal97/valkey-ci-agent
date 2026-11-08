@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "298f7dae60386df154d272a496c7e9ac7dcfbd6c",
+  "parent": "8d562d26df25cae9f354e0d447979d4b53f061e9",
+  "pr": 2632,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Adding unit tests for sha256 (#2632)",
+  "date": "2025-09-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2516,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds unit tests: a new src/unit/test_sha256.c with three SHA-256 test vectors and their registration in src/unit/test_files.h. No server, command, replication, persistence, or tool code is modified \u2014 the SHA-256 implementation itself is untouched \u2014 so no runtime behavior changed and nothing a fuzzer scenario runs against a live server could reach or regress."
+}

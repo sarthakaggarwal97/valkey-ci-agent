@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.slot-migration-rdbload-kills-child
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    VM_RdbLoad (rdbloadsave.so test.rdbload) called while a slot migration snapshot
+    child is running must kill the SLOT_MIGRATION child, empty and reload the dataset,
+    and the export job must fail cleanly.
+components:
+- use: valkey.action.commands
+  id: rdbload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: true
+    nodes: 2
+    resp: 2
+    timeout_s: 60
+    commands:
+    - {command: [DEBUG, POPULATE, 3000], expect: {equals: OK}}
+    - {command: [test.rdbsave, before.rdb], expect: {equals: OK}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, 2000], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 16383, NODE, <node.1.id>],
+      expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], wait_s: 20, expect: {contains: snapshotting},
+      compare: skip}
+    - {command: [INFO, persistence], expect_difference: true, expect: {contains: "slot_migration_fork_in_progress:1"},
+      compare: skip}
+    - {command: [test.rdbload, before.rdb], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 3000}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], wait_s: 30, expect: {contains: failed},
+      compare: skip}
+    - {command: [SET, probe, v], expect: {equals: OK}}
+    - {command: [GET, probe], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [rdbload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rdbload}

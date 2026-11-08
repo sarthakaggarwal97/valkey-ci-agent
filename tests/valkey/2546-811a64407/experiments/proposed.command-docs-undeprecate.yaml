@@ -1,0 +1,99 @@
+extends: [valkey.liveness]
+id: proposed.command-docs-undeprecate
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    COMMAND DOCS no longer reports doc_flags/deprecated_since/replaced_by for the
+    20 un-deprecated commands, while each command's own behaviour is unchanged and
+    SLAVEOF stays deprecated.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [COMMAND, DOCS, getset], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, substr], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, setnx], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, setex], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, psetex], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, hmset], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, rpoplpush], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, brpoplpush], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, georadius], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, georadius_ro], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [COMMAND, DOCS, georadiusbymember], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [COMMAND, DOCS, georadiusbymember_ro], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [COMMAND, DOCS, zrangebylex], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, zrangebyscore], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [COMMAND, DOCS, zrevrange], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, zrevrangebylex], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [COMMAND, DOCS, zrevrangebyscore], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [COMMAND, DOCS, quit], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, slowlog], expect_difference: true, expect: {exists: true}}
+    - {command: [COMMAND, DOCS, slaveof], expect: {exists: true}}
+    - {command: [COMMAND, COUNT], expect: {min: 100}}
+    - {command: [COMMAND, INFO, getset], expect: {exists: true}}
+    - {command: [COMMAND, INFO, hmset], expect: {exists: true}}
+    - {command: [COMMAND, INFO, slowlog|get], expect: {exists: true}}
+    - {command: [SETNX, k, first], expect: {equals: 1}}
+    - {command: [SETNX, k, second], expect: {equals: 0}}
+    - {command: [GETSET, k, newval], expect: {equals: first}}
+    - {command: [SUBSTR, k, 0, 2], expect: {equals: new}}
+    - {command: [SETEX, ke, 1000, v1], expect: {equals: OK}}
+    - {command: [PSETEX, kp, 1000000, v2], expect: {equals: OK}}
+    - {command: [SETEX, kbad, 0, v], expect: {error: "invalid expire"}}
+    - {command: [HMSET, h, f1, v1, f2, v2, fields, keyword], expect: {equals: OK}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [RPUSH, src, a, b, c], expect: {equals: 3}}
+    - {command: [RPOPLPUSH, src, dst], expect: {equals: c}}
+    - {command: [BRPOPLPUSH, src, dst, 0.1], expect: {equals: b}}
+    - {command: [LRANGE, dst, 0, -1], expect: {equals: [b, c]}}
+    - {command: [RPOPLPUSH, missing, dst], expect: {exists: false}}
+    - {command: [ZADD, z, 1, a, 2, b, 3, c], expect: {equals: 3}}
+    - {command: [ZRANGEBYSCORE, z, 1, 2], expect: {equals: [a, b]}}
+    - {command: [ZRANGEBYLEX, z, '-', '+'], expect: {equals: [a, b, c]}}
+    - {command: [ZREVRANGE, z, 0, -1], expect: {equals: [c, b, a]}}
+    - {command: [ZREVRANGEBYLEX, z, '+', '-'], expect: {equals: [c, b, a]}}
+    - {command: [ZREVRANGEBYSCORE, z, 3, 1], expect: {equals: [c, b, a]}}
+    - {command: [GEOADD, geo, '13.361389', '38.115556', Palermo, '15.087269', '37.502669',
+        Catania], expect: {equals: 2}}
+    - {command: [GEORADIUS, geo, '15', '37', '200', km, ASC], expect: {equals: [Catania,
+          Palermo]}}
+    - {command: [GEORADIUS_RO, geo, '15', '37', '200', km, ASC], expect: {equals: [
+          Catania, Palermo]}}
+    - {command: [GEORADIUSBYMEMBER, geo, Catania, '200', km, ASC], expect: {equals: [
+          Catania, Palermo]}}
+    - {command: [GEORADIUSBYMEMBER_RO, geo, Catania, '200', km, ASC], expect: {equals: [
+          Catania, Palermo]}}
+    - {command: [GEORADIUS, geo, '15', '37', '200', km, STORE, geodest], expect: {
+        equals: 2}}
+    - {command: [ZRANGE, geodest, 0, -1], expect: {equals: [Catania, Palermo]}}
+    - {command: [SLOWLOG, LEN], expect: {equals: 0}}
+    - {command: [SLOWLOG, RESET], expect: {equals: OK}}
+    - {command: [SLOWLOG, GET], expect: {equals: []}}
+    - {command: [SLOWLOG, HELP], expect: {exists: true}}
+    - {command: [QUIT], connection: bye, expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

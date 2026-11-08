@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c039b691c428..b44de37b7d2a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d4d42b56765c
+seed: 23701
+experiment:
+  id: proposed.module-auth-event-paths
+  inputs:
+    resp: 2
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

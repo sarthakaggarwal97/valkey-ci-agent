@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cef8822f60b6c6d34e05a92d42ed5b638dd7eb9a",
+  "parent": "3b13a7cd13c22771737fd12be4857797b5eb4d4d",
+  "pr": 2583,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "valkey-cli: Add word-jump navigation (Alt/Option/Ctrl + \u2190/\u2192) (#2583)",
+  "date": "2025-09-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.9261,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to valkey-cli's interactive line editor (linenoise word-jump navigation and extended CSI escape parsing) plus a fix to the linenoise example program, which is not compiled into any shipped binary. The new code runs only inside linenoiseEdit, which is reached only when stdin is a TTY in raw mode; valkey.action.tools feeds valkey-cli through a pipe, so linenoise takes the linenoiseNoTTY path and the changed code never executes on either build \u2014 escape bytes on a pipe are treated as literal input, unchanged by this diff. No server command, reply, replication, or persistence"
+}

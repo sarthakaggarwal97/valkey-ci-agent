@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.asm-module-optin-gate
+deployment:
+  modes: [standalone]
+metadata:
+  description: A module that did not opt in blocks CLUSTER MIGRATESLOTS on the source
+    and CLUSTER SYNCSLOTS ESTABLISH on the target with an error and creates no job;
+    the parent build accepts both. Both servers load the parent commit's hooks.so,
+    which does not set VALKEYMODULE_OPTIONS_HANDLE_ATOMIC_SLOT_MIGRATION.
+components:
+- use: valkey.action.commands
+  id: gate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module_parent.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: true
+    nodes: 2
+    timeout_s: 15
+    commands:
+    - {command: [SET, foo, v1], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 12182, 12182, NODE, <node.1.id>],
+      expect_difference: true, expect: {error: "does not support atomic slot migrations"}}
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, <node.0.id>, NAME, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+        SLOTSRANGE, 16383, 16383], node: 1, connection: job, expect_difference: true,
+      expect: {error: "does not support atomic slot migrations"}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 0, expect_difference: true, expect: {
+        equals: []}}
+    - {command: [GET, foo], node: 0, expect: {equals: v1}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [gate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: gate}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "971cdb78363ba19306bb610efa9eca44543f6b70",
+  "parent": "47d2203c1bba39dbd5de9da1ba1c7acb4b7316e0",
+  "pr": 2571,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Don't use AVX2 instructions if the CPU don't support it (#2571)",
+  "date": "2025-09-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7419,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix adds a runtime __builtin_cpu_supports(\"avx2\") check before dispatching to popcountAVX2 in serverPopcount. It changes behaviour only on x86-64 CPUs that lack AVX2, where the parent build would execute illegal instructions and die with SIGILL on BITCOUNT of a 32+ byte string. On the AVX2-capable CPUs the fuzzer runs on, both builds take the identical popcountAVX2 path, and the AVX2 and scalar paths return identical counts anyway, so no command reply, crash, or data outcome can differ between the two builds. The CPU-feature condition cannot be controlled by any config, command, fault, or "
+}

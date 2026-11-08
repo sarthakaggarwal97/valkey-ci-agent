@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.slot-migration-cancel
+deployment:
+  modes: [standalone]
+metadata:
+  description: Cancel a slot migration mid-snapshot (killSlotMigrationChild), FLUSHALL
+    during a second snapshot (the new kill in flushAllDataAndResetRDB), then a third
+    migration must still succeed on clean pipe state
+components:
+- use: valkey.action.commands
+  id: cancel
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: 2
+    timeout_s: 20
+    commands:
+    - {command: [SET, foo, v1], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 20000, "k{foo}"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, 200], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 12182, 12182, NODE, "<node.1.id>"],
+      expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], wait_s: 15, expect: {contains: snapshotting},
+      compare: skip}
+    - {command: [CLUSTER, CANCELSLOTMIGRATIONS], expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], wait_s: 15, expect: {contains: cancelled},
+      compare: skip}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 1, wait_s: 20, expect: {contains: failed},
+      compare: skip}
+    - {command: [DEBUG, SLEEP, 1], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 12182, 12182, NODE, "<node.1.id>"],
+      expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], wait_s: 20, expect: {contains: snapshotting},
+      compare: skip}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], wait_s: 30, expect: {contains: failed},
+      compare: skip}
+    - {command: [CONFIG, SET, rdb-key-save-delay, 0], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 1], expect: {equals: OK}}
+    - {command: [SET, foo, v2], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 12182, 12182, NODE, "<node.1.id>"],
+      expect: {equals: OK}}
+    - {command: [GET, foo], node: 1, wait_s: 30, expect: {equals: v2}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], expect_difference: true, expect: {contains: cow_size}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cancel.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cancel}

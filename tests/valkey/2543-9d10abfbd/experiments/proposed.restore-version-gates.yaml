@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.restore-version-gates
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE version/type gates - strict rejects foreign/future/new-type
+    payloads, relaxed accepts old foreign data and refuses foreign new types, compared
+    to parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: restore
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, "1"], expect: {equals: OK}}
+    - {command: [RESTORE, kfore, "0", !!binary "AMgAAAAAAAAAAAA="], expect: {error: "DUMP\
+          \ payload version or checksum are wrong"}}
+    - {command: [RESTORE, kfut, "0", !!binary "AGQAAAAAAAAAAAA="], expect: {error: "DUMP\
+          \ payload version or checksum are wrong"}}
+    - {command: [RESTORE, kbad, "0", !!binary "9FAAAAAAAAAAAAA="], expect: {error: "Bad\
+          \ data format"}}
+    - {command: [CONFIG, SET, rdb-version-check, relaxed], expect: {equals: OK}}
+    - {command: [RESTORE, kftype, "0", !!binary "FgwAAAAAAAAAAAA="], expect_difference: true,
+      expect: {error: "Unsupported foreign data type: 22"}}
+    - {command: [RESTORE, foo, "0", !!binary "AANiYXIMAAAAAAAAAAAA"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [GET, foo], expect_difference: true, expect: {equals: bar}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [restore.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore}

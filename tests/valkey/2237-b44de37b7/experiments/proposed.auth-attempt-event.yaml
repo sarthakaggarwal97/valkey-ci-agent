@@ -1,0 +1,97 @@
+extends: [valkey.liveness]
+id: proposed.auth-attempt-event
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The new VALKEYMODULE_EVENT_AUTHENTICATION_ATTEMPT fires exactly once per AUTH
+    / HELLO AUTH attempt, granted or denied, with the right username and result, and
+    not at all when AUTH returns early without authenticating; observed through tests/modules/hooks.so,
+    whose build at the change subscribes to the event and whose build at the parent
+    does not, so every event-log read is marked.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: auth
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 20
+    commands:
+    - {command: [ACL, SETUSER, testuser, on, ">testpass", "~*", "+@all"], expect: {
+        equals: OK}}
+    - {command: [hooks.event_count, auth-attempt], expect: {equals: 0}}
+    - {command: [AUTH, testuser, testpass], expect: {equals: OK}}
+    - {command: [hooks.event_last, auth-attempt], expect_difference: true, expect: {
+        equals: testuser}}
+    - {command: [hooks.event_last, auth-attempt-success], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [hooks.event_count, auth-attempt-module], expect: {equals: 0}}
+    - {command: [AUTH, testuser, wrongpass], expect: {error: WRONGPASS}}
+    - {command: [hooks.event_last, auth-attempt-success], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [AUTH, nosuchuser, whatever], expect: {error: WRONGPASS}}
+    - {command: [hooks.event_last, auth-attempt], expect_difference: true, expect: {
+        equals: nosuchuser}}
+    - {command: [AUTH, "", x], expect: {error: WRONGPASS}}
+    - {command: [hooks.event_last, auth-attempt], expect_difference: true, expect: {
+        equals: ""}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [AUTH, testuser, wrongpass], expect: {equals: QUEUED}}
+    - {command: [EXEC]}
+    - {command: [hooks.event_count, auth-attempt], expect_difference: true, expect: {
+        equals: 5}}
+    - {command: [CONFIG, SET, requirepass, bosspass], expect: {equals: OK}}
+    - {command: [AUTH, bosspass], expect: {equals: OK}}
+    - {command: [hooks.event_last, auth-attempt], expect_difference: true, expect: {
+        equals: default}}
+    - {command: [AUTH, wrongboss], expect: {error: WRONGPASS}}
+    - {command: [hooks.event_last, auth-attempt-success], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [ACL, SETUSER, hellouser, on, ">hpass", "~*", "+@all"], expect: {
+        equals: OK}}
+    - {command: [HELLO, 3, AUTH, hellouser, hpass], connection: hello, compare: skip}
+    - {command: [hooks.event_last, auth-attempt], expect_difference: true, expect: {
+        equals: hellouser}}
+    - {command: [hooks.event_last, auth-attempt-success], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [HELLO, 3, AUTH, hellouser, badpass], connection: hello2, expect: {
+        error: WRONGPASS}}
+    - {command: [hooks.event_last, auth-attempt-success], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [PING], connection: c2, expect: {error: NOAUTH}}
+    - {command: [AUTH, badagain], connection: c2, expect: {error: WRONGPASS}}
+    - {command: [hooks.event_count, auth-attempt], expect_difference: true, expect: {
+        equals: 10}}
+    - {command: [AUTH, testuser, nope], expect: {error: WRONGPASS}}
+    - {command: [AUTH, testuser, nope], expect: {error: WRONGPASS}}
+    - {command: [AUTH, testuser, nope], expect: {error: WRONGPASS}}
+    - {command: [AUTH, testuser, nope], expect: {error: WRONGPASS}}
+    - {command: [AUTH, testuser, nope], expect: {error: WRONGPASS}}
+    - {command: [hooks.event_count, auth-attempt], expect_difference: true, expect: {
+        equals: 15}}
+    - {command: [CONFIG, SET, requirepass, ""], expect: {equals: OK}}
+    - {command: [AUTH, mustfailearly], expect: {error: "without any password"}}
+    - {command: [hooks.event_count, auth-attempt], expect_difference: true, expect: {
+        equals: 15}}
+    - {command: [AUTH, default, anything], expect: {equals: OK}}
+    - {command: [hooks.event_last, auth-attempt], expect_difference: true, expect: {
+        equals: default}}
+    - {command: [hooks.event_last, auth-attempt-success], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [hooks.event_count, auth-attempt], expect_difference: true, expect: {
+        equals: 16}}
+    - {command: [hooks.event_count, auth-attempt-module], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [auth.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: auth}

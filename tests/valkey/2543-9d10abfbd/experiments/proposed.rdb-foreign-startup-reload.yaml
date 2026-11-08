@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.rdb-foreign-startup-reload
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Server reload of a foreign-version (12) RDB file under rdb-version-check
+    relaxed; the change accepts and loads it, the parent rejects the version
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: foreign
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    server_config: {rdb-version-check: relaxed, save: ""}
+    timeout_s: 20
+    files:
+      foreign12.rdb: !!binary 'UkVESVMwMDEy/gAAA2ZvbwNiYXL/AAAAAAAAAAA='
+    commands:
+    - {command: [SET, marker, present], expect: {equals: OK}}
+    - {command: [CONFIG, SET, dbfilename, foreign12.rdb], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, foo], wait_s: 20, expect_difference: true, expect: {equals: bar}}
+    - {command: [GET, marker], expect_difference: true, expect: {equals: null}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: foreign}

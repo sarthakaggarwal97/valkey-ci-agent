@@ -1,0 +1,84 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "eebed884294c31c6a9040e5da4fd7f2830e2bf31",
+  "parent": "b44de37b7d2a2f6f313fd58f88bd1b1bddce195a",
+  "pr": 2215,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove deny_blocking check in moduleBlockClient, cleanup code and doc (#2215)",
+  "date": "2025-09-02",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.6729,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in VM_BlockClientSetPrivateData",
+      "scenario": "ai-e498e4f7642f",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2215",
+      "fingerprint": "bf8bffc66aad52529ab3",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in VM_BlockClientSetPrivateData",
+      "scenario": "ai-fbb32cca1a10",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2215",
+      "fingerprint": "bf8bffc66aad52529ab3",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in VM_BlockClientSetPrivateData",
+      "scenario": "ai-c233950272fe",
+      "seed": 3,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2215",
+      "fingerprint": "bf8bffc66aad52529ab3",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in VM_BlockClientSetPrivateData",
+      "scenario": "ai-08b892ac006d",
+      "seed": 4,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2215",
+      "fingerprint": "bf8bffc66aad52529ab3",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

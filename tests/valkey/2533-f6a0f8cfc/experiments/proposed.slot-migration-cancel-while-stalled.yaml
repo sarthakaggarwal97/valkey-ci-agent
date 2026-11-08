@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.slot-migration-cancel-while-stalled
+deployment:
+  modes: [standalone]
+metadata:
+  description: Cancel an atomic slot migration while the target event loop is stalled
+    mid-snapshot, so the source kills the dedicated slot-migration child while a partial
+    write and the pipe buffer are pending; both builds must clean up without crashing
+    or corrupting state.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cancel
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [DEBUG, POPULATE, "50000", "key:", "2048"], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, "0", "16383", NODE, "<node.1.id>"],
+      expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], wait_s: 30, compare: skip, expect: {
+        contains: snapshotting}}
+    - {command: [DEBUG, SLEEP, "4"], node: 1, connection: stall, expect: {equals: OK}}
+    - {command: [CLUSTER, CANCELSLOTMIGRATIONS], expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], wait_s: 30, compare: skip, expect: {
+        contains: cancelled}}
+    - {command: [INFO, persistence], wait_s: 10, expect_difference: true, expect: {
+        contains: "slot_migration_fork_in_progress:0"}}
+    - {command: [SET, "{foo}:after", survived], expect: {equals: OK}}
+    - {command: [GET, "{foo}:after"], expect: {equals: survived}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [CONFIG, SET, cluster-slot-migration-log-max-len, "0"], expect: {
+        equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], wait_s: 20, expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cancel.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cancel}

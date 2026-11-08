@@ -1,0 +1,64 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3b13a7cd13c22771737fd12be4857797b5eb4d4d",
+  "parent": "5a9ee5b944c6e7dac813e5f0eef6edf51d105317",
+  "pr": 2429,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add cluster-announce-client-(port|tls-port) configs (#2429)",
+  "date": "2025-09-08",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 82,
+    "executed": 75,
+    "percent": 91,
+    "uncovered": [
+      "src/cluster_legacy.c:156",
+      "src/cluster_legacy.c:158",
+      "src/cluster_legacy.c:527",
+      "src/cluster_legacy.c:546",
+      "src/cluster_legacy.c:6860",
+      "src/cluster_legacy.c:6866",
+      "src/module.c:9295"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 5.1908,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 2 (CLUSTER NODES) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":\"<node.0.id> 127.0.0.1:21212@<node.0.cluster-port> myself,master",
+      "scenario": "ai-828d54e529a9",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #2429",
+      "fingerprint": "7fbc8cc8be14e831f647",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/107"
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 2 (CLUSTER NODES) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":\"<node.1.id> 127.0.0.1:<node.1.port>@<node.1.cluster-port> maste",
+      "scenario": "ai-828d54e529a9",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "bf1bc1d2126fd34c6952",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

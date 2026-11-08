@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5ccedafe3ff3..47d2203c1bba.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3aa1cea9c845
+seed: 303
+experiment:
+  id: proposed.slot-info-volatile-resync
+  inputs: {}
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    appendonly: 'no'
+    repl-diskless-sync: 'no'
+    repl-diskless-load: disabled

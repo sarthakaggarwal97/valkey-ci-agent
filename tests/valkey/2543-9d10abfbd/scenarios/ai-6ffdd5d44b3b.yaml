@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 811a64407be0..9d10abfbded4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6ffdd5d44b3b
+seed: 7201
+experiment:
+  id: proposed.restore-version-gates
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7200
+  replicas_per_primary: 0

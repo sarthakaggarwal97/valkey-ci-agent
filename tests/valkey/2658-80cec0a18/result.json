@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "80cec0a18459af92cf0f613e5bbe4a52892ce15d",
+  "parent": "6c1bb73a57a04bd40ef6091ecaf19473601c57f4",
+  "pr": 2658,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Minor fix for dual rdb channel connection conn error log (#2658)",
+  "date": "2025-09-28",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2482,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only corrects which connection's last-error string is interpolated into a warning log message when the dual-channel RDB connection fails to connect (connGetLastError(server.repl_rdb_transfer_s) instead of server.repl_transfer_s). The surrounding error-handling control flow (connClose, resetting repl_rdb_transfer_s, syncWithPrimaryHandleError) is unchanged, so there is no observable behaviour difference in replies, replication, failover, persistence, or data integrity \u2014 only log text, which the fuzzer's oracles do not compare. No scenario is needed."
+}

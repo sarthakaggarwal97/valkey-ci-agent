@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-08T22:17+00:00.
+Updated 2026-11-08T22:41+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 997 | 1510 | #2658 (2025-09-28) | 212 | 142.4 |
+| valkey-io/valkey | 1027 | 1480 | #2566 (2025-08-30) | 242 | 146.7 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
 | valkey-io/valkey-search | 655 | 14 | f8106e72e984 (2024-11-27) | 150 | 93.6 |
@@ -13,28 +13,28 @@ Updated 2026-11-08T22:17+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-08T19:07:20+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42499012726): 20 merge(s) tested, 11 without a code change.
+[2026-11-08T22:41:07+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42513425064): 20 merge(s) tested, 10 without a code change.
 
-- [valkey-io/valkey#2498](https://github.com/valkey-io/valkey/pull/2498) ([tests](tests/valkey/2498-af45feea1/)): Remove the outupdated unknown key/value pairs comment in CLUSTER SYNCSLOTS ESTABLISH (#2498): declined: The change only edits a code comment in clusterCommandSyncSlotsEstablish (src/cluster_migrateslots.c), removing an outdated note about skipping unknown key/value pairs. No executable code, replies, parsing, or configuration are modified, so there is no behaviour to exercise or regress.
-- [valkey-io/valkey#2734](https://github.com/valkey-io/valkey/pull/2734) ([tests](tests/valkey/2734-54da8344c/)): Fix double MOVED reply on unblock at failover (#2734): 2 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2721](https://github.com/valkey-io/valkey/pull/2721) ([tests](tests/valkey/2721-28e5dcce2/)): Fix crash that occurs sometimes when aborting a slot migration while child snapshot is active (#2721): 3 of 7 test(s) reached the change, coverage 80%
-- [valkey-io/valkey#2729](https://github.com/valkey-io/valkey/pull/2729) ([tests](tests/valkey/2729-181ca483b/)): Bump CLUSTER SHARDS command update version to 9.1.0 (#2729): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#747](https://github.com/valkey-io/valkey/pull/747) ([tests](tests/valkey/747-0d500c2cc/)): Update the misleading zdiff() comment on empty first key handling. (#747): declined: The change adds only a code comment above zdiff() in src/t_zset.c explaining the existing empty-first-key no-op behaviour; no executable code, reply, config, or protocol behaviour changes, so there is nothing a scenario could exercise or compare.
-- [valkey-io/valkey#2716](https://github.com/valkey-io/valkey/pull/2716) ([tests](tests/valkey/2716-8182f4a0b/)): HSETEX with FXX should not create an object if it does not exist (#2716): 4 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2710](https://github.com/valkey-io/valkey/pull/2710) ([tests](tests/valkey/2710-f7c95277d/)): Add invalid RDB signature to log statement (#2710): declined: The change only appends the first 9 bytes of the rejected RDB header to an existing LL_WARNING log line in rdbLoadRioWithLoadingCtx (src/rdb.c:3111). The buffer is NUL-terminated at buf[9] and the format is bounded with %.9s, so there is no memory-safety risk; the function still returns C_
-- [valkey-io/valkey#2362](https://github.com/valkey-io/valkey/pull/2362) ([tests](tests/valkey/2362-155b0bb82/)): Fix memory leak with CLIENT LIST/KILL duplicate filters (#2362): 0 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2568](https://github.com/valkey-io/valkey/pull/2568) ([tests](tests/valkey/2568-5bbbc6bd9/)): Add shard id field to CLUSTER SHARDS response (#2568): 2 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1673](https://github.com/valkey-io/valkey/pull/1673) ([tests](tests/valkey/1673-3390b1e60/)): Allow TCL 9.0 for tests (#1673): declined: The change is purely to the project's own test infrastructure and CI: runtest launcher scripts now accept Tcl 9.0, 'package require Tcl 8.5' is removed from test-support TCL files, the test harness switches fconfigure from -encoding binary to -translation binary, and a Fedora-specific CI a
-- [valkey-io/valkey#2688](https://github.com/valkey-io/valkey/pull/2688) ([tests](tests/valkey/2688-a4317e911/)): Introduce SYNCSLOTS CAPA for forwards compatibility (#2688): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2635](https://github.com/valkey-io/valkey/pull/2635) ([tests](tests/valkey/2635-383ffe487/)): Prevent exposure of importing keys on replicas during atomic slot migration (#2635): 9 of 11 test(s) reached the change, coverage 81%
-- [valkey-io/valkey#2679](https://github.com/valkey-io/valkey/pull/2679) ([tests](tests/valkey/2679-064674945/)): Fix format issues with CVE fix (#2679): declined: The change is purely cosmetic: it reformats whitespace and switch-case indentation in luaSetTableProtectionForBasicTypes in src/lua/script_lua.c with byte-for-byte identical semantics (same pushed values, same loop, same calls), and adds an external:skip tag to one TCL test. No server beha
-- [valkey-io/valkey@6dd003e88fea](https://github.com/valkey-io/valkey/commit/6dd003e88feace83e55491f32376f6927896e31e) ([tests](tests/valkey/6dd003e88/)): Merge commit from fork: 3 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2639](https://github.com/valkey-io/valkey/pull/2639) ([tests](tests/valkey/2639-d5bb986fd/)): Add slot migration client flags and module context flags (#2639): 6 of 6 test(s) reached the change, coverage 84%; crash, introduced and since fixed (recorded)
-- [valkey-io/valkey#2656](https://github.com/valkey-io/valkey/pull/2656) ([tests](tests/valkey/2656-307397904/)): Defrag if slab 1/8 full to fix defrag didn't stop issue (#2656): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2646](https://github.com/valkey-io/valkey/pull/2646) ([tests](tests/valkey/2646-a9a65abc8/)): Implement a lolwut for version 9 (#2646): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2661](https://github.com/valkey-io/valkey/pull/2661) ([tests](tests/valkey/2661-f39a80971/)): Fix module key memory usage accounting (#2661): declined: no proposed test validated
-- [valkey-io/valkey#2636](https://github.com/valkey-io/valkey/pull/2636) ([tests](tests/valkey/2636-e99380f75/)): Fix atomic slot migration snapshot never proceeding with hz 1 (#2636): 3 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2329](https://github.com/valkey-io/valkey/pull/2329) ([tests](tests/valkey/2329-ae58b3d5b/)): Redirect blocked clients after failover (#2329): 6 of 8 test(s) reached the change, coverage 89%
+- [valkey-io/valkey#2658](https://github.com/valkey-io/valkey/pull/2658) ([tests](tests/valkey/2658-80cec0a18/)): Minor fix for dual rdb channel connection conn error log (#2658): declined: The change only corrects which connection's last-error string is interpolated into a warning log message when the dual-channel RDB connection fails to connect (connGetLastError(server.repl_rdb_transfer_s) instead of server.repl_transfer_s). The surrounding error-handling control flow (conn
+- [valkey-io/valkey#2631](https://github.com/valkey-io/valkey/pull/2631) ([tests](tests/valkey/2631-d21d52985/)): Optimize skiplist random level generation logic (#2631): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2632](https://github.com/valkey-io/valkey/pull/2632) ([tests](tests/valkey/2632-298f7dae6/)): Adding unit tests for sha256 (#2632): declined: The change only adds unit tests: a new src/unit/test_sha256.c with three SHA-256 test vectors and their registration in src/unit/test_files.h. No server, command, replication, persistence, or tool code is modified — the SHA-256 implementation itself is untouched — so no runtime behavior ch
+- [valkey-io/valkey#2630](https://github.com/valkey-io/valkey/pull/2630) ([tests](tests/valkey/2630-8d562d26d/)): Fix closing slot migration pipe read (#2630): 0 of 3 test(s) reached the change, coverage 50%
+- [valkey-io/valkey#2533](https://github.com/valkey-io/valkey/pull/2533) ([tests](tests/valkey/2533-f6a0f8cfc/)): Separate RDB snapshotting from atomic slot migration (#2533): 8 of 18 test(s) reached the change, coverage 78%; check, not reproduced (recorded); check, not reproduced (recorded); crash, introduced and since fixed (recorded); crash, fixed by #2533 (recorded)
+- [valkey-io/valkey#2615](https://github.com/valkey-io/valkey/pull/2615) ([tests](tests/valkey/2615-80bbbcf6f/)): Fix memory leak in deferred reply buffer (#2615): declined: The fix only adds a free method to the deferred reply list in initDeferredReplyBuffer(), which is created solely when a module has subscribed to keyspace notifications (moduleNotifyKeyspaceSubscribersCnt() > 0). No installed experiment loads a module, MODULE LOAD is refused in command sequ
+- [valkey-io/valkey#2602](https://github.com/valkey-io/valkey/pull/2602) ([tests](tests/valkey/2602-93d7ccab0/)): Fix accounting for dual channel RDB bytes in replication stats (#2602): 2 of 5 test(s) reached the change, coverage 92%
+- [valkey-io/valkey#2593](https://github.com/valkey-io/valkey/pull/2593) ([tests](tests/valkey/2593-2b7d5f776/)): Make modules opt-in to atomic slot migration and add server events (#2593): 6 of 6 test(s) reached the change, coverage 94%; [crash, predates #2593](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87)
+- [valkey-io/valkey#2596](https://github.com/valkey-io/valkey/pull/2596) ([tests](tests/valkey/2596-9b11d3d9e/)): Evict client only when limit is breached (#2596): declined: The change is a single `>=`-to-`>` edit in evictClients()'s loop guard; the old and new builds differ only when the summed NORMAL+PUBSUB client memory exactly equals the eviction limit (otherwise both evict the same clients or neither does). That boundary is measure-zero and not constructi
+- [valkey-io/valkey#2595](https://github.com/valkey-io/valkey/pull/2595) ([tests](tests/valkey/2595-3213f48fd/)): Increase frequency of time check during fields active expiration (#2595): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2583](https://github.com/valkey-io/valkey/pull/2583) ([tests](tests/valkey/2583-cef8822f6/)): valkey-cli: Add word-jump navigation (Alt/Option/Ctrl + ←/→) (#2583): declined: The change is confined to valkey-cli's interactive line editor (linenoise word-jump navigation and extended CSI escape parsing) plus a fix to the linenoise example program, which is not compiled into any shipped binary. The new code runs only inside linenoiseEdit, which is reached only whe
+- [valkey-io/valkey#2429](https://github.com/valkey-io/valkey/pull/2429) ([tests](tests/valkey/2429-3b13a7cd1/)): Add cluster-announce-client-(port|tls-port) configs (#2429): 2 of 3 test(s) reached the change, coverage 91%; [check, appeared after #2429](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/107); check, introduced and since fixed (recorded)
+- [valkey-io/valkey#2573](https://github.com/valkey-io/valkey/pull/2573) ([tests](tests/valkey/2573-d9382bd9f/)): ARM Neon SIMD optimization for hashtable findBucket() (#2573): 0 of 9 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2543](https://github.com/valkey-io/valkey/pull/2543) ([tests](tests/valkey/2543-9d10abfbd/)): Relaxed RDB check for foreign RDB formats (#2543): 6 of 8 test(s) reached the change, coverage 67%
+- [valkey-io/valkey#2546](https://github.com/valkey-io/valkey/pull/2546) ([tests](tests/valkey/2546-811a64407/)): Un-deprecate commands (#2546): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#2571](https://github.com/valkey-io/valkey/pull/2571) ([tests](tests/valkey/2571-971cdb783/)): Don't use AVX2 instructions if the CPU don't support it (#2571): declined: The fix adds a runtime __builtin_cpu_supports("avx2") check before dispatching to popcountAVX2 in serverPopcount. It changes behaviour only on x86-64 CPUs that lack AVX2, where the parent build would execute illegal instructions and die with SIGILL on BITCOUNT of a 32+ byte string. On the 
+- [valkey-io/valkey#2572](https://github.com/valkey-io/valkey/pull/2572) ([tests](tests/valkey/2572-47d2203c1/)): Store number of keys with volatile items per slot in RDB aux field and pre-size hashtables on load (#2572): 0 of 5 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2215](https://github.com/valkey-io/valkey/pull/2215) ([tests](tests/valkey/2215-eebed8842/)): Remove deny_blocking check in moduleBlockClient, cleanup code and doc (#2215): 4 of 4 test(s) reached the change, coverage 100%; crash, fixed by #2215 (recorded)
+- [valkey-io/valkey#2237](https://github.com/valkey-io/valkey/pull/2237) ([tests](tests/valkey/2237-b44de37b7/)): New module API event for tracking authentication attempts (#2237): 3 of 6 test(s) reached the change, coverage 60%; [check, introduced by #2237](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/106)
+- [valkey-io/valkey#2358](https://github.com/valkey-io/valkey/pull/2358) ([tests](tests/valkey/2358-c039b691c/)): Fix module context object re-usage in scripting engines (#2358): declined: no proposed test validated
 
 ### valkey-io/valkey-bloom
 
@@ -67,17 +67,19 @@ Updated 2026-11-08T22:17+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 610 of 887 tested (69%)
-- Changed-line coverage: median 100% of 454 merge(s) measured, 36 under 50%
-- Recall: 167 parents flagged of 247 fix merges
-- Claude: $1207.57 in the last 24 hours, $6431.22 in the last 7 days, $6431.22 in all
-- Issues filed: 56
+- Merges whose tests reached the change: 618 of 900 tested (69%)
+- Changed-line coverage: median 100% of 466 merge(s) measured, 36 under 50%
+- Recall: 168 parents flagged of 249 fix merges
+- Claude: $1333.87 in the last 24 hours, $6557.52 in the last 7 days, $6557.52 in all
+- Issues filed: 58
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/102
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/103
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/104
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/105
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/106
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/107
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "47d2203c1bba39dbd5de9da1ba1c7acb4b7316e0",
+  "parent": "5ccedafe3ff3895f73ef69084e9cdf042750d0f8",
+  "pr": 2572,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Store number of keys with volatile items per slot in RDB aux field and pre-size hashtables on load (#2572)",
+  "date": "2025-09-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.5819,
+  "findings": [],
+  "recorded": []
+}

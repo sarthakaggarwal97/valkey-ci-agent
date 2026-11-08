@@ -1,0 +1,46 @@
+extends: [valkey.base]
+id: proposed.slot-info-volatile-resync
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Seed a cluster with hashes holding field TTLs, then SIGKILL a replica
+    under writes and restart it; its startup RDB load and the full resync from the
+    primary both parse the new slot-info aux with the keys_with_volatile_items count
+    and pre-size the hashtables, with no acknowledged write lost
+components:
+- use: valkey.action.commands
+  id: seed-volatile
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [HSET, vh1, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [HEXPIREAT, vh1, 9999999999, FIELDS, 2, f1, f2], expect: {equals: [
+          1, 1]}}
+    - {command: [HSET, vh2, f1, v1], expect: {equals: 1}}
+    - {command: [HEXPIREAT, vh2, 9999999999, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HSET, vh3, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HEXPIREAT, vh3, 9999999999, FIELDS, 2, f1, f2], expect: {equals: [
+          1, 1]}}
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: SIGKILL
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, seed-volatile, kill-replica]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 5}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed, kill-replica.recovered]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}
+- {evidence_id: valkey.command.sequence, source: seed-volatile}

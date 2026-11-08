@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 78060cb675e7..8d562d26df25.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-de03a4ee11c1
+seed: 3
+experiment:
+  id: proposed.slot-migration-pipe-lifecycle
+  inputs:
+    resp: 2
+    appendonly: 'yes'
+deployment:
+  mode: standalone
+  base_port: 7200

@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.zset-skiplist-equivalence
+deployment:
+  modes: [standalone]
+metadata:
+  description: Mass skiplist inserts, rank/span-sensitive reads, range deletions and
+    a persistence reload compared across the new and old zslRandomLevel, with every
+    zset forced to skiplist encoding
+inputs:
+  properties:
+    appendonly:
+      type: string
+      enum: ["no", "yes"]
+      default: "no"
+      description: "yes makes the restart reload the zsets by replaying the AOF instead\
+        \ of loading the SAVEd RDB"
+components:
+- use: valkey.action.commands
+  id: zsl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      zset-max-listpack-entries: 0
+      appendonly: {$ref: inputs.appendonly}
+    timeout_s: 120
+    commands:
+    - {command: [EVAL, "local n=tonumber(ARGV[1]) local k=KEYS[1] for i=1,n do redis.call('ZADD',k,i,'m'..i)\
+          \ end return redis.call('ZCARD',k)", 1, z, 100000], expect: {equals: 100000}}
+    - {command: [EVAL, "local bad=0 local k=KEYS[1] local a=tonumber(ARGV[1]) local\
+          \ b=tonumber(ARGV[2]) for i=a,b do if redis.call('ZRANK',k,'m'..i)~=(i-a)\
+          \ then bad=bad+1 end end return bad", 1, z, 1, 100000], expect: {equals: 0}}
+    - {command: [ZCARD, z], expect: {equals: 100000}}
+    - {command: [ZRANGE, z, 0, 4], expect: {equals: [m1, m2, m3, m4, m5]}}
+    - {command: [ZRANGE, z, -3, -1], expect: {equals: [m99998, m99999, m100000]}}
+    - {command: [ZRANGEBYSCORE, z, 50000, 50004], expect: {equals: [m50000, m50001,
+          m50002, m50003, m50004]}}
+    - {command: [ZRANK, z, m77777], expect: {equals: 77776}}
+    - {command: [ZCOUNT, z, 1, 1000], expect: {equals: 1000}}
+    - {command: [ZSCORE, z, m12345], expect: {equals: "12345"}}
+    - {command: [ZUNIONSTORE, dst, 1, z], expect: {equals: 100000}}
+    - {command: [EVAL, "local bad=0 local k=KEYS[1] local a=tonumber(ARGV[1]) local\
+          \ b=tonumber(ARGV[2]) for i=a,b do if redis.call('ZRANK',k,'m'..i)~=(i-a)\
+          \ then bad=bad+1 end end return bad", 1, dst, 1, 100000], expect: {equals: 0}}
+    - {command: [ZREMRANGEBYRANK, z, 0, 49999], expect: {equals: 50000}}
+    - {command: [ZREMRANGEBYSCORE, z, 90000, "+inf"], expect: {equals: 10001}}
+    - {command: [ZPOPMIN, z, 3], expect: {equals: [m50001, "50001", m50002, "50002",
+          m50003, "50003"]}}
+    - {command: [ZCARD, z], expect: {equals: 39996}}
+    - {command: [EVAL, "local bad=0 local k=KEYS[1] local a=tonumber(ARGV[1]) local\
+          \ b=tonumber(ARGV[2]) for i=a,b do if redis.call('ZRANK',k,'m'..i)~=(i-a)\
+          \ then bad=bad+1 end end return bad", 1, z, 50004, 89999], expect: {equals: 0}}
+    - {command: [ZADD, zl, 0, aa, 0, bb, 0, ab, 0, ba], expect: {equals: 4}}
+    - {command: [ZRANGEBYLEX, zl, "-", "+"], expect: {equals: [aa, ab, ba, bb]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ZCARD, z], expect: {equals: 39996}}
+    - {command: [EVAL, "local bad=0 local k=KEYS[1] local a=tonumber(ARGV[1]) local\
+          \ b=tonumber(ARGV[2]) for i=a,b do if redis.call('ZRANK',k,'m'..i)~=(i-a)\
+          \ then bad=bad+1 end end return bad", 1, z, 50004, 89999], expect: {equals: 0}}
+    - {command: [ZRANGEBYLEX, zl, "-", "+"], expect: {equals: [aa, ab, ba, bb]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [zsl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zsl}

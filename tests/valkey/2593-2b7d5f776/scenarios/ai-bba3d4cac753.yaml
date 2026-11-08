@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9b11d3d9edf6..2b7d5f77607d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-bba3d4cac753
+seed: 101
+experiment:
+  id: proposed.asm-module-events
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

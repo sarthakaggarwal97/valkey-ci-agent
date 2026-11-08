@@ -1,0 +1,62 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9d10abfbded4ed9633ac50c8c09a9a9965dd6740",
+  "parent": "811a64407be0e3f8e7d7ad597612eee179e86c46",
+  "pr": 2543,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Relaxed RDB check for foreign RDB formats (#2543)",
+  "date": "2025-09-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 6,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 64,
+    "executed": 43,
+    "percent": 67,
+    "uncovered": [
+      "src/rdb.c:2896",
+      "src/rdb.c:2898",
+      "src/rdb.c:2899",
+      "src/rdb.c:3109",
+      "src/rdb.c:3126",
+      "src/rdb.c:3127",
+      "src/rdb.c:3129",
+      "src/rdb.c:3184",
+      "src/rdb.c:3188",
+      "src/rdb.c:3189",
+      "src/rdb.c:3190",
+      "src/rdb.c:3191",
+      "src/rdb.c:3192",
+      "src/rdb.c:3193",
+      "src/rdb.c:3194",
+      "src/rdb.c:3196",
+      "src/rdb.c:3265",
+      "src/rdb.c:3407",
+      "src/rdb.c:3408",
+      "src/rdb.c:3409",
+      "src/rdb.c:3410"
+    ],
+    "rounds": 2
+  },
+  "cost_usd": 16.7284,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-1d6bc9a631af",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'foreign' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (CONFIG SET dbfilename foreign12.rdb), 3 (GET foo)"
+    },
+    {
+      "scenario": "ai-5dce372ca8e4",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'foreign' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (CONFIG SET dbfilename foreign12.rdb), 3 (GET foo)"
+    }
+  ]
+}

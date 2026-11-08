@@ -1,0 +1,28 @@
+extends: [valkey.liveness]
+id: proposed.check-rdb-foreign-formats
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-rdb on plain, foreign (with slot-info opcode), and future-with-unknown-type
+    RDBs; exit and output compared to parent
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    ignore: ['^\d+:[A-Z] .*\n']
+    files:
+      plain-v11.rdb: !!binary 'UkVESVMwMDEx/wAAAAAAAAAA'
+      foreign-v12-slotinfo.rdb: !!binary 'UkVESVMwMDEy/gD0AAAAAANmb28DYmFy/wAAAAAAAAAA'
+      future-v987-unknown.rdb: !!binary 'VkFMS0VZOTg3lg=='
+    runs:
+    - {tool: valkey-check-rdb, args: [plain-v11.rdb], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "RDB looks OK! "}}}
+    - {tool: valkey-check-rdb, args: [foreign-v12-slotinfo.rdb], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "loading requires config 'rdb-version-check\
+            \ relaxed'"}}}
+    - {tool: valkey-check-rdb, args: [future-v987-unknown.rdb], expect_difference: true,
+      expect: {exit: {equals: 1}, stdout: {contains: "Unknown object type 150 in RDB\
+            \ file with future version 987"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

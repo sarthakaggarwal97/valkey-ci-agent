@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.slot-migration-child-reap-and-save
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The slot migration snapshot child is a separate SLOT_MIGRATION child: its reap
+    (not REQUEST-PAUSE) starts streaming when the target is blocked, SAVE runs and
+    BGSAVE refuses with the new error while it is alive, INFO reports slot_migration_fork_in_progress,
+    and a blocked target forces the slot migration pipe write handler through its
+    partial-write paths.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [DEBUG, POPULATE, 2000], expect: {equals: OK}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, 1000], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 16383, NODE, <node.1.id>],
+      expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], wait_s: 20, expect: {contains: snapshotting},
+      compare: skip}
+    - {command: [INFO, persistence], expect_difference: true, expect: {contains: "slot_migration_fork_in_progress:1"},
+      compare: skip}
+    - {raw: "DEBUG SLEEP 3\r\n", node: 1, connection: sleeper1}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], wait_s: 60, expect: {contains: success},
+      compare: skip}
+    - {command: [DBSIZE], node: 1, wait_s: 10, expect: {equals: 2000}}
+    - {command: [DEBUG, POPULATE, 4000, 'big:', 8192], node: 1, expect: {equals: OK}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, 200], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 16383, NODE, <node.0.id>],
+      node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 1, wait_s: 20, expect: {contains: snapshotting},
+      compare: skip}
+    - {raw: "DEBUG SLEEP 2\r\n", node: 0, connection: sleeper0}
+    - {command: [INFO, persistence], node: 1, expect_difference: true, expect: {contains: "slot_migration_fork_in_progress:1"},
+      compare: skip}
+    - {command: [BGSAVE], node: 1, expect_difference: true, expect: {error: "Another\
+          \ child process is active"}}
+    - {command: [SAVE], node: 1, expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 1, wait_s: 90, expect: {contains: success},
+      compare: skip}
+    - {command: [STRLEN, 'big:0'], node: 0, wait_s: 15, expect: {equals: 8192}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [migrate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

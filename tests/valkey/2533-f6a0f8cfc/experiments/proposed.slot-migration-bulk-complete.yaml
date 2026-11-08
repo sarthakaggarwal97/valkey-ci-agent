@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.slot-migration-bulk-complete
+deployment:
+  modes: [standalone]
+metadata:
+  description: A bulk atomic slot migration (two ranges, ~100MB) runs to completion
+    on the new dedicated slot-migration fork; the success done-handler, cow_size reply
+    field, slot_migration_fork_in_progress INFO field and job-log trimming are compared
+    against the parent build. An optional DEBUG SLEEP stalls the target mid-snapshot
+    to engage slotMigrationPipeWriteHandler.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    stall_s: {type: string, enum: ["0", "3"], default: "0"}
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [DEBUG, POPULATE, "50000", "key:", "2048"], expect: {equals: OK}}
+    - {command: [SET, "{bar}:probe", low-marker], expect: {equals: OK}}
+    - {command: [SET, "{foo}:probe", high-marker], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, "0", "8000", NODE, "<node.1.id>",
+        SLOTSRANGE, "8001", "16383", NODE, "<node.1.id>"], expect: {equals: OK}}
+    - {command: [INFO, persistence], expect_difference: true, expect: {contains: slot_migration_fork_in_progress}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], wait_s: 30, compare: skip, expect: {
+        contains: snapshotting}}
+    - {command: [DEBUG, SLEEP, {$ref: inputs.stall_s}], node: 1, connection: stall,
+      expect: {equals: OK}}
+    - {command: [GET, "{bar}:probe"], node: 1, wait_s: 90, expect: {equals: low-marker}}
+    - {command: [GET, "{foo}:probe"], node: 1, wait_s: 90, expect: {equals: high-marker}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], expect_difference: true, expect: {contains: cow_size}}
+    - {command: [CONFIG, SET, cluster-slot-migration-log-max-len, "0"], expect: {
+        equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], wait_s: 20, expect: {equals: []}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [migrate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

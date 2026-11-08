@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.asm-getslotmigrations-reply
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER GETSLOTMIGRATIONS replies target_node and source_node (10 map
+    pairs) instead of node (9); a multi-range job, a cancel, and a full migration
+    with no module loaded exercise the event-firing and renamed-field paths with zero
+    subscribers
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: asm-reply
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [DEBUG, SLOTMIGRATION, PREVENT-PAUSE, 1], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 99, 200, 299, 400, 499, 9000,
+        9000, NODE, <node.1.id>], expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], expect_difference: true, expect: {contains: target_node}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 1, wait_s: 10, expect_difference: true,
+      expect: {contains: source_node}}
+    - {command: [CLUSTER, CANCELSLOTMIGRATIONS], expect: {equals: OK}}
+    - {command: [DEBUG, SLOTMIGRATION, PREVENT-PAUSE, 0], expect: {equals: OK}}
+    - {command: [SET, foo, v1], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 12182, 12182, NODE, <node.1.id>],
+      expect: {equals: OK}}
+    - {command: [GET, foo], node: 1, wait_s: 30, expect: {equals: v1}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 0, wait_s: 10, expect: {
+        equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [asm-reply.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: asm-reply}

@@ -1,0 +1,60 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2b7d5f77607d74f0c52212457bb84ab5f7fb5686",
+  "parent": "9b11d3d9edf6b1f1f18976305c0923c5aad60297",
+  "pr": 2593,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make modules opt-in to atomic slot migration and add server events (#2593)",
+  "date": "2025-09-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 6,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 54,
+    "executed": 51,
+    "percent": 94,
+    "uncovered": [
+      "src/cluster_migrateslots.c:716",
+      "src/module.c:12777",
+      "src/module.c:12778"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 11.1342,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-bba3d4cac753",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #2593",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-c11d6f16749b",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #2593",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87"
+    }
+  ],
+  "recorded": []
+}

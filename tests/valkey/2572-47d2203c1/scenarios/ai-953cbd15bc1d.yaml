@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5ccedafe3ff3..47d2203c1bba.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-953cbd15bc1d
+seed: 202
+experiment:
+  id: proposed.slot-info-volatile-rdb-restart
+  inputs:
+    resp: 3
+    hash_max_listpack_entries: 0
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

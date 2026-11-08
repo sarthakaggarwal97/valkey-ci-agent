@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cef8822f60b6..3213f48fd694.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5443112a7aa6
+seed: 98211
+experiment:
+  id: proposed.fields-active-expiry-pressure
+  inputs:
+    hashes: 8
+    fields_per_hash: 1000
+    dbs: 8
+    reclaim_fields: 60000
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    active-expire-effort: 3
+    hz: 50

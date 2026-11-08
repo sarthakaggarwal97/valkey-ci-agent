@@ -1,0 +1,46 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d9382bd9f3cec97a57815e1ad9216aac08b47fbb",
+  "parent": "9d10abfbded4ed9633ac50c8c09a9a9965dd6740",
+  "pr": 2573,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "ARM Neon SIMD optimization for hashtable findBucket() (#2573)",
+  "date": "2025-09-07",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 9,
+  "proven": 0,
+  "hunted": 9,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 9.3564,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-1e001c5b7a6b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ht' returned ERROR: expectations both builds violate alike, so they are not about the change: 13 (EVAL local bad=0 for i=0,59999 do if redis.call('GET','fork:'..i) ~= 'value:'..i then bad=bad+1 end end return bad 0), 14 (EVAL local n=0 "
+    },
+    {
+      "scenario": "ai-92f999d57c54",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ht' returned ERROR: expectations both builds violate alike, so they are not about the change: 13 (EVAL local bad=0 for i=0,59999 do if redis.call('GET','fork:'..i) ~= 'value:'..i then bad=bad+1 end end return bad 0), 14 (EVAL local n=0 "
+    },
+    {
+      "scenario": "ai-379d4c65ac10",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ht' returned ERROR: expectations both builds violate alike, so they are not about the change: 13 (EVAL local bad=0 for i=0,59999 do if redis.call('GET','fork:'..i) ~= 'value:'..i then bad=bad+1 end end return bad 0), 14 (EVAL local n=0 "
+    }
+  ]
+}

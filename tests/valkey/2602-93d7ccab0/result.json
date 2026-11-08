@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "93d7ccab03779afe70762740129bd34b840e663f",
+  "parent": "a47e8fa1505578d78cef5c5e11da0972c3dae560",
+  "pr": 2602,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix accounting for dual channel RDB bytes in replication stats (#2602)",
+  "date": "2025-09-15",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 2,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 14,
+    "executed": 13,
+    "percent": 92,
+    "uncovered": [
+      "src/module.c:11483"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 3.7508,
+  "findings": [],
+  "recorded": []
+}
