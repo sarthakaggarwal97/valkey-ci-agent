@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-08T15:56+00:00.
+Updated 2026-11-08T16:02+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 941 | 1566 | #2787 (2025-10-31) | 303 | 134.4 |
+| valkey-io/valkey | 941 | 1566 | #2787 (2025-10-31) | 271 | 134.4 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
-| valkey-io/valkey-search | 632 | 37 | f8106e72e984 (2024-11-27) | 197 | 90.3 |
+| valkey-io/valkey-search | 635 | 34 | f8106e72e984 (2024-11-27) | 200 | 90.7 |
 
 ## Last runs
 
@@ -48,20 +48,18 @@ Updated 2026-11-08T15:56+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-08T15:30:09+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42492277290): 5 merge(s) tested, 0 without a code change.
+[2026-11-08T16:02:29+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42495120230): 3 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search@b6f5460f2903](https://github.com/valkey-io/valkey-search/commit/b6f5460f2903d805de90fef40fcc568f23b423df): Additional changes to support clean compilation for both clang and gcc: error: `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coordinator.grpc.pb.h': No such file or directory
-- [valkey-io/valkey-search@4015cc6b5efb](https://github.com/valkey-io/valkey-search/commit/4015cc6b5efb51e1c1e40256822f827da7a2ba45): More compilation cleanup 1. Using newer versions for protobuf and rules_proto 2. Adding rules_android build dep to eliminate a warning related to missing rules_android 3. Using cc_proto_library, proto: error: `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coordinator.grpc.pb.h': No such file or directory
-- [valkey-io/valkey-search@965d40ad2aa1](https://github.com/valkey-io/valkey-search/commit/965d40ad2aa18f99c8f6cac0a89dc73e5fe8d109): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@a4c1a046f08b](https://github.com/valkey-io/valkey-search/commit/a4c1a046f08b338bda26388800eb0feaeb6a7028): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@9ca99aa8f85a](https://github.com/valkey-io/valkey-search/commit/9ca99aa8f85a5021b0489a071c919db0166a42c4): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
+- [valkey-io/valkey-search@965d40ad2aa1](https://github.com/valkey-io/valkey-search/commit/965d40ad2aa18f99c8f6cac0a89dc73e5fe8d109): Compilation cleanup and sync: error: `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coordinator.grpc.pb.h': No such file or directory
+- [valkey-io/valkey-search@a4c1a046f08b](https://github.com/valkey-io/valkey-search/commit/a4c1a046f08b338bda26388800eb0feaeb6a7028): fixing use after free by the allocator: error: `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coordinator.grpc.pb.h': No such file or directory
+- [valkey-io/valkey-search@9ca99aa8f85a](https://github.com/valkey-io/valkey-search/commit/9ca99aa8f85a5021b0489a071c919db0166a42c4): Changing the module target name: error: `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coordinator.grpc.pb.h': No such file or directory
 
 ## Totals
 
 - Merges whose tests reached the change: 587 of 858 tested (68%)
 - Changed-line coverage: median 100% of 431 merge(s) measured, 34 under 50%
 - Recall: 160 parents flagged of 236 fix merges
-- Claude: $1631.34 in the last 24 hours, $6187.05 in the last 7 days, $6187.05 in all
+- Claude: $1538.10 in the last 24 hours, $6187.05 in the last 7 days, $6187.05 in all
 - Issues filed: 56
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
@@ -122,9 +120,6 @@ Updated 2026-11-08T15:56+00:00.
 
 ## Retries
 
-- [valkey-io/valkey-search@965d40ad2aa1](https://github.com/valkey-io/valkey-search/commit/965d40ad2aa18f99c8f6cac0a89dc73e5fe8d109): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@a4c1a046f08b](https://github.com/valkey-io/valkey-search/commit/a4c1a046f08b338bda26388800eb0feaeb6a7028): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
-- [valkey-io/valkey-search@9ca99aa8f85a](https://github.com/valkey-io/valkey-search/commit/9ca99aa8f85a5021b0489a071c919db0166a42c4): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
 - [valkey-io/valkey-search#172](https://github.com/valkey-io/valkey-search/pull/172): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
 - [valkey-io/valkey-search#144](https://github.com/valkey-io/valkey-search/pull/144): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
 - [valkey-io/valkey-search#168](https://github.com/valkey-io/valkey-search/pull/168): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
