@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 44dc58181d7f..5940dbfb0b60.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7f28490d2437
+seed: 105
+experiment:
+  id: proposed.rdb-replica-restart-under-writes
+  inputs:
+    signal: SIGTERM
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7400
+  server_config:
+    appendonly: 'no'

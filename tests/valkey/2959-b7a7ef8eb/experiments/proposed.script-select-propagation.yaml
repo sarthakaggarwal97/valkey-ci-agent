@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.script-select-propagation
+deployment:
+  modes: [standalone]
+metadata:
+  description: SELECT inside EVAL/FCALL affects later server.call commands in the
+    same script, and the caller's db is restored afterwards, including on script error
+    and inside MULTI
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: script-select
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, testkey, db0_value], expect: {equals: OK}}
+    - {command: [EVAL, "local v = server.call('get', KEYS[1]) server.call('select',\
+          \ '1') server.call('set', KEYS[1], 'db1_value') return server.call('get',\
+          \ KEYS[1])", 1, testkey], expect: {equals: db1_value}}
+    - {command: [GET, testkey], expect_difference: true, expect: {equals: db0_value}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [GET, testkey], expect_difference: true, expect: {equals: db1_value}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [EVAL, "server.call('select', '1') server.call('set', 'ka', 'va')\
+          \ server.call('select', '2') server.call('set', 'kb', 'vb') return 'done'",
+        0], expect: {equals: done}}
+    - {command: [GET, ka], expect_difference: true, expect: {exists: false}}
+    - {command: [GET, kb], expect_difference: true, expect: {exists: false}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [GET, ka], expect_difference: true, expect: {equals: va}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [GET, kb], expect_difference: true, expect: {equals: vb}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [EVAL, "server.call('select', '1') server.call('set', 'ek', 'ev')\
+          \ return server.call('nosuchcommand_xyz')", 0], expect: {error: true}, compare: skip}
+    - {command: [GET, ek], expect_difference: true, expect: {exists: false}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [GET, ek], expect_difference: true, expect: {equals: ev}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [EVAL, "server.call('select', '1') return server.call('set', 'mk',\
+          \ 'mv')", 0], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK]}}
+    - {command: [GET, mk], expect_difference: true, expect: {exists: false}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [GET, mk], expect_difference: true, expect: {equals: mv}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=sel\nserver.register_function('selset',\
+          \ function(keys, argv) server.call('select', '1') server.call('set', keys[1],\
+          \ argv[1]) return server.call('get', keys[1]) end)"], expect: {equals: sel}}
+    - {command: [FCALL, selset, 1, fk, fv], expect: {equals: fv}}
+    - {command: [GET, fk], expect_difference: true, expect: {exists: false}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [GET, fk], expect_difference: true, expect: {equals: fv}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [script-select.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: script-select}

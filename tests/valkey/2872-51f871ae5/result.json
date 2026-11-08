@@ -1,0 +1,68 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "51f871ae52e3ed17899a2ed23439aac5c6c03547",
+  "parent": "cd6faaa726791447f7adc196b6c77cc20658112d",
+  "pr": 2872,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Strictly check CRLF when parsing querybuf (#2872)",
+  "date": "2025-12-14",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 5,
+  "recall": false,
+  "coverage": {
+    "lines": 9,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/networking.c:3009",
+      "src/networking.c:3010",
+      "src/networking.c:3011",
+      "src/networking.c:3511",
+      "src/networking.c:3512",
+      "src/networking.c:3595",
+      "src/networking.c:3596",
+      "src/networking.c:3655",
+      "src/networking.c:3657"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 4.5756,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-9a8d388d1748",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-1513e8dce443",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-dde78da0b7ed",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-fc042988f6ef",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-9dab319e1401",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    }
+  ]
+}

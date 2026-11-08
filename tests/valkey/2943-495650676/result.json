@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "495650676b4b57aac48e7a086d86a4b35dec3d10",
+  "parent": "b7a7ef8eb29d739347a516df635d9d398f7c6db3",
+  "pr": 2943,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Enforce 64\u2011bit off_t regardless of include order; prevent LTO type mismatch (#2943)",
+  "date": "2025-12-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2825,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely compile-time: it adds fmacros.h includes to headers and unit-test files and a static_assert(sizeof(off_t) >= 8) in server.h, so that _FILE_OFFSET_BITS=64 is in effect before system headers and any include-order regression fails the build rather than producing a 32-bit off_t under LTO. No runtime behaviour, command reply, replication, persistence or protocol path changes in a binary that compiles; the guard it adds can only manifest as a build failure, which the fuzzer (which runs already-built servers) cannot observe. No scenario is needed."
+}

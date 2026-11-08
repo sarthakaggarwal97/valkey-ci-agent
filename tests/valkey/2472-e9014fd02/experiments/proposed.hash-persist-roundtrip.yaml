@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.hash-persist-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: Hashes with field TTLs and pointer-sized values survive an AOF rewrite
+    (non-RDB preamble, HSETEX propagation) or a SAVEd RDB across a restart, compared
+    across builds
+inputs:
+  properties:
+    appendonly: {type: string, enum: ['yes', 'no'], default: 'yes'}
+components:
+- use: valkey.action.commands
+  id: persist
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      hash-max-listpack-entries: 2
+      appendonly: {$ref: inputs.appendonly}
+      aof-use-rdb-preamble: 'no'
+    timeout_s: 90
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2, f3, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        f4, ''], expect: {equals: 4}}
+    - {command: [HSETEX, h, EXAT, 33177117600, FIELDS, 2, tf1, tv1, tf2, tv2], expect: {
+        equals: 1}}
+    - {command: [HSETEX, h, EXAT, 33177117600, FIELDS, 1, bigttl, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'],
+      expect: {equals: 1}}
+    - {command: [HSET, h2, a, 1, b, 2, c, 3, d, 4], expect: {equals: 4}}
+    - {command: [HSET, small, sf, sv], expect: {equals: 1}}
+    - {command: [BGREWRITEAOF], compare: skip}
+    - {command: [INFO, persistence], wait_s: 20, compare: skip, expect: {contains: 'aof_rewrite_in_progress:0'}}
+    - {command: [INFO, persistence], compare: skip, expect: {contains: 'aof_last_bgrewrite_status:ok'}}
+    - {command: [HSET, h, post, postv], expect: {equals: 1}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HGET, h, f3], expect: {equals: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'}}
+    - {command: [HGET, h, f4], expect: {equals: ''}}
+    - {command: [HMGET, h, f1, f2, post], expect: {equals: [v1, v2, postv]}}
+    - {command: [HEXPIRETIME, h, FIELDS, 3, tf1, tf2, bigttl], expect: {equals: [
+          33177117600, 33177117600, 33177117600]}}
+    - {command: [HGET, h, bigttl], expect: {equals: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'}}
+    - {command: [HGETALL, h2], compare: unordered-pairs}
+    - {command: [HGET, small, sf], expect: {equals: sv}}
+    - {command: [HLEN, h], expect: {equals: 8}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [persist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: persist}

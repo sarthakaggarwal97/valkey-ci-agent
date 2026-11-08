@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.info-cluster-section
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO's Cluster section gains the whole CLUSTER INFO fields in cluster
+    mode and stays unchanged with cluster disabled
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cluster-info
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    commands:
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "cluster_state:ok"},
+      wait_s: 30}
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "cluster_known_nodes:2"},
+      wait_s: 30}
+    - {command: [CLUSTER, INFO], node: 1, compare: skip, expect: {contains: "cluster_known_nodes:2"},
+      wait_s: 30}
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [INFO, cluster], expect_difference: true, expect: {contains: "cluster_state:ok"}}
+    - {command: [INFO, cluster], expect_difference: true, expect: {contains: "cluster_slots_assigned:16384"}}
+    - {command: [INFO, cluster], expect_difference: true, expect: {contains: "cluster_known_nodes:2"}}
+    - {command: [INFO, cluster], node: 1, expect_difference: true, expect: {contains: "cluster_my_epoch:"}}
+    - {command: [INFO], expect_difference: true, expect: {contains: "cluster_current_epoch:"}}
+    - {command: [INFO, everything], expect_difference: true, expect: {contains: "cluster_slots_ok:16384"}}
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "cluster_state:ok"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: standalone-control
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [INFO, cluster], expect: {contains: "cluster_enabled:0"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cluster-info.completed, standalone-control.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cluster-info}
+- {evidence_id: valkey.command.sequence, source: standalone-control}

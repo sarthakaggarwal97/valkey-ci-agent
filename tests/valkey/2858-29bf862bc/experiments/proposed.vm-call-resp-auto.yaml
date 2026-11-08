@@ -1,0 +1,27 @@
+extends: [valkey.liveness]
+id: proposed.vm-call-resp-auto
+deployment:
+  modes: [standalone]
+metadata:
+  description: A module VM_Call in RESP auto mode takes the calling client's protocol
+    version
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: auto
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [test.rmcallautomode, k], compare: unordered-pairs, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: auto}

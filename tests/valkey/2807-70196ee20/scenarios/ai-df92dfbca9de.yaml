@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8ec93819746b..70196ee20f1b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-df92dfbca9de
+seed: 103
+experiment:
+  id: proposed.cluster-slot-delete-safe-iter
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

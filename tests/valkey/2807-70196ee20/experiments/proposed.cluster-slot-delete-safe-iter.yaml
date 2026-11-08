@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.cluster-slot-delete-safe-iter
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Delete a slot's keys and shard-pubsub channels under safe kvstore iterators
+    (KEYS with a slot pattern, CLUSTER FLUSHSLOT via delKeysInSlot, CLUSTER SETSLOT
+    via removeChannelsInSlot), where the iterated hashtable can be freed when emptied,
+    compared against the parent build
+components:
+- use: valkey.action.commands
+  id: slotdel
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 30
+    commands:
+    - {command: [SET, foo, v1], expect: {equals: OK}}
+    - {command: [SET, "{foo}1", v2], expect: {equals: OK}}
+    - {command: [SET, "{foo}2", v3], expect: {equals: OK}}
+    - {command: [SSUBSCRIBE, foo], connection: shard, expect: {exists: true}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, "12182"], expect: {equals: 3}}
+    - {command: [KEYS, "{foo}*"], compare: unordered, expect: {exists: true}}
+    - {command: [CLUSTER, FLUSHSLOT, "12182", SYNC], expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, "12182"], expect: {equals: 0}}
+    - {command: [CLUSTER, SETSLOT, "12182", NODE, "<node.1.id>"], expect: {equals: OK}}
+    - {connection: shard, read: true, expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slotdel.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotdel}

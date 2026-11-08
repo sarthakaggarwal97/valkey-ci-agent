@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "512ffdb8028dc068875d74962b01be3ac9c26375",
+  "parent": "29bf862bcc61f060d0d71b32abc22b3c8118c52f",
+  "pr": 2950,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Module API docs formatting and improve script (#2950)",
+  "date": "2025-12-19",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2511,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only comments in src/module.c (a function-name typo and comment line wrapping in a doc example) and the offline Ruby documentation-generation script utils/generate-module-api-doc.rb. No executable server code, command behaviour, reply format, replication, persistence, or module API semantics change, so there is nothing a fuzzer scenario could reach or regress."
+}

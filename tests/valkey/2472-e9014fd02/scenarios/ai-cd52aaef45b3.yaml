@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 512ffdb8028d..e9014fd02b6e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-cd52aaef45b3
+seed: 11
+experiment:
+  id: proposed.hash-entry-ops-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

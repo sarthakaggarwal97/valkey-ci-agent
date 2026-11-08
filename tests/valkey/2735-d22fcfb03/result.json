@@ -1,0 +1,161 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d22fcfb0328404695f5fecf832f92ce5a28e4065",
+  "parent": "8ab0152bef7c273c0f44dec08fe06d6affbbe141",
+  "pr": 2735,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Respect REPLCONF VERSION in diskless full sync (#2735)",
+  "date": "2025-12-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 17,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 15,
+  "recall": false,
+  "coverage": {
+    "lines": 74,
+    "executed": 32,
+    "percent": 43,
+    "uncovered": [
+      "src/cluster.c:129",
+      "src/cluster.c:130",
+      "src/cluster.c:131",
+      "src/cluster.c:132",
+      "src/cluster_migrateslots.c:374",
+      "src/cluster_migrateslots.c:375",
+      "src/cluster_migrateslots.c:376",
+      "src/rdb.c:713",
+      "src/rdb.c:715",
+      "src/rdb.c:718",
+      "src/rdb.c:723",
+      "src/rdb.c:725",
+      "src/rdb.c:727",
+      "src/rdb.c:732",
+      "src/rdb.c:734",
+      "src/rdb.c:739",
+      "src/rdb.c:742",
+      "src/rdb.c:743",
+      "src/rdb.c:745",
+      "src/rdb.c:747",
+      "src/rdb.c:750",
+      "src/rdb.c:751",
+      "src/rdb.c:868",
+      "src/rdb.c:987",
+      "src/rdb.c:995",
+      "src/rdb.c:1174",
+      "src/rdb.c:1175",
+      "src/rdb.c:1176",
+      "src/rdb.c:1184",
+      "src/rdb.c:1213",
+      "src/rdb.c:1214",
+      "src/rdb.c:1215",
+      "src/rdb.c:1217",
+      "src/rdb.c:1219",
+      "src/rdb.c:1221",
+      "src/rdb.c:1435",
+      "src/rdb.c:1572",
+      "src/replication.c:225",
+      "src/replication.c:1001",
+      "src/replication.c:1065",
+      "src/replication.c:1266",
+      "src/replication.c:1267"
+    ],
+    "rounds": 2
+  },
+  "cost_usd": 17.8766,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-a0a667da03dd",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-6fa9e6c68d03",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-4e689dd94a00",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-1a0420e30d0f",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-1a20574c66e9",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'forkless-infrastructure-enabled \"yes\"' Bad directive or wrong number of arguments; default deployment config"
+    },
+    {
+      "scenario": "ai-0ddb0d9f2afb",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-9ce20a1b087b",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported: default deployment config: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 19 >>> 'rdbcompression \"zstd\"' argument must be 'yes' or 'no' (it starts without rdbcompression, w"
+    },
+    {
+      "scenario": "ai-9b11cfd9bd32",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-b5a89fa288ff",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-00393acb8ada",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: InvalidResponse: Bad bulk string length"
+    },
+    {
+      "scenario": "ai-c67d5db81215",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: InvalidResponse: Bad bulk string length"
+    },
+    {
+      "scenario": "ai-7c06c75c6f62",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: InvalidResponse: Bad bulk string length"
+    },
+    {
+      "scenario": "ai-4ef3a5cf1f65",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-b0247adb89fb",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-ff10cd554845",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

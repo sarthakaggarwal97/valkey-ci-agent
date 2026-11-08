@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3d65a4aecdcfdd72ff1657317657a4cd665bba5f",
+  "parent": "c90e634f114a0ddecf92eacea4f35e269f89e997",
+  "pr": 2898,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix deadlock in IO thread shutdown during panic (#2898)",
+  "date": "2025-12-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.4578,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,127 @@
+extends: [valkey.liveness]
+id: proposed.lua-module-eval-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Compare EVAL/FUNCTION semantics, rewritten script error messages, async
+    script flush and SCRIPT KILL across the Lua-as-module change and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    lazyfree_user_flush: {type: string, enum: ["no", "yes"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: luaseq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {lazyfree-lazy-user-flush: {$ref: inputs.lazyfree_user_flush}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "return 1", 0], expect: {equals: 1}}
+    - {command: [EVAL, "return 'hello'", 0], expect: {equals: hello}}
+    - {command: [EVAL, "return {1,2,nil,4}", 0], expect: {equals: [1, 2]}}
+    - {command: [EVAL, "return redis.call('set', KEYS[1], ARGV[1])", 1, k1, v1], expect: {
+        equals: OK}}
+    - {command: [EVAL, "return server.call('get', KEYS[1])", 1, k1], expect: {equals: v1}}
+    - {command: [EVAL, "return {err='My Error'}", 0], expect: {error: "My Error"}}
+    - {command: [EVAL, "return {ok='fine'}", 0], expect: {equals: fine}}
+    - {command: [EVAL, "return redis.error_reply('oops')", 0], expect: {error: oops}}
+    - {command: [EVAL, "return redis.status_reply('SOMESTATUS')", 0], expect: {equals: SOMESTATUS}}
+    - {command: [EVAL, "if server.breakpoint() then return 1 else return 0 end", 0],
+      expect: {equals: 0}}
+    - {command: [EVAL, "if redis.replicate_commands() then return 'yes' else return\
+          \ 'no' end", 0], expect: {equals: yes}}
+    - {command: [EVAL, "return redis.sha1hex('')", 0], expect: {equals: da39a3ee5e6b4b0d3255bfef95601890afd80709}}
+    - {command: [EVAL, "return cjson.encode({1,2,'x'})", 0], expect: {equals: '[1,2,"x"]'}}
+    - {command: [EVAL, "return tostring(cjson.decode('[1,2,3]')[2])", 0], expect: {
+        equals: "2"}}
+    - {command: [EVAL, "error('myerr')", 0], expect: {error: myerr}}
+    - {command: [EVAL, "return redis.call('nosuchcmd')", 0], expect: {error: "Unknown\
+          \ command called from script"}}
+    - {command: [EVAL, "return redis.call('set','onlykey')", 0], expect: {error: "Wrong\
+          \ number of args"}}
+    - {command: [EVAL, "return redis.call('multi')", 0], expect: {error: "not allowed\
+          \ from script"}}
+    - {command: [EVAL, "local t = redis.pcall('nosuchcmd') return t.err", 0], expect: {
+        contains: Unknown}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [EVAL, "return redis.call('set','mk','mv')", 0], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK]}}
+    - {command: [GET, mk], expect: {equals: mv}}
+    - {command: [SET, wk, w0], expect: {equals: OK}}
+    - {command: [WATCH, wk], expect: {equals: OK}}
+    - {command: [EVAL, "return redis.call('set', KEYS[1], 'w1')", 1, wk], expect: {
+        equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, wk], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: false}}
+    - {command: [GET, wk], expect: {equals: w1}}
+    - {command: [EVAL, "redis.call('select',5) redis.call('set','dbkey','v5') return\
+          \ redis.call('get','dbkey')", 0], expect: {equals: v5}}
+    - {command: [EXISTS, dbkey], expect: {equals: 0}}
+    - {command: [SELECT, 5], expect: {equals: OK}}
+    - {command: [GET, dbkey], expect: {equals: v5}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [EVAL, "redis.setresp(3) local t = redis.call('hgetall', KEYS[1])\
+          \ if t.map then return t.map.f1 else return 'nomap' end", 1, h], expect: {
+        equals: v1}}
+    - {command: [ZADD, z, 1.5, m], expect: {equals: 1}}
+    - {command: [EVAL, "redis.setresp(3) local d = redis.call('zscore', KEYS[1], 'm')\
+          \ return tostring(d.double)", 1, z], expect: {equals: "1.5"}}
+    - {command: [EVAL, "return redis.call('hgetall', KEYS[1])[1]", 1, h], expect: {
+        equals: f1}}
+    - {command: [EVAL, "redis.replicate_commands() redis.set_repl(redis.REPL_NONE)\
+          \ redis.call('set','nrk','x') redis.set_repl(redis.REPL_ALL) return redis.call('get','nrk')",
+        0], expect: {equals: x}}
+    - {command: [SCRIPT, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [EVAL, "return 42", 0], expect: {equals: 42}}
+    - {command: [SCRIPT, FLUSH, SYNC], expect: {equals: OK}}
+    - {command: [EVAL, "return 42", 0], expect: {equals: 42}}
+    - {command: [SCRIPT, FLUSH], expect: {equals: OK}}
+    - {command: [EVAL, "return 42", 0], expect: {equals: 42}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nredis.register_function('getk',\
+          \ function(keys, args) return redis.call('GET', keys[1]) end)\nredis.register_function('setk',\
+          \ function(keys, args) return redis.call('SET', keys[1], args[1]) end)"],
+      expect: {equals: mylib}}
+    - {command: [FCALL, setk, 1, fk, fv], expect: {equals: OK}}
+    - {command: [FCALL, getk, 1, fk], expect: {equals: fv}}
+    - {command: [FCALL_RO, getk, 1, fk], expect: {error: true}}
+    - {command: [FUNCTION, STATS], expect: {exists: true}}
+    - {command: [FUNCTION, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [FCALL, getk, 1, fk], expect: {error: true}}
+    - {command: [EVAL, "#!lua flags=no-writes\nreturn redis.call('set','x','1')",
+        0], expect: {error: "read-only scripts"}}
+    - {command: [EVAL_RO, "return redis.call('set','x','1')", 0], expect: {error: "read-only\
+          \ scripts"}}
+    - {command: [CONFIG, SET, maxmemory, 1], expect: {equals: OK}}
+    - {command: [EVAL, "return redis.call('set','oomk','v')", 0], expect: {error: OOM}}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, scripter, on, ">pw", "~key:*", "+@all", "-flushall"],
+      expect: {equals: OK}}
+    - {command: [AUTH, scripter, pw], expect: {equals: OK}}
+    - {command: [EVAL, "return redis.call('set', KEYS[1], 'v')", 1, "key:1"], expect: {
+        equals: OK}}
+    - {command: [EVAL, "return redis.call('set','secret','v')", 0], expect: {error: "ACL\
+          \ failure in script"}}
+    - {command: [EVAL, "return redis.call('flushall')", 0], expect: {error: "ACL failure\
+          \ in script"}}
+    - {command: [AUTH, default, anypass], expect: {equals: OK}}
+    - {command: [CONFIG, SET, busy-reply-threshold, 100], expect: {equals: OK}}
+    - {connection: busy, command: [EVAL, "while true do end", 0]}
+    - {command: [SCRIPT, KILL], wait_s: 20, expect: {equals: OK}}
+    - {connection: busy, read: true, expect: {error: killed}}
+    - {command: [EVAL, "return 'alive'", 0], expect: {equals: alive}}
+    - {command: [CONFIG, SET, busy-reply-threshold, 5000], expect: {equals: OK}}
+    - {command: [INFO, scriptingengines], expect_difference: true, expect: {contains: "module=lua"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [luaseq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: luaseq}

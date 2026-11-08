@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c8341d416534..8ec93819746b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c9f4ff9efd2a
+seed: 101
+experiment:
+  id: proposed.cluster-forget-meet-heal
+  inputs:
+    node_timeout: 1000
+deployment:
+  mode: standalone
+  base_port: 7000

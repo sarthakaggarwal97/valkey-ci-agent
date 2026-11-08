@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.module-scan-hash-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module ScanKey over hashtable-encoded hashes (moduleScanKeyHashtableCallback
+    now uses entryGetValue with length), compared across builds with scan.so
+components:
+- use: valkey.action.commands
+  id: modscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {hash-max-listpack-entries: 2, set-max-listpack-entries: 2, zset-max-listpack-entries: 2}
+    timeout_s: 30
+    commands:
+    - {command: [SET, strk, strv], expect: {equals: OK}}
+    - {command: [HSET, h, f1, v1, f2, v2, f3, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        f4, ''], expect: {equals: 4}}
+    - {command: [HSETEX, h, EXAT, 33177117600, FIELDS, 1, tf, tv], expect: {equals: 1}}
+    - {command: [HSET, h1, f, v], expect: {equals: 1}}
+    - {command: ['scan.scan_key', h], compare: skip}
+    - {command: ['scan.scan_key', h1], expect: {equals: [[f, v]]}}
+    - {command: [SADD, s, a, b, c], expect: {equals: 3}}
+    - {command: ['scan.scan_key', s], compare: skip}
+    - {command: [ZADD, z, 1, a, 2, b, 3, c], expect: {equals: 3}}
+    - {command: ['scan.scan_key', z], compare: skip}
+    - {command: ['scan.scan_strings'], compare: skip}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HGET, h, f3], expect: {equals: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modscan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modscan}

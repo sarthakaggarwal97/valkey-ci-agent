@@ -1,0 +1,88 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5940dbfb0b601dfc565ca7f349a3a62f67d7e5ed",
+  "parent": "44dc58181d7f8ef9d39503ec6522d5fcbeb01a79",
+  "pr": 2925,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Revert \"Allow partial sync after loading AOF with preamble (#2366)\" (#2925)",
+  "date": "2025-12-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 9,
+  "proven": 2,
+  "hunted": 7,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 17,
+    "executed": 17,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 9.9152,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-05ea60d2a106",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'aof-restart' returned ERROR: expectations both builds violate alike, so they are not about the change: 14 (BGREWRITEAOF on node 1)"
+    },
+    {
+      "scenario": "ai-05ea60d2a106",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-05ea60d2a106",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-05ea60d2a106",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-50ecf58b84cf",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'aof-restart' returned ERROR: expectations both builds violate alike, so they are not about the change: 14 (BGREWRITEAOF on node 1)"
+    },
+    {
+      "scenario": "ai-50ecf58b84cf",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-50ecf58b84cf",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-50ecf58b84cf",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5ccefbf3e742",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-134ffbb9cec5",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

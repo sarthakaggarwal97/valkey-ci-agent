@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d22fcfb03284..29bf862bcc61.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2c2435ce8574
+seed: 103
+experiment:
+  id: proposed.lua-module-eval-compare
+  inputs:
+    resp: 2
+    lazyfree_user_flush: 'yes'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

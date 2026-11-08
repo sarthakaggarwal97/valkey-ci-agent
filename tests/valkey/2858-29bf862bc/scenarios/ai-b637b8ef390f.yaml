@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d22fcfb03284..29bf862bcc61.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b637b8ef390f
+seed: 105
+experiment:
+  id: proposed.lua-module-under-faults
+  inputs:
+    signal: SIGTERM
+    instance: primary
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7400
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec

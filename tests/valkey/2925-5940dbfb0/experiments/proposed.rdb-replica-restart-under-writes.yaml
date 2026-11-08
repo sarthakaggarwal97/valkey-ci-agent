@@ -1,0 +1,47 @@
+extends: [valkey.base]
+id: proposed.rdb-replica-restart-under-writes
+deployment:
+  modes: [standalone, cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: BGSAVE on a replica, then kill and restart it with AOF off under live
+    writes; it reloads the RDB replication info, resyncs, and no acknowledged write
+    is lost
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGTERM}
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-replica]
+  config: {seconds: 2}
+- use: valkey.action.bgsave
+  id: save-replica
+  depends_on: [warm-up]
+  config: {instances: replicas, expect: ok}
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: save-replica.save-completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [save-replica]
+  config: {seconds: 5}
+- use: valkey.action.poll
+  id: links-up
+  depends_on: [settle]
+  config:
+    instances: replicas
+    section: replication
+    field: master_link_status
+    predicate: {equals: up}
+    timeout_s: 60
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [save-replica.save-completed, kill-replica.recovered]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 512ffdb8028d..e9014fd02b6e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-cbd3fac7c7d2
+seed: 51004
+experiment:
+  id: proposed.hash-valueptr-inplace-update-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

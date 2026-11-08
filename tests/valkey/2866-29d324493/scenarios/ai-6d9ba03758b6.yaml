@@ -1,0 +1,21 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 04d0bba398af..29d324493776.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6d9ba03758b6
+seed: 20661
+experiment:
+  id: proposed.cob-soft-limit-replica-stall
+  inputs:
+    run_before_stall_s: 1
+    pause_s: 2.5
+    settle_s: 5
+    mutation_rate: 100
+    value_size: 16384
+    mutable_keys: 100
+    stable_keys: 0
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7000
+  server_config:
+    client-output-buffer-limit: replica 0 128kb 1
+    repl-backlog-size: 8mb

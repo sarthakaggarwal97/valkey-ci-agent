@@ -1,0 +1,47 @@
+extends: [valkey.base]
+id: proposed.io-threads-shutdown-churn
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Churn CONFIG SET io-threads down and up under writes to exercise shutdownIOThread
+    on the live reconfiguration path (updateIOThreads), where the change can double-unlock
+    an inactive thread's mutex
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 1}
+- use: valkey.action.commands
+  id: churn
+  depends_on: [warm-up]
+  config:
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, io-threads, "2"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "9"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "3"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "8"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "2"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "7"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "4"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "9"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "2"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "6"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "3"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "9"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "2"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "5"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "2"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "8"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "3"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "7"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "2"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "9"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "4"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "9"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "2"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "1"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, "9"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

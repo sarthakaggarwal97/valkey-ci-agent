@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 44dc58181d7f..5940dbfb0b60.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-50ecf58b84cf
+seed: 102
+experiment:
+  id: proposed.aof-preamble-restart-resync
+  inputs:
+    dual_channel: 'yes'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

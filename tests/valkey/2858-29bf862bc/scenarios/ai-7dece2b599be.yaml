@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d22fcfb03284..29bf862bcc61.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7dece2b599be
+seed: 4
+experiment:
+  id: proposed.lua-script-flush-async-free
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7300

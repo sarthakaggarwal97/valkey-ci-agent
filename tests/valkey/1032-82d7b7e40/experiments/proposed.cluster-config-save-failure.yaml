@@ -1,0 +1,47 @@
+extends: [valkey.base]
+id: proposed.cluster-config-save-failure
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Make every data directory read-only so saving nodes.conf fails, then
+    fail over a shard; no node may exit, the cluster must settle, and the new save-failure
+    warning must be logged
+components:
+- use: valkey.capability.host-probe
+  id: host
+  config:
+    requires: [not_root]
+- use: valkey.observer.log
+  id: logs
+  config:
+    instances: all
+    expect:
+    - {pattern: "Cluster config updated even though writing the cluster config file\
+        \ to disk failed", evidence_id: valkey.cluster.config-save-failure-logged,
+      required: true}
+- use: valkey.fault.deny-writes
+  id: deny
+  config:
+    instances: all
+    when_event: warm-up.completed
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, logs, deny]
+  config: {seconds: 2}
+- use: valkey.action.wait-event
+  id: deny-applied
+  depends_on: [warm-up]
+  config: {event: deny.injected, timeout_s: 30}
+- use: valkey.action.failover
+  id: failover
+  depends_on: [deny-applied]
+  config: {shard: 0, force: false, timeout_s: 60}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [failover]
+  config: {seconds: 3}
+required_events: [deny.injected]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: deny}
+- {evidence_id: valkey.failover.result, source: failover}

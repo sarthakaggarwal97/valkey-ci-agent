@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.cluster-forget-meet-heal
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    After CLUSTER FORGET splits a two-node cluster's view, the no-inbound-link MEET
+    retry (now gated on nodeSupportsMultiMeet) must still heal the view in both directions,
+    exactly as the parent build does.
+inputs:
+  properties:
+    node_timeout: {type: integer, enum: [1000, 4000], default: 1000}
+components:
+- use: valkey.action.commands
+  id: meet-heal
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    server_config:
+      cluster-node-timeout: {$ref: inputs.node_timeout}
+      cluster-blacklist-ttl: 1
+    timeout_s: 15
+    commands:
+    - {command: [CLUSTER, NODES], node: 0, expect: {contains: "<node.1.id>"}, compare: skip}
+    - {command: [CLUSTER, FORGET, "<node.1.id>"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, NODES], node: 0, wait_s: 30, expect: {contains: "<node.1.id>"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 30, expect: {contains: "cluster_state:ok"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, expect: {contains: "cluster_state:ok"},
+      compare: skip}
+    - {command: [CLUSTER, FORGET, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, NODES], node: 1, wait_s: 30, expect: {contains: "<node.0.id>"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, expect: {contains: "cluster_state:ok"},
+      compare: skip}
+    - {command: [SET, k1, v1], node: 0, expect: {equals: OK}}
+    - {command: [GET, k1], node: 0, expect: {equals: v1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [meet-heal.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: meet-heal}

@@ -1,0 +1,68 @@
+extends: [valkey.base]
+id: proposed.cob-soft-limit-replica-stall
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: >-
+    A replica stalled with SIGSTOP while writes push its output buffer past the configured
+    COB soft limit but below repl-backlog-size must not be disconnected: the soft
+    limit is clamped up to repl-backlog-size (#2866). The primary must never log a
+    COB disconnect and no resync may happen.
+inputs:
+  properties:
+    run_before_stall_s: {type: number, minimum: 0, maximum: 30, default: 1}
+    pause_s: {type: number, minimum: 0.5, maximum: 30, default: 2.5}
+    settle_s: {type: number, minimum: 0, maximum: 60, default: 5}
+components:
+- use: valkey.observer.log
+  id: cob-logs
+  config:
+    instances: primary
+    forbidden:
+    - {pattern: "overcoming of output buffer limits"}
+- use: valkey.observer.info
+  id: resync-info
+  config:
+    instances: primaries
+    interval_s: 0.1
+    sections: [stats]
+    expectations:
+    - {field: sync_full, delta_max: 0, evidence_id: valkey.cob.no-full-resync}
+    - {field: sync_partial_err, delta_max: 0, evidence_id: valkey.cob.no-partial-refused}
+- use: valkey.fault.process-signal
+  id: stall-replica
+  config:
+    instance: replica
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.pause_s}
+    when_event: run-then-stall.completed
+- use: valkey.action.sleep
+  id: run-then-stall
+  depends_on: [writes, cob-logs, resync-info, stall-replica]
+  config:
+    seconds: {$ref: inputs.run_before_stall_s}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [run-then-stall]
+  config:
+    seconds: {$ref: inputs.settle_s}
+- use: valkey.action.poll
+  id: links-up
+  depends_on: [settle]
+  config:
+    field: master_link_status
+    instances: replicas
+    predicate: {equals: up}
+    section: replication
+    timeout_s: 60
+- use: valkey.oracle.evidence
+  id: no-resync
+  depends_on: [resync-info]
+  config:
+    require:
+    - {evidence_id: valkey.cob.no-full-resync, source: resync-info}
+    - {evidence_id: valkey.cob.no-partial-refused, source: resync-info}
+required_events: [run-then-stall.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: stall-replica}

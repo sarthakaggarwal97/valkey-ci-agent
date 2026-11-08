@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "29bf862bcc61f060d0d71b32abc22b3c8118c52f",
+  "parent": "d22fcfb0328404695f5fecf832f92ce5a28e4065",
+  "pr": 2858,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Move Lua scripting engine into a Valkey module (#2858)",
+  "date": "2025-12-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 13,
+  "proven": 3,
+  "hunted": 13,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 65,
+    "executed": 53,
+    "percent": 81,
+    "uncovered": [
+      "src/module.c:12803",
+      "src/module.c:12816",
+      "src/module.c:12848",
+      "src/module.c:12849",
+      "src/module.c:12851",
+      "src/module.c:12852",
+      "src/module.c:12853",
+      "src/module.c:12856",
+      "src/module.c:12882",
+      "src/scripting_engine.c:470",
+      "src/scripting_engine.c:484",
+      "src/server.c:7421"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 12.3557,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-c400c8b39353",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'clusterseq' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (EVAL redis.call('set','{a}k','1') redis.call('set','{b}k','2') return 1 0), 4 (EVAL #!lua flags=allow-cross-slot redis.call('set','"
+    }
+  ]
+}

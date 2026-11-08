@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2a9a1731ee8e049495068244822535928e5e0da8",
+  "parent": "48e0cbbb415a56c88ec3e3359a3054b0995fdd45",
+  "pr": 2915,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix CLUSTER SLOTS crash when called from module timer callback (#2915)",
+  "date": "2025-12-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 9.3219,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

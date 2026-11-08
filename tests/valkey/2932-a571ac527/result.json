@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a571ac527fa8030d5a51c1edaea948c393bb5fbd",
+  "parent": "0a9cb985c8c37c54c5007bc0af2dcd0b6752a529",
+  "pr": 2932,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix memory allocation size in getClusterNodesList (#2932)",
+  "date": "2025-12-19",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3765,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change shrinks an over-allocation in getClusterNodesList from (count+1)*CLUSTER_NAMELEN (40 bytes/element) to the correct (count+1)*sizeof(char *) (8 bytes/element). The old size was always larger than needed, so there was never an out-of-bounds access, crash, or data risk \u2014 only wasted heap. The function is reachable only through the module API VM_GetClusterNodesList (no command, reply, replication or cluster-bus path reaches it, and module loading is refused in compared sequences), and its observable behaviour \u2014 the returned pointer array, its contents and termination \u2014 is identical on b"
+}

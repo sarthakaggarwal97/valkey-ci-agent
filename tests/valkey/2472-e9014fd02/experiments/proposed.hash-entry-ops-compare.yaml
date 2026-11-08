@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.hash-entry-ops-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Hash entry refactor (stringRef support) - field TTL toggles, embedded/pointer
+    value transitions, and SCAN-family stringRef vector, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hashops
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 2, set-max-listpack-entries: 2, zset-max-listpack-entries: 2}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2, f3, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'],
+      expect: {equals: 3}}
+    - {command: [HGET, h, f3], expect: {equals: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'}}
+    - {command: [HSET, h, f3, y], expect: {equals: 0}}
+    - {command: [HGET, h, f3], expect: {equals: y}}
+    - {command: [HSET, h, f3, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'],
+      expect: {equals: 0}}
+    - {command: [HSET, h, f2, w2], expect: {equals: 0}}
+    - {command: [HGET, h, f2], expect: {equals: w2}}
+    - {command: [HSET, h, '', emptyfield-val], expect: {equals: 1}}
+    - {command: [HGET, h, ''], expect: {equals: emptyfield-val}}
+    - {command: [HSET, h, emptyval, ''], expect: {equals: 1}}
+    - {command: [HGET, h, emptyval], expect: {equals: ''}}
+    - {command: [HSETEX, h, EXAT, 33177117600, FIELDS, 2, tf1, tv1, tf2, tv2], expect: {
+        equals: 1}}
+    - {command: [HEXPIRETIME, h, FIELDS, 2, tf1, tf2], expect: {equals: [33177117600,
+          33177117600]}}
+    - {command: [HGETEX, h, EXAT, 33177117601, FIELDS, 1, tf1], expect: {equals: [
+          tv1]}}
+    - {command: [HEXPIRETIME, h, FIELDS, 1, tf1], expect: {equals: [33177117601]}}
+    - {command: [HGETEX, h, PERSIST, FIELDS, 1, tf1], expect: {equals: [tv1]}}
+    - {command: [HEXPIRETIME, h, FIELDS, 1, tf1], expect: {equals: [-1]}}
+    - {command: [HGET, h, tf1], expect: {equals: tv1}}
+    - {command: [HPERSIST, h, FIELDS, 1, tf2], expect: {equals: [1]}}
+    - {command: [HEXPIRE, h, 100000, FIELDS, 1, tf2], expect: {equals: [1]}}
+    - {command: [HSETEX, h, KEEPTTL, FIELDS, 1, tf2, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'],
+      expect: {equals: 1}}
+    - {command: [HGET, h, tf2], expect: {equals: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'}}
+    - {command: [HTTL, h, FIELDS, 1, tf2], compare: skip}
+    - {command: [HSETEX, h, EXAT, 33177117600, FIELDS, 1, bigttl, 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'],
+      expect: {equals: 1}}
+    - {command: [HGETDEL, h, FIELDS, 1, bigttl], expect: {equals: ['AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA']}}
+    - {command: [HDEL, h, f3], expect: {equals: 1}}
+    - {command: [COPY, h, h2], expect: {equals: 1}}
+    - {command: [HMGET, h2, f1, f2, tf1, tf2, ''], expect: {equals: [v1, w2, tv1,
+          'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+          emptyfield-val]}}
+    - {command: [HSET, h1, f, v], expect: {equals: 1}}
+    - {command: [HSCAN, h1, 0], expect: {equals: ['0', [f, v]]}}
+    - {command: [HSCAN, h, 0, COUNT, 1000], compare: skip}
+    - {command: [HSCAN, h, 0, NOVALUES, COUNT, 1000], compare: skip}
+    - {command: [SADD, s, a, b, c], expect: {equals: 3}}
+    - {command: [SSCAN, s, 0, COUNT, 1000], compare: skip}
+    - {command: [ZADD, z, 1, a, 2, b, 3, c], expect: {equals: 3}}
+    - {command: [ZSCAN, z, 0, COUNT, 1000], compare: skip}
+    - {command: [ZSCAN, z, 0, NOSCORES, COUNT, 1000], compare: skip}
+    - {command: [SCAN, 0, COUNT, 1000], compare: skip}
+    - {command: [SCAN, 0, TYPE, hash, COUNT, 1000], compare: skip}
+    - {command: [HLEN, h], expect: {equals: 6}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [hashops.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hashops}

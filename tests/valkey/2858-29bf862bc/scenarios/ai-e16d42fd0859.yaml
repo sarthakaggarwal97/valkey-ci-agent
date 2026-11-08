@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d22fcfb03284..29bf862bcc61.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e16d42fd0859
+seed: 5
+experiment:
+  id: proposed.vm-call-resp-auto
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7400

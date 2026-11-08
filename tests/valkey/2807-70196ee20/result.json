@@ -1,0 +1,121 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "70196ee20f1b84d5420acfdfe06c354b01c224dd",
+  "parent": "8ec93819746b14b789205ab2115d62f3dd2e3c54",
+  "pr": 2807,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add safe iterator tracking in hashtable to prevents invalid access on hashtable delete (#2807)",
+  "date": "2025-12-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 11,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 11,
+  "recall": false,
+  "coverage": {
+    "lines": 93,
+    "executed": 39,
+    "percent": 41,
+    "uncovered": [
+      "src/acl.c:654",
+      "src/acl.c:677",
+      "src/acl.c:1967",
+      "src/acl.c:1980",
+      "src/acl.c:1992",
+      "src/acl.c:2795",
+      "src/aof.c:1921",
+      "src/aof.c:1927",
+      "src/aof.c:1933",
+      "src/debug.c:223",
+      "src/defrag.c:774",
+      "src/hashtable.c:1106",
+      "src/hashtable.c:1107",
+      "src/hashtable.c:1108",
+      "src/hashtable.c:1109",
+      "src/hashtable.c:1110",
+      "src/hashtable.c:1112",
+      "src/latency.c:550",
+      "src/latency.c:583",
+      "src/module.c:12550",
+      "src/module.c:12574",
+      "src/object.c:639",
+      "src/object.c:691",
+      "src/object.c:1168",
+      "src/object.c:1210",
+      "src/pubsub.c:457",
+      "src/pubsub.c:497",
+      "src/pubsub.c:530",
+      "src/pubsub.c:557",
+      "src/rdb.c:923",
+      "src/rdb.c:928",
+      "src/rdb.c:999",
+      "src/rdb.c:1004",
+      "src/rdb.c:1011",
+      "src/rdb.c:1017",
+      "src/server.c:3314",
+      "src/server.c:5415",
+      "src/server.c:5432",
+      "src/server.c:5489",
+      "src/server.c:5653",
+      "src/server.c:5688",
+      "src/sort.c:460",
+      "src/t_hash.c:616",
+      "src/t_hash.c:2105",
+      "src/t_hash.c:2126",
+      "src/t_set.c:1192",
+      "src/t_zset.c:2379",
+      "src/t_zset.c:2788",
+      "src/t_zset.c:4239",
+      "src/t_zset.c:4252"
+    ],
+    "rounds": 2
+  },
+  "cost_usd": 12.5355,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-61aa8ac85bde",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'forkless-infrastructure-enabled \"yes\"' Bad directive or wrong number of arguments; default deployment config"
+    },
+    {
+      "scenario": "ai-593fd73442eb",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'forkless-infrastructure-enabled \"yes\"' Bad directive or wrong number of arguments; default deployment config"
+    },
+    {
+      "scenario": "ai-c458a18a092a",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-660bd5aed9f1",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-48d18251f362",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-518d8ad6d4d9",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'forkless-infrastructure-enabled \"yes\"' Bad directive or wrong number of arguments; default deployment config"
+    },
+    {
+      "scenario": "ai-4f9fb51d079b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

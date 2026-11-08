@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 495650676b4b..82d7b7e40c18.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-962d14dd9a8a
+seed: 11032
+experiment:
+  id: proposed.cluster-config-save-failure
+  inputs: {}
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7000
+  server_config:
+    save: ''
+    repl-diskless-sync: 'yes'
+    repl-diskless-sync-delay: 0
+    repl-diskless-load: swapdb

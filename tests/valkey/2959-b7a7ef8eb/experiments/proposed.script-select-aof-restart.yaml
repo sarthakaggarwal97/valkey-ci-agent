@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.script-select-aof-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: Script effects after an in-script SELECT are written to the AOF against
+    the right database and survive a restart
+components:
+- use: valkey.action.commands
+  id: aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes", appendfsync: always}
+    timeout_s: 60
+    commands:
+    - {command: [SET, testkey, db0_value], expect: {equals: OK}}
+    - {command: [EVAL, "local v = server.call('get', KEYS[1]) server.call('select',\
+          \ '1') server.call('set', KEYS[1], 'db1_value') return server.call('get',\
+          \ KEYS[1])", 1, testkey], expect: {equals: db1_value}}
+    - {command: [EVAL, "server.call('select', '2') return server.call('incr', 'counter')",
+        0], expect: {equals: 1}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, testkey], expect_difference: true, expect: {equals: db0_value}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [GET, testkey], expect_difference: true, expect: {equals: db1_value}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [GET, counter], expect_difference: true, expect: {equals: "1"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof}

@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.lua-module-cluster-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Compare cluster-mode script slot checks (cross-slot, non-local key,
+    allow-cross-slot shebang, FCALL) across the Lua-as-module change and its parent
+components:
+- use: valkey.action.commands
+  id: clusterseq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "return redis.call('set', KEYS[1], 'v1')", 1, "{a}k"], expect: {
+        equals: OK}}
+    - {command: [EVAL, "return redis.call('get', KEYS[1])", 1, "{a}k"], expect: {
+        equals: v1}}
+    - {command: [EVAL, "return 1", 2, "{a}k", "{b}k"], expect: {error: CROSSSLOT}}
+    - {command: [EVAL, "redis.call('set','{a}k','1') redis.call('set','{b}k','2')\
+          \ return 1", 0], expect: {error: slot}}
+    - {command: [EVAL, "#!lua flags=allow-cross-slot\nredis.call('set','{a}k','1')\
+          \ redis.call('set','{b}k','2') return redis.call('get','{b}k')", 0], expect: {
+        equals: "2"}}
+    - {node: 1, command: [EVAL, "return redis.call('set','{a}k','x')", 0], expect: {
+        error: true}}
+    - {node: 1, command: [EVAL, "return 1", 1, "{a}k"], expect: {error: MOVED}}
+    - {command: [FUNCTION, LOAD, "#!lua name=clusterlib\nredis.register_function('csetk',\
+          \ function(keys, args) return redis.call('SET', keys[1], args[1]) end)"],
+      expect: {equals: clusterlib}}
+    - {command: [FCALL, csetk, 2, "{a}k", "{b}k"], expect: {error: CROSSSLOT}}
+    - {command: [FCALL, csetk, 1, "{a}f", vv], expect: {equals: OK}}
+    - {command: [EVAL, "return redis.call('get', KEYS[1])", 1, "{a}f"], expect: {
+        equals: vv}}
+    - {command: [INFO, scriptingengines], expect_difference: true, expect: {contains: "module=lua"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [clusterseq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: clusterseq}

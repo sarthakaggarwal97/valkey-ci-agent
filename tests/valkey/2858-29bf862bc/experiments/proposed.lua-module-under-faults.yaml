@@ -1,0 +1,64 @@
+extends: [valkey.base]
+id: proposed.lua-module-under-faults
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: EVAL and FUNCTION writes on the deployment, an instance killed (SIGTERM
+    exercises the new moduleUnloadAllModules shutdown path) and restarted (the Lua
+    module must auto-load again); propagation checked with WAIT, durability by the
+    ledger
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGTERM, SIGKILL], default: SIGTERM}
+    instance: {type: string, enum: [primary, replica], default: primary}
+components:
+- use: valkey.fault.process-signal
+  id: kill
+  config:
+    when_event: lua-load.completed
+    instance: {$ref: inputs.instance}
+    signal: {$ref: inputs.signal}
+    restart: true
+    restart_mode: immediate
+- use: valkey.action.commands
+  id: lua-load
+  depends_on: [writes, kill]
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "for i=1,200 do redis.call('set', 'lua:'..i, ARGV[1]) end return\
+          \ 200", 0, payload], expect: {equals: 200}}
+    - {command: [FUNCTION, LOAD, "#!lua name=faultlib\nredis.register_function('fset',\
+          \ function(keys, args) return redis.call('SET', keys[1], args[1]) end)"],
+      expect: {equals: faultlib}}
+    - {command: [FCALL, fset, 1, "lua:f", fv], expect: {equals: OK}}
+    - {command: [SCRIPT, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [EVAL, "return redis.call('incr', 'lua:ctr')", 0], expect: {equals: 1}}
+    - {command: [WAIT, 1, 5000], expect: {min: 1}}
+- use: valkey.action.wait-event
+  id: wait-recover
+  depends_on: [lua-load]
+  config: {event: kill.recovered, only_after: kill.injected, timeout_s: 90}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [wait-recover]
+  config: {seconds: 3}
+- use: valkey.action.commands
+  id: lua-after
+  depends_on: [settle]
+  config:
+    timeout_s: 60
+    commands:
+    - {command: [EVAL, "return redis.call('set', KEYS[1], 'post')", 1, "lua:post"],
+      expect: {equals: OK}}
+    - {command: [WAIT, 1, 10000], expect: {min: 1}, wait_s: 30}
+    - {command: [EVAL, "return redis.call('get', KEYS[1])", 1, "lua:post"], expect: {
+        equals: post}}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [lua-load.completed, kill.recovered, lua-after.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill}
+- {evidence_id: valkey.command.sequence, source: lua-after}

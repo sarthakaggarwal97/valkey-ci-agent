@@ -1,0 +1,75 @@
+extends: [valkey.base]
+id: proposed.cob-soft-limit-enforced-at-backlog
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: >-
+    When a stalled replica's output buffer outgrows repl-backlog-size, the soft limit
+    clamped to the backlog size must still disconnect it (#2866 must not disable the
+    soft limit); the replica then completes a full resync and converges on the ledger.
+inputs:
+  properties:
+    run_before_stall_s: {type: number, minimum: 0, maximum: 30, default: 1}
+    pause_s: {type: number, minimum: 0.5, maximum: 30, default: 4}
+    settle_s: {type: number, minimum: 0, maximum: 60, default: 6}
+components:
+- use: valkey.observer.log
+  id: cob-logs
+  config:
+    instances: all
+    expect:
+    - {evidence_id: valkey.cob.soft-limit-disconnect-logged, pattern: "overcoming\
+        \ of output buffer limits", required: true}
+- use: valkey.observer.info
+  id: resync-info
+  config:
+    instances: primaries
+    interval_s: 0.1
+    sections: [stats]
+    expectations:
+    - {field: sync_full, delta_min: 1, evidence_id: valkey.cob.full-resync-counted}
+- use: valkey.fault.process-signal
+  id: stall-replica
+  config:
+    instance: replica
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.pause_s}
+    when_event: run-then-stall.completed
+- use: valkey.action.sleep
+  id: run-then-stall
+  depends_on: [writes, cob-logs, resync-info, stall-replica]
+  config:
+    seconds: {$ref: inputs.run_before_stall_s}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [run-then-stall]
+  config:
+    seconds: {$ref: inputs.settle_s}
+- use: valkey.action.commands
+  id: restore-output-limit
+  depends_on: [settle]
+  config:
+    instances: primaries
+    commands:
+    - {command: [CONFIG, SET, client-output-buffer-limit, "replica 256mb 64mb 60"],
+      expect: {equals: OK}}
+- use: valkey.action.poll
+  id: links-up
+  depends_on: [restore-output-limit]
+  config:
+    field: master_link_status
+    instances: replicas
+    predicate: {equals: up}
+    section: replication
+    timeout_s: 120
+- use: valkey.oracle.evidence
+  id: full-resync
+  depends_on: [resync-info, cob-logs]
+  config:
+    require:
+    - {evidence_id: valkey.cob.full-resync-counted, source: resync-info}
+    - {evidence_id: valkey.cob.soft-limit-disconnect-logged, source: cob-logs}
+required_events: [run-then-stall.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: stall-replica}

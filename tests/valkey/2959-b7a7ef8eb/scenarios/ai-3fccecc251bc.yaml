@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a571ac527fa8..b7a7ef8eb29d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3fccecc251bc
+seed: 104
+experiment:
+  id: proposed.script-select-aof-restart
+deployment:
+  mode: standalone
+  base_port: 7300

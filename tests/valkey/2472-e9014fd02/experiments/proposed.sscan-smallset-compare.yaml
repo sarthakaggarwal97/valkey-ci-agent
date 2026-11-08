@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.sscan-smallset-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: SSCAN on intset- and listpack-encoded sets drives the OBJ_SET branch
+    of scanGenericCommand, which now builds stringRef scan items (db.c addScanDataItem
+    path, lines 1301-1302).
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SSCAN, missing, 0]}
+    - {command: [SADD, iset, 1, 2, 3, 100, -5, 2147483648, 4294967296, 9223372036854775807],
+      expect: {equals: 8}}
+    - {command: [SSCAN, iset, 0]}
+    - {command: [SSCAN, iset, 0, MATCH, "1*"]}
+    - {command: [SSCAN, iset, 0, MATCH, "*2*", COUNT, 1]}
+    - {command: [SSCAN, iset, 0, MATCH, "*", COUNT, 1000000]}
+    - {command: [SADD, sset, a, bb, "", "hello world", "h*llo", "{tag}key"], expect: {
+        equals: 6}}
+    - {command: [SSCAN, sset, 0]}
+    - {command: [SSCAN, sset, 0, MATCH, "h*"]}
+    - {command: [SSCAN, sset, 0, MATCH, ""]}
+    - {command: [SSCAN, sset, 0, MATCH, "*o*"]}
+    - {command: [SADD, iset, notanumber], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, iset], compare: skip}
+    - {command: [SSCAN, iset, 0]}
+    - {command: [SSCAN, iset, 0, MATCH, "*4*"]}
+    - {command: [SSCAN, iset, 0, MATCH, "not*"]}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [sscan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sscan}

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b7a7ef8eb29d739347a516df635d9d398f7c6db3",
+  "parent": "a571ac527fa8030d5a51c1edaea948c393bb5fbd",
+  "pr": 2959,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Propagate database changes from scripting engine temp client (#2959)",
+  "date": "2025-12-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.5362,
+  "findings": [],
+  "recorded": []
+}

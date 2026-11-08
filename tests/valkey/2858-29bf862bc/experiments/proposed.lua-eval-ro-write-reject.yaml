@@ -1,0 +1,29 @@
+extends: [valkey.liveness]
+id: proposed.lua-eval-ro-write-reject
+deployment:
+  modes: [standalone]
+metadata:
+  description: A write command issued from EVAL_RO is rejected with the read-only
+    script error message
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ro
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SET, k, v0], expect: {equals: OK}}
+    - {command: [EVAL_RO, "return server.call('set', KEYS[1], 'v1')", 1, k], expect_difference: true,
+      expect: {error: "not allowed from read-only scripts"}}
+    - {command: [GET, k], expect: {equals: v0}}
+    - {command: [EVAL_RO, "return server.call('get', KEYS[1])", 1, k], expect: {equals: v0}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ro}

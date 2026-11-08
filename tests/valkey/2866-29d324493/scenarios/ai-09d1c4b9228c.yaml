@@ -1,0 +1,22 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 04d0bba398af..29d324493776.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-09d1c4b9228c
+seed: 20663
+experiment:
+  id: proposed.cob-soft-limit-enforced-at-backlog
+  inputs:
+    run_before_stall_s: 1
+    pause_s: 4
+    settle_s: 6
+    mutation_rate: 300
+    value_size: 16384
+    mutable_keys: 50
+    stable_keys: 0
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    client-output-buffer-limit: replica 0 256kb 1
+    repl-backlog-size: 1mb
+    repl-diskless-sync-delay: '0'

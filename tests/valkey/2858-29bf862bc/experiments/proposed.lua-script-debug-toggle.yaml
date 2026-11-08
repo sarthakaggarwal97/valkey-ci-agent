@@ -1,0 +1,29 @@
+extends: [valkey.liveness]
+id: proposed.lua-script-debug-toggle
+deployment:
+  modes: [standalone]
+metadata:
+  description: SCRIPT DEBUG YES/SYNC/NO drives the module scripting engine debugger
+    enable and disable callbacks
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dbg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SCRIPT, DEBUG, "yes"], expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, "no"], expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, "sync"], expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, "no"], expect: {equals: OK}}
+    - {command: [EVAL, "return 1", 0], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbg}

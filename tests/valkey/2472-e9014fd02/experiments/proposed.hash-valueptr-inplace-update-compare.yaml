@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.hash-valueptr-inplace-update-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: In-place updates of non-embedded hashtable hash entry values drive
+    entrySetValueSds and entryFreeValuePtr (entry.c lines 179-184), including updates
+    with an unchanged expiry via HSETEX KEEPTTL, plus embedded/pointer encoding flips
+    and expiry toggles on pointer entries.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hupd
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [HSET, h, big, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"],
+      expect: {equals: 1}}
+    - {command: [HSET, h, big, "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
+      expect: {equals: 0}}
+    - {command: [HGET, h, big], expect: {equals: "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"}}
+    - {command: [HSET, h, big, "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"],
+      expect: {equals: 0}}
+    - {command: [HSTRLEN, h, big], expect: {equals: 256}}
+    - {command: [HSET, h, small, v], expect: {equals: 1}}
+    - {command: [HSET, h, small, "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD"],
+      expect: {equals: 0}}
+    - {command: [HSET, h, small, w], expect: {equals: 0}}
+    - {command: [HGET, h, small], expect: {equals: w}}
+    - {command: [HSET, h, small, ""], expect: {equals: 0}}
+    - {command: [HGET, h, small], expect: {equals: ""}}
+    - {command: [HSETEX, h, EX, 100, FIELDS, 1, tf, "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"],
+      expect: {equals: 1}}
+    - {command: [HSETEX, h, KEEPTTL, FIELDS, 1, tf, "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"],
+      expect: {equals: 1}}
+    - {command: [HGET, h, tf], expect: {equals: "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"}}
+    - {command: [HTTL, h, FIELDS, 1, tf], compare: skip}
+    - {command: [HPERSIST, h, FIELDS, 1, tf], expect: {equals: [1]}}
+    - {command: [HTTL, h, FIELDS, 1, tf], expect: {equals: [-1]}}
+    - {command: [HEXPIRE, h, 100, FIELDS, 1, tf], expect: {equals: [1]}}
+    - {command: [HSETEX, h, KEEPTTL, FIELDS, 1, tf, "GGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG"],
+      expect: {equals: 1}}
+    - {command: [HSTRLEN, h, tf], expect: {equals: 205}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HDEL, h, big], expect: {equals: 1}}
+    - {command: [HDEL, h, tf], expect: {equals: 1}}
+    - {command: [HLEN, h], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [hupd.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hupd}
