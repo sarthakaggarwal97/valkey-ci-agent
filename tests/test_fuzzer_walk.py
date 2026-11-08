@@ -1082,6 +1082,20 @@ def test_coverage_counts_the_changed_lines_gcov_marks_as_code():
     assert walk.coverage({"src/a.c": [1]}, {"src/a.c": {}})["percent"] is None
 
 
+def test_gcov_of_a_file_without_functions_is_measured_as_no_executable_lines(monkeypatch, tmp_path):
+    # valkey #2309 touched cli_commands.c, tables from commands.def with no functions: gcov exits 0 with "No
+    # executable lines" and writes no .gcov report, and the merge's coverage went unmeasured on the missing file.
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "cli_commands.c").write_text("int table[1] = {0};\n")
+    (tmp_path / "src" / "cli_commands.gcno").write_bytes(b"")
+
+    def run(command, **kw):
+        return subprocess.CompletedProcess(command, 0, stdout="No executable lines\n", stderr="")
+
+    monkeypatch.setattr(walk.subprocess, "run", run)
+    assert walk.gcov(tmp_path, "src/cli_commands.c") == {}
+
+
 def _rounds(executed: list[int], lines: int = 10, tests: list[list[str]] | None = None, started: float | None = None):
     """cover() with fakes: each measure reports the next of ``executed``; each round walks the next of ``tests``."""
     measured: list[list[str]] = []

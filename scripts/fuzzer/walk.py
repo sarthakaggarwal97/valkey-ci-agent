@@ -457,7 +457,11 @@ def gcov(tree: Path, path: str) -> dict[int, int] | None:
         return None
     subprocess.run(["gcov", "-o", ".", source.name], cwd=source.parent, check=True, capture_output=True, text=True,
                    timeout=300)
-    return gcov_counts((source.parent / f"{source.name}.gcov").read_text(errors="replace"))
+    report = source.parent / f"{source.name}.gcov"
+    # A file of data alone (cli_commands.c is tables from commands.def) has no functions: gcov writes no report.
+    if not report.is_file():
+        return {}
+    return gcov_counts(report.read_text(errors="replace"))
 
 
 def coverage(changed: dict[str, list[int]], counts: dict[str, dict[int, int] | None]) -> dict[str, Any]:
