@@ -737,6 +737,18 @@ def test_a_test_skipped_as_unsupported_is_dropped_and_its_reason_shown(monkeypat
     assert walk._summary(_merge(), result, "now")["skipped"] == {"count": 1, "reason": summary}
 
 
+def test_a_skip_reasons_rejected_directive_survives_in_the_summary():
+    # valkey #2777/#2986: the rejected config sits at the tail of the FATAL CONFIG error, past the capability
+    # prefix, so a 200-char cut dropped the ">>> 'name'" and PROGRESS.md read uselessly "...at line ".
+    reason = (
+        "required capability 'save-behavior-support' is unsupported: default: build rejects startup "
+        "configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, "
+        "at line 11 >>> 'cluster-config-save-behavior sync' Bad directive or wrong number of arguments"
+    )
+    result = {"recorded": [{"scenario": "s", "status": "SKIP_UNSUPPORTED", "reason": reason}]}
+    assert "cluster-config-save-behavior" in walk._summary(_merge(), result, "now")["skipped"]["reason"]
+
+
 def test_the_same_commands_unreached_on_both_builds_is_no_regressed_fix(monkeypatch, tmp_path):
     # valkey-json #123: its test reached the change on 24 commands at the merge and on unstable, with the same few
     # marked commands unreached on both, and was filed as a regressed fix.

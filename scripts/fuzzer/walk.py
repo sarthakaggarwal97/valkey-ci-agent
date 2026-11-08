@@ -1217,10 +1217,12 @@ def _summary(merge: dict[str, Any], result: dict[str, Any] | None, now: str) -> 
     if entry["coverage"] is None and reason and reason not in COVERAGE_NOT_APPLICABLE:
         entry["coverage_reason"] = str(reason)[:200]
     # Tests skipped as unsupported, most often a setting the build does not know: one reason, so a skip that
-    # every merge hits (a renamed config) shows in PROGRESS.md, not only in a dropped count.
+    # every merge hits (a renamed config) shows in PROGRESS.md, not only in a dropped count. The rejected
+    # directive sits at the tail of a FATAL CONFIG error (">>> 'name value'"), past the capability prefix, so
+    # keep enough of it to name the config, or PROGRESS.md shows an uninformative "at line " with no clue which.
     skipped = [r for r in result.get("recorded") or [] if r.get("status") == "SKIP_UNSUPPORTED"]
     if skipped:
-        entry["skipped"] = {"count": len(skipped), "reason": str(skipped[0].get("reason") or "")[:200]}
+        entry["skipped"] = {"count": len(skipped), "reason": str(skipped[0].get("reason") or "")[:300]}
     if not result.get("error"):
         # record() keeps the tests of a merge whose run finished.
         entry["folder"] = merge_folder(merge)
