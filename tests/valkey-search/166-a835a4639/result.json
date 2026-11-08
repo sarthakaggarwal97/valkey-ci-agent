@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a835a46398d6a284eb1ef67d3e44cf8f15feaf6b",
+  "parent": "316c4265b1ff14285097c9f3b9eceacc5ddf5601",
+  "pr": 166,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fixed drop index bug (#166)",
+  "date": "2025-06-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 10.5742,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

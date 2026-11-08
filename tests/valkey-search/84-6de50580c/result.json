@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "6de50580c8e7340b2a09b7d4650c205491844b10",
+  "parent": "e0765255a1230c9dfcc87dc194f3a3654e73611f",
+  "pr": 84,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Update printed binary file path (#84)",
+  "date": "2025-03-31",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2258,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only fixes the directory name printed by build.sh after a successful build (.build_${BUILD_CONFIG} -> .build-${BUILD_CONFIG} in two printf messages). It is a build-script cosmetic/documentation fix: no module source, command behaviour, reply, persistence, or replication path is touched, so there is nothing a runtime scenario could exercise."
+}

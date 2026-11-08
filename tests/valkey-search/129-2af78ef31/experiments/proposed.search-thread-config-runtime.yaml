@@ -1,0 +1,87 @@
+extends: [valkey.liveness]
+id: proposed.search-thread-config-runtime
+deployment:
+  modes: [standalone]
+metadata:
+  description: search.reader-threads, search.writer-threads and search.log-level become
+    runtime-mutable configs; set and resize them while HNSW indexing and KNN searches
+    run, compared against the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: threadcfg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, search.reader-threads], expect_difference: true, expect: {
+        contains: search.reader-threads}}
+    - {command: [CONFIG, SET, search.reader-threads, 3], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, 2], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.writer-threads], expect_difference: true, expect: {
+        contains: '2'}}
+    - {command: [CONFIG, SET, search.reader-threads, 0], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.writer-threads, 1025], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.writer-threads, 9223372036854775807], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.log-level, debug], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, GET, search.log-level], expect_difference: true, expect: {
+        contains: debug}}
+    - {command: [CONFIG, SET, search.log-level, no-such-level], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.log-level, notice], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', v, !!binary 'AACAPwAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:2', v, !!binary 'AAAAQAAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:3', v, !!binary 'AABAQAAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:4', v, !!binary 'AACAQAAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:5', v, !!binary 'AACgQAAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:6', v, !!binary 'AADAQAAAAAA='], expect: {equals: 1}}
+    - {command: [CONFIG, SET, search.writer-threads, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [HSET, 'doc:7', v, !!binary 'AADgQAAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:8', v, !!binary 'AAAAQQAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:9', v, !!binary 'AAAQQQAAAAA='], expect: {equals: 1}}
+    - {command: [CONFIG, SET, search.writer-threads, 64], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [HSET, 'doc:10', v, !!binary 'AAAgQQAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:11', v, !!binary 'AAAwQQAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:12', v, !!binary 'AABAQQAAAAA='], expect: {equals: 1}}
+    - {command: [CONFIG, SET, search.reader-threads, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: '12'}}
+    - {command: [DEBUG, SLEEP, 2], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 4 @v $q]', PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        NOCONTENT, DIALECT, 2], compare: unordered, expect: {contains: 'doc:1'}}
+    - {command: [CONFIG, SET, search.reader-threads, 32], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.writer-threads, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 12 @v $q]', PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        NOCONTENT, DIALECT, 2], compare: unordered, expect: {contains: 'doc:12'}}
+    - {command: [CONFIG, SET, search.reader-threads, 2], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 12 @v $q]', PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        NOCONTENT, DIALECT, 2], compare: unordered, expect: {contains: 'doc:1'}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [threadcfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: threadcfg}

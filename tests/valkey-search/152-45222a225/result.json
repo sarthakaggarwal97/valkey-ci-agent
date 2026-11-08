@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "45222a225b593bc39ed6edc4561a0686926934e0",
+  "parent": "ef08ab65e068aa0cde1c66e01822c89524f0f960",
+  "pr": 152,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "More resilient builds on different distros (#152)",
+  "date": "2025-05-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2546,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only submodules/CMakeLists.txt, adding a helper that locates dependency CMake config files under lib/ or lib64/ when setting CMAKE_PREFIX_PATH, so builds succeed on RedHat-based distros where configs land in lib64/. It is purely a build-configuration change: no C++ source, command behaviour, replies, persistence, or replication paths are altered, and a successfully built module is byte-for-byte equivalent in behaviour to the parent. There is no runtime path for the fuzzer to exercise, so no scenario is needed."
+}

@@ -1,0 +1,37 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "37b90f2eb0b5d3e555470d12983cff03bf8fe20a",
+  "parent": "41c4ff082a584c599c2c4b6155e2ea61bf7e0c42",
+  "pr": 143,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Use background context rather than IO context during Aux save. (#143)",
+  "date": "2025-05-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 6.4488,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-a62bd739ddc0",
+      "seed": 41002,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #143, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

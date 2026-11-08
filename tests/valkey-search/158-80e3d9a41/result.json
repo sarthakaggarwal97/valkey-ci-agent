@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "80e3d9a41ac9539906d5a8f36e11863423288d2c",
+  "parent": "e06cf7a931fd845e3a87e7320ae880bb82c5e577",
+  "pr": 158,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Use differnt ubuntu mirror (#158)",
+  "date": "2025-05-30",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.214,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only .devcontainer/Dockerfile, switching the Ubuntu apt mirror used when building the development container image. No module source, command behaviour, data path, or runtime configuration changes; the built valkey-search module is identical on both sides, so no scenario can reach or distinguish anything."
+}

@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.search-hnsw-blocksize-bounds
+deployment:
+  modes: [standalone]
+metadata:
+  description: search.hnsw-block-size minimum dropped from 10240 to 0; probe the new
+    bounds and drive ResizeIfFull with a zero block size on a full HNSW index, compared
+    against the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: blocksize
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, search.hnsw-block-size], expect: {contains: '10240'}}
+    - {command: [CONFIG, SET, search.hnsw-block-size, 100], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.hnsw-block-size, 4294967295], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.hnsw-block-size, 4294967296], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.hnsw-block-size, -1], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.writer-threads, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.hnsw-block-size, 0], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, v, VECTOR, HNSW,
+        8, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, INITIAL_CAP, 2], expect: {
+        equals: OK}}
+    - {command: [HSET, 'doc:1', v, !!binary 'AACAPwAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:2', v, !!binary 'AAAAQAAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:3', v, !!binary 'AABAQAAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:4', v, !!binary 'AACAQAAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:5', v, !!binary 'AACgQAAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:6', v, !!binary 'AADAQAAAAAA='], expect: {equals: 1}}
+    - {command: [DEBUG, SLEEP, 2], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], compare: skip}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 6 @v $q]', PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        NOCONTENT, DIALECT, 2], compare: unordered, expect_difference: true, expect: {
+        contains: 'doc:2'}}
+    - {command: [CONFIG, SET, search.hnsw-block-size, 3], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [HSET, 'doc:7', v, !!binary 'AADgQAAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'doc:8', v, !!binary 'AAAAQQAAAAA='], expect: {equals: 1}}
+    - {command: [DEBUG, SLEEP, 2], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 8 @v $q]', PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        NOCONTENT, DIALECT, 2], compare: unordered, expect_difference: true, expect: {
+        contains: 'doc:7'}}
+    - {command: [FT.INFO, idx], compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [blocksize.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: blocksize}

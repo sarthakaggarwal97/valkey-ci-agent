@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 37b90f2eb0b5..2af78ef31027.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f23a3a3ffed5
+seed: 105
+experiment:
+  id: proposed.search-hnsw-blocksize-bounds
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

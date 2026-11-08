@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "73f2d5302e08e44d0f0b4a840498ab657ad10be6",
+  "parent": "4d1dd25390317d223a2ee321f9a5aabe12c95c4c",
+  "pr": 162,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Enable integration tests + ASan (#162)",
+  "date": "2025-06-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3193,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only CI and test infrastructure: a new GitHub Actions workflow that runs integration tests under ASan, build.sh plumbing to forward an --asan flag, an LSan suppression file (ci/asan.supp), and a refactor of testing/integration/run.sh (ASan build dir suffix, env-var printing, log scanning for ASan errors, cleanup trap). No module source code is changed, so the valkey-search module binary built at the change behaves identically to the parent's; there is no runtime behaviour a fuzzer scenario could reach or compare."
+}

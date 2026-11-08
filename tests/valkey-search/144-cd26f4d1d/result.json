@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "cd26f4d1dae82d7b110f9ea0b1aff7208695276c",
+  "parent": "8f17a7c72cde52f399a9d017c4974855f2e1ec25",
+  "pr": 144,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix GetRedisLocalPort function to support TLS (#144)",
+  "date": "2025-06-08",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 6,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 10.8248,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

@@ -1,0 +1,84 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "2af78ef31027fd1bfb966bdd906ce65d3f85aab7",
+  "parent": "37b90f2eb0b5d3e555470d12983cff03bf8fe20a",
+  "pr": 129,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Allow changing the reader/writer threads count at runtime (#129)",
+  "date": "2025-05-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 5,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.8048,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-65e9a98f276c",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #129, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-fc6e37a3a8ad",
+      "seed": 104,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #129, since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-f23a3a3ffed5",
+      "seed": 105,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #129, since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-1e6aa3ff1470",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'threadcfg' returned ERROR: expectations both builds violate alike, so they are not about the change: 32 (FT.SEARCH idx *=>[KNN 12 @v $q] PARAMS 2 q <binary> NOCONTENT DIALECT 2)"
+    },
+    {
+      "scenario": "ai-65e9a98f276c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'threadcfg' returned ERROR: expectations both builds violate alike, so they are not about the change: 32 (FT.SEARCH idx *=>[KNN 12 @v $q] PARAMS 2 q <binary> NOCONTENT DIALECT 2)"
+    },
+    {
+      "scenario": "ai-28e867dd05dc",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'threadcfg' returned ERROR: expectations both builds violate alike, so they are not about the change: 32 (FT.SEARCH idx *=>[KNN 12 @v $q] PARAMS 2 q <binary> NOCONTENT DIALECT 2)"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

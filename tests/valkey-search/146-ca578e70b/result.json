@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ca578e70b2d34b9dea529abebbd4d6bf475140cc",
+  "parent": "2af78ef31027fd1bfb966bdd906ce65d3f85aab7",
+  "pr": 146,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Dropped the deprecated `--threads` flag (#146)",
+  "date": "2025-05-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.7822,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change removes the deprecated, hidden `--threads` module startup flag and its guard over later reader-threads/writer-threads updates. That behavior is only observable when `--threads` is passed as a module load-time argument: the flag was REDISMODULE_CONFIG_HIDDEN, so on both builds it was never registered with Valkey's config system (ModuleConfigManager::Init skips hidden entries) and CONFIG GET/SET search.threads replies identically (unknown option) on parent and change. The fuzzer cannot pass module arguments: modules load as bare paths (valkey.artifact.local-module and the modules/modu"
+}

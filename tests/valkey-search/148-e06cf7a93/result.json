@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "e06cf7a931fd845e3a87e7320ae880bb82c5e577",
+  "parent": "54b62de78b66ebf4c592b8fae99fa5e23d5e1980",
+  "pr": 148,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Small integ tests fixes (#148)",
+  "date": "2025-05-30",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2512,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change touches only testing/integration/run.sh, the script that builds dependencies and launches valkey-search's own integration tests in CI: it stops deleting build directories between runs, switches the valkey-server build from make to cmake/ninja with updated binary paths, adds colored output, and kills stray valkey-server processes on exit. No module source, command handling, indexing, replication or persistence code is touched, so the loaded libsearch.so behaves identically on both builds \u2014 there is no runtime behaviour for a fuzzer scenario to reach."
+}

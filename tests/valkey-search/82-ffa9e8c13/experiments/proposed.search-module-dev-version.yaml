@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.search-module-dev-version
+deployment:
+  modes: [standalone]
+metadata:
+  description: Dev branch registers the module as version 999999; MODULE LIST and
+    INFO modules report it, and the module still creates indexes, backfills and answers
+    FT.SEARCH
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: version
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [MODULE, LIST], expect_difference: true, expect: {contains: "999999"}}
+    - {command: [INFO, modules], expect_difference: true, expect: {contains: "ver=999999"}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, tags, TAG], expect: {
+        equals: OK}}
+    - {command: [FT._LIST], expect: {equals: [idx]}, compare: unordered}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAA=", tags, red], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAAAAAgD8=", tags, blue], expect: {
+        equals: 2}}
+    - {command: [FT.SEARCH, idx, "@tags:{red}=>[KNN 1 @vec $BLOB]", PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], wait_s: 30, expect: {contains: "doc:1"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "@tags:{blue}=>[KNN 1 @vec $BLOB]", PARAMS, 2, BLOB,
+        !!binary "AAAAAAAAgD8=", DIALECT, 2], wait_s: 30, expect: {contains: "doc:2"},
+      compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAAAA=",
+        DIALECT, 2], expect: {contains: "doc:1"}, compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [version.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: version}

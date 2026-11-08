@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "54b62de78b66ebf4c592b8fae99fa5e23d5e1980",
+  "parent": "45222a225b593bc39ed6edc4561a0686926934e0",
+  "pr": 154,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix compilation failure for release option (#154)",
+  "date": "2025-05-30",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2395,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only replaces a bare static_assert(false) with a dependent-false static_assert inside the never-instantiated else branch of the templated ConfigBuilder Builder() function in vmsdk/src/module_config.h. This is a build fix: the assert exists solely to fail compilation if an unsupported config type were ever used, and the branch is not instantiated in any shipped code path. Both builds that the fuzzer would compare produce identical runtime behavior; the only observable effect of the change is that the release build compiles at all, which the runner's build step already verifies. No co"
+}

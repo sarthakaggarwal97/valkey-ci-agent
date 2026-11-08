@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "0730baaebc532b9168e771120a6e9e04602f1fbc",
+  "parent": "cd26f4d1dae82d7b110f9ea0b1aff7208695276c",
+  "pr": 172,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Refactored protobuf generation code (cmake) (#172)",
+  "date": "2025-06-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3795,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely a CMake build refactor: it replaces the generic protobuf_generate() custom-command machinery with configure-time execute_process calls to protoc (plus a timestamp-based skip and extra status messages) in protobuf_generate.cmake and the CMakeLists.txt files that call it. No .proto file, C++ source, or module runtime code changes; the protoc invocations produce the same generated sources with the same include paths, and any generation failure is a configure-time FATAL_ERROR caught when the runner builds the module. There is no runtime behaviour for a scenario to reach, so no"
+}

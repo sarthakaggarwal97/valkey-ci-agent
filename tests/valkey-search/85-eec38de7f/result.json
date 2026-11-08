@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "eec38de7fb0423fb659b451b79a8e3420299e936",
+  "parent": "ffa9e8c136ef8c98d15e721130b28ea2415ef04d",
+  "pr": 85,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "allow building with external libs (#85)",
+  "date": "2025-04-01",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6724,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely a build and CI change: it adds a WITH_SUBMODULES_SYSTEM CMake option, a ci/build_ubuntu.sh script, prebuilt dependency .deb packages, and rewrites cmake modules to locate gRPC/protobuf/abseil/GTest/highwayhash via find_package instead of hardcoded submodule paths, renaming create_proto_library along the way. No C++ source or header is modified, the pinned dependency versions are unchanged, and the module's runtime behaviour is identical on both commits, so there is nothing a scenario could reach or compare."
+}

@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.ft-dropindex-shared-prefix
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.DROPINDEX of one index must not erase the keyspace-notification
+    subscription of another index whose key prefix equals or is extended by the dropped
+    index's prefix (PatriciaTree RemoveHelper erased nodes that still held values)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dropindex
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, idx1], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary 'AACAPwAAAAA='], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx2, "*=>[KNN 2 @vec $B]", PARAMS, 2, B, !!binary 'AACAPwAAAAA=',
+        NOCONTENT], expect_difference: true, wait_s: 15, expect: {equals: [1, "doc:1"]}}
+    - {command: [FT.CREATE, idx3, ON, HASH, PREFIX, 1, "item:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx4, ON, HASH, PREFIX, 1, "item:extra:", SCHEMA, vec,
+        VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, idx4], expect: {equals: OK}}
+    - {command: [HSET, "item:1", vec, !!binary 'AAAAAAAAgD8='], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx3, "*=>[KNN 2 @vec $B]", PARAMS, 2, B, !!binary 'AAAAAAAAgD8=',
+        NOCONTENT], expect_difference: true, wait_s: 15, expect: {equals: [1, "item:1"]}}
+    - {command: [FT.CREATE, idx5, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx5, "*=>[KNN 2 @vec $B]", PARAMS, 2, B, !!binary 'AACAPwAAAAA=',
+        NOCONTENT], wait_s: 30, expect: {equals: [1, "doc:1"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dropindex.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dropindex}

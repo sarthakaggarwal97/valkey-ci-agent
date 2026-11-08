@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "4d1dd25390317d223a2ee321f9a5aabe12c95c4c",
+  "parent": "1a4e2db86326be27390d12e80420a3a6b467329b",
+  "pr": 161,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "CI updates (#161)",
+  "date": "2025-05-31",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3243,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely to CI and build infrastructure: .devcontainer/Dockerfile (adds wget), .gitignore, build.sh (test-output clearing and script exit code), ci/build_ubuntu.sh and submodules/package-submodules.sh (ASan-suffixed dependency .deb packaging and downloading debs from GitHub releases), and removal of committed binary .deb files. No module source code, command handling, indexing, or runtime behaviour is touched, so the module built at the change and at its parent behave identically and no scenario can exercise the change."
+}

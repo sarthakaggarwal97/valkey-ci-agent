@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.search-aux-save-reload-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Drive the module aux-save path (SAVE, forked BGSAVE, AOF rewrite preamble,
+    restart reload) with and without index schemas, replies compared across the two
+    module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    appendonly: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: auxsave
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {appendonly: {$ref: inputs.appendonly}}
+    timeout_s: 30
+    commands:
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary 'AACAPwAAAEA='], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", vec, !!binary 'AAAAAAAAAAA='], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $v]", NOCONTENT, PARAMS, 2, v, !!binary 'AAAAAAAAAAA=',
+        DIALECT, 2], wait_s: 30, compare: unordered, expect: {contains: "doc:2"}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: started}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "rdb_bgsave_in_progress:0"}}
+    - {command: [BGREWRITEAOF], expect: {contains: started}}
+    - {command: [INFO, persistence], wait_s: 60, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT._LIST], compare: unordered, expect: {equals: [idx]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $v]", NOCONTENT, PARAMS, 2, v, !!binary 'AAAAAAAAAAA=',
+        DIALECT, 2], wait_s: 30, compare: unordered, expect: {contains: "doc:2"}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: started}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "rdb_bgsave_in_progress:0"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [auxsave.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: auxsave}

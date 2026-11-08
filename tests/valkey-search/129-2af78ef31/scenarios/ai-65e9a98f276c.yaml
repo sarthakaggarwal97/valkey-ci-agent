@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 37b90f2eb0b5..2af78ef31027.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-65e9a98f276c
+seed: 102
+experiment:
+  id: proposed.search-thread-config-runtime
+  inputs:
+    resp: 3
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

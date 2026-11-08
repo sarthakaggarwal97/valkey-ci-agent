@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ef08ab65e068aa0cde1c66e01822c89524f0f960",
+  "parent": "a752b7c6e3ae058f877da38563c0e20e164967ef",
+  "pr": 149,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Module-Config: fix a possibility of of a double free (#149)",
+  "date": "2025-05-28",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5636,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix changes ConfigBuilder (vmsdk/src/module_config.h) to hold its ConfigBase in a shared_ptr from construction instead of wrapping a raw pointer in a new shared_ptr inside Build(). The double free it prevents requires Build() to be called twice on one builder (two independent shared_ptr control blocks), but the builder's copy/assignment are deleted and every call site \u2014 the five static config definitions in src/valkey_search_options.cc and the unit tests \u2014 calls Build() exactly once on a temporary builder chain. No reachable code path in the parent build triggers the bug, and the fixed bui"
+}

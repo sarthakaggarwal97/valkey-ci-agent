@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.ft-tag-remove-shared-node
+deployment:
+  modes: [standalone]
+metadata:
+  description: Removing one document's tag must not erase other documents that share
+    the same tag tree node, nor a parent tag node on the removal cascade path (same
+    PatriciaTree RemoveHelper bug via the Tag index)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: tagdrop
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, tidx, ON, HASH, PREFIX, 1, "p:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, tag, TAG], expect: {
+        equals: OK}}
+    - {command: [HSET, "p:1", vec, !!binary 'AACAPwAAAAA=', tag, red], expect: {equals: 2}}
+    - {command: [HSET, "p:2", vec, !!binary 'AAAAAAAAgD8=', tag, red], expect: {equals: 2}}
+    - {command: [FT.SEARCH, tidx, "@tag:{red} =>[KNN 4 @vec $B]", PARAMS, 2, B, !!binary 'AACAPwAAAAA=',
+        NOCONTENT], wait_s: 30, expect: {equals: [2, "p:1", "p:2"]}}
+    - {command: [DEL, "p:2"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, tidx, "@tag:{red} =>[KNN 4 @vec $B]", PARAMS, 2, B, !!binary 'AACAPwAAAAA=',
+        NOCONTENT], expect_difference: true, wait_s: 15, expect: {equals: [1, "p:1"]}}
+    - {command: [HSET, "p:1", tag, blue], expect: {equals: 0}}
+    - {command: [FT.SEARCH, tidx, "@tag:{blue} =>[KNN 4 @vec $B]", PARAMS, 2, B, !!binary 'AACAPwAAAAA=',
+        NOCONTENT], wait_s: 30, expect: {equals: [1, "p:1"]}}
+    - {command: [HSET, "p:10", vec, !!binary 'AACAPwAAAAA=', tag, alpha], expect: {
+        equals: 2}}
+    - {command: [HSET, "p:11", vec, !!binary 'AAAAAAAAgD8=', tag, alphabet], expect: {
+        equals: 2}}
+    - {command: [FT.SEARCH, tidx, "@tag:{alphabet} =>[KNN 4 @vec $B]", PARAMS, 2,
+        B, !!binary 'AACAPwAAAAA=', NOCONTENT], wait_s: 30, expect: {equals: [1, "p:11"]}}
+    - {command: [DEL, "p:11"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, tidx, "@tag:{alpha} =>[KNN 4 @vec $B]", PARAMS, 2, B,
+        !!binary 'AACAPwAAAAA=', NOCONTENT], expect_difference: true, wait_s: 15,
+      expect: {equals: [1, "p:10"]}}
+    - {command: [FT.SEARCH, tidx, "@tag:{alph*} =>[KNN 4 @vec $B]", PARAMS, 2, B,
+        !!binary 'AACAPwAAAAA=', NOCONTENT], expect_difference: true, wait_s: 10,
+      expect: {equals: [1, "p:10"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [tagdrop.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tagdrop}

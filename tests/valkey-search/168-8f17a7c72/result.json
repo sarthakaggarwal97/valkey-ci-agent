@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "8f17a7c72cde52f399a9d017c4974855f2e1ec25",
+  "parent": "a835a46398d6a284eb1ef67d3e44cf8f15feaf6b",
+  "pr": 168,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Alpine Linux related fixes (#168)",
+  "date": "2025-06-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2435,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits submodules/CMakeLists.txt: it detects Alpine Linux at configure time and patches a type in grpc's vendored re2 header (mutable int32_t -> mutable int) so the module compiles under musl. It is a build/CI fix with no change to any command, reply, index, replication, or persistence behaviour, and on the fuzzer's (non-Alpine) build environment the branch is not even taken, so no runtime scenario can reach it."
+}
