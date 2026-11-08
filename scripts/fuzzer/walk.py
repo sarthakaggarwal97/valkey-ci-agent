@@ -685,6 +685,8 @@ def ensure_porcupine(fuzzer_dir: Path, work: Path) -> None:
     experiment extends (valkey.history) errors no run; without go, the oracle keeps saying what is missing."""
     if shutil.which("porcupine") or not (fuzzer_dir / "porcupine").is_dir() or not shutil.which("go"):
         return
+    # Absolute: go runs in the porcupine directory (-C) and refuses a relative GOPATH.
+    work = work.resolve()
     bin_dir = work / "bin"
     try:
         _sh(f"go -C {shlex.quote(str((fuzzer_dir / 'porcupine').resolve()))} build -o "

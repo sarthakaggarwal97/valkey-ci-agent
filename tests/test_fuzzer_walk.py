@@ -979,6 +979,22 @@ def test_the_walk_builds_porcupine_for_the_history_oracle(monkeypatch, tmp_path)
     assert walk.os.environ["PATH"] == f"{tmp_path / 'work' / 'bin'}:/usr/bin"
 
 
+def test_the_walk_builds_porcupine_with_absolute_paths_from_a_relative_work_dir(monkeypatch, tmp_path):
+    # The walk's work dir is relative (walk-work); go -C refused it: "GOPATH entry is relative".
+    (tmp_path / "fuzzer" / "porcupine").mkdir(parents=True)
+    calls = []
+    monkeypatch.setattr(walk, "_sh", lambda command, cwd, log, env=None: calls.append((command, env)))
+    monkeypatch.setattr(walk.shutil, "which", lambda name: "/usr/bin/go" if name == "go" else None)
+    monkeypatch.setenv("PATH", "/usr/bin")
+    monkeypatch.chdir(tmp_path)
+    walk.ensure_porcupine(Path("fuzzer"), Path("work"))
+    ((command, env),) = calls
+    work = (tmp_path / "work").resolve()
+    assert command.endswith(f"build -o {work / 'bin' / 'porcupine'}")
+    assert env == {"GOPATH": str(work / "go"), "GOCACHE": str(work / "go" / "cache")}
+    assert walk.os.environ["PATH"] == f"{work / 'bin'}:/usr/bin"
+
+
 def test_porcupine_already_on_path_or_without_go_is_left_alone(monkeypatch, tmp_path):
     (tmp_path / "fuzzer" / "porcupine").mkdir(parents=True)
     monkeypatch.setattr(walk, "_sh", lambda *a, **kw: pytest.fail("built anyway"))

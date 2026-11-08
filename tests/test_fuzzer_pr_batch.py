@@ -202,6 +202,17 @@ def test_valkey_search_build_defines_ninja_tool_for_the_483_window(tmp_path):
     assert (src / "tool").read_text().strip() == "ninja"
 
 
+def test_valkey_search_build_lets_cmake_4_configure_the_older_vendored_c_ares(tmp_path):
+    """Older valkey-search commits vendor a c-ares whose cmake_minimum_required CMake 4 rejects."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "build.sh").write_text('#!/bin/bash\necho "${CMAKE_POLICY_VERSION_MINIMUM:-}" > policy\n')
+    (src / "build.sh").chmod(0o755)
+    subprocess.run(["bash", "-euo", "pipefail", "-c", pr_batch_mod.MODULES["valkey-search"].build],
+                   cwd=src, check=True, capture_output=True, text=True)
+    assert (src / "policy").read_text().strip() == "3.5"
+
+
 def test_valkey_search_build_retries_once_after_the_pre_172_grpc_header_race(tmp_path):
     """Before valkey-search #172 (0730baa), nothing ordered the compiles after protoc's gRPC output: ninja could
     stop on a missing coordinator.grpc.pb.h that the same build generated. The recipe retries once when that
