@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-08T17:02+00:00.
+Updated 2026-11-08T17:08+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 966 | 1541 | #2741 (2025-10-16) | 269 | 138.0 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
-| valkey-io/valkey-search | 635 | 34 | f8106e72e984 (2024-11-27) | 200 | 90.7 |
+| valkey-io/valkey-search | 635 | 34 | f8106e72e984 (2024-11-27) | 177 | 90.7 |
 
 ## Last runs
 
@@ -48,18 +48,35 @@ Updated 2026-11-08T17:02+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-08T16:02:29+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42495120230): 3 merge(s) tested, 0 without a code change.
+[2026-11-08T17:08:10+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42497837183): 20 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search@965d40ad2aa1](https://github.com/valkey-io/valkey-search/commit/965d40ad2aa18f99c8f6cac0a89dc73e5fe8d109): Compilation cleanup and sync: error: `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coordinator.grpc.pb.h': No such file or directory
-- [valkey-io/valkey-search@a4c1a046f08b](https://github.com/valkey-io/valkey-search/commit/a4c1a046f08b338bda26388800eb0feaeb6a7028): fixing use after free by the allocator: error: `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coordinator.grpc.pb.h': No such file or directory
-- [valkey-io/valkey-search@9ca99aa8f85a](https://github.com/valkey-io/valkey-search/commit/9ca99aa8f85a5021b0489a071c919db0166a42c4): Changing the module target name: error: `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coordinator.grpc.pb.h': No such file or directory
+- [valkey-io/valkey-search#172](https://github.com/valkey-io/valkey-search/pull/172): to retry, `export NINJA_TOOL=ninja` failed in parent (exit 2): [13/206] Linking CXX static library src/indexes/libindex_schema_cc_proto.a [14/206] Linking CXX static library vmsdk/src/status/libstatus_macros.a 
+- [valkey-io/valkey-search#144](https://github.com/valkey-io/valkey-search/pull/144): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): [24/206] Building C object third_party/hdrhistogram_c/src/CMakeFiles/hdrhistogram_c.dir/hdr_thread.c.o [25/206] Building CXX object src/CMakeFiles/a
+- [valkey-io/valkey-search#168](https://github.com/valkey-io/valkey-search/pull/168): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): [21/206] Building C object third_party/hdrhistogram_c/src/CMakeFiles/hdrhistogram_c.dir/hdr_encoding.c.o [22/206] Building CXX object vmsdk/src/CMak
+- [valkey-io/valkey-search#166](https://github.com/valkey-io/valkey-search/pull/166): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): [22/206] Building CXX object src/CMakeFiles/attribute_data_type.dir/attribute_data_type.cc.o [23/206] Linking CXX static library src/libattribute_da
+- [valkey-io/valkey-search#162](https://github.com/valkey-io/valkey-search/pull/162): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): [23/206] Linking CXX static library src/libattribute_data_type.a [24/206] Building C object third_party/hdrhistogram_c/src/CMakeFiles/hdrhistogram_c
+- [valkey-io/valkey-search#161](https://github.com/valkey-io/valkey-search/pull/161): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): [9/206] Building CXX object vmsdk/src/CMakeFiles/log.dir/log.cc.o [10/206] Running cpp protocol buffer compiler on /home/runner/work/valkey-ci-agent
+- [valkey-io/valkey-search#159](https://github.com/valkey-io/valkey-search/pull/159): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): [22/206] Building CXX object src/CMakeFiles/attribute_data_type.dir/attribute_data_type.cc.o [23/206] Building C object third_party/hdrhistogram_c/s
+- [valkey-io/valkey-search#158](https://github.com/valkey-io/valkey-search/pull/158): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): [8/206] Building CXX object src/indexes/CMakeFiles/index_schema_cc_proto.dir/__/index_schema.pb.cc.o [9/206] Building CXX object vmsdk/src/CMakeFile
+- [valkey-io/valkey-search#148](https://github.com/valkey-io/valkey-search/pull/148): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): [21/206] Building CXX object vmsdk/src/CMakeFiles/memory_allocation_overrides.dir/memory_allocation_overrides.cc.o [22/206] Building C object third_
+- [valkey-io/valkey-search#154](https://github.com/valkey-io/valkey-search/pull/154): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): [22/206] Building C object third_party/hdrhistogram_c/src/CMakeFiles/hdrhistogram_c.dir/hdr_encoding.c.o [23/206] Building CXX object third_party/hn
+- [valkey-io/valkey-search#152](https://github.com/valkey-io/valkey-search/pull/152): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): [21/206] Linking CXX static library vmsdk/src/libmemory_allocation_overrides.a [22/206] Building C object third_party/hdrhistogram_c/src/CMakeFiles/
+- [valkey-io/valkey-search#149](https://github.com/valkey-io/valkey-search/pull/149): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): [9/206] Building CXX object vmsdk/src/CMakeFiles/log.dir/log.cc.o [10/206] Running cpp protocol buffer compiler on /home/runner/work/valkey-ci-agent
+- [valkey-io/valkey-search#146](https://github.com/valkey-io/valkey-search/pull/146): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): [22/206] Linking CXX static library src/libattribute_data_type.a [23/206] Building C object third_party/hdrhistogram_c/src/CMakeFiles/hdrhistogram_c
+- [valkey-io/valkey-search#129](https://github.com/valkey-io/valkey-search/pull/129): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): [11/206] Building CXX object src/coordinator/CMakeFiles/coordinator_cc_proto.dir/coordinator.pb.cc.o [12/206] Building CXX object src/CMakeFiles/att
+- [valkey-io/valkey-search#143](https://github.com/valkey-io/valkey-search/pull/143): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): [22/202] Building C object third_party/hdrhistogram_c/src/CMakeFiles/hdrhistogram_c.dir/hdr_interval_recorder.c.o [23/202] Building C object third_p
+- [valkey-io/valkey-search#85](https://github.com/valkey-io/valkey-search/pull/85): to retry, `export NINJA_TOOL=ninja` failed in parent (exit 2): -- Found library /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent/.build-release/.deps/install/lib/libupb_json_lib.a -- Found lib
+- [valkey-io/valkey-search#82](https://github.com/valkey-io/valkey-search/pull/82): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Found library /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/.build-release/.deps/install/lib/libupb_json_lib.a -- Found libra
+- [valkey-io/valkey-search#84](https://github.com/valkey-io/valkey-search/pull/84): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Found library /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/.build-release/.deps/install/lib/libupb_json_lib.a -- Found libra
+- [valkey-io/valkey-search#75](https://github.com/valkey-io/valkey-search/pull/75): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Found library /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/.build-release/.deps/install/lib/libupb_json_lib.a -- Found libra
+- [valkey-io/valkey-search#80](https://github.com/valkey-io/valkey-search/pull/80): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Found library /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/.build-release/.deps/install/lib/libupb_json_lib.a -- Found libra
 
 ## Totals
 
 - Merges whose tests reached the change: 595 of 869 tested (68%)
 - Changed-line coverage: median 100% of 441 merge(s) measured, 36 under 50%
 - Recall: 163 parents flagged of 241 fix merges
-- Claude: $1550.97 in the last 24 hours, $6274.23 in the last 7 days, $6274.23 in all
+- Claude: $1471.77 in the last 24 hours, $6274.23 in the last 7 days, $6274.23 in all
 - Issues filed: 56
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
@@ -120,26 +137,26 @@ Updated 2026-11-08T17:02+00:00.
 
 ## Retries
 
-- [valkey-io/valkey-search#172](https://github.com/valkey-io/valkey-search/pull/172): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#144](https://github.com/valkey-io/valkey-search/pull/144): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#168](https://github.com/valkey-io/valkey-search/pull/168): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#166](https://github.com/valkey-io/valkey-search/pull/166): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#162](https://github.com/valkey-io/valkey-search/pull/162): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#161](https://github.com/valkey-io/valkey-search/pull/161): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#159](https://github.com/valkey-io/valkey-search/pull/159): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#158](https://github.com/valkey-io/valkey-search/pull/158): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#148](https://github.com/valkey-io/valkey-search/pull/148): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#154](https://github.com/valkey-io/valkey-search/pull/154): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#152](https://github.com/valkey-io/valkey-search/pull/152): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#149](https://github.com/valkey-io/valkey-search/pull/149): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#146](https://github.com/valkey-io/valkey-search/pull/146): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#129](https://github.com/valkey-io/valkey-search/pull/129): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#143](https://github.com/valkey-io/valkey-search/pull/143): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#85](https://github.com/valkey-io/valkey-search/pull/85): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#82](https://github.com/valkey-io/valkey-search/pull/82): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#84](https://github.com/valkey-io/valkey-search/pull/84): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#75](https://github.com/valkey-io/valkey-search/pull/75): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#80](https://github.com/valkey-io/valkey-search/pull/80): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#172](https://github.com/valkey-io/valkey-search/pull/172): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in parent (exit 2): [13/206] Linking CXX static library src/indexes/libindex_schema_cc_proto.a [14/206] Linking CXX static library vmsdk/src/status/libstatus_macros.a 
+- [valkey-io/valkey-search#144](https://github.com/valkey-io/valkey-search/pull/144): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): [24/206] Building C object third_party/hdrhistogram_c/src/CMakeFiles/hdrhistogram_c.dir/hdr_thread.c.o [25/206] Building CXX object src/CMakeFiles/a
+- [valkey-io/valkey-search#168](https://github.com/valkey-io/valkey-search/pull/168): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): [21/206] Building C object third_party/hdrhistogram_c/src/CMakeFiles/hdrhistogram_c.dir/hdr_encoding.c.o [22/206] Building CXX object vmsdk/src/CMak
+- [valkey-io/valkey-search#166](https://github.com/valkey-io/valkey-search/pull/166): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): [22/206] Building CXX object src/CMakeFiles/attribute_data_type.dir/attribute_data_type.cc.o [23/206] Linking CXX static library src/libattribute_da
+- [valkey-io/valkey-search#162](https://github.com/valkey-io/valkey-search/pull/162): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): [23/206] Linking CXX static library src/libattribute_data_type.a [24/206] Building C object third_party/hdrhistogram_c/src/CMakeFiles/hdrhistogram_c
+- [valkey-io/valkey-search#161](https://github.com/valkey-io/valkey-search/pull/161): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): [9/206] Building CXX object vmsdk/src/CMakeFiles/log.dir/log.cc.o [10/206] Running cpp protocol buffer compiler on /home/runner/work/valkey-ci-agent
+- [valkey-io/valkey-search#159](https://github.com/valkey-io/valkey-search/pull/159): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): [22/206] Building CXX object src/CMakeFiles/attribute_data_type.dir/attribute_data_type.cc.o [23/206] Building C object third_party/hdrhistogram_c/s
+- [valkey-io/valkey-search#158](https://github.com/valkey-io/valkey-search/pull/158): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): [8/206] Building CXX object src/indexes/CMakeFiles/index_schema_cc_proto.dir/__/index_schema.pb.cc.o [9/206] Building CXX object vmsdk/src/CMakeFile
+- [valkey-io/valkey-search#148](https://github.com/valkey-io/valkey-search/pull/148): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): [21/206] Building CXX object vmsdk/src/CMakeFiles/memory_allocation_overrides.dir/memory_allocation_overrides.cc.o [22/206] Building C object third_
+- [valkey-io/valkey-search#154](https://github.com/valkey-io/valkey-search/pull/154): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): [22/206] Building C object third_party/hdrhistogram_c/src/CMakeFiles/hdrhistogram_c.dir/hdr_encoding.c.o [23/206] Building CXX object third_party/hn
+- [valkey-io/valkey-search#152](https://github.com/valkey-io/valkey-search/pull/152): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): [21/206] Linking CXX static library vmsdk/src/libmemory_allocation_overrides.a [22/206] Building C object third_party/hdrhistogram_c/src/CMakeFiles/
+- [valkey-io/valkey-search#149](https://github.com/valkey-io/valkey-search/pull/149): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): [9/206] Building CXX object vmsdk/src/CMakeFiles/log.dir/log.cc.o [10/206] Running cpp protocol buffer compiler on /home/runner/work/valkey-ci-agent
+- [valkey-io/valkey-search#146](https://github.com/valkey-io/valkey-search/pull/146): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): [22/206] Linking CXX static library src/libattribute_data_type.a [23/206] Building C object third_party/hdrhistogram_c/src/CMakeFiles/hdrhistogram_c
+- [valkey-io/valkey-search#129](https://github.com/valkey-io/valkey-search/pull/129): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): [11/206] Building CXX object src/coordinator/CMakeFiles/coordinator_cc_proto.dir/coordinator.pb.cc.o [12/206] Building CXX object src/CMakeFiles/att
+- [valkey-io/valkey-search#143](https://github.com/valkey-io/valkey-search/pull/143): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): [22/202] Building C object third_party/hdrhistogram_c/src/CMakeFiles/hdrhistogram_c.dir/hdr_interval_recorder.c.o [23/202] Building C object third_p
+- [valkey-io/valkey-search#85](https://github.com/valkey-io/valkey-search/pull/85): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in parent (exit 2): -- Found library /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent/.build-release/.deps/install/lib/libupb_json_lib.a -- Found lib
+- [valkey-io/valkey-search#82](https://github.com/valkey-io/valkey-search/pull/82): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Found library /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/.build-release/.deps/install/lib/libupb_json_lib.a -- Found libra
+- [valkey-io/valkey-search#84](https://github.com/valkey-io/valkey-search/pull/84): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Found library /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/.build-release/.deps/install/lib/libupb_json_lib.a -- Found libra
+- [valkey-io/valkey-search#75](https://github.com/valkey-io/valkey-search/pull/75): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Found library /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/.build-release/.deps/install/lib/libupb_json_lib.a -- Found libra
+- [valkey-io/valkey-search#80](https://github.com/valkey-io/valkey-search/pull/80): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Found library /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/.build-release/.deps/install/lib/libupb_json_lib.a -- Found libra
 - [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
 - [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
 - [valkey-io/valkey-search#76](https://github.com/valkey-io/valkey-search/pull/76): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
