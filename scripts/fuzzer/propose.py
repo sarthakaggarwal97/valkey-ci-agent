@@ -935,7 +935,13 @@ valkey.replication-partial-resync (a replica stalled or cut off),
 valkey.replication-chaos, valkey.cluster-chaos and
 valkey.cluster-election-durability (kills and failovers),
 valkey.aof-durability (the primary killed and restarted from its AOF), the
-valkey.forkless-save-* experiments. Or write one that composes
+valkey.forkless-save-* experiments. The builds under test are the change and
+its parent, which may predate a config an experiment needs: a run on a build
+that rejects it is skipped as unsupported and tests nothing. So pick
+valkey.forkless-save-* (and forkless settings in any server_config) only when
+the checkout's src/config.c has forkless-infrastructure-enabled, and
+valkey.cluster-election-durability only when it has
+cluster-config-save-behavior. Or write one that composes
 valkey.fault.process-signal (SIGKILL, SIGTERM or SIGSTOP an instance, then
 restart it) or valkey.action.failover with valkey.base, which brings the
 workload and those oracles:

@@ -1298,6 +1298,10 @@ def test_the_prompts_render():
     assert "null\\n\"}}}\n```\n\n### Faults" in prompt and "\n### Adversarial inputs" in prompt
     assert "one scenario at\n   least runs the change under a fault (below)" in prompt
     assert "examples/valkey/experiments/replica-killed-under-writes.yaml" in prompt
+    # The builds under test may predate a config an experiment's probe needs: the prompt says when to pick
+    # the probed experiments, or every test of an old merge is skipped as unsupported (valkey #2753, #2852).
+    assert "src/config.c has forkless-infrastructure-enabled" in prompt
+    assert "only when it has\ncluster-config-save-behavior" in prompt
     repair = propose_mod._REPAIR_PROMPT.format(change_line="c", source_note="s", failures="f",
                                                references="{$ref: artifacts.parent.binary}", module_note="")
     assert '"experiments": [{"index": <its number>' in repair
