@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-08T09:58+00:00.
+Updated 2026-11-08T10:01+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 887 | 1620 | #2809 (2025-12-03) | 298 | 126.7 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
-| valkey-io/valkey-search | 605 | 64 | #82 (2025-03-31) | 212 | 86.4 |
+| valkey-io/valkey-search | 611 | 58 | #33 (2025-03-01) | 218 | 87.3 |
 
 ## Last runs
 
@@ -48,28 +48,28 @@ Updated 2026-11-08T09:58+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-08T09:58:06+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42462123332): 20 merge(s) tested, 2 without a code change.
+[2026-11-08T10:01:35+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42469396996): 20 merge(s) tested, 6 without a code change.
 
-- [valkey-io/valkey-search#152](https://github.com/valkey-io/valkey-search/pull/152): More resilient builds on different distros (#152): error: `export NINJA_TOOL=ninja` failed in merge (exit 2): [23/206] Building CXX object vmsdk/src/CMakeFiles/module.dir/module.cc.o [24/206] Building C object third_party/hdrhistogram_c/src/CMakeFiles/hdrhistogram_c.dir/hdr_histogram.c.o [25/206] Building C object third_party/hdrhistogram_c/src/CMak
-- [valkey-io/valkey-search#149](https://github.com/valkey-io/valkey-search/pull/149): Module-Config: fix a possibility of of a double free (#149): error: `export NINJA_TOOL=ninja` failed in merge (exit 2): [9/206] Linking CXX static library vmsdk/src/libutils.a [10/206] Linking CXX static library src/utils/liballocator.a [11/206] Linking CXX static library vmsdk/src/status/libstatus_macros.a [12/206] Linking CXX static library src/indexes/libi
-- [valkey-io/valkey-search#146](https://github.com/valkey-io/valkey-search/pull/146): Dropped the deprecated `--threads` flag (#146): error: `export NINJA_TOOL=ninja` failed in merge (exit 2): [22/206] Linking CXX static library vmsdk/src/libmemory_allocation_overrides.a [23/206] Building C object third_party/hdrhistogram_c/src/CMakeFiles/hdrhistogram_c.dir/hdr_encoding.c.o [24/206] Building C object third_party/hdrhistogram_c/src
-- [valkey-io/valkey-search#129](https://github.com/valkey-io/valkey-search/pull/129): Allow changing the reader/writer threads count at runtime (#129): error: `export NINJA_TOOL=ninja` failed in merge (exit 2): [8/206] Building CXX object src/indexes/CMakeFiles/index_schema_cc_proto.dir/__/index_schema.pb.cc.o [9/206] Building CXX object vmsdk/src/CMakeFiles/log.dir/log.cc.o [10/206] Running cpp protocol buffer compiler on /home/runner/work/valkey-
-- [valkey-io/valkey-search#143](https://github.com/valkey-io/valkey-search/pull/143): Use background context rather than IO context during Aux save. (#143): error: `export NINJA_TOOL=ninja` failed in merge (exit 2): [23/202] Building C object third_party/hdrhistogram_c/src/CMakeFiles/hdrhistogram_c.dir/hdr_thread.c.o [24/202] Building C object third_party/hdrhistogram_c/src/CMakeFiles/hdrhistogram_c.dir/hdr_time.c.o [25/202] Building C object third_part
-- [valkey-io/valkey-search#119](https://github.com/valkey-io/valkey-search/pull/119) ([tests](tests/valkey-search/119-4e3fa7f2b/)): Rename ValkeySearch to valkey-search (#119): declined: The change is purely cosmetic: it renames 'ValkeySearch' to 'valkey-search' in copyright headers, LICENSE, QUICK_START.md and the CMake project() name, plus a few clang-format whitespace fixes (ternary spacing in vector_base.cc, brace spacing in tag.h, indentation in status_builder.h and v
-- [valkey-io/valkey-search#105](https://github.com/valkey-io/valkey-search/pull/105) ([tests](tests/valkey-search/105-eff3e03bf/)): chore: avoid reserved gid, group name when setup for local dev env (#105): declined: The change modifies only the local development environment setup (.devcontainer/Dockerfile group-GID conflict handling and a setup.sh echo typo). It is a build/dev-tooling change with no effect on the valkey-search module's runtime behavior, commands, replies, or data handling, so no scena
-- [valkey-io/valkey-search#109](https://github.com/valkey-io/valkey-search/pull/109) ([tests](tests/valkey-search/109-2cd8b1fb2/)): Exposing search subscription info just if built with the macro DEBUG_INFO (#109): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#107](https://github.com/valkey-io/valkey-search/pull/107) ([tests](tests/valkey-search/107-0a803337b/)): Support counting cores on aarch64 (#107): declined: no proposed test validated
-- [valkey-io/valkey-search#106](https://github.com/valkey-io/valkey-search/pull/106) ([tests](tests/valkey-search/106-356ece8c6/)): Fixed crash in UT (#106): declined: The change modifies only unit-test infrastructure: cmake/Modules/valkey_search.cmake drops a strip linker flag for test targets, and vmsdk/src/testing_infra/module.h adds a mock for RedisModule_RegisterNumericConfig used by googletest-based unit tests. Neither is compiled into the shipped 
-- [valkey-io/valkey-search#97](https://github.com/valkey-io/valkey-search/pull/97) ([tests](tests/valkey-search/97-5e50c97e5/)): Make backfill batch/block size configurable (#97): 2 of 2 test(s) reached the change; crash, predates #97, since fixed (recorded)
-- [valkey-io/valkey-search#104](https://github.com/valkey-io/valkey-search/pull/104) ([tests](tests/valkey-search/104-8a391acfc/)): FT.SEARCH - Update neighbor sorting to always be asc (#104): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#101](https://github.com/valkey-io/valkey-search/pull/101) ([tests](tests/valkey-search/101-a87755dd7/)): Fixing asan issues (#101): 0 of 5 test(s) reached the change; crash, predates #101, since fixed (recorded)
-- [valkey-io/valkey-search#95](https://github.com/valkey-io/valkey-search/pull/95) ([tests](tests/valkey-search/95-1e30f7114/)): adding support for blocking clients during keyspace notification (#95): 0 of 5 test(s) reached the change; [crash, appeared after #95](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87); crash, introduced and since fixed (recorded); crash, predates #95, since fixed (recorded)
-- [valkey-io/valkey-search#98](https://github.com/valkey-io/valkey-search/pull/98) ([tests](tests/valkey-search/98-3a3676748/)): avoid unsafe code in ValkeySearch::Info  during crashdump (#98): declined: The change only affects ValkeySearch::Info when invoked with for_crash_report set, i.e. from inside Valkey's crash-dump signal handler: it skips module INFO sections that take locks, allocate, or need the main thread. The normal INFO path (for_crash_report=0) emits exactly the same section
-- [valkey-io/valkey-search#102](https://github.com/valkey-io/valkey-search/pull/102) ([tests](tests/valkey-search/102-94ec3e5fb/)): More ASan build improvements (#102): declined: The change modifies only build tooling: build.sh (clearer output messages and continuing past unit-test failures in ASan runs), a CMake refactor extracting the unchanged ASan compile flags into a helper function, and applying those flags to the test-only testing_common static library. No r
-- [valkey-io/valkey-search#100](https://github.com/valkey-io/valkey-search/pull/100) ([tests](tests/valkey-search/100-aa37bda43/)): Add ASAN build option (#100): declined: The change only adds an opt-in ASAN build option: a build.sh flag, CMake options that add -fsanitize=address, and #ifndef ASAN_BUILD guards around the vmsdk operator new/delete overrides. ASAN_BUILD is OFF by default and the runner builds the module without it, so the compiled module at th
-- [valkey-io/valkey-search#89](https://github.com/valkey-io/valkey-search/pull/89) ([tests](tests/valkey-search/89-15e26b65e/)): Don't suppress error when running python integration tests. (#89): declined: The change modifies only testing/integration/CMakeLists.txt, removing OUTPUT_QUIET/ERROR_QUIET from execute_process calls so pip/venv setup errors are no longer suppressed during CMake configuration of the python integration tests (plus a trailing-newline fix). It is a build/CI change with
-- [valkey-io/valkey-search#88](https://github.com/valkey-io/valkey-search/pull/88): to retry, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
-- [valkey-io/valkey-search#85](https://github.com/valkey-io/valkey-search/pull/85): to retry, `export NINJA_TOOL=ninja` failed in parent (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE
+- [valkey-io/valkey-search#88](https://github.com/valkey-io/valkey-search/pull/88): to retry, the job left no result
+- [valkey-io/valkey-search#85](https://github.com/valkey-io/valkey-search/pull/85): to retry, the job left no result
+- [valkey-io/valkey-search#82](https://github.com/valkey-io/valkey-search/pull/82): to retry, the job left no result
+- [valkey-io/valkey-search#84](https://github.com/valkey-io/valkey-search/pull/84): to retry, the job left no result
+- [valkey-io/valkey-search#75](https://github.com/valkey-io/valkey-search/pull/75): to retry, the job left no result
+- [valkey-io/valkey-search#80](https://github.com/valkey-io/valkey-search/pull/80): to retry, the job left no result
+- [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): to retry, the job left no result
+- [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77): to retry, the job left no result
+- [valkey-io/valkey-search#76](https://github.com/valkey-io/valkey-search/pull/76): to retry, the job left no result
+- [valkey-io/valkey-search#73](https://github.com/valkey-io/valkey-search/pull/73): to retry, the job left no result
+- [valkey-io/valkey-search#60](https://github.com/valkey-io/valkey-search/pull/60): to retry, the job left no result
+- [valkey-io/valkey-search#72](https://github.com/valkey-io/valkey-search/pull/72): to retry, the job left no result
+- [valkey-io/valkey-search#71](https://github.com/valkey-io/valkey-search/pull/71): to retry, the job left no result
+- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70): to retry, the job left no result
+- [valkey-io/valkey-search#49](https://github.com/valkey-io/valkey-search/pull/49): to retry, the job left no result
+- [valkey-io/valkey-search@1d8e30e25ae6](https://github.com/valkey-io/valkey-search/commit/1d8e30e25ae640522f809f839ed2a81fb191e5c1): to retry, the job left no result
+- [valkey-io/valkey-search#65](https://github.com/valkey-io/valkey-search/pull/65): to retry, the job left no result
+- [valkey-io/valkey-search#64](https://github.com/valkey-io/valkey-search/pull/64): to retry, the job left no result
+- [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63): to retry, the job left no result
+- [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57): to retry, the job left no result
 
 ## Totals
 
@@ -135,8 +135,26 @@ Updated 2026-11-08T09:58+00:00.
 
 ## Retries
 
-- [valkey-io/valkey-search#88](https://github.com/valkey-io/valkey-search/pull/88): attempt 1 of 3, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
-- [valkey-io/valkey-search#85](https://github.com/valkey-io/valkey-search/pull/85): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in parent (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE
+- [valkey-io/valkey-search#88](https://github.com/valkey-io/valkey-search/pull/88): attempt 1 of 3, the job left no result
+- [valkey-io/valkey-search#85](https://github.com/valkey-io/valkey-search/pull/85): attempt 1 of 3, the job left no result
+- [valkey-io/valkey-search#82](https://github.com/valkey-io/valkey-search/pull/82): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#84](https://github.com/valkey-io/valkey-search/pull/84): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#75](https://github.com/valkey-io/valkey-search/pull/75): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#80](https://github.com/valkey-io/valkey-search/pull/80): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#76](https://github.com/valkey-io/valkey-search/pull/76): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#73](https://github.com/valkey-io/valkey-search/pull/73): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#60](https://github.com/valkey-io/valkey-search/pull/60): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#72](https://github.com/valkey-io/valkey-search/pull/72): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#71](https://github.com/valkey-io/valkey-search/pull/71): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#49](https://github.com/valkey-io/valkey-search/pull/49): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search@1d8e30e25ae6](https://github.com/valkey-io/valkey-search/commit/1d8e30e25ae640522f809f839ed2a81fb191e5c1): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#65](https://github.com/valkey-io/valkey-search/pull/65): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#64](https://github.com/valkey-io/valkey-search/pull/64): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57): attempt 0 of 3, the job left no result
 - [valkey-io/valkey#3800](https://github.com/valkey-io/valkey/pull/3800): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
 - [valkey-io/valkey#3613](https://github.com/valkey-io/valkey/pull/3613): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
 - [valkey-io/valkey#3498](https://github.com/valkey-io/valkey/pull/3498): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
