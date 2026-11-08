@@ -1,0 +1,52 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9f7cfc771902db5ea1f8e67f1d23c65c07cde11e",
+  "parent": "96c6cb841ffc3c38bb208d9afd529901532888e0",
+  "pr": 2986,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Refactor clusterMsg type casting for improve type safety (#2986)",
+  "date": "2026-01-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 3,
+  "recall": false,
+  "coverage": {
+    "lines": 59,
+    "executed": 42,
+    "percent": 71,
+    "uncovered": [
+      "src/cluster_legacy.c:146",
+      "src/cluster_legacy.c:147",
+      "src/cluster_legacy.c:148",
+      "src/cluster_legacy.c:149",
+      "src/cluster_legacy.c:3630",
+      "src/cluster_legacy.c:3631",
+      "src/cluster_legacy.c:3634",
+      "src/cluster_legacy.c:3635",
+      "src/cluster_legacy.c:3649",
+      "src/cluster_legacy.c:3651",
+      "src/cluster_legacy.c:3653",
+      "src/cluster_legacy.c:3655",
+      "src/cluster_legacy.c:3693",
+      "src/cluster_legacy.c:4259",
+      "src/cluster_legacy.c:4264",
+      "src/cluster_legacy.c:4319",
+      "src/cluster_legacy.c:4321"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 5.407,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-7ca522051298",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'save-behavior-support' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'cluster-config-save-behavior \"sync\"' Bad directive or wrong number of arguments"
+    }
+  ]
+}

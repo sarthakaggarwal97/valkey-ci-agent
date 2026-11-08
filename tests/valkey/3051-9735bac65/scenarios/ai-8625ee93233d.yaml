@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ff7395a90cf5..9735bac65b29.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8625ee93233d
+seed: 7001
+experiment:
+  id: proposed.dual-channel-capa-granted
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

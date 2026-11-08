@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2635377f4da46a50e66c4cad7c3128129a39279f",
+  "parent": "fa5964312801ec435147ecd0667da03aad229434",
+  "pr": 3005,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix used_memory_dataset underflow due to miscalculated used_memory_overhead (#3005)",
+  "date": "2026-01-15",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.4631,
+  "findings": [],
+  "recorded": []
+}

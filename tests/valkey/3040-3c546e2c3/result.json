@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3c546e2c3f567503ed73de006c512c4e773e4482",
+  "parent": "6e2fb513713396363b8991dc699b767408570ace",
+  "pr": 3040,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Makes `CLUSTER KEYSLOT` available in standalone mode (#3040)",
+  "date": "2026-01-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.0132,
+  "findings": [],
+  "recorded": []
+}

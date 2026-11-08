@@ -1,0 +1,66 @@
+extends: [valkey.liveness]
+id: proposed.hexpire-past-validation
+deployment:
+  modes: [standalone]
+metadata:
+  description: HEXPIRE/HPEXPIREAT with a past expiration must respect NX/XX/GT validation
+    (and the listpack XX rule) instead of deleting the field; past-time deletes happen
+    only after validation passes
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: hexpire
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: {$ref: inputs.hash_listpack_entries}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [HSET, h1, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HEXPIRE, h1, 100, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HEXPIRE, h1, 0, NX, FIELDS, 2, f1, f2], expect_difference: true,
+      expect: {equals: [0, 2]}}
+    - {command: [HGET, h1, f1], expect_difference: true, expect: {equals: v1}}
+    - {command: [HLEN, h1], expect_difference: true, expect: {equals: 1}}
+    - {command: [EXISTS, h1], expect_difference: true, expect: {equals: 1}}
+    - {command: [HSET, h2, f1, v1], expect: {equals: 1}}
+    - {command: [HEXPIRE, h2, 100, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HSET, h2, f2, v2], expect: {equals: 1}}
+    - {command: [HPEXPIREAT, h2, 1, XX, FIELDS, 2, f1, f2], expect_difference: true,
+      expect: {equals: [2, 0]}}
+    - {command: [HGET, h2, f2], expect_difference: true, expect: {equals: v2}}
+    - {command: [HLEN, h2], expect_difference: true, expect: {equals: 1}}
+    - {command: [HSET, h3, a, 1, b, 2], expect: {equals: 2}}
+    - {command: [HEXPIRE, h3, -5, XX, FIELDS, 1, a], expect_difference: true, expect: {
+        equals: [0]}}
+    - {command: [HLEN, h3], expect_difference: true, expect: {equals: 2}}
+    - {command: [HEXPIRE, h3, 0, FIELDS, 1, b], expect: {equals: [2]}}
+    - {command: [EXISTS, h3], expect_difference: true, expect: {equals: 1}}
+    - {command: [HSETEX, h4, EX, 600, FIELDS, 1, f, v], expect: {equals: 1}}
+    - {command: [HEXPIRE, h4, 0, GT, FIELDS, 2, f, missing], expect: {equals: [0,
+          -2]}}
+    - {command: [HEXPIRE, h4, 0, FIELDS, 3, f, f, f], expect: {equals: [2, -2, -2]}}
+    - {command: [EXISTS, h4], expect: {equals: 0}}
+    - {command: [HSET, h5, x, 1], expect: {equals: 1}}
+    - {command: [HEXPIRE, h5, -100, FIELDS, 3, x, x, x], expect: {equals: [2, -2,
+          -2]}}
+    - {command: [EXISTS, h5], expect: {equals: 0}}
+    - {command: [HSET, h6, '', ev, FIELDS, kw], expect: {equals: 2}}
+    - {command: [HEXPIRE, h6, 100, FIELDS, 1, ''], expect: {equals: [1]}}
+    - {command: [HEXPIRE, h6, 0, NX, FIELDS, 2, '', FIELDS], expect_difference: true,
+      expect: {equals: [0, 2]}}
+    - {command: [HGET, h6, ''], expect_difference: true, expect: {equals: ev}}
+    - {command: [HLEN, h6], expect_difference: true, expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hexpire.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hexpire}

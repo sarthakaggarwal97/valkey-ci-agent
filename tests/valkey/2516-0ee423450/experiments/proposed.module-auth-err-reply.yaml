@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.module-auth-err-reply
+deployment:
+  modes: [standalone]
+metadata:
+  description: addAuthErrReply reads the embedded value of a module-supplied error
+    string robj
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: mauth
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [testmoduleone.rm_register_auth_cb], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, foo, on, ">allow", "~*", "+@all"], expect: {equals: OK}}
+    - {command: [AUTH, foo, deny], connection: c2, expect: {error: "Auth denied by\
+          \ Misc Module."}}
+    - {command: [AUTH, foo, allow], connection: c3, expect: {equals: OK}}
+    - {command: [ACL, LOG], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mauth}

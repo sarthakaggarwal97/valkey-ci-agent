@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5a3fb0454c866cdf46729694e24e2ecf792df97b",
+  "parent": "0ee4234506ba5b37095160047daf75b857171c12",
+  "pr": 3006,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "HFE make zero a valid ttl during import mode and data loading  (#3006)",
+  "date": "2026-01-06",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 9.0536,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ff7395a90cf5..9735bac65b29.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-342b7d8790b7
+seed: 1101
+experiment:
+  id: proposed.dual-channel-capa-misconfig
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7000
+  server_config:
+    dual-channel-replication-enabled: 'yes'
+    repl-diskless-sync: 'no'

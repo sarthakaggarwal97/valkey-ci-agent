@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.module-cluster-keyslot-c
+deployment:
+  modes: [standalone]
+metadata:
+  description: ValkeyModule_ClusterKeySlotC agrees with ClusterKeySlot and CLUSTER
+    KEYSLOT on adversarial keys, compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: keyslot
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [test.keyslot, foo], expect: {equals: 12182}}
+    - {command: [CLUSTER, KEYSLOT, foo], expect: {equals: 12182}}
+    - {command: [test.keyslot, bar], expect: {equals: 5061}}
+    - {command: [CLUSTER, KEYSLOT, bar], expect: {equals: 5061}}
+    - {command: [test.keyslot, "{foo}.suffix"], expect: {equals: 12182}}
+    - {command: [CLUSTER, KEYSLOT, "{foo}.suffix"], expect: {equals: 12182}}
+    - {command: [test.keyslot, ""], expect: {equals: 0}}
+    - {command: [CLUSTER, KEYSLOT, ""], expect: {equals: 0}}
+    - {command: [test.keyslot, "{}"], expect: {min: 0, max: 16383}}
+    - {command: [CLUSTER, KEYSLOT, "{}"], expect: {min: 0, max: 16383}}
+    - {command: [test.keyslot, "a{}{foo}b"], expect: {min: 0, max: 16383}}
+    - {command: [CLUSTER, KEYSLOT, "a{}{foo}b"], expect: {min: 0, max: 16383}}
+    - {command: [test.keyslot, "{foo"], expect: {min: 0, max: 16383}}
+    - {command: [CLUSTER, KEYSLOT, "{foo"], expect: {min: 0, max: 16383}}
+    - {command: [test.keyslot, !!binary "Zm9vAGJhcg=="], expect: {min: 0, max: 16383}}
+    - {command: [CLUSTER, KEYSLOT, !!binary "Zm9vAGJhcg=="], expect: {min: 0, max: 16383}}
+    - {command: [test.keyslot, !!binary "e2YAb314"], expect: {min: 0, max: 16383}}
+    - {command: [CLUSTER, KEYSLOT, !!binary "e2YAb314"], expect: {min: 0, max: 16383}}
+    - {command: [test.keyslot], expect: {error: "wrong number"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [keyslot.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: keyslot}

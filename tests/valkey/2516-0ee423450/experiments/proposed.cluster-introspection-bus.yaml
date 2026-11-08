@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.cluster-introspection-bus
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTER subcommands, FLUSHSLOT, MIGRATE options and sharded publish
+    read embedded values of their small arguments
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, HELP], compare: skip}
+    - {command: [CLUSTER, MYID], compare: skip}
+    - {command: [CLUSTER, MYSHARDID], compare: skip}
+    - {command: [CLUSTER, SLOTS], compare: skip}
+    - {command: [CLUSTER, SHARDS], compare: skip}
+    - {command: [CLUSTER, INFO], compare: skip}
+    - {command: [CLUSTER, NODES], compare: skip}
+    - {command: [CLUSTER, KEYSLOT, foo], expect: {min: 0, max: 16383}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 0], expect: {equals: 0}}
+    - {command: [CLUSTER, GETKEYSINSLOT, 0, 10], compare: skip}
+    - {command: [CLUSTER, REPLICAS, "nonexistentnodeid0000000000000000000000"], expect: {
+        error: "Unknown node"}}
+    - {command: [CLUSTER, FLUSHSLOT, 0, ASYNC], expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOT, 1, SYNC], expect: {equals: OK}}
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [MIGRATE, "<node.1.host>", "<node.1.port>", foo, 0, 2000, COPY, REPLACE],
+      compare: skip}
+    - {command: [MIGRATE, "<node.1.host>", "<node.1.port>", foo, 0, 2000, AUTH, secret],
+      compare: skip}
+    - {command: [MIGRATE, "<node.1.host>", "<node.1.port>", "", 0, 2000, AUTH2, u,
+        p, KEYS, foo], compare: skip}
+    - {command: [SPUBLISH, chan, hello], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cl}

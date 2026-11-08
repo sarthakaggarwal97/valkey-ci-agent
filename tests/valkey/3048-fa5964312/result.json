@@ -1,0 +1,46 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fa5964312801ec435147ecd0667da03aad229434",
+  "parent": "b7b11d77d621d8d5fed0f77faed676e4ecee5854",
+  "pr": 3048,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix HEXPIRE should not delete items when validation rules fail and expiration is in the past (#3048)",
+  "date": "2026-01-14",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 21,
+    "executed": 21,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.3912,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-809f53d51740",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hexpire' returned ERROR: expectations both builds violate alike, so they are not about the change: 13 (HEXPIRE h3 -5 XX FIELDS 1 a), 22 (HEXPIRE h5 -100 FIELDS 3 x x x), 23 (EXISTS h5)"
+    },
+    {
+      "scenario": "ai-a82f06dea432",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hexpire' returned ERROR: expectations both builds violate alike, so they are not about the change: 13 (HEXPIRE h3 -5 XX FIELDS 1 a), 22 (HEXPIRE h5 -100 FIELDS 3 x x x), 23 (EXISTS h5)"
+    },
+    {
+      "scenario": "ai-cee6063cfdee",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hexpire' returned ERROR: expectations both builds violate alike, so they are not about the change: 13 (HEXPIRE h3 -5 XX FIELDS 1 a), 22 (HEXPIRE h5 -100 FIELDS 3 x x x), 23 (EXISTS h5)"
+    }
+  ]
+}

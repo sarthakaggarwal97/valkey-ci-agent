@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.acl-denied-db-log
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL_DENIED_DB log entry construction reads the embedded value of the
+    offending argument (both argpos branches)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acldb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [ACL, SETUSER, userA, on, ">pw", "~*", "+@all", "db=0"], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, userB, on, ">pw", "~*", "+@all", "db=1"], expect: {
+        equals: OK}}
+    - {command: [AUTH, userA, pw], connection: ca, expect: {equals: OK}}
+    - {command: [SELECT, 1], connection: ca, expect: {error: "NOPERM"}}
+    - {command: [AUTH, userB, pw], connection: cb, expect: {equals: OK}}
+    - {command: [GET, somekey], connection: cb, expect: {error: "NOPERM"}}
+    - {command: [ACL, LOG], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acldb}

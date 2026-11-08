@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f85ec7b00ff4..de00054326db.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-46f92cff02c9
+seed: 20251107
+experiment:
+  id: proposed.aof-multi-slot-cache-reload
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

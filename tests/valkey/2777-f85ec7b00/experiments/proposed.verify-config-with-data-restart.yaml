@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.verify-config-with-data-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: Restart a node holding keys in an unassigned slot and in a slot owned
+    by another node, driving both verifyClusterConfigWithData branches (take responsibility,
+    delete dirty keys) on both builds
+components:
+- use: valkey.action.commands
+  id: dirty-slots
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 60
+    commands:
+    - {command: [SET, foo, v1], node: 0, expect: {equals: OK}}
+    - {command: [SET, bar, v2], node: 0, expect: {equals: OK}}
+    - {command: [SAVE], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, DELSLOTS, 12182], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, DELSLOTS, 5061], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 5061, NODE, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {restart: true, node: 0, expect: {equals: OK}}
+    - {command: [GET, foo], node: 0, wait_s: 30, expect: {equals: v1}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 0, expect: {equals: 1}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 5061], node: 0, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dirty-slots.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dirty-slots}

@@ -1,0 +1,29 @@
+extends: [valkey.liveness]
+id: proposed.module-aofrw-fsl
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module AOF rewrite of an fsltype key on both builds, exercising rewriteModuleObject
+    through objectGetVal
+components:
+- use: valkey.action.commands
+  id: fslaof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 30
+    commands:
+    - {command: ["FSL.PUSH", mylist, "1"], expect: {equals: OK}}
+    - {command: ["FSL.PUSH", mylist, "5"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, appendonly, yes], expect: {equals: OK}}
+    - {command: [BGREWRITEAOF], wait_s: 15, compare: skip, expect: {exists: true}}
+    - {command: [DEBUG, LOADAOF], wait_s: 25, expect: {equals: OK}}
+    - {command: ["FSL.GETALL", mylist], expect: {equals: [1, 5]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [fslaof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fslaof}

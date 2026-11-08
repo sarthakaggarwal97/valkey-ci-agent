@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.cluster-keyslot-standalone
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER KEYSLOT answers in standalone mode; other CLUSTER subcommands
+    still refused; cluster-mode replies unchanged
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: keyslot
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CLUSTER, KEYSLOT, foo], expect_difference: true, expect: {equals: 12182}}
+    - {command: [CLUSTER, KEYSLOT, bar], expect_difference: true, expect: {equals: 5061}}
+    - {command: [CLUSTER, keyslot, foo], expect_difference: true, expect: {equals: 12182}}
+    - {command: [CLUSTER, KEYSLOT, "{bar}xyz"], expect_difference: true, expect: {
+        equals: 5061}}
+    - {command: [CLUSTER, KEYSLOT, "{}abc"], expect_difference: true, expect: {min: 0,
+        max: 16383}}
+    - {command: [CLUSTER, KEYSLOT, ""], expect_difference: true, expect: {equals: 0}}
+    - {command: [CLUSTER, KEYSLOT, "{"], expect_difference: true, expect: {min: 0,
+        max: 16383}}
+    - {command: [CLUSTER, KEYSLOT, !!binary "AP9Ze3t9"], expect_difference: true,
+      expect: {min: 0, max: 16383}}
+    - {command: [CLUSTER, KEYSLOT], expect: {error: "wrong number of arguments"}}
+    - {command: [CLUSTER, KEYSLOT, a, b], expect: {error: "wrong number of arguments"}}
+    - {command: [CLUSTER, INFO], expect: {error: "cluster support disabled"}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 0], expect: {error: "cluster support disabled"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [CLUSTER, KEYSLOT, foo], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [12182]}}
+    - {command: [EVAL, "return redis.call('cluster','keyslot',KEYS[1])", 1, foo],
+      expect_difference: true, expect: {equals: 12182}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: clusterside
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CLUSTER, KEYSLOT, foo], expect: {equals: 12182}}
+    - {command: [CLUSTER, KEYSLOT, "{bar}xyz"], expect: {equals: 5061}}
+    - {command: [CLUSTER, KEYSLOT, ""], expect: {equals: 0}}
+    - {command: [SET, foo, v1], expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [keyslot.completed, clusterside.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: keyslot}
+- {evidence_id: valkey.command.sequence, source: clusterside}

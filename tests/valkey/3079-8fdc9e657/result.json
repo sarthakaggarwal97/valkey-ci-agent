@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8fdc9e65733322282df042016f95e769d513a41d",
+  "parent": "2883c6afca0b999771fa57ded014f5f55fdff711",
+  "pr": 3079,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix valkey-benchmark hanging in single-thread duration mode (#3079)",
+  "date": "2026-01-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.4174,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.bitcount-bitpos-unit
+deployment:
+  modes: [standalone]
+metadata:
+  description: BITCOUNT and BITPOS BYTE/BIT unit parsing reads the embedded value
+    of the small unit argument
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bits
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SET, mykey, foobar], expect: {equals: OK}}
+    - {command: [BITCOUNT, mykey]}
+    - {command: [BITCOUNT, mykey, 0, 0]}
+    - {command: [BITCOUNT, mykey, 1, 1, BYTE]}
+    - {command: [BITCOUNT, mykey, 5, 30, BIT]}
+    - {command: [BITCOUNT, mykey, 0, 0, FOO], expect: {error: true}}
+    - {command: [BITPOS, mykey, 1]}
+    - {command: [BITPOS, mykey, 1, 2]}
+    - {command: [BITPOS, mykey, 1, 0, -1, BYTE]}
+    - {command: [BITPOS, mykey, 1, 0, -1, BIT]}
+    - {command: [BITPOS, mykey, 0, 0, -1, FOO], expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bits}

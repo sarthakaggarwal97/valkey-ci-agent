@@ -1,0 +1,46 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f0d981014c208b6d80badf3a814cff016b3f117d",
+  "parent": "3c546e2c3f567503ed73de006c512c4e773e4482",
+  "pr": 3030,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Don't stop the dirty scripts when an OOM occurs midway through execution (#3030)",
+  "date": "2026-01-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.7391,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-4410dc2c39b9",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'oomscript' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (FCALL dirtyset 1 foo2 baz), 7 (GET foo2)"
+    },
+    {
+      "scenario": "ai-42aa6c121c24",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'oomscript' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (FCALL dirtyset 1 foo2 baz), 7 (GET foo2)"
+    },
+    {
+      "scenario": "ai-296608512659",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'oomscript' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (FCALL dirtyset 1 foo2 baz), 7 (GET foo2)"
+    }
+  ]
+}

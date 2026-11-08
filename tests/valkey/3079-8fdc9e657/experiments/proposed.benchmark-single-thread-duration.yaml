@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-single-thread-duration
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    valkey-benchmark in single-threaded duration mode (--duration with --rps, no --threads)
+    must exit when the duration elapses. On the parent build the showThroughput timer
+    only calls aeStop when config.num_threads is set, so rate-limited clients that
+    go idle at the deadline (writeHandler returns at the requests_issued check without
+    writing, so no reply ever arrives to trigger clientDone's aeStop) leave the event
+    loop running forever: the benchmark hangs. The fixed build's timer stops the loop
+    in single-thread mode and stays alive (no AE_NOMORE) for the following tests of
+    the suite, which need it to clear --warmup and to stop each test. Runs compare
+    exit status and timed_out across the two builds; throughput numbers differ between
+    processes, so all output is ignored for comparison and checked only by each run's
+    expect.
+inputs:
+  properties:
+    duration: {type: integer, default: 2}
+    rps: {type: integer, default: 10}
+    clients: {type: integer, default: 2}
+    pipeline: {type: integer, default: 1}
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 15
+    ignore: ['^.*\n', '^.*$']
+    runs:
+    - tool: valkey-benchmark
+      args: [-p, $port, -c, {$ref: inputs.clients}, -P, {$ref: inputs.pipeline}, --rps,
+        {$ref: inputs.rps}, --duration, {$ref: inputs.duration}, -t, set, --csv]
+      expect_difference: true
+      expect: {exit: {equals: 0}, stdout: {contains: '"SET"'}}
+    - tool: valkey-benchmark
+      args: [-p, $port, -c, {$ref: inputs.clients}, -P, {$ref: inputs.pipeline}, --rps,
+        {$ref: inputs.rps}, --duration, {$ref: inputs.duration}, -t, "set,get", --csv]
+      expect_difference: true
+      expect: {exit: {equals: 0}, stdout: {contains: '"GET"'}}
+    - tool: valkey-benchmark
+      args: [-p, $port, -c, {$ref: inputs.clients}, -P, {$ref: inputs.pipeline}, --rps,
+        {$ref: inputs.rps}, --warmup, 1, --duration, {$ref: inputs.duration}, -t,
+        "set,get", --csv]
+      expect_difference: true
+      expect: {exit: {equals: 0}, stdout: {contains: '"GET"'}}
+    - tool: valkey-benchmark
+      args: [-p, $port, --threads, 2, -c, {$ref: inputs.clients}, -P, {$ref: inputs.pipeline},
+        --rps, {$ref: inputs.rps}, --duration, {$ref: inputs.duration}, -t, set, --csv]
+      expect: {exit: {equals: 0}, stdout: {contains: '"SET"'}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

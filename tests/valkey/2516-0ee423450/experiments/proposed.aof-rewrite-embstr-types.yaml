@@ -1,0 +1,66 @@
+extends: [valkey.liveness]
+id: proposed.aof-rewrite-embstr-types
+deployment:
+  modes: [standalone]
+metadata:
+  description: Command-format AOF rewrite (no RDB preamble) of int/embstr/raw strings,
+    listpack and skiplist zsets, streams and a module type, verified by reloading
+    the rewritten AOF across a restart
+inputs: {}
+components:
+- use: valkey.action.commands
+  id: aofrw
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config:
+      appendonly: 'yes'
+      appendfsync: everysec
+      aof-use-rdb-preamble: 'no'
+      zset-max-listpack-entries: 4
+    timeout_s: 90
+    commands:
+    - {command: [SET, 's:int', 1234567890123], expect: {equals: OK}}
+    - {command: [SET, 's:emb', hello-embstr], expect: {equals: OK}}
+    - {command: [SET, 's:raw', this-is-a-long-raw-string-value-exceeding-the-embstr-limit-0123456789],
+      expect: {equals: OK}}
+    - {command: [SET, 's:empty', ''], expect: {equals: OK}}
+    - {command: [ZADD, zl, 1, a, 2, b, 0, ''], expect: {equals: 3}}
+    - {command: [ZADD, zs, 1, a, 2, b, 3, c, 4, d, 5, e, 6, f], expect: {equals: 6}}
+    - {command: [XADD, st, 1-1, f, v], expect: {equals: 1-1}}
+    - {command: [XADD, st, 2-2, f2, v2], expect: {equals: 2-2}}
+    - {command: [XGROUP, CREATE, st, g1, 0], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g1, c1, COUNT, 1, STREAMS, st, '>'], expect: {
+        exists: true}}
+    - {command: [FSL.PUSH, fsl, 1], expect: {equals: OK}}
+    - {command: [FSL.PUSH, fsl, 2], expect: {equals: OK}}
+    - {command: [FSL.PUSH, fsl, 3], expect: {equals: OK}}
+    - {command: [RPUSH, list, a, b, c], expect: {equals: 3}}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [SADD, set, x, y, z], expect: {equals: 3}}
+    - {command: [BGREWRITEAOF], expect: {contains: started}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: 'aof_rewrite_in_progress:0'}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, 's:int'], expect: {equals: '1234567890123'}}
+    - {command: [GET, 's:emb'], expect: {equals: hello-embstr}}
+    - {command: [GET, 's:raw'], expect: {equals: this-is-a-long-raw-string-value-exceeding-the-embstr-limit-0123456789}}
+    - {command: [GET, 's:empty'], expect: {equals: ''}}
+    - {command: [ZRANGE, zl, 0, -1, WITHSCORES], expect: {equals: ['', '0', a, '1',
+          b, '2']}}
+    - {command: [ZRANGE, zs, 0, -1, WITHSCORES], expect: {equals: [a, '1', b, '2',
+          c, '3', d, '4', e, '5', f, '6']}}
+    - {command: [XLEN, st], expect: {equals: 2}}
+    - {command: [XRANGE, st, '-', '+'], expect: {exists: true}}
+    - {command: [XINFO, GROUPS, st], compare: skip, expect: {exists: true}}
+    - {command: [FSL.GETALL, fsl], expect: {equals: [1, 2, 3]}}
+    - {command: [LRANGE, list, 0, -1], expect: {equals: [a, b, c]}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [SMEMBERS, set], compare: unordered}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [aofrw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofrw}

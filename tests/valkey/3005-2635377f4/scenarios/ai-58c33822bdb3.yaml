@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fa5964312801..2635377f4da4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-58c33822bdb3
+seed: 300501
+experiment:
+  id: proposed.memory-dataset-underflow
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

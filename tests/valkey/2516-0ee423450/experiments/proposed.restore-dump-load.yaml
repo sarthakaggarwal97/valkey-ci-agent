@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.restore-dump-load
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE option parsing and payload load read the embedded value of
+    the option and payload arguments
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: restore
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {rdb-version-check: relaxed}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [RESTORE, foo, 0, !!binary 'AANiYXLeAD1ZVXph0+zg'], expect: {equals: OK}}
+    - {command: [GET, foo], expect: {equals: bar}}
+    - {command: [RESTORE, foo, 0, !!binary 'AANiYXLeAD1ZVXph0+zg', REPLACE], expect: {
+        equals: OK}}
+    - {command: [RESTORE, foo, 100000, !!binary 'AANiYXLeAD1ZVXph0+zg', REPLACE, ABSTTL],
+      expect: {equals: OK}}
+    - {command: [RESTORE, k2, 0, !!binary 'AANiYXLeAD1ZVXph0+zg', IDLETIME, 100],
+      expect: {equals: OK}}
+    - {command: [RESTORE, k3, 0, !!binary 'AANiYXLeAD1ZVXph0+zg', FREQ, 5], expect: {
+        equals: OK}}
+    - {command: [GET, k3], expect: {equals: bar}}
+    - {command: [RESTORE, k4, 0, !!binary 'AANiYXLeAD1ZVXph0+zg', FROB], expect: {
+        error: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore}

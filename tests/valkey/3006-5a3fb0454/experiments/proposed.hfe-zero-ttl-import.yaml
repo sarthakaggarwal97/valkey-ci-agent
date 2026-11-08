@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.hfe-zero-ttl-import
+deployment:
+  modes: [standalone]
+metadata:
+  description: HSETEX with an already-past absolute TTL (EXAT 0) under import-mode
+    stores a tracked field that expires once import-mode ends, instead of a permanent
+    field
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hfe
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 40
+    commands:
+    - {command: [CONFIG, SET, import-mode, yes], expect: {equals: OK}}
+    - {command: [HSET, myhash, f1, v1], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, myhash], compare: skip}
+    - {command: [HSETEX, myhash, EXAT, 0, FIELDS, 2, f2, v2, f3, v3], expect: {equals: 1}}
+    - {command: [HLEN, myhash], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, myhash], compare: skip}
+    - {command: [CONFIG, SET, import-mode, no], expect: {equals: OK}}
+    - {command: [HGET, myhash, f2], expect_difference: true, expect: {exists: false}}
+    - {command: [HGET, myhash, f3], expect_difference: true, expect: {exists: false}}
+    - {command: [HGET, myhash, f1], expect: {equals: v1}}
+    - {command: [HLEN, myhash], expect_difference: true, expect: {equals: 1}, wait_s: 30}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hfe.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hfe}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b7f1a6c7d9ce83d202c128616b4abd28691fa3a1",
+  "parent": "33a1b51cc0f728bc46bf1bd3035f58ff0ad33c40",
+  "pr": 3055,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Delete large binary junk file valkey-microbench (#3055)",
+  "date": "2026-01-13",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2098,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only deletes src/valkey-microbench, an accidentally committed binary artifact. No source code, build rules, tools, or runtime behaviour change, so there is no path for a scenario to exercise."
+}

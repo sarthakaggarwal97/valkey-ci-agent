@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9f7cfc771902..0ee4234506ba.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4417aa6e36df
+seed: 101
+experiment:
+  id: proposed.embstr-embedded-value-boundaries
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

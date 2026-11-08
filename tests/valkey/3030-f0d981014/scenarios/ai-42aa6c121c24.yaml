@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3c546e2c3f56..f0d981014c20.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-42aa6c121c24
+seed: 30302
+experiment:
+  id: proposed.script-oom-dirty-continue
+  inputs:
+    resp: 3
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

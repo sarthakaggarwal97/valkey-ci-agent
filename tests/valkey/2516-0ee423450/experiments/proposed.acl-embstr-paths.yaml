@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.acl-embstr-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: AUTH and ACL subcommands that now read usernames, passwords, keys and
+    channels through objectGetVal
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    files: {users.acl: "user default on nopass ~* &* +@all\n"}
+    server_config: {aclfile: users.acl}
+    commands:
+    - {command: [ACL, WHOAMI], expect: {equals: default}}
+    - {command: [ACL, SETUSER, alice, on, '>secret-pass', '~app:*', '&news.*', '&shard.*',
+        '+@read', '+@write', '+@pubsub', '+auth', '+select|0'], expect: {equals: OK}}
+    - {command: [ACL, GETUSER, alice], expect: {exists: true}}
+    - {command: [AUTH, alice, wrongpass], expect: {error: WRONGPASS}}
+    - {command: [AUTH, nosuchuser, x], expect: {error: WRONGPASS}}
+    - {connection: a, command: [AUTH, alice, secret-pass], expect: {equals: OK}}
+    - {connection: a, command: [SELECT, 0], expect: {equals: OK}}
+    - {connection: a, command: [SELECT, 1], expect: {error: NOPERM}}
+    - {connection: a, command: [SET, 'app:k1', v1], expect: {equals: OK}}
+    - {connection: a, command: [GET, 'app:k1'], expect: {equals: v1}}
+    - {connection: a, command: [SET, 'other:k', v], expect: {error: NOPERM}}
+    - {connection: a, command: [PUBLISH, private.ch, m], expect: {error: NOPERM}}
+    - {connection: sub, command: [AUTH, alice, secret-pass], expect: {equals: OK}}
+    - {connection: sub, command: [SUBSCRIBE, news.sports], expect: {exists: true}}
+    - {connection: sub, command: [PSUBSCRIBE, 'news.*'], expect: {exists: true}}
+    - {connection: sub, command: [SSUBSCRIBE, shard.feed], expect: {exists: true}}
+    - {connection: sub, command: [SUBSCRIBE, private.x], expect: {error: NOPERM}}
+    - {connection: a, command: [PUBLISH, news.sports, hi], expect: {equals: 2}}
+    - {connection: sub, read: true, expect: {exists: true}}
+    - {command: [ACL, SETUSER, alice, resetchannels, '&news.*'], expect: {equals: OK}}
+    - {connection: sub, read: true, expect: {exists: false}}
+    - {command: [ACL, DRYRUN, alice, GET, 'app:k1'], expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, alice, GET, 'other:k'], expect: {contains: no permissions}}
+    - {command: [ACL, DRYRUN, alice, NOSUCHCMD, x], expect: {error: not found}}
+    - {command: [ACL, DRYRUN, ghost, GET, k], expect: {error: not found}}
+    - {command: [ACL, CAT, read], compare: unordered, expect: {exists: true}}
+    - {command: [ACL, CAT, nosuchcat], expect: {error: Unknown category}}
+    - {command: [ACL, LOG], compare: skip, expect: {exists: true}}
+    - {command: [ACL, LOG, RESET], expect: {equals: OK}}
+    - {command: [ACL, LOG], expect: {equals: []}}
+    - {command: [ACL, LIST], expect: {exists: true}}
+    - {command: [ACL, SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ACL, LIST], expect: {exists: true}}
+    - {command: [ACL, GETUSER, alice], expect: {exists: true}}
+    - {command: [ACL, DELUSER, default], expect: {error: cannot be removed}}
+    - {command: [ACL, SETUSER, bob, on], expect: {equals: OK}}
+    - {command: [ACL, DELUSER, alice, bob], expect: {equals: 2}}
+    - {command: [ACL, GETUSER, alice], expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [acl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

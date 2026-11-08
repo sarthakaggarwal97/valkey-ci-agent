@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4524c23526a44fa644938935a10f5ec3ef3d4860",
+  "parent": "bdc62355c642af7ef9f1fa87ffe2aa5df59724e8",
+  "pr": 2931,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Cumulative metric for active main thread usage (#2931)",
+  "date": "2026-01-16",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 26,
+    "executed": 26,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.5741,
+  "findings": [],
+  "recorded": []
+}

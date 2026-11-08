@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.aof-multi-slot-cache-reload
+deployment:
+  modes: [standalone]
+metadata:
+  description: AOF reload in cluster mode replays MULTI/EXEC through the AOF client;
+    before the fix the stale cached slot put transaction keys into the wrong slot
+    dict, duplicating keys and corrupting data
+components:
+- use: valkey.action.commands
+  id: aof-reload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    server_config: {appendonly: "yes", enable-debug-command: "yes"}
+    timeout_s: 60
+    commands:
+    - {command: [SET, "{a}k", v1], expect: {equals: OK}}
+    - {command: [SET, "{b}k", v2], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "{a}k", v3], expect: {equals: QUEUED}}
+    - {command: [APPEND, "{a}k", v4], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, 4]}}
+    - {command: [SET, "{c}q", v5], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [APPEND, "{b}k", x], expect: {equals: QUEUED}}
+    - {command: [APPEND, "{b}k", y], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [3, 4]}}
+    - {command: [DEBUG, LOADAOF], expect: {equals: OK}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 3}}
+    - {command: [GET, "{a}k"], expect_difference: true, expect: {equals: v3v4}}
+    - {command: [GET, "{b}k"], expect_difference: true, expect: {equals: v2xy}}
+    - {command: [GET, "{c}q"], expect: {equals: v5}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 3300], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 7365], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [KEYS, "*"], compare: unordered, expect_difference: true, expect: {
+        equals: ["{a}k", "{b}k", "{c}q"]}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 3}}
+    - {command: [GET, "{a}k"], expect_difference: true, expect: {equals: v3v4}}
+    - {command: [GET, "{b}k"], expect_difference: true, expect: {equals: v2xy}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aof-reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof-reload}

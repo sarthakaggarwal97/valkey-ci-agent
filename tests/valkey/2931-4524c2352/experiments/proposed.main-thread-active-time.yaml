@@ -1,0 +1,96 @@
+extends: [valkey.liveness]
+id: proposed.main-thread-active-time
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    INFO cpu gains used_active_time_main_thread; it must be present, positive after
+    command work, include DEBUG SLEEP main-thread time, be reset by CONFIG RESETSTAT,
+    and appear exactly once in INFO everything. The parent build has no such field,
+    so each Lua probe returns a different integer there.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, enum: [1, 4], default: 1}
+    appendonly: {type: string, enum: ["yes", "no"], default: "no"}
+    appendfsync: {type: string, enum: [always, everysec, "no"], default: everysec}
+components:
+- use: valkey.action.commands
+  id: active-time
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config:
+      hz: 100
+      io-threads: {$ref: inputs.io_threads}
+      appendonly: {$ref: inputs.appendonly}
+      appendfsync: {$ref: inputs.appendfsync}
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [RPUSH, biglist, a, b, c, d, e, f, g, h], expect: {equals: 8}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [INFO, cpu], expect_difference: true, expect: {contains: "used_active_time_main_thread:"}}
+    - command:
+      - EVAL
+      - |
+        local info = redis.call('INFO', 'cpu')
+        local v = string.match(info, 'used_active_time_main_thread:(%d+%.%d+)')
+        if v and tonumber(v) > 0 then return 1 end
+        return 0
+      - "0"
+      expect_difference: true
+      expect: {equals: 1}
+    - {command: [SET, exp1, v, PX, 50], expect: {equals: OK}}
+    - {command: [SET, exp2, v, PX, 50], expect: {equals: OK}}
+    - {command: [EXISTS, exp1, exp2], wait_s: 10, expect: {equals: 0}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - command:
+      - EVAL
+      - |
+        local info = redis.call('INFO', 'cpu')
+        local v = string.match(info, 'used_active_time_main_thread:(%d+%.%d+)')
+        if not v then
+          redis.call('SET', 'prev_active', '-1')
+          return 0
+        end
+        redis.call('SET', 'prev_active', v)
+        if tonumber(v) >= 0.3 then return 1 end
+        return 2
+      - "0"
+      expect_difference: true
+      expect: {equals: 1}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - command:
+      - EVAL
+      - |
+        local info = redis.call('INFO', 'cpu')
+        local v = string.match(info, 'used_active_time_main_thread:(%d+%.%d+)')
+        if not v then return 0 end
+        local prev = tonumber(redis.call('GET', 'prev_active'))
+        if prev and prev > 0 and tonumber(v) < prev then return 1 end
+        return 2
+      - "0"
+      expect_difference: true
+      expect: {equals: 1}
+    - command:
+      - EVAL
+      - |
+        local info = redis.call('INFO', 'everything')
+        local n = 0
+        for _ in string.gmatch(info, 'used_active_time_main_thread:') do n = n + 1 end
+        return n
+      - "0"
+      expect_difference: true
+      expect: {equals: 1}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [active-time.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: active-time}

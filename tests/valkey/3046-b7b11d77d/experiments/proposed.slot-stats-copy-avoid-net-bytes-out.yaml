@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.slot-stats-copy-avoid-net-bytes-out
+deployment:
+  modes: [standalone]
+metadata:
+  description: network-bytes-out in CLUSTER SLOT-STATS is not double-counted for copy-avoided
+    (BULK_STR_REF) replies, on the static-buffer and reply-list release paths
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, enum: [1, 4], default: 1}
+components:
+- use: valkey.action.commands
+  id: slotstats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    server_config:
+      cluster-slot-stats-enabled: "yes"
+      min-string-size-avoid-copy-reply: 1
+      min-string-size-avoid-copy-reply-threaded: 1
+      io-threads: {$ref: inputs.io_threads}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - command: [SET, foo, AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA]
+      expect: {equals: OK}
+    - command: [GET, foo]
+      expect: {equals: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA}
+    - command:
+      - EVAL
+      - "local s = redis.call('CLUSTER','SLOT-STATS','SLOTSRANGE','12182','12182')\
+        \ local t = s[1][2] for i=1,#t,2 do if t[i]=='network-bytes-out' then return\
+        \ t[i+1] end end return -1"
+      - "0"
+      expect_difference: true
+      expect: {equals: 76}
+      wait_s: 5
+    - command: [SETRANGE, "{foo}big", 99999, A]
+      expect: {equals: 100000}
+    - command: [GET, "{foo}big"]
+    - command:
+      - EVAL
+      - "local s = redis.call('CLUSTER','SLOT-STATS','SLOTSRANGE','12182','12182')\
+        \ local t = s[1][2] for i=1,#t,2 do if t[i]=='network-bytes-out' then return\
+        \ t[i+1] end end return -1"
+      - "0"
+      expect_difference: true
+      expect: {equals: 100096}
+      wait_s: 5
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slotstats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotstats}

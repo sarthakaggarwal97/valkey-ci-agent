@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "de00054326db991c35529dcbe5342470404c3bba",
+  "parent": "f85ec7b00ff4a9c97ec72c196baf5bec96fb7fb7",
+  "pr": 3004,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Skip slot cache optimization for AOF client to prevent key duplication and data corruption (#3004)",
+  "date": "2026-01-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.9465,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in loadAppendOnlyFiles",
+      "scenario": "ai-46f92cff02c9",
+      "seed": 20251107,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #3004, since fixed",
+      "fingerprint": "b503eb41219018395165",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: === VALKEY BUG REPORT START: Cut & paste starting from here ===",
+      "scenario": "ai-46f92cff02c9",
+      "seed": 20251107,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #3004",
+      "fingerprint": "2acbae1cb6f75ed7f0ef",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5a3fb0454c86..269f6e7083f2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-82c781459ebb
+seed: 101
+experiment:
+  id: proposed.log-format-json
+  inputs:
+    resp: 2
+    timestamp_format: legacy
+deployment:
+  mode: standalone
+  base_port: 7000

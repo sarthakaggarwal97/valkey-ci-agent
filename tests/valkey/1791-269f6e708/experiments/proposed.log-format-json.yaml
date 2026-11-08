@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.log-format-json
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    log-format accepts json on the new build (the parent rejects it), the value survives
+    CONFIG REWRITE and a restart, and JSON escaping of quotes, backslashes and control
+    bytes in log messages does not crash the server
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    timestamp_format: {type: string, enum: [legacy, iso8601, milliseconds], default: legacy}
+components:
+- use: valkey.action.commands
+  id: logjson
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      enable-debug-command: "yes"
+      log-timestamp-format: {$ref: inputs.timestamp_format}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, GET, log-format]}
+    - {command: [CONFIG, SET, log-format, json], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, GET, log-format], expect_difference: true, expect: {contains: json}}
+    - {command: [CONFIG, SET, log-format, bogus], expect_difference: true, expect: {
+        error: "must be one of"}}
+    - {command: [DEBUG, LOG, "quotes \"x\" and \\back\\slash\\ end\""], expect: {
+        equals: OK}}
+    - {command: [DEBUG, LOG, "ctrl \x01\x02\x1F tab\t nl\n cr\r bs\b ff\f end"], expect: {
+        equals: OK}}
+    - {command: [DEBUG, LOG, ""], expect: {equals: OK}}
+    - {command: [DEBUG, LOG, "\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\\\"\
+          \\\"\\\"\\\""], expect: {equals: OK}}
+    - {command: [DEBUG, LOG, "utf8 h\xE9llo w\xF6rld \u65E5\u672C\u8A9E \u2603"],
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, log-format, logfmt], expect: {equals: OK}}
+    - {command: [DEBUG, LOG, "logfmt \"quoted\"\tmessage"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, log-format, json], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, log-timestamp-format, milliseconds], expect: {equals: OK}}
+    - {command: [DEBUG, LOG, "json with ms timestamps \"q\""], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, log-format], expect_difference: true, expect: {contains: json}}
+    - {command: [DEBUG, LOG, "after restart \"json\" \\ \t \x1F"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [logjson.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: logjson}

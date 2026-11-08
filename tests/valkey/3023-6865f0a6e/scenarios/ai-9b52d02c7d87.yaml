@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey de00054326db..6865f0a6e929.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9b52d02c7d87
+seed: 3024
+experiment:
+  id: proposed.hexpire-gt-past
+  inputs:
+    resp: 3
+    hash_max_listpack_entries: 128
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.hfe-zero-ttl-rdb-reload
+deployment:
+  modes: [standalone]
+metadata:
+  description: A hash field given a zero (epoch-0) expiry under import mode is tracked
+    for active expiry after an RDB save and reload
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, import-mode, "yes"], expect: {equals: OK}}
+    - {command: [HSETEX, myhash, EXAT, "99999999999", FIELDS, "1", f1, v1], expect: {
+        equals: 1}}
+    - {command: [HSETEX, myhash, EXAT, "0", FIELDS, "1", f0, v0], expect: {equals: 1}}
+    - {command: [HLEN, myhash], expect: {equals: 2}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HLEN, myhash], wait_s: 30, expect_difference: true, expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

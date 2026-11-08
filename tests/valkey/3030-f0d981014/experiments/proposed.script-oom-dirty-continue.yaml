@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.script-oom-dirty-continue
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    A script that already wrote (write-dirty) keeps running deny-oom commands after
+    maxmemory is exceeded, while a script with no prior write still stops with an
+    OOM error
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: oomscript
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 15
+    commands:
+    - {command: [SET, foo, initial], expect: {equals: OK}}
+    - {command: [SET, foo2, initial2], expect: {equals: OK}}
+    - command: [FUNCTION, LOAD, "#!lua name=oomlib\nserver.register_function('dirtyset',\
+          \ function(keys, args) server.call('del', keys[1]) return server.call('set',\
+          \ keys[1], args[1]) end)"]
+      expect: {equals: oomlib}
+    - {command: [CONFIG, SET, maxmemory, "1"], expect: {equals: OK}}
+    - command: [EVAL, "server.call('get', KEYS[1])\nserver.call('del', KEYS[1])\n\
+          return server.call('set', KEYS[1], ARGV[1])", "1", foo, bar]
+      expect_difference: true
+      expect: {equals: OK}
+    - {command: [GET, foo], expect_difference: true, expect: {equals: bar}}
+    - command: [FCALL, dirtyset, "1", foo2, baz]
+      expect_difference: true
+      expect: {equals: OK}
+    - {command: [GET, foo2], expect_difference: true, expect: {equals: baz}}
+    - command: [EVAL, "server.call('get', KEYS[1])\nreturn server.call('set', KEYS[1],\
+          \ ARGV[1])", "1", nondirty, x]
+      expect: {error: "OOM"}
+    - {command: [GET, nondirty], expect: {exists: false}}
+    - command: [EVAL, "#!lua flags=allow-oom\nreturn server.call('set', KEYS[1], ARGV[1])",
+        "1", oomkey, v]
+      expect: {equals: OK}
+    - {command: [CONFIG, SET, maxmemory, "0"], expect: {equals: OK}}
+    - {command: [GET, oomkey], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [oomscript.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: oomscript}

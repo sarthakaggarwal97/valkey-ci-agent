@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5e65bad9cc53e46fdfce5f55b429dc89dff9273e",
+  "parent": "9735bac65b29984c138127e859dd5b6a74fe034c",
+  "pr": 3075,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Cleanup and break the while loop in clusterPrimariesHaveReplicas (#3075)",
+  "date": "2026-01-19",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3075,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure refactor: clusterPrimariesHaveReplicas previously summed num_replicas over all primaries and returned (sum != 0); it now returns 1 at the first primary with num_replicas != 0. Because num_replicas is a non-negative count, the two forms compute the identical boolean for every cluster state \u2014 the loop merely exits early. The only caller, clusterNodeSetSlotBit, sets the MIGRATE_TO flag under exactly the same conditions as before, so there is no observable behaviour change to test."
+}

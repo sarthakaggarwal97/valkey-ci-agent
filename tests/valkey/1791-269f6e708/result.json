@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "269f6e7083f29528191595584eac1c4cda2542d1",
+  "parent": "5a3fb0454c866cdf46729694e24e2ecf792df97b",
+  "pr": 1791,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Adding json support for log-format config (#1791)",
+  "date": "2026-01-06",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 3,
+  "hunted": 4,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 23,
+    "executed": 22,
+    "percent": 95,
+    "uncovered": [
+      "src/server.c:244"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 3.9675,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-8995458716f7",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-8521328d1e8c",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

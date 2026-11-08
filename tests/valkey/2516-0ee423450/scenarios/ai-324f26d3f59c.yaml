@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9f7cfc771902..0ee4234506ba.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-324f26d3f59c
+seed: 104
+experiment:
+  id: valkey.snapshot-equivalence
+  inputs:
+    value_size: 48
+    stable_keys: 2000
+    operations: 5000
+deployment:
+  mode: standalone
+  base_port: 7300

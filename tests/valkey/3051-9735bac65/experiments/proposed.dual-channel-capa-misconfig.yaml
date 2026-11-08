@@ -1,0 +1,41 @@
+extends: [valkey.base]
+id: proposed.dual-channel-capa-misconfig
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Primary with repl-diskless-sync off must ignore a replica's dual-channel
+    capability, log the notice, and still complete an ordinary resync with no acknowledged
+    write lost
+components:
+- use: valkey.observer.log
+  id: capa-log
+  config:
+    instances: primary
+    expect:
+    - {evidence_id: valkey.replication.dual-channel-ignored-logged, pattern: "Dual\
+        \ channel capability ignored: repl-diskless-sync disabled", required: true}
+    forbidden:
+    - {pattern: "is capable of dual channel synchronization"}
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: SIGKILL
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, capa-log, kill-replica]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.replication.dual-channel-ignored-logged, source: capa-log}
+- {evidence_id: valkey.fault.injected, source: kill-replica}

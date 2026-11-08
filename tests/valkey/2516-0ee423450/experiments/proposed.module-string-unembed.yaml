@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.module-string-unembed
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module string APIs that must unembed an embedded value (StringAppendBuffer,
+    StringTruncate, StringDMA, TrimStringAllocation) compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: modstr
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [test.string.append], expect: {equals: foobar}}
+    - {command: [test.string.append.am], expect: {equals: foobar}}
+    - {command: [test.string.trim], expect: {equals: OK}}
+    - {command: [test.string.truncate], expect: {equals: OK}}
+    - {command: [GET, foo], expect: {equals: ""}}
+    - {command: [test.string.truncate], expect: {equals: OK}}
+    - {command: [test.string.printf, aa, bb], expect: {equals: "Got 3 args. argv[1]:\
+          \ aa, argv[2]: bb"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modstr.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modstr}

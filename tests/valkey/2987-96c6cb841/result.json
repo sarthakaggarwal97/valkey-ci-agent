@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "96c6cb841ffc3c38bb208d9afd529901532888e0",
+  "parent": "82a312d8a595b71cc818fb045c84121cc13835ec",
+  "pr": 2987,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "fix asprintf unused result warn (#2987)",
+  "date": "2026-01-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4479,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a mechanical refactor to silence a -Wunused-result build warning: six call sites in the Lua debugger (src/modules/lua/debug_lua.c) swap asprintf+free for lm_asprintf+ValkeyModule_Free. lm_asprintf (script_lua.c:235) produces byte-identical formatted strings via vsnprintf into a ValkeyModule_Alloc buffer, and every changed allocation is freed with the matching allocator in the same function. The only semantic difference is on allocation failure, where the unchecked asprintf result is replaced by the module allocator's abort-on-OOM, which is neither reachable nor observable in a te"
+}

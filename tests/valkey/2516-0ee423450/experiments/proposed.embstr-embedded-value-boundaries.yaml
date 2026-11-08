@@ -1,0 +1,85 @@
+extends: [valkey.liveness]
+id: proposed.embstr-embedded-value-boundaries
+deployment:
+  modes: [standalone]
+metadata:
+  description: Embedded-value string boundaries, expire/key offset arithmetic, and
+    unshare paths compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: embstr
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, a, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, a], expect: {equals: embstr}}
+    - {command: [SET, b, AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, b], expect_difference: true, expect: {equals: embstr}}
+    - {command: [GET, b], expect: {equals: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA}}
+    - {command: [SET, b, BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, b], expect_difference: true, expect: {equals: embstr}}
+    - {command: [GET, b], expect: {equals: BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB}}
+    - {command: [DEBUG, SDSLEN, b], compare: skip}
+    - {command: [SET, c, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb], expect: {
+        equals: OK}}
+    - {command: [OBJECT, ENCODING, c], expect_difference: true, expect: {equals: embstr}}
+    - {command: [EXPIRE, c, 100], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, c], expect: {equals: raw}}
+    - {command: [GET, c], expect: {equals: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb}}
+    - {command: [TTL, c], compare: skip, expect: {min: 90}}
+    - {command: [GETDEL, c], expect: {equals: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb}}
+    - {command: [EXISTS, c], expect: {equals: 0}}
+    - {command: [SET, d, ccccccccccccccccccccccccccccccccccccccccccccccccc], expect: {
+        equals: OK}}
+    - {command: [OBJECT, ENCODING, d], expect: {equals: raw}}
+    - {command: [SET, f, DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD, EX, 100], expect: {
+        equals: OK}}
+    - {command: [OBJECT, ENCODING, f], expect_difference: true, expect: {equals: embstr}}
+    - {command: [GET, f], expect: {equals: DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD}}
+    - {command: [GETRANGE, f, 0, 5], expect: {equals: DDDDDD}}
+    - {command: [PERSIST, f], expect: {equals: 1}}
+    - {command: [GET, f], expect: {equals: DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD}}
+    - {command: [SET, g, eeeeeeeeeeeeeeeeeeee, EX, 100], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, g], expect: {equals: embstr}}
+    - {command: [SETRANGE, g, 10, 0123456789ABCDE], expect: {equals: 25}}
+    - {command: [GET, g], expect: {equals: eeeeeeeeee0123456789ABCDE}}
+    - {command: [TTL, g], compare: skip, expect: {min: 90}}
+    - {command: [SET, h, ""], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: embstr}}
+    - {command: [APPEND, h, x], expect: {equals: 1}}
+    - {command: [GET, h], expect: {equals: x}}
+    - {command: [SET, i, 123], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, i], expect: {equals: int}}
+    - {command: [INCR, i], expect: {equals: 124}}
+    - {command: [APPEND, i, 9], expect: {equals: 4}}
+    - {command: [OBJECT, ENCODING, i], expect: {equals: raw}}
+    - {command: [GET, i], expect: {equals: "1249"}}
+    - {command: [SET, KKKKKKKKKKKKKKKKKKKKKKKKKKKKKK, fffffffffffffffffff], expect: {
+        equals: OK}}
+    - {command: [OBJECT, ENCODING, KKKKKKKKKKKKKKKKKKKKKKKKKKKKKK], expect_difference: true,
+      expect: {equals: embstr}}
+    - {command: [GET, KKKKKKKKKKKKKKKKKKKKKKKKKKKKKK], expect: {equals: fffffffffffffffffff}}
+    - {command: [SET, LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,
+        small], expect: {equals: OK}}
+    - {command: [EXPIRE, LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL,
+        100], expect: {equals: 1}}
+    - {command: [GET, LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL],
+      expect: {equals: small}}
+    - {command: [TTL, LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL],
+      compare: skip, expect: {min: 90}}
+    - {command: [APPEND, a, xxxxxxxxxxxxxxxxxxxxxxxx], expect: {equals: 64}}
+    - {command: [OBJECT, ENCODING, a], expect: {equals: raw}}
+    - {command: [GET, a], expect: {equals: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaxxxxxxxxxxxxxxxxxxxxxxxx}}
+    - {command: [STRLEN, a], expect: {equals: 64}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [embstr.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: embstr}

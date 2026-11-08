@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6865f0a6e929948aa73560b2ab20e3058d584e65",
+  "parent": "de00054326db991c35529dcbe5342470404c3bba",
+  "pr": 3023,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix HEXPIRE should not delete items when GT rule is used and expiration is in the past (#3023)",
+  "date": "2026-01-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.9736,
+  "findings": [],
+  "recorded": []
+}

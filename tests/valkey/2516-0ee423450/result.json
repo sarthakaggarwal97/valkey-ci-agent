@@ -1,0 +1,202 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0ee4234506ba5b37095160047daf75b857171c12",
+  "parent": "9f7cfc771902db5ea1f8e67f1d23c65c07cde11e",
+  "pr": 2516,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove internal server object pointer overhead in small strings (#2516)",
+  "date": "2026-01-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 26,
+  "proven": 2,
+  "hunted": 21,
+  "dropped": 5,
+  "recall": true,
+  "coverage": {
+    "lines": 1650,
+    "executed": 568,
+    "percent": 34,
+    "uncovered": [
+      "src/acl.c:1567",
+      "src/aof.c:2193",
+      "src/cluster.c:257",
+      "src/cluster.c:271",
+      "src/cluster.c:391",
+      "src/cluster.c:393",
+      "src/cluster.c:1204",
+      "src/cluster.c:1374",
+      "src/cluster_legacy.c:7595",
+      "src/cluster_legacy.c:7702",
+      "src/cluster_legacy.c:7703",
+      "src/cluster_legacy.c:7824",
+      "src/cluster_legacy.c:7834",
+      "src/cluster_legacy.c:7927",
+      "src/cluster_legacy.c:8051",
+      "src/cluster_legacy.c:8054",
+      "src/cluster_legacy.c:8057",
+      "src/cluster_legacy.c:8060",
+      "src/cluster_migrateslots.c:409",
+      "src/cluster_migrateslots.c:549",
+      "src/cluster_migrateslots.c:551",
+      "src/cluster_migrateslots.c:563",
+      "src/cluster_migrateslots.c:577",
+      "src/cluster_migrateslots.c:579",
+      "src/cluster_migrateslots.c:583",
+      "src/cluster_migrateslots.c:587",
+      "src/cluster_migrateslots.c:729",
+      "src/cluster_migrateslots.c:734",
+      "src/cluster_migrateslots.c:738",
+      "src/cluster_migrateslots.c:740",
+      "src/cluster_migrateslots.c:744",
+      "src/cluster_migrateslots.c:748",
+      "src/cluster_migrateslots.c:753",
+      "src/cluster_migrateslots.c:1158",
+      "src/cluster_migrateslots.c:1199",
+      "src/cluster_migrateslots.c:1204",
+      "src/cluster_migrateslots.c:1206",
+      "src/cluster_migrateslots.c:1209",
+      "src/cluster_migrateslots.c:1213",
+      "src/cluster_migrateslots.c:2568",
+      "src/cluster_migrateslots.c:2573",
+      "src/cluster_migrateslots.c:2581",
+      "src/cluster_migrateslots.c:2586",
+      "src/cluster_migrateslots.c:2591",
+      "src/cluster_migrateslots.c:2596",
+      "src/cluster_migrateslots.c:2601",
+      "src/cluster_migrateslots.c:2606",
+      "src/cluster_migrateslots.c:2611",
+      "src/cluster_slot_stats.c:262",
+      "src/cluster_slot_stats.c:278"
+    ],
+    "rounds": 3
+  },
+  "cost_usd": 34.112,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "acl-bypass: command 16 (SET {s}k1 v1) as the user 'default +@all resetkeys ~nomatch-*' ran, though its rule refuses it: {\"error\":\"ERR You should send CLUSTER FAILOVER to a replica\"}",
+      "scenario": "ai-69c66bfe8d4f",
+      "seed": 7001,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #2516, since fixed",
+      "fingerprint": "886cf9944e24a388c1a8",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-b6eb7e4d73d7",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-ce34b8a16122",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'full-resync' returned ERROR: not judged: the preconditions were not recorded: valkey.replication.output-limit-logged from logs"
+    },
+    {
+      "scenario": "ai-5568ac72876e",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'forkless-infrastructure-enabled \"yes\"' Bad directive or wrong number of arguments; default deployment config"
+    },
+    {
+      "scenario": "ai-86ee6d297c69",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-86ee6d297c69",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-86ee6d297c69",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b289853cefdc",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b289853cefdc",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b289853cefdc",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-61820b3f29e2",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'aofrw' returned ERROR: expectations both builds violate alike, so they are not about the change: 10 (FSL.PUSH fsl 1), 11 (FSL.PUSH fsl 2), 12 (FSL.PUSH fsl 3), 28 (FSL.GETALL fsl)"
+    },
+    {
+      "scenario": "ai-8b6d34781167",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-fe7693ecc5c9",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'restore' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (RESTORE foo 0 <binary>), 1 (GET foo), 2 (RESTORE foo 0 <binary> REPLACE), 3 (RESTORE foo 100000 <binary> REPLACE ABSTTL), 4 (RESTORE k"
+    },
+    {
+      "scenario": "ai-763710266aa7",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'restore' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (RESTORE foo 0 <binary>), 1 (GET foo), 2 (RESTORE foo 0 <binary> REPLACE), 3 (RESTORE foo 100000 <binary> REPLACE ABSTTL), 4 (RESTORE k"
+    },
+    {
+      "scenario": "ai-9b6eca34c509",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'cl' returned ERROR: expectations both builds violate alike, so they are not about the change: 14 (MIGRATE <node.1.host> <node.1.port> foo 0 2000 COPY REPLACE), 15 (MIGRATE <node.1.host> <node.1.port> foo 0 2000 AUTH secret), 16 (MIGRATE"
+    },
+    {
+      "scenario": "ai-8b7b06ebce14",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'cl' returned ERROR: expectations both builds violate alike, so they are not about the change: 14 (MIGRATE <node.1.host> <node.1.port> foo 0 2000 COPY REPLACE), 15 (MIGRATE <node.1.host> <node.1.port> foo 0 2000 AUTH secret), 16 (MIGRATE"
+    },
+    {
+      "scenario": "ai-27e227a4a036",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'mauth' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (testmoduleone.rm_register_auth_cb), 2 (AUTH foo deny on connection c2)"
+    },
+    {
+      "scenario": "ai-1da011a51174",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'fslaof' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (FSL.PUSH mylist 1), 1 (FSL.PUSH mylist 5), 5 (FSL.GETALL mylist)"
+    },
+    {
+      "scenario": "ai-33a0cea38e54",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

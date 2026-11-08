@@ -1,0 +1,90 @@
+extends: [valkey.liveness]
+id: proposed.memory-dataset-underflow
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    In cluster mode, once a key allocates a db's on-demand kvstore hashtables, used_memory_overhead
+    double counts the kvstore memory (notably the ~131KB hashtable_size_index per
+    kvstore) that is already inside used_memory_startup, so used_memory_dataset =
+    zmalloc_used - overhead underflows to near 2^64 on the parent build. The fix subtracts
+    the startup overhead from initial_memory_usage and counts every db. A Lua script
+    reduces the nondeterministic INFO memory numbers to a boolean: 1 iff used_memory_dataset
+    exceeds 2^60 (underflow), checked after the first key, after an expire allocates
+    db->expires hashtables, after DEBUG POPULATE grows the tables, and after FLUSHALL
+    frees the hashtables (the removed kvstoreNumAllocatedHashtables skip) and a new
+    write reallocates them.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: memcheck
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - command:
+      - EVAL
+      - |
+        local info = redis.call('INFO', 'memory')
+        local ds = tonumber(string.match(info, 'used_memory_dataset:(%d+)'))
+        if ds > 2^60 then return 1 else return 0 end
+      - "0"
+      expect_difference: true
+      expect: {equals: 0}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [PEXPIRE, k2, "3600000"], expect: {equals: 1}}
+    - command:
+      - EVAL
+      - |
+        local info = redis.call('INFO', 'memory')
+        local ds = tonumber(string.match(info, 'used_memory_dataset:(%d+)'))
+        if ds > 2^60 then return 1 else return 0 end
+      - "0"
+      expect_difference: true
+      expect: {equals: 0}
+    - {command: [DEBUG, POPULATE, "200"], expect: {equals: OK}}
+    - command:
+      - EVAL
+      - |
+        local info = redis.call('INFO', 'memory')
+        local ds = tonumber(string.match(info, 'used_memory_dataset:(%d+)'))
+        if ds > 2^60 then return 1 else return 0 end
+      - "0"
+      expect_difference: true
+      expect: {equals: 0}
+    - {command: [INFO, memory], compare: skip}
+    - {command: [MEMORY, STATS], compare: skip}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - command:
+      - EVAL
+      - |
+        local info = redis.call('INFO', 'memory')
+        local ds = tonumber(string.match(info, 'used_memory_dataset:(%d+)'))
+        if ds > 2^60 then return 1 else return 0 end
+      - "0"
+      compare: skip
+    - {command: [SET, k3, v3], expect: {equals: OK}}
+    - command:
+      - EVAL
+      - |
+        local info = redis.call('INFO', 'memory')
+        local ds = tonumber(string.match(info, 'used_memory_dataset:(%d+)'))
+        if ds > 2^60 then return 1 else return 0 end
+      - "0"
+      expect_difference: true
+      expect: {equals: 0}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [memcheck.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: memcheck}

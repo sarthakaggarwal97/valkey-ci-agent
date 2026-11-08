@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1d23866b7dfd35438a4cbc0d158e75cba791c51a",
+  "parent": "35fdcea259cf70a86666b349d4c6f0150ed27cf9",
+  "pr": 2945,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Trigger prepareCommand on argc change in module command filters (#2945)",
+  "date": "2026-01-08",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 8.0145,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only executes inside moduleCallCommandFilters (src/module.c:11242), which does nothing unless a module has registered a command filter; it re-runs prepareCommand (recomputing arity and the cluster slot) when a filter changes argc, not just when it changes the command name. The only Valkey test module that registers a command filter is commandfilter.so, whose ValkeyModule_OnLoad returns VALKEYMODULE_ERR unless it is loaded with 2-3 arguments (a log-key name and a noself flag), so it fails to load and aborts server startup when loaded with no arguments. The fuzzer can only load a modu"
+}

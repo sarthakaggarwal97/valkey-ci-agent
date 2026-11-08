@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b7b11d77d621..fa5964312801.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-809f53d51740
+seed: 1101
+experiment:
+  id: proposed.hexpire-past-validation
+  inputs:
+    resp: 2
+    hash_listpack_entries: 128
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

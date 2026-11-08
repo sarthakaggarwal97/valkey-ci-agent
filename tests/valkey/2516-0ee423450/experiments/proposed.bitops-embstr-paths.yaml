@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.bitops-embstr-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: SETBIT/GETBIT/BITCOUNT/BITPOS/BITFIELD/BITOP paths that read and resize
+    string values through objectGetVal/objectSetVal, over int, embstr and grown raw
+    encodings
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bits
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SET, intkey, 12345], expect: {equals: OK}}
+    - {command: [GETBIT, intkey, 2], expect: {equals: 1}}
+    - {command: [GETBIT, intkey, 100], expect: {equals: 0}}
+    - {command: [GETBIT, intkey, 9223372036854775807], expect: {error: out of range}}
+    - {command: [BITCOUNT, intkey], expect: {min: 1}}
+    - {command: [BITPOS, intkey, 1], expect: {equals: 2}}
+    - {command: [SETBIT, intkey, 6, 1], expect: {equals: 0}}
+    - {command: [GET, intkey], expect: {equals: '32345'}}
+    - {command: [BITCOUNT, intkey, 0, 0], expect: {min: 1}}
+    - {command: [SETBIT, grown, 1000, 1], expect: {equals: 0}}
+    - {command: [STRLEN, grown], expect: {equals: 126}}
+    - {command: [GETBIT, grown, 1000], expect: {equals: 1}}
+    - {command: [SETBIT, grown, 2000, 0], expect: {equals: 0}}
+    - {command: [STRLEN, grown], expect: {equals: 251}}
+    - {command: [SETBIT, grown, -1, 1], expect: {error: out of range}}
+    - {command: [SETBIT, big, 4294967296, 1], expect: {error: out of range}}
+    - {command: [SET, e, ''], expect: {equals: OK}}
+    - {command: [GETBIT, e, 0], expect: {equals: 0}}
+    - {command: [BITCOUNT, e], expect: {equals: 0}}
+    - {command: [SETBIT, e, 0, 1], expect: {equals: 0}}
+    - {command: [BITFIELD, bf, SET, u8, 0, 255, GET, u8, 0], expect: {equals: [0,
+          255]}}
+    - {command: [BITFIELD, bf, SET, i64, '#1', -9223372036854775808, GET, i64, '#1'],
+      expect: {equals: [0, -9223372036854775808]}}
+    - {command: [BITFIELD, bf, OVERFLOW, SAT, INCRBY, u8, 0, 100], expect: {equals: [
+          255]}}
+    - {command: [BITFIELD, bf, SET, u64, 0, 1], expect: {error: Invalid bitfield type}}
+    - {command: [BITFIELD, bf, GET, w8, 0], expect: {error: Invalid bitfield type}}
+    - {command: [BITFIELD, bf, GET, u8, x], expect: {error: bit offset}}
+    - {command: [SET, a, abc], expect: {equals: OK}}
+    - {command: [SET, b, abd], expect: {equals: OK}}
+    - {command: [BITOP, AND, dest, a, b], expect: {equals: 3}}
+    - {command: [GET, dest], expect: {exists: true}}
+    - {command: [BITOP, XOR, x1, a, b], expect: {equals: 3}}
+    - {command: [BITOP, NOT, n1, a], expect: {equals: 3}}
+    - {command: [BITOP, OR, o1, intkey, a], expect: {equals: 5}}
+    - {command: [BITOP, BOGUS, d1, a], expect: {error: syntax error}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [bits.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bits}

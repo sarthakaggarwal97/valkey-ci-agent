@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.cluster-admin-error-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER admin subcommands, DEBUG CLUSTERLINK KILL and cross-DB COPY
+    on two-node clusters of both builds, replies compared
+components:
+- use: valkey.action.commands
+  id: adminseq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 20
+    commands:
+    - {command: [CLUSTER, FORGET, "0123456789012345678901234567890123456789"], expect: {
+        error: "Unknown node"}}
+    - {command: [CLUSTER, REPLICATE, "0123456789012345678901234567890123456789"],
+      node: 1, expect: {error: "Unknown node"}}
+    - {command: [CLUSTER, "COUNT-FAILURE-REPORTS", "<node.1.id>"], expect: {equals: 0}}
+    - {command: [CLUSTER, "COUNT-FAILURE-REPORTS", "0123456789012345678901234567890123456789"],
+      expect: {error: "Unknown node"}}
+    - {command: [CLUSTER, SETSLOT, "0", MIGRATING, "0123456789012345678901234567890123456789"],
+      expect: {error: "I don't know about node"}}
+    - {command: [CLUSTER, SETSLOT, "100", IMPORTING, "0123456789012345678901234567890123456789"],
+      node: 1, expect: {error: "I don't know about node"}}
+    - {command: [CLUSTER, SETSLOT, "0", NODE, "0123456789012345678901234567890123456789"],
+      expect: {error: "Unknown node"}}
+    - {command: [CLUSTER, SETSLOT, "0", STABLE], expect: {equals: OK}}
+    - {command: [CLUSTER, MEET, "127.0.0.1", "abc"], expect: {error: "Invalid base\
+          \ port"}}
+    - {command: [CLUSTER, MEET, "127.0.0.1", "7000", "xyz"], expect: {error: "Invalid\
+          \ bus port"}}
+    - {command: [DEBUG, CLUSTERLINK, KILL, from, "0123456789012345678901234567890123456789"],
+      expect: {error: "Unknown node"}}
+    - {command: [DEBUG, CLUSTERLINK, KILL, bogusdir, "<node.1.id>"], expect: {error: "Unknown\
+          \ direction"}}
+    - {command: [DEBUG, CLUSTERLINK, KILL, all, "<node.1.id>"], expect: {equals: OK}}
+    - {command: [CLUSTER, FAILOVER, FORCE], expect: {error: "replica"}}
+    - {command: [CLUSTER, FAILOVER, TAKEOVER], expect: {error: "replica"}}
+    - {command: [CLUSTER, DELSLOTS, "100"], node: 1, expect: {error: true}}
+    - {command: [SET, "{s}k1", v1], expect: {equals: OK}}
+    - {command: [COPY, "{s}k1", "{s}k2", DB, "1"], expect: {error: true}}
+    - {command: [COPY, "{s}k1", "{s}k3", DB, "0"], expect: {equals: 1}}
+    - {command: [CLUSTER, RESET, SOFT], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, RESET, HARD], node: 1, expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [adminseq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: adminseq}
