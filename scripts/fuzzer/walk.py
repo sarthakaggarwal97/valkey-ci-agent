@@ -933,7 +933,10 @@ def run(merge: dict[str, Any], *, gh: Any, token: str, publisher: Any, fuzzer_re
         del result["error"]
     except Exception as exc:
         logger.warning("The walk of %s failed: %s", merge["sha"], exc, exc_info=True)
-        result["error"] = " ".join(str(exc).split())[:1000]
+        # The head and the tail: a build's error says what failed at the start and why at the end (a compiler's
+        # error is the last lines of _sh's tail, which a plain [:1000] cut off).
+        text = " ".join(str(exc).split())
+        result["error"] = text if len(text) <= 1000 else f"{text[:500]} […] {text[-494:]}"
     finally:
         save()
     return result

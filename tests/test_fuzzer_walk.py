@@ -1199,6 +1199,22 @@ def test_a_coverage_build_that_fails_leaves_the_coverage_unknown_and_the_merge_t
     assert result["coverage"] is None and result["coverage_reason"] == "`make gcov` failed in coverage (exit 2)"
 
 
+def test_a_failed_walks_error_keeps_the_head_and_the_tail(monkeypatch, tmp_path):
+    # The valkey-search builds of 2026-11-08: _sh raises with the build log's last 30 lines, over 1000
+    # characters of ninja progress, and a plain [:1000] cut off the compiler's error at the end.
+    tail = " ".join(f"[{step}/206] Building CXX object step{step}.o" for step in range(1, 40))
+    error = f"`export NINJA_TOOL=ninja` failed in merge (exit 1): {tail} " \
+            "FAILED: fatal error: src/coordinator/coordinator.grpc.pb.h: No such file or directory"
+
+    def built(src, asan=False, coverage=False):
+        raise RuntimeError(error)
+
+    result, _ = _walk_merge(monkeypatch, tmp_path, None, (), build=built)
+    assert len(result["error"]) <= 1000
+    assert result["error"].startswith("`export NINJA_TOOL=ninja` failed in merge (exit 1):")
+    assert result["error"].endswith("fatal error: src/coordinator/coordinator.grpc.pb.h: No such file or directory")
+
+
 def test_progress_shows_each_merges_coverage_and_the_median():
     merges = [_merge(sha=c * 40, pr=i) for i, c in enumerate("bcdef", 1)]
     covered = [{"lines": 10, "executed": e, "percent": e * 10, "uncovered": []} for e in (9, 4, 7)] + [None, None]
