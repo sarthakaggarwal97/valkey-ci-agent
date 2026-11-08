@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 6fab2d034019..3e9874028831.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-47e623278f12
+seed: 101
+experiment:
+  id: proposed.search-backfill-oom-pause
+  inputs:
+    resp: 2
+    hz: 10
+deployment:
+  mode: standalone
+  base_port: 7000

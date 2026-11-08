@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.search-info-total-indexed-documents
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO search_index_stats reports total_indexed_documents (renamed from
+    total_indexed_hash_keys) with the same count across index creation, ingestion
+    and FT.DROPINDEX
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: info-rename
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [INFO, search_index_stats], expect_difference: true, expect: {contains: total_indexed_documents}}
+    - {command: [FT.CREATE, idx1, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, category, TAG], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "item:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAgD8=", category, red], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAQAAAgD8=", category, red], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:3", vec, !!binary "AABAQAAAgD8=", category, blue], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:4", vec, !!binary "AACAQAAAgD8=", category, blue], expect: {
+        equals: 2}}
+    - {command: [HSET, "item:1", vec, !!binary "AACAPwAAAEA="], expect: {equals: 1}}
+    - {command: [HSET, "item:2", vec, !!binary "AAAAQAAAAEA="], expect: {equals: 1}}
+    - {command: [HSET, "item:3", vec, !!binary "AABAQAAAAEA="], expect: {equals: 1}}
+    - {command: [HSET, "item:4", vec, !!binary "AACAQAAAAEA="], expect: {equals: 1}}
+    - {command: [HSET, "item:5", vec, !!binary "AACgQAAAAEA="], expect: {equals: 1}}
+    - {command: [HSET, "item:6", vec, !!binary "AADAQAAAAEA="], expect: {equals: 1}}
+    - {command: [FT.INFO, idx1], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.INFO, idx2], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [INFO, search_index_stats], wait_s: 30, expect_difference: true, expect: {
+        contains: ":10"}}
+    - {command: [FT.SEARCH, idx1, "*=>[KNN 10 @vec $BLOB]", NOCONTENT, PARAMS, 2,
+        BLOB, !!binary "AACAPwAAgD8=", DIALECT, 2], compare: unordered}
+    - {command: [FT.DROPINDEX, idx1], expect: {equals: OK}}
+    - {command: [INFO, search_index_stats], wait_s: 10, expect_difference: true, expect: {
+        contains: ":6"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [info-rename.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: info-rename}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5001de38f1a39b1c10bf371a9746b5529ba901f1",
+  "parent": "3e9874028831818c191d74ec88221b069601ffee",
+  "pr": 137,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "renaming total_indexed_hash_keys to total_indexed_documents (#137)",
+  "date": "2025-05-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.38,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

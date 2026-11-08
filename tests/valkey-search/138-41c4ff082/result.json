@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "41c4ff082a584c599c2c4b6155e2ea61bf7e0c42",
+  "parent": "5001de38f1a39b1c10bf371a9746b5529ba901f1",
+  "pr": 138,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fixing empty vector query clause ft.search cmd parsing (#138)",
+  "date": "2025-05-22",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.2301,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

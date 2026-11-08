@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "6fab2d034019517e02fd39bacf351e0a299ff526",
+  "parent": "c7c8ac0704a6485738c46425df4bcf2a73609a55",
+  "pr": 136,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Remove Google-internal specifics and unused code (#136)",
+  "date": "2025-05-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4838,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure cleanup with no behaviour change: it removes Google-internal comment references (a screenshot link and Buganizer bug numbers in TODOs), deletes dead declarations (SchemaManager::OnSavingStarted/OnSavingEnded have no definitions, callers, or server-event subscriptions anywhere in the tree), and deletes Google-internal metadata and Bazel files (METADATA, OWNERS, copy.bara.sky, blueprint, redis_module_*.bzl) that the open-source CMake build never references. No command reply, indexing, persistence, replication, or cluster path differs between the two builds, so no scenario ca"
+}

@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.search-backfill-oom-pause
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Index backfill pauses while the server is over maxmemory (FT.INFO reports state
+    backfill_paused_by_oom) and resumes to ready when memory is freed; the parent
+    keeps backfilling under OOM and its FT.INFO has no state field.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hz: {type: integer, enum: [10, 50, 100], default: 10}
+components:
+- use: valkey.action.commands
+  id: backfill
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {hz: {$ref: inputs.hz}}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx0, ON, HASH, PREFIX, 1, "none:", SCHEMA, v, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.INFO, idx0], wait_s: 15, expect_difference: true, expect: {contains: ready}}
+    - {command: [DEBUG, POPULATE, 500000], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", v, !!binary "AACAPwAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", v, !!binary "AAAAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", v, !!binary "AABAQAAAAAA="], expect: {equals: 1}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, 1mb], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 15, expect_difference: true, expect: {contains: backfill_paused_by_oom}}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect_difference: true, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @v $vec]", NOCONTENT, PARAMS, 2, vec,
+        !!binary "AAAAAAAAAAA=", DIALECT, 2], compare: unordered, expect: {contains: "doc:3"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [backfill.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: backfill}

@@ -1,0 +1,92 @@
+extends: [valkey.liveness]
+id: proposed.ft-acl-categories
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT commands now carry real ACL categories (search/read/write/fast/slow/admin)
+    via RedisModule_SetCommandACLCategories instead of bare readonly/write strflags;
+    category-scoped ACL users gain or lose access accordingly
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftacl
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', vec, !!binary 'AACAPwAAAAA='], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 1 @vec $q]', PARAMS, 2, q, !!binary 'AACAPwAAAAA=',
+        NOCONTENT, DIALECT, 2], wait_s: 30, expect: {contains: 'doc:1'}}
+    - {command: [ACL, CAT], expect_difference: true, expect: {contains: search}, compare: unordered}
+    - {command: [ACL, CAT, search], expect_difference: true, expect: {error: false},
+      compare: unordered}
+    - {command: [ACL, SETUSER, searchuser, on, nopass, '~*', '+@search'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [ACL, SETUSER, reader, on, nopass, '~*', '+@read', '+@fast'], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, writer, on, nopass, '~*', '+@write'], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, noadmin, on, nopass, '~*', '+@all', '-@admin'], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, keyscoped, on, nopass, '~doc:*', '+@all'], expect: {
+        equals: OK}}
+    - {connection: reader, command: [AUTH, reader, x], expect: {equals: OK}}
+    - {connection: reader, command: [FT.INFO, idx], expect_difference: true, expect: {
+        error: false}}
+    - {connection: reader, command: [FT.SEARCH, idx, '*=>[KNN 1 @vec $q]', PARAMS,
+        2, q, !!binary 'AACAPwAAAAA=', NOCONTENT, DIALECT, 2], expect_difference: true,
+      expect: {error: false}}
+    - {connection: reader, command: [FT._LIST], expect_difference: true, expect: {
+        error: false}, compare: unordered}
+    - {connection: reader, command: [FT.CREATE, ridx, ON, HASH, PREFIX, 1, 'doc:',
+        SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect_difference: true,
+      expect: {equals: OK}}
+    - {connection: writer, command: [AUTH, writer, x], expect: {equals: OK}}
+    - {connection: writer, command: [FT.CREATE, widx, ON, HASH, PREFIX, 1, 'doc:',
+        SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect_difference: true,
+      expect: {equals: OK}}
+    - {connection: writer, command: [FT.DROPINDEX, widx], expect_difference: true,
+      expect: {equals: OK}}
+    - {connection: writer, command: [FT.SEARCH, idx, '*=>[KNN 1 @vec $q]', PARAMS,
+        2, q, !!binary 'AACAPwAAAAA=', DIALECT, 2], expect: {error: true}}
+    - {connection: noadmin, command: [AUTH, noadmin, x], expect: {equals: OK}}
+    - {connection: noadmin, command: [FT._LIST], expect_difference: true, expect: {
+        error: true}}
+    - {connection: noadmin, command: [FT.INFO, idx], expect: {error: false}, compare: skip}
+    - {connection: keyscoped, command: [AUTH, keyscoped, x], expect: {equals: OK}}
+    - {connection: keyscoped, command: [FT.CREATE, kidx, ON, HASH, PREFIX, 1, 'doc:',
+        SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {connection: keyscoped, command: [FT.CREATE, kidx2, ON, HASH, PREFIX, 1, 'other:',
+        SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {
+        error: true}}
+    - {connection: keyscoped, command: [FT.INFO, kidx], expect: {error: false}, compare: skip}
+    - {connection: su, command: [AUTH, searchuser, x], expect_difference: true, expect: {
+        equals: OK}}
+    - {connection: su, command: [FT.SEARCH, idx, '*=>[KNN 1 @vec $q]', PARAMS, 2,
+        q, !!binary 'AACAPwAAAAA=', NOCONTENT, DIALECT, 2], expect: {contains: 'doc:1'}}
+    - {connection: su, command: [FT._LIST], expect_difference: true, expect: {contains: idx},
+      compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftacl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftacl}
