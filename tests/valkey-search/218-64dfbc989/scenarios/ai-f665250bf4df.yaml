@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 91035f6f8895..64dfbc9894ca.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f665250bf4df
+seed: 1001
+experiment:
+  id: proposed.search-non-vector-query
+  inputs:
+    resp: 2
+    cluster: false
+    nodes: 1
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

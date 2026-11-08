@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "54f42808355ef4acabcef9bd47958344d73f1a52",
+  "parent": "cdd08c28760df40c9dc8bbe490590bff9f888457",
+  "pr": 238,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Improve unit testing cmake infrastructure (#238)",
+  "date": "2025-07-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4881,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only restructures the unit-test CMake build (consolidating per-file test executables into six suite executables, splitting testing_common into testing_common_base and testing_common_coordinator, and deleting the absorbed testing/coordinator, testing/query and testing/utils CMakeLists files) and renames the MaxLimitTest test class in testing/ft_search_test.cc to FTSearchMaxLimitTest to avoid a name collision in the consolidated suite. No module runtime source is modified, so the loaded valkeysearch.so behaves identically at the change and its parent: there is no command reply, indexi"
+}

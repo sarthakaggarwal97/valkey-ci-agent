@@ -1,0 +1,71 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "28462b09b84ddad24890e7c3cd81d396654597e3",
+  "parent": "b6f344a855e6b7d79cddf22aee2451b51ee7915e",
+  "pr": 182,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Limit FT.SEARCH query string parsing recursive depth by a module config (#182)",
+  "date": "2025-07-08",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.3246,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-fbd23b181e02",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'search' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (FT.CREATE idx ON HASH PREFIX 1 doc: SCHEMA price NUMERIC), 5 (FT.SEARCH idx @price:[10 20]), 6 (FT.SEARCH idx @price:[10 20] | @price:["
+    },
+    {
+      "scenario": "ai-fbd23b181e02",
+      "build": "unstable",
+      "seed": 1001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-fbd23b181e02",
+      "build": "unstable",
+      "seed": 1002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-fbd23b181e02",
+      "build": "unstable",
+      "seed": 1003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-efa67a237470",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'search' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (FT.CREATE idx ON HASH PREFIX 1 doc: SCHEMA price NUMERIC), 5 (FT.SEARCH idx @price:[10 20]), 6 (FT.SEARCH idx @price:[10 20] | @price:["
+    },
+    {
+      "scenario": "ai-efa67a237470",
+      "build": "unstable",
+      "seed": 1002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-efa67a237470",
+      "build": "unstable",
+      "seed": 1003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-efa67a237470",
+      "build": "unstable",
+      "seed": 1004,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

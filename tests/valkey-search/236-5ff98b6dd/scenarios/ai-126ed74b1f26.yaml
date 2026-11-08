@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 54f42808355e..5ff98b6ddff7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-126ed74b1f26
+seed: 303
+experiment:
+  id: proposed.hnsw-concurrent-write-compare
+  inputs:
+    resp: 2
+    writer_threads: 1
+    m: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

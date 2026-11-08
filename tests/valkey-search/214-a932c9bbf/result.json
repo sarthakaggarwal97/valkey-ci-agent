@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a932c9bbf8f36365a5ab81d1d1985ec2a20de210",
+  "parent": "a69edd54d387adb9a606b2119f245cfd782073d8",
+  "pr": 214,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add operational limits to create command (#214)",
+  "date": "2025-07-13",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 4.2991,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

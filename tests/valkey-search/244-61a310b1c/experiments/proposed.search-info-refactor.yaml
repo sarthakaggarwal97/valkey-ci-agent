@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.search-info-refactor
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO SEARCH after the info_field refactor - field presence, counter
+    values across SAVE and restart, latency visibility after samples, developer-visible
+    path
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: infoseq
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {save: ""}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: search_background_indexing_status}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: search_query_queue_size}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: search_string_interning_store_size}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: search_vector_externing_entry_count}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, tag, TAG, num, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAA=", tag, red, num, 1], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAAAAAgD8=", tag, blue, num, 2],
+      expect: {equals: 3}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: num_docs}}
+    - {command: [INFO, SEARCH], wait_s: 30, expect_difference: true, expect: {contains: "search_ingest_hash_keys:2"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=",
+        DIALECT, 2, NOCONTENT], wait_s: 30, compare: unordered, expect: {contains: "doc:1"}}
+    - {command: [INFO, SEARCH], wait_s: 30, expect_difference: true, expect: {contains: search_hnsw_vector_index_search_latency_usec}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: search_successful_requests_count}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_rdb_save_success_cnt:1"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_rdb_load_success_cnt:1"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", PARAMS, 2, BLOB, !!binary "AAAAAAAAAAA=",
+        DIALECT, 2, NOCONTENT], wait_s: 30, compare: unordered, expect: {contains: "doc:1"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: search_used_memory_bytes}}
+    - {command: [CONFIG, SET, search.info-developer-visible, yes], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: search_writer_queue_size}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [infoseq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: infoseq}

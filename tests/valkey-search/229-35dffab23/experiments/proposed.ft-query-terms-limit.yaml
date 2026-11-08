@@ -1,0 +1,104 @@
+extends: [valkey.liveness]
+id: proposed.ft-query-terms-limit
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH filter queries over the new search.query-string-terms-count
+    limit are rejected, queries at or under it still parse and return the same results,
+    and the relocated query-string-depth config still works
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: terms
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, price, NUMERIC,
+        category, TAG, vec, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', price, 10, category, red, vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:2', price, 20, category, blue, vec, !!binary 'AAAAQAAAAAA='],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:3', price, 30, category, red, vec, !!binary 'AABAQAAAAAA='],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:4', price, 40, category, blue, vec, !!binary 'AACAQAAAAAA='],
+      expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 4 @vec $B]', NOCONTENT, PARAMS, 2, B, !!binary 'AAAAAAAAAAA='],
+      wait_s: 30, expect: {equals: [4, 'doc:1', 'doc:2', 'doc:3', 'doc:4']}}
+    - {command: [CONFIG, GET, search.query-string-terms-count], expect_difference: true,
+      expect: {contains: '16'}}
+    - {command: [FT.SEARCH, idx, '@price:[0 100] @price:[0 100] @price:[0 100] @price:[0
+          100] @price:[0 100] @price:[0 100] @price:[0 100] @price:[0 100] =>[KNN
+          4 @vec $B]', NOCONTENT, PARAMS, 2, B, !!binary 'AAAAAAAAAAA='], expect: {
+        equals: [4, 'doc:1', 'doc:2', 'doc:3', 'doc:4']}}
+    - {command: [FT.SEARCH, idx, '@price:[0 100] @price:[0 100] @price:[0 100] @price:[0
+          100] @price:[0 100] @price:[0 100] @price:[0 100] @price:[0 100] @price:[0
+          100] =>[KNN 4 @vec $B]', NOCONTENT, PARAMS, 2, B, !!binary 'AAAAAAAAAAA='],
+      expect_difference: true, expect: {error: "max number of terms can't exceed 16"}}
+    - {command: [CONFIG, SET, search.query-string-terms-count, 5], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.query-string-terms-count], expect_difference: true,
+      expect: {contains: '5'}}
+    - {command: [FT.SEARCH, idx, '@price:[0 100] @price:[0 100] @price:[0 100] =>[KNN
+          4 @vec $B]', NOCONTENT, PARAMS, 2, B, !!binary 'AAAAAAAAAAA='], expect: {
+        equals: [4, 'doc:1', 'doc:2', 'doc:3', 'doc:4']}}
+    - {command: [FT.SEARCH, idx, '@price:[0 100] @price:[0 100] @price:[0 100] @price:[0
+          100] =>[KNN 4 @vec $B]', NOCONTENT, PARAMS, 2, B, !!binary 'AAAAAAAAAAA='],
+      expect_difference: true, expect: {error: "max number of terms can't exceed 5"}}
+    - {command: [FT.SEARCH, idx, '@price:[10 20] | @price:[30 40] | @category:{red}
+          =>[KNN 4 @vec $B]', NOCONTENT, PARAMS, 2, B, !!binary 'AAAAAAAAAAA='], expect: {
+        equals: [4, 'doc:1', 'doc:2', 'doc:3', 'doc:4']}}
+    - {command: [FT.SEARCH, idx, '-(@price:[10 20] | @category:{red}) @price:[0 100]
+          =>[KNN 4 @vec $B]', NOCONTENT, PARAMS, 2, B, !!binary 'AAAAAAAAAAA='], expect: {
+        equals: [1, 'doc:4']}}
+    - {command: [CONFIG, SET, search.query-string-terms-count, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @vec $B]', NOCONTENT, PARAMS, 2, B, !!binary 'AAAAAAAAAAA='],
+      expect: {equals: [2, 'doc:1', 'doc:2']}}
+    - {command: [FT.SEARCH, idx, '@category:{red|blue|green|purple} =>[KNN 4 @vec
+          $B]', NOCONTENT, PARAMS, 2, B, !!binary 'AAAAAAAAAAA='], expect: {equals: [
+          4, 'doc:1', 'doc:2', 'doc:3', 'doc:4']}}
+    - {command: [FT.SEARCH, idx, '@price:[0 100] @category:{red} =>[KNN 4 @vec $B]',
+        NOCONTENT, PARAMS, 2, B, !!binary 'AAAAAAAAAAA='], expect_difference: true,
+      expect: {error: "max number of terms can't exceed 1"}}
+    - {command: [CONFIG, SET, search.query-string-terms-count, 32], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '@price:[0 100] @price:[0 100] @price:[0 100] @price:[0
+          100] @price:[0 100] @price:[0 100] @price:[0 100] @price:[0 100] @price:[0
+          100] @price:[0 100] @price:[0 100] @price:[0 100] @price:[0 100] @price:[0
+          100] @price:[0 100] @price:[0 100] =>[KNN 4 @vec $B]', NOCONTENT, PARAMS,
+        2, B, !!binary 'AAAAAAAAAAA='], expect: {equals: [4, 'doc:1', 'doc:2', 'doc:3',
+          'doc:4']}}
+    - {command: [FT.SEARCH, idx, '@price:[0 100] @price:[0 100] @price:[0 100] @price:[0
+          100] @price:[0 100] @price:[0 100] @price:[0 100] @price:[0 100] @price:[0
+          100] @price:[0 100] @price:[0 100] @price:[0 100] @price:[0 100] @price:[0
+          100] @price:[0 100] @price:[0 100] @price:[0 100] =>[KNN 4 @vec $B]', NOCONTENT,
+        PARAMS, 2, B, !!binary 'AAAAAAAAAAA='], expect_difference: true, expect: {
+        error: "max number of terms can't exceed 32"}}
+    - {command: [CONFIG, SET, search.query-string-terms-count, 0], expect_difference: true,
+      expect: {error: 'between 1 and 32'}}
+    - {command: [CONFIG, SET, search.query-string-terms-count, 33], expect_difference: true,
+      expect: {error: 'between 1 and 32'}}
+    - {command: [CONFIG, GET, search.query-string-depth], expect: {contains: '1000'}}
+    - {command: [CONFIG, SET, search.query-string-depth, 2], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '(((@price:[0 100]))) =>[KNN 4 @vec $B]', NOCONTENT,
+        PARAMS, 2, B, !!binary 'AAAAAAAAAAA='], expect: {error: 'Query string is too
+          complex'}}
+    - {command: [CONFIG, SET, search.query-string-depth, 1000], expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [terms.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: terms}

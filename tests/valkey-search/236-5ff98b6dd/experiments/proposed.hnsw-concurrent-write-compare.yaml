@@ -1,0 +1,129 @@
+extends: [valkey.liveness]
+id: proposed.hnsw-concurrent-write-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Concurrent HNSW inserts, updates, deletes and backfill through the
+    writer thread pool, replies compared across the addPoint lock-reorder change
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    writer_threads: {type: integer, minimum: 1, maximum: 64, default: 8}
+    m: {type: integer, minimum: 2, maximum: 64, default: 16}
+components:
+- use: valkey.action.commands
+  id: hnsw
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.writer-threads, {$ref: inputs.writer_threads}],
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, d, SCHEMA, v, VECTOR, HNSW,
+        12, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, M, {$ref: inputs.m}, EF_CONSTRUCTION,
+        64, EF_RUNTIME, 250], expect: {equals: OK}}
+    - {command: [HSET, d001, v, v0000001], expect: {equals: 1}}
+    - {command: [HSET, d002, v, v0000002], expect: {equals: 1}}
+    - {command: [HSET, d003, v, v0000003], expect: {equals: 1}}
+    - {command: [HSET, d004, v, v0000004], expect: {equals: 1}}
+    - {command: [HSET, d005, v, v0000005], expect: {equals: 1}}
+    - {command: [HSET, d006, v, v0000006], expect: {equals: 1}}
+    - {command: [HSET, d007, v, v0000007], expect: {equals: 1}}
+    - {command: [HSET, d008, v, v0000008], expect: {equals: 1}}
+    - {command: [HSET, d009, v, v0000009], expect: {equals: 1}}
+    - {command: [HSET, d010, v, v0000010], expect: {equals: 1}}
+    - {command: [HSET, d011, v, v0000011], expect: {equals: 1}}
+    - {command: [HSET, d012, v, v0000012], expect: {equals: 1}}
+    - {command: [HSET, d013, v, v0000013], expect: {equals: 1}}
+    - {command: [HSET, d014, v, v0000014], expect: {equals: 1}}
+    - {command: [HSET, d015, v, v0000015], expect: {equals: 1}}
+    - {command: [HSET, d016, v, v0000016], expect: {equals: 1}}
+    - {command: [HSET, d017, v, v0000017], expect: {equals: 1}}
+    - {command: [HSET, d018, v, v0000018], expect: {equals: 1}}
+    - {command: [HSET, d019, v, v0000019], expect: {equals: 1}}
+    - {command: [HSET, d020, v, v0000020], expect: {equals: 1}}
+    - {command: [HSET, d021, v, v0000021], expect: {equals: 1}}
+    - {command: [HSET, d022, v, v0000022], expect: {equals: 1}}
+    - {command: [HSET, d023, v, v0000023], expect: {equals: 1}}
+    - {command: [HSET, d024, v, v0000024], expect: {equals: 1}}
+    - {command: [HSET, d025, v, v0000025], expect: {equals: 1}}
+    - {command: [HSET, d026, v, v0000026], expect: {equals: 1}}
+    - {command: [HSET, d027, v, v0000027], expect: {equals: 1}}
+    - {command: [HSET, d028, v, v0000028], expect: {equals: 1}}
+    - {command: [HSET, d029, v, v0000029], expect: {equals: 1}}
+    - {command: [HSET, d030, v, v0000030], expect: {equals: 1}}
+    - {command: [BGSAVE], compare: skip}
+    - {command: [HSET, d031, v, v0000031], expect: {equals: 1}}
+    - {command: [HSET, d032, v, v0000032], expect: {equals: 1}}
+    - {command: [HSET, d033, v, v0000033], expect: {equals: 1}}
+    - {command: [HSET, d034, v, v0000034], expect: {equals: 1}}
+    - {command: [HSET, d035, v, v0000035], expect: {equals: 1}}
+    - {command: [HSET, d036, v, v0000036], expect: {equals: 1}}
+    - {command: [HSET, d037, v, v0000037], expect: {equals: 1}}
+    - {command: [HSET, d038, v, v0000038], expect: {equals: 1}}
+    - {command: [HSET, d039, v, v0000039], expect: {equals: 1}}
+    - {command: [HSET, d040, v, v0000040], expect: {equals: 1}}
+    - {command: [HSET, d041, v, v0000041], expect: {equals: 1}}
+    - {command: [HSET, d042, v, v0000042], expect: {equals: 1}}
+    - {command: [HSET, d043, v, v0000043], expect: {equals: 1}}
+    - {command: [HSET, d044, v, v0000044], expect: {equals: 1}}
+    - {command: [HSET, d045, v, v0000045], expect: {equals: 1}}
+    - {command: [HSET, d046, v, v0000046], expect: {equals: 1}}
+    - {command: [HSET, d047, v, v0000047], expect: {equals: 1}}
+    - {command: [HSET, d048, v, v0000048], expect: {equals: 1}}
+    - {command: [HSET, d049, v, v0000049], expect: {equals: 1}}
+    - {command: [HSET, d050, v, v0000050], expect: {equals: 1}}
+    - {command: [HSET, d051, v, v0000051], expect: {equals: 1}}
+    - {command: [HSET, d052, v, v0000052], expect: {equals: 1}}
+    - {command: [HSET, d053, v, v0000053], expect: {equals: 1}}
+    - {command: [HSET, d054, v, v0000054], expect: {equals: 1}}
+    - {command: [HSET, d055, v, v0000055], expect: {equals: 1}}
+    - {command: [HSET, d056, v, v0000056], expect: {equals: 1}}
+    - {command: [HSET, d057, v, v0000057], expect: {equals: 1}}
+    - {command: [HSET, d058, v, v0000058], expect: {equals: 1}}
+    - {command: [HSET, d059, v, v0000059], expect: {equals: 1}}
+    - {command: [HSET, d060, v, v0000060], expect: {equals: 1}}
+    - {command: [HSET, d001, v, u0000001], expect: {equals: 0}}
+    - {command: [HSET, d002, v, u0000002], expect: {equals: 0}}
+    - {command: [HSET, d003, v, u0000003], expect: {equals: 0}}
+    - {command: [HSET, d004, v, u0000004], expect: {equals: 0}}
+    - {command: [HSET, d005, v, u0000005], expect: {equals: 0}}
+    - {command: [HSET, d006, v, u0000006], expect: {equals: 0}}
+    - {command: [HSET, d007, v, u0000007], expect: {equals: 0}}
+    - {command: [HSET, d008, v, u0000008], expect: {equals: 0}}
+    - {command: [HSET, d009, v, u0000009], expect: {equals: 0}}
+    - {command: [HSET, d010, v, u0000010], expect: {equals: 0}}
+    - {command: [DEL, d011, d012, d013, d014, d015], expect: {equals: 5}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: '55'}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 100 @v $q]', PARAMS, 2, q, v0000050, NOCONTENT,
+        LIMIT, 0, 100], compare: unordered, expect: {contains: d050}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 1 @v $q]', PARAMS, 2, q, v0000050, NOCONTENT],
+      expect: {equals: [1, d050]}}
+    - {command: [HSET, d011, v, w0000011], expect: {equals: 1}}
+    - {command: [HSET, d012, v, w0000012], expect: {equals: 1}}
+    - {command: [HSET, d013, v, w0000013], expect: {equals: 1}}
+    - {command: [HSET, d014, v, w0000014], expect: {equals: 1}}
+    - {command: [HSET, d015, v, w0000015], expect: {equals: 1}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, d, SCHEMA, v, VECTOR, HNSW,
+        12, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, M, {$ref: inputs.m}, EF_CONSTRUCTION,
+        64, EF_RUNTIME, 250], expect: {equals: OK}}
+    - {command: [FT.INFO, idx2], wait_s: 60, compare: skip, expect: {contains: '60'}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: '60'}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 100 @v $q]', PARAMS, 2, q, v0000050, NOCONTENT,
+        LIMIT, 0, 100], compare: unordered, expect: {contains: d011}}
+    - {command: [FT.SEARCH, idx2, '*=>[KNN 100 @v $q]', PARAMS, 2, q, v0000050, NOCONTENT,
+        LIMIT, 0, 100], compare: unordered, expect: {contains: d050}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 1 @v $q]', PARAMS, 2, q, v0000050, NOCONTENT],
+      expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hnsw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hnsw}

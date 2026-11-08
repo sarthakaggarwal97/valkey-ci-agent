@@ -1,0 +1,82 @@
+extends: [valkey.liveness]
+id: proposed.ft-create-default-limits
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.CREATE default operational limits (max 10 indexes, 8 prefixes, tag/numeric
+    field length, DIM inclusive boundary, new range error prefixes) compared against
+    the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx_p9, PREFIX, 9, p1, p2, p3, p4, p5, p6, p7, p8, p9,
+        SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2], expect_difference: true,
+      expect: {error: "exceeds the maximum allowed (8)"}}
+    - {command: [FT.CREATE, idx_p8, PREFIX, 8, p1, p2, p3, p4, p5, p6, p7, p8, SCHEMA,
+        v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idx_tag_long, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32,
+        DIM, 4, DISTANCE_METRIC, L2, tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt,
+        TAG], expect_difference: true, expect: {error: "A tag field can have a maximum\
+          \ length of 256"}}
+    - {command: [FT.CREATE, idx_tag_ok, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32,
+        DIM, 4, DISTANCE_METRIC, L2, tagfield_ok_0123456789, TAG], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_num_long, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32,
+        DIM, 4, DISTANCE_METRIC, L2, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn,
+        NUMERIC], expect_difference: true, expect: {error: "A numeric field can have\
+          \ a maximum length of 128"}}
+    - {command: [FT.CREATE, idx_num_ok, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32,
+        DIM, 4, DISTANCE_METRIC, L2, numfield_ok_0123456789, NUMERIC], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_dim_max, SCHEMA, v, VECTOR, FLAT, 8, TYPE, FLOAT32,
+        DIM, 32768, DISTANCE_METRIC, L2, INITIAL_CAP, 2], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.INFO, idx_dim_max], expect_difference: true, expect: {error: false}}
+    - {command: [FT.CREATE, idx_dim_over, SCHEMA, v, VECTOR, FLAT, 8, TYPE, FLOAT32,
+        DIM, 32769, DISTANCE_METRIC, L2, INITIAL_CAP, 2], expect_difference: true,
+      expect: {error: "Invalid range: Value above maximum"}}
+    - {command: [FT.CREATE, idx_m_neg, SCHEMA, v, VECTOR, HNSW, 8, TYPE, FLOAT32,
+        DIM, 4, DISTANCE_METRIC, L2, M, -10], expect_difference: true, expect: {error: "Invalid\
+          \ range: Value below minimum"}}
+    - {command: [FT.CREATE, idx_ef0, SCHEMA, v, VECTOR, HNSW, 8, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2, EF_RUNTIME, 0], expect_difference: true, expect: {
+        error: "Invalid range: Value below minimum"}}
+    - {command: [FT.CREATE, idx_f1, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_f2, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_f3, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_f4, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_f5, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_f6, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_f7, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2], expect_difference: true, expect: {error: "Maximum\
+          \ number of indexes reached (10)"}}
+    - {command: [FT.DROPINDEX, idx_f1], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_f7, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2], expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_f8, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2], expect_difference: true, expect: {error: "Maximum\
+          \ number of indexes reached (10)"}}
+    - {command: [FT._LIST], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

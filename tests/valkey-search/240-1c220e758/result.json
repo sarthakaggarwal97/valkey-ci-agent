@@ -1,0 +1,79 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "1c220e758ead7a480de2819873d331a4b4772d0d",
+  "parent": "5ff98b6ddff7c2783f2c15a002c69e8b32f0e1d9",
+  "pr": 240,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add metric for reclaimable memory (#240)",
+  "date": "2025-07-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 10.0217,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-302ee02de32f",
+      "seed": 240001,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #240, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-f5def62ddd77",
+      "seed": 240002,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: AddressSanitizer: CHECK failed: asan_interceptors.cpp:463 \"((__interception::real___cxa_throw)) != (0)\" (0x0, 0x0) (tid=7773)",
+      "scenario": "ai-f5def62ddd77",
+      "seed": 240002,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #240",
+      "fingerprint": "16febae255ea25b5e911",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-f5def62ddd77",
+      "seed": 240002,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #240",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-08T03:00+00:00.
+Updated 2026-11-08T03:09+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 840 | 1667 | #2964 (2026-01-05) | 328 | 120.0 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
-| valkey-io/valkey-search | 530 | 139 | #218 (2025-07-21) | 179 | 75.7 |
+| valkey-io/valkey-search | 551 | 118 | #207 (2025-07-08) | 200 | 78.7 |
 
 ## Last runs
 
@@ -48,35 +48,35 @@ Updated 2026-11-08T03:00+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-08T00:37:24+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42417851138): 20 merge(s) tested, 5 without a code change.
+[2026-11-08T03:09:30+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42430594824): 20 merge(s) tested, 1 without a code change.
 
-- [valkey-io/valkey-search#308](https://github.com/valkey-io/valkey-search/pull/308) ([tests](tests/valkey-search/308-cb39bf3f7/)): Strip the complete build path from logs (#308): declined: The change is build-only: it adds -ffile-prefix-map=${CMAKE_SOURCE_DIR}= to the module's compile flags in cmake/Modules/valkey_search.cmake, which only strips the absolute build directory from __FILE__ strings and debug info used in log messages and backtraces. No command behaviour, reply,
-- [valkey-io/valkey-search#319](https://github.com/valkey-io/valkey-search/pull/319) ([tests](tests/valkey-search/319-a90471352/)): Update 3 fields returned type of FT.INFO (#319): 2 of 2 test(s) reached the change; crash, predates #319, since fixed (recorded)
-- [valkey-io/valkey-search#310](https://github.com/valkey-io/valkey-search/pull/310) ([tests](tests/valkey-search/310-3d27b2cdb/)): Fanout operation base and cluster-wide primary and cluster fanout operation modes (#310): 2 of 2 test(s) reached the change; crash, predates #310, since fixed (recorded)
-- [valkey-io/valkey-search#313](https://github.com/valkey-io/valkey-search/pull/313) ([tests](tests/valkey-search/313-1b71811d4/)): Added support for cluster with replicas (#313): declined: The change modifies only the project's CI script (build.sh) and its Python integration-test framework (integration/valkey_search_test_case.py and test files): it adds replica support to the test harness itself — new Node/ReplicationGroup helpers, parametrized fixtures, a renamed temp direc
-- [valkey-io/valkey-search#290](https://github.com/valkey-io/valkey-search/pull/290) ([tests](tests/valkey-search/290-7b759eb68/)): Add gc_stats, cursor_stats, dialect_stats, Index Errors field part for FT.INFO returned fields (#290): 2 of 2 test(s) reached the change; crash, predates #290, since fixed (recorded)
-- [valkey-io/valkey-search#307](https://github.com/valkey-io/valkey-search/pull/307) ([tests](tests/valkey-search/307-3b82b53e6/)): Build script fixes (#307): declined: The change modifies only build/CI scripts (build.sh, integration/run.sh, and the GitHub Actions workflow) to add a --retries=N option for the project's own integration test runner. No module source code is touched, so the compiled valkey-search module is behaviourally identical at the chan
-- [valkey-io/valkey-search#303](https://github.com/valkey-io/valkey-search/pull/303) ([tests](tests/valkey-search/303-a16926323/)): Allow running single integration test (#303): declined: The change modifies only developer tooling: build.sh gains a --run-integration-tests=pattern option to filter which integration tests run, scripts/common.rc fixes a shell test for an unset SAN_BUILD variable and a log message typo. No source file of the valkey-search module is touched, so 
-- [valkey-io/valkey-search#284](https://github.com/valkey-io/valkey-search/pull/284) ([tests](tests/valkey-search/284-fba1a3822/)): Add coordinator metadata health monitoring info field (#284): declined: no proposed test validated
-- [valkey-io/valkey-search#285](https://github.com/valkey-io/valkey-search/pull/285) ([tests](tests/valkey-search/285-7bea873c0/)): Adding command flags to match ACL permissions. (#285): 3 of 3 test(s) reached the change
-- [valkey-io/valkey-search#298](https://github.com/valkey-io/valkey-search/pull/298) ([tests](tests/valkey-search/298-ca45eeb0a/)): build.sh now runs both integration test suits (#298): declined: The change is purely build/CI/test infrastructure: build.sh now also runs the OSS integration suite (with retries), shell helpers moved into scripts/common.rc (setup_valkey_server, setup_json_module, install_test_framework, check_for_san_errors), .gitignore entries were added, and the Pyth
-- [valkey-io/valkey-search#288](https://github.com/valkey-io/valkey-search/pull/288) ([tests](tests/valkey-search/288-e001f91ca/)): Fix num_docs not getting reset across a flushall. Add flushall test (#288): 0 of 2 test(s) reached the change; crash, predates #288, since fixed (recorded)
-- [valkey-io/valkey-search#283](https://github.com/valkey-io/valkey-search/pull/283) ([tests](tests/valkey-search/283-8b53ed55a/)): Reject queries when no valid pre-filter and no vector filter is provided (#283): 3 of 3 test(s) reached the change; crash, fixed by #283 (recorded)
-- [valkey-io/valkey-search#268](https://github.com/valkey-io/valkey-search/pull/268) ([tests](tests/valkey-search/268-0e8cc8c89/)): Handle OOM during search command fanout (#268): declined: no proposed test validated
-- [valkey-io/valkey-search#281](https://github.com/valkey-io/valkey-search/pull/281) ([tests](tests/valkey-search/281-288cfb0a5/)): Change visibility for some of info fields to developer only (#281): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#275](https://github.com/valkey-io/valkey-search/pull/275) ([tests](tests/valkey-search/275-8782ca876/)): Remove unnecessary file added in #249 (#275): declined: The change only removes a test-build CMakeLists.txt (testing/coordinator/CMakeLists.txt, duplicate build rules for unit tests added in #249) and adds a trailing space to a comment in src/indexes/text/posting.h. No runtime source, command handling, indexing, replication or persistence code 
-- [valkey-io/valkey-search#209](https://github.com/valkey-io/valkey-search/pull/209) ([tests](tests/valkey-search/209-1be979bbb/)): Add config to skip loading index from rdb (#209): 2 of 2 test(s) reached the change; crash, predates #209, since fixed (recorded)
-- [valkey-io/valkey-search#249](https://github.com/valkey-io/valkey-search/pull/249) ([tests](tests/valkey-search/249-40355d3b8/)): Reimplement timeout handling. (#249): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#237](https://github.com/valkey-io/valkey-search/pull/237) ([tests](tests/valkey-search/237-54ffb1b04/)): Add Comprehensive Tests for Time Slice Mutex Metrics (#237): 3 of 3 test(s) reached the change
-- [valkey-io/valkey-search#248](https://github.com/valkey-io/valkey-search/pull/248) ([tests](tests/valkey-search/248-526c4c585/)): Fix WrongArity function to wrap command names with single quotes for Valkey consistency (#248): 2 of 2 test(s) reached the change
-- [valkey-io/valkey-search#246](https://github.com/valkey-io/valkey-search/pull/246) ([tests](tests/valkey-search/246-75b9e3184/)): Fix ACL bug where commands where allowed when user has no permissions for one of the index prefixes (#246): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#218](https://github.com/valkey-io/valkey-search/pull/218) ([tests](tests/valkey-search/218-64dfbc989/)): Adding support for non vector queries (#218): 4 of 4 test(s) reached the change; crash, introduced and since fixed (recorded)
+- [valkey-io/valkey-search#243](https://github.com/valkey-io/valkey-search/pull/243) ([tests](tests/valkey-search/243-91035f6f8/)): Fix attribute alias handling in filters when running in CME mode (#243): 1 of 1 test(s) reached the change
+- [valkey-io/valkey-search#244](https://github.com/valkey-io/valkey-search/pull/244) ([tests](tests/valkey-search/244-61a310b1c/)): Refactor configs (#244): 2 of 2 test(s) reached the change; crash, predates #244, since fixed (recorded)
+- [valkey-io/valkey-search#240](https://github.com/valkey-io/valkey-search/pull/240) ([tests](tests/valkey-search/240-1c220e758/)): Add metric for reclaimable memory (#240): 3 of 3 test(s) reached the change; crash, predates #240, since fixed (recorded); crash, introduced and since fixed (recorded); crash, fixed by #240 (recorded)
+- [valkey-io/valkey-search#236](https://github.com/valkey-io/valkey-search/pull/236) ([tests](tests/valkey-search/236-5ff98b6dd/)): Supporting tsan build and addressing the time slice mutex test issues (#236): 0 of 4 test(s) reached the change; crash, predates #236, since fixed (recorded)
+- [valkey-io/valkey-search#238](https://github.com/valkey-io/valkey-search/pull/238) ([tests](tests/valkey-search/238-54f428083/)): Improve unit testing cmake infrastructure (#238): declined: The change only restructures the unit-test CMake build (consolidating per-file test executables into six suite executables, splitting testing_common into testing_common_base and testing_common_coordinator, and deleting the absorbed testing/coordinator, testing/query and testing/utils CMake
+- [valkey-io/valkey-search#239](https://github.com/valkey-io/valkey-search/pull/239) ([tests](tests/valkey-search/239-cdd08c287/)): Limit the result record in ft.search cmd (#239): 3 of 3 test(s) reached the change; crash, predates #239, since fixed (recorded)
+- [valkey-io/valkey-search#231](https://github.com/valkey-io/valkey-search/pull/231) ([tests](tests/valkey-search/231-42970c7c3/)): Add limit to the K value in FT.SEARCH cmd (#231): 3 of 3 test(s) reached the change
+- [valkey-io/valkey-search#229](https://github.com/valkey-io/valkey-search/pull/229) ([tests](tests/valkey-search/229-35dffab23/)): Add a limit on the number of terms in a search query (#229): 3 of 3 test(s) reached the change
+- [valkey-io/valkey-search#230](https://github.com/valkey-io/valkey-search/pull/230) ([tests](tests/valkey-search/230-b7cdc9fc2/)): Enhanced Metrics for Valkey Search Ingestion (#230): 5 of 5 test(s) reached the change; crash, predates #230, since fixed (recorded)
+- [valkey-io/valkey-search#228](https://github.com/valkey-io/valkey-search/pull/228) ([tests](tests/valkey-search/228-5c4b578a1/)): Added missing "String" configuration entry (#228): declined: The change adds a new String configuration entry class to the vmsdk module-config framework, but at this commit no valkey-search code registers a String config: the only instantiation is the new unit test (vmsdk/testing/configuration_test.cc), and all runtime configs remain Number/Boolean/
+- [valkey-io/valkey-search#222](https://github.com/valkey-io/valkey-search/pull/222) ([tests](tests/valkey-search/222-553db36de/)): Add query string bytes limit using a module config (#222): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search@4051589915be](https://github.com/valkey-io/valkey-search/commit/4051589915be79b07e6630aae4662e352200453a) ([tests](tests/valkey-search/405158991/)): Merge branch 'fulltext' into main: declined: The merge adds only non-functional content: a cspell word-list update, Markdown design docs under docs/full-text/ with a doc-scraping script, and skeleton C++ headers (src/indexes/text.h, src/indexes/text/*.h, src/indexes/text_index.h) sketching a future full-text index. No CMake/Bazel fil
+- [valkey-io/valkey-search#221](https://github.com/valkey-io/valkey-search/pull/221) ([tests](tests/valkey-search/221-ecc807434/)): Cripple broken unit test (#221): declined: The change modifies only unit test files (testing/*.cc and vmsdk/testing/*.cc): it adds EXPECT_CALL mock expectations for GetIdentifier in several gmock-based tests and disables two flaky tests (LogTest.SinkOptions, ThreadPoolTest.priority) behind #ifdef BROKEN_UNIT_TEST. No code that is c
+- [valkey-io/valkey-search#220](https://github.com/valkey-io/valkey-search/pull/220) ([tests](tests/valkey-search/220-436e5b04c/)): Fix duplicated code (#220): declined: The change deletes dead code only: in SchemaManager::CreateIndexSchema, the removed `if (GetNumberOfIndexSchemas() >= max_indexes)` check was unreachable, because the preceding VMSDK_RETURN_IF_ERROR(vmsdk::VerifyRange(count + 1, nullopt, max_indexes)) fires on exactly the same condition (c
+- [valkey-io/valkey-search#217](https://github.com/valkey-io/valkey-search/pull/217) ([tests](tests/valkey-search/217-78e4f65bd/)): Add CPU metrics for reader and writer threads (#217): 0 of 3 test(s) reached the change; crash, introduced and since fixed (recorded)
+- [valkey-io/valkey-search#214](https://github.com/valkey-io/valkey-search/pull/214) ([tests](tests/valkey-search/214-a932c9bbf/)): Add operational limits to create command (#214): 4 of 4 test(s) reached the change
+- [valkey-io/valkey-search#212](https://github.com/valkey-io/valkey-search/pull/212) ([tests](tests/valkey-search/212-a69edd54d/)): Add network byte counting to coordinator client (#212): declined: The change only increments two new atomic byte counters inside the coordinator gRPC client's SearchIndexPartition and prints them as INFO fields gated by UsingCoordinator(). That code runs only when the module's use-coordinator option is enabled, and that option is a hidden config (VALKEYM
+- [valkey-io/valkey-search#216](https://github.com/valkey-io/valkey-search/pull/216) ([tests](tests/valkey-search/216-a0e527508/)): Fix DisplayAsSIBytes test (#216): declined: The change modifies a single assertion in vmsdk/testing/utils_test.cc, changing EXPECT_EQ(buffer[1], -1) to EXPECT_EQ(buffer[1], '\xff') to fix the test under platforms where char is unsigned. It touches only test code: no module source, command handling, indexing, replication or persisten
+- [valkey-io/valkey-search#182](https://github.com/valkey-io/valkey-search/pull/182) ([tests](tests/valkey-search/182-28462b09b/)): Limit FT.SEARCH query string parsing recursive depth by a module config (#182): 2 of 2 test(s) reached the change
 
 ## Totals
 
-- Merges whose tests reached the change: 533 of 772 tested (69%)
+- Merges whose tests reached the change: 544 of 785 tested (69%)
 - Changed-line coverage: median 100% of 378 merge(s) measured, 24 under 50%
-- Recall: 152 parents flagged of 224 fix merges
-- Claude: $1808.45 in the last 24 hours, $5516.60 in the last 7 days, $5516.60 in all
+- Recall: 153 parents flagged of 225 fix merges
+- Claude: $1900.39 in the last 24 hours, $5608.54 in the last 7 days, $5608.54 in all
 - Issues filed: 53
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

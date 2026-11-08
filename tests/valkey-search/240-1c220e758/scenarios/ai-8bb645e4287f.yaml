@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 5ff98b6ddff7..1c220e758ead.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8bb645e4287f
+seed: 240003
+experiment:
+  id: proposed.search-reclaimable-memory-replica-sync
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

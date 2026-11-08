@@ -1,0 +1,125 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-result-record-limits
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH drops result records over the new max-search-result-record-size
+    and fields-count limits, compared against the parent module build where no limits
+    exist
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: ftlimits
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config: {hash-max-listpack-entries: {$ref: inputs.hash_listpack_entries}}
+    timeout_s: 120
+    commands:
+    - {command: [CONFIG, SET, search.max-search-result-fields-count, '400'], expect: {
+        error: true}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, 'doc:a', vec, !!binary 'AACAPwAAAAA=', f, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:b', vec, !!binary 'AAAAQAAAAAA=', f, 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
+      expect: {equals: 2}}
+    - {command: [HSET, 'doc:c', vec, !!binary 'AABAQAAAAAA=', a1, v, a2, v, a3, v,
+        a4, v, a5, v, a6, v, a7, v, a8, v, a9, v, a10, v, a11, v, a12, v, a13, v,
+        a14, v, a15, v, a16, v, a17, v, a18, v, a19, v, a20, v, a21, v, a22, v, a23,
+        v, a24, v, a25, v, a26, v, a27, v, a28, v, a29, v, a30, v, a31, v, a32, v,
+        a33, v, a34, v, a35, v, a36, v, a37, v, a38, v, a39, v, a40, v, a41, v, a42,
+        v, a43, v, a44, v, a45, v, a46, v, a47, v, a48, v, a49, v, a50, v, a51, v,
+        a52, v, a53, v, a54, v, a55, v, a56, v, a57, v, a58, v, a59, v, a60, v, a61,
+        v, a62, v, a63, v, a64, v, a65, v, a66, v, a67, v, a68, v, a69, v, a70, v,
+        a71, v, a72, v, a73, v, a74, v, a75, v, a76, v, a77, v, a78, v, a79, v, a80,
+        v, a81, v, a82, v, a83, v, a84, v, a85, v, a86, v, a87, v, a88, v, a89, v,
+        a90, v, a91, v, a92, v, a93, v, a94, v, a95, v, a96, v, a97, v, a98, v, a99,
+        v, a100, v], expect: {equals: 101}}
+    - {command: [HSET, 'doc:c', a101, v, a102, v, a103, v, a104, v, a105, v, a106,
+        v, a107, v, a108, v, a109, v, a110, v, a111, v, a112, v, a113, v, a114, v,
+        a115, v, a116, v, a117, v, a118, v, a119, v, a120, v, a121, v, a122, v, a123,
+        v, a124, v, a125, v, a126, v, a127, v, a128, v, a129, v, a130, v, a131, v,
+        a132, v, a133, v, a134, v, a135, v, a136, v, a137, v, a138, v, a139, v, a140,
+        v, a141, v, a142, v, a143, v, a144, v, a145, v, a146, v, a147, v, a148, v,
+        a149, v, a150, v, a151, v, a152, v, a153, v, a154, v, a155, v, a156, v, a157,
+        v, a158, v, a159, v, a160, v, a161, v, a162, v, a163, v, a164, v, a165, v,
+        a166, v, a167, v, a168, v, a169, v, a170, v, a171, v, a172, v, a173, v, a174,
+        v, a175, v, a176, v, a177, v, a178, v, a179, v, a180, v, a181, v, a182, v,
+        a183, v, a184, v, a185, v, a186, v, a187, v, a188, v, a189, v, a190, v, a191,
+        v, a192, v, a193, v, a194, v, a195, v, a196, v, a197, v, a198, v, a199, v,
+        a200, v], expect: {equals: 100}}
+    - {command: [HSET, 'doc:c', a201, v, a202, v, a203, v, a204, v, a205, v, a206,
+        v, a207, v, a208, v, a209, v, a210, v, a211, v, a212, v, a213, v, a214, v,
+        a215, v, a216, v, a217, v, a218, v, a219, v, a220, v, a221, v, a222, v, a223,
+        v, a224, v, a225, v, a226, v, a227, v, a228, v, a229, v, a230, v, a231, v,
+        a232, v, a233, v, a234, v, a235, v, a236, v, a237, v, a238, v, a239, v, a240,
+        v, a241, v, a242, v, a243, v, a244, v, a245, v, a246, v, a247, v, a248, v,
+        a249, v, a250, v, a251, v, a252, v, a253, v, a254, v, a255, v, a256, v, a257,
+        v, a258, v, a259, v, a260, v, a261, v, a262, v, a263, v, a264, v, a265, v,
+        a266, v, a267, v, a268, v, a269, v, a270, v, a271, v, a272, v, a273, v, a274,
+        v, a275, v, a276, v, a277, v, a278, v, a279, v, a280, v, a281, v, a282, v,
+        a283, v, a284, v, a285, v, a286, v, a287, v, a288, v, a289, v, a290, v, a291,
+        v, a292, v, a293, v, a294, v, a295, v, a296, v, a297, v, a298, v, a299, v,
+        a300, v], expect: {equals: 100}}
+    - {command: [HSET, 'doc:c', a301, v, a302, v, a303, v, a304, v, a305, v, a306,
+        v, a307, v, a308, v, a309, v, a310, v, a311, v, a312, v, a313, v, a314, v,
+        a315, v, a316, v, a317, v, a318, v, a319, v, a320, v, a321, v, a322, v, a323,
+        v, a324, v, a325, v, a326, v, a327, v, a328, v, a329, v, a330, v, a331, v,
+        a332, v, a333, v, a334, v, a335, v, a336, v, a337, v, a338, v, a339, v, a340,
+        v, a341, v, a342, v, a343, v, a344, v, a345, v, a346, v, a347, v, a348, v,
+        a349, v, a350, v, a351, v, a352, v, a353, v, a354, v, a355, v, a356, v, a357,
+        v, a358, v, a359, v, a360, v, a361, v, a362, v, a363, v, a364, v, a365, v,
+        a366, v, a367, v, a368, v, a369, v, a370, v, a371, v, a372, v, a373, v, a374,
+        v, a375, v, a376, v, a377, v, a378, v, a379, v, a380, v, a381, v, a382, v,
+        a383, v, a384, v, a385, v, a386, v, a387, v, a388, v, a389, v, a390, v, a391,
+        v, a392, v, a393, v, a394, v, a395, v, a396, v, a397, v, a398, v, a399, v,
+        a400, v], expect: {equals: 100}}
+    - {command: [HSET, 'doc:c', a401, v, a402, v, a403, v, a404, v, a405, v, a406,
+        v, a407, v, a408, v, a409, v, a410, v, a411, v, a412, v, a413, v, a414, v,
+        a415, v, a416, v, a417, v, a418, v, a419, v, a420, v, a421, v, a422, v, a423,
+        v, a424, v, a425, v, a426, v, a427, v, a428, v, a429, v, a430, v, a431, v,
+        a432, v, a433, v, a434, v, a435, v, a436, v, a437, v, a438, v, a439, v, a440,
+        v, a441, v, a442, v, a443, v, a444, v, a445, v, a446, v, a447, v, a448, v,
+        a449, v, a450, v, a451, v, a452, v, a453, v, a454, v, a455, v, a456, v, a457,
+        v, a458, v, a459, v, a460, v, a461, v, a462, v, a463, v, a464, v, a465, v,
+        a466, v, a467, v, a468, v, a469, v, a470, v, a471, v, a472, v, a473, v, a474,
+        v, a475, v, a476, v, a477, v, a478, v, a479, v, a480, v, a481, v, a482, v,
+        a483, v, a484, v, a485, v, a486, v, a487, v, a488, v, a489, v, a490, v, a491,
+        v, a492, v, a493, v, a494, v, a495, v, a496, v, a497, v, a498, v, a499, v,
+        a500, v], expect: {equals: 100}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 3 @vec $B AS score]', PARAMS, 2, B, !!binary 'AAAAAAAAAAA=',
+        NOCONTENT, DIALECT, 2], wait_s: 30, compare: unordered, expect: {contains: 'doc:c'}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @vec $B AS score]', PARAMS, 2, B, !!binary 'AAAAAAAAAAA=',
+        RETURN, 1, f, DIALECT, 2], compare: unordered, expect: {exists: true}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 1 @vec $B AS score]', PARAMS, 2, B, !!binary 'AABAQAAAAAA=',
+        DIALECT, 2], expect_difference: true, expect: {equals: [0]}}
+    - {command: [CONFIG, SET, search.max-search-result-record-size, '100'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @vec $B AS score]', PARAMS, 2, B, !!binary 'AAAAAAAAAAA=',
+        RETURN, 1, f, DIALECT, 2], expect_difference: true, expect: {equals: [1, 'doc:a',
+          [f, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']]}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 1 @vec $B AS score]', PARAMS, 2, B, !!binary 'AAAAQAAAAAA=',
+        RETURN, 1, f, DIALECT, 2], expect_difference: true, expect: {equals: [0]}}
+    - {command: [INFO, everything], compare: skip, expect: {contains: 'result_record_dropped_count:3'}}
+    - {command: [CONFIG, SET, search.max-search-result-record-size, '99'], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.max-search-result-record-size, '9223372036854775807'],
+      expect_difference: true, expect: {error: true}}
+    - {command: [CONFIG, SET, search.max-search-result-record-size, '10485760'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @vec $B AS score]', PARAMS, 2, B, !!binary 'AAAAAAAAAAA=',
+        RETURN, 1, f, DIALECT, 2], compare: unordered, expect: {exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftlimits.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftlimits}

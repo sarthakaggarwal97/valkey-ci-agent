@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "436e5b04ca0798407bf6a459de2af551e35264c7",
+  "parent": "78e4f65bd36ed890bbbf2afc95e73c028e3ea74f",
+  "pr": 220,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix duplicated code (#220)",
+  "date": "2025-07-14",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.482,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change deletes dead code only: in SchemaManager::CreateIndexSchema, the removed `if (GetNumberOfIndexSchemas() >= max_indexes)` check was unreachable, because the preceding VMSDK_RETURN_IF_ERROR(vmsdk::VerifyRange(count + 1, nullopt, max_indexes)) fires on exactly the same condition (count >= max_indexes) and returns first. The surviving check and its error message are unchanged, so FT.CREATE at the max-indexes limit returns the identical error on both builds and no other code path is touched. A pure refactor with no behavior change needs no scenario; a compared sequence would have no repl"
+}

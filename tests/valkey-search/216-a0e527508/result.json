@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a0e52750875eb9b6678c8acef917ecb1c84a3cc0",
+  "parent": "28462b09b84ddad24890e7c3cd81d396654597e3",
+  "pr": 216,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix DisplayAsSIBytes test (#216)",
+  "date": "2025-07-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2217,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies a single assertion in vmsdk/testing/utils_test.cc, changing EXPECT_EQ(buffer[1], -1) to EXPECT_EQ(buffer[1], '\\xff') to fix the test under platforms where char is unsigned. It touches only test code: no module source, command handling, indexing, replication or persistence path changes, so there is no runtime behaviour to exercise and no scenario can reach the change."
+}

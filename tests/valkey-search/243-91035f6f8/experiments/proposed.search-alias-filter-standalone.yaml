@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.search-alias-filter-standalone
+deployment:
+  modes: [standalone]
+metadata:
+  description: Aliased filters stay correct outside CME mode, and the changed "Index
+    field `x` does not exists" error message surfaces for an unknown KNN field
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: alias
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - command: [FT.CREATE, idx, ON, HASH, SCHEMA, vec, VECTOR, FLAT, 6, TYPE, FLOAT32,
+        DIM, 2, DISTANCE_METRIC, L2, numfield, AS, numalias, NUMERIC, tagfield, AS,
+        tagalias, TAG, SEPARATOR, ","]
+      expect: {equals: OK}
+    - command: [HSET, doc1, vec, !!binary "AACAPwAAAAA=", numfield, 1, tagfield, red]
+      expect: {equals: 3}
+    - command: [HSET, doc2, vec, !!binary "AAAAAAAAgD8=", numfield, 2, tagfield, blue]
+      expect: {equals: 3}
+    - command: [HSET, doc3, vec, !!binary "AACAPwAAAAA=", numfield, 3, tagfield, red]
+      expect: {equals: 3}
+    - command: [FT.INFO, idx]
+      wait_s: 30
+      expect: {contains: ready}
+      compare: skip
+    - command: [FT.SEARCH, idx, "@numalias:[1 2]=>[KNN 3 @vec $BLOB]", NOCONTENT,
+        PARAMS, 2, BLOB, !!binary "AACAPwAAAAA=", DIALECT, 2]
+      expect: {error: false}
+      compare: unordered
+    - command: [FT.SEARCH, idx, "@tagalias:{re*}=>[KNN 3 @vec $BLOB]", NOCONTENT,
+        PARAMS, 2, BLOB, !!binary "AACAPwAAAAA=", DIALECT, 2]
+      expect: {error: false}
+      compare: unordered
+    - command: [FT.SEARCH, idx, "@numfield:[1 3]=>[KNN 3 @vec $BLOB]", PARAMS, 2,
+        BLOB, !!binary "AACAPwAAAAA=", DIALECT, 2]
+      expect: {error: "is not indexed as a numeric field"}
+    - command: [FT.SEARCH, idx, "*=>[KNN 2 @nosuch $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAAAA=",
+        DIALECT, 2]
+      expect_difference: true
+      expect: {error: "does not exists"}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [alias.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: alias}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a69edd54d387adb9a606b2119f245cfd782073d8",
+  "parent": "a0e52750875eb9b6678c8acef917ecb1c84a3cc0",
+  "pr": 212,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add network byte counting to coordinator client (#212)",
+  "date": "2025-07-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.2221,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only increments two new atomic byte counters inside the coordinator gRPC client's SearchIndexPartition and prints them as INFO fields gated by UsingCoordinator(). That code runs only when the module's use-coordinator option is enabled, and that option is a hidden config (VALKEYMODULE_CONFIG_HIDDEN, skipped by ModuleConfigManager::Init, so CONFIG SET and valkey.conf cannot set it) settable only as a module startup argument on the loadmodule line. The fuzzer loads modules by bare path with no arguments (valkey.artifact.local-module and valkey.action.commands modules are bare paths; MO"
+}

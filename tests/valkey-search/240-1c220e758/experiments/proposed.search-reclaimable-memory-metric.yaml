@@ -1,0 +1,91 @@
+extends: [valkey.liveness]
+id: proposed.search-reclaimable-memory-metric
+deployment:
+  modes: [standalone]
+metadata:
+  description: search_index_reclaimable_memory tracks HNSW marked-deleted vectors
+    exactly across delete, overwrite, re-add, SAVE+restart (LoadIndex), FT.DROPINDEX
+    and FLUSHALL, never underflowing
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reclaim
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "vec:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_index_reclaimable_memory:0\r\
+          \n"}}
+    - {command: [HSET, "vec:1", vec, !!binary "AACAPwAAAEAAAEBA"], expect: {equals: 1}}
+    - {command: [HSET, "vec:2", vec, !!binary "AACAPwAAAEAAAEBA"], expect: {equals: 1}}
+    - {command: [HSET, "vec:3", vec, !!binary "AACAPwAAAEAAAEBA"], expect: {equals: 1}}
+    - {command: [HSET, "vec:4", vec, !!binary "AACAQAAAAKBAAMBA"], expect: {equals: 1}}
+    - {command: [HSET, "vec:5", vec, !!binary "AACAQAAAAKBAAMBA"], expect: {equals: 1}}
+    - {command: [INFO, SEARCH], compare: skip, wait_s: 30, expect: {contains: "search_total_indexed_documents:5\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_index_reclaimable_memory:0\r\
+          \n"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", NOCONTENT, PARAMS, 2, q, !!binary "AACAPwAAAEAAAEBA"],
+      compare: unordered}
+    - {command: [DEL, "vec:1", "vec:2", "vec:3"], expect: {equals: 3}}
+    - {command: [INFO, SEARCH], compare: skip, wait_s: 30, expect: {contains: "search_total_indexed_documents:2\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_index_reclaimable_memory:36\r\
+          \n"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $q]", NOCONTENT, PARAMS, 2, q, !!binary "AACAPwAAAEAAAEBA"],
+      compare: unordered}
+    - {command: [HSET, "vec:4", vec, !!binary "AACAPwAAAEAAAEBA"], expect: {equals: 0}}
+    - {command: [INFO, SEARCH], expect_difference: true, wait_s: 10, expect: {contains: "search_index_reclaimable_memory:36\r\
+          \n"}}
+    - {command: [DEL, "vec:5"], expect: {equals: 1}}
+    - {command: [INFO, SEARCH], compare: skip, wait_s: 30, expect: {contains: "search_total_indexed_documents:1\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_index_reclaimable_memory:48\r\
+          \n"}}
+    - {command: [HSET, "vec:1", vec, !!binary "AACAQAAAAKBAAMBA"], expect: {equals: 1}}
+    - {command: [INFO, SEARCH], compare: skip, wait_s: 30, expect: {contains: "search_total_indexed_documents:2\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_index_reclaimable_memory:48\r\
+          \n"}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [INFO, SEARCH], compare: skip, wait_s: 30, expect: {contains: "search_total_indexed_documents:2\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, wait_s: 10, expect: {contains: "search_index_reclaimable_memory:48\r\
+          \n"}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], compare: skip, wait_s: 30, expect: {contains: "search_number_of_indexes:0\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, wait_s: 15, expect: {contains: "search_index_reclaimable_memory:0\r\
+          \n"}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "p:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "p:1", vec, !!binary "AACAPwAAAEAAAEBA"], expect: {equals: 1}}
+    - {command: [HSET, "p:2", vec, !!binary "AACAQAAAAKBAAMBA"], expect: {equals: 1}}
+    - {command: [INFO, SEARCH], compare: skip, wait_s: 30, expect: {contains: "search_total_indexed_documents:2\r\
+          \n"}}
+    - {command: [DEL, "p:1"], expect: {equals: 1}}
+    - {command: [INFO, SEARCH], compare: skip, wait_s: 30, expect: {contains: "search_total_indexed_documents:1\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_index_reclaimable_memory:12\r\
+          \n"}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], compare: skip, wait_s: 30, expect: {contains: "search_number_of_indexes:0\r\
+          \n"}}
+    - {command: [INFO, SEARCH], expect_difference: true, wait_s: 15, expect: {contains: "search_index_reclaimable_memory:0\r\
+          \n"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reclaim.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reclaim}

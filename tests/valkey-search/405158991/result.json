@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "4051589915be79b07e6630aae4662e352200453a",
+  "parent": "ecc8074348282cfeb04d563a918e0f6417a2f6d5",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Merge branch 'fulltext' into main",
+  "date": "2025-07-14",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6565,
+  "findings": [],
+  "recorded": [],
+  "reason": "The merge adds only non-functional content: a cspell word-list update, Markdown design docs under docs/full-text/ with a doc-scraping script, and skeleton C++ headers (src/indexes/text.h, src/indexes/text/*.h, src/indexes/text_index.h) sketching a future full-text index. No CMake/Bazel file or .cc file references any of the new headers, and several are not even valid C++ (e.g. 'public public' inheritance, 'void Next() = override;', includes of a nonexistent src/text/text.h), so they cannot be compiled into the module. The built module at the change is behaviorally identical to the parent; no c"
+}

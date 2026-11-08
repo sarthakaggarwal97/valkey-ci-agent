@@ -1,0 +1,107 @@
+extends: [valkey.liveness]
+id: proposed.ft-create-limit-configs
+deployment:
+  modes: [standalone]
+metadata:
+  description: The nine new search.max-* module configs set at runtime and enforced
+    by FT.CREATE, including a limit lowered below the live index count and defaults
+    that exceed a configured maximum, compared against the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [CONFIG, SET, search.max-indexes, 2], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, GET, search.max-indexes], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [FT.CREATE, c1, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 4,
+        DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, c2, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 4,
+        DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, c3, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 4,
+        DISTANCE_METRIC, L2], expect_difference: true, expect: {error: "Maximum number\
+          \ of indexes reached (2)"}}
+    - {command: [FT.DROPINDEX, c1], expect: {equals: OK}}
+    - {command: [FT.CREATE, c3, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 4,
+        DISTANCE_METRIC, L2], expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.max-indexes, 1], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, c4, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 4,
+        DISTANCE_METRIC, L2], expect_difference: true, expect: {error: "Maximum number\
+          \ of indexes reached (1)"}}
+    - {command: [FT.DROPINDEX, c2], expect: {equals: OK}}
+    - {command: [FT.CREATE, c4, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 4,
+        DISTANCE_METRIC, L2], expect_difference: true, expect: {error: "Maximum number\
+          \ of indexes reached (1)"}}
+    - {command: [FT.DROPINDEX, c3], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.max-indexes, 10], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, search.max-indexes, 0], expect_difference: true, expect: {
+        error: true}}
+    - {command: [CONFIG, SET, search.max-indexes, 11], expect_difference: true, expect: {
+        error: true}}
+    - {command: [CONFIG, SET, search.max-vector-dimensions, 64000], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, cdim, SCHEMA, v, VECTOR, FLAT, 8, TYPE, FLOAT32, DIM,
+        64000, DISTANCE_METRIC, L2, INITIAL_CAP, 2], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, cdim2, SCHEMA, v, VECTOR, FLAT, 8, TYPE, FLOAT32, DIM,
+        64001, DISTANCE_METRIC, L2, INITIAL_CAP, 2], expect_difference: true, expect: {
+        error: "less than or equal to 64000"}}
+    - {command: [CONFIG, SET, search.max-prefixes, 2], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, cpre, PREFIX, 3, a, b, c, SCHEMA, v, VECTOR, FLAT, 6,
+        TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2], expect_difference: true, expect: {
+        error: "exceeds the maximum allowed (2)"}}
+    - {command: [CONFIG, SET, search.max-tag-field-length, 5], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, ctag, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2, field_too_long, TAG], expect_difference: true, expect: {
+        error: "A tag field can have a maximum length of 5"}}
+    - {command: [CONFIG, SET, search.max-numeric-field-length, 5], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, cnum, SCHEMA, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2, field_too_long, NUMERIC], expect_difference: true,
+      expect: {error: "A numeric field can have a maximum length of 5"}}
+    - {command: [CONFIG, SET, search.max-vector-attributes, 2], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, cattr, SCHEMA, v1, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2, t1, TAG, n1, NUMERIC], expect_difference: true, expect: {
+        error: "The maximum number of attributes cannot exceed 2"}}
+    - {command: [CONFIG, SET, search.max-vector-m, 50], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, cm51, SCHEMA, v, VECTOR, HNSW, 8, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2, M, 51], expect_difference: true, expect: {error: "cannot\
+          \ exceed 50"}}
+    - {command: [FT.CREATE, cm50, SCHEMA, v, VECTOR, HNSW, 8, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2, M, 50], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.max-vector-ef-construction, 100], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, cefc, SCHEMA, v, VECTOR, HNSW, 8, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2, EF_CONSTRUCTION, 101], expect_difference: true, expect: {
+        error: "cannot exceed 100"}}
+    - {command: [FT.CREATE, cefc2, SCHEMA, v, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2], expect_difference: true, expect: {error: "cannot\
+          \ exceed 100"}}
+    - {command: [CONFIG, SET, search.max-vector-ef-runtime, 5], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, cefr, SCHEMA, v, VECTOR, HNSW, 10, TYPE, FLOAT32, DIM,
+        4, DISTANCE_METRIC, L2, EF_CONSTRUCTION, 50, EF_RUNTIME, 6], expect_difference: true,
+      expect: {error: "cannot exceed 5"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

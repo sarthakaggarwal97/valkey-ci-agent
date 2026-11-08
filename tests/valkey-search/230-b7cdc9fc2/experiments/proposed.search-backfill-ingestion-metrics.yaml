@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.search-backfill-ingestion-metrics
+deployment:
+  modes: [standalone]
+metadata:
+  description: global_ingestion counters driven by HNSW backfill over pre-existing
+    hash keys, including records the numeric and tag indexes skip (non-numeric value,
+    empty tag string)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: backfill
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [HSET, "k:1", vec, !!binary 'AACAPwAAAEA=', price, "1", category,
+        alpha], expect: {equals: 3}}
+    - {command: [HSET, "k:2", vec, !!binary 'AACAPwAAAEA=', price, "2", category,
+        beta], expect: {equals: 3}}
+    - {command: [HSET, "k:3", vec, !!binary 'AACAPwAAAEA=', price, "3", category,
+        "gamma,delta"], expect: {equals: 3}}
+    - {command: [HSET, "k:4", vec, !!binary 'AACAPwAAAEA=', price, "4", category,
+        SCHEMA], expect: {equals: 3}}
+    - {command: [HSET, "k:5", vec, !!binary 'AACAPwAAAEA=', price, "5", category,
+        fields], expect: {equals: 3}}
+    - {command: [HSET, "k:6", vec, !!binary 'AACAPwAAAEA=', price, "-6.25", category,
+        zeta], expect: {equals: 3}}
+    - {command: [HSET, "k:7", vec, !!binary 'AACAPwAAAEA=', price, "2147483648", category,
+        eta], expect: {equals: 3}}
+    - {command: [HSET, "k:8", vec, !!binary 'AACAPwAAAEA=', price, "9223372036854775807",
+        category, theta], expect: {equals: 3}}
+    - {command: [HSET, "k:9", vec, !!binary 'AACAPwAAAEA=', price, "0", category,
+        iota], expect: {equals: 3}}
+    - {command: [HSET, "k:10", vec, !!binary 'AACAPwAAAEA=', price, "10", category,
+        kappa], expect: {equals: 3}}
+    - {command: [HSET, "k:11", vec, !!binary 'AACAPwAAAEA=', price, notanumber, category,
+        x], expect: {equals: 3}}
+    - {command: [HSET, "k:12", vec, !!binary 'AACAPwAAAEA=', price, "5", category,
+        ""], expect: {equals: 3}}
+    - {command: [FT.CREATE, idxb, ON, HASH, PREFIX, "1", "k:", SCHEMA, vec, VECTOR,
+        HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, COSINE, price, NUMERIC,
+        category, TAG], expect: {equals: OK}}
+    - {command: [FT.INFO, idxb], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [INFO, SEARCH], expect_difference: true, wait_s: 30, expect: {contains: "search_ingest_field_vector:12"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_ingest_hash_keys:12"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_ingest_field_numeric:11"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_ingest_field_tag:11"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_ingest_total_failures:0"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_ingest_total_batches:0"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_ingest_hash_blocked:0"}}
+    - {command: [FT.SEARCH, idxb, "*=>[KNN 20 @vec $B]", PARAMS, "2", B, !!binary 'AACAPwAAAEA=',
+        NOCONTENT, DIALECT, "2"], compare: unordered}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [backfill.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: backfill}

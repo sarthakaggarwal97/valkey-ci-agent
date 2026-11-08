@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "42970c7c36262d860ad55eb6fab00f29d61150f8",
+  "parent": "35dffab23923c3213797073b4d3a900cda5468aa",
+  "pr": 231,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add limit to the K value in FT.SEARCH cmd (#231)",
+  "date": "2025-07-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.7302,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

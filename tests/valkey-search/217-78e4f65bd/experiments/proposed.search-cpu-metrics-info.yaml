@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.search-cpu-metrics-info
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: valkey-search INFO exposes used_read_cpu/used_write_cpu and survives
+    reader/writer thread-pool resizes while INFO is read
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "parent commit module build, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cpu
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, search.reader-threads], compare: skip}
+    - {command: [CONFIG, GET, search.writer-threads], compare: skip}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC,
+        t, TAG], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", n, 1, t, a], expect: {equals: 2}}
+    - {command: [HSET, "doc:2", n, 2, t, b], expect: {equals: 2}}
+    - {command: [HSET, "doc:3", n, 3, t, a], expect: {equals: 2}}
+    - {command: [FT.INFO, idx], wait_s: 10, compare: skip, expect: {contains: num_docs}}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: search_used_read_cpu}}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: search_used_write_cpu}}
+    - {command: [CONFIG, SET, search.reader-threads, 8], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: search_used_read_cpu}}
+    - {command: [CONFIG, SET, search.writer-threads, 8], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: search_used_write_cpu}}
+    - {command: [CONFIG, SET, search.reader-threads, 1], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: search_used_read_cpu}}
+    - {command: [CONFIG, SET, search.writer-threads, 1], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: search_used_write_cpu}}
+    - {command: [CONFIG, SET, search.reader-threads, 16], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: search_used_read_cpu}}
+    - {command: [CONFIG, SET, search.writer-threads, 16], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: search_used_write_cpu}}
+    - {command: [FT.SEARCH, idx, "@n:[0 100]"], compare: unordered}
+    - {command: [INFO, SEARCH], compare: skip, expect: {contains: search_used_read_cpu}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cpu}

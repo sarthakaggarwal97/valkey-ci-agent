@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5c4b578a151db59afb98c13cf3345d34b06c66a9",
+  "parent": "553db36defcaa7918871c3e7a7044b025e122712",
+  "pr": 228,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Added missing \"String\" configuration entry (#228)",
+  "date": "2025-07-15",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4966,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds a new String configuration entry class to the vmsdk module-config framework, but at this commit no valkey-search code registers a String config: the only instantiation is the new unit test (vmsdk/testing/configuration_test.cc), and all runtime configs remain Number/Boolean/Enum. The code is unreachable in a loaded module build, so both builds expose identical configs, commands and replies \u2014 there is no behavior difference a scenario could reach, and no existing path was modified that a fault or workload could stress."
+}

@@ -1,0 +1,50 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "b7cdc9fc25039d209be7cedc18c5a847336b6653",
+  "parent": "c6196332d200a69e0c26af5df302e0e65584a5e0",
+  "pr": 230,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Enhanced Metrics for Valkey Search Ingestion (#230)",
+  "date": "2025-07-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 5,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.2591,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-f9a089952c3e",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #230, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-69196e4e1bce",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ingest' returned ERROR: expectations both builds violate alike, so they are not about the change: 18 (FT.CREATE idx2 ON HASH PREFIX 1 d2: SCHEMA t TAG), 24 (FT.DROPINDEX idx2)"
+    },
+    {
+      "scenario": "ai-f9a089952c3e",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ingest' returned ERROR: expectations both builds violate alike, so they are not about the change: 18 (FT.CREATE idx2 ON HASH PREFIX 1 d2: SCHEMA t TAG), 24 (FT.DROPINDEX idx2)"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

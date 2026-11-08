@@ -1,0 +1,86 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5ff98b6ddff7c2783f2c15a002c69e8b32f0e1d9",
+  "parent": "54f42808355ef4acabcef9bd47958344d73f1a52",
+  "pr": 236,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Supporting tsan build and addressing the time slice mutex test issues (#236)",
+  "date": "2025-07-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 4,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 8.3633,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-3cb8011784f9",
+      "seed": 202,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #236, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-f438e47299f1",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3cb8011784f9",
+      "build": "unstable",
+      "seed": 202,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3cb8011784f9",
+      "build": "unstable",
+      "seed": 203,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3cb8011784f9",
+      "build": "unstable",
+      "seed": 204,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-126ed74b1f26",
+      "build": "unstable",
+      "seed": 303,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-126ed74b1f26",
+      "build": "unstable",
+      "seed": 304,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-126ed74b1f26",
+      "build": "unstable",
+      "seed": 305,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-01df5a712179",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

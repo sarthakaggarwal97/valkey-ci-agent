@@ -1,0 +1,100 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-knn-limit
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH KNN k is capped by the new search.max-vector-knn config and
+    EF_RUNTIME by search.max-vector-ef-runtime; boundary, wrapped and PARAMS-substituted
+    values compared against the parent module
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: knn
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAAAAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, "doc:3", vec, !!binary "AACAPwAAgD8="], expect: {equals: 1}}
+    - {command: [HSET, "doc:4", vec, !!binary "AAAAQAAAAAA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:5", vec, !!binary "AAAAAAAAAEA="], expect: {equals: 1}}
+    - {command: [HSET, "doc:6", vec, !!binary "AABAQAAAAAA="], expect: {equals: 1}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, expect: {contains: ready}, compare: skip}
+    - {command: [CONFIG, GET, search.max-vector-knn], expect_difference: true, expect: {
+        contains: max-vector-knn}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 6 @vec $v]", PARAMS, 2, v, !!binary "AACAPwAAAAA=",
+        NOCONTENT], expect: {error: false}, compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 128 @vec $v]", PARAMS, 2, v, !!binary "AACAPwAAAAA=",
+        NOCONTENT], expect: {error: false}, compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 129 @vec $v]", PARAMS, 2, v, !!binary "AACAPwAAAAA=",
+        NOCONTENT], expect_difference: true, expect: {error: "cannot exceed 128"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1000000 @vec $v]", PARAMS, 2, v, !!binary "AACAPwAAAAA=",
+        NOCONTENT], expect_difference: true, expect: {error: "cannot exceed 128"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2147483648 @vec $v]", PARAMS, 2, v, !!binary "AACAPwAAAAA="],
+      expect_difference: true, expect: {error: "KNN parameter"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4294967295 @vec $v]", PARAMS, 2, v, !!binary "AACAPwAAAAA="],
+      expect_difference: true, expect: {error: "KNN parameter"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4294967296 @vec $v]", PARAMS, 2, v, !!binary "AACAPwAAAAA="],
+      expect: {error: true}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 0 @vec $v]", PARAMS, 2, v, !!binary "AACAPwAAAAA="],
+      expect_difference: true, expect: {error: "KNN parameter"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN $kp @vec $v]", PARAMS, 4, v, !!binary "AACAPwAAAAA=",
+        kp, 500], expect_difference: true, expect: {error: "cannot exceed 128"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $v EF_RUNTIME 0]", PARAMS, 2, v,
+        !!binary "AACAPwAAAAA="], expect_difference: true, expect: {error: EF_RUNTIME}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $v EF_RUNTIME 4096]", PARAMS, 2,
+        v, !!binary "AACAPwAAAAA=", NOCONTENT], expect: {error: false}, compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $v EF_RUNTIME 4097]", PARAMS, 2,
+        v, !!binary "AACAPwAAAAA="], expect_difference: true, expect: {error: "cannot\
+          \ exceed 4096"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $v EF_RUNTIME 4294967295]", PARAMS,
+        2, v, !!binary "AACAPwAAAAA="], expect_difference: true, expect: {error: "cannot\
+          \ exceed 4096"}}
+    - {command: [CONFIG, SET, search.max-vector-ef-runtime, 5], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $v EF_RUNTIME 6]", PARAMS, 2, v,
+        !!binary "AACAPwAAAAA="], expect_difference: true, expect: {error: "cannot\
+          \ exceed 5"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $v EF_RUNTIME 5]", PARAMS, 2, v,
+        !!binary "AACAPwAAAAA=", NOCONTENT], expect: {error: false}, compare: unordered}
+    - {command: [CONFIG, SET, search.max-vector-knn, 5], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 6 @vec $v]", PARAMS, 2, v, !!binary "AACAPwAAAAA="],
+      expect_difference: true, expect: {error: "cannot exceed 5"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 5 @vec $v]", PARAMS, 2, v, !!binary "AACAPwAAAAA=",
+        NOCONTENT], expect: {error: false}, compare: unordered}
+    - {command: [CONFIG, SET, search.max-vector-knn, 0], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.max-vector-knn, 1001], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.max-vector-knn, 1000], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1000 @vec $v]", PARAMS, 2, v, !!binary "AACAPwAAAAA=",
+        NOCONTENT], expect: {error: false}, compare: unordered}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1001 @vec $v]", PARAMS, 2, v, !!binary "AACAPwAAAAA="],
+      expect_difference: true, expect: {error: "cannot exceed 1000"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: knn}

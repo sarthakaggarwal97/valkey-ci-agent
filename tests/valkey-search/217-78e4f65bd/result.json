@@ -1,0 +1,120 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "78e4f65bd36ed890bbbf2afc95e73c028e3ea74f",
+  "parent": "a932c9bbf8f36365a5ab81d1d1985ec2a20de210",
+  "pr": 217,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add CPU metrics for reader and writer threads (#217)",
+  "date": "2025-07-14",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.575,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-44af6511c3c1",
+      "seed": 1,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-f144931372b7",
+      "seed": 2,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-42cc33db85cf",
+      "seed": 3,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-44af6511c3c1",
+      "build": "unstable",
+      "seed": 1,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-44af6511c3c1",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-44af6511c3c1",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-f144931372b7",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-f144931372b7",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-f144931372b7",
+      "build": "unstable",
+      "seed": 4,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-42cc33db85cf",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-42cc33db85cf",
+      "build": "unstable",
+      "seed": 4,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-42cc33db85cf",
+      "build": "unstable",
+      "seed": 5,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

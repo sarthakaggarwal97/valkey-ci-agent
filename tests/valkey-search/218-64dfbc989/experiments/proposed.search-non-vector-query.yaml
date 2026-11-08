@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.search-non-vector-query
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: FT.CREATE/FT.SEARCH with only NUMERIC/TAG fields (no vector) compared
+    against the parent module build, which rejects them
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+    nodes: {type: integer, default: 1}
+components:
+- use: valkey.action.commands
+  id: nonvec
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    nodes: {$ref: inputs.nodes}
+    timeout_s: 40
+    commands:
+    - {command: [FT.CREATE, products, ON, HASH, PREFIX, 1, 'product:', SCHEMA, price,
+        NUMERIC, rating, NUMERIC, category, TAG], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [HSET, 'product:1', category, electronics, name, Laptop, price, '999.99',
+        rating, '4.5', desc, Great], expect: {equals: 5}}
+    - {command: [HSET, 'product:2', category, electronics, name, Tablet, price, '499.00',
+        rating, '4.0', desc, Good], expect: {equals: 5}}
+    - {command: [HSET, 'product:3', category, electronics, name, Phone, price, '299.00',
+        rating, '3.8', desc, Ok], expect: {equals: 5}}
+    - {command: [HSET, 'product:4', category, books, name, Book, price, '19.99', rating,
+        '4.8', desc, Excellent], expect: {equals: 5}}
+    - {command: [FT.SEARCH, products, '@price:[300 1000] @rating:[4.4 +inf]'], wait_s: 15,
+      compare: unordered, expect_difference: true, expect: {contains: 'product:1'}}
+    - {command: [FT.SEARCH, products, '@category:{electronics} @price:[400 1000]'],
+      compare: unordered, expect_difference: true, expect: {contains: 'product:2'}}
+    - {command: [FT.SEARCH, products, '@category:{books}'], compare: unordered, expect_difference: true,
+      expect: {contains: 'product:4'}}
+    - {command: [FT.SEARCH, products, '@price:[100000 +inf]'], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, products, '@price:[-inf +inf]', NOCONTENT], compare: unordered,
+      expect_difference: true, expect: {contains: 'product:3'}}
+    - {command: [FT.SEARCH, products, '@rating:[4.4 +inf]'], compare: unordered, expect_difference: true,
+      expect: {contains: 'product:4'}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: nonvec}

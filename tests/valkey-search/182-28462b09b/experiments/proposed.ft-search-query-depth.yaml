@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-query-depth
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH filter-parser recursion depth is capped by the new search.query-string-depth
+    config
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, GET, search.query-string-depth], expect_difference: true,
+      expect: {contains: "1000"}}
+    - {command: [CONFIG, SET, search.query-string-depth, "0"], expect_difference: true,
+      expect: {error: "between 1 and 4294967295 inclusive"}}
+    - {command: [CONFIG, SET, search.query-string-depth, "4294967296"], expect_difference: true,
+      expect: {error: "between 1 and 4294967295 inclusive"}}
+    - {command: [CONFIG, SET, search.query-string-depth, "1"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, price, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@price:[10 20]"], compare: skip, expect: {error: false}}
+    - {command: [FT.SEARCH, idx, "@price:[10 20] | @price:[30 40]"], expect_difference: true,
+      expect: {error: "Query string is too complex"}}
+    - {command: [FT.SEARCH, idx, "(@price:[10 20])"], expect_difference: true, expect: {
+        error: "Query string is too complex"}}
+    - {command: [CONFIG, SET, search.query-string-depth, "10"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "(@price:[10 20])"], compare: skip, expect: {error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [search.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}

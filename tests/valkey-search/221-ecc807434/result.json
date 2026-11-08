@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ecc8074348282cfeb04d563a918e0f6417a2f6d5",
+  "parent": "436e5b04ca0798407bf6a459de2af551e35264c7",
+  "pr": 221,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Cripple broken unit test (#221)",
+  "date": "2025-07-14",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.27,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only unit test files (testing/*.cc and vmsdk/testing/*.cc): it adds EXPECT_CALL mock expectations for GetIdentifier in several gmock-based tests and disables two flaky tests (LogTest.SinkOptions, ThreadPoolTest.priority) behind #ifdef BROKEN_UNIT_TEST. No code that is compiled into the valkey-search module changes, so the module's runtime behaviour is identical on both builds and no scenario can reach the change."
+}

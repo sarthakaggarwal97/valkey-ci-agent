@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 42970c7c3626..cdd08c28760d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f9d3619ca558
+seed: 1102
+experiment:
+  id: proposed.ft-search-result-record-limits
+  inputs:
+    resp: 3
+    hash_listpack_entries: 128
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

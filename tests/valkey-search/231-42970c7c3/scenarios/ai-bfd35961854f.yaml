@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 35dffab23923..42970c7c3626.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-bfd35961854f
+seed: 3
+experiment:
+  id: proposed.ft-search-knn-limit
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 2
+    cluster: true
+deployment:
+  mode: standalone
+  base_port: 7200

@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.search-ingestion-metrics
+deployment:
+  modes: [standalone]
+metadata:
+  description: New global_ingestion INFO counters during live hash ingestion, a multi/exec
+    batch flush via FT.SEARCH, and categorized blocked-client tracking across an index
+    drop with pending mutations
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: ingest
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 180
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, vec, VECTOR,
+        FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2, price, NUMERIC, category,
+        TAG], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary 'AACAPwAAAEA=', price, "10", category,
+        "red,blue"], expect: {equals: 3}}
+    - {command: [HSET, "doc:2", vec, !!binary 'AACAPwAAAEA=', price, "20", category,
+        green], expect: {equals: 3}}
+    - {command: [HSET, "doc:3", vec, !!binary 'AACAPwAAAEA=', price, "-3.5", category,
+        fields], expect: {equals: 3}}
+    - {command: [HSET, "doc:4", category, ""], expect: {equals: 1}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, "doc:5", vec, !!binary 'AACAPwAAAEA=', price, "2147483648",
+        category, "a,b,c"], expect: {equals: QUEUED}}
+    - {command: [HSET, "doc:6", vec, !!binary 'AACAPwAAAEA=', price, "9223372036854775807",
+        category, tag], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [3, 3]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 10 @vec $B]", PARAMS, "2", B, !!binary 'AACAPwAAAEA=',
+        NOCONTENT, DIALECT, "2"], compare: unordered}
+    - {command: [INFO, SEARCH], expect_difference: true, wait_s: 30, expect: {contains: "search_ingest_field_tag:5"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_ingest_hash_keys:6"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_ingest_field_vector:5"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_ingest_field_numeric:5"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_ingest_json_keys:0"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_ingest_total_batches:1"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_ingest_last_batch_size:2"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_ingest_total_failures:0"}}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, "1", "d2:", SCHEMA, t, TAG], expect: {
+        equals: OK}}
+    - {command: [HSET, "d2:1", t, "a,b"], expect: {equals: 1}}
+    - {command: [HSET, "d2:2", t, "a,b"], expect: {equals: 1}}
+    - {command: [HSET, "d2:3", t, "a,b"], expect: {equals: 1}}
+    - {command: [HSET, "d2:4", t, "a,b"], expect: {equals: 1}}
+    - {command: [HSET, "d2:5", t, "a,b"], expect: {equals: 1}}
+    - {command: [FT.DROPINDEX, idx2], expect: {equals: OK}}
+    - {command: [INFO, SEARCH], expect_difference: true, wait_s: 15, expect: {contains: "search_ingest_hash_blocked:0"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ingest.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ingest}

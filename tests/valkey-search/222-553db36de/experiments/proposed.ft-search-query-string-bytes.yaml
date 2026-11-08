@@ -1,0 +1,82 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-query-string-bytes
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH rejects query strings longer than search.query-string-bytes,
+    exactly-at-limit queries pass, the length check precedes parsing, and the config
+    enforces its min and max
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, price, NUMERIC,
+        v, VECTOR, FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [HSET, "doc:1", price, "10", v, !!binary "AACAPwAAAAA="], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:2", price, "20", v, !!binary "AAAAAAAAgD8="], expect: {
+        equals: 2}}
+    - {command: [FT.SEARCH, idx, "@price:[0 100] =>[KNN 2 @v $BLOB]", NOCONTENT, PARAMS,
+        "2", BLOB, !!binary "AACAPwAAAAA="], wait_s: 30, expect: {contains: "doc:2"},
+      compare: unordered}
+    - {command: [CONFIG, SET, search.query-string-bytes, "33"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@price:[0 100] =>[KNN 2 @v $BLOB]", NOCONTENT, PARAMS,
+        "2", BLOB, !!binary "AACAPwAAAAA="], expect: {contains: "doc:1"}, compare: unordered}
+    - {command: [CONFIG, SET, search.query-string-bytes, "32"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@price:[0 100] =>[KNN 2 @v $BLOB]", NOCONTENT, PARAMS,
+        "2", BLOB, !!binary "AACAPwAAAAA="], expect_difference: true, expect: {error: "Query\
+          \ string is too long, max length is 32 bytes"}}
+    - {command: [FT.SEARCH, idx, "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@", NOCONTENT],
+      expect_difference: true, expect: {error: "Query string is too long, max length\
+          \ is 32 bytes"}}
+    - {command: [CONFIG, SET, search.query-string-bytes, "200"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@price:[0 100]                                 \
+          \                                                                      \
+          \                                                                      \
+          \                                                                    =>[KNN\
+          \ 2 @v $BLOB]", NOCONTENT, PARAMS, "2", BLOB, !!binary "AACAPwAAAAA="],
+      expect_difference: true, expect: {error: "Query string is too long, max length\
+          \ is 200 bytes"}}
+    - {command: [CONFIG, SET, search.query-string-bytes, "10240"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@price:[0 100]                                 \
+          \                                                                      \
+          \                                                                      \
+          \                                                                    =>[KNN\
+          \ 2 @v $BLOB]", NOCONTENT, PARAMS, "2", BLOB, !!binary "AACAPwAAAAA="],
+      expect: {contains: "doc:1"}, compare: unordered}
+    - {command: [CONFIG, SET, search.query-string-bytes, "1"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "x", NOCONTENT], expect: {error: true}}
+    - {command: [FT.SEARCH, idx, "xy", NOCONTENT], expect_difference: true, expect: {
+        error: "Query string is too long, max length is 1 bytes"}}
+    - {command: [FT.SEARCH, idx, "", NOCONTENT], expect: {error: true}}
+    - {command: [CONFIG, SET, search.query-string-bytes, "0"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.query-string-bytes, "4294967295"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "@price:[0 100] =>[KNN 2 @v $BLOB]", NOCONTENT, PARAMS,
+        "2", BLOB, !!binary "AACAPwAAAAA="], expect: {contains: "doc:1"}, compare: unordered}
+    - {command: [CONFIG, SET, search.query-string-bytes, "4294967296"], expect_difference: true,
+      expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [search.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}
