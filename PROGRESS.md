@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-08T15:30+00:00.
+Updated 2026-11-08T15:39+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 941 | 1566 | #2787 (2025-10-31) | 303 | 134.4 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
-| valkey-io/valkey-search | 666 | 3 | f8106e72e984 (2024-11-27) | 231 | 95.1 |
+| valkey-io/valkey-search | 632 | 37 | f8106e72e984 (2024-11-27) | 197 | 90.3 |
 
 ## Last runs
 
@@ -43,7 +43,7 @@ Updated 2026-11-08T15:30+00:00.
 
 ### valkey-io/valkey-json
 
-[2026-11-08T15:08:48+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42493250568): 0 merge(s) tested, 0 without a code change.
+[2026-11-08T15:39:29+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42495863778): 0 merge(s) tested, 0 without a code change.
 
 
 ### valkey-io/valkey-search
@@ -125,5 +125,39 @@ Updated 2026-11-08T15:30+00:00.
 - [valkey-io/valkey-search@965d40ad2aa1](https://github.com/valkey-io/valkey-search/commit/965d40ad2aa18f99c8f6cac0a89dc73e5fe8d109): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
 - [valkey-io/valkey-search@a4c1a046f08b](https://github.com/valkey-io/valkey-search/commit/a4c1a046f08b338bda26388800eb0feaeb6a7028): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
 - [valkey-io/valkey-search@9ca99aa8f85a](https://github.com/valkey-io/valkey-search/commit/9ca99aa8f85a5021b0489a071c919db0166a42c4): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): grep: build.sh: No such file or directory bash: line 12: ./build.sh: No such file or directory ls: cannot access '.build-release/src/coordinator/coo
+- [valkey-io/valkey-search#172](https://github.com/valkey-io/valkey-search/pull/172): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#144](https://github.com/valkey-io/valkey-search/pull/144): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#168](https://github.com/valkey-io/valkey-search/pull/168): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#166](https://github.com/valkey-io/valkey-search/pull/166): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#162](https://github.com/valkey-io/valkey-search/pull/162): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#161](https://github.com/valkey-io/valkey-search/pull/161): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#159](https://github.com/valkey-io/valkey-search/pull/159): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#158](https://github.com/valkey-io/valkey-search/pull/158): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#148](https://github.com/valkey-io/valkey-search/pull/148): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#154](https://github.com/valkey-io/valkey-search/pull/154): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#152](https://github.com/valkey-io/valkey-search/pull/152): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#149](https://github.com/valkey-io/valkey-search/pull/149): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#146](https://github.com/valkey-io/valkey-search/pull/146): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#129](https://github.com/valkey-io/valkey-search/pull/129): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#143](https://github.com/valkey-io/valkey-search/pull/143): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#85](https://github.com/valkey-io/valkey-search/pull/85): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#82](https://github.com/valkey-io/valkey-search/pull/82): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#84](https://github.com/valkey-io/valkey-search/pull/84): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#75](https://github.com/valkey-io/valkey-search/pull/75): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#80](https://github.com/valkey-io/valkey-search/pull/80): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#76](https://github.com/valkey-io/valkey-search/pull/76): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#73](https://github.com/valkey-io/valkey-search/pull/73): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#60](https://github.com/valkey-io/valkey-search/pull/60): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#72](https://github.com/valkey-io/valkey-search/pull/72): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#71](https://github.com/valkey-io/valkey-search/pull/71): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#49](https://github.com/valkey-io/valkey-search/pull/49): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search@1d8e30e25ae6](https://github.com/valkey-io/valkey-search/commit/1d8e30e25ae640522f809f839ed2a81fb191e5c1): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#65](https://github.com/valkey-io/valkey-search/pull/65): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#64](https://github.com/valkey-io/valkey-search/pull/64): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
 - [valkey-io/valkey#3800](https://github.com/valkey-io/valkey/pull/3800): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
 - [valkey-io/valkey#3498](https://github.com/valkey-io/valkey/pull/3498): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
