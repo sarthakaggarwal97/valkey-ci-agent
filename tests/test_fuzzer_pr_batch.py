@@ -202,6 +202,32 @@ def test_valkey_search_build_defines_ninja_tool_for_the_483_window(tmp_path):
     assert (src / "tool").read_text().strip() == "ninja"
 
 
+def test_valkey_search_build_retries_once_after_the_pre_172_grpc_header_race(tmp_path):
+    """Before valkey-search #172 (0730baa), nothing ordered the compiles after protoc's gRPC output: ninja could
+    stop on a missing coordinator.grpc.pb.h that the same build generated. The recipe retries once when that
+    header landed, and lets any other failure stand."""
+    src = tmp_path / "src"
+    src.mkdir()
+    # A stand-in for the racy build.sh: the first run fails after generating the header; the second succeeds.
+    (src / "build.sh").write_text(
+        '#!/bin/bash\nif [ ! -f .build-release/src/coordinator/coordinator.grpc.pb.h ]; then\n'
+        '  mkdir -p .build-release/src/coordinator && touch .build-release/src/coordinator/coordinator.grpc.pb.h\n'
+        '  exit 1\nfi\necho "$@" > built\n'
+    )
+    (src / "build.sh").chmod(0o755)
+    subprocess.run(["bash", "-euo", "pipefail", "-c", pr_batch_mod.MODULES["valkey-search"].build],
+                   cwd=src, check=True, capture_output=True, text=True)
+    assert (src / "built").exists()
+
+    # A failure that leaves no gRPC header is not the race: it stands, with no retry.
+    shutil.rmtree(src / ".build-release")
+    (src / "build.sh").write_text('#!/bin/bash\necho attempt >> attempts\nexit 1\n')
+    done = subprocess.run(["bash", "-euo", "pipefail", "-c", pr_batch_mod.MODULES["valkey-search"].build],
+                          cwd=src, capture_output=True, text=True)
+    assert done.returncode != 0
+    assert (src / "attempts").read_text() == "attempt\n"
+
+
 def test_batch_names_keep_a_fitting_id_and_fix_the_rest():
     ids = ["ai-0123456789ab", "spec-register:lost-write", "spec-register-lost-write", "..x..y", ":::", "s" * 120,
            "s" * 130]
