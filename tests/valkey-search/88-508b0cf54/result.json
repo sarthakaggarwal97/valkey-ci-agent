@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "508b0cf54a1d4199651f3b71fc7c137a9e015c4e",
+  "parent": "eec38de7fb0423fb659b451b79a8e3420299e936",
+  "pr": 88,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Adding json and flat integration tests (#88)",
+  "date": "2025-04-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.2649,
+  "findings": [],
+  "recorded": [],
+  "reason": "The only production change is swapping valkey-search's JSON-module detection from a JSON.GET probe to a MODULE LIST scan (IsJsonModuleLoaded -> vmsdk::IsModuleLoaded), reached only by FT.CREATE ON JSON and a one-time OnLoad log line. The swap is behavior-preserving: with the JSON module loaded both builds report loaded; without it both return the identical 'JSON module is not loaded' error. A difference is observable only when valkey-json is actually loaded, but the harness loads only the two valkey-search builds into the pinned Valkey and provides no valkey-json artifact, so FT.CREATE ON JSON"
+}
