@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "09411fb98c77aef659721e13d41e1e9cb21425af",
+  "parent": "221d4c602438b76f157ba7c52717dd1e1ee2eb46",
+  "pr": 178,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "The module can now be built on macOS (#178)",
+  "date": "2025-06-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.8474,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a macOS build-portability PR: almost all hunks are CMake/build.sh changes, macOS-only submodule patches, or test-only code. The three runtime hunks are no-ops on the Linux/gcc builds the fuzzer runs: the filter_parser infinity constants only change under #if defined(__clang__) (and the clang branches cannot even compile on Linux clang, since the added To<unsigned long> specialization in type_conversions.h would redefine To<uint64_t> there, so the runner's builds are gcc, where the code equals the parent's); the static_cast<size_t> in CalcEndIndex is an identity cast on LP64 Linux"
+}

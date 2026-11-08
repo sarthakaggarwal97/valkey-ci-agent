@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "254b2cb53cad6e21ca2f3d18c0b50fe44f2228bc",
+  "parent": "2af5e6c02b67a4f4bdc742881f47ca08904c7f30",
+  "pr": 173,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Spelling (#173)",
+  "date": "2025-06-24",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4114,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a spelling-only PR: it fixes typos in documentation (COMMANDS.md, README.md, QUICK_START.md, rfc/rdb-format.md), code comments, and build scripts, and renames internal identifiers consistently at declaration and every use site in the same diff (CalcBestMatchingPrefiltereddKeys -> CalcBestMatchingPrefilteredKeys in src/query/search.{h,cc} and testing/search_test.cc; kChunkBufferMinEntryiesPerChunk -> kChunkBufferMinEntriesPerChunk in src/utils/allocator.{h,cc}; INTEGRETION_TEST -> INTEGRATION_TEST in build.sh; test class/case renames in testing/). None of these identifiers are exp"
+}

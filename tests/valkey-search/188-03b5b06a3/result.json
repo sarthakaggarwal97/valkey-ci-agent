@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "03b5b06a37f536a0ffb8df05da3997de74f17e5c",
+  "parent": "cc56d7979575f24e094a071b142c394941f781c9",
+  "pr": 188,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Integrate valkey-test-framework (#188)",
+  "date": "2025-06-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2767,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds integration-test infrastructure to the valkey-search repository: a new Python test harness (integration/valkey_search_test_case.py, integration/test_vss_basic.py), a test runner script (integration/run.sh), a README, and shell helpers (scripts/common.rc). No file under src/ or any code compiled into the valkey-search module is modified, so the module binary built at the change is behaviourally identical to the parent's. There is no command, reply, indexing, replication or persistence path to exercise; a compared sequence would show no difference by construction. This is a "
+}

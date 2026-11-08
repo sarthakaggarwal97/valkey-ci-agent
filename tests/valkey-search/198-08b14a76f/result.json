@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "08b14a76ffdf5529d491e190aee2cf0e713eac54",
+  "parent": "254b2cb53cad6e21ca2f3d18c0b50fe44f2228bc",
+  "pr": 198,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Load JSON module into the test framework (#198)",
+  "date": "2025-06-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2805,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to valkey-search's own test/CI infrastructure: integration/run.sh gains a venv setup and a step that clones and builds the valkey-json module, the pytest fixture loads that JSON module next to the search module, and scripts/common.rc gets a log helper. No source file of the module itself changes, so the built valkey-search artifact at the change is behaviourally identical to the parent's: no command reply, indexing path, replication or persistence behaviour differs, and there is nothing a fuzzer scenario against real servers could reach."
+}

@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.search-info-framework
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO SEARCH fields, renamed/reordered sections and the new search.info-developer-visible
+    config after the info framework revision, compared against the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: info
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, GET, search.info-developer-visible], expect_difference: true,
+      expect: {contains: "info-developer-visible"}}
+    - {command: [CONFIG, SET, search.info-developer-visible, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.info-developer-visible, "no"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary 'AACAPwAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, "doc:2", vec, !!binary 'AAAAAAAAgD8='], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [INFO, SEARCH], wait_s: 30, expect_difference: true, expect: {contains: "search_total_indexed_documents:2"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", NOCONTENT, PARAMS, 2, BLOB,
+        !!binary 'AACAPwAAAAA=', DIALECT, 2], compare: unordered, expect: {contains: "doc:1"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_successful_requests_count:1"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_number_of_indexes:1"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "iB"}}
+    - {command: [INFO, search_index_stats], expect_difference: true, expect: {contains: "search_number_of_attributes:1"}}
+    - {command: [INFO, search_memory], expect_difference: true, expect: {contains: "search_used_memory_bytes:"}}
+    - {command: [INFO, search_indexing], expect_difference: true, expect: {contains: "search_background_indexing_status:NO_ACTIVITY"}}
+    - {command: [INFO, search_ingestion], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [info.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: info}

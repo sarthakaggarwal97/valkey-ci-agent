@@ -1,0 +1,65 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "b6f344a855e6b7d79cddf22aee2451b51ee7915e",
+  "parent": "71e80207c2681d1f24796b3da8a7b57cb6a769e9",
+  "pr": 207,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add FT._DEBUG command (#207)",
+  "date": "2025-07-08",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 4.1237,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-bc1112e418dc",
+      "seed": 20701,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #207",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-9a46c08f3e06",
+      "seed": 20702,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #207",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-332636bd7609",
+      "seed": 20703,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #207",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87"
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

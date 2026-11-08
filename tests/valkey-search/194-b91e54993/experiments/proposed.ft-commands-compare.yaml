@@ -1,0 +1,94 @@
+extends: [valkey.liveness]
+id: proposed.ft-commands-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.* lifecycle, vector/tag/numeric queries, ACL prefix checks and error
+    paths compared across the rebranded and parent module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: ft
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, v, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, t, TAG, n, NUMERIC], expect: {
+        equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC],
+      expect: {error: true}}
+    - {command: [FT._LIST], expect: {equals: [idx]}}
+    - {command: [HSET, "doc:1", v, !!binary "AACAPwAAAAA=", t, red, n, 1], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:2", v, !!binary "AAAAAACAPw==", t, blue, n, 2], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:3", v, !!binary "AACAPwAAgD8=", t, "red,blue", n, 3],
+      expect: {equals: 3}}
+    - {command: [HSET, "other:1", v, !!binary "AACAPwAAAAA="], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        DIALECT, 2, NOCONTENT], wait_s: 30, compare: unordered, expect: {contains: "doc:3"}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        DIALECT, 2, NOCONTENT], expect: {equals: [3, "doc:1", "doc:3", "doc:2"]}}
+    - {command: [FT.SEARCH, idx, "@t:{red}=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        DIALECT, 2, NOCONTENT], expect: {equals: [2, "doc:1", "doc:3"]}}
+    - {command: [FT.SEARCH, idx, "@n:[2 3]=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        DIALECT, 2, NOCONTENT], expect: {equals: [2, "doc:3", "doc:2"]}}
+    - {command: [FT.SEARCH, idx, "@t:{blue} @n:[1 2]=>[KNN 3 @v $q]", PARAMS, 2, q,
+        !!binary "AACAPwAAAAA=", DIALECT, 2, NOCONTENT], expect: {equals: [1, "doc:2"]}}
+    - {command: [FT.SEARCH, idx, "@t:{green}=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        DIALECT, 2, NOCONTENT], expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@n:[1 2]=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        DIALECT, 2, RETURN, 1, n], expect: {equals: [2, "doc:1", [n, "1"], "doc:2",
+          [n, "2"]]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        DIALECT, 2, NOCONTENT], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [[1, "doc:1"]]}}
+    - {command: [FT.SEARCH, idx, ""], expect: {error: true}}
+    - {command: [FT.SEARCH, nosuch, "*=>[KNN 1 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        DIALECT, 2], expect: {error: true}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4294967296 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        DIALECT, 2], expect: {error: true}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @v $q]", PARAMS, 2, q, abc, DIALECT, 2],
+      expect: {error: true}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        DIALECT, 5], expect: {error: true}}
+    - {command: [FT.INFO, nosuch], expect: {error: true}}
+    - {command: [FT.DROPINDEX, nosuch], expect: {error: true}}
+    - {command: [ACL, SETUSER, alice, on, ">pw", "~doc:*", "+@all"], expect: {equals: OK}}
+    - {command: [AUTH, alice, pw], expect: {equals: OK}}
+    - {command: [FT.CREATE, aclbad, ON, HASH, PREFIX, 1, "secret:", SCHEMA, n, NUMERIC],
+      expect: {error: true}}
+    - {command: [FT.CREATE, aclok, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.DROPINDEX, aclok], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, bob, on, ">pw2", "~zzz:*", "+@all", "(+@all ~doc:*)"],
+      expect: {equals: OK}}
+    - {command: [AUTH, bob, pw2], expect: {equals: OK}}
+    - {command: [FT.CREATE, bobidx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [AUTH, default, x], expect: {equals: OK}}
+    - {command: [DEL, "doc:2"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        DIALECT, 2, NOCONTENT], wait_s: 30, expect: {equals: [2, "doc:1", "doc:3"]}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT._LIST], compare: unordered, expect: {equals: [bobidx]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 1 @v $q]", PARAMS, 2, q, !!binary "AACAPwAAAAA=",
+        DIALECT, 2], expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ft.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ft}

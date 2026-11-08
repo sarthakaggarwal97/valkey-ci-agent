@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "b91e54993e9468d1ebce9735eb91013710e1140b",
+  "parent": "08b14a76ffdf5529d491e190aee2cf0e713eac54",
+  "pr": 194,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Rebranding module to use Valkey instead of Redis (#194)",
+  "date": "2025-07-01",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 9.1204,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-5a8fb0c859de",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ft' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (FT.SEARCH idx *=>[KNN 3 @v $q] PARAMS 2 q <binary> DIALECT 2 NOCONTENT), 11 (FT.SEARCH idx @n:[2 3]=>[KNN 3 @v $q] PARAMS 2 q <binary> DIAL"
+    },
+    {
+      "scenario": "ai-0016b32db34d",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ft' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (FT.SEARCH idx *=>[KNN 3 @v $q] PARAMS 2 q <binary> DIALECT 2 NOCONTENT), 11 (FT.SEARCH idx @n:[2 3]=>[KNN 3 @v $q] PARAMS 2 q <binary> DIAL"
+    },
+    {
+      "scenario": "ai-8888e8c9a226",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ft' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (FT.SEARCH idx *=>[KNN 3 @v $q] PARAMS 2 q <binary> DIALECT 2 NOCONTENT), 11 (FT.SEARCH idx @n:[2 3]=>[KNN 3 @v $q] PARAMS 2 q <binary> DIAL"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

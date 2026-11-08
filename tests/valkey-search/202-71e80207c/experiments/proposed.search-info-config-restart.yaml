@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.search-info-config-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: The new search.info-developer-visible config survives CONFIG REWRITE
+    and a restart, and the info_field registry re-registers and passes Validate()
+    on module reload
+components:
+- use: valkey.action.commands
+  id: restart
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {save: "3600 1"}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.info-developer-visible, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.info-developer-visible], expect_difference: true,
+      expect: {contains: "yes"}}
+    - {command: [INFO, SEARCH], wait_s: 30, expect_difference: true, expect: {contains: "search_number_of_indexes:"}}
+    - {command: [INFO, SEARCH], expect_difference: true, expect: {contains: "search_rdb_load_success_cnt:"}}
+    - {command: [INFO, search_indexing], expect_difference: true, expect: {contains: "search_background_indexing_status:"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [restart.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restart}

@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.ft-debug-show-info
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT._DEBUG SHOW_INFO replies, argument-parsing edge cases and ACL gating,
+    compared against the parent module build where the command does not exist
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: debug
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [FT._DEBUG, SHOW_INFO], expect_difference: true, expect: {error: false}}
+    - {command: [FT._DEBUG, SHOW_INFO, METADATA], expect_difference: true, expect: {
+        error: false}}
+    - {command: [ft._debug, show_info, metadata], expect_difference: true, expect: {
+        error: false}}
+    - {command: [FT._DEBUG], expect_difference: true, expect: {error: true}}
+    - {command: [FT._DEBUG, ""], expect_difference: true, expect: {error: true}}
+    - {command: [FT._DEBUG, NO_SUCH_SUBCOMMAND], expect_difference: true, expect: {
+        error: true}}
+    - {command: [FT._DEBUG, SHOW_INFO, EXTRA_ARG], expect_difference: true, expect: {
+        error: true}}
+    - {command: [FT._DEBUG, SHOW_INFO, METADATA, METADATA], expect_difference: true,
+      expect: {error: false}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, vec, VECTOR,
+        FLAT, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAA="], expect: {equals: 1}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {error: false}}
+    - {command: [FT._DEBUG, SHOW_INFO], expect_difference: true, expect: {error: false}}
+    - {command: [FT._DEBUG, SHOW_INFO, METADATA], expect_difference: true, expect: {
+        error: false}}
+    - {command: [ACL, SETUSER, limited, on, ">pw", "~*", "+ping"], expect: {equals: OK}}
+    - {command: [AUTH, limited, pw], connection: lim, expect: {equals: OK}}
+    - {command: [PING], connection: lim, expect: {equals: PONG}}
+    - {command: [FT._DEBUG, SHOW_INFO], connection: lim, expect_difference: true,
+      expect: {error: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [debug.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: debug}

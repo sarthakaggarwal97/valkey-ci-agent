@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "403d7b57436592ae1d213498b19e90f330f3c951",
+  "parent": "09411fb98c77aef659721e13d41e1e9cb21425af",
+  "pr": 12,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Initial text search RFC (#12)",
+  "date": "2025-06-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3662,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds only a documentation file (rfc/text-field.md, an RFC proposing a future TEXT field type) and a .vscode editor settings tweak. No source code, build file, command, or configuration of the module is modified, so there is no behaviour change to test."
+}

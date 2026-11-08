@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "cc56d7979575f24e094a071b142c394941f781c9",
+  "parent": "403d7b57436592ae1d213498b19e90f330f3c951",
+  "pr": 192,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix broken CI (#192)",
+  "date": "2025-06-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2473,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only CI infrastructure scripts: ci/build_ubuntu.sh (removes wget --show-progress, affecting only CI log verbosity) and testing/integration/run.sh (pins the valkey-json dependency to a fixed commit and builds it with --release for the integration test harness). No module source code, command handling, indexing, replication or persistence logic is touched, so the built valkey-search module behaves identically at the change and its parent; there is no runtime behaviour for a scenario to exercise."
+}
