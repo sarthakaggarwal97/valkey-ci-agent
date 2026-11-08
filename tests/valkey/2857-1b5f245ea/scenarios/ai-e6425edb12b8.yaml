@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 853d111f4790..1b5f245eaecf.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e6425edb12b8
+seed: 104
+experiment:
+  id: proposed.lrulfu-eviction-compare
+  inputs:
+    policy: allkeys-lfu
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7300

@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.psync-null-backlog-crash
+deployment:
+  modes: [standalone]
+metadata:
+  description: PSYNC against a primary that has no replication backlog must not crash;
+    the rewritten lack-of-backlog log dereferences a NULL server.repl_backlog
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: psync
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [PSYNC, "0000000000000000000000000000000000000000", "-1"], connection: repl,
+      expect_difference: true, expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [psync.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: psync}

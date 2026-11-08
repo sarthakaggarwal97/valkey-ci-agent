@@ -1,0 +1,74 @@
+extends: [valkey.base]
+id: proposed.writable-replica-expires-full-resync
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Full resync of a writable replica holding thousands of tracked expire
+    keys frees replicaKeysWithExpire asynchronously without crash or data loss
+inputs:
+  properties:
+    run_before_sync_s: {type: number, minimum: 0, maximum: 600, default: 1}
+startup_overlays:
+- overlay_id: writable-replica
+  server_config:
+    replica-read-only: "no"
+    replica-lazy-flush: "yes"
+- overlay_id: full-sync
+  server_config:
+    repl-diskless-sync-delay: "0"
+    enable-debug-command: "yes"
+components:
+- use: valkey.action.commands
+  id: seed-tracked
+  depends_on: [writes]
+  config:
+    instances: replicas
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "for i=1,5000 do redis.call('SET','wre:'..i,'v','EX',600) end\
+          \ return tonumber(redis.call('INFO','stats'):match('slave_expires_tracked_keys:(%d+)'))\
+          \ or 0", 0], expect: {equals: 5000}}
+- use: valkey.action.sleep
+  id: run-before-sync
+  depends_on: [seed-tracked]
+  config: {seconds: {$ref: inputs.run_before_sync_s}}
+- use: valkey.action.commands
+  id: force-full-sync
+  depends_on: [run-before-sync]
+  config:
+    instances: primaries
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, CHANGE-REPL-ID], expect: {equals: OK}}
+    - {command: [CLIENT, KILL, TYPE, replica]}
+- use: valkey.action.poll
+  id: links-up
+  depends_on: [force-full-sync]
+  config:
+    instances: replicas
+    section: replication
+    field: master_link_status
+    predicate: {equals: up}
+    timeout_s: 120
+- use: valkey.action.commands
+  id: post-resync
+  depends_on: [links-up]
+  config:
+    instances: replicas
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "return tonumber(redis.call('INFO','stats'):match('slave_expires_tracked_keys:(%d+)'))\
+          \ or 0", 0], expect: {equals: 0}}
+    - {command: [EVAL, "for i=1,100 do redis.call('SET','post:'..i,'v','EX',1) end\
+          \ return tonumber(redis.call('INFO','stats'):match('slave_expires_tracked_keys:(%d+)'))\
+          \ or 0", 0], expect: {equals: 100}}
+    - {command: [EVAL, "return tonumber(redis.call('INFO','stats'):match('slave_expires_tracked_keys:(%d+)'))\
+          \ or 0", 0], wait_s: 30, expect: {equals: 0}}
+- use: valkey.oracle.ledger
+  id: data
+  config: {converge_timeout_s: 120}
+required_events: [force-full-sync.completed, links-up.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seed-tracked}
+- {evidence_id: valkey.command.sequence, source: post-resync}

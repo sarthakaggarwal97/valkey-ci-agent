@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e5de417f1e8d2b2bb61257e842f21a74b9352746",
+  "parent": "dd2827a14ea183389e693255c244e1a7cad2acbb",
+  "pr": 2873,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix build on 32-bit ARM by only using NEON on AArch64 (#2873)",
+  "date": "2025-11-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2356,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a one-line build fix: it tightens the HAVE_ARM_NEON preprocessor guard in src/config.h to require __aarch64__, so NEON SIMD intrinsics are only compiled on 64-bit ARM, fixing a compile failure on 32-bit ARM. It alters which code is compiled, not what any compiled build does: on AArch64 and x86 the resulting binary is identical to before, and on 32-bit ARM the scalar fallback is functionally equivalent to the SIMD path (which previously failed to build at all). There is no runtime behaviour, reply, or data path for a scenario to exercise or compare."
+}

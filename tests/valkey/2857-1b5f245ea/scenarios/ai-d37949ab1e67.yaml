@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 853d111f4790..1b5f245eaecf.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d37949ab1e67
+seed: 102
+experiment:
+  id: proposed.lrulfu-restore-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

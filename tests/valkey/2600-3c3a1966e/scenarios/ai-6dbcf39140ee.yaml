@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 57892663bed8..3c3a1966ec8f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6dbcf39140ee
+seed: 2602
+experiment:
+  id: proposed.rdbload-incompatible-preserves-data
+  inputs:
+    resp: 3
+    lazy_flush: 'yes'
+deployment:
+  mode: standalone
+  base_port: 7100

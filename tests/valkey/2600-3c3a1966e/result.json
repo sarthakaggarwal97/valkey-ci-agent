@@ -1,0 +1,91 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3c3a1966ec8fd32fb1cbffee4329a01528caf83a",
+  "parent": "57892663bed81fe0d0b7041ec599f81ffc95f607",
+  "pr": 2600,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Perform data cleanup during RDB load on successful version/signature validation (#2600)",
+  "date": "2025-11-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 14,
+  "proven": 3,
+  "hunted": 6,
+  "dropped": 8,
+  "recall": true,
+  "coverage": {
+    "lines": 36,
+    "executed": 22,
+    "percent": 61,
+    "uncovered": [
+      "src/aof.c:1462",
+      "src/debug.c:589",
+      "src/rdb.c:3152",
+      "src/rdb.c:3436",
+      "src/rdb.c:3520",
+      "src/rdb.c:3541",
+      "src/replication.c:2416",
+      "src/replication.c:2417",
+      "src/replication.c:2420",
+      "src/replication.c:2421",
+      "src/replication.c:2519",
+      "src/replication.c:2520",
+      "src/replication.c:2523",
+      "src/replication.c:2524"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 7.5249,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-6cbc89513e1d",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-006ddffcad93",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-6b0bab268ba8",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-c01f458c2482",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-7ef9235a3a80",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-a04cf4220d8a",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-209c158ae6fe",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-38858b2178a0",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

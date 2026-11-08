@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.info-replstate-rdb-transmitted
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO replication lists an rdb-only dual-channel RDB client as state=rdb_transmitted
+    once the RDB is transmitted; the parent build drops the slaveN line for that state
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rdbonly
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      dual-channel-replication-enabled: "yes"
+      repl-diskless-sync: "yes"
+      repl-diskless-sync-delay: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, delay-rdb-client-free-seconds, 60], expect: {equals: OK}}
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [RPUSH, l1, a, b, c, d, e], expect: {equals: 5}}
+    - {command: [REPLCONF, capa, eof, rdb-only, 1, rdb-channel, 1, listening-port,
+        7777], connection: repl, expect: {equals: OK}}
+    - {raw: "SYNC\r\n", connection: repl, expect: {exists: false}}
+    - {command: [INFO, replication], wait_s: 20, expect_difference: true, expect: {
+        contains: "state=rdb_transmitted"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rdbonly.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rdbonly}

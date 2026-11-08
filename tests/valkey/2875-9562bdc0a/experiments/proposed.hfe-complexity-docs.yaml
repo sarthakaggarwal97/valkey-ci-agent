@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.hfe-complexity-docs
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS reports the aligned O(N) complexity text for the multi-field
+    HFE commands, and the commands still behave identically
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, DOCS, HTTL], expect_difference: true, expect: {contains: "O(N)\
+          \ where N is the number of specified fields."}}
+    - {command: [COMMAND, DOCS, HPTTL], expect_difference: true, expect: {contains: "O(N)\
+          \ where N is the number of specified fields."}}
+    - {command: [COMMAND, DOCS, HEXPIRETIME], expect_difference: true, expect: {contains: "O(N)\
+          \ where N is the number of specified fields."}}
+    - {command: [COMMAND, DOCS, HPEXPIRETIME], expect_difference: true, expect: {
+        contains: "O(N) where N is the number of specified fields."}}
+    - {command: [COMMAND, DOCS, HPERSIST], expect_difference: true, expect: {contains: "O(N)\
+          \ where N is the number of specified fields."}}
+    - {command: [COMMAND, DOCS, HGETEX], expect_difference: true, expect: {contains: "O(N)\
+          \ where N is the number of specified fields."}}
+    - {command: [COMMAND, DOCS, HSETEX], expect_difference: true, expect: {contains: "O(N)\
+          \ where N is the number of specified fields."}}
+    - {command: [COMMAND, DOCS, HEXPIRE], expect: {contains: "O(N) where N is the\
+          \ number of specified fields."}}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HEXPIRE, h, 100, FIELDS, 2, f1, f2], expect: {equals: [1, 1]}}
+    - {command: [HEXPIRETIME, h, FIELDS, 2, f1, f2], compare: skip}
+    - {command: [HPEXPIRETIME, h, FIELDS, 2, f1, f2], compare: skip}
+    - {command: [HPERSIST, h, FIELDS, 2, f1, f2], expect: {equals: [1, 1]}}
+    - {command: [HTTL, h, FIELDS, 2, f1, f2], expect: {equals: [-1, -1]}}
+    - {command: [HPTTL, h, FIELDS, 2, f1, f2], expect: {equals: [-1, -1]}}
+    - {command: [HGETEX, h, EX, 100, FIELDS, 2, f1, f2], expect: {equals: [v1, v2]}}
+    - {command: [HSETEX, h, 100, FIELDS, 2, f1, v1x, f2, v2x], expect: {equals: 1}}
+    - {command: [HMGET, h, f1, f2], expect: {equals: [v1x, v2x]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

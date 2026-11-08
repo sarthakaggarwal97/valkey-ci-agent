@@ -1,0 +1,31 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1d7224f3894c8e6db39a9e86c040270b3122c064",
+  "parent": "199d49a4326c5722f1c9c0bbb1860bcb64d9b323",
+  "pr": 3613,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix UAF in unblockClientOnKey when reprocessed command frees the client (CVE-2026-23479) (#3613)",
+  "date": "2026-05-07",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 4,
+    "executed": 1,
+    "percent": 25,
+    "uncovered": [
+      "src/blocked.c:729",
+      "src/blocked.c:730",
+      "src/blocked.c:731"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 8.836,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c8341d416534e219b12daf79fecc93e1fe76f956",
+  "parent": "2e8fba49a21b5dcd13defa6b96ad0f4ecad44142",
+  "pr": 2809,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replace strcmp with byte-by-byte comparison in valkey-check-aof (#2809)",
+  "date": "2025-12-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.8512,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change rewrites `strncmp(buf, \"\\r\\n\", 2) != 0` in consumeNewline of valkey-check-aof.c as `buf[0] != '\\r' || buf[1] != '\\n'`. The two predicates are equivalent for all byte values: strncmp against the non-NUL literal \"\\r\\n\" with n=2 returns non-zero exactly when byte 0 differs from '\\r' or byte 1 differs from '\\n' (char signedness cannot affect an equality test, and both forms read the same two bytes). Error output, line counting, return values, and all callers are unchanged, so valkey-check-aof accepts and rejects exactly the same AOF files with the same output and exit status on both bui"
+}

@@ -1,0 +1,93 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1b5f245eaecf274f655763f20e30ed4f1966ff41",
+  "parent": "853d111f479043603385aeb674273c7b0099fe82",
+  "pr": 2857,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Refactor of LFU/LRU code for modularity (#2857)",
+  "date": "2025-12-02",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 9,
+  "proven": 2,
+  "hunted": 5,
+  "dropped": 4,
+  "recall": true,
+  "coverage": {
+    "lines": 87,
+    "executed": 87,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 13.4471,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in VM_GetLRU",
+      "scenario": "ai-c1adefec1ed1",
+      "seed": 105,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "042de25129a211eaf6d6",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in VM_GetLRU",
+      "scenario": "ai-c1adefec1ed1",
+      "seed": 105,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2857",
+      "fingerprint": "f494e938664d753289e8",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-e08ff6dcfc17",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'evict' returned ERROR: expectations both builds violate alike, so they are not about the change: 10 (DBSIZE)"
+    },
+    {
+      "scenario": "ai-e6425edb12b8",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'evict' returned ERROR: expectations both builds violate alike, so they are not about the change: 10 (DBSIZE)"
+    },
+    {
+      "scenario": "ai-0e1948b8c21a",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-c971bb283404",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-6af14a90288a",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'forkless-infrastructure-enabled \"yes\"' Bad directive or wrong number of arguments; default deployment config"
+    },
+    {
+      "scenario": "ai-c73c977ac548",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'build' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'forkless-infrastructure-enabled \"yes\"' Bad directive or wrong number of arguments; default deployment config"
+    }
+  ]
+}

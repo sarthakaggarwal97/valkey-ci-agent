@@ -1,0 +1,77 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4a0e20bbc91da1e776c619df741e0e9377193602",
+  "parent": "a087cc1132cbe2ae17d6063a32c1543f8a31c39e",
+  "pr": 2886,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Handle failed psync log when there is no replication backlog (#2886)",
+  "date": "2025-12-01",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 3,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 2,
+    "percent": 66,
+    "uncovered": [
+      "src/replication.c:870"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 3.2379,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 1 (PSYNC 0000000000000000000000000000000000000000 -1 on connection repl) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":\"FULLRESY",
+      "scenario": "ai-7d61d4b55f06",
+      "seed": 20261108,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #2886",
+      "fingerprint": "d1a9f7e96195048b7523",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/104"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in primaryTryPartialResynchronization",
+      "scenario": "ai-7d61d4b55f06",
+      "seed": 20261108,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2886",
+      "fingerprint": "33e052038ff4982b0032",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-80ec34bdd3bc",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-4680af7ba167",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-1ca881e8dad4",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

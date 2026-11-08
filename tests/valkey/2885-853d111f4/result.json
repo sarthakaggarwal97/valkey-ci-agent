@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "853d111f479043603385aeb674273c7b0099fe82",
+  "parent": "3fd0942279cf4f0eb9f7f52659af2901bde84831",
+  "pr": 2885,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Build: Support `make test` when PROG_SUFFIX is used (#2885)",
+  "date": "2025-12-02",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2214,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is build/CI-only: it passes PROG_SUFFIX from `make test` into the Tcl test harness (src/Makefile and tests/support/set_executable_path.tcl) so the harness finds suffixed binary names. No Valkey server, client-tool, or protocol code changes; there is no runtime behaviour for a scenario to exercise."
+}

@@ -1,0 +1,19 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 199d49a4326c..1d7224f3894c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f03e88b04a77
+seed: 20260481
+experiment:
+  id: proposed.blocked-reprocess-pressure
+  inputs:
+    resp: 2
+    command_rate: 4000
+    keys: 64
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7000
+  server_config:
+    maxmemory-clients: 1mb
+    maxmemory: 128mb
+    maxmemory-policy: allkeys-random
+    appendonly: 'no'

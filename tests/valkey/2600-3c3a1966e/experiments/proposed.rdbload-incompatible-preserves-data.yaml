@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.rdbload-incompatible-preserves-data
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_RdbLoad (rdbLoad with RDBFLAGS_EMPTY_DATA) keeps the existing dataset
+    when the RDB file is missing or fails signature/version validation, and still
+    flushes on a successful load
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    lazy_flush: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: rdbload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {replica-lazy-flush: {$ref: inputs.lazy_flush}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    files:
+      badmagic.rdb: "BADMAGIC0-not-an-rdb-file"
+      future-valkey.rdb: "VALKEY987"
+      old-valkey.rdb: "VALKEY011"
+      future-redis.rdb: "REDIS0100"
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [test.rdbload, missing.rdb], expect: {error: true}}
+    - {command: [GET, k1], expect_difference: true, expect: {equals: v1}}
+    - {command: [GET, k2], expect_difference: true, expect: {equals: v2}}
+    - {command: [test.rdbload, badmagic.rdb], expect: {error: true}}
+    - {command: [GET, k1], expect_difference: true, expect: {equals: v1}}
+    - {command: [test.rdbload, future-valkey.rdb], expect: {error: true}}
+    - {command: [GET, k2], expect_difference: true, expect: {equals: v2}}
+    - {command: [test.rdbload, old-valkey.rdb], expect: {error: true}}
+    - {command: [test.rdbload, future-redis.rdb], expect: {error: true}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 2}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [SET, s1, v1], expect: {equals: OK}}
+    - {command: [test.rdbsave, snap.rdb], expect: {equals: OK}}
+    - {command: [SET, s2, v2], expect: {equals: OK}}
+    - {command: [test.rdbload, snap.rdb], expect: {equals: OK}}
+    - {command: [EXISTS, s2], expect: {equals: 0}}
+    - {command: [GET, s1], expect: {equals: v1}}
+    - {command: [DBSIZE], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [rdbload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rdbload}

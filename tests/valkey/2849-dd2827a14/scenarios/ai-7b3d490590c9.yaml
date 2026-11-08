@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8ea7f1330cbc..dd2827a14ea1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7b3d490590c9
+seed: 202
+experiment:
+  id: proposed.writable-replica-expires-full-resync
+  inputs:
+    run_before_sync_s: 2
+    mutation_rate: 500
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7100
+  server_config:
+    repl-diskless-sync: 'no'
+    repl-diskless-load: disabled

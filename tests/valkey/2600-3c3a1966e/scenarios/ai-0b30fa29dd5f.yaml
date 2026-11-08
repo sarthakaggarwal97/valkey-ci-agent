@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 57892663bed8..3c3a1966ec8f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0b30fa29dd5f
+seed: 2605
+experiment:
+  id: proposed.full-sync-dirty-replica
+  inputs:
+    diskless_sync: 'yes'
+    diskless_load: swapdb
+    lazy_flush: 'no'
+deployment:
+  mode: standalone
+  base_port: 7400

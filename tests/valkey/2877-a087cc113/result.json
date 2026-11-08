@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a087cc1132cbe2ae17d6063a32c1543f8a31c39e",
+  "parent": "761fba2e9de2b1cf4f9081220565f78f1922b7c9",
+  "pr": 2877,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add psync offset range information to the failed psync log (#2877)",
+  "date": "2025-11-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.0192,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in primaryTryPartialResynchronization",
+      "scenario": "ai-926539489ff4",
+      "seed": 7001,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "33e052038ff4982b0032",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

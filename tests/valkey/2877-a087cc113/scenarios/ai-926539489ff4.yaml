@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 761fba2e9de2..a087cc1132cb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-926539489ff4
+seed: 7001
+experiment:
+  id: proposed.psync-null-backlog-crash
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

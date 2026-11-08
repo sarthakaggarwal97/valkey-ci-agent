@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "da3c43d76bb8667df43e53227608e1b3344d0f1c",
+  "parent": "e5de417f1e8d2b2bb61257e842f21a74b9352746",
+  "pr": 2815,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Additional log information for cluster accept handler and message processing (#2815)",
+  "date": "2025-11-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 8,
+    "executed": 6,
+    "percent": 75,
+    "uncovered": [
+      "src/cluster_legacy.c:1718",
+      "src/cluster_legacy.c:3856"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 3.9125,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-056ebd8ffd8d",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'save-behavior-support' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'cluster-config-save-behavior \"sync\"' Bad directive or wrong number of arguments"
+    },
+    {
+      "scenario": "ai-061e0625854c",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'save-behavior-support' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'cluster-config-save-behavior \"sync\"' Bad directive or wrong number of arguments"
+    }
+  ]
+}

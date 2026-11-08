@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.info-replstate-rdb-transmitted-dualchannel
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO replication names a dual-channel rdb-only replica's state rdb_transmitted
+    while it is parked in REPLICA_STATE_RDB_TRANSMITTED
+inputs:
+  properties:
+    load_delay_us:
+      type: integer
+      default: 1200
+      minimum: 1
+      maximum: 100000
+      description: per-key delay (microseconds) the replica applies while loading
+        the transferred RDB, to widen the RDB_TRANSMITTED window
+components:
+- use: valkey.action.commands
+  id: rdbtransmit
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 2
+    timeout_s: 120
+    server_config:
+      dual-channel-replication-enabled: "yes"
+      repl-diskless-sync: "yes"
+      repl-diskless-sync-delay: 0
+      key-load-delay: {$ref: inputs.load_delay_us}
+    commands:
+    - {command: [DEBUG, POPULATE, "12000"], expect: {equals: OK}}
+    - {command: [DEBUG, delay-rdb-client-free-seconds, "80"], expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], wait_s: 45, expect_difference: true, expect: {
+        contains: "state=rdb_transmitted"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rdbtransmit}

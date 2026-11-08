@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.lrulfu-restore-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE IDLETIME/FREQ at wrap boundaries, OBJECT IDLETIME/FREQ, LFU
+    touch counting, DEBUG OBJECT format and RDB save/reload of LRU/LFU metadata, compared
+    across the lrulfu refactor
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lrulfu
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {maxmemory-policy: allkeys-lru}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, 1], expect: {equals: OK}}
+    - {command: [RESTORE, k1, 0, !!binary "AANiYXILAAAAAAAAAAAA", IDLETIME, 1000],
+      expect: {equals: OK}}
+    - {command: [OBJECT, IDLETIME, k1], compare: skip, expect: {min: 1000, max: 1010}}
+    - {command: [RESTORE, k2, 0, !!binary "AANiYXILAAAAAAAAAAAA", IDLETIME, 2147483648],
+      expect: {equals: OK}}
+    - {command: [OBJECT, IDLETIME, k2], expect_difference: true, expect: {max: 3}}
+    - {command: [RESTORE, k3, 0, !!binary "AANiYXILAAAAAAAAAAAA", IDLETIME, 4294967296],
+      expect: {equals: OK}}
+    - {command: [OBJECT, IDLETIME, k3], expect_difference: true, expect: {max: 3}}
+    - {command: [RESTORE, k4, 0, !!binary "AANiYXILAAAAAAAAAAAA", IDLETIME, 16000000],
+      expect: {equals: OK}}
+    - {command: [OBJECT, IDLETIME, k4], compare: skip, expect: {min: 15999998, max: 16000003}}
+    - {command: [RESTORE, kerr, 0, !!binary "AANiYXILAAAAAAAAAAAA", IDLETIME, -1],
+      expect: {error: "Invalid IDLETIME"}}
+    - {command: [RESTORE, kerr, 0, !!binary "AANiYXILAAAAAAAAAAAA", IDLETIME, 10,
+        FREQ, 10], expect: {error: true}}
+    - {command: [SET, fresh, v], expect: {equals: OK}}
+    - {command: [OBJECT, IDLETIME, fresh], compare: skip, expect: {max: 2}}
+    - {command: [OBJECT, FREQ, fresh], expect: {error: true}}
+    - {command: [DEBUG, OBJECT, k1], expect_difference: true, expect: {contains: lru_seconds_idle}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [OBJECT, IDLETIME, k1], compare: skip, expect: {min: 1000, max: 1120}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-lfu], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, 1], expect: {equals: OK}}
+    - {command: [RESTORE, kf, 0, !!binary "AANiYXILAAAAAAAAAAAA", FREQ, 100], expect: {
+        equals: OK}}
+    - {command: [OBJECT, FREQ, kf], expect: {equals: 100}}
+    - {command: [RESTORE, kf0, 0, !!binary "AANiYXILAAAAAAAAAAAA", FREQ, 0], expect: {
+        equals: OK}}
+    - {command: [GET, kf0], expect: {equals: bar}}
+    - {command: [GET, kf0], expect: {equals: bar}}
+    - {command: [GET, kf0], expect: {equals: bar}}
+    - {command: [OBJECT, FREQ, kf0], expect: {min: 2, max: 3}}
+    - {command: [RESTORE, kf255, 0, !!binary "AANiYXILAAAAAAAAAAAA", FREQ, 255], expect: {
+        equals: OK}}
+    - {command: [GET, kf255], expect: {equals: bar}}
+    - {command: [OBJECT, FREQ, kf255], expect: {equals: 255}}
+    - {command: [RESTORE, kferr, 0, !!binary "AANiYXILAAAAAAAAAAAA", FREQ, 256], expect: {
+        error: "Invalid FREQ"}}
+    - {command: [OBJECT, IDLETIME, kf], expect: {error: true}}
+    - {command: [DEBUG, OBJECT, kf], expect_difference: true, expect: {contains: lfu_freq}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [OBJECT, FREQ, kf], compare: skip, expect: {min: 95, max: 100}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [lrulfu.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lrulfu}

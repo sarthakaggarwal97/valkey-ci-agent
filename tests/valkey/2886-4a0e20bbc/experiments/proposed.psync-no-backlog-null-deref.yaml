@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.psync-no-backlog-null-deref
+deployment:
+  modes: [standalone]
+metadata:
+  description: PSYNC matching the all-zeros replid2 with offset -1 on a backlog-less
+    primary must not crash (parent dereferences a NULL repl_backlog in the failed-psync
+    log line)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: psync
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [PING], expect: {equals: PONG}}
+    - {connection: repl, command: [PSYNC, "0000000000000000000000000000000000000000",
+        "-1"], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [psync.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: psync}

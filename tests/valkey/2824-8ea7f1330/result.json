@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8ea7f1330cbc80fe016fc5110ec91efe2369ecee",
+  "parent": "8189fe5c42573f96229bea7d427b650a4354be31",
+  "pr": 2824,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update dual channel replication conf to mention the local buffer is imited by COB (#2824)",
+  "date": "2025-11-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2223,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewords a log message in bufferReplData to include the configured byte limit, updates the test's log-matching pattern accordingly, and adds a documentation comment to valkey.conf. No executable behaviour changes: the dual-channel buffering cutoff logic, its condition, and its effect are untouched, so there is nothing a fuzzer scenario could distinguish between the two builds."
+}

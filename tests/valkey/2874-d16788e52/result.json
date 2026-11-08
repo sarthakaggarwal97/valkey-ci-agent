@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d16788e52dfe1c80627975bb503d5e9ba6ae58ae",
+  "parent": "faac14ab9c8430057490f64ca979492057bb4d40",
+  "pr": 2874,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix discarded-qualifiers warnings reported by fedorarawhide (#2874)",
+  "date": "2025-11-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2906,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds const qualifiers to local pointer declarations (char * -> const char *) in cli_common.c, module.c, networking.c and resp_parser.c to silence -Wdiscarded-qualifiers warnings from fedorarawhide builds. No expression, control flow, or data layout changes; the compiled behavior is identical, so no runtime behavior can differ and no scenario is needed."
+}

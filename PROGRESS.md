@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-08T10:12+00:00.
+Updated 2026-11-08T10:25+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 887 | 1620 | #2809 (2025-12-03) | 298 | 126.7 |
+| valkey-io/valkey | 910 | 1597 | #2853 (2025-11-18) | 321 | 130.0 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
 | valkey-io/valkey-search | 611 | 58 | #33 (2025-03-01) | 218 | 87.3 |
@@ -13,28 +13,28 @@ Updated 2026-11-08T10:12+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-08T08:08:13+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42450654882): 20 merge(s) tested, 6 without a code change.
+[2026-11-08T10:25:32+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42461631861): 20 merge(s) tested, 3 without a code change.
 
-- [valkey-io/valkey#3800](https://github.com/valkey-io/valkey/pull/3800): to retry, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
-- [valkey-io/valkey#1032](https://github.com/valkey-io/valkey/pull/1032) ([tests](tests/valkey/1032-82d7b7e40/)): Fail to save the cluster config file will not exit the process (#1032): 0 of 3 test(s) reached the change, coverage 85%; [crash, predates #1032, which hid it](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/103)
-- [valkey-io/valkey#2943](https://github.com/valkey-io/valkey/pull/2943) ([tests](tests/valkey/2943-495650676/)): Enforce 64‑bit off_t regardless of include order; prevent LTO type mismatch (#2943): declined: The change is purely compile-time: it adds fmacros.h includes to headers and unit-test files and a static_assert(sizeof(off_t) >= 8) in server.h, so that _FILE_OFFSET_BITS=64 is in effect before system headers and any include-order regression fails the build rather than producing a 32-bit 
-- [valkey-io/valkey#2959](https://github.com/valkey-io/valkey/pull/2959) ([tests](tests/valkey/2959-b7a7ef8eb/)): Propagate database changes from scripting engine temp client (#2959): 4 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2932](https://github.com/valkey-io/valkey/pull/2932) ([tests](tests/valkey/2932-a571ac527/)): Fix memory allocation size in getClusterNodesList (#2932): declined: The change shrinks an over-allocation in getClusterNodesList from (count+1)*CLUSTER_NAMELEN (40 bytes/element) to the correct (count+1)*sizeof(char *) (8 bytes/element). The old size was always larger than needed, so there was never an out-of-bounds access, crash, or data risk — only waste
-- [valkey-io/valkey#2955](https://github.com/valkey-io/valkey/pull/2955) ([tests](tests/valkey/2955-0a9cb985c/)): Fix lua module build failure when using CLANG (#2955): declined: The change only edits src/modules/lua/Makefile: it detects clang, switches -std=c99 to -std=gnu11, and adds -fuse-ld=lld for clang linking. It is a build-system fix with no runtime behaviour change — no command, reply, replication, persistence or cluster path is affected, so there is nothi
-- [valkey-io/valkey#2472](https://github.com/valkey-io/valkey/pull/2472) ([tests](tests/valkey/2472-e9014fd02/)): Adding support for sharing memory between the module and the engine (#2472): 0 of 11 test(s) reached the change, coverage 58%
-- [valkey-io/valkey#2950](https://github.com/valkey-io/valkey/pull/2950) ([tests](tests/valkey/2950-512ffdb80/)): Module API docs formatting and improve script (#2950): declined: The change edits only comments in src/module.c (a function-name typo and comment line wrapping in a doc example) and the offline Ruby documentation-generation script utils/generate-module-api-doc.rb. No executable server code, command behaviour, reply format, replication, persistence, or m
-- [valkey-io/valkey#2858](https://github.com/valkey-io/valkey/pull/2858) ([tests](tests/valkey/2858-29bf862bc/)): Move Lua scripting engine into a Valkey module (#2858): 3 of 13 test(s) reached the change, coverage 81%
-- [valkey-io/valkey#2735](https://github.com/valkey-io/valkey/pull/2735) ([tests](tests/valkey/2735-d22fcfb03/)): Respect REPLCONF VERSION in diskless full sync (#2735): 0 of 17 test(s) reached the change, coverage 43%, 2 skipped (required capability 'build' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'forkless-infrastructure-enabled "yes"' Bad directive or wrong number of arguments; default deployment config)
-- [valkey-io/valkey#2852](https://github.com/valkey-io/valkey/pull/2852) ([tests](tests/valkey/2852-8ab0152be/)): Check for duplicate nodeids when loading nodes.conf (#2852): 0 of 4 test(s) reached the change, coverage 0%, 4 skipped (required capability 'save-behavior-support' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'cluster-config-save-behavior "sync"' Bad directive or wrong number of arguments)
-- [valkey-io/valkey#2872](https://github.com/valkey-io/valkey/pull/2872) ([tests](tests/valkey/2872-51f871ae5/)): Strictly check CRLF when parsing querybuf (#2872): 0 of 5 test(s) reached the change, coverage 0%
-- [valkey-io/valkey#2925](https://github.com/valkey-io/valkey/pull/2925) ([tests](tests/valkey/2925-5940dbfb0/)): Revert "Allow partial sync after loading AOF with preamble (#2366)" (#2925): 2 of 9 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2915](https://github.com/valkey-io/valkey/pull/2915) ([tests](tests/valkey/2915-2a9a1731e/)): Fix CLUSTER SLOTS crash when called from module timer callback (#2915): declined: no proposed test validated
-- [valkey-io/valkey#2652](https://github.com/valkey-io/valkey/pull/2652) ([tests](tests/valkey/2652-48e0cbbb4/)): Fix commandlog large-reply when using reply copy avoidance (#2652): 3 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2866](https://github.com/valkey-io/valkey/pull/2866) ([tests](tests/valkey/2866-29d324493/)): Make the COB soft limit also use repl-backlog-size when its value is smaller (#2866): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2876](https://github.com/valkey-io/valkey/pull/2876) ([tests](tests/valkey/2876-04d0bba39/)): support whole cluster info for INFO command in cluster section (#2876): 2 of 4 test(s) reached the change, coverage 75%
-- [valkey-io/valkey#2898](https://github.com/valkey-io/valkey/pull/2898) ([tests](tests/valkey/2898-3d65a4aec/)): Fix deadlock in IO thread shutdown during panic (#2898): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2807](https://github.com/valkey-io/valkey/pull/2807) ([tests](tests/valkey/2807-70196ee20/)): Add safe iterator tracking in hashtable to prevents invalid access on hashtable delete (#2807): 0 of 11 test(s) reached the change, coverage 41%, 3 skipped (required capability 'build' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'forkless-infrastructure-enabled "yes"' Bad directive or wrong number of arguments; default deployment config)
-- [valkey-io/valkey#2840](https://github.com/valkey-io/valkey/pull/2840) ([tests](tests/valkey/2840-8ec938197/)): Send duplicate multi meet packet only for node which supports it (#2840): 0 of 3 test(s) reached the change, coverage 80%
+- [valkey-io/valkey#3613](https://github.com/valkey-io/valkey/pull/3613) ([tests](tests/valkey/3613-1d7224f38/)): Fix UAF in unblockClientOnKey when reprocessed command frees the client (CVE-2026-23479) (#3613): 0 of 2 test(s) reached the change, coverage 25%
+- [valkey-io/valkey#2809](https://github.com/valkey-io/valkey/pull/2809) ([tests](tests/valkey/2809-c8341d416/)): Replace strcmp with byte-by-byte comparison in valkey-check-aof (#2809): declined: The change rewrites `strncmp(buf, "\r\n", 2) != 0` in consumeNewline of valkey-check-aof.c as `buf[0] != '\r' || buf[1] != '\n'`. The two predicates are equivalent for all byte values: strncmp against the non-NUL literal "\r\n" with n=2 returns non-zero exactly when byte 0 differs from '\r
+- [valkey-io/valkey#2857](https://github.com/valkey-io/valkey/pull/2857) ([tests](tests/valkey/2857-1b5f245ea/)): Refactor of LFU/LRU code for modularity (#2857): 2 of 9 test(s) reached the change, coverage 100%, 2 skipped (required capability 'build' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'forkless-infrastructure-enabled "yes"' Bad directive or wrong number of arguments; default deployment config); crash, introduced and since fixed (recorded); crash, fixed by #2857 (recorded)
+- [valkey-io/valkey#2885](https://github.com/valkey-io/valkey/pull/2885) ([tests](tests/valkey/2885-853d111f4/)): Build: Support `make test` when PROG_SUFFIX is used (#2885): declined: The change is build/CI-only: it passes PROG_SUFFIX from `make test` into the Tcl test harness (src/Makefile and tests/support/set_executable_path.tcl) so the harness finds suffixed binary names. No Valkey server, client-tool, or protocol code changes; there is no runtime behaviour for a sc
+- [valkey-io/valkey#2816](https://github.com/valkey-io/valkey/pull/2816) ([tests](tests/valkey/2816-3fd094227/)): Refactor TCL reference to support running tests with CMake (#2816): declined: The change is purely build and test infrastructure: it refactors CMake files (symlink creation, a 'hint' custom target in src/CMakeLists.txt) and the TCL test harness (tests/support/set_executable_path.tcl and sourcing it from test scripts) so the existing TCL suites can run against CMake-
+- [valkey-io/valkey#2887](https://github.com/valkey-io/valkey/pull/2887) ([tests](tests/valkey/2887-825d19fb0/)): Make all ACL categories explicit in JSON files (#2887): 0 of 4 test(s) reached the change
+- [valkey-io/valkey#2886](https://github.com/valkey-io/valkey/pull/2886) ([tests](tests/valkey/2886-4a0e20bbc/)): Handle failed psync log when there is no replication backlog (#2886): 1 of 4 test(s) reached the change, coverage 66%; [check, introduced by #2886](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/104); crash, fixed by #2886 (recorded)
+- [valkey-io/valkey#2877](https://github.com/valkey-io/valkey/pull/2877) ([tests](tests/valkey/2877-a087cc113/)): Add psync offset range information to the failed psync log (#2877): 0 of 1 test(s) reached the change; crash, introduced and since fixed (recorded)
+- [valkey-io/valkey#2881](https://github.com/valkey-io/valkey/pull/2881) ([tests](tests/valkey/2881-761fba2e9/)): Fix persisting missing make variables (#2881): declined: The change touches only src/Makefile's persist-settings target, adding PROG_SUFFIX and USE_FAST_FLOAT to the .make-settings file so that changing those build flags triggers a rebuild. It is a build-system fix with no runtime behaviour change: no command, reply, persistence, replication, or
+- [valkey-io/valkey#2874](https://github.com/valkey-io/valkey/pull/2874) ([tests](tests/valkey/2874-d16788e52/)): Fix discarded-qualifiers warnings reported by fedorarawhide (#2874): declined: The change only adds const qualifiers to local pointer declarations (char * -> const char *) in cli_common.c, module.c, networking.c and resp_parser.c to silence -Wdiscarded-qualifiers warnings from fedorarawhide builds. No expression, control flow, or data layout changes; the compiled beh
+- [valkey-io/valkey#2781](https://github.com/valkey-io/valkey/pull/2781) ([tests](tests/valkey/2781-faac14ab9/)): Cluster: Optimize slot bitmap iteration from per-bit to 64-bit word scan (#2781): 0 of 4 test(s) reached the change, coverage 80%, 2 skipped (required capability 'save-behavior-support' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'cluster-config-save-behavior "sync"' Bad directive or wrong number of arguments)
+- [valkey-io/valkey#2851](https://github.com/valkey-io/valkey/pull/2851) ([tests](tests/valkey/2851-56ab3c4a8/)): Adds HGETDEL Support to Valkey (#2851): 1 of 4 test(s) reached the change, coverage 93%
+- [valkey-io/valkey#2875](https://github.com/valkey-io/valkey/pull/2875) ([tests](tests/valkey/2875-9562bdc0a/)): Align the complexity description for all multi field HFE commands docs (#2875): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#2815](https://github.com/valkey-io/valkey/pull/2815) ([tests](tests/valkey/2815-da3c43d76/)): Additional log information for cluster accept handler and message processing (#2815): 0 of 5 test(s) reached the change, coverage 75%, 2 skipped (required capability 'save-behavior-support' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'cluster-config-save-behavior "sync"' Bad directive or wrong number of arguments)
+- [valkey-io/valkey#2873](https://github.com/valkey-io/valkey/pull/2873) ([tests](tests/valkey/2873-e5de417f1/)): Fix build on 32-bit ARM by only using NEON on AArch64 (#2873): declined: The change is a one-line build fix: it tightens the HAVE_ARM_NEON preprocessor guard in src/config.h to require __aarch64__, so NEON SIMD intrinsics are only compiled on 64-bit ARM, fixing a compile failure on 32-bit ARM. It alters which code is compiled, not what any compiled build does: 
+- [valkey-io/valkey#2849](https://github.com/valkey-io/valkey/pull/2849) ([tests](tests/valkey/2849-dd2827a14/)): Add support for asynchronous release to replicaKeysWithExpire on writable replica (#2849): 1 of 4 test(s) reached the change, coverage 94%
+- [valkey-io/valkey#2824](https://github.com/valkey-io/valkey/pull/2824) ([tests](tests/valkey/2824-8ea7f1330/)): Update dual channel replication conf to mention the local buffer is imited by COB (#2824): declined: The change only rewords a log message in bufferReplData to include the configured byte limit, updates the test's log-matching pattern accordingly, and adds a documentation comment to valkey.conf. No executable behaviour changes: the dual-channel buffering cutoff logic, its condition, and i
+- [valkey-io/valkey#2833](https://github.com/valkey-io/valkey/pull/2833) ([tests](tests/valkey/2833-8189fe5c4/)): Add rdb_transmitted to replstateToString so that we can see it in INFO (#2833): 4 of 5 test(s) reached the change, coverage 0%; [check, predates #2833](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/105)
+- [valkey-io/valkey#2836](https://github.com/valkey-io/valkey/pull/2836) ([tests](tests/valkey/2836-05540af40/)): Add script function flags in the module API (#2836): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#2600](https://github.com/valkey-io/valkey/pull/2600) ([tests](tests/valkey/2600-3c3a1966e/)): Perform data cleanup during RDB load on successful version/signature validation (#2600): 3 of 14 test(s) reached the change, coverage 61%
 
 ### valkey-io/valkey-bloom
 
@@ -73,15 +73,17 @@ Updated 2026-11-08T10:12+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 569 of 830 tested (69%)
-- Changed-line coverage: median 100% of 408 merge(s) measured, 30 under 50%
-- Recall: 159 parents flagged of 234 fix merges
-- Claude: $1800.18 in the last 24 hours, $5983.68 in the last 7 days, $5983.68 in all
-- Issues filed: 54
+- Merges whose tests reached the change: 577 of 843 tested (68%)
+- Changed-line coverage: median 100% of 417 merge(s) measured, 32 under 50%
+- Recall: 159 parents flagged of 235 fix merges
+- Claude: $1885.44 in the last 24 hours, $6068.93 in the last 7 days, $6068.93 in all
+- Issues filed: 56
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/102
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/103
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/104
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/105
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -156,5 +158,4 @@ Updated 2026-11-08T10:12+00:00.
 - [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63): attempt 0 of 3, the job left no result
 - [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57): attempt 0 of 3, the job left no result
 - [valkey-io/valkey#3800](https://github.com/valkey-io/valkey/pull/3800): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
-- [valkey-io/valkey#3613](https://github.com/valkey-io/valkey/pull/3613): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
 - [valkey-io/valkey#3498](https://github.com/valkey-io/valkey/pull/3498): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict

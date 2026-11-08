@@ -1,0 +1,65 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8189fe5c42573f96229bea7d427b650a4354be31",
+  "parent": "05540af405b05382e700a594ae229ac34056a7bc",
+  "pr": 2833,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add rdb_transmitted to replstateToString so that we can see it in INFO (#2833)",
+  "date": "2025-11-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/server.c:5645"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 21.7689,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "protocol-error: command 4 (raw \"SYNC\\r\\n\" on connection repl) got a reply the client cannot parse: Protocol error, got \"\\n\" as reply type byte",
+      "scenario": "ai-9dabc1eb7756",
+      "seed": 11,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #2833",
+      "fingerprint": "8381ffdadb7db74fa471",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/105"
+    },
+    {
+      "rule": "check",
+      "detail": "protocol-error: command 4 (raw \"SYNC\\r\\n\" on connection repl) got a reply the client cannot parse: Protocol error, got \"\\n\" as reply type byte",
+      "scenario": "ai-945f2aa4678b",
+      "seed": 12,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #2833",
+      "fingerprint": "8381ffdadb7db74fa471",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/105"
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-307a250039ee",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+extends: [valkey.liveness]
+id: proposed.blocked-reprocess-pressure
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Repeatedly block clients on list/zset/stream keys and unblock them with writes,
+    including inside MULTI/EXEC, while a command-table workload and client/key eviction
+    run concurrently. Drives unblockClientOnKey's command reprocess path where the
+    client can be freed during processing (CVE-2026-23479); judged by liveness (crash
+    / sanitizer report).
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    command_rate: {type: number, default: 4000}
+    keys: {type: integer, default: 64}
+components:
+- use: valkey.workload.command-table
+  id: table
+  config:
+    rate: {$ref: inputs.command_rate}
+    keys: {$ref: inputs.keys}
+- use: valkey.action.commands
+  id: churn
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    judge_replies: false
+    commands:
+    - {command: [XGROUP, CREATE, s1, g1, "$", MKSTREAM]}
+    - {command: [XGROUP, CREATE, s2, g1, "$", MKSTREAM]}
+    - {connection: b1, raw: "BLPOP l1 5\r\n"}
+    - {connection: b2, raw: "BLMPOP 5 1 l2 LEFT\r\n"}
+    - {connection: b3, raw: "BZPOPMIN z1 5\r\n"}
+    - {connection: b4, raw: "BLPOP l3 5\r\n"}
+    - {connection: b5, raw: "XREADGROUP GROUP g1 c1 BLOCK 5000 COUNT 1 STREAMS s1\
+        \ >\r\n"}
+    - {command: [MULTI]}
+    - {command: [RPUSH, l1, v1]}
+    - {command: [RPUSH, l2, v2]}
+    - {command: [ZADD, z1, 1, m1]}
+    - {command: [RPUSH, l3, v3]}
+    - {command: [XADD, s1, "*", f, v]}
+    - {command: [EXEC]}
+    - {connection: b1, read: true}
+    - {connection: b2, read: true}
+    - {connection: b3, read: true}
+    - {connection: b4, read: true}
+    - {connection: b5, read: true}
+    - {connection: b1, raw: "BLPOP l4 5\r\n"}
+    - {connection: b2, raw: "BZPOPMIN z2 5\r\n"}
+    - {connection: b3, raw: "BLMPOP 5 2 l5 l6 LEFT COUNT 2\r\n"}
+    - {connection: b6, raw: "XREADGROUP GROUP g1 c1 BLOCK 5000 COUNT 1 STREAMS s2\
+        \ >\r\n"}
+    - {command: [RPUSH, l4, v4]}
+    - {command: [ZADD, z2, 2, m2]}
+    - {command: [RPUSH, l5, v5]}
+    - {command: [XADD, s2, "*", f, v]}
+    - {connection: b1, read: true}
+    - {connection: b2, read: true}
+    - {connection: b3, read: true}
+    - {connection: b6, read: true}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}
+- {evidence_id: valkey.workload.command-table, source: table}

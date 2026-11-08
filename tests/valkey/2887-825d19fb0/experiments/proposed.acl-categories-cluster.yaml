@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.acl-categories-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    In cluster mode, checks the CLUSTER subcommand table, whose parent-side categories
+    were derived entirely from flags (acl_categories was 0 in the old table): an admin-only
+    user can run the admin subcommands but not the slow-only ones, a slow-only user
+    can run both the slow-only ones and those that kept SLOW alongside ADMIN|DANGEROUS,
+    compared against the parent.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: clusteracl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, INFO], wait_s: 30, compare: skip, expect: {contains: "cluster_state:ok"}}
+    - {command: [ACL, SETUSER, cadmin, on, '>pw', '~*', '+@admin'], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, cslow, on, '>pw', '~*', '+@slow'], expect: {equals: OK}}
+    - {command: [AUTH, cadmin, pw], connection: ca, expect: {equals: OK}}
+    - {command: [CLUSTER, BUMPEPOCH], connection: ca, compare: skip, expect: {error: false}}
+    - {command: [CLUSTER, SAVECONFIG], connection: ca, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], connection: ca, expect: {error: "NOPERM"}}
+    - {command: [CLUSTER, KEYSLOT, foo], connection: ca, expect: {error: "NOPERM"}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 0], connection: ca, expect: {error: "NOPERM"}}
+    - {command: [AUTH, cslow, pw], connection: cs, expect: {equals: OK}}
+    - {command: [CLUSTER, KEYSLOT, foo], connection: cs, expect: {equals: 12182}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 0], connection: cs, expect: {equals: 0}}
+    - {command: [CLUSTER, SHARDS], connection: cs, compare: skip, expect: {error: false}}
+    - {command: [CLUSTER, DELSLOTS, 0], connection: cs, expect: {equals: OK}}
+    - {command: [CLUSTER, ADDSLOTS, 0], connection: cs, expect: {equals: OK}}
+    - {command: [ACL, CAT, admin], compare: unordered}
+    - {command: [ACL, CAT, dangerous], compare: unordered}
+    - {command: [ACL, CAT, slow], compare: unordered}
+    - {command: [COMMAND, LIST, FILTERBY, ACLCAT, dangerous], compare: unordered}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [clusteracl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: clusteracl}

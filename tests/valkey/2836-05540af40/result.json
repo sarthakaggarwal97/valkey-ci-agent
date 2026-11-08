@@ -1,0 +1,64 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "05540af405b05382e700a594ae229ac34056a7bc",
+  "parent": "ed8856bdfce07426b36a75b84cf9ee798024336f",
+  "pr": 2836,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add script function flags in the module API (#2836)",
+  "date": "2025-11-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.6283,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-797e7bb8dd74",
+      "build": "unstable",
+      "seed": 20261108,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-797e7bb8dd74",
+      "build": "unstable",
+      "seed": 20261109,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-797e7bb8dd74",
+      "build": "unstable",
+      "seed": 20261110,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b7fdef479f42",
+      "build": "unstable",
+      "seed": 20261109,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b7fdef479f42",
+      "build": "unstable",
+      "seed": 20261110,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b7fdef479f42",
+      "build": "unstable",
+      "seed": 20261111,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

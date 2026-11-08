@@ -1,0 +1,49 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "56ab3c4a813564e50a00cb2fd80e1beaea4af506",
+  "parent": "9562bdc0ab185554d013e9406674aea1918dbc30",
+  "pr": 2851,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Adds HGETDEL Support to Valkey (#2851)",
+  "date": "2025-11-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 4,
+  "recall": true,
+  "coverage": {
+    "lines": 30,
+    "executed": 28,
+    "percent": 93,
+    "uncovered": [
+      "src/t_hash.c:1067",
+      "src/t_hash.c:1068"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 4.4809,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-99a7c8e65755",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-5692db28617b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-58f68c7712ad",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    }
+  ]
+}

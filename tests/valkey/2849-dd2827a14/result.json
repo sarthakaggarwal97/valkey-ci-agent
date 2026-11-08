@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dd2827a14ea183389e693255c244e1a7cad2acbb",
+  "parent": "8ea7f1330cbc80fe016fc5110ec91efe2369ecee",
+  "pr": 2849,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add support for asynchronous release to replicaKeysWithExpire on writable replica (#2849)",
+  "date": "2025-11-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 1,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 19,
+    "executed": 18,
+    "percent": 94,
+    "uncovered": [
+      "src/expire.c:652"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 4.9052,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.lrulfu-module-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_SetLRU/GetLRU/SetLFU/GetLFU roundtrips via misc.so; the refactor
+    passes milliseconds*1000 to lru_import, which expects seconds, inflating VM_SetLRU
+    idle time a million-fold
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: modlru
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {maxmemory-policy: allkeys-lru}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [test.getlru, k], expect: {max: 2000}}
+    - {command: [test.setlru, k, 5000], expect: {equals: 1}}
+    - {command: [test.getlru, k], expect: {min: 4000, max: 20000}}
+    - {command: [test.setlru, k, 120000], expect: {equals: 1}}
+    - {command: [test.getlru, k], expect: {min: 110000, max: 130000}}
+    - {command: [test.setlru, k, -5], expect: {equals: 0}}
+    - {command: [test.setlfu, k, 10], expect: {equals: 0}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-lfu], expect: {equals: OK}}
+    - {command: [SET, kf, v], expect: {equals: OK}}
+    - {command: [test.setlfu, kf, 100], expect: {equals: 1}}
+    - {command: [test.getlfu, kf], expect: {equals: 100}}
+    - {command: [test.setlfu, kf, 255], expect: {equals: 1}}
+    - {command: [test.getlfu, kf], expect: {equals: 255}}
+    - {command: [test.setlfu, kf, -1], expect: {equals: 0}}
+    - {command: [test.setlru, kf, 1000], expect: {equals: 0}}
+    - {command: [test.getlru, kf], expect: {equals: -1}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modlru.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modlru}

@@ -1,0 +1,95 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "825d19fb09ad637499d8cd8d851abd58d4929191",
+  "parent": "4a0e20bbc91da1e776c619df741e0e9377193602",
+  "pr": 2887,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make all ACL categories explicit in JSON files (#2887)",
+  "date": "2025-12-02",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.3956,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-eeabc7cb6839",
+      "build": "unstable",
+      "seed": 1101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-eeabc7cb6839",
+      "build": "unstable",
+      "seed": 1102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-eeabc7cb6839",
+      "build": "unstable",
+      "seed": 1103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-349d055999b4",
+      "build": "unstable",
+      "seed": 1102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-349d055999b4",
+      "build": "unstable",
+      "seed": 1103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-349d055999b4",
+      "build": "unstable",
+      "seed": 1104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8a48a67760b0",
+      "build": "unstable",
+      "seed": 1103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8a48a67760b0",
+      "build": "unstable",
+      "seed": 1104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8a48a67760b0",
+      "build": "unstable",
+      "seed": 1105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-533b9b389a3f",
+      "build": "unstable",
+      "seed": 1104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-533b9b389a3f",
+      "build": "unstable",
+      "seed": 1105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-533b9b389a3f",
+      "build": "unstable",
+      "seed": 1106,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

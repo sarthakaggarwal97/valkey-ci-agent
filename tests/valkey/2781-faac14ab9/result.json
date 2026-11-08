@@ -1,0 +1,46 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "faac14ab9c8430057490f64ca979492057bb4d40",
+  "parent": "56ab3c4a813564e50a00cb2fd80e1beaea4af506",
+  "pr": 2781,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Cluster: Optimize slot bitmap iteration from per-bit to 64-bit word scan (#2781)",
+  "date": "2025-11-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 26,
+    "executed": 21,
+    "percent": 80,
+    "uncovered": [
+      "src/cluster_legacy.c:5129",
+      "src/cluster_legacy.c:5133",
+      "src/cluster_legacy.c:5142",
+      "src/cluster_legacy.c:5146",
+      "src/cluster_legacy.c:5147"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 1.5779,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-e2169be8000d",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'save-behavior-support' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'cluster-config-save-behavior \"sync\"' Bad directive or wrong number of arguments"
+    },
+    {
+      "scenario": "ai-7914c5d08198",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'save-behavior-support' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'cluster-config-save-behavior \"sync\"' Bad directive or wrong number of arguments"
+    }
+  ]
+}

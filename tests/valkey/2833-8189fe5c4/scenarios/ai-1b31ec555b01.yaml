@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 05540af405b0..8189fe5c4257.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1b31ec555b01
+seed: 1
+experiment:
+  id: proposed.info-replstate-rdb-transmitted-dualchannel
+  inputs:
+    load_delay_us: 1200
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

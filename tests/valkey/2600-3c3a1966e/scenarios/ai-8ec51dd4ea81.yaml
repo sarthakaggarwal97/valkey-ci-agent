@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 57892663bed8..3c3a1966ec8f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8ec51dd4ea81
+seed: 1001
+experiment:
+  id: proposed.module-rdbload-incompatible-preserves
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

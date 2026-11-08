@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "761fba2e9de2b1cf4f9081220565f78f1922b7c9",
+  "parent": "d16788e52dfe1c80627975bb503d5e9ba6ae58ae",
+  "pr": 2881,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix persisting missing make variables (#2881)",
+  "date": "2025-11-28",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2178,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change touches only src/Makefile's persist-settings target, adding PROG_SUFFIX and USE_FAST_FLOAT to the .make-settings file so that changing those build flags triggers a rebuild. It is a build-system fix with no runtime behaviour change: no command, reply, persistence, replication, or cluster path is affected, so no fuzzer scenario can reach it."
+}

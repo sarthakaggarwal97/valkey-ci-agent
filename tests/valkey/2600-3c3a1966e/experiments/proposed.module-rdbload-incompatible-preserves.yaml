@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.module-rdbload-incompatible-preserves
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_RdbLoad of an incompatible RDB preserves existing data on the change
+    but flushes it first on the parent
+inputs:
+  required: [module, module_parent]
+  properties:
+    module: {type: environment_reference, reference_kinds: [artifacts], description: "{$ref:\
+        \ artifacts.module.path}"}
+    module_parent: {type: environment_reference, reference_kinds: [artifacts], description: "{$ref:\
+        \ artifacts.module_parent.path}"}
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rdbload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    files:
+      bad.rdb: !!binary 'Tk9UQVJFRElT'
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [test.rdbsave, good.rdb], expect: {equals: OK}}
+    - {command: [test.rdbload, bad.rdb], expect: {error: true}}
+    - {command: [GET, k1], expect_difference: true, expect: {equals: v1}}
+    - {command: [GET, k2], expect_difference: true, expect: {equals: v2}}
+    - {command: [test.rdbload, good.rdb], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 2}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [rdbload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rdbload}

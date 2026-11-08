@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ed8856bdfce0..05540af405b0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b7fdef479f42
+seed: 20261109
+experiment:
+  id: proposed.scripting-engine-script-flags
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

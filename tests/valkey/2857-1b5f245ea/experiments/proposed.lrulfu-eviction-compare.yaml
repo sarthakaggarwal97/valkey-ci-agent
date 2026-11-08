@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.lrulfu-eviction-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Drive real eviction under allkeys-lru/allkeys-lfu through the rewritten
+    evictionPoolPopulate/objectGetIdleness path, which now mutates o->lru while sampling
+inputs:
+  properties:
+    policy: {type: string, enum: [allkeys-lru, allkeys-lfu], default: allkeys-lru}
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: evict
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      maxmemory-policy: {$ref: inputs.policy}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [DEBUG, POPULATE, 50000], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 50000}}
+    - {command: [GET, "key:1"], expect: {equals: "value:1"}}
+    - {command: [GET, "key:100"], expect: {equals: "value:100"}}
+    - {command: [GET, "key:100"], expect: {equals: "value:100"}}
+    - {command: [GET, "key:49999"], expect: {equals: "value:49999"}}
+    - {command: [CONFIG, SET, maxmemory, 4mb], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.3], expect: {equals: OK}}
+    - {command: [SET, "trigger:1", v], compare: skip}
+    - {command: [DEBUG, SLEEP, 0.3], expect: {equals: OK}}
+    - {command: [DBSIZE], compare: skip, expect: {min: 1, max: 49999}}
+    - {command: [CONFIG, SET, maxmemory, 2mb], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.3], expect: {equals: OK}}
+    - {command: [SET, "trigger:2", v], compare: skip}
+    - {command: [DEBUG, SLEEP, 0.3], expect: {equals: OK}}
+    - {command: [DBSIZE], compare: skip, expect: {min: 1, max: 49998}}
+    - {command: [GET, "key:25000"], compare: skip}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 20000], expect: {equals: OK}}
+    - {command: [DBSIZE], compare: skip, expect: {min: 20000}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [evict.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evict}

@@ -1,0 +1,88 @@
+extends: [valkey.liveness]
+id: proposed.acl-categories-explicit
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Diffs ACL category membership and enforcement between the build that makes every
+    ACL category explicit in the command JSON files and the parent that derived write/read/admin/dangerous/pubsub/fast/slow/blocking
+    implicitly from command flags. ACL CAT per category is a full membership diff;
+    ACL DRYRUN and per-user connections assert each implicit derivation rule still
+    holds, including the READONLY-but-scripting exclusion from @read.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aclcat
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [ACL, CAT], compare: unordered}
+    - {command: [ACL, CAT, read], compare: unordered}
+    - {command: [ACL, CAT, write], compare: unordered}
+    - {command: [ACL, CAT, fast], compare: unordered}
+    - {command: [ACL, CAT, slow], compare: unordered}
+    - {command: [ACL, CAT, admin], compare: unordered}
+    - {command: [ACL, CAT, dangerous], compare: unordered}
+    - {command: [ACL, CAT, pubsub], compare: unordered}
+    - {command: [ACL, CAT, blocking], compare: unordered}
+    - {command: [ACL, CAT, connection], compare: unordered}
+    - {command: [ACL, CAT, keyspace], compare: unordered}
+    - {command: [ACL, CAT, scripting], compare: unordered}
+    - {command: [ACL, CAT, transaction], compare: unordered}
+    - {command: [ACL, CAT, string], compare: unordered}
+    - {command: [ACL, CAT, list], compare: unordered}
+    - {command: [ACL, CAT, set], compare: unordered}
+    - {command: [ACL, CAT, sortedset], compare: unordered}
+    - {command: [ACL, CAT, hash], compare: unordered}
+    - {command: [ACL, CAT, bitmap], compare: unordered}
+    - {command: [ACL, CAT, hyperloglog], compare: unordered}
+    - {command: [ACL, CAT, geo], compare: unordered}
+    - {command: [ACL, CAT, stream], compare: unordered}
+    - {command: [COMMAND, COUNT], expect: {min: 100}}
+    - {command: [COMMAND, LIST, FILTERBY, ACLCAT, admin], compare: unordered}
+    - {command: [COMMAND, LIST, FILTERBY, ACLCAT, fast], compare: unordered}
+    - {command: [COMMAND, LIST, FILTERBY, ACLCAT, slow], compare: unordered}
+    - {command: [COMMAND, INFO, get, set, del, eval, eval_ro, fcall_ro, subscribe,
+        publish, blpop, wait, flushall]}
+    - {command: [COMMAND, INFO, object|encoding, cluster|addslots, client|kill, pubsub|channels,
+        function|dump, script|load, acl|whoami, slowlog|get, config|get, memory|usage,
+        latency|history, xinfo|stream]}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [RPUSH, l, a, b], expect: {equals: 2}}
+    - {command: [ACL, SETUSER, reader, on, '>pw', '~*', '+@read'], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, fastu, on, '>pw', '~*', '+@fast'], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, slowu, on, '>pw', '~*', '+@slow'], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, adminu, on, '>pw', '~*', '+@admin'], expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, reader, GET, k], expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, reader, SET, k, v], expect: {contains: "no permissions"}}
+    - {command: [ACL, DRYRUN, reader, EVAL_RO, "return 1", "0"], expect: {contains: "no\
+          \ permissions"}}
+    - {command: [ACL, DRYRUN, fastu, GET, k], expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, fastu, LRANGE, l, 0, -1], expect: {contains: "no permissions"}}
+    - {command: [ACL, DRYRUN, slowu, LRANGE, l, 0, -1], expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, slowu, GET, k], expect: {contains: "no permissions"}}
+    - {command: [ACL, DRYRUN, slowu, CLUSTER, BUMPEPOCH], expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, adminu, CONFIG, GET, maxmemory], expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, adminu, GET, k], expect: {contains: "no permissions"}}
+    - {command: [ACL, DRYRUN, adminu, CLUSTER, INFO], expect: {contains: "no permissions"}}
+    - {command: [AUTH, reader, pw], connection: rd, expect: {equals: OK}}
+    - {command: [GET, k], connection: rd, expect: {equals: v}}
+    - {command: [SET, k, w], connection: rd, expect: {error: "NOPERM"}}
+    - {command: [EVAL_RO, "return 1", "0"], connection: rd, expect: {error: "NOPERM"}}
+    - {command: [AUTH, adminu, pw], connection: ad, expect: {equals: OK}}
+    - {command: [CONFIG, GET, maxmemory], connection: ad, expect: {error: false}}
+    - {command: [GET, k], connection: ad, expect: {error: "NOPERM"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aclcat.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aclcat}

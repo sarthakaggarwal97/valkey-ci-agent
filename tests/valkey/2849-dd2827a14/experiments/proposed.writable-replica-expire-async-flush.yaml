@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.writable-replica-expire-async-flush
+deployment:
+  modes: [standalone]
+metadata:
+  description: FLUSHALL ASYNC on a writable replica frees the replicaKeysWithExpire
+    dict on the lazyfree thread; the tracking dict must rebuild and drain correctly
+    afterwards
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flush
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {node: 1, command: [CONFIG, SET, replica-read-only, "no"], expect: {equals: OK}}
+    - {node: 1, command: [REPLICAOF, <node.0.host>, <node.0.port>], expect: {equals: OK}}
+    - {node: 1, command: [INFO, replication], wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {node: 1, command: [EVAL, "for i=1,200 do redis.call('SET','wk:'..i,'v','EX',500)\
+          \ end return tonumber(redis.call('INFO','stats'):match('slave_expires_tracked_keys:(%d+)'))\
+          \ or 0", 0], expect: {equals: 200}}
+    - {node: 1, command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {node: 1, command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {node: 1, command: [EVAL, "local m=redis.call('INFO','memory'):match('lazyfreed_objects:(%d+)')\
+          \ if m and tonumber(m)>=350 then return 1 end return 0", 0], wait_s: 15,
+      expect: {equals: 1}, expect_difference: true}
+    - {node: 1, command: [EVAL, "return tonumber(redis.call('INFO','stats'):match('slave_expires_tracked_keys:(%d+)'))\
+          \ or 0", 0], expect: {equals: 0}}
+    - {node: 1, command: [EVAL, "for i=1,100 do redis.call('SET','xk:'..i,'v','EX',1)\
+          \ end return tonumber(redis.call('INFO','stats'):match('slave_expires_tracked_keys:(%d+)'))\
+          \ or 0", 0], expect: {equals: 100}}
+    - {node: 1, command: [EVAL, "return tonumber(redis.call('INFO','stats'):match('slave_expires_tracked_keys:(%d+)'))\
+          \ or 0", 0], wait_s: 30, expect: {equals: 0}}
+    - {node: 1, command: [EVAL, "for i=1,10 do redis.call('SET','sk:'..i,'v','EX',500)\
+          \ end return tonumber(redis.call('INFO','stats'):match('slave_expires_tracked_keys:(%d+)'))\
+          \ or 0", 0], expect: {equals: 10}}
+    - {node: 1, command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {node: 1, command: [EVAL, "return tonumber(redis.call('INFO','stats'):match('slave_expires_tracked_keys:(%d+)'))\
+          \ or 0", 0], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [flush.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flush}
