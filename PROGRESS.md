@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-08T21:10+00:00.
+Updated 2026-11-08T21:37+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 997 | 1510 | #2658 (2025-09-28) | 240 | 142.4 |
+| valkey-io/valkey | 997 | 1510 | #2658 (2025-09-28) | 212 | 142.4 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
 | valkey-io/valkey-search | 655 | 14 | f8106e72e984 (2024-11-27) | 174 | 93.6 |
@@ -48,35 +48,29 @@ Updated 2026-11-08T21:10+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-08T20:29:42+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42508756598): 20 merge(s) tested, 0 without a code change.
+[2026-11-08T21:37:16+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42520396419): 14 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search#172](https://github.com/valkey-io/valkey-search/pull/172) ([tests](tests/valkey-search/172-0730baaeb/)): Refactored protobuf generation code (cmake) (#172): declined: The change is purely a CMake build refactor: it replaces the generic protobuf_generate() custom-command machinery with configure-time execute_process calls to protoc (plus a timestamp-based skip and extra status messages) in protobuf_generate.cmake and the CMakeLists.txt files that call it
-- [valkey-io/valkey-search#144](https://github.com/valkey-io/valkey-search/pull/144) ([tests](tests/valkey-search/144-cd26f4d1d/)): Fix GetRedisLocalPort function to support TLS (#144): declined: no proposed test validated
-- [valkey-io/valkey-search#168](https://github.com/valkey-io/valkey-search/pull/168) ([tests](tests/valkey-search/168-8f17a7c72/)): Alpine Linux related fixes (#168): declined: The change only edits submodules/CMakeLists.txt: it detects Alpine Linux at configure time and patches a type in grpc's vendored re2 header (mutable int32_t -> mutable int) so the module compiles under musl. It is a build/CI fix with no change to any command, reply, index, replication, or 
-- [valkey-io/valkey-search#166](https://github.com/valkey-io/valkey-search/pull/166) ([tests](tests/valkey-search/166-a835a4639/)): Fixed drop index bug (#166): 2 of 4 test(s) reached the change
-- [valkey-io/valkey-search#162](https://github.com/valkey-io/valkey-search/pull/162) ([tests](tests/valkey-search/162-73f2d5302/)): Enable integration tests + ASan (#162): declined: The change modifies only CI and test infrastructure: a new GitHub Actions workflow that runs integration tests under ASan, build.sh plumbing to forward an --asan flag, an LSan suppression file (ci/asan.supp), and a refactor of testing/integration/run.sh (ASan build dir suffix, env-var prin
-- [valkey-io/valkey-search#161](https://github.com/valkey-io/valkey-search/pull/161) ([tests](tests/valkey-search/161-4d1dd2539/)): CI updates (#161): declined: The change is purely to CI and build infrastructure: .devcontainer/Dockerfile (adds wget), .gitignore, build.sh (test-output clearing and script exit code), ci/build_ubuntu.sh and submodules/package-submodules.sh (ASan-suffixed dependency .deb packaging and downloading debs from GitHub rel
-- [valkey-io/valkey-search#159](https://github.com/valkey-io/valkey-search/pull/159) ([tests](tests/valkey-search/159-1a4e2db86/)): Use a managed pointer for thread safe context in coordinator (#159): declined: no proposed test validated
-- [valkey-io/valkey-search#158](https://github.com/valkey-io/valkey-search/pull/158) ([tests](tests/valkey-search/158-80e3d9a41/)): Use differnt ubuntu mirror (#158): declined: The change modifies only .devcontainer/Dockerfile, switching the Ubuntu apt mirror used when building the development container image. No module source, command behaviour, data path, or runtime configuration changes; the built valkey-search module is identical on both sides, so no scenario
-- [valkey-io/valkey-search#148](https://github.com/valkey-io/valkey-search/pull/148) ([tests](tests/valkey-search/148-e06cf7a93/)): Small integ tests fixes (#148): declined: The change touches only testing/integration/run.sh, the script that builds dependencies and launches valkey-search's own integration tests in CI: it stops deleting build directories between runs, switches the valkey-server build from make to cmake/ninja with updated binary paths, adds colo
-- [valkey-io/valkey-search#154](https://github.com/valkey-io/valkey-search/pull/154) ([tests](tests/valkey-search/154-54b62de78/)): fix compilation failure for release option (#154): declined: The change only replaces a bare static_assert(false) with a dependent-false static_assert inside the never-instantiated else branch of the templated ConfigBuilder Builder() function in vmsdk/src/module_config.h. This is a build fix: the assert exists solely to fail compilation if an unsupp
-- [valkey-io/valkey-search#152](https://github.com/valkey-io/valkey-search/pull/152) ([tests](tests/valkey-search/152-45222a225/)): More resilient builds on different distros (#152): declined: The change modifies only submodules/CMakeLists.txt, adding a helper that locates dependency CMake config files under lib/ or lib64/ when setting CMAKE_PREFIX_PATH, so builds succeed on RedHat-based distros where configs land in lib64/. It is purely a build-configuration change: no C++ sour
-- [valkey-io/valkey-search#149](https://github.com/valkey-io/valkey-search/pull/149) ([tests](tests/valkey-search/149-ef08ab65e/)): Module-Config: fix a possibility of of a double free (#149): declined: The fix changes ConfigBuilder (vmsdk/src/module_config.h) to hold its ConfigBase in a shared_ptr from construction instead of wrapping a raw pointer in a new shared_ptr inside Build(). The double free it prevents requires Build() to be called twice on one builder (two independent shared_pt
-- [valkey-io/valkey-search#146](https://github.com/valkey-io/valkey-search/pull/146) ([tests](tests/valkey-search/146-ca578e70b/)): Dropped the deprecated `--threads` flag (#146): declined: The change removes the deprecated, hidden `--threads` module startup flag and its guard over later reader-threads/writer-threads updates. That behavior is only observable when `--threads` is passed as a module load-time argument: the flag was REDISMODULE_CONFIG_HIDDEN, so on both builds it
-- [valkey-io/valkey-search#129](https://github.com/valkey-io/valkey-search/pull/129) ([tests](tests/valkey-search/129-2af78ef31/)): Allow changing the reader/writer threads count at runtime (#129): 5 of 5 test(s) reached the change; crash, predates #129, since fixed (recorded); crash, predates #129, since fixed (recorded)
-- [valkey-io/valkey-search#143](https://github.com/valkey-io/valkey-search/pull/143) ([tests](tests/valkey-search/143-37b90f2eb/)): Use background context rather than IO context during Aux save. (#143): 0 of 2 test(s) reached the change; crash, predates #143, since fixed (recorded)
-- [valkey-io/valkey-search#85](https://github.com/valkey-io/valkey-search/pull/85) ([tests](tests/valkey-search/85-eec38de7f/)): allow building with external libs (#85): declined: The change is purely a build and CI change: it adds a WITH_SUBMODULES_SYSTEM CMake option, a ci/build_ubuntu.sh script, prebuilt dependency .deb packages, and rewrites cmake modules to locate gRPC/protobuf/abseil/GTest/highwayhash via find_package instead of hardcoded submodule paths, rena
-- [valkey-io/valkey-search#82](https://github.com/valkey-io/valkey-search/pull/82) ([tests](tests/valkey-search/82-ffa9e8c13/)): Create placeholder release notes and development versions (#82): 2 of 2 test(s) reached the change; crash, predates #82, since fixed (recorded)
-- [valkey-io/valkey-search#84](https://github.com/valkey-io/valkey-search/pull/84) ([tests](tests/valkey-search/84-6de50580c/)): Update printed binary file path (#84): declined: The change only fixes the directory name printed by build.sh after a successful build (.build_${BUILD_CONFIG} -> .build-${BUILD_CONFIG} in two printf messages). It is a build-script cosmetic/documentation fix: no module source, command behaviour, reply, persistence, or replication path is 
-- [valkey-io/valkey-search#75](https://github.com/valkey-io/valkey-search/pull/75) ([tests](tests/valkey-search/75-e0765255a/)): Fixed build warning - wrong inculde path (cmake) (#75): declined: The change is a one-line CMake fix in vmsdk/testing/CMakeLists.txt that corrects the include path (a source-list variable mistakenly used as a directory) for the concurrency_test unit-test executable. It is a build/CI-only change affecting how a test binary compiles; no module runtime code
-- [valkey-io/valkey-search#80](https://github.com/valkey-io/valkey-search/pull/80): bazel cleanup (#80): error: building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): to retry, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77): to retry, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#76](https://github.com/valkey-io/valkey-search/pull/76): to retry, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#73](https://github.com/valkey-io/valkey-search/pull/73): to retry, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#60](https://github.com/valkey-io/valkey-search/pull/60): to retry, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#72](https://github.com/valkey-io/valkey-search/pull/72): to retry, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#71](https://github.com/valkey-io/valkey-search/pull/71): to retry, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): Root directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Checking if configure is required...[32;1mno[0m Checking for cma
+- [valkey-io/valkey-search#49](https://github.com/valkey-io/valkey-search/pull/49): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/.build-release/.deps/install/lib/libgrpc.a(syste
+- [valkey-io/valkey-search@1d8e30e25ae6](https://github.com/valkey-io/valkey-search/commit/1d8e30e25ae640522f809f839ed2a81fb191e5c1): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
+- [valkey-io/valkey-search#65](https://github.com/valkey-io/valkey-search/pull/65): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
+- [valkey-io/valkey-search#64](https://github.com/valkey-io/valkey-search/pull/64): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
+- [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
+- [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
 
 ## Totals
 
 - Merges whose tests reached the change: 610 of 887 tested (69%)
 - Changed-line coverage: median 100% of 454 merge(s) measured, 36 under 50%
 - Recall: 167 parents flagged of 247 fix merges
-- Claude: $1400.08 in the last 24 hours, $6431.22 in the last 7 days, $6431.22 in all
+- Claude: $1299.57 in the last 24 hours, $6431.22 in the last 7 days, $6431.22 in all
 - Issues filed: 56
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
@@ -137,18 +131,18 @@ Updated 2026-11-08T21:10+00:00.
 
 ## Retries
 
-- [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#76](https://github.com/valkey-io/valkey-search/pull/76): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#73](https://github.com/valkey-io/valkey-search/pull/73): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#60](https://github.com/valkey-io/valkey-search/pull/60): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#72](https://github.com/valkey-io/valkey-search/pull/72): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#71](https://github.com/valkey-io/valkey-search/pull/71): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#49](https://github.com/valkey-io/valkey-search/pull/49): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search@1d8e30e25ae6](https://github.com/valkey-io/valkey-search/commit/1d8e30e25ae640522f809f839ed2a81fb191e5c1): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#65](https://github.com/valkey-io/valkey-search/pull/65): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#64](https://github.com/valkey-io/valkey-search/pull/64): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
-- [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
+- [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): attempt 1 of 3, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77): attempt 1 of 3, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#76](https://github.com/valkey-io/valkey-search/pull/76): attempt 1 of 3, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#73](https://github.com/valkey-io/valkey-search/pull/73): attempt 1 of 3, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#60](https://github.com/valkey-io/valkey-search/pull/60): attempt 1 of 3, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#72](https://github.com/valkey-io/valkey-search/pull/72): attempt 1 of 3, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#71](https://github.com/valkey-io/valkey-search/pull/71): attempt 1 of 3, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): Root directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Checking if configure is required...[32;1mno[0m Checking for cma
+- [valkey-io/valkey-search#49](https://github.com/valkey-io/valkey-search/pull/49): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/.build-release/.deps/install/lib/libgrpc.a(syste
+- [valkey-io/valkey-search@1d8e30e25ae6](https://github.com/valkey-io/valkey-search/commit/1d8e30e25ae640522f809f839ed2a81fb191e5c1): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
+- [valkey-io/valkey-search#65](https://github.com/valkey-io/valkey-search/pull/65): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
+- [valkey-io/valkey-search#64](https://github.com/valkey-io/valkey-search/pull/64): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
+- [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
+- [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
 - [valkey-io/valkey#3800](https://github.com/valkey-io/valkey/pull/3800): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
