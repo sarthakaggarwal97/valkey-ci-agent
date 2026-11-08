@@ -1,0 +1,54 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2da21d9def303fe77c42a1dfafa83e6d0722b1f4",
+  "parent": "7fbd4cb2603bca713dea566eda4c9f6666edd7b4",
+  "pr": 2366,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Allow partial sync after loading AOF with preamble (#2366)",
+  "date": "2025-11-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 4,
+  "recall": true,
+  "coverage": {
+    "lines": 31,
+    "executed": 30,
+    "percent": 96,
+    "uncovered": [
+      "src/server.c:6992"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 8.6191,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-f166e339bcca",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-77b5a51a3bd7",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-0a54929008b9",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-a91dca7af600",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

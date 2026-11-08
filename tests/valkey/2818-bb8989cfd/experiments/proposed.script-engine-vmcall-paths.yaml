@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.script-engine-vmcall-paths
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: A module scripting engine (HELLO) runs scripts that issue server commands
+    through VM_Call, exercising the script-execution context branches
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The HELLO engine module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: eng
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [EVAL, "#!hello\nFUNCTION f\nCONSTS k\nCONSTI 43\nCONSTI 2\nCALL SET\n\
+          RETURN", 0], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: "43"}}
+    - {command: [EVAL, "#!hello\nFUNCTION f\nCONSTS k\nCONSTI 1\nCALL INCR\nRETURN",
+        0], expect: {equals: 44}}
+    - {command: [GET, k], expect: {equals: "44"}}
+    - {command: [EVAL, "#!hello flags=no-writes\nFUNCTION f\nCONSTS k\nCONSTI 9\n\
+          CONSTI 2\nCALL SET\nRETURN", 0], expect: {error: "Write commands are not\
+          \ allowed from read-only scripts"}}
+    - {command: [GET, k], expect: {equals: "44"}}
+    - {command: [EVAL, "#!hello\nFUNCTION f\nCONSTS CAT\nCONSTI 1\nCALL ACL\nRETURN",
+        0], expect: {error: "is not allowed on script mode"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [eng.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: eng}

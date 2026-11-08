@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.geoadd-shared-zadd
+deployment:
+  modes: [standalone]
+metadata:
+  description: GEOADD rewrite to shared ZADD object survives repeated success, coordinate-error
+    frees, MULTI/EXEC and wrong-type paths
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: geoadd
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [GEOADD, geo, "13.361389", "38.115556", Palermo], expect: {equals: 1}}
+    - {command: [GEOADD, geo, "15.087269", "37.502669", Catania, "2.349014", "48.864716",
+        Paris], expect: {equals: 2}}
+    - {command: [ZSCORE, geo, Palermo], expect: {exists: true}}
+    - {command: [GEOPOS, geo, Palermo, Catania, missing], expect: {exists: true}}
+    - {command: [GEODIST, geo, Palermo, Catania, km], expect: {exists: true}}
+    - {command: [GEOADD, geo, XX, CH, "13.361389", "38.115556", Palermo], expect: {
+        equals: 0}}
+    - {command: [GEOADD, geo, NX, "13.0", "38.0", Palermo], expect: {equals: 0}}
+    - {command: [ZSCORE, geo, Palermo], expect: {exists: true}}
+    - {command: [GEOADD, geo, "181", "38", bad], expect: {error: "invalid longitude"}}
+    - {command: [GEOADD, geo, "10", "10", a, "20", "20", b, "999", "999", bad], expect: {
+        error: "invalid longitude"}}
+    - {command: [ZCARD, geo], expect: {equals: 3}}
+    - {command: [GEOADD, geo, "-181", "0", bad], expect: {error: "invalid longitude"}}
+    - {command: [GEOADD, geo, "0", "91", bad], expect: {error: "invalid longitude"}}
+    - {command: [GEOADD, geo, "0", "-91", bad], expect: {error: "invalid longitude"}}
+    - {command: [GEOADD, geo, notanumber, "0", bad], expect: {error: true}}
+    - {command: [GEOADD, geo, "0", "0", zero], expect: {equals: 1}}
+    - {command: [ZCARD, geo], expect: {equals: 4}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GEOADD, geo, "1", "1", m1], expect: {equals: QUEUED}}
+    - {command: [GEOADD, geo, "181", "1", bad], expect: {equals: QUEUED}}
+    - {command: [GEOADD, geo, "2", "2", m2], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: true}}
+    - {command: [ZCARD, geo], expect: {equals: 6}}
+    - {command: [GEOADD, geo, "5", "5", ""], expect: {equals: 1}}
+    - {command: [GEOADD, geo, "6", "6", dup, "7", "7", dup], expect: {equals: 1}}
+    - {command: [ZCARD, geo], expect: {equals: 8}}
+    - {command: [SET, str, v], expect: {equals: OK}}
+    - {command: [GEOADD, str, "1", "1", a], expect: {error: "WRONGTYPE"}}
+    - {command: [GEOADD, zadd, "1", "1", x], expect: {equals: 1}}
+    - {command: [GEOADD, geo, CH, "13.361389", "38.115556", Palermo, "8", "8", newguy],
+      expect: {equals: 1}}
+    - {command: [ZCARD, geo], expect: {equals: 9}}
+    - {command: [GEOADD, geo, "1", "1"], expect: {error: true}}
+    - {command: [GEOADD, geo, NX, XX, "1", "1", q], expect: {error: "syntax error"}}
+    - {command: [GEOADD, geo, CH, CH, CH, "9", "9", chch], expect: {equals: 1}}
+    - {command: [ZRANGE, geo, 0, -1], expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [geoadd.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: geoadd}

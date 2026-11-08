@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a99c63632109d17bb06f1153f195658ae3ba2e2c",
+  "parent": "4d78d36bff27c6345be7127cc50776b2fb34a745",
+  "pr": 2794,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Improve header comment and strengthen type checking for entry (#2794)",
+  "date": "2025-11-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3802,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure type-safety refactor of src/entry.c/entry.h and callers in t_hash.c: a rewritten header comment, `typedef void entry` replaced by an opaque `struct _entry` typedef, explicit casts, an `entryGetField()` accessor that returns the same pointer as before ((sds)entry), and a cast-only wrapper for the vset expiry callback. All functional expressions compute identical values on both builds (the new int offset in entryDefrag holds an intra-allocation offset of at most a few dozen bytes, so no truncation), so no runtime behaviour, reply, encoding, persistence or replication path di"
+}

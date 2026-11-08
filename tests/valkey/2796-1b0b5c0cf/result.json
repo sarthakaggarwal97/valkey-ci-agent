@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1b0b5c0cfd7fb31d7c957cbe533d95ad693499c0",
+  "parent": "3c378862c3a1f4b3693cec1f86d873b562b46a56",
+  "pr": 2796,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "New module API to perform prefix\u2011aware ACL permission check (#2796)",
+  "date": "2025-11-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 29,
+    "executed": 25,
+    "percent": 86,
+    "uncovered": [
+      "src/module.c:14181",
+      "src/module.c:14182",
+      "src/module.c:14186",
+      "src/module.c:14187"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 3.9846,
+  "findings": [],
+  "recorded": []
+}

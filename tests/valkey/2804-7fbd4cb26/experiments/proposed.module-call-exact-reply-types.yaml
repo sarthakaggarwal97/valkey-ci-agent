@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.module-call-exact-reply-types
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_Call 'X' flag yields SIMPLE_STRING and ARRAY_NULL reply types, observed
+    through the helloscripting engine's CALL instruction
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: xflag
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [LPUSH, s, a], expect: {equals: 1}}
+    - command: [EVAL, "#!hello\nFUNCTION f1\nCONSTS s\nCONSTI 0\nCONSTI 2\nCALL BLPOP\n\
+          RETURN", "0"]
+      expect: {equals: OK}
+    - command: [EVAL, "#!hello\nFUNCTION f2\nCONSTS s\nCONSTI 0\nCONSTI 2\nCALL BLPOP\n\
+          RETURN", "0"]
+      expect_difference: true
+      expect: {equals: "(null array)"}
+    - command: [EVAL, "#!hello\nFUNCTION f3\nCONSTS missing\nCONSTI 1\nCALL GET\n\
+          RETURN", "0"]
+      expect_difference: true
+      expect: {equals: "(null string)"}
+    - command: [EVAL, "#!hello\nFUNCTION f4\nCONSTS nolist\nCONSTI 1\nCALL LPOP\n\
+          RETURN", "0"]
+      expect_difference: true
+      expect: {equals: "(null string)"}
+    - command: [EVAL, "#!hello\nFUNCTION f5\nCONSTS k\nCONSTS v1\nCONSTI 2\nCALL SET\n\
+          RETURN", "0"]
+      expect: {equals: OK}
+    - command: [EVAL, "#!hello\nFUNCTION f6\nCONSTS k\nCONSTI 1\nCALL GET\nRETURN",
+        "0"]
+      expect: {equals: v1}
+    - command: [EVAL, "#!hello\nFUNCTION f7\nCONSTI 0\nCALL PING\nRETURN", "0"]
+      expect: {equals: PONG}
+    - command: [EVAL, "#!hello\nFUNCTION f8\nCONSTS k\nCONSTI 1\nCALL EXISTS\nRETURN",
+        "0"]
+      expect: {equals: 1}
+    - command: [EVAL, "#!hello\nFUNCTION f9\nCONSTS k\nCONSTI 1\nCALL INCR\nRETURN",
+        "0"]
+      expect: {error: "not an integer"}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [xflag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: xflag}

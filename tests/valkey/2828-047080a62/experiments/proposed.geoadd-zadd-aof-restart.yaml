@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.geoadd-zadd-aof-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: GEOADD rewritten to the shared ZADD vector is serialized to the AOF
+    and reloads identically after a restart
+components:
+- use: valkey.action.commands
+  id: geoadd-aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes", appendfsync: always}
+    timeout_s: 60
+    commands:
+    - {command: [GEOADD, geo, "13.361389", "38.115556", Palermo, "15.087269", "37.502669",
+        Catania], expect: {equals: 2}}
+    - {command: [GEOADD, geo, "181", "0", bad], expect: {error: "invalid longitude"}}
+    - {command: [GEOADD, geo, "2.349014", "48.864716", Paris, "2.349014", "48.864716",
+        Paris], expect: {equals: 1}}
+    - {command: [ZSCORE, geo, Paris], expect: {exists: true}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ZCARD, geo], expect: {equals: 3}}
+    - {command: [ZSCORE, geo, Palermo], expect: {exists: true}}
+    - {command: [GEOADD, geo, XX, CH, "13.361389", "38.115556", Palermo], expect: {
+        equals: 0}}
+    - {command: [GEOADD, geo, "5", "5", after], expect: {equals: 1}}
+    - {command: [ZCARD, geo], expect: {equals: 4}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [geoadd-aof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: geoadd-aof}

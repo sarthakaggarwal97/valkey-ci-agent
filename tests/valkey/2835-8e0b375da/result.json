@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8e0b375da4f9096c5eafa49a9ad6b8c49322fb48",
+  "parent": "01a7657b83a8a08a1c87a8677a4d72c6b35ffc08",
+  "pr": 2835,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix cluster slot stats for scripts with cross-slot keys (#2835)",
+  "date": "2025-11-13",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 12.9711,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (CLUSTER SLOT-STATS SLOTSRANGE 5061 5061) replies otherwise with resp 3: {\"reply\":[[5061,{\"cpu-usec\":55,\"key-count\":2,\"network-bytes-in\":249,\"network-bytes-out\":31}]]}, not {\"reply\":[[5061,[\"key-count\",2,\"cpu-usec\",60,\"network-bytes-in\",249,\"network-bytes-out\",31]]]}",
+      "scenario": "ai-2d9c6b0cfd12",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2835",
+      "fingerprint": "c4bfa614cd0790babd28",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 3 (CLUSTER SLOT-STATS SLOTSRANGE 5061 5061) replies otherwise with resp 2: {\"reply\":[[5061,[\"key-count\",2,\"cpu-usec\",49,\"network-bytes-in\",120,\"network-bytes-out\",18]]]}, not {\"reply\":[[5061,{\"cpu-usec\":36,\"key-count\":2,\"network-bytes-in\":120,\"network-bytes-out\":18}]]}",
+      "scenario": "ai-3b3613c2581f",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2835",
+      "fingerprint": "2f310a1b913be1f962ee",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

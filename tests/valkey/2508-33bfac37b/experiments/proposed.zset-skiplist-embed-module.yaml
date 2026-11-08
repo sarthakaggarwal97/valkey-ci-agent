@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.zset-skiplist-embed-module
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module zset range/scan API (VM_ZsetRange*) over a skiplist-encoded
+    zset, driven by tests/modules/zset.so built at both commits
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: module
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config: {zset-max-listpack-entries: 2, zset-max-listpack-value: 64}
+    commands:
+    - {command: [zset.add, k, 0, ele0], expect: {equals: OK}}
+    - {command: [zset.add, k, 0, ele1], expect: {equals: OK}}
+    - {command: [zset.add, k, 0, ele2], expect: {equals: OK}}
+    - {command: [zset.add, k, 0, ele3], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, k], expect: {equals: skiplist}}
+    - {command: [zset.incrby, k, ele0, 0]}
+    - {command: [zset.rangebylex, k, "-", "+"], expect_difference: true, expect: {
+        equals: [ele0, ele1, ele2, ele3]}}
+    - {command: [zset.revrangebylex, k, "-", "+"], expect_difference: true, expect: {
+        equals: [ele3, ele2, ele1, ele0]}}
+    - {command: [zset.rangebylex, k, "(ele0", "(ele3"], expect_difference: true, expect: {
+        equals: [ele1, ele2]}}
+    - {command: [zset.members, k], compare: unordered, expect_difference: true, expect: {
+        contains: ele0}}
+    - {command: [zset.rem, k, ele3]}
+    - {command: [ZRANGE, k, 0, -1], expect: {equals: [ele0, ele1, ele2]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: module}

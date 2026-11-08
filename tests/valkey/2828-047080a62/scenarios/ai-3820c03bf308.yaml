@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b7a3fc988a8e..047080a62259.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3820c03bf308
+seed: 20284
+experiment:
+  id: proposed.geoadd-zadd-aof-restart
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

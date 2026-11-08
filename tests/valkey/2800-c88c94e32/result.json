@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c88c94e32625ab8b7eef0df9df8e3128821055d6",
+  "parent": "a49d469f483b2d8f0624790a0a40ec876b6bfa95",
+  "pr": 2800,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reuse dbHasNoKeys() inside dbsHaveNoKeys() to remove duplicate logic (#2800)",
+  "date": "2025-11-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2471,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change replaces the inlined emptiness check in dbsHaveNoKeys() with a call to the existing dbHasNoKeys() helper. Within the loop bounds [0, server.dbnum) the helper's added range checks are always false, so it evaluates to exactly the same condition the old code tested (!server.db[i] || kvstoreSize(server.db[i]->keys) == 0). The function's return value is unchanged for all inputs; this is a pure refactor removing duplicate logic, with no observable behaviour to test."
+}

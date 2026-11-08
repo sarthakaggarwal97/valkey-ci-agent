@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7fbd4cb2603b..2da21d9def30.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-19019b8d541d
+seed: 2366
+experiment:
+  id: proposed.aof-preamble-partial-sync
+deployment:
+  mode: standalone
+  base_port: 7000

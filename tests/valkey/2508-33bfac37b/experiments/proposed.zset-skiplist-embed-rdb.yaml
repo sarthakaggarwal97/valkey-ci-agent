@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.zset-skiplist-embed-rdb
+deployment:
+  modes: [standalone]
+metadata:
+  description: Skiplist-encoded zsets (incl. empty-string and large-score members)
+    saved to RDB and reloaded across a restart, compared across the embed change
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rdb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config: {zset-max-listpack-entries: 2, zset-max-listpack-value: 64}
+    commands:
+    - {command: [ZADD, z, 1.5, a, 2.5, b, 3.5, c, 4.5, d, 5.5, e], expect: {equals: 5}}
+    - {command: [ZADD, lex, 0, a, 0, bb, 0, ccc, 0, dddd, 0, eeee], expect: {equals: 5}}
+    - {command: [ZADD, emptyset, 0, "", 0, x, 0, yy], expect: {equals: 3}}
+    - {command: [ZADD, big, 9007199254740992, m1, 9007199254740993, m2, -9007199254740992,
+        m3], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, z], expect: {equals: skiplist}}
+    - {command: [DEBUG, DIGEST-VALUE, z, lex, emptyset, big]}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, z], expect: {equals: skiplist}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES]}
+    - {command: [ZSCORE, z, c]}
+    - {command: [ZRANGEBYLEX, lex, "-", "+"]}
+    - {command: [ZRANGE, emptyset, 0, -1], expect: {equals: ["", x, yy]}}
+    - {command: [ZRANGE, big, 0, -1, WITHSCORES]}
+    - {command: [DEBUG, DIGEST-VALUE, z, lex, emptyset, big]}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rdb}

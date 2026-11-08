@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "01a7657b83a8a08a1c87a8677a4d72c6b35ffc08",
+  "parent": "b835463a73d01f2d8a041dfc6b754db6952bcbb8",
+  "pr": 2581,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add --warmup and --duration parameters to valkey-benchmark (#2581)",
+  "date": "2025-11-13",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 49,
+    "executed": 49,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.1525,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 01a7657b83a8..8e0b375da4f9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3b3613c2581f
+seed: 2
+experiment:
+  id: proposed.module-engine-cross-slot-slot-stats
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

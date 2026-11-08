@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.zset-skiplist-embed-commands
+deployment:
+  modes: [standalone]
+metadata:
+  description: Skiplist-encoded zset reads, score updates, ranges, lex, set-stores,
+    GEO, SORT, digest and DUMP compared across the embed change
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zset
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config: {zset-max-listpack-entries: 2, zset-max-listpack-value: 64}
+    commands:
+    - {command: [ZADD, conv, 1, a, 2, b], expect: {equals: 2}}
+    - {command: [OBJECT, ENCODING, conv], expect: {equals: listpack}}
+    - {command: [ZADD, conv, 3, c], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, conv], expect: {equals: skiplist}}
+    - {command: [ZADD, z, 1, a, 2, b, 3, c, 4, d, 5, e], expect: {equals: 5}}
+    - {command: [OBJECT, ENCODING, z], expect: {equals: skiplist}}
+    - {command: [ZADD, z, 10, a], expect: {equals: 0}}
+    - {command: [ZSCORE, z, a]}
+    - {command: [ZINCRBY, z, 1.5, b]}
+    - {command: [ZADD, z, XX, GT, CH, 100, c, 1, d], expect: {equals: 1}}
+    - {command: [ZSCORE, z, c]}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES]}
+    - {command: [ZRANGEBYSCORE, z, 3, 100]}
+    - {command: [ZREVRANGE, z, 0, 1]}
+    - {command: [ZRANK, z, e]}
+    - {command: [ZCOUNT, z, 4, 100]}
+    - {command: [ZADD, L, 0, alpha, 0, beta, 0, gamma, 0, delta, 0, epsilon], expect: {
+        equals: 5}}
+    - {command: [ZRANGEBYLEX, L, "-", "+"]}
+    - {command: [ZRANGEBYLEX, L, "(alpha", "(gamma"]}
+    - {command: [ZREVRANGEBYLEX, L, "+", "-"]}
+    - {command: [ZRANGEBYLEX, L, "[beta", "[delta"]}
+    - {command: [ZLEXCOUNT, L, "-", "+"], expect: {equals: 5}}
+    - {command: [ZREMRANGEBYLEX, L, "(alpha", "(gamma"], expect: {equals: 3}}
+    - {command: [ZRANGE, L, 0, -1]}
+    - {command: [ZADD, s1, 1, a, 2, b, 3, c], expect: {equals: 3}}
+    - {command: [ZADD, s2, 10, b, 20, c, 30, d], expect: {equals: 3}}
+    - {command: [ZUNIONSTORE, dst, 2, s1, s2, WEIGHTS, 1, 1], expect: {equals: 4}}
+    - {command: [ZRANGE, dst, 0, -1, WITHSCORES]}
+    - {command: [ZINTERSTORE, di, 2, s1, s2], expect: {equals: 2}}
+    - {command: [ZRANGE, di, 0, -1, WITHSCORES]}
+    - {command: [ZDIFFSTORE, dd, 2, s1, s2], expect: {equals: 1}}
+    - {command: [ZDIFF, 2, s1, s2, WITHSCORES]}
+    - {command: [SORT, dst, ALPHA]}
+    - {command: [GEOADD, g, 13.361389, 38.115556, Palermo, 15.087269, 37.502669, Catania,
+        2.349014, 48.864716, Paris], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, g], expect: {equals: skiplist}}
+    - {command: [GEOSEARCHSTORE, gdst, g, FROMLONLAT, 14, 38, BYRADIUS, 400, km, ASC],
+      expect: {equals: 2}}
+    - {command: [ZCARD, gdst], expect: {equals: 2}}
+    - {command: [GEODIST, g, Palermo, Catania, km]}
+    - {command: [DEBUG, DIGEST-VALUE, z, L, dst, di, dd, g, gdst]}
+    - {command: [DUMP, z]}
+    - {command: [DUMP, dst]}
+    - {command: [ZPOPMIN, z]}
+    - {command: [ZPOPMAX, z]}
+    - {command: [ZCARD, z], expect: {equals: 3}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zset}

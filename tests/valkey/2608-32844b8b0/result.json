@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "32844b8b0a8f598e8d849e2b85f204f0cbd60fb6",
+  "parent": "c88c94e32625ab8b7eef0df9df8e3128821055d6",
+  "pr": 2608,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Configurable DB hash seed for SCAN family commands consistency (#2608)",
+  "date": "2025-11-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 1,
+  "hunted": 3,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 16,
+    "executed": 14,
+    "percent": 87,
+    "uncovered": [
+      "src/config.c:3193",
+      "src/config.c:3194"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 5.0254,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-d8c4feebdf5b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    },
+    {
+      "scenario": "ai-54023383be80",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

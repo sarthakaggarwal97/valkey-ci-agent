@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6cbc1a31d743..4d78d36bff27.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b04a6d8da102
+seed: 1003
+experiment:
+  id: proposed.hsetex-keyword-key-propagation
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

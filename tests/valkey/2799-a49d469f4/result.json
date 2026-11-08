@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a49d469f483b2d8f0624790a0a40ec876b6bfa95",
+  "parent": "a99c63632109d17bb06f1153f195658ae3ba2e2c",
+  "pr": 2799,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reverts hashHashtableTypeValidate signature (#2799)",
+  "date": "2025-11-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3057,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only reverts the C signature of hashHashtableTypeValidate from 'entry *' to 'void *' and adds an equivalent local cast, restoring type compatibility with the hashtableType.validateEntry callback declared in server.c. The function body and all runtime behaviour are identical; it is a type-correctness refactor with no observable behaviour change, so no scenario can distinguish the two builds."
+}

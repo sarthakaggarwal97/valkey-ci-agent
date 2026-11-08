@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.script-engine-vmcall-oom
+deployment:
+  modes: [standalone]
+metadata:
+  description: A HELLO script with allow-oom calls a write command under maxmemory,
+    exercising the OOM-relax branch of VM_Call in script-execution context
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The HELLO engine module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: oom
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, maxmemory, "1"], expect: {equals: OK}}
+    - {command: [EVAL, "#!hello\nFUNCTION f\nCONSTS k\nCONSTI 1\nCONSTI 2\nCALL SET\n\
+          RETURN", 0], expect: {error: "used memory"}}
+    - {command: [EVAL, "#!hello flags=allow-oom\nFUNCTION f\nCONSTS k\nCONSTI 1\n\
+          CONSTI 2\nCALL SET\nRETURN", 0], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, "0"], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: "1"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [oom.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: oom}

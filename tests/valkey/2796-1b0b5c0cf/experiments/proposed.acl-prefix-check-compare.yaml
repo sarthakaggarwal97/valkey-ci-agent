@@ -1,0 +1,101 @@
+extends: [valkey.liveness]
+id: proposed.acl-prefix-check-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: New module API ACLCheckKeyPrefixPermissions grants and denies key-prefix
+    access per ACL pattern shape, while exact-key ACL checks through the reworked
+    ACLUserCheckKeyPerm stay unchanged
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "aclcheck.so built at the change, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "aclcheck.so built at the parent commit, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: prefixcheck
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ACL, SETUSER, testuser, on, ">1234", "%W~write_*", "%R~read_*", "~literal",
+        "%R~mid*fix", "%W~a*b*", "+@all"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, staruser, on, ">1234", "%R~*", "+@all"], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, seluser, on, ">1234", "+@all", "(~sel1_* +@all)"],
+      expect: {equals: OK}}
+    - {command: [AUTH, testuser, "1234"], expect: {equals: OK}}
+    - {command: [acl.check_key_prefix, "write_*", W], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [acl.check_key_prefix, write_1, W], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [acl.check_key_prefix, write_, W], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [acl.check_key_prefix, write, W], expect_difference: true, expect: {
+        equals: EACCESS}}
+    - {command: [acl.check_key_prefix, "wr*", W], expect_difference: true, expect: {
+        equals: EACCESS}}
+    - {command: [acl.check_key_prefix, write_1, R], expect_difference: true, expect: {
+        equals: EACCESS}}
+    - {command: [acl.check_key_prefix, read_1, R], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [acl.check_key_prefix, "read*", R], expect_difference: true, expect: {
+        equals: EACCESS}}
+    - {command: [acl.check_key_prefix, "read_*", R], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [acl.check_key_prefix, "read_[a-z]", R], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [acl.check_key_prefix, "write_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        W], expect_difference: true, expect: {equals: OK}}
+    - {command: [acl.check_key_prefix, literal, R], expect_difference: true, expect: {
+        equals: EACCESS}}
+    - {command: [acl.check_key_prefix, mid, R], expect_difference: true, expect: {
+        equals: EACCESS}}
+    - {command: [acl.check_key_prefix, ab, W], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [acl.check_key_prefix, a, W], expect_difference: true, expect: {equals: EACCESS}}
+    - {command: [acl.check_key_prefix, "", R], expect_difference: true, expect: {
+        equals: EACCESS}}
+    - {command: [acl.check_key_prefix, write_1, X], expect_difference: true, expect: {
+        equals: EINVALID}}
+    - {command: [GET, read_x]}
+    - {command: [GET, write_1], expect: {error: true}}
+    - {command: [GET, midAfix]}
+    - {command: [GET, literal]}
+    - {command: [aclcheck.set.check.key, W, write_k, v], expect: {equals: OK}}
+    - {command: [aclcheck.set.check.key, W, read_k, v], expect: {error: "DENIED KEY"}}
+    - {command: [AUTH, staruser, "1234"], expect: {equals: OK}}
+    - {command: [acl.check_key_prefix, anything, R], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [acl.check_key_prefix, "", R], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [acl.check_key_prefix, anything, W], expect_difference: true, expect: {
+        equals: EACCESS}}
+    - {command: [AUTH, seluser, "1234"], expect: {equals: OK}}
+    - {command: [acl.check_key_prefix, sel1_x, R], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [acl.check_key_prefix, other, R], expect_difference: true, expect: {
+        equals: EACCESS}}
+    - {command: [GET, sel1_a]}
+    - {command: [AUTH, default, x], expect: {equals: OK}}
+    - {command: [acl.check_key_prefix, zzz, W], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [acl.check_key_prefix, "", W], expect_difference: true, expect: {
+        equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [prefixcheck.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: prefixcheck}

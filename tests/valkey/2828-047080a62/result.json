@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "047080a62259efb5ade83a1781c7f647c8807787",
+  "parent": "b7a3fc988a8e92b7b0c326bbbf28e87fe1092e89",
+  "pr": 2828,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "shared zadd for geoadd (#2828)",
+  "date": "2025-11-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.8317,
+  "findings": [],
+  "recorded": []
+}

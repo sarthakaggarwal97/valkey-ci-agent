@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.module-script-execution-flag
+deployment:
+  modes: [standalone]
+metadata:
+  description: A module command invoked from inside a running script, calling VM_Call
+    in script mode, is no longer treated as script execution; the NOSCRIPT gate therefore
+    diverges between the two builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: nested
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [usercall.reset_user], expect: {equals: OK}}
+    - {command: [DEBUG, SET-DISABLE-DENY-SCRIPTS, "1"], expect: {equals: OK}}
+    - {command: [EVAL, "return redis.pcall('usercall.call_with_user_flag','S','ACL','CAT')",
+        "0"], expect_difference: true, expect: {error: "is not allowed on script mode"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: nested}

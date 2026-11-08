@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.acl-log-script-context
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    ACL LOG context is "script" for ACL denials inside a module scripting engine script
+    (EVAL and FCALL through VM_Call), stays "lua" for Lua, and toplevel/multi entries
+    are unchanged.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    acllog_max_len: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: aclctx
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {acllog-max-len: {$ref: inputs.acllog_max_len}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [EVAL, "#!hello\nFUNCTION foo\nARGS 0\nRETURN", 0, 145], expect: {
+        equals: 145}}
+    - {command: [FUNCTION, LOAD, "#!hello name=hellolib\nFUNCTION callset\nCONSTS\
+          \ x\nCONSTI 5\nCONSTI 2\nCALL SET\nRETURN"], expect: {equals: hellolib}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lualib\nserver.register_function('luaset',\
+          \ function(keys, args) return server.call('SET', 'x', '5') end)"], expect: {
+        equals: lualib}}
+    - {command: [FCALL, callset, 0], expect: {equals: OK}}
+    - {command: [FCALL, luaset, 0], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, default, -set], expect: {equals: OK}}
+    - {command: [ACL, LOG, RESET], expect: {equals: OK}}
+    - {command: [SET, x, 5], expect: {error: NOPERM}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, x, 5], expect: {error: NOPERM}}
+    - {command: [EXEC], expect: {error: EXECABORT}}
+    - {command: [EVAL, "#!hello\nFUNCTION callcmd\nCONSTS x\nCONSTI 5\nCONSTI 2\n\
+          CALL SET\nRETURN", 0], expect: {error: NOPERM}}
+    - {command: [FCALL, callset, 0], expect: {error: NOPERM}}
+    - {command: [EVAL, "return server.call('SET', 'x', '5')", 0], expect: {error: "ACL\
+          \ failure in script"}}
+    - {command: [FCALL, luaset, 0], expect: {error: "ACL failure in script"}}
+    - {command: [ACL, LOG], expect_difference: true, expect: {contains: script}}
+    - {command: [ACL, SETUSER, default, +set], expect: {equals: OK}}
+    - {command: [FCALL, callset, 0], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [aclctx.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aclctx}

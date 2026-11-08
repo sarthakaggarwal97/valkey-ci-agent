@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.zset-skiplist-embed-readpaths
+deployment:
+  modes: [standalone]
+metadata:
+  description: Skiplist zset scan/sort/range-delete/diff/random reply paths compared
+    across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [ZADD, z, "1", a, "2", b, "3", c, "4", d, "5", e, "6", f, "7", g,
+        "8", h, "9", i, "10", j], expect: {equals: 10}}
+    - {command: [ZSCAN, z, "0", MATCH, "[a-e]*"], compare: skip, expect: {exists: true}}
+    - {command: [SORT, z, BY, nosort, ALPHA], expect: {equals: [a, b, c, d, e, f,
+          g, h, i, j]}}
+    - {command: [SORT, z, BY, nosort, ALPHA, LIMIT, "3", "4"], expect: {equals: [
+          d, e, f, g]}}
+    - {command: [ZREMRANGEBYSCORE, z, "1", "3"], expect: {equals: 3}}
+    - {command: [ZREMRANGEBYRANK, z, "0", "0"], expect: {equals: 1}}
+    - {command: [ZRANGE, z, "0", "-1"], expect: {equals: [e, f, g, h, i, j]}}
+    - {command: [ZADD, src, "1", x, "2", y, "3", w], expect: {equals: 3}}
+    - {command: [COPY, src, dst], expect: {equals: 1}}
+    - {command: [ZRANGE, dst, "0", "-1", WITHSCORES]}
+    - {command: [ZADD, zbig, "1", m1, "2", m2, "3", m3, "4", m4, "5", m5, "6", m6,
+        "7", m7, "8", m8, "9", m9, "10", m10, "11", m11, "12", m12, "13", m13, "14",
+        m14, "15", m15, "16", m16, "17", m17, "18", m18, "19", m19, "20", m20], expect: {
+        equals: 20}}
+    - {command: [ZADD, zc1, "1", m1], expect: {equals: 1}}
+    - {command: [ZADD, zc2, "1", m2], expect: {equals: 1}}
+    - {command: [ZDIFFSTORE, ddst, "3", zbig, zc1, zc2], expect: {equals: 18}}
+    - {command: [ZCARD, ddst], expect: {equals: 18}}
+    - {command: [ZADD, zr, "1", a, "2", b, "3", c, "4", d, "5", e, "6", f, "7", g,
+        "8", h, "9", i, "10", j], expect: {equals: 10}}
+    - {command: [ZRANDMEMBER, zr, "-4", WITHSCORES], compare: skip, expect: {exists: true}}
+    - {command: [ZRANDMEMBER, zr, "7"], compare: skip, expect: {exists: true}}
+    - {command: [ZRANDMEMBER, zr], compare: skip, expect: {exists: true}}
+    - {command: [ZRANDMEMBER, zr, "7", WITHSCORES], compare: skip, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

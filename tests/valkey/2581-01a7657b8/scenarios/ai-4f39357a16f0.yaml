@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b835463a73d0..01a7657b83a8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4f39357a16f0
+seed: 20261108
+experiment:
+  id: proposed.benchmark-warmup-duration
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

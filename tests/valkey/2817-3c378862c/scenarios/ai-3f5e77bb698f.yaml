@@ -1,0 +1,19 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 047080a62259..3c378862c3a1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3f5e77bb698f
+seed: 28172
+experiment:
+  id: proposed.light-msg-link-churn
+  inputs:
+    signal: SIGTERM
+    first_target: primary
+    second_target: replica
+    command_rate: 8000
+deployment:
+  mode: cluster
+  primaries: 5
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec

@@ -1,0 +1,63 @@
+extends: [valkey.base, valkey.command-table]
+id: proposed.light-msg-link-churn
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Restart cluster nodes while key-value writes and command-table Pub/Sub
+    traffic (PUBLISH, SPUBLISH) flow, so light-header cluster bus broadcasts meet
+    freshly created, not-yet-ready bidirectional links; no node may close a link because
+    a lightweight message arrived first on it, and no acknowledged write may be lost
+    across the restarts.
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+    first_target: {type: string, default: primary}
+    second_target: {type: string, default: replica}
+components:
+- use: valkey.observer.log
+  id: light-msg-log
+  config:
+    instances: all
+    forbidden:
+    - {pattern: "sent a lightweight message of type .* as its first message on the\
+        \ link"}
+- use: valkey.fault.process-signal
+  id: churn-first
+  config:
+    when_event: warm-up.completed
+    instance: {$ref: inputs.first_target}
+    signal: {$ref: inputs.signal}
+    restart: true
+    restart_mode: immediate
+- use: valkey.fault.process-signal
+  id: churn-second
+  config:
+    when_event: between-kills.completed
+    instance: {$ref: inputs.second_target}
+    signal: {$ref: inputs.signal}
+    restart: true
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, commands, light-msg-log, churn-first, churn-second]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: between-kills
+  depends_on: [warm-up]
+  config: {seconds: 4}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [between-kills]
+  config: {seconds: 6}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_s: 2.5
+    loss_window_faults: [churn-first, churn-second]
+required_events: [warm-up.completed, between-kills.completed, churn-first.recovered,
+  churn-second.recovered]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: churn-first}
+- {evidence_id: valkey.fault.injected, source: churn-second}

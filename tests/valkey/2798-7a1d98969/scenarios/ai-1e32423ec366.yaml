@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cf7a628ada23..7a1d989696b0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1e32423ec366
+seed: 1101
+experiment:
+  id: proposed.acl-log-script-context
+  inputs:
+    resp: 2
+    acllog_max_len: 128
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

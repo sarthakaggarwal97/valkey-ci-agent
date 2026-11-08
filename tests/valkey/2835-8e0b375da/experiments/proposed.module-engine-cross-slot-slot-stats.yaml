@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.module-engine-cross-slot-slot-stats
+deployment:
+  modes: [standalone]
+metadata:
+  description: Cross-slot scripts run by a module scripting engine (helloscripting's
+    HELLO) must not attribute the EVAL's slot-stats to the last slot a nested VM_Call
+    touched
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slotstats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: true
+    resp: {$ref: inputs.resp}
+    server_config: {cluster-slot-stats-enabled: "yes"}
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "#!lua flags=allow-cross-slot-keys\nredis.call('SET', KEYS[1],\
+          \ 'v')\nreturn 1", 1, "{bar}lua"], expect: {equals: 1}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 5061, 5061], expect: {contains: key-count}}
+    - {command: [EVAL, "#!hello flags=allow-cross-slot-keys\nFUNCTION f\nCONSTS bar\n\
+          CONSTS v1\nCONSTI 2\nCALL SET\nRETURN", 0], expect: {equals: OK}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 5061, 5061], expect_difference: true,
+      expect: {contains: key-count}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 12182, 12182], expect: {contains: key-count}}
+    - {command: [EVAL, "#!hello flags=allow-cross-slot-keys\nFUNCTION f\nCONSTS bar\n\
+          CONSTS v2\nCONSTI 2\nCALL SET\nRETURN", 1, foo], expect: {equals: OK}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 5061, 5061], expect_difference: true,
+      expect: {contains: key-count}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 12182, 12182], expect: {contains: key-count}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, network-bytes-in, LIMIT, 1, DESC],
+      expect_difference: true, expect: {contains: key-count}}
+    - {command: [EVAL, "#!hello\nFUNCTION f\nCONSTS foo\nCONSTS v3\nCONSTI 2\nCALL\
+          \ SET\nRETURN", 0], expect: {equals: OK}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 12182, 12182], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [slotstats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotstats}

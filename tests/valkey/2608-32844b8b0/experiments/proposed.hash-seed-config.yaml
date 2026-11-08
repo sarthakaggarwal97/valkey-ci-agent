@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.hash-seed-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: hash-seed registers as an immutable startup-only config on the new
+    build and is unknown to the parent; CONFIG GET/SET replies compared across builds
+components:
+- use: valkey.action.commands
+  id: seedcfg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, GET, hash-seed], expect_difference: true, expect: {equals: [
+          hash-seed, ""]}}
+    - {command: [CONFIG, SET, hash-seed, myseed], expect_difference: true, expect: {
+        error: "immutable"}}
+    - {command: [CONFIG, GET, hash-seed], expect_difference: true, expect: {equals: [
+          hash-seed, ""]}}
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [SCAN, 0], compare: skip}
+    - {command: [DBSIZE], expect: {equals: 2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seedcfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seedcfg}

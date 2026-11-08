@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "33bfac37bab7b754604c3fd8a5563aa1398c651d",
+  "parent": "616fccb4c5cdb0d7f2085051dc277e262a65fd38",
+  "pr": 2508,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize zset memory usage by embedding element in skiplist (#2508)",
+  "date": "2025-11-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 9,
+  "proven": 1,
+  "hunted": 8,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 107,
+    "executed": 95,
+    "percent": 88,
+    "uncovered": [
+      "src/aof.c:1925",
+      "src/defrag.c:270",
+      "src/defrag.c:271",
+      "src/defrag.c:285",
+      "src/defrag.c:294",
+      "src/defrag.c:295",
+      "src/defrag.c:296",
+      "src/object.c:670",
+      "src/object.c:671",
+      "src/object.c:672",
+      "src/valkey-check-rdb.c:331",
+      "src/valkey-check-rdb.c:332"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 8.6187,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-a7f164fe02e6",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

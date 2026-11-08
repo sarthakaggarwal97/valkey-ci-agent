@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.zset-skiplist-embed-defrag
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active-defrag relocates embedded skiplist nodes without corruption,
+    compared across builds
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 0}
+    resp: 2
+    timeout_s: 25
+    commands:
+    - {command: [ZADD, zf, "1", e1, "2", e2, "3", e3, "4", e4, "5", e5, "6", e6, "7",
+        e7, "8", e8, "9", e9, "10", e10, "11", e11, "12", e12, "13", e13, "14", e14,
+        "15", e15, "16", e16, "17", e17, "18", e18, "19", e19, "20", e20, "21", e21,
+        "22", e22, "23", e23, "24", e24, "25", e25, "26", e26, "27", e27, "28", e28,
+        "29", e29, "30", e30, "31", e31, "32", e32, "33", e33, "34", e34, "35", e35,
+        "36", e36, "37", e37, "38", e38, "39", e39, "40", e40], expect: {equals: 40}}
+    - {command: [ZREMRANGEBYRANK, zf, "0", "19"], expect: {equals: 20}}
+    - {command: [CONFIG, SET, active-defrag-ignore-bytes, "1"], compare: skip, expect: {
+        exists: true}}
+    - {command: [CONFIG, SET, active-defrag-threshold-lower, "0"], compare: skip,
+      expect: {exists: true}}
+    - {command: [CONFIG, SET, active-defrag-cycle-min, "90"], compare: skip, expect: {
+        exists: true}}
+    - {command: [CONFIG, SET, active-defrag-cycle-max, "99"], compare: skip, expect: {
+        exists: true}}
+    - {command: [CONFIG, SET, activedefrag, "yes"], compare: skip, expect: {exists: true}}
+    - {command: [ZADD, zf, "100", scratch1], expect: {equals: 1}}
+    - {command: [ZREM, zf, scratch1], expect: {equals: 1}}
+    - {command: [ZADD, zf, "100", scratch2], expect: {equals: 1}}
+    - {command: [ZREM, zf, scratch2], expect: {equals: 1}}
+    - {command: [ZADD, zf, "100", scratch3], expect: {equals: 1}}
+    - {command: [ZREM, zf, scratch3], expect: {equals: 1}}
+    - {command: [ZCARD, zf], expect: {equals: 20}}
+    - {command: [ZRANGE, zf, "0", "-1"], expect: {equals: [e21, e22, e23, e24, e25,
+          e26, e27, e28, e29, e30, e31, e32, e33, e34, e35, e36, e37, e38, e39, e40]}}
+    - {command: [ZSCORE, zf, e21], expect: {equals: "21"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

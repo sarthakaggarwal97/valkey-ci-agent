@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4d78d36bff27c6345be7127cc50776b2fb34a745",
+  "parent": "6cbc1a31d7430cfd531b3b872b7378106c313d03",
+  "pr": 2668,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "HSETEX: Support NX/XX Flags (#2668)",
+  "date": "2025-11-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 3,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 30,
+    "executed": 30,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 9.9448,
+  "findings": [],
+  "recorded": []
+}

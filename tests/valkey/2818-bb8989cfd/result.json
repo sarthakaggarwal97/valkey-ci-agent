@@ -1,0 +1,85 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bb8989cfdedd31ff01b76ea277006cb917a661e0",
+  "parent": "65ab07dde7a18e22f9f65e7c3d6dedd3a8727793",
+  "pr": 2818,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Adds new module context flag `VALKEYMODULE_CTX_SCRIPT_EXECUTION` (#2818)",
+  "date": "2025-11-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 2,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 13,
+    "executed": 4,
+    "percent": 30,
+    "uncovered": [
+      "src/module.c:1001",
+      "src/module.c:6513",
+      "src/module.c:6621",
+      "src/module.c:6629",
+      "src/module.c:6630",
+      "src/module.c:6662",
+      "src/module.c:6671",
+      "src/module.c:6680",
+      "src/module.c:6721"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 15.8593,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in VM_Call",
+      "scenario": "ai-2cae44dcbf5b",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2818",
+      "fingerprint": "3176f73ca1f7a1ed0d3c",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in VM_Call",
+      "scenario": "ai-4595e10aa6a1",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2818",
+      "fingerprint": "3176f73ca1f7a1ed0d3c",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-c84c878645b7",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'eng' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (EVAL #!hello FUNCTION f CONSTS k CONSTI 43 CONSTI 2 CALL SET RETURN 0), 1 (GET k), 2 (EVAL #!hello FUNCTION f CONSTS k CONSTI 1 CALL INCR "
+    },
+    {
+      "scenario": "ai-e4de8eccc79c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'eng' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (EVAL #!hello FUNCTION f CONSTS k CONSTI 43 CONSTI 2 CALL SET RETURN 0), 1 (GET k), 2 (EVAL #!hello FUNCTION f CONSTS k CONSTI 1 CALL INCR "
+    },
+    {
+      "scenario": "ai-4168d29c351f",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'oom' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (EVAL #!hello flags=allow-oom FUNCTION f CONSTS k CONSTI 1 CONSTI 2 CALL SET RETURN 0), 4 (GET k)"
+    }
+  ]
+}

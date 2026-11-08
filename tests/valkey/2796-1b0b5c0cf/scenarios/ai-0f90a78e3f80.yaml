@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3c378862c3a1..1b0b5c0cfd7f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0f90a78e3f80
+seed: 2796
+experiment:
+  id: proposed.acl-prefix-check-compare
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

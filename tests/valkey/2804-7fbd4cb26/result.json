@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7fbd4cb2603bca713dea566eda4c9f6666edd7b4",
+  "parent": "bb8989cfdedd31ff01b76ea277006cb917a661e0",
+  "pr": 2804,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Expose SIMPLE_STRING and ARRAY_NULL reply type to the Module API (#2804)",
+  "date": "2025-11-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 17,
+    "executed": 17,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.8489,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.reply-block-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Churn client reply list blocks through every alloc/free path now routed through
+    zfree_with_size: large bulk replies spilling past the 16KB static buffer, deferred
+    multi-bulk lengths inside MULTI/EXEC (trim, glue and realloc paths), and an output-buffer-limit
+    kill that frees a pending multi-block reply list that was never written. Replies
+    must be identical on both builds; a size-class mismatch in je_sdallocx shows up
+    as a crash or corrupted replies on the change build.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SETRANGE, big, 99999, x], expect: {equals: 100000}}
+    - {command: [GET, big], expect: {contains: x}}
+    - {command: [DEBUG, POPULATE, 20000], expect: {equals: OK}}
+    - {command: [KEYS, "key:*"], compare: unordered}
+    - {command: [EVAL, "local t={} for i=1,20000 do t[i]=string.rep('v',100) end return\
+          \ t", 0], expect: {exists: true}}
+    - {command: [EVAL, "return string.rep('x',1000000)", 0], expect: {contains: xxxxxxxx}}
+    - {command: [RPUSH, l2, a, b, c], expect: {equals: 3}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, big], expect: {equals: QUEUED}}
+    - {command: [LRANGE, l2, 0, -1], expect: {equals: QUEUED}}
+    - {command: [GET, big], expect: {equals: QUEUED}}
+    - {command: [EVAL, "return string.rep('y',100000)", 0], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: true}}
+    - {command: [CONFIG, SET, client-output-buffer-limit, "normal 16384 8192 1"],
+      expect: {equals: OK}}
+    - {command: [EVAL, "return string.rep('z',1000000)", 0], connection: victim, expect: {
+        exists: false}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, client-output-buffer-limit, "normal 0 0 0"], expect: {
+        equals: OK}}
+    - {command: [GET, big], expect: {contains: x}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

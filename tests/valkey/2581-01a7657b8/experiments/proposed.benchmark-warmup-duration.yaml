@@ -1,0 +1,80 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-warmup-duration
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark --warmup/--duration termination, stats reset and option
+    parsing, compared against the parent build's benchmark
+components:
+- use: valkey.action.tools
+  id: bench-args
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 30
+    runs:
+    - {tool: valkey-benchmark, args: [--help], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "--warmup"}}}
+    - {tool: valkey-benchmark, args: [-n, 100, --duration, 1], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "mutually exclusive"}}}
+    - {tool: valkey-benchmark, args: [--duration, 1, -n, 100], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "mutually exclusive"}}}
+- use: valkey.action.tools
+  id: bench-run
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 90
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 10, --duration, 1, -t, set],
+      expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: "requests\
+            \ completed in"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 50, --duration, 1, -t, set],
+      expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: "requests\
+            \ completed in"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 10, --threads, 2, --duration,
+        1, -t, set], expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: "requests completed in"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 10, -P, 20, --duration, 1, -t,
+        get], expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: "requests\
+            \ completed in"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 10, --duration, 1, -t, set, --csv],
+      expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: '"SET","'}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 10, --warmup, 1, -n, 200, -t,
+        set], expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: "requests\
+            \ completed in"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 10, --warmup, 1, --duration,
+        1, -t, set], expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: "requests completed in"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 10, --warmup, 1, -n, 200, -t,
+        'set,get'], expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: "====== GET ======"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 10, --threads, 2, --warmup, 1,
+        -n, 200, -t, set], expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: "requests completed in"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 10, --warmup, 0, -n, 200, -t,
+        set], expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: "requests\
+            \ completed in"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 10, --duration, -1, -t, set],
+      expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: "100000\
+            \ requests completed in"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 10, -n, 200, -t, set], compare: skip,
+      expect: {exit: {equals: 0}, stdout: {contains: "200 requests completed in"}}}
+- use: valkey.action.tools
+  id: bench-cluster
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 90
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, -c, 10, --duration, 1,
+        -t, set], expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: "requests\
+            \ completed in"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, -c, 10, --warmup, 1, -n,
+        200, -t, set], expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: "requests completed in"}}}
+required_events: [bench-args.completed, bench-run.completed, bench-cluster.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench-args}
+- {evidence_id: valkey.tool.runs, source: bench-run}
+- {evidence_id: valkey.tool.runs, source: bench-cluster}

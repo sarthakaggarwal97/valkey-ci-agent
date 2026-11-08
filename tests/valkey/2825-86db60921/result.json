@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "86db6092198fa42acf75cad2481bd1881cfd3165",
+  "parent": "b93cfcc33277327f929c441a0cd98f02343b568e",
+  "pr": 2825,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Print node name on a best effort basis if light weight message is received before link stabilization (#2825)",
+  "date": "2025-11-14",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2637,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewrites serverLog message text in cluster_legacy.c, factoring the existing `link->node ? name : \"<unknown>\"` null checks into two inline helpers and adding the human node name to a few debug/notice/warning log lines. No command reply, cluster-bus protocol behaviour, link lifecycle, or data path changes: links are freed and packets processed exactly as before, so there is no observable behaviour for a scenario's oracles or a compared sequence to distinguish."
+}

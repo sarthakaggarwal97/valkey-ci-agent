@@ -1,0 +1,38 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "65ab07dde7a18e22f9f65e7c3d6dedd3a8727793",
+  "parent": "2288657a058ba48d760c6cdd3ffe905135883f32",
+  "pr": 2624,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Leverage zfree_with_size for client reply blocks (#2624)",
+  "date": "2025-11-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 7,
+    "executed": 4,
+    "percent": 57,
+    "uncovered": [
+      "src/networking.c:190",
+      "src/networking.c:191",
+      "src/networking.c:192"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 4.0004,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-a1f03cec5292",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during oracle.evaluate: RunnerError: oracle 'history' returned ERROR: cannot check the history: porcupine is not on PATH: build it from a valkey-fuzzer checkout with `go -C porcupine build -o <a directory on PATH>`"
+    }
+  ]
+}

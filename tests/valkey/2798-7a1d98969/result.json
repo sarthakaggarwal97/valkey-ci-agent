@@ -1,0 +1,151 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7a1d989696b0f7854723d639743ba64747bf447e",
+  "parent": "cf7a628ada230af8ee69408d74080bfd40e1e091",
+  "pr": 2798,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add \"script\" context to  ACL log entries (#2798)",
+  "date": "2025-11-06",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 12,
+    "executed": 11,
+    "percent": 91,
+    "uncovered": [
+      "src/acl.c:2665"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 5.1134,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 15 (ACL LOG) replies otherwise with resp 3: {\"reply\":[{\"age-seconds\":0.0,\"client-info\":\"id=4 addr=[/tmp/vfc-sn24st7b/s.sock:0]:0 laddr=[/tmp/vfc-sn24st7b/s.sock:0]:0 fd=12 name= age=0 idle=0 flags=U capa= db=0 sub=0 psub=0 ssub=0 multi=0 watch=0 qbuf=0 qbuf-free=0 argv-mem=",
+      "scenario": "ai-1e32423ec366",
+      "seed": 1101,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "1174065d42a0e3d6051f",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 15 (ACL LOG) replies otherwise with resp 3: {\"reply\":[{\"age-seconds\":0.0,\"client-info\":\"id=5 addr=[/tmp/vfc-38onzu1o/s.sock:0]:0 laddr=[/tmp/vfc-38onzu1o/s.sock:0]:0 fd=11 name= age=0 idle=0 flags=U capa= db=0 sub=0 psub=0 ssub=0 multi=0 watch=0 qbuf=0 qbuf-free=0 argv-mem=",
+      "scenario": "ai-1e32423ec366",
+      "seed": 1101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "6464cbbd133e2509e562",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 15 (ACL LOG) replies otherwise with resp 2: {\"reply\":[[\"count\",2,\"reason\",\"command\",\"context\",\"lua\",\"object\",\"set\",\"username\",\"default\",\"age-seconds\",\"0\",\"client-info\",\"id=4 addr=[/tmp/vfc-xl9bja9w/s.sock:0]:0 laddr=[/tmp/vfc-xl9bja9w/s.sock:0]:0 fd=12 name= age=0 idle=0 fl",
+      "scenario": "ai-446f6ff94c6b",
+      "seed": 1102,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "057f057ae9be30e2636b",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 15 (ACL LOG) replies otherwise with resp 2: {\"reply\":[[\"count\",2,\"reason\",\"command\",\"context\",\"lua\",\"object\",\"set\",\"username\",\"default\",\"age-seconds\",\"0\",\"client-info\",\"id=5 addr=[/tmp/vfc-66c4jowv/s.sock:0]:0 laddr=[/tmp/vfc-66c4jowv/s.sock:0]:0 fd=11 name= age=0 idle=0 fl",
+      "scenario": "ai-446f6ff94c6b",
+      "seed": 1102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "379622a37c3f483371dc",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 15 (ACL LOG) replies otherwise with resp 3: {\"reply\":[{\"age-seconds\":0.0,\"client-info\":\"id=4 addr=[/tmp/vfc-qjyo0rs6/s.sock:0]:0 laddr=[/tmp/vfc-qjyo0rs6/s.sock:0]:0 fd=12 name= age=0 idle=0 flags=U capa= db=0 sub=0 psub=0 ssub=0 multi=0 watch=0 qbuf=0 qbuf-free=0 argv-mem=",
+      "scenario": "ai-2d35bb1cbf8d",
+      "seed": 1103,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "bf908d9b8969a34c0749",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 15 (ACL LOG) replies otherwise with resp 3: {\"reply\":[{\"age-seconds\":0.0,\"client-info\":\"id=5 addr=[/tmp/vfc-0s98m0tp/s.sock:0]:0 laddr=[/tmp/vfc-0s98m0tp/s.sock:0]:0 fd=11 name= age=0 idle=0 flags=U capa= db=0 sub=0 psub=0 ssub=0 multi=0 watch=0 qbuf=0 qbuf-free=0 argv-mem=",
+      "scenario": "ai-2d35bb1cbf8d",
+      "seed": 1103,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "07e9c3a270748e622545",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-1e32423ec366",
+      "build": "unstable",
+      "seed": 1102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1e32423ec366",
+      "build": "unstable",
+      "seed": 1103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-446f6ff94c6b",
+      "build": "unstable",
+      "seed": 1103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-446f6ff94c6b",
+      "build": "unstable",
+      "seed": 1104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2d35bb1cbf8d",
+      "build": "unstable",
+      "seed": 1104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2d35bb1cbf8d",
+      "build": "unstable",
+      "seed": 1105,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

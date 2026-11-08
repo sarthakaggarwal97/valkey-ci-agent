@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 616fccb4c5cd..33bfac37bab7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-39b6bab16f68
+seed: 1004
+experiment:
+  id: proposed.zset-skiplist-embed-defrag
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

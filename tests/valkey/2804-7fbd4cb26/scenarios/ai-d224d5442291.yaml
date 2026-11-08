@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bb8989cfdedd..7fbd4cb2603b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d224d5442291
+seed: 1101
+experiment:
+  id: proposed.module-call-exact-reply-types
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
