@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-08T10:46+00:00.
+Updated 2026-11-08T10:49+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -48,28 +48,28 @@ Updated 2026-11-08T10:46+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-08T10:08:38+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42469914962): 20 merge(s) tested, 0 without a code change.
+[2026-11-08T10:49:24+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42470157470): 20 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search#88](https://github.com/valkey-io/valkey-search/pull/88): to retry, the job left no result
-- [valkey-io/valkey-search#85](https://github.com/valkey-io/valkey-search/pull/85): to retry, the job left no result
-- [valkey-io/valkey-search#82](https://github.com/valkey-io/valkey-search/pull/82): to retry, the job left no result
-- [valkey-io/valkey-search#84](https://github.com/valkey-io/valkey-search/pull/84): to retry, the job left no result
-- [valkey-io/valkey-search#75](https://github.com/valkey-io/valkey-search/pull/75): to retry, the job left no result
-- [valkey-io/valkey-search#80](https://github.com/valkey-io/valkey-search/pull/80): to retry, the job left no result
-- [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): to retry, the job left no result
-- [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77): to retry, the job left no result
-- [valkey-io/valkey-search#76](https://github.com/valkey-io/valkey-search/pull/76): to retry, the job left no result
-- [valkey-io/valkey-search#73](https://github.com/valkey-io/valkey-search/pull/73): to retry, the job left no result
-- [valkey-io/valkey-search#60](https://github.com/valkey-io/valkey-search/pull/60): to retry, the job left no result
-- [valkey-io/valkey-search#72](https://github.com/valkey-io/valkey-search/pull/72): to retry, the job left no result
-- [valkey-io/valkey-search#71](https://github.com/valkey-io/valkey-search/pull/71): to retry, the job left no result
-- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70): to retry, the job left no result
-- [valkey-io/valkey-search#49](https://github.com/valkey-io/valkey-search/pull/49): to retry, the job left no result
-- [valkey-io/valkey-search@1d8e30e25ae6](https://github.com/valkey-io/valkey-search/commit/1d8e30e25ae640522f809f839ed2a81fb191e5c1): to retry, the job left no result
-- [valkey-io/valkey-search#65](https://github.com/valkey-io/valkey-search/pull/65): to retry, the job left no result
-- [valkey-io/valkey-search#64](https://github.com/valkey-io/valkey-search/pull/64): to retry, the job left no result
-- [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63): to retry, the job left no result
-- [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57): to retry, the job left no result
+- [valkey-io/valkey-search#88](https://github.com/valkey-io/valkey-search/pull/88): to retry, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 56): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search#85](https://github.com/valkey-io/valkey-search/pull/85): to retry, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search#82](https://github.com/valkey-io/valkey-search/pull/82): to retry, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search#84](https://github.com/valkey-io/valkey-search/pull/84): to retry, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search#75](https://github.com/valkey-io/valkey-search/pull/75): to retry, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search#80](https://github.com/valkey-io/valkey-search/pull/80): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#76](https://github.com/valkey-io/valkey-search/pull/76): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#73](https://github.com/valkey-io/valkey-search/pull/73): to retry, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search#60](https://github.com/valkey-io/valkey-search/pull/60): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#72](https://github.com/valkey-io/valkey-search/pull/72): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#71](https://github.com/valkey-io/valkey-search/pull/71): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#49](https://github.com/valkey-io/valkey-search/pull/49): to retry, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search@1d8e30e25ae6](https://github.com/valkey-io/valkey-search/commit/1d8e30e25ae640522f809f839ed2a81fb191e5c1): to retry, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 56): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search#65](https://github.com/valkey-io/valkey-search/pull/65): to retry, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search#64](https://github.com/valkey-io/valkey-search/pull/64): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
 
 ## Totals
 
@@ -137,25 +137,25 @@ Updated 2026-11-08T10:46+00:00.
 
 ## Retries
 
-- [valkey-io/valkey-search#88](https://github.com/valkey-io/valkey-search/pull/88): attempt 1 of 3, the job left no result
-- [valkey-io/valkey-search#85](https://github.com/valkey-io/valkey-search/pull/85): attempt 1 of 3, the job left no result
-- [valkey-io/valkey-search#82](https://github.com/valkey-io/valkey-search/pull/82): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-search#84](https://github.com/valkey-io/valkey-search/pull/84): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-search#75](https://github.com/valkey-io/valkey-search/pull/75): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-search#80](https://github.com/valkey-io/valkey-search/pull/80): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-search#76](https://github.com/valkey-io/valkey-search/pull/76): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-search#73](https://github.com/valkey-io/valkey-search/pull/73): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-search#60](https://github.com/valkey-io/valkey-search/pull/60): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-search#72](https://github.com/valkey-io/valkey-search/pull/72): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-search#71](https://github.com/valkey-io/valkey-search/pull/71): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-search#49](https://github.com/valkey-io/valkey-search/pull/49): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-search@1d8e30e25ae6](https://github.com/valkey-io/valkey-search/commit/1d8e30e25ae640522f809f839ed2a81fb191e5c1): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-search#65](https://github.com/valkey-io/valkey-search/pull/65): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-search#64](https://github.com/valkey-io/valkey-search/pull/64): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63): attempt 0 of 3, the job left no result
-- [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57): attempt 0 of 3, the job left no result
+- [valkey-io/valkey-search#88](https://github.com/valkey-io/valkey-search/pull/88): attempt 2 of 3, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 56): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search#85](https://github.com/valkey-io/valkey-search/pull/85): attempt 2 of 3, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search#82](https://github.com/valkey-io/valkey-search/pull/82): attempt 1 of 3, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search#84](https://github.com/valkey-io/valkey-search/pull/84): attempt 1 of 3, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search#75](https://github.com/valkey-io/valkey-search/pull/75): attempt 1 of 3, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search#80](https://github.com/valkey-io/valkey-search/pull/80): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#76](https://github.com/valkey-io/valkey-search/pull/76): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#73](https://github.com/valkey-io/valkey-search/pull/73): attempt 1 of 3, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search#60](https://github.com/valkey-io/valkey-search/pull/60): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#72](https://github.com/valkey-io/valkey-search/pull/72): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#71](https://github.com/valkey-io/valkey-search/pull/71): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#49](https://github.com/valkey-io/valkey-search/pull/49): attempt 1 of 3, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search@1d8e30e25ae6](https://github.com/valkey-io/valkey-search/commit/1d8e30e25ae640522f809f839ed2a81fb191e5c1): attempt 1 of 3, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 56): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search#65](https://github.com/valkey-io/valkey-search/pull/65): attempt 1 of 3, `sudo apt-get install -y cmake ninja-build` failed in walk-work (exit 22): Preparing to unpack .../librhash1_1.4.6-1.1_amd64v3.deb ... Unpacking librhash1:amd64 (1.4.6-1.1) ... Selecting previously un
+- [valkey-io/valkey-search#64](https://github.com/valkey-io/valkey-search/pull/64): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
+- [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 2): -- Detecting CXX compile features -- Detecting CXX compile features - done -- Performing Test CMAKE_HAVE_LIBC_PTHREAD -- Performing Test CMAKE_HAVE_
 - [valkey-io/valkey#3800](https://github.com/valkey-io/valkey/pull/3800): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
 - [valkey-io/valkey#3498](https://github.com/valkey-io/valkey/pull/3498): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
