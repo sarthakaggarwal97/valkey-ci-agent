@@ -180,6 +180,10 @@ sudo dpkg -i "${deb}"
         # a failed build builds that header's target, coordinator_grpc_proto, and runs once more; a commit
         # without that target fails there and its error stands.
         # Older commits vendor a c-ares that asks for a CMake older than CMake 4 accepts.
+        # Before #70 (cd8de7f) linked systemd, build.sh fails linking its test binaries (the in-tree gRPC
+        # references sd_* nothing resolves), though the module, a shared library, links fine: a build.sh that
+        # still fails falls back to the module's own target. Before #80 (fc55e14) renamed the module to
+        # libsearch.so, that target and its file are valkeysearch: the file is copied to the recipe's name.
         build="""export NINJA_TOOL=ninja
 export CMAKE_POLICY_VERSION_MINIMUM=3.5
 deps=/opt/valkey-search-deps
@@ -191,10 +195,19 @@ if grep -q 'schema_manager\\.' src/commands/commands.cc 2> /dev/null \\
   git diff b0e8a26b5a2b1131062875be9e26153dd315aaaf^ b0e8a26b5a2b1131062875be9e26153dd315aaaf -- src \\
     | git apply --whitespace=nowarn
 fi
+if [ -f cmake/Modules/linux_utils.cmake ] && ! grep -q SYSTEMDLIB cmake/Modules/linux_utils.cmake; then
+  printf 'find_library(SYSTEMDLIB systemd REQUIRED)\\nlist(APPEND THIRD_PARTY_LIBS ${SYSTEMDLIB})\\n' \\
+    >> cmake/Modules/linux_utils.cmake
+fi
 if grep -q -- '--use-system-modules)' build.sh; then args=--use-system-modules; else args=; fi
 if ! ./build.sh ${args}; then
   ninja -C .build-release coordinator_grpc_proto
-  ./build.sh ${args}
+  if ! ./build.sh ${args}; then
+    ninja -C .build-release libsearch || ninja -C .build-release valkeysearch
+  fi
+fi
+if [ ! -f .build-release/libsearch.so ] && [ -f .build-release/valkeysearch.so ]; then
+  cp .build-release/valkeysearch.so .build-release/libsearch.so
 fi""",
         note="For valkey-search, FT.SEARCH returns its results in no fixed order: give it `compare: unordered`. "
              "Indexing is asynchronous: after writing the documents, send FT.INFO with `wait_s` and an `expect` "

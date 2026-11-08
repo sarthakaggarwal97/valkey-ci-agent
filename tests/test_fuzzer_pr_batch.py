@@ -252,6 +252,52 @@ def test_valkey_search_setup_installs_libsystemd_for_older_commits():
     assert "libsystemd-dev" in pr_batch_mod.MODULES["valkey-search"].setup
 
 
+def test_valkey_search_build_links_systemd_before_70(tmp_path):
+    """Before valkey-search #70 (cd8de7f) linked systemd, the in-tree gRPC's sd_* references resolve to nothing:
+    the recipe appends systemd to THIRD_PARTY_LIBS, and only where #70's fix is missing."""
+    src = tmp_path / "src"
+    (src / "cmake" / "Modules").mkdir(parents=True)
+    utils = src / "cmake" / "Modules" / "linux_utils.cmake"
+    utils.write_text("list(APPEND THIRD_PARTY_LIBS ${LIBCARES})\n")
+    (src / "build.sh").write_text("#!/bin/bash\nexit 0\n")
+    (src / "build.sh").chmod(0o755)
+    (src / ".build-release").mkdir()
+    (src / ".build-release" / "libsearch.so").touch()
+    subprocess.run(["bash", "-euo", "pipefail", "-c", pr_batch_mod.MODULES["valkey-search"].build],
+                   cwd=src, check=True, capture_output=True, text=True)
+    assert "find_library(SYSTEMDLIB systemd REQUIRED)" in utils.read_text()
+    assert "list(APPEND THIRD_PARTY_LIBS ${SYSTEMDLIB})" in utils.read_text()
+
+    # A commit since #70: SYSTEMDLIB is already there, so nothing is appended.
+    fixed = "find_library(SYSTEMDLIB systemd REQUIRED)\nlist(APPEND THIRD_PARTY_LIBS ${SYSTEMDLIB})\n"
+    utils.write_text(fixed)
+    subprocess.run(["bash", "-euo", "pipefail", "-c", pr_batch_mod.MODULES["valkey-search"].build],
+                   cwd=src, check=True, capture_output=True, text=True)
+    assert utils.read_text() == fixed
+
+
+def test_valkey_search_build_falls_back_to_the_module_target_and_takes_its_old_name(tmp_path):
+    """Before valkey-search #70, build.sh fails linking its test binaries though the module links fine: a
+    build.sh that still fails after the gRPC-header retry builds the module's own target. Before #80 (fc55e14)
+    renamed it to libsearch, that target and its file are valkeysearch: the file is copied to the recipe's
+    name, where build_module looks."""
+    src, bin_dir = tmp_path / "src", tmp_path / "bin"
+    src.mkdir()
+    bin_dir.mkdir()
+    # A stand-in for the old build.sh: its test binaries never link.
+    (src / "build.sh").write_text("#!/bin/bash\nmkdir -p .build-release\nexit 1\n")
+    (src / "build.sh").chmod(0o755)
+    # A stand-in for ninja: no libsearch target, and only the valkeysearch target makes the module.
+    (bin_dir / "ninja").write_text(
+        '#!/bin/bash\n[ "$3" == "coordinator_grpc_proto" ] && exit 0\n'
+        '[ "$3" == "valkeysearch" ] || exit 1\ntouch .build-release/valkeysearch.so\n')
+    (bin_dir / "ninja").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+    subprocess.run(["bash", "-euo", "pipefail", "-c", pr_batch_mod.MODULES["valkey-search"].build],
+                   cwd=src, env=env, check=True, capture_output=True, text=True)
+    assert (src / ".build-release" / "libsearch.so").exists()
+
+
 def test_batch_names_keep_a_fitting_id_and_fix_the_rest():
     ids = ["ai-0123456789ab", "spec-register:lost-write", "spec-register-lost-write", "..x..y", ":::", "s" * 120,
            "s" * 130]
