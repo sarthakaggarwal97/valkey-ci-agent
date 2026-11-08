@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-08T22:41+00:00.
+Updated 2026-11-08T22:42+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -48,7 +48,7 @@ Updated 2026-11-08T22:41+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-08T21:37:16+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42520396419): 14 merge(s) tested, 0 without a code change.
+[2026-11-08T22:42:04+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42526127195): 14 merge(s) tested, 0 without a code change.
 
 - [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): to retry, building valkey-search left no .build-release/libsearch.so
 - [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77): to retry, building valkey-search left no .build-release/libsearch.so
@@ -57,7 +57,7 @@ Updated 2026-11-08T22:41+00:00.
 - [valkey-io/valkey-search#60](https://github.com/valkey-io/valkey-search/pull/60): to retry, building valkey-search left no .build-release/libsearch.so
 - [valkey-io/valkey-search#72](https://github.com/valkey-io/valkey-search/pull/72): to retry, building valkey-search left no .build-release/libsearch.so
 - [valkey-io/valkey-search#71](https://github.com/valkey-io/valkey-search/pull/71): to retry, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): Root directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Checking if configure is required...[32;1mno[0m Checking for cma
+- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): Checking for gcc...[32;1mok[0m Checking for ninja...[32;1mok[0m [35;1mBuilding[0m [1/26] Linking CXX executable tests/ft_search_test FAILED: [
 - [valkey-io/valkey-search#49](https://github.com/valkey-io/valkey-search/pull/49): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/.build-release/.deps/install/lib/libgrpc.a(syste
 - [valkey-io/valkey-search@1d8e30e25ae6](https://github.com/valkey-io/valkey-search/commit/1d8e30e25ae640522f809f839ed2a81fb191e5c1): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
 - [valkey-io/valkey-search#65](https://github.com/valkey-io/valkey-search/pull/65): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
@@ -133,18 +133,18 @@ Updated 2026-11-08T22:41+00:00.
 
 ## Retries
 
-- [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): attempt 1 of 3, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77): attempt 1 of 3, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#76](https://github.com/valkey-io/valkey-search/pull/76): attempt 1 of 3, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#73](https://github.com/valkey-io/valkey-search/pull/73): attempt 1 of 3, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#60](https://github.com/valkey-io/valkey-search/pull/60): attempt 1 of 3, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#72](https://github.com/valkey-io/valkey-search/pull/72): attempt 1 of 3, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#71](https://github.com/valkey-io/valkey-search/pull/71): attempt 1 of 3, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): Root directory: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge Checking if configure is required...[32;1mno[0m Checking for cma
-- [valkey-io/valkey-search#49](https://github.com/valkey-io/valkey-search/pull/49): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/.build-release/.deps/install/lib/libgrpc.a(syste
-- [valkey-io/valkey-search@1d8e30e25ae6](https://github.com/valkey-io/valkey-search/commit/1d8e30e25ae640522f809f839ed2a81fb191e5c1): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
-- [valkey-io/valkey-search#65](https://github.com/valkey-io/valkey-search/pull/65): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
-- [valkey-io/valkey-search#64](https://github.com/valkey-io/valkey-search/pull/64): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
-- [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
-- [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57): attempt 1 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
+- [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): attempt 2 of 3, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77): attempt 2 of 3, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#76](https://github.com/valkey-io/valkey-search/pull/76): attempt 2 of 3, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#73](https://github.com/valkey-io/valkey-search/pull/73): attempt 2 of 3, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#60](https://github.com/valkey-io/valkey-search/pull/60): attempt 2 of 3, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#72](https://github.com/valkey-io/valkey-search/pull/72): attempt 2 of 3, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#71](https://github.com/valkey-io/valkey-search/pull/71): attempt 2 of 3, building valkey-search left no .build-release/libsearch.so
+- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): Checking for gcc...[32;1mok[0m Checking for ninja...[32;1mok[0m [35;1mBuilding[0m [1/26] Linking CXX executable tests/ft_search_test FAILED: [
+- [valkey-io/valkey-search#49](https://github.com/valkey-io/valkey-search/pull/49): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/.build-release/.deps/install/lib/libgrpc.a(syste
+- [valkey-io/valkey-search@1d8e30e25ae6](https://github.com/valkey-io/valkey-search/commit/1d8e30e25ae640522f809f839ed2a81fb191e5c1): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
+- [valkey-io/valkey-search#65](https://github.com/valkey-io/valkey-search/pull/65): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
+- [valkey-io/valkey-search#64](https://github.com/valkey-io/valkey-search/pull/64): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
+- [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
+- [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
 - [valkey-io/valkey#3800](https://github.com/valkey-io/valkey/pull/3800): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
