@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.ft-info-extended-fields
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.INFO gains gc_stats, cursor_stats, dialect_stats and Index Errors
+    sections; the reply must stay a well-formed 34-element array with the trailing
+    fields intact and no RESP desync afterwards
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftinfo
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'doc:', SCHEMA, tag, TAG, SEPARATOR,
+        ',', num, NUMERIC, vec, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [HSET, 'doc:1', tag, 'red,blue', num, 5, vec, !!binary 'AACAPwAAAAA='],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:2', tag, green, num, 10, vec, !!binary 'AAAAAAAAgD8='],
+      expect: {equals: 3}}
+    - {command: [HSET, 'doc:3', tag, red, num, 7, vec, bad], expect: {equals: 3}}
+    - {command: [FT.INFO, idx], wait_s: 25, expect: {contains: ready}, compare: skip}
+    - {command: [FT.SEARCH, idx, '@tag:{green}', NOCONTENT], wait_s: 25, expect: {
+        contains: 'doc:2'}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '@num:[4 6]', NOCONTENT], wait_s: 25, expect: {contains: 'doc:1'},
+      compare: unordered}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {contains: gc_stats}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 2 @vec $v]', PARAMS, 2, v, !!binary 'AACAPwAAAAA=',
+        NOCONTENT], expect: {contains: 'doc:1'}, compare: unordered}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, 'p2:', SCHEMA, v, VECTOR, FLAT,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [FT.INFO, idx2], expect_difference: true, expect: {contains: cursor_stats}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [FT.DROPINDEX, idx2], expect: {equals: OK}}
+    - {command: [FT.INFO, idx2], expect: {error: true}}
+    - {command: [FT.INFO, idx], expect_difference: true, expect: {contains: dialect_stats}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftinfo}

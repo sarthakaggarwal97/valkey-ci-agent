@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "ca45eeb0a11c6731eed45f1a1dd8d70eb13c2403",
+  "parent": "e001f91ca6b983665056981ff87ca0d8dcedb760",
+  "pr": 298,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "build.sh now runs both integration test suits (#298)",
+  "date": "2025-08-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.539,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely build/CI/test infrastructure: build.sh now also runs the OSS integration suite (with retries), shell helpers moved into scripts/common.rc (setup_valkey_server, setup_json_module, install_test_framework, check_for_san_errors), .gitignore entries were added, and the Python integration tests were reformatted and de-flaked (waiters.wait_for_equal replacing sleeps, Union type hints). No file under the module's runtime source is touched, so the module binary's behaviour \u2014 commands, replies, indexing, cluster or persistence paths \u2014 is identical at the change and its parent. There"
+}

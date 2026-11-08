@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.ft-info-scope-standalone
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.INFO new scope argument parsing and gating outside cluster/coordinator
+    mode, compared across module builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: info
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [FT.CREATE, index1, ON, HASH, PREFIX, "1", "doc:", SCHEMA, price,
+        NUMERIC], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", price, "10"], expect: {equals: 1}}
+    - {command: [FT.INFO, index1], compare: skip, wait_s: 20, expect: {contains: ready}}
+    - {command: [FT.INFO, index1, LOCAL], compare: skip, expect: {contains: index_name}}
+    - {command: [FT.INFO, index1, PRIMARY], expect_difference: true, expect: {error: "PRIMARY\
+          \ option is not valid in this configuration"}}
+    - {command: [FT.INFO, index1, CLUSTER], expect_difference: true, expect: {error: "CLUSTER\
+          \ option is not valid in this configuration"}}
+    - {command: [FT.INFO, index1, primary], expect_difference: true, expect: {error: "not\
+          \ valid in this configuration"}}
+    - {command: [FT.INFO, index1, GLOBAL], expect_difference: true, expect: {error: "Invalid\
+          \ scope parameter"}}
+    - {command: [FT.INFO, index1, PRIMARY, EXTRA], expect_difference: true, expect: {
+        error: "wrong number of arguments"}}
+    - {command: [FT.INFO, missing, PRIMARY], expect_difference: true, expect: {error: "PRIMARY\
+          \ option is not valid"}}
+    - {command: [FT.INFO, missing], expect: {error: "not found"}}
+    - {command: [CONFIG, SET, search.ft-info-timeout-ms, "10000"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.ft-info-timeout-ms, "50"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, search.backfill-batch-size, "1"], expect_difference: true,
+      expect: {equals: OK}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [info.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: info}

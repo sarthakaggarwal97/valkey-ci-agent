@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "8782ca876d4e9c2550dd8697bd2df811c0c87b12",
+  "parent": "1be979bbbddb74685430779caea20b40c3ab69ee",
+  "pr": 275,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Remove unnecessary file added in #249 (#275)",
+  "date": "2025-08-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2411,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only removes a test-build CMakeLists.txt (testing/coordinator/CMakeLists.txt, duplicate build rules for unit tests added in #249) and adds a trailing space to a comment in src/indexes/text/posting.h. No runtime source, command handling, indexing, replication or persistence code changes; the module built at the change and at its parent behave identically. This is a build/CI and comment-only change, so no scenario is needed."
+}

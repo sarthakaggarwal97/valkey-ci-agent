@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 20ceefaeecd5..54ffb1b04aeb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2ff2133097f6
+seed: 101
+experiment:
+  id: proposed.search-time-slice-metrics
+  inputs:
+    resp: 2
+    cluster: false
+deployment:
+  mode: standalone
+  base_port: 7000

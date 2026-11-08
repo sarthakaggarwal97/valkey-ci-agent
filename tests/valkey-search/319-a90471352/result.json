@@ -1,0 +1,74 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a90471352ffe202d6f0ab1b9a915e824800e831c",
+  "parent": "3d27b2cdb69b685c59dc9c692781001e0d1396ef",
+  "pr": 319,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Update 3 fields returned type of FT.INFO (#319)",
+  "date": "2025-08-15",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.1083,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: leak from VM_GetDetachedThreadSafeContext",
+      "scenario": "ai-fea118ccc59b",
+      "seed": 320,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #319, since fixed",
+      "fingerprint": "8e34ec2f6e4b8cd2856a",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-c0a52ed991d8",
+      "build": "unstable",
+      "seed": 319,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c0a52ed991d8",
+      "build": "unstable",
+      "seed": 320,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c0a52ed991d8",
+      "build": "unstable",
+      "seed": 321,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-fea118ccc59b",
+      "build": "unstable",
+      "seed": 320,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-fea118ccc59b",
+      "build": "unstable",
+      "seed": 321,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-fea118ccc59b",
+      "build": "unstable",
+      "seed": 322,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

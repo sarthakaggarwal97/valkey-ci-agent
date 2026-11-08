@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "1b71811d4d795fb20d82aefc12b6573a7a4a9b15",
+  "parent": "7b759eb68e6cde9bac458e4302559838a943b021",
+  "pr": 313,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Added support for cluster with replicas (#313)",
+  "date": "2025-08-13",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4293,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only the project's CI script (build.sh) and its Python integration-test framework (integration/valkey_search_test_case.py and test files): it adds replica support to the test harness itself \u2014 new Node/ReplicationGroup helpers, parametrized fixtures, a renamed temp directory. No module source (src/) or runtime behavior of valkey-search changes, so the module binaries at the change and at its parent behave identically and no fuzzer scenario can reach anything the change altered."
+}

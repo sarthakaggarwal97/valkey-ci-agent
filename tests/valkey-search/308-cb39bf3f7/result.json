@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "cb39bf3f70d20e420392855d280df53d397aab1f",
+  "parent": "2d040c32417451fdc0fed3f809a3a573e123bd27",
+  "pr": 308,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Strip the complete build path from logs (#308)",
+  "date": "2025-08-15",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2443,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is build-only: it adds -ffile-prefix-map=${CMAKE_SOURCE_DIR}= to the module's compile flags in cmake/Modules/valkey_search.cmake, which only strips the absolute build directory from __FILE__ strings and debug info used in log messages and backtraces. No command behaviour, reply, data path, replication or persistence code changes, so no reply comparison or fault scenario can reach it; the only observable effect is cosmetic path text in log output, which the fuzzer's oracles do not judge."
+}

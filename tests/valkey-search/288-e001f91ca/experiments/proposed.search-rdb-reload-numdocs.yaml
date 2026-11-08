@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.search-rdb-reload-numdocs
+deployment:
+  modes: [standalone]
+metadata:
+  description: num_docs of an index with no key prefixes must be restored from the
+    RDB on reload; the parent's early return loses it and the next delete underflows
+    the counter
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, SCHEMA, n, NUMERIC, v, VECTOR, HNSW, 6,
+        TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "k:1", n, 1, v, !!binary "AACAPwAAAEA="], expect: {equals: 2}}
+    - {command: [HSET, "k:2", n, 2, v, !!binary "AACAPwAAAEA="], expect: {equals: 2}}
+    - {command: [HSET, "k:3", n, 3, v, !!binary "AACAPwAAAEA="], expect: {equals: 2}}
+    - {command: [HSET, "k:4", n, 4, v, !!binary "AACAPwAAAEA="], expect: {equals: 2}}
+    - {command: [HSET, "k:5", n, 5, v, !!binary "AACAPwAAAEA="], expect: {equals: 2}}
+    - {command: [INFO, SEARCH], wait_s: 30, expect: {contains: "search_total_indexed_documents:5\r"},
+      compare: skip}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [INFO, SEARCH], wait_s: 30, expect_difference: true, expect: {contains: "search_total_indexed_documents:5\r"},
+      compare: skip}
+    - {command: [DEL, "k:1"], expect: {equals: 1}}
+    - {command: [INFO, SEARCH], wait_s: 15, expect_difference: true, expect: {contains: "search_total_indexed_documents:4\r"},
+      compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

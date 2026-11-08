@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "0e8cc8c899ce5e03bc0a7b68fd4f09eb0f7bb0d5",
+  "parent": "288cfb0a5b59276501859940d422162fc0e844e4",
+  "pr": 268,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Handle OOM during search command fanout (#268)",
+  "date": "2025-08-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 8.7949,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

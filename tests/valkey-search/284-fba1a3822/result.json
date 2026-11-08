@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "fba1a3822d8eabcc2c816d2e8e0c4bbc03969041",
+  "parent": "7bea873c04b092a36f05dacbccdd0ff5fd99f5ac",
+  "pr": 284,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Add coordinator metadata health monitoring info field (#284)",
+  "date": "2025-08-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.3984,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.ft-command-flags-cluster-replica
+deployment:
+  modes: [standalone]
+metadata:
+  description: On a cluster replica (CLUSTER REPLICATE) the write-flagged FT.CREATE/FT.DROPINDEX
+    are rejected with READONLY; the parent module executes them, diverging the replica's
+    index set from its primary
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flags
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: true
+    nodes: 2
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [FT.CREATE, idx_replica, ON, HASH, SCHEMA, embedding, VECTOR, HNSW,
+        12, m, 10, TYPE, FLOAT32, DIM, 100, DISTANCE_METRIC, COSINE, EF_CONSTRUCTION,
+        5, EF_RUNTIME, 10], node: 1, expect_difference: true, expect: {error: "read\
+          \ only replica"}}
+    - {command: [FT._LIST], node: 1, expect_difference: true, expect: {equals: []}}
+    - {command: [FT.CREATE, idx_primary, ON, HASH, SCHEMA, embedding, VECTOR, HNSW,
+        12, m, 10, TYPE, FLOAT32, DIM, 100, DISTANCE_METRIC, COSINE, EF_CONSTRUCTION,
+        5, EF_RUNTIME, 10], node: 0, expect: {equals: OK}}
+    - {command: [FT.INFO, idx_primary], node: 1, wait_s: 30, compare: skip, expect: {
+        error: false}}
+    - {command: [FT.DROPINDEX, idx_primary], node: 1, expect_difference: true, expect: {
+        error: "read only replica"}}
+    - {command: [FT._LIST], node: 1, compare: unordered, expect_difference: true,
+      expect: {equals: [idx_primary]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [flags.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flags}

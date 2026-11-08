@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "288cfb0a5b59276501859940d422162fc0e844e4",
+  "parent": "350fd5274222c3fb9038b19d5e862b982c752f95",
+  "pr": 281,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Change visibility for some of info fields to developer only (#281)",
+  "date": "2025-08-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.0604,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

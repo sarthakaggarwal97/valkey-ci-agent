@@ -1,0 +1,202 @@
+extends: [valkey.liveness]
+id: proposed.search-info-dev-visibility
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    The global_ingestion and time_slice_mutex INFO fields moved from Application to
+    Developer visibility: hidden from INFO SEARCH at the default search.info-developer-visible=no
+    (including the now-empty section headers), shown again when the config is set
+    to yes, and reported Application=0 by FT._DEBUG SHOW_INFO METADATA. Untouched
+    Application fields (thread-pool) must stay visible, and the moved counters must
+    still count ingested keys.
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: infovis
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    commands:
+    - command:
+      - EVAL
+      - |
+        local s = redis.call('INFO','SEARCH')
+        if string.find(s, 'ingest_hash_keys', 1, true) then return 1 end
+        return 0
+      - "0"
+      expect_difference: true
+      expect: {equals: 0}
+    - command:
+      - EVAL
+      - |
+        local s = redis.call('INFO','SEARCH')
+        if string.find(s, 'search_global_ingestion', 1, true) then return 1 end
+        return 0
+      - "0"
+      expect_difference: true
+      expect: {equals: 0}
+    - command:
+      - EVAL
+      - |
+        local s = redis.call('INFO','SEARCH')
+        if string.find(s, 'time_slice_queries', 1, true) then return 1 end
+        return 0
+      - "0"
+      expect_difference: true
+      expect: {equals: 0}
+    - command:
+      - EVAL
+      - |
+        local s = redis.call('INFO','SEARCH')
+        if string.find(s, 'query_queue_size', 1, true) then return 1 end
+        return 0
+      - "0"
+      expect: {equals: 1}
+    - command:
+      - EVAL
+      - |
+        local r = redis.call('FT._DEBUG','SHOW_INFO','METADATA')
+        local want = ARGV[1]
+        for i=1,#r do
+          local e = r[i]
+          local name, app
+          for j=1,#e-1,2 do
+            local k = e[j]
+            if type(k) == 'table' then k = k.ok end
+            local v = e[j+1]
+            if k == 'Name' then
+              if type(v) == 'table' then v = v.ok end
+              name = v
+            elseif k == 'Application' then
+              if v == true then app = 1 elseif v == false then app = 0 else app = v end
+            end
+          end
+          if name == want then return app end
+        end
+        return -1
+      - "0"
+      - search.ingest_hash_keys
+      expect_difference: true
+      expect: {equals: 0}
+    - command:
+      - EVAL
+      - |
+        local r = redis.call('FT._DEBUG','SHOW_INFO','METADATA')
+        local want = ARGV[1]
+        for i=1,#r do
+          local e = r[i]
+          local name, app
+          for j=1,#e-1,2 do
+            local k = e[j]
+            if type(k) == 'table' then k = k.ok end
+            local v = e[j+1]
+            if k == 'Name' then
+              if type(v) == 'table' then v = v.ok end
+              name = v
+            elseif k == 'Application' then
+              if v == true then app = 1 elseif v == false then app = 0 else app = v end
+            end
+          end
+          if name == want then return app end
+        end
+        return -1
+      - "0"
+      - search.time_slice_queries
+      expect_difference: true
+      expect: {equals: 0}
+    - command:
+      - EVAL
+      - |
+        local r = redis.call('FT._DEBUG','SHOW_INFO','METADATA')
+        local want = ARGV[1]
+        for i=1,#r do
+          local e = r[i]
+          local name, app
+          for j=1,#e-1,2 do
+            local k = e[j]
+            if type(k) == 'table' then k = k.ok end
+            local v = e[j+1]
+            if k == 'Name' then
+              if type(v) == 'table' then v = v.ok end
+              name = v
+            elseif k == 'Application' then
+              if v == true then app = 1 elseif v == false then app = 0 else app = v end
+            end
+          end
+          if name == want then return app end
+        end
+        return -1
+      - "0"
+      - search.query_queue_size
+      expect: {equals: 1}
+    - command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "doc:", SCHEMA, price, NUMERIC,
+        category, TAG]
+      expect: {equals: OK}
+    - command: [HSET, "doc:1", price, "10", category, a]
+      expect: {equals: 2}
+    - command: [HSET, "doc:2", price, "20", category, b]
+      expect: {equals: 2}
+    - command: [HSET, "doc:3", price, "30", category, c]
+      expect: {equals: 2}
+    - command: [CONFIG, SET, search.info-developer-visible, "yes"]
+      expect: {equals: OK}
+    - command:
+      - EVAL
+      - |
+        local s = redis.call('INFO','SEARCH')
+        local v = string.match(s, 'ingest_hash_keys:(%d+)')
+        if v then return tonumber(v) end
+        return -1
+      - "0"
+      wait_s: 30
+      expect: {min: 3}
+    - command:
+      - EVAL
+      - |
+        local s = redis.call('INFO','SEARCH')
+        if string.find(s, 'search_global_ingestion', 1, true) then return 1 end
+        return 0
+      - "0"
+      expect: {equals: 1}
+    - command:
+      - EVAL
+      - |
+        local s = redis.call('INFO','SEARCH')
+        if string.find(s, 'time_slice_queries', 1, true) then return 1 end
+        return 0
+      - "0"
+      expect: {equals: 1}
+    - command: [CONFIG, SET, search.info-developer-visible, "no"]
+      expect: {equals: OK}
+    - command:
+      - EVAL
+      - |
+        local s = redis.call('INFO','SEARCH')
+        if string.find(s, 'ingest_hash_keys', 1, true) then return 1 end
+        return 0
+      - "0"
+      expect_difference: true
+      expect: {equals: 0}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [infovis.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: infovis}

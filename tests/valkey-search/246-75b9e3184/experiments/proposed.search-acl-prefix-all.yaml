@@ -1,0 +1,76 @@
+extends: [valkey.liveness]
+id: proposed.search-acl-prefix-all
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    A user whose ACL key patterns cover only one of an index's prefixes must be denied
+    FT.SEARCH, FT.INFO, FT.CREATE and FT.DROPINDEX; the parent allowed them when any
+    single prefix was permitted, even dropping the index.
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [HSET, "abc:1", n, 5], expect: {equals: 1}}
+    - {command: [HSET, "abc:2", n, 100], expect: {equals: 1}}
+    - {command: [HSET, "xyz:1", n, 7], expect: {equals: 1}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 2, "abc:", "xyz:", SCHEMA, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: ready}}
+    - {command: [FT.INFO, idx], wait_s: 30, compare: skip, expect: {contains: "3"}}
+    - {command: [ACL, SETUSER, u_one, on, ">pw", "~abc:*", "+@all"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, u_two, on, ">pw", "~xyz:*", "+@all"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, u_all, on, ">pw", "~abc:*", "~xyz:*", "+@all"], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, u_none, on, ">pw", "~other:*", "+@all"], expect: {
+        equals: OK}}
+    - {connection: c1, command: [AUTH, u_one, pw], expect: {equals: OK}}
+    - {connection: c1, command: [FT.SEARCH, idx, "@n:[0 200]", NOCONTENT], expect_difference: true,
+      expect: {error: "permission"}}
+    - {connection: c1, command: [FT.INFO, idx], expect_difference: true, expect: {
+        error: "permission"}}
+    - {connection: c2, command: [AUTH, u_two, pw], expect: {equals: OK}}
+    - {connection: c2, command: [FT.SEARCH, idx, "@n:[0 200]", NOCONTENT], expect_difference: true,
+      expect: {error: "permission"}}
+    - {connection: c3, command: [AUTH, u_all, pw], expect: {equals: OK}}
+    - {connection: c3, command: [FT.SEARCH, idx, "@n:[0 200]", NOCONTENT], compare: unordered,
+      expect: {contains: "abc:1"}}
+    - {connection: c4, command: [AUTH, u_none, pw], expect: {equals: OK}}
+    - {connection: c4, command: [FT.SEARCH, idx, "@n:[0 200]", NOCONTENT], expect: {
+        error: "permission"}}
+    - {connection: c1, command: [FT.CREATE, idx2, ON, HASH, PREFIX, 2, "abc:", "xyz:",
+        SCHEMA, n, NUMERIC], expect_difference: true, expect: {error: "permission"}}
+    - {connection: c1, command: [FT.CREATE, idxa, ON, HASH, PREFIX, 1, "abc:", SCHEMA,
+        n, NUMERIC], expect: {equals: OK}}
+    - {connection: c1, command: [FT.DROPINDEX, idx], expect_difference: true, expect: {
+        error: "permission"}}
+    - {command: [FT._LIST], expect_difference: true, compare: unordered, expect: {
+        contains: idx}}
+    - {command: [FT.SEARCH, idx, "@n:[0 200]", NOCONTENT], expect_difference: true,
+      expect: {contains: "abc:1"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [acl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

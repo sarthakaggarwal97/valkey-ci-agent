@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "40355d3b825941c0b67d989b4693ee7eb87b25ab",
+  "parent": "54ffb1b04aeb7fc3a9f2deaac1dc6059d2ac364e",
+  "pr": 249,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Reimplement timeout handling. (#249)",
+  "date": "2025-07-31",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.4693,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

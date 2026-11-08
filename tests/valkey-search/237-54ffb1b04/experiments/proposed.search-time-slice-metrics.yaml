@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.search-time-slice-metrics
+deployment:
+  modes: [standalone]
+metadata:
+  description: New time_slice_mutex INFO fields exist only on the change build, and
+    the upsert/delete/query counters match the exact number of indexed attribute mutations
+    and FT.SEARCH vector queries
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: tsm
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2, num, NUMERIC, tag, TAG],
+      expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAAA=", num, 1, tag, red], expect: {
+        equals: 3}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAAAAAAAgD8=", num, 2, tag, blue],
+      expect: {equals: 3}}
+    - {command: [INFO, everything], wait_s: 20, expect: {contains: "time_slice_upserts:6"},
+      expect_difference: true}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", PARAMS, 2, BLOB, !!binary "AACAPwAAAAA=",
+        DIALECT, 2], compare: skip}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @vec $BLOB]", PARAMS, 2, BLOB, !!binary "AAAAAAAAgD8=",
+        DIALECT, 2], compare: skip}
+    - {command: [FT.SEARCH, idx, "@num:[0 10]=>[KNN 1 @vec $BLOB]", PARAMS, 2, BLOB,
+        !!binary "AACAPwAAAAA=", DIALECT, 2], compare: skip}
+    - {command: [INFO, everything], wait_s: 10, expect: {contains: "time_slice_queries:3"},
+      expect_difference: true}
+    - {command: [HSET, "doc:1", vec, !!binary "AAAAQAAAAAA=", num, 5, tag, green],
+      expect: {equals: 0}}
+    - {command: [INFO, everything], wait_s: 15, expect: {contains: "time_slice_upserts:9"},
+      expect_difference: true}
+    - {command: [DEL, "doc:2"], expect: {equals: 1}}
+    - {command: [INFO, everything], wait_s: 15, expect: {contains: "time_slice_deletes:3"},
+      expect_difference: true}
+    - {command: [FT._DEBUG, SHOW_INFO], expect: {contains: "search.time_slice_read_periods"},
+      expect_difference: true}
+    - {command: [FT._DEBUG, SHOW_INFO, METADATA], expect: {contains: "search.time_slice_write_time"},
+      expect_difference: true}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [tsm.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tsm}

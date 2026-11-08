@@ -1,0 +1,59 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "75b9e3184d91222568c9ff5dd5202c424f8de6d9",
+  "parent": "64dfbc9894ca86ee9d7a76c889a7ea341138de4c",
+  "pr": 246,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix ACL bug where commands where allowed when user has no permissions for one of the index prefixes (#246)",
+  "date": "2025-07-22",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.4056,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-8b9a61f29f1c",
+      "build": "unstable",
+      "seed": 246001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8b9a61f29f1c",
+      "build": "unstable",
+      "seed": 246002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8b9a61f29f1c",
+      "build": "unstable",
+      "seed": 246003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-93554f48e104",
+      "build": "unstable",
+      "seed": 246002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-93554f48e104",
+      "build": "unstable",
+      "seed": 246003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-93554f48e104",
+      "build": "unstable",
+      "seed": 246004,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

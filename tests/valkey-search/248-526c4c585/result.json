@@ -1,0 +1,59 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "526c4c5856e7a3fb4cb9acb80a993c9aa45d97ba",
+  "parent": "75b9e3184d91222568c9ff5dd5202c424f8de6d9",
+  "pr": 248,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix WrongArity function to wrap command names with single quotes for Valkey consistency (#248)",
+  "date": "2025-07-24",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.3766,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-ba1eec30d161",
+      "build": "unstable",
+      "seed": 248001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ba1eec30d161",
+      "build": "unstable",
+      "seed": 248002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ba1eec30d161",
+      "build": "unstable",
+      "seed": 248003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-74c9d0976a88",
+      "build": "unstable",
+      "seed": 248002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-74c9d0976a88",
+      "build": "unstable",
+      "seed": 248003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-74c9d0976a88",
+      "build": "unstable",
+      "seed": 248004,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

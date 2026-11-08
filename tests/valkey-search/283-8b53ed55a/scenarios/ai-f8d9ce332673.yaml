@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 0e8cc8c899ce..8b53ed55a179.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f8d9ce332673
+seed: 103
+experiment:
+  id: proposed.ft-search-missing-vector-clause
+  inputs:
+    resp: 2
+    cluster: true
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 0
+  base_port: 7200

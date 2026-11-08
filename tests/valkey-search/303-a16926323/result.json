@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a16926323ef94fdb23849688730aa6125402fa8f",
+  "parent": "fba1a3822d8eabcc2c816d2e8e0c4bbc03969041",
+  "pr": 303,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Allow running single integration test (#303)",
+  "date": "2025-08-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2566,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only developer tooling: build.sh gains a --run-integration-tests=pattern option to filter which integration tests run, scripts/common.rc fixes a shell test for an unset SAN_BUILD variable and a log message typo. No source file of the valkey-search module is touched, so the built module artifact and its runtime behaviour (commands, replies, indexing, replication, persistence) are identical on both sides. This is a build/CI-script change with no behaviour to test against a running server."
+}

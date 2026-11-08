@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.ft-wrongarity-quotes
+deployment:
+  modes: [standalone]
+metadata:
+  description: WrongArity errors from FT.INFO, FT.DROPINDEX and FT._LIST wrap the
+    command name in single quotes
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: arity
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.INFO], expect_difference: true, expect: {error: "wrong number\
+          \ of arguments for 'FT.INFO' command"}}
+    - {command: [ft.info], expect_difference: true, expect: {error: "wrong number\
+          \ of arguments for 'FT.INFO' command"}}
+    - {command: [FT.DROPINDEX], expect_difference: true, expect: {error: "wrong number\
+          \ of arguments for 'FT.DROPINDEX' command"}}
+    - {command: [FT.DROPINDEX, idx, extra], expect_difference: true, expect: {error: "wrong\
+          \ number of arguments for 'FT.DROPINDEX' command"}}
+    - {command: [FT._LIST, extra], expect_difference: true, expect: {error: "wrong\
+          \ number of arguments for 'FT._LIST' command"}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, t, TAG], expect: {
+        equals: OK}}
+    - {command: [FT._LIST], compare: unordered, wait_s: 10, expect: {equals: [idx]}}
+    - {command: [FT.INFO, nosuchindex], expect: {error: true}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [FT._LIST], expect: {equals: []}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [arity.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: arity}

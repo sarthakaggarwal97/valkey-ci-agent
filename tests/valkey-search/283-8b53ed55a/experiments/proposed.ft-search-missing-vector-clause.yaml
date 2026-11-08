@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-missing-vector-clause
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: FT.SEARCH with a match-all/empty pre-filter and no vector clause is
+    rejected on the change but dereferences a null predicate on the parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: search
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 15
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, price, NUMERIC,
+        embedding, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 3, DISTANCE_METRIC, L2], expect: {
+        equals: OK}}
+    - {command: [FT.SEARCH, idx, "@price:[0 100]"]}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 2 @embedding $BLOB]", PARAMS, 2, BLOB, !!binary "AAIAPwAAAAAAAAAA"]}
+    - {command: [FT.SEARCH, idx, "*"], expect_difference: true, expect: {error: "Vector\
+          \ query clause is missing"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: search}

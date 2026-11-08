@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "3b82b53e66390f6698dd11c6422de81db6464fb9",
+  "parent": "ad9281a803572830f79944e69a855c62b9df736e",
+  "pr": 307,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Build script fixes (#307)",
+  "date": "2025-08-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2428,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only build/CI scripts (build.sh, integration/run.sh, and the GitHub Actions workflow) to add a --retries=N option for the project's own integration test runner. No module source code is touched, so the compiled valkey-search module is behaviourally identical at the change and its parent; there is no command, reply, replication, or persistence path for a scenario to reach."
+}

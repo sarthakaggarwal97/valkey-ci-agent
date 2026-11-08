@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.search-skip-rdb-load-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Toggle search.skip-rdb-load, SAVE and restart; the candidate must skip
+    index load, rebuild by backfill, and answer searches like the parent's loaded
+    index
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: skipload
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {appendonly: "no"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, search.skip-rdb-load], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [CONFIG, GET, search.use-coordinator], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [CONFIG, SET, search.use-coordinator, "yes"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, title, TAG,
+        price, NUMERIC, embedding, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [FT.CREATE, empty_idx, ON, HASH, PREFIX, 1, "none:", SCHEMA, vec,
+        VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", title, alpha, price, 100, embedding, !!binary "AACAPwAAAAA="],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:2", title, beta, price, 200, embedding, !!binary "AAAAAAAAgD8="],
+      expect: {equals: 3}}
+    - {command: [HSET, "doc:3", title, gamma, price, 300, embedding, !!binary "AACAPwAAgD8="],
+      expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @embedding $v AS d]", PARAMS, 2, v, !!binary "AACAPwAAAAA=",
+        NOCONTENT, DIALECT, 2], wait_s: 30, expect: {equals: [3, "doc:1", "doc:3",
+          "doc:2"]}}
+    - {command: [CONFIG, SET, search.skip-rdb-load, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, search.skip-rdb-load], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [FT._LIST], compare: unordered, expect: {contains: idx}}
+    - {command: [FT.INFO, idx], compare: skip}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 3 @embedding $v AS d]", PARAMS, 2, v, !!binary "AACAPwAAAAA=",
+        NOCONTENT, DIALECT, 2], wait_s: 60, expect: {equals: [3, "doc:1", "doc:3",
+          "doc:2"]}}
+    - {command: [FT.SEARCH, idx, "@title:{beta}", NOCONTENT, DIALECT, 2], wait_s: 30,
+      expect: {equals: [1, "doc:2"]}}
+    - {command: [FT.SEARCH, idx, "@price:[150 250]", NOCONTENT, DIALECT, 2], wait_s: 30,
+      expect: {equals: [1, "doc:2"]}}
+    - {command: [FT.SEARCH, empty_idx, "*=>[KNN 1 @vec $v]", PARAMS, 2, v, !!binary "AACAPwAAAAA=",
+        NOCONTENT, DIALECT, 2], expect: {equals: [0]}}
+    - {command: [HSET, "doc:4", title, delta, price, 400, embedding, !!binary "AAAAAAAAAAA="],
+      expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, "@title:{delta}", NOCONTENT, DIALECT, 2], wait_s: 30,
+      expect: {equals: [1, "doc:4"]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [skipload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: skipload}

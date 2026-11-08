@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 40355d3b8259..1be979bbbddb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-37d55c35742f
+seed: 101
+experiment:
+  id: proposed.search-skip-rdb-load-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000
