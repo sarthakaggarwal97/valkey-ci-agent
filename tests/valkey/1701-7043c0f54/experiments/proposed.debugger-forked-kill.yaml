@@ -1,0 +1,24 @@
+extends: [valkey.liveness]
+id: proposed.debugger-forked-kill
+deployment:
+  modes: [standalone]
+metadata:
+  description: A forked EVAL debugging session is killed when the server shuts down
+    for a restart
+components:
+- use: valkey.action.commands
+  id: dbg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 30
+    judge_replies: false
+    commands:
+    - {command: [SCRIPT, DEBUG, YES]}
+    - {command: [EVAL, "return 1", 0]}
+    - {restart: true}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbg}

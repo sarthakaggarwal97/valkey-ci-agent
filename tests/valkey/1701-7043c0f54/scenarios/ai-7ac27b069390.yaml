@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f1270a851f6d..7043c0f54326.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7ac27b069390
+seed: 301
+experiment:
+  id: proposed.debugger-malformed-proto
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

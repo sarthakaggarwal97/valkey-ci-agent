@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "43ee46da339d598a588b621a7ccfa7907a8cde86",
+  "parent": "84eb459cd4e7c3b9c529d152d68a4d83613faa28",
+  "pr": 2785,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Authenticate slot migration client on source node to internal user (#2785)",
+  "date": "2025-10-31",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 8.7545,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "hang: command 1 (ACL SETUSER admin on >S3cureAdmin ~* &* +@all on node 1) on connection 2 of 4 got no reply, and the server answered no PING within 120s",
+      "scenario": "ai-d1b7a5fb6dc7",
+      "seed": 33,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "a2c72ed0c6a308c5beee",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

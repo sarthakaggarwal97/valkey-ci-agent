@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.module-script-error-stats-eval
+deployment:
+  modes: [standalone]
+metadata:
+  description: An error from a command called inside a HELLO-engine EVAL script is
+    counted once in errorstats (parent double-counts)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: eval
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [LPUSH, l, "1"], expect: {equals: 1}}
+    - {command: [EVAL, "#!hello\nFUNCTION callcmd\nCONSTS l\nCONSTI 1\nCALL GET\n\
+          RETURN\n", "0"], expect: {error: "WRONGTYPE"}}
+    - {command: [INFO, errorstats], expect_difference: true, expect: {contains: "errorstat_WRONGTYPE:count=1"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [eval.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: eval}

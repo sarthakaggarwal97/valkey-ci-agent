@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.debugger-server-reply
+deployment:
+  modes: [standalone]
+metadata:
+  description: Lua debugger 'valkey' command logs integer, status, and error replies
+    in human-readable form
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dbg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    judge_replies: false
+    commands:
+    - {command: [SCRIPT, DEBUG, SYNC]}
+    - {command: [EVAL, "return 1", 0]}
+    - {command: [valkey, SET, k, hello]}
+    - {command: [valkey, INCRBY, n, 5]}
+    - {command: [valkey, INCR, k]}
+    - {command: [continue]}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbg}

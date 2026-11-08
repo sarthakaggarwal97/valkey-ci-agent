@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7e0b3bbd5215953ec1e634a91107f8541869cf6c",
+  "parent": "0e5477fb9bdfdb4b615a097387907f92345474b8",
+  "pr": 2471,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Show RPS histogram in valkey-benchmark (#2471)",
+  "date": "2025-10-22",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 25,
+    "executed": 25,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.687,
+  "findings": [],
+  "recorded": []
+}

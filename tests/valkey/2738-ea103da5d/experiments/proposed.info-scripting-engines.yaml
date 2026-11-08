@@ -1,0 +1,66 @@
+extends: [valkey.liveness]
+id: proposed.info-scripting-engines
+deployment:
+  modes: [standalone]
+metadata:
+  description: New INFO scriptingengines section compared against the parent build,
+    including engine memory callbacks invoked from inside Lua and across SCRIPT/FUNCTION
+    FLUSH
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: info-engines
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [INFO, scriptingengines], expect_difference: true, expect: {contains: "#\
+          \ Scripting Engines"}}
+    - {command: [INFO, scriptingengines], expect_difference: true, expect: {contains: "engines_count:1"}}
+    - {command: [INFO, SCRIPTINGENGINES], expect_difference: true, expect: {contains: "name=LUA,module=built-in,abi_version=4"}}
+    - {command: [EVAL, "if string.find(server.call('INFO','default'), '# Scripting\
+          \ Engines', 1, true) then return 1 else return 0 end", "0"], expect: {equals: 0}}
+    - {command: [EVAL, "if string.find(server.call('INFO','all'), '# Scripting Engines',\
+          \ 1, true) then return 1 else return 0 end", "0"], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [INFO, everything], compare: skip, expect: {contains: "# Scripting\
+          \ Engines"}}
+    - {command: [SCRIPT, LOAD, "return 42"], expect: {exists: true}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nserver.register_function('myfunc',\
+          \ function(keys, args) return 1 end)"], expect: {equals: mylib}}
+    - {command: [FCALL, myfunc, "0"], expect: {equals: 1}}
+    - {command: [EVAL, "local m = string.match(server.call('INFO','scriptingengines'),\
+          \ 'used_memory=(%d+)') if m and tonumber(m) > 0 then return 1 else return\
+          \ 0 end", "0"], expect_difference: true, expect: {equals: 1}}
+    - {command: [SCRIPT, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [INFO, scriptingengines], expect_difference: true, expect: {contains: "engines_count:1"}}
+    - {command: [FUNCTION, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [INFO, scriptingengines], expect_difference: true, expect: {contains: "memory_overhead="}}
+    - {command: [SCRIPT, LOAD, "return 1"], expect: {exists: true}}
+    - {command: [SCRIPT, FLUSH, SYNC], expect: {equals: OK}}
+    - {command: [INFO, scriptingengines], expect_difference: true, expect: {contains: "engines_count:1"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [INFO, scriptingengines], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: true}}
+    - {command: [INFO, scriptingengines, keyspace], expect_difference: true, expect: {
+        contains: "# Scripting Engines"}}
+    - {command: [INFO, scriptingengines, scriptingengines], expect_difference: true,
+      expect: {contains: "engines_count:1"}}
+    - {command: [INFO, default, scriptingengines], expect_difference: true, expect: {
+        contains: "# Scripting Engines"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [info-engines.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: info-engines}

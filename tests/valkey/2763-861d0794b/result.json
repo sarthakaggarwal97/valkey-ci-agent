@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "861d0794b7bdf2237d98502a5b405faf19db24dc",
+  "parent": "baf2d572f7c3016c25168928c6de039028f1ddcc",
+  "pr": 2763,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Sentinel: Skip IS-PRIMARY-DOWN-BY-ADDR requests when primary not SDOWN (#2763)",
+  "date": "2025-10-24",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.1103,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to Sentinel-mode code (sentinelAskPrimaryStateToOtherSentinels in src/sentinel.c, the IS-PRIMARY-DOWN-BY-ADDR exchange between sentinels). The fuzzer cannot reach it: deployment modes are standalone and cluster only (Sentinel mode is explicitly unimplemented per docs/architecture.md), no installed experiment or component starts a sentinel, and the private servers of valkey.action.commands / valkey.action.tools are regular servers where sentinel mode cannot be enabled via server_config (it needs --sentinel or the valkey-sentinel executable) and the SENTINEL command does n"
+}

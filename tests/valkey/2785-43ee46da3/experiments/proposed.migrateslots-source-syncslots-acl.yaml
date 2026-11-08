@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.migrateslots-source-syncslots-acl
+deployment:
+  modes: [standalone]
+metadata:
+  description: Slot migration completes even when the default user is denied CLUSTER|SYNCSLOTS
+    on the source; on the parent the export job client is bound to the default user,
+    the target's inbound SYNCSLOTS commands are ACL-denied, and the migration never
+    finishes
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 120
+    commands:
+    - {command: [MSET, "{6ZJ}:1", v1, "{6ZJ}:2", v2, "{6ZJ}:3", v3, "{6ZJ}:4", v4,
+        "{6ZJ}:5", v5, "{6ZJ}:6", v6, "{6ZJ}:7", v7, "{6ZJ}:8", v8], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16383], node: 0, expect: {equals: 8}}
+    - {command: [ACL, SETUSER, default, "-cluster|syncslots"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 16383, 16383, NODE, "<node.1.id>"],
+      node: 0, expect: {equals: OK}}
+    - {command: [CLIENT, LIST], node: 0, compare: skip}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16383], node: 0, wait_s: 45, expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [GET, "{6ZJ}:1"], node: 1, expect_difference: true, expect: {equals: v1}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16383], node: 1, compare: skip}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 0, compare: skip}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 1, compare: skip}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [migrate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

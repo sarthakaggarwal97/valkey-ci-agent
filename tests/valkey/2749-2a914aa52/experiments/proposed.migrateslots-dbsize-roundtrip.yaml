@@ -1,0 +1,65 @@
+extends: [valkey.liveness]
+id: proposed.migrateslots-dbsize-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: DBSIZE after completed CLUSTER MIGRATESLOTS imports, migrated back
+    and forth between two nodes; the parent double-counts imported keys in the kvstore
+    and BIT
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, KEYSLOT, "{foo}1"], expect: {equals: 12182}}
+    - {command: [CLUSTER, KEYSLOT, "{hello}1"], expect: {equals: 866}}
+    - {command: [SET, "{foo}1", v1], expect: {equals: OK}}
+    - {command: [SET, "{foo}2", v2], expect: {equals: OK}}
+    - {command: [SET, "{foo}3", v3, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}4", v4, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, "{foo}5", v5], expect: {equals: OK}}
+    - {command: [MSET, "{hello}1", w1, "{hello}2", w2, "{hello}3", w3], expect: {
+        equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 8}}
+    - {command: [DBSIZE], node: 1, expect: {equals: 0}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 12182, 12182, NODE, "<node.1.id>"],
+      wait_s: 30, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 1, wait_s: 30, expect: {
+        equals: 5}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], wait_s: 30, expect: {equals: 0}}
+    - {command: [DBSIZE], expect: {equals: 3}}
+    - {command: [DBSIZE], node: 1, expect_difference: true, expect: {equals: 5}}
+    - {command: [MGET, "{foo}1", "{foo}2", "{foo}5"], node: 1, expect: {equals: [
+          v1, v2, v5]}}
+    - {command: [DEL, "{foo}1", "{foo}2", "{foo}3", "{foo}4", "{foo}5"], node: 1,
+      expect: {equals: 5}}
+    - {command: [DBSIZE], node: 1, expect_difference: true, expect: {equals: 0}}
+    - {command: [SET, "{foo}1", x1], node: 1, expect: {equals: OK}}
+    - {command: [SET, "{foo}2", x2, EX, 10000], node: 1, expect: {equals: OK}}
+    - {command: [SET, "{foo}3", x3], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 12182, 12182, NODE, "<node.0.id>"],
+      node: 1, wait_s: 30, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], wait_s: 30, expect: {equals: 3}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 1, wait_s: 30, expect: {
+        equals: 0}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 6}}
+    - {command: [DBSIZE], node: 1, expect_difference: true, expect: {equals: 0}}
+    - {command: [MGET, "{foo}1", "{foo}2", "{foo}3"], expect: {equals: [x1, x2, x3]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [migrate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

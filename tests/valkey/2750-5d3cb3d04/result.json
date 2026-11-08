@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5d3cb3d04c100c938f5859f12bdc3a76dc86900f",
+  "parent": "2a914aa5214d166572e82689d33277a6fe2f1cdf",
+  "pr": 2750,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Initialize the lua attributes of the luaFunction script (#2750)",
+  "date": "2025-10-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.3095,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change fixes an uninitialized-field bug: in the two FUNCTION-registration paths the luaFunction script was zmalloc'd, so script->lua held garbage, and luaEngineFreeFunction's `if (lua == script->lua) lua_unref(...)` guard then skipped releasing the Lua registry reference when an individual library was freed (FUNCTION DELETE, or a REPLACE load over an existing library) while the function VM persisted. The only effect is a Lua-registry reference leak: the orphaned function object stays reachable from the VM's LUA_REGISTRYINDEX table and is reclaimed only at VM teardown. This produces no dete"
+}

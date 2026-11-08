@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.function-flush-async-vm-recreate
+deployment:
+  modes: [standalone]
+metadata:
+  description: FUNCTION FLUSH ASYNC re-creates the Lua VM, SCRIPT FLUSH ASYNC runs
+    engine reset callbacks, and loading right after an async flush does not crash
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flush
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nfor i=1,100 do\n server.register_function('f'..i,\
+          \ function() return 1 end)\nend"], expect: {equals: mylib}}
+    - {command: [FCALL, f1, 0], expect: {equals: 1}}
+    - {command: [FUNCTION, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [FUNCTION, LIST], expect: {equals: []}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nfor i=1,100 do\n server.register_function('g'..i,\
+          \ function() return 2 end)\nend"], expect: {equals: mylib}}
+    - {command: [FCALL, g1, 0], expect: {equals: 2}}
+    - {command: [FUNCTION, FLUSH, SYNC], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nserver.register_function('h1',\
+          \ function() return 3 end)"], expect: {equals: mylib}}
+    - {command: [FCALL, h1, 0], expect: {equals: 3}}
+    - {command: [SCRIPT, LOAD, "return 1"], expect: {exists: true}}
+    - {command: [EVAL, "return 1", 0], expect: {equals: 1}}
+    - {command: [SCRIPT, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [EVAL, "return 2", 0], expect: {equals: 2}}
+    - {command: [SCRIPT, FLUSH, SYNC], expect: {equals: OK}}
+    - {command: [FUNCTION, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [FUNCTION, FLUSH], expect: {equals: OK}}
+required_events: [flush.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flush}

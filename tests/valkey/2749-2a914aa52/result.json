@@ -1,0 +1,40 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2a914aa5214d166572e82689d33277a6fe2f1cdf",
+  "parent": "b4c93cc9c25e08d2da9c12cb7e109a176e3e885c",
+  "pr": 2749,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix incorrect kvstore size and BIT accounting after completed migration (#2749)",
+  "date": "2025-10-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 9.3515,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-39f8c0e17d95",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'migrate' returned ERROR: expectations both builds violate alike, so they are not about the change: 23 (CLUSTER COUNTKEYSINSLOT 12182 on node 1), 25 (DBSIZE on node 1)"
+    },
+    {
+      "scenario": "ai-1655095dce7a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'migrate' returned ERROR: expectations both builds violate alike, so they are not about the change: 23 (CLUSTER COUNTKEYSINSLOT 12182 on node 1), 25 (DBSIZE on node 1)"
+    }
+  ]
+}

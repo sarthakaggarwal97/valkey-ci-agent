@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f54818cc60597e9fe5dc03a52fd39ab944cd4932",
+  "parent": "864de555ced5354976ae4f97f44977041556115f",
+  "pr": 2786,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Bug fix: reset io_last_written on c->buf resize to prevent stale pointers (#2786)",
+  "date": "2025-10-30",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.2823,
+  "findings": [],
+  "recorded": [],
+  "reason": "Memory-safety fix in clientsCronResizeOutputBuffer: when the client reply buffer c->buf is reallocated by the server cron, a pending partial-write pointer (c->io_last_written.buf) that still referenced the freed old buffer is now repointed to the new buffer, avoiding a stale/dangling pointer that would trip serverAssert (networking.c:2711) or corrupt post-write bookkeeping. Reaching it requires a normal client with a partially-completed socket write resting on c->buf (real TCP/send-buffer backpressure from a slow or non-reading consumer) coinciding with the ~100ms cron buffer-resize window; wi"
+}

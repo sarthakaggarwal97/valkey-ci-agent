@@ -1,0 +1,29 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-rps-histogram
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark --rps prints the new RPS Summary histogram block the
+    parent build lacks, and a large --rps drives the config.rps*2 histogram bound
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 30
+    runs:
+    - tool: valkey-benchmark
+      args: [-p, $port, -n, 4000, -c, 10, --rps, 1000, -t, set]
+      expect_difference: true
+      expect: {stdout: {contains: "target RPS: 1000.00"}}
+    - tool: valkey-benchmark
+      args: [-p, $port, -n, 8000, -c, 10, --threads, 4, --rps, 2000, -t, get]
+      expect_difference: true
+      expect: {stdout: {contains: "RPS distribution (reqs/sec)"}}
+    - tool: valkey-benchmark
+      args: [-p, $port, -n, 2000, -c, 5, --rps, 2000000000, -t, incr]
+      compare: skip
+      expect: {exit: {equals: 0}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

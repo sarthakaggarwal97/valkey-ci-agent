@@ -1,0 +1,29 @@
+extends: [valkey.liveness]
+id: proposed.module-script-call-noscript
+deployment:
+  modes: [standalone]
+metadata:
+  description: A NOSCRIPT command called from a scripting engine is blocked unless
+    script_disable_deny_script is enabled
+components:
+- use: valkey.action.commands
+  id: scall
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 15
+    commands:
+    - {command: [EVAL, "#!hello\nFUNCTION f\nCONSTS CAT\nCONSTI 1\nCALL ACL\nRETURN\n",
+        "0"], expect_difference: true, expect: {error: "is not allowed on script mode"}}
+    - {command: [DEBUG, SET-DISABLE-DENY-SCRIPTS, "1"], expect: {equals: OK}}
+    - {command: [EVAL, "#!hello\nFUNCTION f\nCONSTS CAT\nCONSTI 1\nCALL ACL\nRETURN\n",
+        "0"], expect_difference: true, expect: {equals: OK}}
+    - {command: [DEBUG, SET-DISABLE-DENY-SCRIPTS, "0"], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [scall.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scall}

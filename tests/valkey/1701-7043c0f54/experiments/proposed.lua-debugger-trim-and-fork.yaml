@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.lua-debugger-trim-and-fork
+deployment:
+  modes: [standalone]
+metadata:
+  description: Sync Lua debugger session exercising reply trimming (maxlen, hint)
+    and a forked (SCRIPT DEBUG YES) session exercising serverFork, parent-side disable,
+    child exit and SIGCHLD reaping, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ldbg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SCRIPT, DEBUG, SYNC], connection: sdbg, expect: {equals: OK}}
+    - {command: [EVAL, "local x = string.rep('a',500)\nreturn 1", 0], connection: sdbg,
+      compare: skip, expect: {exists: true}}
+    - {command: [step], connection: sdbg, compare: skip, expect: {exists: true}}
+    - {command: [print, x], connection: sdbg, compare: skip, expect: {exists: true}}
+    - {command: [valkey, echo, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      connection: sdbg, compare: skip, expect: {exists: true}}
+    - {command: [maxlen], connection: sdbg, compare: skip, expect: {exists: true}}
+    - {command: [maxlen, "10"], connection: sdbg, compare: skip, expect: {exists: true}}
+    - {command: [print, x], connection: sdbg, compare: skip, expect: {exists: true}}
+    - {command: [blahblah], connection: sdbg, expect_difference: true, expect: {exists: true}}
+    - {command: [help], connection: sdbg, compare: skip, expect: {exists: true}}
+    - {command: [continue], connection: sdbg, compare: skip, expect: {exists: true}}
+    - {read: true, connection: sdbg, compare: skip}
+    - {command: [SCRIPT, DEBUG, YES], connection: fdbg, expect: {equals: OK}}
+    - {command: [EVAL, "local y = 'fork'\nreturn 2", 0], connection: fdbg, compare: skip,
+      expect: {exists: true}}
+    - {command: [step], connection: fdbg, compare: skip, expect: {exists: true}}
+    - {command: [BGSAVE], compare: skip, expect: {exists: true}}
+    - {command: [print, y], connection: fdbg, compare: skip, expect: {exists: true}}
+    - {command: [continue], connection: fdbg, compare: skip, expect: {exists: true}}
+    - {read: true, connection: fdbg, compare: skip}
+    - {command: [SET, after, 1], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [SCRIPT, DEBUG, YES, lua], expect_difference: true, expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, NO], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [ldbg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ldbg}

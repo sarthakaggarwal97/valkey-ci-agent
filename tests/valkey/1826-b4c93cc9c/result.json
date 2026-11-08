@@ -1,0 +1,107 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b4c93cc9c25e08d2da9c12cb7e109a176e3e885c",
+  "parent": "95154feaa122f867ffd91c65b5ceb0a44dc7c0ef",
+  "pr": 1826,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "FUNCTION FLUSH re-create lua VM, fix flush not gc, fix flush async + load crash (#1826)",
+  "date": "2025-10-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 12,
+  "proven": 0,
+  "hunted": 9,
+  "dropped": 3,
+  "recall": true,
+  "coverage": {
+    "lines": 51,
+    "executed": 46,
+    "percent": 90,
+    "uncovered": [
+      "src/functions.c:194",
+      "src/scripting_engine.c:345",
+      "src/scripting_engine.c:346",
+      "src/scripting_engine.c:348",
+      "src/scripting_engine.c:355"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 5.0043,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11",
+      "scenario": "ai-b1e014b248b2",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1826",
+      "fingerprint": "a967cad403e4689c0118",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: assertion failed: 16355:M 08 Nov 2026 13:45:34.665 # ==> lua/script_lua.c:192 'lua_islightuserdata(lua, -1)' is not true",
+      "scenario": "ai-b1e014b248b2",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1826",
+      "fingerprint": "2e03e67e4848b7a4897c",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-2de934b13d18",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1826",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-d8d65537c189",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'engines' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (FUNCTION LOAD #!lua name=heavy1 local big = {} for i=1,400 do big[i] = string.rep('a', 8192) .. i end server.register_function('h1', f"
+    },
+    {
+      "scenario": "ai-f82d25e282af",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'engines' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (FUNCTION LOAD #!lua name=heavy1 local big = {} for i=1,400 do big[i] = string.rep('a', 8192) .. i end server.register_function('h1', f"
+    },
+    {
+      "scenario": "ai-6acd6469c1f1",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "no trustworthy verdict is possible; required components did not do their part outside an oracle or action, depend on one that did not, judged a deployment whose teardown failed, or were skipped: kill-replica, seed-functions"
+    },
+    {
+      "scenario": "ai-0b5a26000c13",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "no trustworthy verdict is possible; required components did not do their part outside an oracle or action, depend on one that did not, judged a deployment whose teardown failed, or were skipped: kill-replica, seed-functions"
+    },
+    {
+      "scenario": "ai-3e539b0f4499",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "no trustworthy verdict is possible; required components did not do their part outside an oracle or action, depend on one that did not, judged a deployment whose teardown failed, or were skipped: kill-replica, seed-functions"
+    }
+  ]
+}

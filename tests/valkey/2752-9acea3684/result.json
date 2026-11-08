@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9acea36841903eb08fb9e12a5febbf112ab8200d",
+  "parent": "1cf0df9fc3a2d6ceb02c7e69ebfacc7ee5b06186",
+  "pr": 2752,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix outdated comment around clusterLink->flags (#2752)",
+  "date": "2025-10-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.201,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits a comment on clusterLink->flags in src/cluster_legacy.h (one line, no code change). It cannot alter behaviour, replies, cluster bus traffic, or persistence, so no scenario is needed."
+}

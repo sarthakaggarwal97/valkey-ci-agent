@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 95154feaa122..b4c93cc9c25e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d8d65537c189
+seed: 103
+experiment:
+  id: proposed.function-flush-engine-abi-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

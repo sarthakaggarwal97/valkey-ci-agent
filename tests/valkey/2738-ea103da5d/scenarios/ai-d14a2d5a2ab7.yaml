@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e381182297c7..ea103da5d6e1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d14a2d5a2ab7
+seed: 202
+experiment:
+  id: proposed.info-scripting-engines
+  inputs:
+    resp: 3
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

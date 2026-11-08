@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 84eb459cd4e7..43ee46da339d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-514b482a73dd
+seed: 11
+experiment:
+  id: proposed.migrateslots-source-syncslots-acl
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

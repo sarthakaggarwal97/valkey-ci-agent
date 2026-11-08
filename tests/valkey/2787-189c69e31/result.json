@@ -1,0 +1,34 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "189c69e315cae23c2e6dcd125317e4bccfdccb51",
+  "parent": "43ee46da339d598a588b621a7ccfa7907a8cde86",
+  "pr": 2787,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix: ltrim should not call signalModifiedKey when no elements are removed (#2787)",
+  "date": "2025-10-31",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.5683,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-dfc000f6fb7a",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    }
+  ]
+}

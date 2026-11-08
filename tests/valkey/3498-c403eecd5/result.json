@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c403eecd5b7dbfdf737e8c6aae8e1d022727ba50",
+  "parent": "04896c1e6dab95f6da6c0cf6c2fa2d3d23330bb8",
+  "pr": 3498,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix double free in stream consumer PEL loading with corrupt RDB data (#3498)",
+  "date": "2026-04-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.0568,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

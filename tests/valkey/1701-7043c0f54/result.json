@@ -1,0 +1,120 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7043c0f5432699ba5b6643ef01bf6b19ab07512c",
+  "parent": "f1270a851f6d488081a556a7f098a564c2b6d578",
+  "pr": 1701,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Scripting Engine Debugger Support (#1701)",
+  "date": "2025-10-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 16,
+  "proven": 12,
+  "hunted": 16,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 503,
+    "executed": 403,
+    "percent": 80,
+    "uncovered": [
+      "src/eval.c:637",
+      "src/eval.c:638",
+      "src/eval.c:643",
+      "src/eval.c:644",
+      "src/module.c:13515",
+      "src/module.c:13527",
+      "src/module.c:13528",
+      "src/module.c:13529",
+      "src/module.c:13536",
+      "src/module.c:13538",
+      "src/module.c:13539",
+      "src/module.c:13540",
+      "src/scripting_engine.c:109",
+      "src/scripting_engine.c:112",
+      "src/scripting_engine.c:360",
+      "src/scripting_engine.c:406",
+      "src/scripting_engine.c:409",
+      "src/scripting_engine.c:416",
+      "src/scripting_engine.c:521",
+      "src/scripting_engine.c:524",
+      "src/scripting_engine.c:526",
+      "src/scripting_engine.c:529",
+      "src/scripting_engine.c:632",
+      "src/scripting_engine.c:633",
+      "src/scripting_engine.c:704",
+      "src/scripting_engine.c:839",
+      "src/scripting_engine.c:857",
+      "src/scripting_engine.c:905",
+      "src/scripting_engine.c:1058",
+      "src/scripting_engine.c:1059",
+      "src/scripting_engine.c:1108",
+      "src/scripting_engine.c:1109",
+      "src/scripting_engine.c:1110",
+      "src/scripting_engine.c:1111",
+      "src/scripting_engine.c:1112",
+      "src/scripting_engine.c:1113",
+      "src/scripting_engine.c:1133",
+      "src/scripting_engine.c:1134",
+      "src/scripting_engine.c:1148",
+      "src/scripting_engine.c:1149",
+      "src/scripting_engine.c:1151",
+      "src/scripting_engine.c:1153",
+      "src/scripting_engine.c:1154",
+      "src/scripting_engine.c:1155",
+      "src/scripting_engine.c:1156",
+      "src/scripting_engine.c:1157",
+      "src/scripting_engine.c:1159",
+      "src/scripting_engine.c:1160",
+      "src/scripting_engine.c:1161",
+      "src/scripting_engine.c:1162"
+    ],
+    "rounds": 3
+  },
+  "cost_usd": 24.5812,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 17 (SCRIPT DEBUG yes) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"closed\":true}, not {\"reply\":\"v1\"}",
+      "scenario": "ai-df243fb292b0",
+      "seed": 201,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "200e8279e6567a2f2b87",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 17 (SCRIPT DEBUG yes) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"closed\":true}, not {\"reply\":\"v1\"}",
+      "scenario": "ai-dd624356a1aa",
+      "seed": 202,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "200e8279e6567a2f2b87",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-ba9b3b027053",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'dbg' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (maxlen 30)"
+    },
+    {
+      "scenario": "ai-1c4c58cd29ef",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'dbg' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (maxlen 30)"
+    }
+  ]
+}

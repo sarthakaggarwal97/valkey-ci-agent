@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.module-script-call-oom
+deployment:
+  modes: [standalone]
+metadata:
+  description: A write called from a script under maxmemory is OOM-rejected unless
+    the script carries the allow-oom flag
+components:
+- use: valkey.action.commands
+  id: scall
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, maxmemory, "1"], expect: {equals: OK}}
+    - {command: [EVAL, "#!hello\nFUNCTION f\nCONSTS x\nCONSTI 43\nCONSTI 2\nCALL SET\n\
+          RETURN\n", "0"], expect_difference: true, expect: {error: "command not allowed\
+          \ when used memory"}}
+    - {command: [EVAL, "#!hello flags=allow-oom\nFUNCTION f\nCONSTS x\nCONSTI 43\n\
+          CONSTI 2\nCALL SET\nRETURN\n", "0"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, "0"], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [scall.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scall}

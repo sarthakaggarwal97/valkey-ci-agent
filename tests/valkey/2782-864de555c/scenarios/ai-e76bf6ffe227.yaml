@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ea103da5d6e1..864de555ced5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e76bf6ffe227
+seed: 7400
+experiment:
+  id: proposed.module-script-call-oom
+deployment:
+  mode: standalone
+  base_port: 7400

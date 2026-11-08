@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 84eb459cd4e7..43ee46da339d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d1b7a5fb6dc7
+seed: 33
+experiment:
+  id: proposed.migrateslots-locked-down-cluster
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

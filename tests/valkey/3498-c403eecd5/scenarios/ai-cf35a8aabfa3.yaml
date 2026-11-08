@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 04896c1e6dab..c403eecd5b7d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-cf35a8aabfa3
+seed: 7001
+experiment:
+  id: proposed.stream-consumer-pel-dup-double-free
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

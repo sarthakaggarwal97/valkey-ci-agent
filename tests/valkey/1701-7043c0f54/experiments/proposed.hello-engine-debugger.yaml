@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.hello-engine-debugger
+deployment:
+  modes: [standalone]
+metadata:
+  description: SCRIPT DEBUG with a module scripting engine (HELLO) through the new
+    ABI v4 debugger API, end to end
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hellodbg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "#!hello\nFUNCTION foo\nARGS 0\nRETURN", 0, "167"], expect: {
+        equals: 167}}
+    - {command: [FUNCTION, LOAD, "#!hello name=mylib\nFUNCTION bar\nARGS 0\nRETURN"],
+      expect: {equals: mylib}}
+    - {command: [FCALL, bar, 0, "123"], expect: {equals: 123}}
+    - {command: [SCRIPT, DEBUG, sync, hello], expect_difference: true, expect: {equals: OK}}
+    - {command: [EVAL, "#!hello\nFUNCTION foo\nARGS 0\nRETURN", 0, "167"], expect_difference: true,
+      expect: {equals: [">>>   0: ARGS 0"]}}
+    - {command: [step], expect_difference: true, expect: {equals: [">>>   1: RETURN"]}}
+    - {command: [stack], expect_difference: true, expect: {equals: ["Stack contents:",
+          "top -> [0] 167"]}}
+    - {command: [stack, "0"], expect_difference: true, expect: {equals: ["[0] 167"]}}
+    - {command: [help], expect_difference: true, expect: {exists: true}}
+    - {command: [maxlen], expect_difference: true, expect: {equals: ["Current maxlen\
+            \ is 256"]}}
+    - {command: [continue], expect_difference: true, expect: {equals: ["<endsession>"]}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [SCRIPT, DEBUG, no, hello], expect_difference: true, expect: {equals: OK}}
+    - {command: [FCALL, bar, 0, "99"], expect: {equals: 99}}
+    - {command: [EVAL, "#!hello\nFUNCTION foo\nARGS 0\nRETURN", 0, "55"], expect: {
+        equals: 55}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [hellodbg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hellodbg}

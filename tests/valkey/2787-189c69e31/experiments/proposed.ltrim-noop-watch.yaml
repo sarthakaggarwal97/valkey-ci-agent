@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.ltrim-noop-watch
+deployment:
+  modes: [standalone]
+metadata:
+  description: A no-op LTRIM (range spans the whole list) must not abort a WATCHed
+    transaction; a trimming LTRIM still must
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: watch
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {list-max-listpack-size: 4}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [RPUSH, lp, a, b, c], expect: {equals: 3}}
+    - {command: [RPUSH, qp, a, b, c, d, e, f, g, h], expect: {equals: 8}}
+    - {command: [WATCH, lp], expect: {equals: OK}}
+    - {command: [LTRIM, lp, 0, -1], connection: mod, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [LLEN, lp], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [3]}}
+    - {command: [WATCH, qp], expect: {equals: OK}}
+    - {command: [LTRIM, qp, -100, 9223372036854775807], connection: mod, expect: {
+        equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [LLEN, qp], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [8]}}
+    - {command: [WATCH, qp], expect: {equals: OK}}
+    - {command: [LTRIM, qp, 1, -1], connection: mod, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [LLEN, qp], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: false}}
+    - {command: [WATCH, lp], expect: {equals: OK}}
+    - {command: [LTRIM, lp, 5, 2], connection: mod, expect: {equals: OK}}
+    - {command: [EXISTS, lp], connection: mod, expect: {equals: 0}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: false}}
+    - {command: [WATCH, nosuch], expect: {equals: OK}}
+    - {command: [LTRIM, nosuch, 0, -1], connection: mod, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [PONG]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [watch.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: watch}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "35b4e2f1ab84eb609162cca64bc2d29bd765ae7a",
+  "parent": "9acea36841903eb08fb9e12a5febbf112ab8200d",
+  "pr": 2757,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update module api generation and format module.c (#2757)",
+  "date": "2025-10-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3511,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change touches only doc comments and whitespace in src/module.c (reflowed example code in comments, 'redis.call()' renamed to 'server.call()' in a comment, and the VM_RegisterCommandFilter signature re-wrapped across lines with no code change) and rewrites utils/generate-module-api-doc.rb, a Ruby script that generates module API documentation and is never part of the server binary. No runtime behavior, reply, module ABI, replication, or persistence path changes, so there is nothing a scenario could exercise."
+}

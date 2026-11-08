@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0e5477fb9bdfdb4b615a097387907f92345474b8",
+  "parent": "35b4e2f1ab84eb609162cca64bc2d29bd765ae7a",
+  "pr": 2758,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix atomic slot migration module notification comment (#2758)",
+  "date": "2025-10-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.238,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure documentation fix: it deletes two stale lines (source_node_id and target_node_id field descriptions) from a C comment in src/module.c describing the atomic slot migration module notification struct. No executable code, API, data layout, or behaviour changes, so there is nothing a scenario could exercise or compare."
+}

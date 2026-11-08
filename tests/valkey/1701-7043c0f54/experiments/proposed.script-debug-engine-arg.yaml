@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.script-debug-engine-arg
+deployment:
+  modes: [standalone]
+metadata:
+  description: SCRIPT DEBUG gained an optional engine-name argument (arity 3 to -3),
+    with new engine-lookup error paths and updated SCRIPT HELP text
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dbgarg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SCRIPT, DEBUG, yes, lua], expect_difference: true, expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, no], expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, sync, LUA], expect_difference: true, expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, no, lua], expect_difference: true, expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, yes, nosuchengine], expect_difference: true, expect: {
+        error: "No scripting engine found"}}
+    - {command: [SCRIPT, DEBUG, no, ""], expect_difference: true, expect: {error: "No\
+          \ scripting engine found"}}
+    - {command: [SCRIPT, DEBUG, badmode], expect: {error: "Use SCRIPT DEBUG YES/SYNC/NO"}}
+    - {command: [SCRIPT, DEBUG, badmode, lua], expect_difference: true, expect: {
+        error: "Use SCRIPT DEBUG YES/SYNC/NO"}}
+    - {command: [SCRIPT, HELP], expect_difference: true, expect: {exists: true}}
+    - {command: [SCRIPT, DEBUG, no], expect: {equals: OK}}
+    - {command: [EVAL, "return 42", 0], expect: {equals: 42}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [dbgarg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbgarg}

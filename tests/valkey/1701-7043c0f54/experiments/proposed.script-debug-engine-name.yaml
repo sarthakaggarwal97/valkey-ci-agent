@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.script-debug-engine-name
+deployment:
+  modes: [standalone]
+metadata:
+  description: SCRIPT DEBUG with the new optional engine-name argument and a bad engine
+    name, replies compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: scriptdbg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SCRIPT, DEBUG, "no"], expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, "yes", lua], expect_difference: true, expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, "no", lua], expect_difference: true, expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, "sync", lua], expect_difference: true, expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, "no"], expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, "no", nosuchengine], expect_difference: true, expect: {
+        error: "No scripting engine found"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [scriptdbg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scriptdbg}

@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-08T16:10+00:00.
+Updated 2026-11-08T16:16+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 941 | 1566 | #2787 (2025-10-31) | 271 | 134.4 |
+| valkey-io/valkey | 966 | 1541 | #2741 (2025-10-16) | 296 | 138.0 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
 | valkey-io/valkey-search | 635 | 34 | f8106e72e984 (2024-11-27) | 200 | 90.7 |
@@ -13,28 +13,28 @@ Updated 2026-11-08T16:10+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-08T12:40:17+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42471378663): 20 merge(s) tested, 11 without a code change.
+[2026-11-08T16:16:00+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42481344991): 20 merge(s) tested, 5 without a code change.
 
-- [valkey-io/valkey#2508](https://github.com/valkey-io/valkey/pull/2508) ([tests](tests/valkey/2508-33bfac37b/)): Optimize zset memory usage by embedding element in skiplist (#2508): 1 of 9 test(s) reached the change, coverage 88%
-- [valkey-io/valkey#2659](https://github.com/valkey-io/valkey/pull/2659) ([tests](tests/valkey/2659-a06cf15b2/)): Allow dual channel full sync in plain failover (#2659): 0 of 3 test(s) reached the change, coverage 0%
-- [valkey-io/valkey#2825](https://github.com/valkey-io/valkey/pull/2825) ([tests](tests/valkey/2825-86db60921/)): Print node name on a best effort basis if light weight message is received before link stabilization (#2825): declined: The change only rewrites serverLog message text in cluster_legacy.c, factoring the existing `link->node ? name : "<unknown>"` null checks into two inline helpers and adding the human node name to a few debug/notice/warning log lines. No command reply, cluster-bus protocol behaviour, link l
-- [valkey-io/valkey#2829](https://github.com/valkey-io/valkey/pull/2829) ([tests](tests/valkey/2829-331a85282/)): Change DEFAULT_WAIT_BEFORE_RDB_CLIENT_FREE from 60s to 5s (#2829): 0 of 3 test(s) reached the change
-- [valkey-io/valkey#2835](https://github.com/valkey-io/valkey/pull/2835) ([tests](tests/valkey/2835-8e0b375da/)): Fix cluster slot stats for scripts with cross-slot keys (#2835): 2 of 2 test(s) reached the change, coverage 100%; check, fixed by #2835 (recorded); check, fixed by #2835 (recorded)
-- [valkey-io/valkey#2581](https://github.com/valkey-io/valkey/pull/2581) ([tests](tests/valkey/2581-01a7657b8/)): Add --warmup and --duration parameters to valkey-benchmark (#2581): 1 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2796](https://github.com/valkey-io/valkey/pull/2796) ([tests](tests/valkey/2796-1b0b5c0cf/)): New module API to perform prefix‑aware ACL permission check (#2796): 2 of 2 test(s) reached the change, coverage 86%
-- [valkey-io/valkey#2817](https://github.com/valkey-io/valkey/pull/2817) ([tests](tests/valkey/2817-3c378862c/)): Cluster: Avoid usage of light weight messages to nodes with not ready bidirectional links (#2817): 0 of 3 test(s) reached the change, coverage 50%
-- [valkey-io/valkey#2828](https://github.com/valkey-io/valkey/pull/2828) ([tests](tests/valkey/2828-047080a62/)): shared zadd for geoadd (#2828): 0 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2366](https://github.com/valkey-io/valkey/pull/2366) ([tests](tests/valkey/2366-2da21d9de/)): Allow partial sync after loading AOF with preamble (#2366): 1 of 5 test(s) reached the change, coverage 96%
-- [valkey-io/valkey#2804](https://github.com/valkey-io/valkey/pull/2804) ([tests](tests/valkey/2804-7fbd4cb26/)): Expose SIMPLE_STRING and ARRAY_NULL reply type to the Module API (#2804): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2818](https://github.com/valkey-io/valkey/pull/2818) ([tests](tests/valkey/2818-bb8989cfd/)): Adds new module context flag `VALKEYMODULE_CTX_SCRIPT_EXECUTION` (#2818): 2 of 5 test(s) reached the change, coverage 30%; crash, fixed by #2818 (recorded)
-- [valkey-io/valkey#2624](https://github.com/valkey-io/valkey/pull/2624) ([tests](tests/valkey/2624-65ab07dde/)): Leverage zfree_with_size for client reply blocks (#2624): 0 of 3 test(s) reached the change, coverage 57%
-- [valkey-io/valkey#2798](https://github.com/valkey-io/valkey/pull/2798) ([tests](tests/valkey/2798-7a1d98969/)): Add "script" context to  ACL log entries (#2798): 3 of 3 test(s) reached the change, coverage 91%; check, not reproduced (recorded); check, introduced and since fixed (recorded); check, not reproduced (recorded); check, introduced and since fixed (recorded); check, not reproduced (recorded); check, introduced and since fixed (recorded)
-- [valkey-io/valkey#2608](https://github.com/valkey-io/valkey/pull/2608) ([tests](tests/valkey/2608-32844b8b0/)): Configurable DB hash seed for SCAN family commands consistency (#2608): 1 of 5 test(s) reached the change, coverage 87%
-- [valkey-io/valkey#2800](https://github.com/valkey-io/valkey/pull/2800) ([tests](tests/valkey/2800-c88c94e32/)): Reuse dbHasNoKeys() inside dbsHaveNoKeys() to remove duplicate logic (#2800): declined: The change replaces the inlined emptiness check in dbsHaveNoKeys() with a call to the existing dbHasNoKeys() helper. Within the loop bounds [0, server.dbnum) the helper's added range checks are always false, so it evaluates to exactly the same condition the old code tested (!server.db[i] |
-- [valkey-io/valkey#2799](https://github.com/valkey-io/valkey/pull/2799) ([tests](tests/valkey/2799-a49d469f4/)): Reverts hashHashtableTypeValidate signature (#2799): declined: The change only reverts the C signature of hashHashtableTypeValidate from 'entry *' to 'void *' and adds an equivalent local cast, restoring type compatibility with the hashtableType.validateEntry callback declared in server.c. The function body and all runtime behaviour are identical; it 
-- [valkey-io/valkey#2794](https://github.com/valkey-io/valkey/pull/2794) ([tests](tests/valkey/2794-a99c63632/)): Improve header comment and strengthen type checking for entry (#2794): declined: The change is a pure type-safety refactor of src/entry.c/entry.h and callers in t_hash.c: a rewritten header comment, `typedef void entry` replaced by an opaque `struct _entry` typedef, explicit casts, an `entryGetField()` accessor that returns the same pointer as before ((sds)entry), and 
-- [valkey-io/valkey#2668](https://github.com/valkey-io/valkey/pull/2668) ([tests](tests/valkey/2668-4d78d36bf/)): HSETEX: Support NX/XX Flags (#2668): 3 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2780](https://github.com/valkey-io/valkey/pull/2780) ([tests](tests/valkey/2780-6cbc1a31d/)): Sentinel: fix regression requiring "+failover" ACL in failover path (#2780): declined: The change is confined to Sentinel-mode code: sentinelSendReplicaOf in src/sentinel.c now sends FAILOVER ABORT in the reconfiguration MULTI only when the monitored instance's master_failover_state shows an ongoing failover, instead of whenever the instance supports that INFO field, so a se
+- [valkey-io/valkey#3498](https://github.com/valkey-io/valkey/pull/3498) ([tests](tests/valkey/3498-c403eecd5/)): Fix double free in stream consumer PEL loading with corrupt RDB data (#3498): 0 of 1 test(s) reached the change
+- [valkey-io/valkey#2787](https://github.com/valkey-io/valkey/pull/2787) ([tests](tests/valkey/2787-189c69e31/)): Fix: ltrim should not call signalModifiedKey when no elements are removed (#2787): 2 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2785](https://github.com/valkey-io/valkey/pull/2785) ([tests](tests/valkey/2785-43ee46da3/)): Authenticate slot migration client on source node to internal user (#2785): 3 of 3 test(s) reached the change, coverage 100%; check, introduced and since fixed (recorded)
+- [valkey-io/valkey#2791](https://github.com/valkey-io/valkey/pull/2791) ([tests](tests/valkey/2791-84eb459cd/)): Add ValkeyModule_ReplyWithCustomErrorFormat to module API (#2791): 3 of 3 test(s) reached the change, coverage 87%
+- [valkey-io/valkey#2786](https://github.com/valkey-io/valkey/pull/2786) ([tests](tests/valkey/2786-f54818cc6/)): Bug fix: reset io_last_written on c->buf resize to prevent stale pointers (#2786): declined: Memory-safety fix in clientsCronResizeOutputBuffer: when the client reply buffer c->buf is reallocated by the server cron, a pending partial-write pointer (c->io_last_written.buf) that still referenced the freed old buffer is now repointed to the new buffer, avoiding a stale/dangling point
+- [valkey-io/valkey#2782](https://github.com/valkey-io/valkey/pull/2782) ([tests](tests/valkey/2782-864de555c/)): Make ValkeyModule_Call compatible with calling commands from scripting engines (#2782): 5 of 5 test(s) reached the change, coverage 48%
+- [valkey-io/valkey#2738](https://github.com/valkey-io/valkey/pull/2738) ([tests](tests/valkey/2738-ea103da5d/)): New INFO section for scripting engines (#2738): 3 of 3 test(s) reached the change, coverage 95%
+- [valkey-io/valkey#2776](https://github.com/valkey-io/valkey/pull/2776) ([tests](tests/valkey/2776-f3b2dee3b/)): Add monotonic clock calibration handling if clock speed is not found (#2776): declined: The change is confined to monotonicInit_x86linux() in src/monotonic.c, which is compiled only when USE_PROCESSOR_CLOCK is defined (a non-default build flag set via CFLAGS=-DUSE_PROCESSOR_CLOCK). The fuzzer runs the builds the runner supplies, which use the default POSIX clock_gettime path,
+- [valkey-io/valkey#2737](https://github.com/valkey-io/valkey/pull/2737) ([tests](tests/valkey/2737-909d082cd/)): Reorder valkey.conf: move configs to correct sections (#2737): declined: The change only reorders commented-out documentation blocks inside valkey.conf (availability-zone, server-cpulist/bio-cpulist/aof-rewrite-cpulist/bgsave-cpulist, ignore-warnings) into their correct sections. Every moved line begins with '#'; no active config directive or server code change
+- [valkey-io/valkey#2763](https://github.com/valkey-io/valkey/pull/2763) ([tests](tests/valkey/2763-861d0794b/)): Sentinel: Skip IS-PRIMARY-DOWN-BY-ADDR requests when primary not SDOWN (#2763): declined: The change is confined to Sentinel-mode code (sentinelAskPrimaryStateToOtherSentinels in src/sentinel.c, the IS-PRIMARY-DOWN-BY-ADDR exchange between sentinels). The fuzzer cannot reach it: deployment modes are standalone and cluster only (Sentinel mode is explicitly unimplemented per docs
+- [valkey-io/valkey#1701](https://github.com/valkey-io/valkey/pull/1701) ([tests](tests/valkey/1701-7043c0f54/)): Scripting Engine Debugger Support (#1701): 12 of 16 test(s) reached the change, coverage 80%; check, introduced and since fixed (recorded)
+- [valkey-io/valkey#2761](https://github.com/valkey-io/valkey/pull/2761) ([tests](tests/valkey/2761-746d9eca9/)): Use the fetched TLS and TCP ports in clusterProcessGossipSection (#2761): declined: The change only replaces inline ternary expressions in clusterProcessGossipSection's address-update condition with the msg_tls_port/msg_tcp_port variables already computed by getClientPortFromGossip a few lines above. Those variables are defined by exactly the same expressions that were re
+- [valkey-io/valkey#2471](https://github.com/valkey-io/valkey/pull/2471) ([tests](tests/valkey/2471-7e0b3bbd5/)): Show RPS histogram in valkey-benchmark (#2471): 1 of 1 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2758](https://github.com/valkey-io/valkey/pull/2758) ([tests](tests/valkey/2758-0e5477fb9/)): Fix atomic slot migration module notification comment (#2758): declined: The change is a pure documentation fix: it deletes two stale lines (source_node_id and target_node_id field descriptions) from a C comment in src/module.c describing the atomic slot migration module notification struct. No executable code, API, data layout, or behaviour changes, so there i
+- [valkey-io/valkey#2757](https://github.com/valkey-io/valkey/pull/2757) ([tests](tests/valkey/2757-35b4e2f1a/)): Update module api generation and format module.c (#2757): declined: The change touches only doc comments and whitespace in src/module.c (reflowed example code in comments, 'redis.call()' renamed to 'server.call()' in a comment, and the VM_RegisterCommandFilter signature re-wrapped across lines with no code change) and rewrites utils/generate-module-api-doc
+- [valkey-io/valkey#2752](https://github.com/valkey-io/valkey/pull/2752) ([tests](tests/valkey/2752-9acea3684/)): Fix outdated comment around clusterLink->flags (#2752): declined: The change only edits a comment on clusterLink->flags in src/cluster_legacy.h (one line, no code change). It cannot alter behaviour, replies, cluster bus traffic, or persistence, so no scenario is needed.
+- [valkey-io/valkey#2753](https://github.com/valkey-io/valkey/pull/2753) ([tests](tests/valkey/2753-1cf0df9fc/)): Fix invalid memory address caused by hashtable shrinking during safe iteration (#2753): 0 of 5 test(s) reached the change, coverage 0%, 5 skipped (required capability 'build' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'forkless-infrastructure-enabled "yes"' Bad directive or wrong number of arguments; default deployment config)
+- [valkey-io/valkey#2750](https://github.com/valkey-io/valkey/pull/2750) ([tests](tests/valkey/2750-5d3cb3d04/)): Initialize the lua attributes of the luaFunction script (#2750): declined: The change fixes an uninitialized-field bug: in the two FUNCTION-registration paths the luaFunction script was zmalloc'd, so script->lua held garbage, and luaEngineFreeFunction's `if (lua == script->lua) lua_unref(...)` guard then skipped releasing the Lua registry reference when an indivi
+- [valkey-io/valkey#2749](https://github.com/valkey-io/valkey/pull/2749) ([tests](tests/valkey/2749-2a914aa52/)): Fix incorrect kvstore size and BIT accounting after completed migration (#2749): 3 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1826](https://github.com/valkey-io/valkey/pull/1826) ([tests](tests/valkey/1826-b4c93cc9c/)): FUNCTION FLUSH re-create lua VM, fix flush not gc, fix flush async + load crash (#1826): 0 of 12 test(s) reached the change, coverage 90%; crash, fixed by #1826 (recorded); crash, fixed by #1826 (recorded); crash, fixed by #1826 (recorded)
 
 ### valkey-io/valkey-bloom
 
@@ -56,10 +56,10 @@ Updated 2026-11-08T16:10+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 587 of 858 tested (68%)
-- Changed-line coverage: median 100% of 431 merge(s) measured, 34 under 50%
-- Recall: 160 parents flagged of 236 fix merges
-- Claude: $1538.10 in the last 24 hours, $6187.05 in the last 7 days, $6187.05 in all
+- Merges whose tests reached the change: 595 of 869 tested (68%)
+- Changed-line coverage: median 100% of 441 merge(s) measured, 36 under 50%
+- Recall: 163 parents flagged of 241 fix merges
+- Claude: $1625.27 in the last 24 hours, $6274.23 in the last 7 days, $6274.23 in all
 - Issues filed: 56
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
@@ -155,4 +155,3 @@ Updated 2026-11-08T16:10+00:00.
 - [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
 - [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57): attempt 0 of 3, requeued: its build failed before the walk's build fix (CMake 4 policy, gRPC header race)
 - [valkey-io/valkey#3800](https://github.com/valkey-io/valkey/pull/3800): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
-- [valkey-io/valkey#3498](https://github.com/valkey-io/valkey/pull/3498): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict

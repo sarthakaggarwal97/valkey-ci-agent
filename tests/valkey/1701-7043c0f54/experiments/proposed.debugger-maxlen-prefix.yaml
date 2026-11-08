@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.debugger-maxlen-prefix
+deployment:
+  modes: [standalone]
+metadata:
+  description: Lua script debugger REPL maxlen, prefix matching, and changed messages
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dbg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SCRIPT, DEBUG, SYNC], expect: {equals: OK}}
+    - {command: [EVAL, "return 1", 0], compare: skip}
+    - {command: [h], compare: skip}
+    - {command: [p], compare: skip}
+    - {command: [maxlen, abc], expect_difference: true, expect: {equals: ["<error>\
+            \ Invalid maxlen value."]}}
+    - {command: [maxlen, 30], expect_difference: true, expect: {equals: ["<value>\
+            \ replies are truncated at 30 bytes."]}}
+    - {command: [maxlen, 0], expect_difference: true, expect: {equals: ["<value> replies\
+            \ are not truncated."]}}
+    - {command: [zzz], expect_difference: true, expect: {equals: ["<error> Unknown\
+            \ debugger command or wrong number of arguments."]}}
+    - {command: [continue], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbg}

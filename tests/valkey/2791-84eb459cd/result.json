@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "84eb459cd4e7c3b9c529d152d68a4d83613faa28",
+  "parent": "f54818cc60597e9fe5dc03a52fd39ab944cd4932",
+  "pr": 2791,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add ValkeyModule_ReplyWithCustomErrorFormat to module API (#2791)",
+  "date": "2025-10-31",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 16,
+    "executed": 14,
+    "percent": 87,
+    "uncovered": [
+      "src/module.c:3228",
+      "src/module.c:3230"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 6.5528,
+  "findings": [],
+  "recorded": []
+}

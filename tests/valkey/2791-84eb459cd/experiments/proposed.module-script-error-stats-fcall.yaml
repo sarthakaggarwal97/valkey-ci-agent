@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.module-script-error-stats-fcall
+deployment:
+  modes: [standalone]
+metadata:
+  description: An error from a command called inside a HELLO-engine FUNCTION (FCALL)
+    is counted once in errorstats (parent double-counts)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fcall
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [FUNCTION, LOAD, "#!hello name=mylib\nFUNCTION callcmd\nCONSTS l\n\
+          CONSTI 1\nCALL GET\nRETURN\n"], expect: {equals: mylib}}
+    - {command: [LPUSH, l, "1"], expect: {equals: 1}}
+    - {command: [FCALL, callcmd, "0"], expect: {error: "WRONGTYPE"}}
+    - {command: [INFO, errorstats], expect_difference: true, expect: {contains: "errorstat_WRONGTYPE:count=1"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [fcall.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fcall}

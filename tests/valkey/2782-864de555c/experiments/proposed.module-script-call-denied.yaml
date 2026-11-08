@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.module-script-call-denied
+deployment:
+  modes: [standalone]
+metadata:
+  description: A write called from a read-only script, and one the script user lacks
+    ACL for, are rejected through the new script-mode cleanup path
+components:
+- use: valkey.action.commands
+  id: scall
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 15
+    commands:
+    - {command: [EVAL, "#!hello flags=no-writes\nFUNCTION f\nCONSTS x\nCONSTI 43\n\
+          CONSTI 2\nCALL SET\nRETURN\n", "0"], expect_difference: true, expect: {
+        error: "Write commands are not allowed"}}
+    - {command: [ACL, SETUSER, default, -set], expect: {equals: OK}}
+    - {command: [EVAL, "#!hello\nFUNCTION f\nCONSTS x\nCONSTI 43\nCONSTI 2\nCALL SET\n\
+          RETURN\n", "0"], expect_difference: true, expect: {error: "has no permissions"}}
+    - {command: [ACL, SETUSER, default, +set], expect: {equals: OK}}
+    - {command: [GET, x], expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [scall.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scall}

@@ -1,0 +1,81 @@
+extends: [valkey.liveness]
+id: proposed.function-flush-vm-reset-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FUNCTION FLUSH and FLUSHALL re-create the Lua function VM and release
+    its memory; FUNCTION LOAD right after an async flush works
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flush
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FUNCTION, LOAD, "#!lua name=heavy1\nlocal big = {} for i=1,400 do\
+          \ big[i] = string.rep('a', 8192) .. i end server.register_function('h1',\
+          \ function() return #big end)"], expect: {equals: heavy1}}
+    - {command: [FUNCTION, LOAD, "#!lua name=heavy2\nlocal big = {} for i=1,400 do\
+          \ big[i] = string.rep('b', 8192) .. i end server.register_function('h2',\
+          \ function() return #big end)"], expect: {equals: heavy2}}
+    - {command: [FUNCTION, LOAD, "#!lua name=heavy3\nlocal big = {} for i=1,400 do\
+          \ big[i] = string.rep('c', 8192) .. i end server.register_function('h3',\
+          \ function() return #big end)"], expect: {equals: heavy3}}
+    - {command: [FUNCTION, LOAD, "#!lua name=bulk\nfor i=1,100 do server.register_function('fn'\
+          \ .. i, function() return i end) end"], expect: {equals: bulk}}
+    - {command: [FCALL, h1, 0], expect: {equals: 400}}
+    - {command: [FCALL, fn5, 0], expect: {equals: 5}}
+    - {command: [EVAL, "local info = server.call('INFO','memory') local m = tonumber(string.match(info,\
+          \ 'used_memory_vm_functions:(%d+)')) if m ~= nil and m < 5000000 then return\
+          \ 1 else return 0 end", 0], expect: {equals: 0}}
+    - {command: [FUNCTION, FLUSH, SYNC], expect: {equals: OK}}
+    - {command: [FUNCTION, LIST], expect: {equals: []}}
+    - {command: [FCALL, h1, 0], expect: {error: "Function not found"}}
+    - {command: [EVAL, "local info = server.call('INFO','memory') local m = tonumber(string.match(info,\
+          \ 'used_memory_vm_functions:(%d+)')) if m ~= nil and m < 5000000 then return\
+          \ 1 else return 0 end", 0], expect_difference: true, expect: {equals: 1}}
+    - {command: [FUNCTION, LOAD, "#!lua name=heavy1\nlocal big = {} for i=1,400 do\
+          \ big[i] = string.rep('a', 8192) .. i end server.register_function('h1',\
+          \ function() return #big end)"], expect: {equals: heavy1}}
+    - {command: [FCALL, h1, 0], expect: {equals: 400}}
+    - {command: [FUNCTION, LOAD, "#!lua name=heavy2\nlocal big = {} for i=1,400 do\
+          \ big[i] = string.rep('b', 8192) .. i end server.register_function('h2',\
+          \ function() return #big end)"], expect: {equals: heavy2}}
+    - {command: [FUNCTION, LOAD, "#!lua name=bulk\nfor i=1,100 do server.register_function('fn'\
+          \ .. i, function() return i end) end"], expect: {equals: bulk}}
+    - {command: [FUNCTION, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=bulk\nfor i=1,100 do server.register_function('fn'\
+          \ .. i, function() return i end) end"], expect: {equals: bulk}}
+    - {command: [FCALL, fn7, 0], expect: {equals: 7}}
+    - {command: [EVAL, "local info = server.call('INFO','memory') local m = tonumber(string.match(info,\
+          \ 'used_memory_vm_functions:(%d+)')) if m ~= nil and m < 5000000 then return\
+          \ 1 else return 0 end", 0], compare: skip, expect: {equals: 1}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=heavy3\nlocal big = {} for i=1,400 do\
+          \ big[i] = string.rep('c', 8192) .. i end server.register_function('h3',\
+          \ function() return #big end)"], expect: {equals: heavy3}}
+    - {command: [FLUSHALL, SYNC], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: null}}
+    - {command: [FUNCTION, LIST], expect: {equals: []}}
+    - {command: [EVAL, "local info = server.call('INFO','memory') local m = tonumber(string.match(info,\
+          \ 'used_memory_vm_functions:(%d+)')) if m ~= nil and m < 5000000 then return\
+          \ 1 else return 0 end", 0], compare: skip, expect: {equals: 1}}
+    - {command: [FUNCTION, LOAD, "#!lua name=bulk\nfor i=1,100 do server.register_function('fn'\
+          \ .. i, function() return i end) end"], expect: {equals: bulk}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [FUNCTION, LIST], expect: {equals: []}}
+    - {command: [FUNCTION, LOAD, "#!lua name=bulk\nfor i=1,100 do server.register_function('fn'\
+          \ .. i, function() return i end) end"], expect: {equals: bulk}}
+    - {command: [FCALL, fn9, 0], expect: {equals: 9}}
+    - {command: [EVAL, "return 7", 0], expect: {equals: 7}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [flush.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flush}

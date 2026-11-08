@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "746d9eca9e139af501f21944f200a707b2c8e394",
+  "parent": "7e0b3bbd5215953ec1e634a91107f8541869cf6c",
+  "pr": 2761,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use the fetched TLS and TCP ports in clusterProcessGossipSection (#2761)",
+  "date": "2025-10-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3608,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only replaces inline ternary expressions in clusterProcessGossipSection's address-update condition with the msg_tls_port/msg_tcp_port variables already computed by getClientPortFromGossip a few lines above. Those variables are defined by exactly the same expressions that were removed (tls_cluster ? ntohs(g->port) : ntohs(g->pport) for TLS and the reverse for TCP), and the gossip entry is not mutated in between, so the condition evaluates identically on every input. This is a pure refactor with no behaviour change, so no scenario is needed."
+}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 95154feaa122..b4c93cc9c25e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2de934b13d18
+seed: 102
+experiment:
+  id: proposed.function-flush-vm-reset-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

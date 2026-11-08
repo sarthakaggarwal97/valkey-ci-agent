@@ -1,0 +1,24 @@
+extends: [valkey.liveness]
+id: proposed.debugger-malformed-proto
+deployment:
+  modes: [standalone]
+metadata:
+  description: Malformed RESP in the debugger command stream hits the protocol-error
+    cleanup path
+components:
+- use: valkey.action.commands
+  id: dbg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 20
+    judge_replies: false
+    commands:
+    - {command: [SCRIPT, DEBUG, SYNC]}
+    - {command: [EVAL, "return 1", 0]}
+    - {connection: main, raw: "*2\r\n$3\r\nfoo\r\nbar\r\n"}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbg}

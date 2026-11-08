@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.lua-debugger-repl
+deployment:
+  modes: [standalone]
+metadata:
+  description: Interactive Lua debugger sessions (sync and forked) through the rewritten
+    generic debugger REPL, maxlen parsing, argument-count checking, and changed error
+    text
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ldbrepl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, sync], expect: {equals: OK}}
+    - {command: [EVAL, "local x = server.call('GET', KEYS[1])\nreturn x", 1, k1],
+      expect: {exists: true}}
+    - {command: [help], expect_difference: true, expect: {exists: true}}
+    - {command: [maxlen], expect_difference: true, expect: {equals: ["Current maxlen\
+            \ is 256"]}}
+    - {command: [maxlen, abc], expect_difference: true, expect: {equals: ["<error>\
+            \ Invalid maxlen value."]}}
+    - {command: [maxlen, "100"], expect: {equals: ["<value> replies are truncated\
+            \ at 100 bytes."]}}
+    - {command: [maxlen, "-1"], expect_difference: true, expect: {equals: ["<error>\
+            \ Invalid maxlen value."]}}
+    - {command: [maxlen, "0"], expect_difference: true, expect: {equals: ["<value>\
+            \ replies are not truncated."]}}
+    - {command: [foobar], expect_difference: true, expect: {equals: ["<error> Unknown\
+            \ debugger command or wrong number of arguments."]}}
+    - {command: [whole, "9"], expect_difference: true, expect: {equals: ["<error>\
+            \ Unknown debugger command or wrong number of arguments."]}}
+    - {command: [valkey], expect_difference: true, expect: {equals: ["<error> Unknown\
+            \ debugger command or wrong number of arguments."]}}
+    - {command: [break, "2"], expect: {exists: true}}
+    - {command: [step], expect: {exists: true}}
+    - {command: [print, x], expect: {exists: true}}
+    - {command: [valkey, GET, k1], expect: {exists: true}}
+    - {command: [continue], expect: {exists: true}}
+    - {command: [SCRIPT, DEBUG, yes], expect: {equals: OK}}
+    - {command: [EVAL, "return 'fork'", 0], expect: {exists: true}}
+    - {command: [maxlen], expect_difference: true, expect: {equals: ["Current maxlen\
+            \ is 256"]}}
+    - {command: [whole], expect: {exists: true}}
+    - {command: [abort], expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [SCRIPT, DEBUG, no], expect: {equals: OK}}
+    - {command: [EVAL, "return 7", 0], expect: {equals: 7}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [ldbrepl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ldbrepl}
