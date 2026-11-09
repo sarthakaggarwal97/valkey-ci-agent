@@ -830,11 +830,14 @@ def test_a_change_the_merge_got_wrong_is_no_regressed_fix(monkeypatch, tmp_path)
 
 
 def test_the_commands_violating_their_expect_are_known_by_component_and_index():
+    # Tool runs count too (fuzzer#113): at valkey#2177's merge the marked cli runs differed only by crashing
+    # against their expect, and without their violating list the lost difference read as a regressed fix.
     report = {"outcome": {"component_results": [
         {"component_id": "seq", "evidence": [{"evidence_id": walk.SEQUENCE_EVIDENCE, "value": {"violating": [5, 27]}}]},
         {"component_id": "old", "evidence": [{"evidence_id": walk.SEQUENCE_EVIDENCE, "value": {"reached": [1]}}]},
+        {"component_id": "cli", "evidence": [{"evidence_id": walk.TOOL_RUNS_EVIDENCE, "value": {"violating": [0]}}]},
     ]}}
-    assert walk.violating_commands(report) == {("seq", 5), ("seq", 27)}
+    assert walk.violating_commands(report) == {("seq", 5), ("seq", 27), ("cli", 0)}
 
 
 def test_the_replies_of_a_runs_sequence_are_known_by_component_and_index():

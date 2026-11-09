@@ -663,14 +663,14 @@ def reached_commands(report: dict[str, Any]) -> set[tuple[str, int]]:
 
 
 def violating_commands(report: dict[str, Any]) -> set[tuple[str, int]]:
-    """The commands whose reply on the build under test violates their expect in one run, as (component id,
-    index): the ``violating`` lists of its sequence evidence."""
+    """The commands (or tool runs) whose reply on the build under test violates their expect in one run, as
+    (component id, index): the ``violating`` lists of its sequence and tool runs evidence."""
     violating = set()
     for result in report["outcome"]["component_results"]:
         if not isinstance(result, dict):
             continue
         for evidence in result.get("evidence") or []:
-            if isinstance(evidence, dict) and evidence.get("evidence_id") == SEQUENCE_EVIDENCE:
+            if isinstance(evidence, dict) and evidence.get("evidence_id") in (SEQUENCE_EVIDENCE, TOOL_RUNS_EVIDENCE):
                 value = evidence.get("value")
                 indexes = value.get("violating") if isinstance(value, dict) else None
                 violating |= {(str(result.get("component_id")), int(index)) for index in indexes or []}
