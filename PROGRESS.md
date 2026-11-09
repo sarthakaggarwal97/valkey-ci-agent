@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-09T17:43+00:00.
+Updated 2026-11-09T17:44+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -43,9 +43,8 @@ Updated 2026-11-09T17:43+00:00.
 
 ### valkey-io/valkey-json
 
-[2026-11-09T17:43:32+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42662928754): 1 merge(s) tested, 0 without a code change.
+[2026-11-09T17:44:19+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42667417480): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-json#128](https://github.com/valkey-io/valkey-json/pull/128) ([tests](tests/valkey-json/128-1d9062ada/)): Fix CI on ubuntu-26.04 runners (#128): 0 of 2 test(s) reached the change
 
 ### valkey-io/valkey-search
 
