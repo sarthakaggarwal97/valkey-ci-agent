@@ -1,0 +1,49 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a05d1a6ec1473a176a74e4b027bf5ab64b5f5c3a",
+  "parent": "ceb09b0a9df8a72e544d4837cf6c27221c6f15c8",
+  "pr": 2225,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix the incorrect stdout redirect logic, use dup2 to redirect stdout  (#2225)",
+  "date": "2025-06-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 11,
+    "executed": 11,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 12.3979,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: killed by signal 11",
+      "scenario": "ai-07da6cf34eb5",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #2225, since fixed",
+      "fingerprint": "3c9b6d82c5da2b04c973",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-c4b50af53cd7",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'stats-output' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (valkey-cli -p $port CONFIG SET dbfilename small.rdb), 8 (valkey-check-rdb small.rdb --stats --format info --output stats.txt)"
+    }
+  ]
+}

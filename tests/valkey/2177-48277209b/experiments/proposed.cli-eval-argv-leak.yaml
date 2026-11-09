@@ -1,0 +1,21 @@
+extends: [valkey.liveness]
+id: proposed.cli-eval-argv-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli --eval frees its argument vector after issuing EVAL (no
+    leak on the fixed build)
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    ignore: ['^\d+:[A-Z] .*\n']
+    files:
+      script.lua: "return 1\n"
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, --eval, script.lua, k1, k2, ",", a1, a2,
+        a3], expect_difference: true, expect: {exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

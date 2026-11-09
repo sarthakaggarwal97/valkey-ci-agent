@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c41ffc3401acd3f9b7c2bfc50314626805718dd0",
+  "parent": "1b531e560b6256a26692382ad622fc975a683f36",
+  "pr": 2193,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "valkey-check-rdb: Fix truncated long aux fields (#2193)",
+  "date": "2025-06-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.1005,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

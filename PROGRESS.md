@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-09T13:18+00:00.
+Updated 2026-11-09T13:36+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1185 | 1322 | #2260 (2025-06-24) | 244 | 169.3 |
+| valkey-io/valkey | 1210 | 1297 | #1566 (2025-06-10) | 269 | 172.9 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
 | valkey-io/valkey-search | 669 | 0 | f8106e72e984 (2024-11-27) | 62 | 95.6 |
@@ -13,28 +13,28 @@ Updated 2026-11-09T13:18+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-09T11:54:24+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42600016857): 20 merge(s) tested, 1 without a code change.
+[2026-11-09T13:36:17+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42612697002): 20 merge(s) tested, 5 without a code change.
 
-- [valkey-io/valkey#2283](https://github.com/valkey-io/valkey/pull/2283) ([tests](tests/valkey/2283-e279b00f8/)): Generate a new shard_id when the replica executes CLUSTER RESET SOFT (#2283): 2 of 2 test(s) reached the change, coverage 100%; check, introduced and since fixed (recorded)
-- [valkey-io/valkey#2262](https://github.com/valkey-io/valkey/pull/2262) ([tests](tests/valkey/2262-293be3e32/)): spelling: md (#2262): declined: The change edits a single comment in src/unit/test_help.h, correcting a filename typo (README.me to README.md). It is a comment-only spelling fix with no behaviour change in any Valkey binary, so no scenario is needed.
-- [valkey-io/valkey#2288](https://github.com/valkey-io/valkey/pull/2288) ([tests](tests/valkey/2288-e53e048c6/)): Fix leak when shrinking a hashtable without entries (#2288): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1761](https://github.com/valkey-io/valkey/pull/1761) ([tests](tests/valkey/1761-51b81d0ec/)): Implement RPS control for benchmark using token bucket algorithm (#1761): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2179](https://github.com/valkey-io/valkey/pull/2179) ([tests](tests/valkey/2179-06a281ee8/)): Update LPOP and RPOP command json file description (#2179): declined: The change only rewords the 'summary' documentation string for LPOP and RPOP in their command JSON files and the regenerated commands.def. Command behaviour, arity, flags, key specs and replies are untouched; the only observable difference is the intended doc text in COMMAND DOCS output. T
-- [valkey-io/valkey#2296](https://github.com/valkey-io/valkey/pull/2296) ([tests](tests/valkey/2296-a62f83db8/)): Make valkey-server --help/-h output to stdout and exit with 0 (#2296): declined: The change affects only the valkey-server --help/-h code path: usage() in src/server.c is called solely from the argv[1] == --help/-h branch of main() (server.c:7099), and now prints to stdout and exits 0 instead of stderr/1. No running server, tool behaviour, reply, replication, or persis
-- [valkey-io/valkey#2287](https://github.com/valkey-io/valkey/pull/2287): to retry, the job left no result
-- [valkey-io/valkey#2290](https://github.com/valkey-io/valkey/pull/2290) ([tests](tests/valkey/2290-74137d33b/)): Fix MEMORY USAGE to consider embedded keys (#2290): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2195](https://github.com/valkey-io/valkey/pull/2195) ([tests](tests/valkey/2195-1e05724f5/)): Add SAFE option to SHUTDOWN to reject shutdown in unsafe situations (#2195): 5 of 7 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1475](https://github.com/valkey-io/valkey/pull/1475) ([tests](tests/valkey/1475-fef4dbf04/)): Move auth check to the front, before command exist/arity/protected check (#1475): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2280](https://github.com/valkey-io/valkey/pull/2280) ([tests](tests/valkey/2280-d37dc527d/)): Use objectGetExpire instead of getExpire to reduce expire hashtable lookup (#2280): 0 of 8 test(s) reached the change, coverage 84%
-- [valkey-io/valkey#2141](https://github.com/valkey-io/valkey/pull/2141) ([tests](tests/valkey/2141-0b0b813ac/)): Update redis to server in internal variable names in benchmark source code (#2141): declined: The change only renames the internal variable/struct field `redis_config` to `server_config` in src/valkey-benchmark.c (in the global config struct and clusterNode struct), updating all references consistently. No logic, output, memory management, or user-visible behavior of valkey-benchma
-- [valkey-io/valkey#2209](https://github.com/valkey-io/valkey/pull/2209) ([tests](tests/valkey/2209-23fb9f2b5/)): Start failover without waiting for the next cluster cron cycle (#2209): 0 of 3 test(s) reached the change, coverage 91%
-- [valkey-io/valkey#1677](https://github.com/valkey-io/valkey/pull/1677) ([tests](tests/valkey/1677-a0b8d5e37/)): Save config file after replica migration and brocast a PONG when role changed (#1677): 2 of 5 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2269](https://github.com/valkey-io/valkey/pull/2269) ([tests](tests/valkey/2269-db639c99f/)): Check module NO_FAILOVER flag before calling clusterHandleReplicaFailover (#2269): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2264](https://github.com/valkey-io/valkey/pull/2264) ([tests](tests/valkey/2264-b65beca83/)): Optimize CLUSTER INFO (#2264): 0 of 4 test(s) reached the change, coverage 95%
-- [valkey-io/valkey#2240](https://github.com/valkey-io/valkey/pull/2240) ([tests](tests/valkey/2240-57459f77d/)): Spelling 3 (#2240): declined: The change is purely cosmetic: every hunk fixes a spelling mistake in a comment, README, test comment, or valgrind suppression description. The only source-code edit is renaming the static callback updateAppendonly to updateAppendOnly in src/config.c, with its sole call site updated in the
-- [valkey-io/valkey#2257](https://github.com/valkey-io/valkey/pull/2257) ([tests](tests/valkey/2257-ad2c6b049/)): Fix hashtablePauseAutoShrink and use it in hashtableScanDefrag (#2257): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2258](https://github.com/valkey-io/valkey/pull/2258) ([tests](tests/valkey/2258-868721cbc/)): Add ENGINE_CHECK_RDB_NAME to the 'test' target dependencies in Makefile (#2258): declined: The change only adds ENGINE_CHECK_RDB_NAME (valkey-check-rdb) to the Makefile 'test' target's prerequisites so it gets built before the test suite runs. It is a build/CI change with no modification to any runtime code path, command behavior, reply, persistence, or tool logic; there is noth
-- [valkey-io/valkey#1482](https://github.com/valkey-io/valkey/pull/1482) ([tests](tests/valkey/1482-94a95cd36/)): Cleanup aof temp files in sigShutdownHandler before exiting (#1482): declined: no proposed test validated
+- [valkey-io/valkey#2287](https://github.com/valkey-io/valkey/pull/2287) ([tests](tests/valkey/2287-fc7c04e4f/)): Fix missing response when AUTH is errored inside a transaction (#2287): 0 of 4 test(s) reached the change, coverage 0%
+- [valkey-io/valkey#2260](https://github.com/valkey-io/valkey/pull/2260) ([tests](tests/valkey/2260-2aea99b26/)): Do not report negative passing test count (#2260): declined: The change only edits the test_report() macro in src/testhelp.h, which is compiled solely into Valkey's internal C unit-test harness to print a test summary line; it clamps the displayed passing-test count at zero and changes no server, tool, replication, persistence, or protocol behavior.
+- [valkey-io/valkey#2263](https://github.com/valkey-io/valkey/pull/2263) ([tests](tests/valkey/2263-6a259d8e0/)): Properly account for checking zmalloc_used_memory() (#2263): declined: The change modifies only src/unit/test_main.c, the C unit-test runner: it adds `test_num++` so the end-of-suite zmalloc_used_memory() leak check is counted in the test totals. It affects test-harness bookkeeping only, compiles into the unit-test binary and not into valkey-server or any too
+- [valkey-io/valkey#2177](https://github.com/valkey-io/valkey/pull/2177) ([tests](tests/valkey/2177-48277209b/)): Fix valkey-cli memory leak (#2177): 2 of 2 test(s) reached the change, coverage 0%; crash, introduced and since fixed (recorded); [regressed-fix, the fix of #2177 regressed](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/113)
+- [valkey-io/valkey#2254](https://github.com/valkey-io/valkey/pull/2254) ([tests](tests/valkey/2254-d6507f3a0/)): Avoid freeing cluster link before printing link sender (#2254): 0 of 5 test(s) reached the change, coverage 0%
+- [valkey-io/valkey#2174](https://github.com/valkey-io/valkey/pull/2174) ([tests](tests/valkey/2174-4a3e71303/)): Converge divergent shard-id persisted in nodes.conf to primary's shard id (#2174): 0 of 4 test(s) reached the change, coverage 0%, 1 skipped (required capability 'save-behavior-support' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'cluster-config-save-behavior "sync"' Bad directive or wrong number of arguments)
+- [valkey-io/valkey#2214](https://github.com/valkey-io/valkey/pull/2214) ([tests](tests/valkey/2214-502dd451d/)): Fix incorrect laddr field and correct getClientSockname declaration (#2214): declined: The change only fixes the laddr argument passed to an LTTng tracepoint (valkey_commands_trace in call()), renames tracepoint fields, corrects a function-prototype casing mismatch in server.h, and updates the trace README. None of this affects command replies, CLIENT INFO/LIST output, repli
+- [valkey-io/valkey#2216](https://github.com/valkey-io/valkey/pull/2216) ([tests](tests/valkey/2216-3a01c7f7e/)): Fix unixsocket too long cause addr / laddr being truncated in CLIENT INFO / LIST and logging (#2216): 3 of 3 test(s) reached the change, coverage 90%
+- [valkey-io/valkey#2229](https://github.com/valkey-io/valkey/pull/2229) ([tests](tests/valkey/2229-04353aea3/)): Ensure empty error tables in scripts don't crash Valkey (#2229): 2 of 2 test(s) reached the change; crash, fixed by #2229 (recorded)
+- [valkey-io/valkey#1292](https://github.com/valkey-io/valkey/pull/1292) ([tests](tests/valkey/1292-a1f4cd6f2/)): Improve "SENTINEL FAILOVER" by using the "FAILOVER" command (#1292): declined: The change is confined to Sentinel mode: new COORDINATED option and failover state machine in src/sentinel.c, plus SENTINEL FAILOVER command metadata. The fuzzer can only deploy standalone/cluster data nodes and private servers started as ordinary valkey-server processes; sentinel mode req
+- [valkey-io/valkey#2223](https://github.com/valkey-io/valkey/pull/2223) ([tests](tests/valkey/2223-62376a315/)): Add non-fatal unit test assertions (#2223): declined: The change adds non-fatal assertion macros to the C unit-test framework (src/unit/test_help.h, test_main.c) and documents them in src/unit/README.md. It modifies only test-harness code compiled into the unit-test binary, not the valkey-server or any tool shipped in a build; no command, rep
+- [valkey-io/valkey#2225](https://github.com/valkey-io/valkey/pull/2225) ([tests](tests/valkey/2225-a05d1a6ec/)): Fix the incorrect stdout redirect logic, use dup2 to redirect stdout  (#2225): 3 of 3 test(s) reached the change, coverage 100%; crash, predates #2225, since fixed (recorded)
+- [valkey-io/valkey#2226](https://github.com/valkey-io/valkey/pull/2226) ([tests](tests/valkey/2226-ceb09b0a9/)): Reset failover failed primary rank when doing a manual failover (#2226): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2160](https://github.com/valkey-io/valkey/pull/2160) ([tests](tests/valkey/2160-3b25c4d6b/)): Optimize scan/sscan/hscan/zscan commands by replacing list with vector (#2160): 0 of 4 test(s) reached the change, coverage 98%
+- [valkey-io/valkey#2206](https://github.com/valkey-io/valkey/pull/2206) ([tests](tests/valkey/2206-81e00517c/)): Prevent getNodeByQuery from leaking DB changes into client (#2206): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1743](https://github.com/valkey-io/valkey/pull/1743) ([tests](tests/valkey/1743-e71f03ca0/)): Support for RDB analysis reports (#1743): 3 of 3 test(s) reached the change, coverage 88%
+- [valkey-io/valkey#2201](https://github.com/valkey-io/valkey/pull/2201) ([tests](tests/valkey/2201-95b6a32f5/)): test: fix UBSan warning due to misaligned memory access in unit test_addRepliesWithOffloadsToList (#2201): declined: The change edits only the unit test file src/unit/test_networking.c, replacing misaligned robj** dereferences with memcpy to fix a UBSan warning inside the tests themselves. No server source code, command behaviour, reply format, replication, persistence, or tool code changes, so no fuzzer
+- [valkey-io/valkey#2198](https://github.com/valkey-io/valkey/pull/2198) ([tests](tests/valkey/2198-5b368352b/)): Remove unused repl_offset_time field in clusterNode (#2198): declined: The change deletes the clusterNode.repl_offset_time field, its zero-initialization in createClusterNode, and its single assignment in clusterProcessPacket. The field was only ever written, never read — a grep of the post-change tree shows no remaining references, and the pre-change code ha
+- [valkey-io/valkey#2188](https://github.com/valkey-io/valkey/pull/2188) ([tests](tests/valkey/2188-7bc34cf87/)): fix: use replica's last selected db for dual-channel sync (#2188): 2 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2193](https://github.com/valkey-io/valkey/pull/2193) ([tests](tests/valkey/2193-c41ffc340/)): valkey-check-rdb: Fix truncated long aux fields (#2193): declined: no proposed test validated
 
 ### valkey-io/valkey-bloom
 
@@ -53,11 +53,11 @@ Updated 2026-11-09T13:18+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 658 of 989 tested (67%)
-- Changed-line coverage: median 100% of 544 merge(s) measured, 41 under 50%
-- Recall: 182 parents flagged of 278 fix merges
-- Claude: $959.83 in the last 24 hours, $7146.88 in the last 7 days, $7146.88 in all
-- Issues filed: 63
+- Merges whose tests reached the change: 665 of 1001 tested (66%)
+- Changed-line coverage: median 100% of 555 merge(s) measured, 45 under 50%
+- Recall: 186 parents flagged of 283 fix merges
+- Claude: $1039.18 in the last 24 hours, $7226.23 in the last 7 days, $7226.23 in all
+- Issues filed: 64
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/102
@@ -71,6 +71,7 @@ Updated 2026-11-09T13:18+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/110
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/111
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/112
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/113
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -124,4 +125,4 @@ Updated 2026-11-09T13:18+00:00.
 
 ## Retries
 
-- [valkey-io/valkey#2287](https://github.com/valkey-io/valkey/pull/2287): attempt 0 of 3, the job left no result
+None.

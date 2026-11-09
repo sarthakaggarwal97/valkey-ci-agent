@@ -1,0 +1,54 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fc7c04e4f8ba86dfbac1ec059db457fb44ed0a2d",
+  "parent": "74137d33bcc40d9206c24f2ba899946090b92a8d",
+  "pr": 2287,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix missing response when AUTH is errored inside a transaction (#2287)",
+  "date": "2025-07-01",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 4,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/acl.c:1446"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 4.6667,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-b6c10a8ca9b9",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'authmulti' returned ERROR: the parent did not answer command 3 (EXEC on connection hello): TimeoutError: Timeout reading from /tmp/vfc-pxd2ny0d/s.sock"
+    },
+    {
+      "scenario": "ai-453f2ee7c6ac",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'authmulti' returned ERROR: the parent did not answer command 3 (EXEC on connection hello): TimeoutError: Timeout reading from /tmp/vfc-9dmob6yd/s.sock"
+    },
+    {
+      "scenario": "ai-226bf0a935b6",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-7423a5373cf1",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    }
+  ]
+}

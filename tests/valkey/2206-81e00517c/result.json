@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "81e00517c14e4010cae934addd6fee70992b15a2",
+  "parent": "e71f03ca05e5164d96cde401cc5b74169a437bcf",
+  "pr": 2206,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Prevent getNodeByQuery from leaking DB changes into client (#2206)",
+  "date": "2025-06-16",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.3831,
+  "findings": [],
+  "recorded": []
+}

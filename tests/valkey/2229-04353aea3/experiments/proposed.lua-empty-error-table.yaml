@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.lua-empty-error-table
+deployment:
+  modes: [standalone]
+metadata:
+  description: A script raising an error table without a string 'err' field returns
+    a clean error instead of crashing
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: evalerr
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [EVAL, "return redis.error_reply('ERR plain')", "0"], expect: {error: "plain"}}
+    - {command: [EVAL, "error('simple string error')", "0"], expect: {error: "simple\
+          \ string error"}}
+    - {command: [EVAL, "error({err='ERR table error'})", "0"], expect: {error: "table\
+          \ error"}}
+    - {command: [EVAL, "error({})", "0"], expect_difference: true, expect: {error: "unknown\
+          \ error"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evalerr}

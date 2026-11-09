@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ac2451bf5c7b..7bc34cf87644.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b807916dfab2
+seed: 218801
+experiment:
+  id: proposed.dual-channel-endoff-db
+  inputs:
+    resp: 2
+    diskless_load: disabled
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

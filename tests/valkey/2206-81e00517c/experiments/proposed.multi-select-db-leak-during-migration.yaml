@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.multi-select-db-leak-during-migration
+deployment:
+  modes: [standalone]
+metadata:
+  description: SELECT inside MULTI/EXEC validated against a migrating slot must not
+    leak a DB change into the client (valkey-io/valkey#2206)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: db-leak
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    server_config: {cluster-databases: 16}
+    timeout_s: 30
+    commands:
+    - {command: [SET, "{foo}key1", value1_db0], expect: {equals: OK}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [SET, "{foo}key2", value2_db1], expect: {equals: OK}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [SET, "{foo}key3", value3_db2], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, MIGRATING, "<node.1.id>"], wait_s: 30, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, "<node.0.id>"], node: 1, wait_s: 30,
+      expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [EXISTS, "{foo}key1"], expect: {equals: QUEUED}}
+    - {command: [SELECT, 1], expect: {equals: QUEUED}}
+    - {command: [EXISTS, "{foo}key2"], expect: {equals: QUEUED}}
+    - {command: [SELECT, 2], expect: {equals: QUEUED}}
+    - {command: [EXISTS, "{foo}key3"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [1, OK, 1, OK, 1]}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [EXISTS, "{foo}key1"], expect: {equals: QUEUED}}
+    - {command: [SELECT, 1], expect: {equals: QUEUED}}
+    - {command: [EXISTS, "{foo}key2"], expect: {equals: QUEUED}}
+    - {command: [SELECT, 2], expect: {equals: QUEUED}}
+    - {command: [EXISTS, "{foo}nokey"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {error: "TRYAGAIN"}}
+    - {command: [GET, "{foo}key1"], expect_difference: true, expect: {equals: value1_db0}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [GET, "{foo}key1"], expect: {equals: value1_db0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [db-leak.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: db-leak}

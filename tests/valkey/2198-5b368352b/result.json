@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5b368352bf830581e317a9fbf59a88ec5d80ae34",
+  "parent": "92c154980fe4be123e533b7cd01fcc072666e687",
+  "pr": 2198,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove unused repl_offset_time field in clusterNode (#2198)",
+  "date": "2025-06-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2453,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change deletes the clusterNode.repl_offset_time field, its zero-initialization in createClusterNode, and its single assignment in clusterProcessPacket. The field was only ever written, never read \u2014 a grep of the post-change tree shows no remaining references, and the pre-change code had no reader either (the PR title says 'Remove unused field'). clusterNode is an internal in-memory struct, not part of the cluster bus packet format or any persisted state, so removing the field changes no reply, no failover decision, no manual-failover offset handling (sender->repl_offset is still updated), "
+}

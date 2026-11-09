@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "502dd451d176b805c830291430cd786642a587df",
+  "parent": "3a01c7f7e3c5af06ef53241efe3601525c3eb6d0",
+  "pr": 2214,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix incorrect laddr field and correct getClientSockname declaration (#2214)",
+  "date": "2025-06-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3053,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only fixes the laddr argument passed to an LTTng tracepoint (valkey_commands_trace in call()), renames tracepoint fields, corrects a function-prototype casing mismatch in server.h, and updates the trace README. None of this affects command replies, CLIENT INFO/LIST output, replication, persistence, or any state the fuzzer's oracles or a compared command sequence can observe; the effect is visible only in LTTng trace event payloads, which the fuzzer cannot capture. No scenario can reach the change."
+}

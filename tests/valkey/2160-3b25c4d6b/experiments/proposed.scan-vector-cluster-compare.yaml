@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.scan-vector-cluster-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Keyspace SCAN over the per-slot kvstore in cluster mode, including
+    the slot-pinned MATCH path, compared between the vector-based build and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [SET, "{t}a", "1"], expect: {equals: OK}}
+    - {command: [SET, "{t}b", "2"], expect: {equals: OK}}
+    - {command: [SET, other, "3"], expect: {equals: OK}}
+    - {command: [SCAN, "0", MATCH, "{t}a", COUNT, "1000"], expect: {equals: ["0",
+          ["{t}a"]]}}
+    - {command: [SCAN, "0", MATCH, "{t}*", COUNT, "1000"], compare: skip, expect: {
+        exists: true}}
+    - {command: [CONFIG, SET, hash-max-listpack-entries, "2"], expect: {equals: OK}}
+    - {command: [HSET, "{t}h", c1, d1, c2, d2, c3, d3, c4, d4, c5, d5, c6, d6, c7,
+        d7, c8, d8, c9, d9, c10, d10, c11, d11, c12, d12, c13, d13, c14, d14, c15,
+        d15, c16, d16, c17, d17, c18, d18, c19, d19, c20, d20], expect: {equals: 20}}
+    - {command: [OBJECT, ENCODING, "{t}h"], compare: skip, expect: {equals: hashtable}}
+    - {command: [HSCAN, "{t}h", "0", COUNT, "1000"], compare: skip, expect: {exists: true}}
+    - {command: [HSCAN, "{t}h", "0", MATCH, c7, COUNT, "1000"], expect: {equals: [
+          "0", [c7, d7]]}}
+    - {command: [HSCAN, "{t}h", "0", MATCH, c7, COUNT, "1000", NOVALUES], expect: {
+        equals: ["0", [c7]]}}
+    - {command: [DEBUG, POPULATE, "1000"], expect: {equals: OK}}
+    - {command: [SCAN, "0", COUNT, "5000"], compare: skip, expect: {exists: true}}
+    - {command: [SCAN, "0", MATCH, "key:123", COUNT, "5000"], expect: {equals: ["0",
+          ["key:123"]]}}
+    - {command: [SCAN, "0", TYPE, hash, COUNT, "5000"], expect: {equals: ["0", ["{t}h"]]}}
+    - {command: [SCAN, "0", COUNT, "1"], compare: skip, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cscan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cscan}

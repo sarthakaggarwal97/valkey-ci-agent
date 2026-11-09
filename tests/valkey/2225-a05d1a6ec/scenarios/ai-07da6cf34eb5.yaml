@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ceb09b0a9df8..a05d1a6ec147.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-07da6cf34eb5
+seed: 2
+experiment:
+  id: proposed.check-rdb-output-stdout-leak
+deployment:
+  mode: standalone
+  base_port: 7100

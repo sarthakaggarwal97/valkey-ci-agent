@@ -1,0 +1,55 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4a3e713032ff73fc652221fef958bae6bb1958f4",
+  "parent": "502dd451d176b805c830291430cd786642a587df",
+  "pr": 2174,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Converge divergent shard-id persisted in nodes.conf to primary's shard id (#2174)",
+  "date": "2025-06-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 3,
+  "recall": false,
+  "coverage": {
+    "lines": 8,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/cluster_legacy.c:322",
+      "src/cluster_legacy.c:326",
+      "src/cluster_legacy.c:327",
+      "src/cluster_legacy.c:328",
+      "src/cluster_legacy.c:732",
+      "src/cluster_legacy.c:736",
+      "src/cluster_legacy.c:737",
+      "src/cluster_legacy.c:738"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 8.4287,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-eca6f8d435df",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'loadconf' returned ERROR: the parent build (/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent/src/valkey-server) does not start with {'sanitize-dump-payload': 'yes', 'enable-debug-command': 'yes'}: the probe could not r"
+    },
+    {
+      "scenario": "ai-f4f51cd97c14",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'loadconf' returned ERROR: the parent build (/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent/src/valkey-server) does not start with {'sanitize-dump-payload': 'yes', 'enable-debug-command': 'yes'}: the probe could not r"
+    },
+    {
+      "scenario": "ai-cf28f3a15fc7",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "required capability 'save-behavior-support' is unsupported: default: build rejects startup configuration: *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** Reading the configuration file, at line 11 >>> 'cluster-config-save-behavior \"sync\"' Bad directive or wrong number of arguments"
+    }
+  ]
+}

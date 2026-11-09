@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6a259d8e05b7038c5c2149450d850bc2c8f9c45d",
+  "parent": "48277209b991253c4fa0e9a718b0651494708048",
+  "pr": 2263,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Properly account for checking zmalloc_used_memory() (#2263)",
+  "date": "2025-06-24",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2186,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only src/unit/test_main.c, the C unit-test runner: it adds `test_num++` so the end-of-suite zmalloc_used_memory() leak check is counted in the test totals. It affects test-harness bookkeeping only, compiles into the unit-test binary and not into valkey-server or any tool, and changes no command reply, replication, persistence or cluster behaviour. There is nothing a fuzzer scenario against a running server could exercise."
+}

@@ -1,0 +1,21 @@
+extends: [valkey.liveness]
+id: proposed.check-rdb-output-stdout-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-rdb --stats --output must send the stats block to the
+    file, not stdout; the dup2 rewrite drops fflush before redirect
+components:
+- use: valkey.action.tools
+  id: check-rdb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files:
+      empty-db2.rdb: !!binary 'UkVESVMwMDA5/gL/AAAAAAAAAAA='
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - {tool: valkey-check-rdb, args: [empty-db2.rdb, --stats, --format, info, --output,
+        stats.txt], expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: "type.string.keys.total"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check-rdb}

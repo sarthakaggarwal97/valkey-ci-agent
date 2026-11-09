@@ -1,0 +1,93 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "04353aea381f8c93dcb323839b4dc4821fcbd042",
+  "parent": "a1f4cd6f21799ed745ea8a2dc9f14842b09c9212",
+  "pr": 2229,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Ensure empty error tables in scripts don't crash Valkey (#2229)",
+  "date": "2025-06-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.1143,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-b6c2936e3e56",
+      "seed": 1001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2229",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-8f770166a9f4",
+      "seed": 1002,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2229",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-b6c2936e3e56",
+      "build": "unstable",
+      "seed": 1001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b6c2936e3e56",
+      "build": "unstable",
+      "seed": 1002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b6c2936e3e56",
+      "build": "unstable",
+      "seed": 1003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8f770166a9f4",
+      "build": "unstable",
+      "seed": 1002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8f770166a9f4",
+      "build": "unstable",
+      "seed": 1003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8f770166a9f4",
+      "build": "unstable",
+      "seed": 1004,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

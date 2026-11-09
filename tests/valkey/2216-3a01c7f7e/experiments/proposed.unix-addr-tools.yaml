@@ -1,0 +1,24 @@
+extends: [valkey.liveness]
+id: proposed.unix-addr-tools
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli over each build's unix socket, CLIENT INFO / LIST addr and
+    laddr format compared, with a TCP control run
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    runs:
+    - {tool: valkey-cli, args: [-s, $socket, PING], expect: {exit: {equals: 0}, stdout: {
+          equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-s, $socket, CLIENT, INFO], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "]:0"}}}
+    - {tool: valkey-cli, args: [-s, $socket, CLIENT, LIST], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "laddr=["}}}
+    - {tool: valkey-cli, args: [-p, $port, CLIENT, INFO], compare: skip, expect: {
+        exit: {equals: 0}, stdout: {contains: "laddr=127.0.0.1:$port"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

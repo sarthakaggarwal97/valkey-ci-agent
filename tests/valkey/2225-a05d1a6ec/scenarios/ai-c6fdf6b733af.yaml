@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ceb09b0a9df8..a05d1a6ec147.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c6fdf6b733af
+seed: 1
+experiment:
+  id: proposed.check-rdb-output-open-failure
+deployment:
+  mode: standalone
+  base_port: 7000

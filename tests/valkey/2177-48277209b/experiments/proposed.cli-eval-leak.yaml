@@ -1,0 +1,26 @@
+extends: [valkey.liveness]
+id: proposed.cli-eval-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli --eval frees its EVAL argument vector, so the sanitized
+    build exits clean where the parent leaks it
+inputs:
+  properties: {}
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 30
+    files:
+      eval-noargs.lua: "return 1"
+      eval-keys.lua: "return redis.call('set', KEYS[1], ARGV[1])"
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, --eval, eval-noargs.lua], expect_difference: true,
+      expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --eval, eval-keys.lua, k1, ',', v1], expect_difference: true,
+      expect: {exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

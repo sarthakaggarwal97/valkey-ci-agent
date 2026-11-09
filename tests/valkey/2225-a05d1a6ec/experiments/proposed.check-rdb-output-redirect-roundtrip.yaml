@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.check-rdb-output-redirect-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-rdb --stats --output success path, the dup2 redirect and
+    stdout restore, and the open-without-truncate reopen of an existing output file
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.tools
+  id: stats-output
+  config:
+    compare_with: {$ref: inputs.parent}
+    server: true
+    ignore: ['^\d+:[A-Z] .*\n']
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, -n, 15, SET, big, v], expect: {stdout: {
+          equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SET, k0, v0], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SAVE], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-check-rdb, args: [dump.rdb, --stats, --format, info, --output,
+        stats.txt], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, FLUSHALL], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SET, k0, v0], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, dbfilename, small.rdb], expect: {
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SAVE], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-check-rdb, args: [small.rdb, --stats, --format, info, --output,
+        stats.txt], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-check-aof, args: [stats.txt], expect_difference: true, expect: {
+        exit: {equals: 1}, stdout: {contains: "is not valid"}}}
+required_events: [stats-output.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: stats-output}

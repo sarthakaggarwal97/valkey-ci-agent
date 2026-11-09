@@ -1,0 +1,21 @@
+extends: [valkey.liveness]
+id: proposed.check-rdb-output-open-failure
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-rdb --stats --output to a path that cannot be opened -
+    exit status and error stream changed by the dup2 rewrite
+components:
+- use: valkey.action.tools
+  id: check-rdb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files:
+      empty-db2.rdb: !!binary 'UkVESVMwMDA5/gL/AAAAAAAAAAA='
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - {tool: valkey-check-rdb, args: [empty-db2.rdb, --stats, --format, info, --output,
+        missingdir/out.txt], expect_difference: true, expect: {exit: {equals: 1},
+        stderr: {contains: "Cannot open output file"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check-rdb}

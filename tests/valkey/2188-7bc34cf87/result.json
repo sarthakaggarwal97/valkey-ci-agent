@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7bc34cf87644733621108199efcdd15ea3500013",
+  "parent": "ac2451bf5c7bfec4bd579cfb33b9c7a3c2e0c03f",
+  "pr": 2188,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "fix: use replica's last selected db for dual-channel sync (#2188)",
+  "date": "2025-06-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 16.1898,
+  "findings": [],
+  "recorded": []
+}

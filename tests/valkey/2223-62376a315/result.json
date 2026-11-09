@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "62376a315a727a229af85c58333a652df3299456",
+  "parent": "a05d1a6ec1473a176a74e4b027bf5ab64b5f5c3a",
+  "pr": 2223,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add non-fatal unit test assertions (#2223)",
+  "date": "2025-06-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2209,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds non-fatal assertion macros to the C unit-test framework (src/unit/test_help.h, test_main.c) and documents them in src/unit/README.md. It modifies only test-harness code compiled into the unit-test binary, not the valkey-server or any tool shipped in a build; no command, reply, replication, cluster, or persistence path changes, so no fuzzer scenario can exercise it and none is needed."
+}

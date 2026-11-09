@@ -1,0 +1,90 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "48277209b991253c4fa0e9a718b0651494708048",
+  "parent": "621039d868f4afbc0a4268deb4db46acd4cae6c4",
+  "pr": 2177,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix valkey-cli memory leak (#2177)",
+  "date": "2025-06-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 5,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/valkey-cli.c:3549",
+      "src/valkey-cli.c:3550",
+      "src/valkey-cli.c:3552",
+      "src/valkey-cli.c:5910",
+      "src/valkey-cli.c:5911"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 6.319,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: killed by signal 6",
+      "scenario": "ai-e0c95a2ce5c9",
+      "seed": 1,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "3c9b6d82c5da2b04c973",
+      "issue": null
+    },
+    {
+      "rule": "regressed-fix",
+      "detail": "regressed fix: the change of valkey-io/valkey#2177 no longer shows on aa7545348b68 (commands cli 0, cli 1)",
+      "scenario": "ai-e0c95a2ce5c9",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "the fix of #2177 regressed",
+      "fingerprint": "bfc5ec640959b4ddf338",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/113"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: killed by signal 6",
+      "scenario": "ai-3660e277a04e",
+      "seed": 7001,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "3c9b6d82c5da2b04c973",
+      "issue": null
+    },
+    {
+      "rule": "regressed-fix",
+      "detail": "regressed fix: the change of valkey-io/valkey#2177 no longer shows on aa7545348b68 (commands cli 0)",
+      "scenario": "ai-3660e277a04e",
+      "seed": 7001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "the fix of #2177 regressed",
+      "fingerprint": "bfc5ec640959b4ddf338",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/113"
+    }
+  ],
+  "recorded": []
+}

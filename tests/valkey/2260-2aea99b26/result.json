@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2aea99b26f6520ab0ee5068a0a16e66c78c3fc47",
+  "parent": "6a259d8e05b7038c5c2149450d850bc2c8f9c45d",
+  "pr": 2260,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Do not report negative passing test count (#2260)",
+  "date": "2025-06-24",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2299,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits the test_report() macro in src/testhelp.h, which is compiled solely into Valkey's internal C unit-test harness to print a test summary line; it clamps the displayed passing-test count at zero and changes no server, tool, replication, persistence, or protocol behavior. No command reply, fault path, or runtime code is affected, so no fuzzer scenario can reach or exercise it."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "95b6a32f5b056867f233ca8e87ba5abc065a1a80",
+  "parent": "22872611fa0c999f05392df037075faf9e2e5edd",
+  "pr": 2201,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "test: fix UBSan warning due to misaligned memory access in unit test_addRepliesWithOffloadsToList (#2201)",
+  "date": "2025-06-16",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.222,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only the unit test file src/unit/test_networking.c, replacing misaligned robj** dereferences with memcpy to fix a UBSan warning inside the tests themselves. No server source code, command behaviour, reply format, replication, persistence, or tool code changes, so no fuzzer scenario can reach or validate it; the fix is covered by the unit test suite itself."
+}

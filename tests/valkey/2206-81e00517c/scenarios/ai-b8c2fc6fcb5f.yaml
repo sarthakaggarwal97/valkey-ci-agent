@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e71f03ca05e5..81e00517c14e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b8c2fc6fcb5f
+seed: 220601
+experiment:
+  id: proposed.multi-select-db-leak-during-migration
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

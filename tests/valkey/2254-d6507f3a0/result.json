@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d6507f3a0ebbd5574b959001eaeda2581b1c4cb9",
+  "parent": "4a3e713032ff73fc652221fef958bae6bb1958f4",
+  "pr": 2254,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Avoid freeing cluster link before printing link sender (#2254)",
+  "date": "2025-06-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/cluster_legacy.c:3314"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 1.662,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a1f4cd6f21799ed745ea8a2dc9f14842b09c9212",
+  "parent": "62376a315a727a229af85c58333a652df3299456",
+  "pr": 1292,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Improve \"SENTINEL FAILOVER\" by using the \"FAILOVER\" command (#1292)",
+  "date": "2025-06-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.2389,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to Sentinel mode: new COORDINATED option and failover state machine in src/sentinel.c, plus SENTINEL FAILOVER command metadata. The fuzzer can only deploy standalone/cluster data nodes and private servers started as ordinary valkey-server processes; sentinel mode requires the --sentinel argv flag at startup, which no deployment shape, server_config, or component can set. The SENTINEL command is CMD_ONLY_SENTINEL and is not registered outside sentinel mode, so on any reachable server both builds reply 'unknown command' identically, including the changed arity/metadata. Th"
+}

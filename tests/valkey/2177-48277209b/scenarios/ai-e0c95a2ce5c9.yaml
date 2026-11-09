@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 621039d868f4..48277209b991.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e0c95a2ce5c9
+seed: 1
+experiment:
+  id: proposed.cli-eval-leak
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000
+  replicas_per_primary: 0

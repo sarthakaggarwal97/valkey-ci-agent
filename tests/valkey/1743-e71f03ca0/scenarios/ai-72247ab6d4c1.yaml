@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 95b6a32f5b05..e71f03ca05e5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-72247ab6d4c1
+seed: 811001
+experiment:
+  id: proposed.check-rdb-stats
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    format: info
+    stats_match: db.9.type.string.keys.total:1
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
