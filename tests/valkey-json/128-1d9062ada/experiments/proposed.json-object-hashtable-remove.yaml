@@ -1,0 +1,83 @@
+extends: [valkey.liveness]
+id: proposed.json-object-hashtable-remove
+deployment:
+  modes: [standalone]
+metadata:
+  description: Member removal from hashtable-backed JSON objects (DoRemoveMemberHT
+    slot reuse fix) compared across module builds, with KeyTable integrity checks
+    and a persistence round-trip
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: htremove
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [JSON.SET, doc, '.', '{"a0":0,"a1":1,"a2":2,"a3":3,"a4":4,"a5":5,"a6":6,"a7":7,"a8":8,"a9":9,"a10":10,"a11":11,"a12":12,"a13":13,"a14":14,"a15":15,"a16":16,"a17":17,"a18":18,"a19":19,"a20":20,"a21":21,"a22":22,"a23":23,"a24":24,"a25":25,"a26":26,"a27":27,"a28":28,"a29":29,"a30":30,"a31":31,"a32":32,"a33":33,"a34":34,"a35":35,"a36":36,"a37":37,"a38":38,"a39":39,"a40":40,"a41":41,"a42":42,"a43":43,"a44":44,"a45":45,"a46":46,"a47":47,"a48":48,"a49":49,"a50":"xxxxxxxxxxxxxxxxxxxxxxxx","a51":"xxxxxxxxxxxxxxxxxxxxxxxx","a52":"xxxxxxxxxxxxxxxxxxxxxxxx","a53":"xxxxxxxxxxxxxxxxxxxxxxxx","a54":"xxxxxxxxxxxxxxxxxxxxxxxx","a55":"xxxxxxxxxxxxxxxxxxxxxxxx","a56":"xxxxxxxxxxxxxxxxxxxxxxxx","a57":"xxxxxxxxxxxxxxxxxxxxxxxx","a58":"xxxxxxxxxxxxxxxxxxxxxxxx","a59":"xxxxxxxxxxxxxxxxxxxxxxxx","a60":"xxxxxxxxxxxxxxxxxxxxxxxx","a61":"xxxxxxxxxxxxxxxxxxxxxxxx","a62":"xxxxxxxxxxxxxxxxxxxxxxxx","a63":"xxxxxxxxxxxxxxxxxxxxxxxx","a64":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a65":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a66":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a67":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a68":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a69":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a70":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a71":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a72":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a73":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a74":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a75":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a76":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a77":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a78":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a79":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"}}'],
+      expect: {equals: OK}}
+    - {command: [JSON.OBJLEN, doc, '.'], expect: {equals: 80}}
+    - {command: [JSON.DEL, doc, '$.a1'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a3'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a5'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a7'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a9'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a11'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a13'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a15'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a17'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a19'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a50'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a52'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a54'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a56'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a64'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a66'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a68'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a70'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a72'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a74'], expect: {equals: 1}}
+    - {command: [JSON.OBJLEN, doc, '.'], expect: {equals: 60}}
+    - {command: [JSON.SET, doc, '$.a5', '"readded_member_value_123456"'], expect: {
+        equals: OK}}
+    - {command: [JSON.OBJLEN, doc, '.'], expect: {equals: 61}}
+    - {command: [JSON.GET, doc], compare: json, expect: {contains: a79}}
+    - {command: [JSON.OBJKEYS, doc, '.'], compare: unordered, expect: {contains: a0}}
+    - {command: [JSON.DEBUG, KEYTABLE-CHECK], expect: {error: false}}
+    - {command: [JSON.DEL, doc, '$.*'], expect: {equals: 61}}
+    - {command: [JSON.OBJLEN, doc, '.'], expect: {equals: 0}}
+    - {command: [JSON.GET, doc], compare: json, expect: {equals: '{}'}}
+    - {command: [JSON.SET, doc, '.', '{"a0":0,"a1":1,"a2":2,"a3":3,"a4":4,"a5":5,"a6":6,"a7":7,"a8":8,"a9":9,"a10":10,"a11":11,"a12":12,"a13":13,"a14":14,"a15":15,"a16":16,"a17":17,"a18":18,"a19":19,"a20":20,"a21":21,"a22":22,"a23":23,"a24":24,"a25":25,"a26":26,"a27":27,"a28":28,"a29":29,"a30":30,"a31":31,"a32":32,"a33":33,"a34":34,"a35":35,"a36":36,"a37":37,"a38":38,"a39":39,"a40":40,"a41":41,"a42":42,"a43":43,"a44":44,"a45":45,"a46":46,"a47":47,"a48":48,"a49":49,"a50":"xxxxxxxxxxxxxxxxxxxxxxxx","a51":"xxxxxxxxxxxxxxxxxxxxxxxx","a52":"xxxxxxxxxxxxxxxxxxxxxxxx","a53":"xxxxxxxxxxxxxxxxxxxxxxxx","a54":"xxxxxxxxxxxxxxxxxxxxxxxx","a55":"xxxxxxxxxxxxxxxxxxxxxxxx","a56":"xxxxxxxxxxxxxxxxxxxxxxxx","a57":"xxxxxxxxxxxxxxxxxxxxxxxx","a58":"xxxxxxxxxxxxxxxxxxxxxxxx","a59":"xxxxxxxxxxxxxxxxxxxxxxxx","a60":"xxxxxxxxxxxxxxxxxxxxxxxx","a61":"xxxxxxxxxxxxxxxxxxxxxxxx","a62":"xxxxxxxxxxxxxxxxxxxxxxxx","a63":"xxxxxxxxxxxxxxxxxxxxxxxx","a64":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a65":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a66":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a67":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a68":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a69":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a70":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a71":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a72":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a73":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a74":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a75":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a76":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a77":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a78":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"},"a79":{"n":[1,2,3],"s":"yyyyyyyyyyyyyyyyyyyyyyyy"}}'],
+      expect: {equals: OK}}
+    - {command: [JSON.DEL, doc, '$.a1'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a3'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a5'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a7'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a9'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a11'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a13'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a15'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a17'], expect: {equals: 1}}
+    - {command: [JSON.DEL, doc, '$.a19'], expect: {equals: 1}}
+    - {command: [JSON.OBJLEN, doc, '.'], expect: {equals: 70}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [JSON.OBJLEN, doc, '.'], expect: {equals: 70}}
+    - {command: [JSON.GET, doc], compare: json, expect: {contains: a79}}
+    - {command: [JSON.DEL, doc, '$.a2'], expect: {equals: 1}}
+    - {command: [JSON.OBJLEN, doc, '.'], expect: {equals: 69}}
+    - {command: [JSON.OBJKEYS, doc, '.'], compare: unordered, expect: {contains: a0}}
+    - {command: [JSON.DEBUG, KEYTABLE-CHECK], expect: {error: false}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [htremove.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: htremove}

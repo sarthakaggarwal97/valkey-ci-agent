@@ -1,12 +1,12 @@
 # Fuzzer walk
 
-Updated 2026-11-09T17:25+00:00.
+Updated 2026-11-09T17:43+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 1252 | 1255 | #2099 (2025-05-23) | 286 | 178.9 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
-| valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
+| valkey-io/valkey-json | 63 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 9.0 |
 | valkey-io/valkey-search | 669 | 0 | f8106e72e984 (2024-11-27) | 34 | 95.6 |
 
 ## Last runs
@@ -43,8 +43,9 @@ Updated 2026-11-09T17:25+00:00.
 
 ### valkey-io/valkey-json
 
-[2026-11-09T16:45:56+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42657958819): 0 merge(s) tested, 0 without a code change.
+[2026-11-09T17:43:32+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42662928754): 1 merge(s) tested, 0 without a code change.
 
+- [valkey-io/valkey-json#128](https://github.com/valkey-io/valkey-json/pull/128) ([tests](tests/valkey-json/128-1d9062ada/)): Fix CI on ubuntu-26.04 runners (#128): 0 of 2 test(s) reached the change
 
 ### valkey-io/valkey-search
 
@@ -53,10 +54,10 @@ Updated 2026-11-09T17:25+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 677 of 1027 tested (66%)
+- Merges whose tests reached the change: 677 of 1028 tested (66%)
 - Changed-line coverage: median 100% of 578 merge(s) measured, 48 under 50%
-- Recall: 189 parents flagged of 288 fix merges
-- Claude: $1155.90 in the last 24 hours, $7430.12 in the last 7 days, $7430.12 in all
+- Recall: 189 parents flagged of 289 fix merges
+- Claude: $1162.73 in the last 24 hours, $7436.95 in the last 7 days, $7436.95 in all
 - Issues filed: 64
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

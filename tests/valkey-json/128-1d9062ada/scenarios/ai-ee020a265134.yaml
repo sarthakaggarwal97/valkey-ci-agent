@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-json aeaa68237eb8..1d9062ada728.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ee020a265134
+seed: 1282
+experiment:
+  id: proposed.json-object-hashtable-remove
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec
