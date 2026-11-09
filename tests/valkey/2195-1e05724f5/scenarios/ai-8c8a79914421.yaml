@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fef4dbf046d6..1e05724f5920.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8c8a79914421
+seed: 102
+experiment:
+  id: proposed.shutdown-safe-refused
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

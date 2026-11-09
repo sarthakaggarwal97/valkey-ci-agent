@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "94a95cd3680eec33481563e5a45a3756b14b3e5d",
+  "parent": "2aea99b26f6520ab0ee5068a0a16e66c78c3fc47",
+  "pr": 1482,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Cleanup aof temp files in sigShutdownHandler before exiting (#1482)",
+  "date": "2025-06-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.8809,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

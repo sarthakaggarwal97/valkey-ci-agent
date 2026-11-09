@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0b0b813acba4b66ed52097848d8cf6f67855a55b",
+  "parent": "23fb9f2b5162752fbf42d892c6ff311a346565b8",
+  "pr": 2141,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update redis to server in internal variable names in benchmark source code (#2141)",
+  "date": "2025-06-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2649,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the internal variable/struct field `redis_config` to `server_config` in src/valkey-benchmark.c (in the global config struct and clusterNode struct), updating all references consistently. No logic, output, memory management, or user-visible behavior of valkey-benchmark changes, and any missed reference would be a compile error rather than a runtime bug. A pure identifier rename needs no test scenario."
+}

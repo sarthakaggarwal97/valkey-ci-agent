@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fef4dbf046d6..1e05724f5920.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7a4d0e0d6d86
+seed: 51002
+experiment:
+  id: proposed.shutdown-safe-voting-primary-refusal
+  inputs:
+    resp: 3
+    supervised: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e279b00f854b7b4cfe06f8a3eb7c89fd7ce25bdc",
+  "parent": "2f3e363c154edbe2483415730f096758e3a1b293",
+  "pr": 2283,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Generate a new shard_id when the replica executes CLUSTER RESET SOFT (#2283)",
+  "date": "2025-07-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.1651,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 11 (EVAL return #redis.call('cluster','shards') 0) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":3}, not {\"reply\":2}",
+      "scenario": "ai-53e4a5d2c47f",
+      "seed": 20283,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "3677dc3001231bf51874",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

@@ -1,0 +1,76 @@
+extends: [valkey.liveness]
+id: proposed.module-unlink-getabsexpire
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    VM_GetAbsExpire now reads the expire embedded in the value robj instead of a getExpire
+    lookup in the expires hashtable. hooks.so calls it from the key-unlink server
+    event, where the key is mid-removal from the keyspace (popped from the keys table,
+    expires entry not yet deleted), for deleted, unlinked, overwritten and expired
+    keys; HOOKS.PEXPIREAT returns the value the callback captured.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    lazyfree: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: unlinkexp
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config:
+      lazyfree-lazy-user-del: {$ref: inputs.lazyfree}
+      lazyfree-lazy-expire: {$ref: inputs.lazyfree}
+      lazyfree-lazy-server-del: {$ref: inputs.lazyfree}
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [PEXPIREAT, k1, 9999999999999], expect: {equals: 1}}
+    - {command: [DEL, k1], expect: {equals: 1}}
+    - {command: [HOOKS.PEXPIREAT, k1], expect: {equals: "9999999999999"}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [DEL, k2], expect: {equals: 1}}
+    - {command: [HOOKS.PEXPIREAT, k2], expect: {equals: "-1"}}
+    - {command: [SET, kmax, v], expect: {equals: OK}}
+    - {command: [PEXPIREAT, kmax, 9223372036854775807], expect: {equals: 1}}
+    - {command: [DEL, kmax], expect: {equals: 1}}
+    - {command: [HOOKS.PEXPIREAT, kmax], expect: {equals: "9223372036854775807"}}
+    - {command: [SET, k3, old], expect: {equals: OK}}
+    - {command: [PEXPIREAT, k3, 8888888888888], expect: {equals: 1}}
+    - {command: [SET, k3, new], expect: {equals: OK}}
+    - {command: [HOOKS.PEXPIREAT, k3], expect: {equals: "8888888888888"}}
+    - {command: [TTL, k3], expect: {equals: -1}}
+    - {command: [SET, src, sv], expect: {equals: OK}}
+    - {command: [SET, dst, dv], expect: {equals: OK}}
+    - {command: [PEXPIREAT, dst, 6666666666666], expect: {equals: 1}}
+    - {command: [RENAME, src, dst], expect: {equals: OK}}
+    - {command: [HOOKS.PEXPIREAT, dst], expect: {equals: "6666666666666"}}
+    - {command: [SET, csrc, cv], expect: {equals: OK}}
+    - {command: [PEXPIREAT, csrc, 7777777777777], expect: {equals: 1}}
+    - {command: [SET, cdst, dv2], expect: {equals: OK}}
+    - {command: [PEXPIREAT, cdst, 5555555555555], expect: {equals: 1}}
+    - {command: [COPY, csrc, cdst, REPLACE], expect: {equals: 1}}
+    - {command: [HOOKS.PEXPIREAT, cdst], expect: {equals: "5555555555555"}}
+    - {command: [PEXPIRETIME, cdst], expect: {equals: 7777777777777}}
+    - {command: [RPUSH, blist, a, b, c, d, e], expect: {equals: 5}}
+    - {command: [PEXPIREAT, blist, 4444444444444], expect: {equals: 1}}
+    - {command: [UNLINK, blist], expect: {equals: 1}}
+    - {command: [HOOKS.PEXPIREAT, blist], expect: {equals: "4444444444444"}}
+    - {command: [SET, kg, gv], expect: {equals: OK}}
+    - {command: [PEXPIREAT, kg, 3333333333333], expect: {equals: 1}}
+    - {command: [GETDEL, kg], expect: {equals: gv}}
+    - {command: [HOOKS.PEXPIREAT, kg], expect: {equals: "3333333333333"}}
+    - {command: [SET, kexp, ev, PX, 80], expect: {equals: OK}}
+    - {command: [TTL, kexp], wait_s: 10, expect: {equals: -2}}
+    - {command: [HOOKS.PEXPIREAT, kexp], compare: skip, expect: {exists: true}}
+    - {command: [HOOKS.IS_KEY_REMOVED, kexp], expect: {equals: [ev, expired]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [unlinkexp.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: unlinkexp}

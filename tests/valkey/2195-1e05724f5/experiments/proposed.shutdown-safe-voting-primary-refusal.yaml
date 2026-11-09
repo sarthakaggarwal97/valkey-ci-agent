@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.shutdown-safe-voting-primary-refusal
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    SHUTDOWN SAFE sent as a raw inline command to a one-node cluster primary owning
+    all 16384 slots is refused: the candidate logs "Can't exit", cancels the shutdown
+    and replies an error while staying up; the parent build rejects the SAFE token
+    as a syntax error. Later reads prove the candidate server survived with its data
+    intact.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    supervised: {type: string, enum: ["no", systemd], default: "no"}
+components:
+- use: valkey.action.commands
+  id: shutdown-safe
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    server_config: {supervised: {$ref: inputs.supervised}}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 7629], expect: {equals: 1}}
+    - {raw: "SHUTDOWN SAFE\r\n", connection: shut, expect_difference: true, expect: {
+        error: "Errors trying to SHUTDOWN"}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {raw: "shutdown nosave now safe\r\n", connection: shut, expect_difference: true,
+      expect: {error: "Errors trying to SHUTDOWN"}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {raw: "SHUTDOWN ABORT SAFE\r\n", connection: shut, expect: {error: "syntax error"}}
+    - {command: [DBSIZE], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shutdown-safe.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shutdown-safe}

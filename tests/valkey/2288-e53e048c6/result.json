@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e53e048c6960a2b821d33ef3f4fb55bf8977dfd5",
+  "parent": "51b81d0ec8defc3c2192cc634afd678e25e39a01",
+  "pr": 2288,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix leak when shrinking a hashtable without entries (#2288)",
+  "date": "2025-07-02",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 10.4541,
+  "findings": [],
+  "recorded": []
+}

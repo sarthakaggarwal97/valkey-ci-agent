@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "868721cbc49361bd896fd4453a907b7d45525e40",
+  "parent": "94a95cd3680eec33481563e5a45a3756b14b3e5d",
+  "pr": 2258,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add ENGINE_CHECK_RDB_NAME to the 'test' target dependencies in Makefile (#2258)",
+  "date": "2025-06-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2136,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds ENGINE_CHECK_RDB_NAME (valkey-check-rdb) to the Makefile 'test' target's prerequisites so it gets built before the test suite runs. It is a build/CI change with no modification to any runtime code path, command behavior, reply, persistence, or tool logic; there is nothing a fuzzer scenario could exercise."
+}

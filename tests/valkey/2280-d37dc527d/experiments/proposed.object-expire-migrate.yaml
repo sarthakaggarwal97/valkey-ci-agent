@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.object-expire-migrate
+deployment:
+  modes: [standalone]
+metadata:
+  description: MIGRATE serializes the TTL read from the robj instead of the expire
+    hashtable; the target receives the same expire, keys without one arrive non-volatile
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 2
+    timeout_s: 30
+    commands:
+    - {command: [SET, mk1, mv1], expect: {equals: OK}}
+    - {command: [PEXPIREAT, mk1, "33177117600000"], expect: {equals: 1}}
+    - {command: [SET, mk2, mv2], expect: {equals: OK}}
+    - {command: [RPUSH, ml1, a, b, c], expect: {equals: 3}}
+    - {command: [PEXPIREAT, ml1, "33177117700000"], expect: {equals: 1}}
+    - {command: [MIGRATE, <node.1.host>, <node.1.port>, "", "0", "5000", KEYS, mk1,
+        mk2, ml1], expect: {equals: OK}}
+    - {command: [EXISTS, mk1], expect: {equals: 0}}
+    - {command: [EXISTS, mk2], expect: {equals: 0}}
+    - {command: [PEXPIRETIME, mk1], node: 1, compare: skip, expect: {min: 33177117000000,
+        max: 33177118000000}}
+    - {command: [PEXPIRETIME, mk2], node: 1, expect: {equals: -1}}
+    - {command: [PEXPIRETIME, ml1], node: 1, compare: skip, expect: {min: 33177117100000,
+        max: 33177118100000}}
+    - {command: [GET, mk2], node: 1, expect: {equals: mv2}}
+    - {command: [LRANGE, ml1, 0, -1], node: 1, expect: {equals: [a, b, c]}}
+    - {command: [SET, back, bv], node: 1, expect: {equals: OK}}
+    - {command: [PEXPIREAT, back, "33177117900000"], node: 1, expect: {equals: 1}}
+    - {command: [MIGRATE, <node.0.host>, <node.0.port>, back, "0", "5000"], node: 1,
+      expect: {equals: OK}}
+    - {command: [PEXPIRETIME, back], compare: skip, expect: {min: 33177117300000,
+        max: 33177118300000}}
+    - {command: [GET, back], expect: {equals: bv}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [migrate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

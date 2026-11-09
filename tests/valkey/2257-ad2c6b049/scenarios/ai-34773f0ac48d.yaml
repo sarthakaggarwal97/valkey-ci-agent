@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 868721cbc493..ad2c6b049b01.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-34773f0ac48d
+seed: 7001
+experiment:
+  id: proposed.scan-defrag-auto-shrink
+  inputs:
+    command_rate: 5000
+    run_s: 30
+    active_expire_effort: 10
+    stable_keys: 2000
+    mutable_keys: 1000
+    mutation_rate: 1000
+    value_size: 1024
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

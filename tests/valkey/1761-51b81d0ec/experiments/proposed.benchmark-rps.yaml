@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-rps
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark --rps token-bucket rate limiting runs to completion
+    on the change's build across thread, pipeline, and boundary shapes; the parent
+    build rejects the option
+components:
+- use: valkey.action.tools
+  id: bench-rps
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 90
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, -t, set, -n, 1000, -c, 10, --rps,
+        500, -q], expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: requests
+            per second}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, set, -n, 4800, -c, 10, -P, 16,
+        --rps, 2400, -q], expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: requests per second}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, get, -n, 3000, -c, 32, --threads,
+        4, --rps, 1500, -q], expect_difference: true, expect: {exit: {equals: 0},
+        stdout: {contains: requests per second}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, set, -n, 3200, -c, 16, --threads,
+        2, -P, 8, --rps, 1600, -q], expect_difference: true, expect: {exit: {equals: 0},
+        stdout: {contains: requests per second}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, ping, -n, 3, -c, 2, --rps, 1,
+        -q], expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: requests
+            per second}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, set, -n, 10, -c, 50, --rps, 20,
+        -q], expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: requests
+            per second}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, set, -n, 20000, -c, 50, --rps,
+        2000000000, -q], expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: requests per second}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, ping, -n, 1000, -c, 10, --rps,
+        0, -q], expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: requests
+            per second}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, ping, -n, 1000, -c, 10, --rps,
+        '-5', -q], expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: requests per second}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -3, -t, set, -n, 1000, -c, 10, --rps,
+        500, -q], expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: requests
+            per second}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, set, -n, 1000, -c, 10, -q], compare: skip,
+      expect: {exit: {equals: 0}, stdout: {contains: requests per second}}}
+required_events: [bench-rps.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench-rps}

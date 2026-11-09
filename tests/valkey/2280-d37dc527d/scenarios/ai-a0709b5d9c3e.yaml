@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0b0b813acba4..d37dc527d0b4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a0709b5d9c3e
+seed: 103
+experiment:
+  id: proposed.object-expire-migrate
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

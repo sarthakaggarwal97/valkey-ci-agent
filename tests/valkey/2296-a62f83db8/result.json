@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a62f83db8f639883f214cdcebd343263565bda73",
+  "parent": "fc7c04e4f8ba86dfbac1ec059db457fb44ed0a2d",
+  "pr": 2296,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make valkey-server --help/-h output to stdout and exit with 0 (#2296)",
+  "date": "2025-07-02",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.4238,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change affects only the valkey-server --help/-h code path: usage() in src/server.c is called solely from the argv[1] == --help/-h branch of main() (server.c:7099), and now prints to stdout and exits 0 instead of stderr/1. No running server, tool behaviour, reply, replication, or persistence path is touched, so no deployment-based experiment can reach it. The only way to exercise it is to run `valkey-server --help` as a process and compare exit status and stdout/stderr across builds, but no installed component can do that: valkey.action.tools is limited by its schema to valkey-cli, valkey-b"
+}

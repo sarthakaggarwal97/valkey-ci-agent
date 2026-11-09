@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.hashtable-shrink-empty-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active expiration drains the expires hashtable to empty with chained
+    buckets, then FLUSHALL ASYNC releases it; the parent leaks the child buckets and
+    aborts on the overhead assert, the fixed build survives
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hz: {type: integer, minimum: 1, maximum: 500, default: 100}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      hz: {$ref: inputs.hz}
+      appendonly: "no"
+      save: ""
+      maxmemory: "0"
+    commands:
+    - {command: [EVAL, "for i=1,3000 do redis.call('psetex','vk'..i,300,'x') end return\
+          \ 1", "0"], expect: {equals: 1}}
+    - {command: [MSET, p1, v, p2, v, p3, v, p4, v, p5, v], expect: {equals: OK}}
+    - {command: [DBSIZE], wait_s: 30, expect: {equals: 5}}
+    - {command: [DEBUG, SLEEP, "0.5"], expect: {equals: OK}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "1"], expect_difference: true, expect: {equals: OK}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

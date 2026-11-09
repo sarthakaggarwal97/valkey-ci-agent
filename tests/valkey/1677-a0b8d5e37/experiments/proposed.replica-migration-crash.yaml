@@ -1,0 +1,76 @@
+extends: [valkey.base]
+id: proposed.replica-migration-crash
+deployment:
+  modes: [cluster]
+  primaries: {minimum: 3}
+  replicas_per_primary: {minimum: 2}
+metadata:
+  description: Orphan a shard so a replica migrates to it, kill the migrating replica
+    the moment it logs the migration, restart it, and verify it rejoins with a consistent
+    cluster view and no acknowledged write lost
+inputs:
+  properties:
+    migrator_signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+    settle_s: {type: number, minimum: 5, maximum: 120, default: 25}
+components:
+- use: valkey.observer.log-trigger
+  id: migration-log
+  config:
+    instances: all
+    rules:
+    - pattern: "Migrating to orphaned primary"
+      publish: cluster.migration.started
+      evidence_id: valkey.cluster.migration-logged
+      required: true
+- use: valkey.fault.process-signal
+  id: kill-replica-a
+  config:
+    when_event: warm-up.completed
+    instance: valkey-1
+    signal: SIGKILL
+    restart: true
+    restart_mode: background
+    restart_delay_s: 30
+- use: valkey.fault.process-signal
+  id: kill-replica-b
+  config:
+    when_event: warm-up.completed
+    instance: valkey-2
+    signal: SIGKILL
+    restart: true
+    restart_mode: background
+    restart_delay_s: 30
+- use: valkey.fault.process-signal
+  id: kill-migrator
+  config:
+    when_event: cluster.migration.started
+    instance: event
+    signal: {$ref: inputs.migrator_signal}
+    restart: true
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, migration-log, kill-replica-a, kill-replica-b, kill-migrator]
+  config: {seconds: 2}
+- use: valkey.action.wait-event
+  id: migrator-recovered
+  depends_on: [warm-up]
+  config:
+    event: kill-migrator.recovered
+    only_after: kill-migrator.injected
+    timeout_s: 120
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [migrator-recovered]
+  config:
+    seconds: {$ref: inputs.settle_s}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_s: 2.5
+    converge_timeout_s: 90
+required_events: [warm-up.completed, cluster.migration.started, kill-migrator.recovered]
+required_evidence:
+- {evidence_id: valkey.cluster.migration-logged, source: migration-log}
+- {evidence_id: valkey.fault.injected, source: kill-migrator}

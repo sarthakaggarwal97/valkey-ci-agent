@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey db639c99f7f8..a0b8d5e378cd.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a108d5f53298
+seed: 1677
+experiment:
+  id: proposed.replica-migration-crash
+  inputs:
+    migrator_signal: SIGKILL
+    settle_s: 25
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 2
+  base_port: 7000
+  server_config:
+    cluster-node-timeout: 3000
+    cluster-allow-replica-migration: 'yes'
+    cluster-migration-barrier: 1

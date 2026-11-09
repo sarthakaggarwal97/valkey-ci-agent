@@ -1,0 +1,120 @@
+extends: [valkey.liveness]
+id: proposed.cluster-info-slot-accounting
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    CLUSTER INFO slot accounting (now summed from node->numslots instead of the slots
+    array), the BUMPEPOCH reply, and the nodes.conf vars epoch line (sdscatprintf
+    -> sdscatfmt) compared across builds under slot add/delete/flush, an INT64_MAX
+    epoch, a restart that reloads nodes.conf, and a two-node slot migration.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: info-single
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_slots_assigned:16384"},
+      wait_s: 10}
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_state:ok"}}
+    - {command: [CLUSTER, SET-CONFIG-EPOCH, "9223372036854775807"], expect: {equals: OK}}
+    - {command: [CLUSTER, BUMPEPOCH], expect: {equals: "STILL 9223372036854775807"}}
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_current_epoch:9223372036854775807"},
+      wait_s: 10}
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_my_epoch:9223372036854775807"}}
+    - {command: [CLUSTER, DELSLOTS, 0], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_state:fail"}, wait_s: 10}
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_slots_assigned:16383"}}
+    - {command: [CLUSTER, DELSLOTSRANGE, 1, 8191], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_slots_assigned:8192"},
+      wait_s: 10}
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_slots_ok:8192"}}
+    - {command: [CLUSTER, ADDSLOTS, 0], expect: {equals: OK}}
+    - {command: [CLUSTER, ADDSLOTSRANGE, 1, 8191], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_state:ok"}, wait_s: 15}
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_slots_ok:16384"}}
+    - {command: [CLUSTER, SAVECONFIG], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_current_epoch:9223372036854775807"},
+      wait_s: 10}
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_slots_assigned:16384"}}
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_known_nodes:1"}}
+    - {command: [CLUSTER, RESET, HARD], expect: {equals: OK}}
+    - {command: [CLUSTER, BUMPEPOCH], expect: {equals: "BUMPED 1"}}
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_current_epoch:1"}, wait_s: 10}
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_slots_assigned:0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: info-multi
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_known_nodes:2"}, compare: skip,
+      wait_s: 15}
+    - {command: [CLUSTER, INFO], expect: {contains: "cluster_size:1"}, compare: skip}
+    - {command: [CLUSTER, SETSLOT, 0, IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 0, MIGRATING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 0, NODE, "<node.1.id>"], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 0, NODE, "<node.1.id>"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 0, expect: {contains: "cluster_size:2"}, compare: skip,
+      wait_s: 30}
+    - {command: [CLUSTER, INFO], node: 0, expect: {contains: "cluster_slots_assigned:16384"},
+      compare: skip, wait_s: 10}
+    - {command: [CLUSTER, INFO], node: 0, expect: {contains: "cluster_slots_ok:16384"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 1, expect: {contains: "cluster_size:2"}, compare: skip,
+      wait_s: 30}
+    - {command: [CLUSTER, INFO], node: 1, expect: {contains: "cluster_slots_assigned:16384"},
+      compare: skip, wait_s: 10}
+    - {command: [CLUSTER, DELSLOTS, 1], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 0, expect: {contains: "cluster_slots_assigned:16383"},
+      compare: skip, wait_s: 10}
+    - {command: [CLUSTER, INFO], node: 0, expect: {contains: "cluster_state:fail"},
+      compare: skip, wait_s: 10}
+    - {command: [CLUSTER, ADDSLOTS, 1], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 0, expect: {contains: "cluster_state:ok"},
+      compare: skip, wait_s: 15}
+    - {command: [CLUSTER, FLUSHSLOTS], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 0, expect: {contains: "cluster_slots_assigned:1"},
+      compare: skip, wait_s: 10}
+    - {command: [CLUSTER, ADDSLOTSRANGE, 1, 16383], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 0, expect: {contains: "cluster_slots_assigned:16384"},
+      compare: skip, wait_s: 15}
+    - {command: [CLUSTER, INFO], node: 0, expect: {contains: "cluster_state:ok"},
+      compare: skip, wait_s: 15}
+    - {command: [CLUSTER, BUMPEPOCH], node: 1, expect: {error: false}, compare: skip}
+    - {command: [CLUSTER, INFO], node: 1, expect: {contains: "cluster_slots_ok:16384"},
+      compare: skip, wait_s: 15}
+    - {command: [CLUSTER, INFO], node: 0, expect: {contains: "cluster_nodes_pfail:0"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 0, expect: {contains: "cluster_nodes_fail:0"},
+      compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [info-single.completed, info-multi.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: info-single}
+- {evidence_id: valkey.command.sequence, source: info-multi}

@@ -1,0 +1,46 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1e05724f592025535d4e53a700d65486e715a2a8",
+  "parent": "fef4dbf046d60b52b116135c08d73a20195072fa",
+  "pr": 2195,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add SAFE option to SHUTDOWN to reject shutdown in unsafe situations (#2195)",
+  "date": "2025-07-01",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 5,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 11,
+    "executed": 11,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 17.084,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-09becc97e52e",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'shutdown-safe' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (CLUSTER COUNTKEYSINSLOT 7629)"
+    },
+    {
+      "scenario": "ai-7a4d0e0d6d86",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'shutdown-safe' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (CLUSTER COUNTKEYSINSLOT 7629)"
+    },
+    {
+      "scenario": "ai-932264a7a6bb",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'shutdown-safe' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (CLUSTER COUNTKEYSINSLOT 7629)"
+    }
+  ]
+}

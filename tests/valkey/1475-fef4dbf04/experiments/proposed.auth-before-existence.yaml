@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.auth-before-existence
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Auth check moved before command existence/arity/protected checks: an unauthenticated
+    client now gets NOAUTH for unknown commands, bad arity, unknown subcommands and
+    protected DEBUG, where the parent leaked the detailed error; NO_AUTH commands
+    (AUTH, HELLO, RESET) and the POST/Host: cross-protocol abort still work, on both
+    authRequired branches (requirepass and disabled default user).
+inputs:
+  properties:
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: noauth
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "no"}
+    cluster: {$ref: inputs.cluster}
+    resp: 2
+    timeout_s: 10
+    commands:
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [CONFIG, SET, requirepass, secret123], expect: {equals: OK}}
+    - {command: [TOTALLY-UNKNOWN-CMD, leak-me, "9999999999999999999"], connection: probe,
+      expect_difference: true, expect: {error: "NOAUTH Authentication required"}}
+    - {command: [""], connection: probe, expect_difference: true, expect: {error: "NOAUTH\
+          \ Authentication required"}}
+    - {command: [SET, k], connection: probe, expect_difference: true, expect: {error: "NOAUTH\
+          \ Authentication required"}}
+    - {command: [CONFIG, NOT-A-SUBCOMMAND], connection: probe, expect_difference: true,
+      expect: {error: "NOAUTH Authentication required"}}
+    - {command: [CONFIG, GET], connection: probe, expect_difference: true, expect: {
+        error: "NOAUTH Authentication required"}}
+    - {command: [DEBUG, HELP], connection: probe, expect_difference: true, expect: {
+        error: "NOAUTH Authentication required"}}
+    - {command: [GET, k], connection: probe, expect: {error: "NOAUTH"}}
+    - {command: [MGET, k, l], connection: probe, expect: {error: "NOAUTH"}}
+    - {command: [HELLO, 3], connection: probe, expect: {error: "HELLO must be called"}}
+    - {command: [AUTH, wrongpass], connection: probe, expect: {error: "WRONGPASS"}}
+    - {command: [AUTH, secret123], connection: probe, expect: {equals: OK}}
+    - {command: [TOTALLY-UNKNOWN-CMD, leak-me], connection: probe, expect: {error: "unknown\
+          \ command"}}
+    - {command: [SET, k], connection: probe, expect: {error: "wrong number of arguments"}}
+    - {command: [CONFIG, NOT-A-SUBCOMMAND], connection: probe, expect: {error: "unknown\
+          \ subcommand"}}
+    - {command: [DEBUG, HELP], connection: probe, expect: {error: "not allowed"}}
+    - {command: [RESET], connection: probe, expect: {equals: RESET}}
+    - {command: [EXEC], connection: probe, expect: {error: "NOAUTH"}}
+    - {command: [POST, /index.html], connection: cps, expect: {exists: false}}
+    - {command: [CONFIG, SET, requirepass, ""], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, default, off], expect: {equals: OK}}
+    - {command: [ANOTHER-UNKNOWN-CMD, x], connection: probe2, expect_difference: true,
+      expect: {error: "NOAUTH Authentication required"}}
+    - {command: [LPUSH, l], connection: probe2, expect_difference: true, expect: {
+        error: "NOAUTH Authentication required"}}
+    - {command: [DEBUG, HELP], connection: probe2, expect_difference: true, expect: {
+        error: "NOAUTH Authentication required"}}
+    - {command: [GET, k], connection: probe2, expect: {error: "NOAUTH"}}
+    - {command: [ACL, SETUSER, default, on, nopass], expect: {equals: OK}}
+    - {command: [PING], connection: probe2, expect: {equals: PONG}}
+    - {command: [GET, k], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [noauth.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: noauth}

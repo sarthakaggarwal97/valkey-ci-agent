@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d37dc527d0b4865cf38ef9939551bd2b5cc16c72",
+  "parent": "0b0b813acba4b66ed52097848d8cf6f67855a55b",
+  "pr": 2280,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use objectGetExpire instead of getExpire to reduce expire hashtable lookup (#2280)",
+  "date": "2025-06-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 0,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 13,
+    "executed": 11,
+    "percent": 84,
+    "uncovered": [
+      "src/module.c:4282",
+      "src/module.c:4283"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 7.6891,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-9bf8947c7615",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'expire-paths' returned ERROR: expectations both builds violate alike, so they are not about the change: 19 (GETEX k1 PEXAT 33177117600000), 20 (EXPIRETIME k1), 25 (PEXPIREAT k1 33177117500000 NX), 27 (PEXPIREAT k1 33177117500000 LT)"
+    },
+    {
+      "scenario": "ai-33450d31911a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'expire-paths' returned ERROR: expectations both builds violate alike, so they are not about the change: 19 (GETEX k1 PEXAT 33177117600000), 20 (EXPIRETIME k1), 25 (PEXPIREAT k1 33177117500000 NX), 27 (PEXPIREAT k1 33177117500000 LT)"
+    }
+  ]
+}

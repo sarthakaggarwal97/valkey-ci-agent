@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d37dc527d0b4..fef4dbf046d6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-638baf0af508
+seed: 2
+experiment:
+  id: proposed.auth-before-existence
+  inputs:
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

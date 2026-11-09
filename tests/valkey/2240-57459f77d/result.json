@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "57459f77d468b3618ba8c3c8a17a025d57b87268",
+  "parent": "ad2c6b049b01f28dc39e0b39dfc1f463a86056e6",
+  "pr": 2240,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Spelling 3 (#2240)",
+  "date": "2025-06-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.298,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely cosmetic: every hunk fixes a spelling mistake in a comment, README, test comment, or valgrind suppression description. The only source-code edit is renaming the static callback updateAppendonly to updateAppendOnly in src/config.c, with its sole call site updated in the same commit \u2014 a behaviour-preserving identifier rename. No command reply, config semantics, replication, persistence, or any runtime path changes, so there is no risky path for a scenario to reach."
+}

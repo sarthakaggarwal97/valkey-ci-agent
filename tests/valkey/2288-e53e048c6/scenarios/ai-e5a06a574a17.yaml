@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 51b81d0ec8de..e53e048c6960.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e5a06a574a17
+seed: 7002
+experiment:
+  id: proposed.hashtable-shrink-empty-leak
+  inputs:
+    resp: 3
+    hz: 30
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

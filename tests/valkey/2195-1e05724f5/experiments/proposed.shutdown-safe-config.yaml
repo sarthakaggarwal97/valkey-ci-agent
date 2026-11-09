@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.shutdown-safe-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: shutdown-on-sigterm and shutdown-on-sigint accept the new "safe" flag
+    alone and combined with the other flags, reject it with save+nosave, and keep
+    it across CONFIG REWRITE and a restart; the parent rejects "safe" outright
+components:
+- use: valkey.action.commands
+  id: shutdown-config
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, GET, shutdown-on-sigterm], expect: {equals: [shutdown-on-sigterm,
+          default]}}
+    - {command: [CONFIG, SET, shutdown-on-sigterm, safe], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, shutdown-on-sigterm], expect_difference: true, expect: {
+        equals: [shutdown-on-sigterm, safe]}}
+    - {command: [CONFIG, SET, shutdown-on-sigterm, "nosave force safe"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, shutdown-on-sigterm], expect_difference: true, expect: {
+        equals: [shutdown-on-sigterm, "nosave force safe"]}}
+    - {command: [CONFIG, SET, shutdown-on-sigterm, "save nosave safe"], expect_difference: true,
+      expect: {error: "SAVE and NOSAVE"}}
+    - {command: [CONFIG, SET, shutdown-on-sigint, "safe now"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, shutdown-on-sigint], expect_difference: true, expect: {
+        equals: [shutdown-on-sigint, "now safe"]}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, shutdown-on-sigterm], expect_difference: true, expect: {
+        equals: [shutdown-on-sigterm, "nosave force safe"]}}
+    - {command: [CONFIG, GET, shutdown-on-sigint], expect_difference: true, expect: {
+        equals: [shutdown-on-sigint, "now safe"]}}
+    - {command: [CONFIG, SET, shutdown-on-sigterm, default], expect: {equals: OK}}
+    - {command: [CONFIG, GET, shutdown-on-sigterm], expect: {equals: [shutdown-on-sigterm,
+          default]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shutdown-config.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shutdown-config}

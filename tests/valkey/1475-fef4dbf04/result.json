@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fef4dbf046d60b52b116135c08d73a20195072fa",
+  "parent": "d37dc527d0b4865cf38ef9939551bd2b5cc16c72",
+  "pr": 1475,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Move auth check to the front, before command exist/arity/protected check (#1475)",
+  "date": "2025-07-01",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 11.8998,
+  "findings": [],
+  "recorded": []
+}

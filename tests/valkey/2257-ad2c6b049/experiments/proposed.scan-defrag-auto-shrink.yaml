@@ -1,0 +1,44 @@
+extends: [valkey.base]
+id: proposed.scan-defrag-auto-shrink
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: >-
+    Drive hashtable scans with concurrent deletion (active-expire cycle, SCAN lazy
+    expiry) and active defrag under heavy keyspace churn, so a mid-scan auto-shrink
+    would fire on the unfixed build. Judged by the liveness oracle (no crash/assert/sanitizer
+    report) and the write ledger (no acknowledged write lost or corrupted).
+inputs:
+  properties:
+    command_rate: {type: number, minimum: 1, maximum: 20000, default: 4000}
+    run_s: {type: number, minimum: 1, maximum: 120, default: 25}
+    active_expire_effort: {type: integer, minimum: 1, maximum: 10, default: 10}
+startup_overlays:
+- overlay_id: defrag-and-expire
+  selector: all
+  server_config:
+    activedefrag: "yes"
+    active-defrag-ignore-bytes: 1
+    active-defrag-threshold-lower: 1
+    active-defrag-cycle-max: 75
+    active-expire-effort: {$ref: inputs.active_expire_effort}
+    hash-max-listpack-entries: 0
+    set-max-listpack-entries: 0
+    set-max-intset-entries: 0
+    zset-max-listpack-entries: 0
+components:
+- use: valkey.capability.build-probe
+  id: supports-defrag
+  config:
+    config_set: {activedefrag: ["yes"]}
+- use: valkey.workload.command-table
+  id: commands
+  config: {rate: {$ref: inputs.command_rate}}
+- use: valkey.action.sleep
+  id: run
+  depends_on: [writes, commands]
+  config: {seconds: {$ref: inputs.run_s}}
+required_events: [run.completed]
+required_evidence:
+- {evidence_id: valkey.data.ledger-verified, source: data}
+- {evidence_id: valkey.workload.command-table, source: commands}

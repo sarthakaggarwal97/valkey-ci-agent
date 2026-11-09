@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.shutdown-safe-refused
+deployment:
+  modes: [standalone]
+metadata:
+  description: SHUTDOWN SAFE on a one-node cluster (a voting primary with all slots)
+    is refused in every flag combination except FORCE, and the server keeps serving
+    afterwards; the parent rejects SAFE as a syntax error
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {exit: {equals: 0}, stdout: {
+          equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SHUTDOWN, SAFE], expect_difference: true,
+      expect: {stdout: {contains: "Errors trying to SHUTDOWN"}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SET, k, v], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SHUTDOWN, SAVE, SAFE], expect_difference: true,
+      expect: {stdout: {contains: "Errors trying to SHUTDOWN"}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, k], expect: {stdout: {equals: "v\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, shutdown, nosave, safe, now], expect_difference: true,
+      expect: {stdout: {contains: "Errors trying to SHUTDOWN"}}}
+    - {tool: valkey-cli, args: [-p, $port, SHUTDOWN, SAFE, SAFE, NOW, SAFE], expect_difference: true,
+      expect: {stdout: {contains: "Errors trying to SHUTDOWN"}}}
+    - {tool: valkey-cli, args: [-3, -p, $port, SHUTDOWN, SAFE], expect_difference: true,
+      expect: {stdout: {contains: "Errors trying to SHUTDOWN"}}}
+    - {tool: valkey-cli, args: [-p, $port, SHUTDOWN, ABORT, SAFE], expect: {stdout: {
+          contains: "syntax error"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, shutdown-on-sigterm, safe],
+      expect_difference: true, expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, GET, shutdown-on-sigterm], expect_difference: true,
+      expect: {stdout: {contains: safe}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {stdout: {equals: "PONG\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

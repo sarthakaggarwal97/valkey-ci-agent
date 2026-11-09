@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2f3e363c154e..e279b00f854b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-53e4a5d2c47f
+seed: 20283
+experiment:
+  id: proposed.cluster-reset-soft-replica-shard-id
+  inputs:
+    resp: 2
+    lazyfree_user_flush: 'no'
+deployment:
+  mode: standalone
+  base_port: 7000

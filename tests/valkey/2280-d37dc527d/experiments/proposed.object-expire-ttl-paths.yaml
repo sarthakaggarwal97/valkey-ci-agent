@@ -1,0 +1,101 @@
+extends: [valkey.liveness]
+id: proposed.object-expire-ttl-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: The expire read from the robj matches the old expire-hashtable behaviour
+    across TTL/EXPIRETIME, PERSIST, KEEPTTL, value-replacing writes, RENAME, COPY,
+    MOVE, DEBUG DIGEST and an RDB save/restart
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: expire-paths
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [PEXPIREAT, k1, "33177117600000"], expect: {equals: 1}}
+    - {command: [EXPIRETIME, k1], expect: {equals: 33177117600}}
+    - {command: [PEXPIRETIME, k1], expect: {equals: 33177117600000}}
+    - {command: [TTL, k1], compare: skip, expect: {min: 1}}
+    - {command: [PTTL, k1], compare: skip, expect: {min: 1}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [TTL, k2], expect: {equals: -1}}
+    - {command: [EXPIRETIME, k2], expect: {equals: -1}}
+    - {command: [TTL, nosuchkey], expect: {equals: -2}}
+    - {command: [PERSIST, k1], expect: {equals: 1}}
+    - {command: [EXPIRETIME, k1], expect: {equals: -1}}
+    - {command: [PEXPIREAT, k1, "33177117600000"], expect: {equals: 1}}
+    - {command: [APPEND, k1, more], expect: {equals: 6}}
+    - {command: [EXPIRETIME, k1], expect: {equals: 33177117600}}
+    - {command: [SET, k1, v9, KEEPTTL], expect: {equals: OK}}
+    - {command: [PEXPIRETIME, k1], expect: {equals: 33177117600000}}
+    - {command: [SET, k1, v10], expect: {equals: OK}}
+    - {command: [EXPIRETIME, k1], expect: {equals: -1}}
+    - {command: [GETEX, k1, PEXAT, "33177117600000"], expect: {equals: v10}}
+    - {command: [EXPIRETIME, k1], expect: {equals: 33177117600}}
+    - {command: [SET, cnt, "41"], expect: {equals: OK}}
+    - {command: [PEXPIREAT, cnt, "33177117600000"], expect: {equals: 1}}
+    - {command: [INCR, cnt], expect: {equals: 42}}
+    - {command: [PEXPIRETIME, cnt], expect: {equals: 33177117600000}}
+    - {command: [PEXPIREAT, k1, "33177117500000", NX], expect: {equals: 0}}
+    - {command: [PEXPIREAT, k1, "33177117500000", GT], expect: {equals: 0}}
+    - {command: [PEXPIREAT, k1, "33177117500000", LT], expect: {equals: 1}}
+    - {command: [PEXPIRETIME, k1], expect: {equals: 33177117500000}}
+    - {command: [SET, src, sv], expect: {equals: OK}}
+    - {command: [PEXPIREAT, src, "33177117600000"], expect: {equals: 1}}
+    - {command: [RENAME, src, dst], expect: {equals: OK}}
+    - {command: [PEXPIRETIME, dst], expect: {equals: 33177117600000}}
+    - {command: [SET, src2, sv2], expect: {equals: OK}}
+    - {command: [RENAME, src2, dst], expect: {equals: OK}}
+    - {command: [PEXPIRETIME, dst], expect: {equals: -1}}
+    - {command: [SET, src3, sv3], expect: {equals: OK}}
+    - {command: [PEXPIREAT, src3, "33177117700000"], expect: {equals: 1}}
+    - {command: [RENAMENX, src3, dst2], expect: {equals: 1}}
+    - {command: [PEXPIRETIME, dst2], expect: {equals: 33177117700000}}
+    - {command: [COPY, dst2, cp1], expect: {equals: 1}}
+    - {command: [PEXPIRETIME, cp1], expect: {equals: 33177117700000}}
+    - {command: [COPY, dst2, cp2, DB, "1"], expect: {equals: 1}}
+    - {command: [COPY, k2, cp1], expect: {equals: 0}}
+    - {command: [COPY, k2, cp1, REPLACE], expect: {equals: 1}}
+    - {command: [PEXPIRETIME, cp1], expect: {equals: -1}}
+    - {command: [SET, mv, mval], expect: {equals: OK}}
+    - {command: [PEXPIREAT, mv, "33177117800000"], expect: {equals: 1}}
+    - {command: [MOVE, mv, "1"], expect: {equals: 1}}
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [PEXPIRETIME, mv], expect: {equals: 33177117800000}}
+    - {command: [PEXPIRETIME, cp2], expect: {equals: 33177117700000}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [RPUSH, l1, a, b, c], expect: {equals: 3}}
+    - {command: [PEXPIREAT, l1, "33177117600000"], expect: {equals: 1}}
+    - {command: [HSET, h1, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [PEXPIREAT, h1, "33177117600000"], expect: {equals: 1}}
+    - {command: [DEBUG, DIGEST], expect: {exists: true}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [PEXPIRETIME, k1], expect: {equals: 33177117500000}}
+    - {command: [PEXPIRETIME, dst], expect: {equals: -1}}
+    - {command: [PEXPIRETIME, dst2], expect: {equals: 33177117700000}}
+    - {command: [PEXPIRETIME, l1], expect: {equals: 33177117600000}}
+    - {command: [PEXPIRETIME, h1], expect: {equals: 33177117600000}}
+    - {command: [TTL, k2], expect: {equals: -1}}
+    - {command: [LRANGE, l1, 0, -1], expect: {equals: [a, b, c]}}
+    - {command: [DEBUG, DIGEST], expect: {exists: true}}
+    - {command: [SET, gone, g], expect: {equals: OK}}
+    - {command: [PEXPIREAT, gone, "1"], expect: {equals: 1}}
+    - {command: [TTL, gone], expect: {equals: -2}}
+    - {command: [EXISTS, gone], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [expire-paths.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: expire-paths}

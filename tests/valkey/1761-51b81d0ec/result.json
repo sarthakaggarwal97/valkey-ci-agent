@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "51b81d0ec8defc3c2192cc634afd678e25e39a01",
+  "parent": "06a281ee87982323016aeec3caf6f43ad3f01669",
+  "pr": 1761,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Implement RPS control for benchmark using token bucket algorithm (#1761)",
+  "date": "2025-07-02",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 86,
+    "executed": 86,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.2039,
+  "findings": [],
+  "recorded": []
+}

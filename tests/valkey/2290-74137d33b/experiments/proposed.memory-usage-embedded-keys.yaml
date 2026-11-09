@@ -1,0 +1,127 @@
+extends: [valkey.liveness]
+id: proposed.memory-usage-embedded-keys
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    MEMORY USAGE must count the whole robj allocation (embedded key and reserved expire
+    field) via zmalloc_size in every type/encoding branch of objectComputeSize; the
+    parent counts a bare sizeof(robj) and undercounts keys with long names. One key
+    per type and encoding, long key names, and SAMPLES 0 so sampling order cannot
+    make replies nondeterministic.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: memusage
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config:
+      list-max-listpack-size: 4
+      set-max-listpack-entries: 4
+      set-max-intset-entries: 128
+      hash-max-listpack-entries: 4
+      zset-max-listpack-entries: 4
+    commands:
+    - {command: [SET, "si:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        12345], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, "si:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK"],
+      compare: skip, expect: {equals: int}}
+    - {command: [MEMORY, USAGE, "si:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        SAMPLES, 0], expect_difference: true, expect: {min: 60}}
+    - {command: [SET, k, 99], expect: {equals: OK}}
+    - {command: [MEMORY, USAGE, k, SAMPLES, 0], expect_difference: true, expect: {
+        min: 17}}
+    - {command: [INCR, "bi:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"],
+      expect: {equals: 1}}
+    - {command: [MEMORY, USAGE, "bi:BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        SAMPLES, 0], expect_difference: true, expect: {min: 120}}
+    - {command: [SET, "sr:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV"], expect: {
+        equals: OK}}
+    - {command: [OBJECT, ENCODING, "sr:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK"],
+      compare: skip, expect: {equals: raw}}
+    - {command: [MEMORY, USAGE, "sr:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        SAMPLES, 0], expect_difference: true, expect: {min: 120}}
+    - {command: [SET, "sx:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV", EX, 1000],
+      expect: {equals: OK}}
+    - {command: [MEMORY, USAGE, "sx:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        SAMPLES, 0], expect_difference: true, expect: {min: 120}}
+    - {command: [SET, "se:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        short], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, "se:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK"],
+      compare: skip, expect: {equals: embstr}}
+    - {command: [MEMORY, USAGE, "se:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        SAMPLES, 0], compare: skip, expect: {min: 60}}
+    - {command: [RPUSH, "ll:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        a, b, c], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, "ll:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK"],
+      compare: skip, expect: {equals: listpack}}
+    - {command: [MEMORY, USAGE, "ll:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        SAMPLES, 0], expect_difference: true, expect: {min: 60}}
+    - {command: [RPUSH, "lq:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        a, b, c, d, e, f], expect: {equals: 6}}
+    - {command: [OBJECT, ENCODING, "lq:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK"],
+      compare: skip, expect: {equals: quicklist}}
+    - {command: [MEMORY, USAGE, "lq:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        SAMPLES, 0], expect_difference: true, expect: {min: 60}}
+    - {command: [SADD, "tl:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        xa, xb, xc], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, "tl:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK"],
+      compare: skip, expect: {equals: listpack}}
+    - {command: [MEMORY, USAGE, "tl:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        SAMPLES, 0], expect_difference: true, expect: {min: 60}}
+    - {command: [SADD, "ti:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        1, 2, 3], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, "ti:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK"],
+      compare: skip, expect: {equals: intset}}
+    - {command: [MEMORY, USAGE, "ti:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        SAMPLES, 0], expect_difference: true, expect: {min: 60}}
+    - {command: [SADD, "th:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        ma, mb, mc, md, me, mf], expect: {equals: 6}}
+    - {command: [OBJECT, ENCODING, "th:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK"],
+      compare: skip, expect: {equals: hashtable}}
+    - {command: [MEMORY, USAGE, "th:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        SAMPLES, 0], expect_difference: true, expect: {min: 60}}
+    - {command: [HSET, "hl:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [OBJECT, ENCODING, "hl:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK"],
+      compare: skip, expect: {equals: listpack}}
+    - {command: [MEMORY, USAGE, "hl:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        SAMPLES, 0], expect_difference: true, expect: {min: 60}}
+    - {command: [HSET, "hh:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        f1, v1, f2, v2, f3, v3, f4, v4, f5, v5, f6, v6], expect: {equals: 6}}
+    - {command: [OBJECT, ENCODING, "hh:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK"],
+      compare: skip, expect: {equals: hashtable}}
+    - {command: [MEMORY, USAGE, "hh:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        SAMPLES, 0], expect_difference: true, expect: {min: 60}}
+    - {command: [ZADD, "zl:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        1, m1, 2, m2], expect: {equals: 2}}
+    - {command: [OBJECT, ENCODING, "zl:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK"],
+      compare: skip, expect: {equals: listpack}}
+    - {command: [MEMORY, USAGE, "zl:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        SAMPLES, 0], expect_difference: true, expect: {min: 60}}
+    - {command: [ZADD, "zs:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        1, m1, 2, m2, 3, m3, 4, m4, 5, m5, 6, m6], expect: {equals: 6}}
+    - {command: [OBJECT, ENCODING, "zs:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK"],
+      compare: skip, expect: {equals: skiplist}}
+    - {command: [MEMORY, USAGE, "zs:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        SAMPLES, 0], expect_difference: true, expect: {min: 60}}
+    - {command: [XADD, "st:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        1-1, fld, val], expect: {equals: 1-1}}
+    - {command: [MEMORY, USAGE, "st:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK",
+        SAMPLES, 0], expect_difference: true, expect: {min: 60}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [memusage.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: memusage}

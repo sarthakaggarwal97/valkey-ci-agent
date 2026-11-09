@@ -1,0 +1,40 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "74137d33bcc40d9206c24f2ba899946090b92a8d",
+  "parent": "1e05724f592025535d4e53a700d65486e715a2a8",
+  "pr": 2290,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix MEMORY USAGE to consider embedded keys (#2290)",
+  "date": "2025-07-01",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 12,
+    "executed": 12,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.3666,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-114778f0ff0b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'memusage' returned ERROR: expectations both builds violate alike, so they are not about the change: 13 (OBJECT ENCODING se:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK)"
+    },
+    {
+      "scenario": "ai-1ea646a8623b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'memusage' returned ERROR: expectations both builds violate alike, so they are not about the change: 13 (OBJECT ENCODING se:KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK)"
+    }
+  ]
+}

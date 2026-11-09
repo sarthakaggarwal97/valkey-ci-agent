@@ -1,0 +1,66 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b65beca836e0de70a50867bbc2131bf7f90f0f73",
+  "parent": "57459f77d468b3618ba8c3c8a17a025d57b87268",
+  "pr": 2264,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize CLUSTER INFO (#2264)",
+  "date": "2025-06-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 24,
+    "executed": 23,
+    "percent": 95,
+    "uncovered": [
+      "src/cluster_legacy.c:6489"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 6.5089,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-b6d15e7c80e8",
+      "build": "unstable",
+      "seed": 1,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b6d15e7c80e8",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b6d15e7c80e8",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c8901376c22b",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c8901376c22b",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c8901376c22b",
+      "build": "unstable",
+      "seed": 4,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

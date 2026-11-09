@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey db639c99f7f8..a0b8d5e378cd.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-24200e7c8c37
+seed: 1678
+experiment:
+  id: proposed.setslot-last-slot-demotion-broadcast
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

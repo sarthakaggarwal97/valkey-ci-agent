@@ -1,0 +1,91 @@
+extends: [valkey.liveness]
+id: proposed.setslot-last-slot-demotion-broadcast
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    A primary that loses its last slot through CLUSTER SETSLOT NODE demotes itself
+    to a replica of the new owner and, with the change, broadcasts a PONG so every
+    peer learns the role change at once (cluster_legacy.c:7000). With periodic and
+    random cluster pings suppressed on every node, the parent build never tells the
+    peers: they keep answering CLUSTER REPLICAS <old-primary> with an empty array,
+    while the fixed build's broadcast makes them answer the 'not a master' error.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: demote-first-slot
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    server_config: {enable-debug-command: "yes", cluster-allow-replica-migration: "yes"}
+    timeout_s: 90
+    commands:
+    - {command: [CONFIG, SET, cluster-ping-interval, "3600000"], node: 0, expect: {
+        equals: OK}}
+    - {command: [DEBUG, DISABLE-CLUSTER-RANDOM-PING, "1"], node: 0, expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-ping-interval, "3600000"], node: 1, expect: {
+        equals: OK}}
+    - {command: [DEBUG, DISABLE-CLUSTER-RANDOM-PING, "1"], node: 1, expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-ping-interval, "3600000"], node: 2, expect: {
+        equals: OK}}
+    - {command: [DEBUG, DISABLE-CLUSTER-RANDOM-PING, "1"], node: 2, expect: {equals: OK}}
+    - {command: [CLUSTER, DELSLOTSRANGE, "1", "16383"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, "0"], node: 0, expect: {equals: 0}}
+    - {command: [CLUSTER, SETSLOT, "0", NODE, "<node.1.id>"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICAS, "<node.0.id>"], node: 0, expect: {error: "not\
+          \ a master"}}
+    - {command: [CLUSTER, REPLICAS, "<node.0.id>"], node: 1, wait_s: 12, expect_difference: true,
+      expect: {error: "not a master"}}
+    - {command: [CLUSTER, REPLICAS, "<node.0.id>"], node: 2, wait_s: 12, expect_difference: true,
+      expect: {error: "not a master"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: demote-last-slot
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    server_config: {enable-debug-command: "yes", cluster-allow-replica-migration: "yes"}
+    timeout_s: 90
+    commands:
+    - {command: [CONFIG, SET, cluster-ping-interval, "3600000"], node: 0, expect: {
+        equals: OK}}
+    - {command: [DEBUG, DISABLE-CLUSTER-RANDOM-PING, "1"], node: 0, expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-ping-interval, "3600000"], node: 1, expect: {
+        equals: OK}}
+    - {command: [DEBUG, DISABLE-CLUSTER-RANDOM-PING, "1"], node: 1, expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-ping-interval, "3600000"], node: 2, expect: {
+        equals: OK}}
+    - {command: [DEBUG, DISABLE-CLUSTER-RANDOM-PING, "1"], node: 2, expect: {equals: OK}}
+    - {command: [CLUSTER, DELSLOTSRANGE, "0", "16382"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, "16383"], node: 0, expect: {equals: 0}}
+    - {command: [CLUSTER, SETSLOT, "16383", NODE, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, REPLICAS, "<node.0.id>"], node: 0, expect: {error: "not\
+          \ a master"}}
+    - {command: [CLUSTER, REPLICAS, "<node.0.id>"], node: 1, wait_s: 12, expect_difference: true,
+      expect: {error: "not a master"}}
+    - {command: [CLUSTER, REPLICAS, "<node.0.id>"], node: 2, wait_s: 12, expect_difference: true,
+      expect: {error: "not a master"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [demote-first-slot.completed, demote-last-slot.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: demote-first-slot}
+- {evidence_id: valkey.command.sequence, source: demote-last-slot}
