@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.acl-load-deferred-free-user
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL LOAD that orphans the client running it inside MULTI/EXEC must
+    not leave a dangling user pointer that CLIENT INFO dereferences
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    files:
+      users.acl: "user default on nopass ~* &* +@all\n"
+    server_config: {aclfile: users.acl}
+    commands:
+    - {command: [ACL, SETUSER, tempuser, on, ">pass", "~*", "&*", "+@all"], expect: {
+        equals: OK}}
+    - {command: [AUTH, tempuser, pass], connection: victim, expect: {equals: OK}}
+    - {command: [ACL, WHOAMI], connection: victim, expect: {equals: tempuser}}
+    - {command: [MULTI], connection: victim, expect: {equals: OK}}
+    - {command: [ACL, LOAD], connection: victim, expect: {equals: QUEUED}}
+    - {command: [CLIENT, INFO], connection: victim, expect: {equals: QUEUED}}
+    - {command: [EXEC], connection: victim, expect_difference: true, expect: {error: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

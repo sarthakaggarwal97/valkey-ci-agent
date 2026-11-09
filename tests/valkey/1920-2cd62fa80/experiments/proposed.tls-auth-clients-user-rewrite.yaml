@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.tls-auth-clients-user-rewrite
+deployment:
+  modes: [standalone]
+metadata:
+  description: tls-auth-clients-user survives CONFIG REWRITE and a restart on the
+    change's build, and with it enabled a non-TLS client is never auto-authenticated
+components:
+- use: valkey.action.commands
+  id: rewrite
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, tls-auth-clients-user, CN], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, tls-auth-clients-user], expect_difference: true, expect: {
+        equals: [tls-auth-clients-user, CN]}}
+    - {command: [CONFIG, SET, tls-auth-clients-user, off], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, tls-auth-clients-user], expect_difference: true, expect: {
+        equals: [tls-auth-clients-user, "off"]}}
+    - {command: [CONFIG, SET, tls-auth-clients-user, CN], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [ACL, SETUSER, Client-only, on, ">clientpass", allcommands, allkeys],
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, requirepass, s3cret], expect: {equals: OK}}
+    - {command: [PING], connection: fresh, expect: {error: "NOAUTH"}}
+    - {command: [AUTH, s3cret], connection: fresh, expect: {equals: OK}}
+    - {command: [ACL, WHOAMI], connection: fresh, expect: {equals: default}}
+    - {command: [INFO, stats], expect_difference: true, expect: {contains: "acl_access_denied_tls_cert:0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rewrite.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rewrite}

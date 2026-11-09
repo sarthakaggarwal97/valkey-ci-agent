@@ -1,0 +1,66 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "130ea3973ba9ec0ebd767d6444268bfc33999489",
+  "parent": "61b63ab989973412c9173a42c91651b079a18f72",
+  "pr": 2095,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Allow shrinking hashtables in low memory situations (#2095)",
+  "date": "2025-07-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 17,
+    "executed": 16,
+    "percent": 94,
+    "uncovered": [
+      "src/hashtable.c:637"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 10.289,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-0fd8a7a234cd",
+      "build": "unstable",
+      "seed": 20951,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0fd8a7a234cd",
+      "build": "unstable",
+      "seed": 20952,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0fd8a7a234cd",
+      "build": "unstable",
+      "seed": 20953,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-fc20115884a1",
+      "build": "unstable",
+      "seed": 20953,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-fc20115884a1",
+      "build": "unstable",
+      "seed": 20954,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-fc20115884a1",
+      "build": "unstable",
+      "seed": 20955,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

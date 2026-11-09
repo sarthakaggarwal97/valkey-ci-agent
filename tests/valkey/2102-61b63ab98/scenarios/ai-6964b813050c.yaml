@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9c45cf33423e..61b63ab98997.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6964b813050c
+seed: 101
+experiment:
+  id: proposed.benchmark-placeholders-core
+deployment:
+  mode: standalone
+  base_port: 7000

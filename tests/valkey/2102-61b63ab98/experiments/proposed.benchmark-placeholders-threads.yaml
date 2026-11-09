@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-placeholders-threads
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark placeholder rewrite under --threads (shared atomic
+    counters and the global offset table read concurrently), repeated initPlaceholders
+    across several -t tests (the resetPlaceholders free path), and adjacent repeated
+    occurrences of one placeholder, compared against the parent build
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 120
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, --threads, 4, -c, 8, -r, 100, -n,
+        2000, --sequential, "--", set, k__rand_1st__, x], compare: skip, expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect_difference: true, expect: {
+        stdout: {equals: "100\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, FLUSHALL], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 1, -r, 50, -n, 50, --sequential,
+        -t, "set,incr,zadd"], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, ZCARD, myzset], expect_difference: true,
+      expect: {stdout: {equals: "50\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect: {stdout: {equals: "101\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, FLUSHALL], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 1, -r, 10, -n, 10, --sequential,
+        "--", set, m__rand_4th__, "__rand_4th____rand_4th____rand_4th____rand_4th__"],
+      compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, m000000000003], expect_difference: true,
+      expect: {stdout: {equals: "000000000003000000000003000000000003000000000003\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

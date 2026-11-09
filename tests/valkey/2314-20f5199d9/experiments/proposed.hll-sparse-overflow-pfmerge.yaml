@@ -1,0 +1,28 @@
+extends: [valkey.liveness]
+id: proposed.hll-sparse-overflow-pfmerge
+deployment:
+  modes: [standalone]
+metadata:
+  description: PFMERGE reading a corrupt sparse HLL whose run-lengths overflow the
+    register index errors instead of crashing (CVE-2025-32023)
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 2
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "redis.call('SET', KEYS[1], string.char(72,89,76,76,1,0,0,0,0,0,0,0,0,0,0,0)..string.rep(string.char(127,255),200000)..string.char(128));\
+          \ return 'OK'", "1", hll], expect: {equals: OK}}
+    - {command: [PFMERGE, dest, hll], expect_difference: true, expect: {error: "INVALIDOBJ"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

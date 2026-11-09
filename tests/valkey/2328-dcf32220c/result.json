@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dcf32220c914588123e6d7001a72e7643d428130",
+  "parent": "30ea139fb49e3d8e0a40833c92d23938165c6ea9",
+  "pr": 2328,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "handle prefetch-batch-max-size config update from zero to positive value (#2328)",
+  "date": "2025-07-08",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 8.81,
+  "findings": [],
+  "recorded": []
+}

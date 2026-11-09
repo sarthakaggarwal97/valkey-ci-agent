@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 57b176169d2c..20f5199d96ba.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7f1b85dec9c5
+seed: 20250132
+experiment:
+  id: proposed.hll-sparse-overflow-regpaths
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

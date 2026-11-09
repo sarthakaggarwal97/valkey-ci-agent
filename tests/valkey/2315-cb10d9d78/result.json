@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cb10d9d78f35945b667e46967b3980e89954d73b",
+  "parent": "20f5199d96baf0c64bd4e7d042b6274c4e773bcb",
+  "pr": 2315,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "retry accept on transient errors (CVE-2025-48367) (#2315)",
+  "date": "2025-07-07",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 11,
+    "executed": 9,
+    "percent": 81,
+    "uncovered": [
+      "src/anet.c:672",
+      "src/anet.c:687"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 5.4584,
+  "findings": [],
+  "recorded": []
+}

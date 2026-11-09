@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "de765863f049ab44e11dceffff7a9b5fc0244f20",
+  "parent": "b44e24493bf0a1b142fba3ab1c54dab6c0a4cb2a",
+  "pr": 2353,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix large allocations crashing Valkey during active defrag (#2353)",
+  "date": "2025-07-14",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.5423,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: allocator_defrag.c:396 'binind < je_cb.nbins && region_size == je_cb.bin_info[binind].reg_size' is not true",
+      "scenario": "ai-b16b4939b110",
+      "seed": 23531,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2353",
+      "fingerprint": "0a1dc72aba547ca45e70",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

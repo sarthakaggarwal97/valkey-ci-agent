@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ba24e0d4f536b9c830a4505ee7064c301510dcc6",
+  "parent": "c782b5aeac9b25b3b6e84930f067497ec2e1a384",
+  "pr": 2337,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Avoid logging sender role on each cluster message (#2337)",
+  "date": "2025-07-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.8369,
+  "findings": [],
+  "recorded": []
+}

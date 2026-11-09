@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7a19c864ece4..2cd62fa8097b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3cc3f9aea8c5
+seed: 101
+experiment:
+  id: proposed.tls-auth-clients-user-config
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

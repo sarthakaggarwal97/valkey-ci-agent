@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7a19c864ece4e3eb136579f49ddc478ba15496dd",
+  "parent": "507042df9642a0f70f991d87003ffaab2246ceea",
+  "pr": 2335,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Exit early when all the covered slots are deleted (#2335)",
+  "date": "2025-07-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 21,
+    "executed": 21,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 4.2972,
+  "findings": [],
+  "recorded": []
+}

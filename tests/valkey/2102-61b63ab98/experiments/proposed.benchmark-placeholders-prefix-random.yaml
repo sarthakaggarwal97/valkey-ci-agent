@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-placeholders-prefix-random
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark placeholder rewrite under the --dbnum SELECT prefix
+    (the old code patched randptr pointers when the prefix was stripped), RESP3, higher
+    placeholder slots, -x stdin data, and seeded random-mode determinism against the
+    parent build
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, --dbnum, 1, -c, 1, -P, 3, -r, 50,
+        -n, 300, --sequential, "--", set, k__rand_1st__, v], compare: skip, expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, -n, 1, DBSIZE], expect_difference: true,
+      expect: {stdout: {equals: "50\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect: {stdout: {equals: "0\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -3, -c, 1, -r, 50, -n, 50, --sequential,
+        "--", set, "a__rand_2nd__:__rand_3rd__", x], compare: skip, expect: {exit: {
+          equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, EXISTS, "a000000000007:000000000007"],
+      expect_difference: true, expect: {stdout: {equals: "1\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect_difference: true, expect: {
+        stdout: {equals: "50\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -x, -c, 1, -r, 10, -n, 10, --sequential,
+        "--", set, x__rand_5th__], stdin: "VAL__rand_5th__END", compare: skip, expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, x000000000002], expect_difference: true,
+      expect: {stdout: {equals: "VAL000000000002END\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, FLUSHALL], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --seed, 7, -c, 1, -r, 1000, -n, 30,
+        -t, set], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, KEYS, "key:*"], compare: unordered}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

@@ -1,0 +1,31 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "507042df9642a0f70f991d87003ffaab2246ceea",
+  "parent": "e9edba48e8444ee550105fe61557e599fd120ec9",
+  "pr": 2301,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix replica (the old primary) claims to sitll have slots after manual failover (#2301)",
+  "date": "2025-07-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 17,
+    "executed": 14,
+    "percent": 82,
+    "uncovered": [
+      "src/debug.c:622",
+      "src/debug.c:623",
+      "src/debug.c:624"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 2.1063,
+  "findings": [],
+  "recorded": []
+}

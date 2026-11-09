@@ -1,0 +1,39 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "aa7488f4b191a727e4c3e3f0456f6a1f0ee08527",
+  "parent": "4b25a7064677ecb3d594a5033971058ef01334f9",
+  "pr": 3800,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix heap-use-after-free in ACL LOAD when client free is deferred (#3800)",
+  "date": "2026-05-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 12,
+    "executed": 1,
+    "percent": 8,
+    "uncovered": [
+      "src/debug.c:1076",
+      "src/debug.c:1078",
+      "src/debug.c:1079",
+      "src/debug.c:1080",
+      "src/debug.c:1081",
+      "src/debug.c:1082",
+      "src/debug.c:1084",
+      "src/debug.c:1085",
+      "src/debug.c:1086",
+      "src/debug.c:1087",
+      "src/debug.c:1089"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 2.6827,
+  "findings": [],
+  "recorded": []
+}

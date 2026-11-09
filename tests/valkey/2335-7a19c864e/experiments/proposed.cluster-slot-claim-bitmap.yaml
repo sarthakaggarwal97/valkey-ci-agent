@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.cluster-slot-claim-bitmap
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    After CLUSTER FAILOVER TAKEOVER the new primary claims its old primary's slots
+    (clusterFailoverReplaceYourPrimary) and CLUSTER RESET deletes a node's slots (clusterDelNodeSlots);
+    both now walk the slot bitmap with an early exit. Drive both with a full 16384-slot
+    bitmap and a sparse 10-slot bitmap whose bits straddle byte boundaries (0,7,8,15,255,256,
+    4095,4096,8192,16383), comparing against the parent build. The old primary demotes
+    to replica only when every one of its slots was claimed, so the role and slot-count
+    checks catch any skipped or miscomputed slot.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slots
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [SET, k1, v1], node: 0, expect: {equals: OK}}
+    - {command: [WAIT, 1, 10000], node: 0, expect: {equals: 1}}
+    - {command: [CLUSTER, FAILOVER, TAKEOVER], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 0, wait_s: 30, compare: skip, expect: {
+        contains: "role:slave"}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, compare: skip, expect: {contains: "cluster_slots_assigned:16384"}}
+    - {command: [GET, k1], node: 1, expect: {equals: v1}}
+    - {command: [FLUSHALL], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, DELSLOTSRANGE, 1, 6, 9, 14, 16, 254, 257, 4094, 4097, 8191,
+        8193, 16382], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, compare: skip, expect: {contains: "cluster_slots_assigned:10\r\
+          \n"}}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 30, compare: skip, expect: {contains: "cluster_slots_assigned:10\r\
+          \n"}}
+    - {command: [CLUSTER, FAILOVER, TAKEOVER], node: 0, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "role:slave"}}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 30, compare: skip, expect: {contains: "cluster_slots_assigned:10\r\
+          \n"}}
+    - {command: [CLUSTER, RESET, SOFT], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 30, compare: skip, expect: {contains: "cluster_slots_assigned:0\r\
+          \n"}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16383], node: 0, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slots.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slots}

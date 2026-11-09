@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6e24028f7b68..c782b5aeac9b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-630edbb46fd9
+seed: 1003
+experiment:
+  id: proposed.debug-clusterlink-args-crash
+  inputs:
+    resp: 2
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 0
+  base_port: 7200

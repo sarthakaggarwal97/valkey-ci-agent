@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.debug-clusterlink-args-crash
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: DEBUG CLUSTERLINK with too few args must not read past argv (OOB crash
+    on parent)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: clusterlink
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, CLUSTERLINK], expect_difference: true, expect: {exists: false}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [DEBUG, CLUSTERLINK, KILL], expect: {error: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [DEBUG, CLUSTERLINK, KILL, all], expect: {error: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [DEBUG, CLUSTERLINK, KILL, all, somenode, extra], expect: {error: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [clusterlink.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: clusterlink}

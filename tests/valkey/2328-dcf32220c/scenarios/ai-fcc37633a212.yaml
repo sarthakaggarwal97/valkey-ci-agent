@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 30ea139fb49e..dcf32220c914.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fcc37633a212
+seed: 101
+experiment:
+  id: proposed.prefetch-zero-to-positive-startup
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

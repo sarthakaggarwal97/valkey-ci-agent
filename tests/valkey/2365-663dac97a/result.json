@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "663dac97a15449265c56c51f790b746317ea6e03",
+  "parent": "e6ea0b34431e6e29dc3020e2b122351dad5d8ab1",
+  "pr": 2365,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Prevent calling `lookupkey` twice in some module functions that use `setkey` (#2365)",
+  "date": "2025-07-17",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.2438,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

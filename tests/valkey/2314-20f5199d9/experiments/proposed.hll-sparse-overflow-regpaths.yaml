@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.hll-sparse-overflow-regpaths
+deployment:
+  modes: [standalone]
+metadata:
+  description: Corrupted sparse HLLs whose run-lengths overflow HLL_REGISTERS reach
+    the ZERO/XZERO/VAL overflow guards in hllSparseToDense, hllSparseRegHisto and
+    hllMerge; the fixed build rejects them with INVALIDOBJ where the parent accepted
+    the VAL-overflow payload as valid.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hll
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SET, k_val_td, !!binary "SFlMTAEAAAAAAAAAAAAAAH//gA=="], expect: {
+        equals: OK}}
+    - {command: [PFDEBUG, TODENSE, k_val_td], expect_difference: true, expect: {error: "INVALIDOBJ"}}
+    - {command: [SET, k_val_mg, !!binary "SFlMTAEAAAAAAAAAAAAAAH//gA=="], expect: {
+        equals: OK}}
+    - {command: [PFMERGE, dst_val, k_val_mg], expect_difference: true, expect: {error: "INVALIDOBJ"}}
+    - {command: [SET, k_zero_td, !!binary "SFlMTAEAAAAAAAAAAAAAAH//AQ=="], expect: {
+        equals: OK}}
+    - {command: [PFDEBUG, TODENSE, k_zero_td], expect: {error: "INVALIDOBJ"}}
+    - {command: [SET, k_zero_mg, !!binary "SFlMTAEAAAAAAAAAAAAAAH//AQ=="], expect: {
+        equals: OK}}
+    - {command: [PFMERGE, dst_zero, k_zero_mg], expect: {error: "INVALIDOBJ"}}
+    - {command: [SET, k_cnt_val, !!binary "SFlMTAEAAAAAAAAAAAAAgH//gA=="], expect: {
+        equals: OK}}
+    - {command: [PFCOUNT, k_cnt_val], expect: {error: "INVALIDOBJ"}}
+    - {command: [SET, k_cnt_zero, !!binary "SFlMTAEAAAAAAAAAAAAAgH//AQ=="], expect: {
+        equals: OK}}
+    - {command: [PFCOUNT, k_cnt_zero], expect: {error: "INVALIDOBJ"}}
+    - {command: [SET, k_cnt_xz, !!binary "SFlMTAEAAAAAAAAAAAAAgH//QAA="], expect: {
+        equals: OK}}
+    - {command: [PFCOUNT, k_cnt_xz], expect: {error: "INVALIDOBJ"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hll}

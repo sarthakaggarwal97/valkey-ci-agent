@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-placeholders-core
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark placeholder rewrite - the zadd --sequential fix, the
+    new __rand_1st__ placeholder (same value per command, independent counter), pipelined
+    and multi-command replacement, datasets compared via valkey-cli against the parent
+    build
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-benchmark, args: [--help], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "__rand_1st__"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 1, -r, 50, -n, 50, --sequential,
+        -t, zadd], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, ZCARD, myzset], expect_difference: true,
+      expect: {stdout: {equals: "50\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, ZRANGEBYSCORE, myzset, 49, 49], expect_difference: true,
+      expect: {stdout: {contains: "element:000000000049"}}}
+    - {tool: valkey-cli, args: [-p, $port, FLUSHALL], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 1, -r, 50, -n, 100, --sequential,
+        "--", set, j__rand_int__, rain, ";", set, k__rand_1st__, rain], compare: skip,
+      expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect_difference: true, expect: {
+        stdout: {equals: "100\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, FLUSHALL], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 1, -P, 5, -r, 100, -n, 100, --sequential,
+        "--", set, rain__rand_1st__, rain__rand_1st__], compare: skip, expect: {exit: {
+          equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect_difference: true, expect: {
+        stdout: {equals: "100\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, rain000000000042], expect_difference: true,
+      expect: {stdout: {equals: "rain000000000042\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, FLUSHALL], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 1, -r, 100, -n, 10, --sequential,
+        "--", set, v__rand_int__, v__rand_int__], compare: skip, expect: {exit: {
+          equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, v000000000004], expect: {stdout: {
+          equals: "v000000000005\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

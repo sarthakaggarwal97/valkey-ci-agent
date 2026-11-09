@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "57b176169d2c869d14dc4908674ffbb8b28b39cc",
+  "parent": "d75bc311b9fe1846c9e48eacc060374ca1105d9d",
+  "pr": 2245,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Spelling 9 (#2245)",
+  "date": "2025-07-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3317,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely spelling fixes: comment text, documentation (README, valkey.conf comments, install_server.sh header), Makefile comments, TCL test-suite strings, and two consistently renamed C macros (AOF_REWRITE_LIMITE_* -> AOF_REWRITE_LIMIT_*) whose values and all use sites are unchanged. No compiled code path, command reply, replication, persistence, or tool behavior changes, so there is nothing a scenario could exercise."
+}

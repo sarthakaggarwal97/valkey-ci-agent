@@ -1,0 +1,66 @@
+extends: [valkey.liveness]
+id: proposed.prefetch-zero-to-positive-startup
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Server starts with prefetch-batch-max-size 0 (no prefetch batch allocated). CONFIG
+    SET to a positive value must re-create the batch: on the fixed build io_threaded_total_prefetch_batches
+    starts increasing, on the parent the batch stays NULL and the counter is pinned
+    at 0.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: prefetch
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      io-threads: 4
+      events-per-io-thread: 0
+      prefetch-batch-max-size: 0
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [SET, k3, v3], expect: {equals: OK}}
+    - {command: [SET, k4, v4], expect: {equals: OK}}
+    - {command: [SET, k5, v5], expect: {equals: OK}}
+    - {command: [SET, k6, v6], expect: {equals: OK}}
+    - {command: [SET, k7, v7], expect: {equals: OK}}
+    - {command: [SET, k8, v8], expect: {equals: OK}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [EVAL, "local s=redis.call('INFO','stats') return tonumber(string.match(s,'io_threaded_total_prefetch_batches:(%d+)'))",
+        "0"], expect: {equals: 0}}
+    - {command: [CONFIG, GET, prefetch-batch-max-size]}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, "8"], expect: {equals: OK}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [EVAL, "local s=redis.call('INFO','stats') return tonumber(string.match(s,'io_threaded_total_prefetch_batches:(%d+)'))",
+        "8", k1, k2, k3, k4, k5, k6, k7, k8], expect_difference: true, wait_s: 20,
+      expect: {min: 1}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [prefetch.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: prefetch}

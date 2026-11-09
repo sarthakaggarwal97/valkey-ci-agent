@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 61b63ab98997..130ea3973ba9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fc20115884a1
+seed: 20953
+experiment:
+  id: proposed.hashtable-shrink-oom
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

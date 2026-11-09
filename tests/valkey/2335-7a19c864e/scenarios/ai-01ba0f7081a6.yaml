@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 507042df9642..7a19c864ece4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-01ba0f7081a6
+seed: 23351
+experiment:
+  id: proposed.cluster-slot-claim-bitmap
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

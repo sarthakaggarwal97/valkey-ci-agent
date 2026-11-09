@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 78e7208b030d..e6ea0b34431e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-719587623291
+seed: 220203
+experiment:
+  id: proposed.cluster-bus-enum-init
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7200

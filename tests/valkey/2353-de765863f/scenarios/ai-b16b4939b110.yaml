@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b44e24493bf0..de765863f049.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b16b4939b110
+seed: 23531
+experiment:
+  id: proposed.defrag-large-alloc-scan
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
+  server_config:
+    proto-max-bulk-len: '4294967296'
+    maxmemory: '0'
+    active-defrag-threshold-lower: '0'
+    active-defrag-ignore-bytes: '1'
+    active-defrag-cycle-min: '25'
+    active-defrag-cycle-max: '75'

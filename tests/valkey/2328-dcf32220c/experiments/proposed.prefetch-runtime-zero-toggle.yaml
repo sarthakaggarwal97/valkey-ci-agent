@@ -1,0 +1,83 @@
+extends: [valkey.liveness]
+id: proposed.prefetch-runtime-zero-toggle
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Runtime positive -> 0 -> positive toggle of prefetch-batch-max-size. Both builds
+    free the batch after the set to 0 (the parent through the deferred path in processClientsCommandsBatch);
+    on the set back to 16 the fixed build re-allocates it via the new config apply
+    hook while the parent stays stuck with a NULL batch, so the prefetch-batches counter
+    delta stays 0 there.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: toggle
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      io-threads: 4
+      events-per-io-thread: 0
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [SET, k3, v3], expect: {equals: OK}}
+    - {command: [SET, k4, v4], expect: {equals: OK}}
+    - {command: [SET, k5, v5], expect: {equals: OK}}
+    - {command: [SET, k6, v6], expect: {equals: OK}}
+    - {command: [SET, k7, v7], expect: {equals: OK}}
+    - {command: [SET, k8, v8], expect: {equals: OK}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [EVAL, "local s=redis.call('INFO','stats') return tonumber(string.match(s,'io_threaded_total_prefetch_batches:(%d+)'))",
+        "8", k1, k2, k3, k4, k5, k6, k7, k8], compare: skip, wait_s: 15, expect: {
+        min: 1}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, "0"], expect: {equals: OK}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [EVAL, "local s=redis.call('INFO','stats') redis.call('SET',KEYS[1],string.match(s,'io_threaded_total_prefetch_batches:(%d+)'))\
+          \ return redis.status_reply('OK')", "1", pfbase], expect: {equals: OK}}
+    - {command: [EVAL, "local s=redis.call('INFO','stats') return tonumber(string.match(s,'io_threaded_total_prefetch_batches:(%d+)'))\
+          \ - tonumber(redis.call('GET',KEYS[1]))", "1", pfbase], expect: {equals: 0}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, "16"], expect: {equals: OK}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    - {command: [EVAL, "local s=redis.call('INFO','stats') return tonumber(string.match(s,'io_threaded_total_prefetch_batches:(%d+)'))\
+          \ - tonumber(redis.call('GET',KEYS[1]))", "9", pfbase, k1, k2, k3, k4, k5,
+        k6, k7, k8], expect_difference: true, wait_s: 25, expect: {min: 2}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], expect: {equals: [v1, v2,
+          v3, v4, v5, v6, v7, v8]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [toggle.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: toggle}

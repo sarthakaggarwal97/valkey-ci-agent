@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.cli-cluster-yes-env
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    valkey-cli honors VALKEYCLI_CLUSTER_YES for cluster-manager confirmation prompts,
+    still honors REDISCLI_CLUSTER_YES as a fallback, and lets the new variable take
+    precedence when both are set. Each --cluster create runs against the side's own
+    one-node cluster with empty stdin, so a build that prompts reads EOF and exits
+    1 while a build that auto-confirms creates the cluster and exits 0.
+components:
+- use: valkey.action.tools
+  id: cluster-yes
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 120
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, FLUSHSLOTS], expect: {exit: {
+          equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [--cluster, create, '127.0.0.1:$port'], env: {REDISCLI_CLUSTER_YES: "1"},
+      compare: skip, expect: {exit: {equals: 0}, stdout: {contains: "All 16384 slots\
+            \ covered"}}}
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, RESET, HARD], expect: {exit: {
+          equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [--cluster, create, '127.0.0.1:$port'], env: {VALKEYCLI_CLUSTER_YES: "1"},
+      compare: skip, expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: "All 16384 slots covered"}}}
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, RESET, HARD], expect: {exit: {
+          equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [--cluster, create, '127.0.0.1:$port'], env: {VALKEYCLI_CLUSTER_YES: "0",
+        REDISCLI_CLUSTER_YES: "1"}, compare: skip, expect_difference: true, expect: {
+        exit: {equals: 1}, stdout: {contains: "type 'yes' to accept"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cluster-yes}

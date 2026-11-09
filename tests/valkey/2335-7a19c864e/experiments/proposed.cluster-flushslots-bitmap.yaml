@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.cluster-flushslots-bitmap
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER FLUSHSLOTS drives the new bitmap walk in clusterDelNodeSlots
+    over full, sparse byte-boundary, and single-slot ownership, compared against the
+    parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flushslots
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 0], expect: {equals: 0}}
+    - {command: [CLUSTER, FLUSHSLOTS], expect: {equals: OK}}
+    - {command: [CLUSTER, SLOTS], expect: {equals: []}}
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "cluster_slots_assigned:0"}}
+    - {command: [SET, foo, bar], expect: {error: CLUSTERDOWN}}
+    - {command: [CLUSTER, ADDSLOTS, 0, 7, 8, 15, 63, 64, 8191, 8192, 16383], expect: {
+        equals: OK}}
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "cluster_slots_assigned:9"}}
+    - {command: [CLUSTER, FLUSHSLOTS], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "cluster_slots_assigned:0"}}
+    - {command: [CLUSTER, SLOTS], expect: {equals: []}}
+    - {command: [CLUSTER, ADDSLOTS, 0], expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOTS], expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOTS], expect: {equals: OK}}
+    - {command: [CLUSTER, SLOTS], expect: {equals: []}}
+    - {command: [CLUSTER, ADDSLOTSRANGE, 0, 16383], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "cluster_state:ok"},
+      wait_s: 15}
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOTS], expect: {error: "DB must be empty"}}
+    - {command: [GET, foo], expect: {equals: bar}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOTS], expect: {equals: OK}}
+    - {command: [CLUSTER, SLOTS], expect: {equals: []}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16383], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [flushslots.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flushslots}

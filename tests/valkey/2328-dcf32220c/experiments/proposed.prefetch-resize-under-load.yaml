@@ -1,0 +1,79 @@
+extends: [valkey.base]
+id: proposed.prefetch-resize-under-load
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Churn prefetch-batch-max-size across 0/1/128/16 while a concurrent key-value workload
+    writes; DEBUG SLEEP stalls the main thread so IO threads queue multi-client batches
+    and the resize hook fires mid-batch (deferred path). The realloc must not crash
+    or lose acknowledged writes, and after the final 0 -> 16 change the prefetch-batches
+    counter must move again.
+components:
+- use: valkey.action.commands
+  id: toggle
+  depends_on: [writes]
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [MSET, p1, x, p2, x, p3, x, p4, x, p5, x, p6, x, p7, x, p8, x], expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, "0"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [MGET, p1, p2, p3, p4, p5, p6, p7, p8], expect: {equals: [x, x, x,
+          x, x, x, x, x]}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, "1"], expect: {equals: OK}}
+    - {command: [MGET, p1, p2, p3, p4, p5, p6, p7, p8], expect: {equals: [x, x, x,
+          x, x, x, x, x]}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, "128"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [MGET, p1, p2, p3, p4, p5, p6, p7, p8], expect: {equals: [x, x, x,
+          x, x, x, x, x]}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, "16"], expect: {equals: OK}}
+    - {command: [MGET, p1, p2, p3, p4, p5, p6, p7, p8], expect: {equals: [x, x, x,
+          x, x, x, x, x]}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, "0"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [MGET, p1, p2, p3, p4, p5, p6, p7, p8], expect: {equals: [x, x, x,
+          x, x, x, x, x]}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, "1"], expect: {equals: OK}}
+    - {command: [MGET, p1, p2, p3, p4, p5, p6, p7, p8], expect: {equals: [x, x, x,
+          x, x, x, x, x]}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, "128"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [MGET, p1, p2, p3, p4, p5, p6, p7, p8], expect: {equals: [x, x, x,
+          x, x, x, x, x]}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, "16"], expect: {equals: OK}}
+    - {command: [MGET, p1, p2, p3, p4, p5, p6, p7, p8], expect: {equals: [x, x, x,
+          x, x, x, x, x]}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, "0"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [MGET, p1, p2, p3, p4, p5, p6, p7, p8], expect: {equals: [x, x, x,
+          x, x, x, x, x]}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, "1"], expect: {equals: OK}}
+    - {command: [MGET, p1, p2, p3, p4, p5, p6, p7, p8], expect: {equals: [x, x, x,
+          x, x, x, x, x]}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, "128"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [MGET, p1, p2, p3, p4, p5, p6, p7, p8], expect: {equals: [x, x, x,
+          x, x, x, x, x]}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, "16"], expect: {equals: OK}}
+    - {command: [MGET, p1, p2, p3, p4, p5, p6, p7, p8], expect: {equals: [x, x, x,
+          x, x, x, x, x]}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, "0"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [MGET, p1, p2, p3, p4, p5, p6, p7, p8], expect: {equals: [x, x, x,
+          x, x, x, x, x]}}
+    - {command: [EVAL, "local s=redis.call('INFO','stats') redis.call('SET',KEYS[1],string.match(s,'io_threaded_total_prefetch_batches:(%d+)'))\
+          \ return redis.status_reply('OK')", "1", pfbase], expect: {equals: OK}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, "16"], expect: {equals: OK}}
+    - {command: [MGET, p1, p2, p3, p4, p5, p6, p7, p8], expect: {equals: [x, x, x,
+          x, x, x, x, x]}}
+    - {command: [MGET, p1, p2, p3, p4, p5, p6, p7, p8], expect: {equals: [x, x, x,
+          x, x, x, x, x]}}
+    - {command: [EVAL, "local s=redis.call('INFO','stats') return tonumber(string.match(s,'io_threaded_total_prefetch_batches:(%d+)'))\
+          \ - tonumber(redis.call('GET',KEYS[1]))", "9", pfbase, p1, p2, p3, p4, p5,
+        p6, p7, p8], wait_s: 30, expect: {min: 1}}
+required_events: [toggle.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: toggle}

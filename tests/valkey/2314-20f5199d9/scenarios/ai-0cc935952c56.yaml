@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 57b176169d2c..20f5199d96ba.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0cc935952c56
+seed: 2
+experiment:
+  id: proposed.hll-sparse-overflow-pfmerge
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

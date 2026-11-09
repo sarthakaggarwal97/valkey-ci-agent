@@ -1,0 +1,22 @@
+extends: [valkey.liveness]
+id: proposed.defrag-large-alloc-scan
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active defrag scanning a >4GB allocation must not crash (region_size
+    must not truncate to 32 bits)
+components:
+- use: valkey.action.commands
+  id: setup
+  config:
+    timeout_s: 90
+    commands:
+    - {command: [SETRANGE, K, "3999999999", A], expect: {equals: 4000000000}}
+    - {command: [CONFIG, SET, activedefrag, "yes"], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: scan
+  depends_on: [setup]
+  config: {seconds: 12}
+required_events: [setup.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: setup}

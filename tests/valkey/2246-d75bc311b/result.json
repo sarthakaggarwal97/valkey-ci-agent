@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d75bc311b9fe1846c9e48eacc060374ca1105d9d",
+  "parent": "d08aab13410f4cad8391b791755a479616065592",
+  "pr": 2246,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Spelling 10 (#2246)",
+  "date": "2025-07-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3285,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a spelling cleanup only: comment fixes across several files, a constant macro rename (UTILIZATION_THRESHOLD_FACTOR_MILI -> MILLI, same value 125, both uses updated), a typedef alias rename in module.c with an unchanged struct layout, a reworded log message, and a test-name typo fix. No executable behaviour, reply, replication, persistence, or module-API semantics change, so no scenario can distinguish the builds."
+}

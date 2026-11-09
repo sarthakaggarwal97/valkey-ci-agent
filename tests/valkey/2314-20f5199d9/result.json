@@ -1,0 +1,70 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "20f5199d96baf0c64bd4e7d042b6274c4e773bcb",
+  "parent": "57b176169d2c869d14dc4908674ffbb8b28b39cc",
+  "pr": 2314,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Apply fixed for CVE-2025-32023 (#2314)",
+  "date": "2025-07-06",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 5,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 33,
+    "executed": 33,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 6.4935,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in hllSparseToDense",
+      "scenario": "ai-dbf1ef7899f3",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2314",
+      "fingerprint": "00c017ce5d73677d8ec9",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in hllMerge",
+      "scenario": "ai-0cc935952c56",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2314",
+      "fingerprint": "7b4bc08cd8c283a957a5",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in hllMerge",
+      "scenario": "ai-ffcd106f30c9",
+      "seed": 3,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2314",
+      "fingerprint": "7b4bc08cd8c283a957a5",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

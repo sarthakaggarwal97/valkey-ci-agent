@@ -1,0 +1,38 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2cd62fa8097b625b50209bb1b37b15c3e45c2b50",
+  "parent": "7a19c864ece4e3eb136579f49ddc478ba15496dd",
+  "pr": 1920,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add support for automatic client authentication via TLS certificate fields (#1920)",
+  "date": "2025-07-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 13,
+    "executed": 3,
+    "percent": 23,
+    "uncovered": [
+      "src/acl.c:2583",
+      "src/acl.c:2584",
+      "src/acl.c:3026",
+      "src/networking.c:1689",
+      "src/networking.c:1690",
+      "src/networking.c:1691",
+      "src/networking.c:1692",
+      "src/networking.c:1693",
+      "src/networking.c:1696",
+      "src/networking.c:1698"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 10.599,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,100 @@
+extends: [valkey.liveness]
+id: proposed.hashtable-shrink-oom
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Hashtables shrink on mass deletion even when used memory exceeds maxmemory (the
+    parent refuses the shrink), including while a BGSAVE child is active, and DEBUG
+    dict-resizing 0 now forbids every resize through the resize policy instead of
+    the resizeAllowed callback.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shrink-oom
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes", save: ""}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [EVAL, "for i=1,10000 do redis.call('SET','k:'..i,'v') end redis.call('SET','filler',string.rep('x',4194304))\
+          \ return redis.call('DBSIZE')", "0"], expect: {equals: 10001}}
+    - {command: [DEBUG, HTSTATS, "0"], expect: {contains: "table size: 14336\n number\
+          \ of entries: 10001"}}
+    - {command: [CONFIG, SET, maxmemory, 1mb], expect: {equals: OK}}
+    - {command: [SET, blocked, x], expect: {error: "OOM"}}
+    - {command: [EVAL, "#!lua flags=allow-oom\nfor i=1,9900 do redis.call('DEL','k:'..i)\
+          \ end\nreturn redis.call('DBSIZE')", "0"], expect: {equals: 101}}
+    - {command: [EVAL, "#!lua flags=allow-oom\nfor i=1,6000 do redis.call('SET','poke','x')\
+          \ redis.call('DEL','poke') end\nreturn redis.call('DBSIZE')", "0"], expect: {
+        equals: 101}}
+    - {command: [DEBUG, HTSTATS, "0"], wait_s: 25, expect_difference: true, expect: {
+        contains: "table size: 112\n number of entries: 101"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: shrink-under-bgsave
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes", save: ""}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [EVAL, "for i=1,10000 do redis.call('SET','k:'..i,'v') end redis.call('SET','filler',string.rep('x',4194304))\
+          \ return redis.call('DBSIZE')", "0"], expect: {equals: 10001}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, "500"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, 1mb], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: "Background saving started"}}
+    - {command: [INFO, persistence], compare: skip, expect: {contains: "rdb_bgsave_in_progress:1"}}
+    - {command: [EVAL, "#!lua flags=allow-oom\nfor i=1,9900 do redis.call('DEL','k:'..i)\
+          \ end\nreturn redis.call('DBSIZE')", "0"], expect: {equals: 101}}
+    - {command: [EVAL, "#!lua flags=allow-oom\nfor i=1,6000 do redis.call('SET','poke','x')\
+          \ redis.call('DEL','poke') end\nreturn redis.call('DBSIZE')", "0"], expect: {
+        equals: 101}}
+    - {command: [DEBUG, HTSTATS, "0"], wait_s: 45, expect_difference: true, expect: {
+        contains: "table size: 112\n number of entries: 101"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: dict-resizing
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes", save: ""}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [DEBUG, DICT-RESIZING, "0"], expect: {equals: OK}}
+    - {command: [EVAL, "for i=1,100 do redis.call('SET','k:'..i,'v') end return redis.call('DBSIZE')",
+        "0"], expect: {equals: 100}}
+    - {command: [DEBUG, HTSTATS, "0"], expect_difference: true, expect: {contains: "table\
+          \ size: 7\n number of entries: 100"}}
+    - {command: [DEBUG, DICT-RESIZING, "1"], expect: {equals: OK}}
+    - {command: [EVAL, "for i=1,500 do redis.call('SET','poke','x') redis.call('DEL','poke')\
+          \ end return redis.call('DBSIZE')", "0"], expect: {equals: 100}}
+    - {command: [DEBUG, HTSTATS, "0"], wait_s: 15, expect: {contains: "table size:\
+          \ 112\n number of entries: 100"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shrink-oom.completed, shrink-under-bgsave.completed, dict-resizing.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shrink-oom}
+- {evidence_id: valkey.command.sequence, source: shrink-under-bgsave}
+- {evidence_id: valkey.command.sequence, source: dict-resizing}

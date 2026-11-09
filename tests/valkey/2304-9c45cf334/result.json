@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9c45cf33423e2f7c70ccf6adbdb428a1890cb4a5",
+  "parent": "e279b00f854b7b4cfe06f8a3eb7c89fd7ce25bdc",
+  "pr": 2304,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make unit test report each memory leak only once (#2304)",
+  "date": "2025-07-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3742,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits Valkey's unit test harness (src/unit/test_main.c, test_hashtable.c, test_rax.c, test_zmalloc.c, test_files.h) so that leak checks compare against a baseline of zmalloc_used_memory() taken before each suite instead of asserting zero, and it removes two now-redundant unit tests. No code in valkey-server, valkey-cli, valkey-benchmark, or the check tools is touched; the unit-test binary is never run by the fuzzer's deployments. There is no runtime behavior to exercise, so no scenario is needed."
+}

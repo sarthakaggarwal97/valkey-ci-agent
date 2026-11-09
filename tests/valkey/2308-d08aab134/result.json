@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d08aab13410f4cad8391b791755a479616065592",
+  "parent": "130ea3973ba9ec0ebd767d6444268bfc33999489",
+  "pr": 2308,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "[optimization] Improve the speed of sending switch-master from sentinel (#2308)",
+  "date": "2025-07-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.4492,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only reorders when Sentinel emits +switch-master within one sentinelTimer tick: a pure latency optimization in sentinel.c with no change to replies, data, or the failover outcome, and no new iterator hazard (the call already ran before dictReleaseIterator, and sentinelResetPrimaryAndChangeAddress does not add or remove entries of the iterated primaries dict). Moreover, the code is unreachable by the fuzzer: no installed experiment or component deploys or starts a Sentinel process (deployment modes are standalone and cluster only, and sentinel mode is a startup flag that valkey.actio"
+}

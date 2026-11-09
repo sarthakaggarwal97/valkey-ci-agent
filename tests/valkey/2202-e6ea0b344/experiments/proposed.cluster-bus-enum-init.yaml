@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.cluster-bus-enum-init
+deployment:
+  modes: [standalone]
+metadata:
+  description: Cluster bus initializes from the enum-indexed connection table (clusterInitLast
+    check) and comes back after a node restart, compared against the parent build
+components:
+- use: valkey.action.commands
+  id: bus
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:2"}}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 30, compare: skip, expect: {contains: "cluster_state:ok"}}
+    - {command: [INFO, server], node: 0, compare: skip, expect: {contains: "listener0:name=tcp"}}
+    - {command: [SET, k1, v1], node: 0, expect: {equals: OK}}
+    - {command: [SAVE], node: 0, expect: {equals: OK}}
+    - {restart: true, node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 30, compare: skip, expect: {contains: "cluster_state:ok"}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:2"}}
+    - {command: [GET, k1], node: 0, expect: {equals: v1}}
+    - {command: [INFO, server], node: 0, compare: skip, expect: {contains: "listener0:name=tcp"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [bus.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bus}

@@ -1,0 +1,40 @@
+extends: [valkey.base]
+id: proposed.cluster-node-restart-rehandshake
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Kill a cluster node under writes and restart it so every cluster-bus
+    link is recreated and the extension handshake reruns on fresh links
+inputs:
+  properties:
+    target: {type: string, enum: [primary, replica], default: replica}
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+    settle_s: {type: number, minimum: 1, maximum: 60, default: 5}
+components:
+- use: valkey.fault.process-signal
+  id: kill-node
+  config:
+    when_event: warm-up.completed
+    instance: {$ref: inputs.target}
+    signal: {$ref: inputs.signal}
+    restart: true
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-node]
+  config: {seconds: 2}
+- use: valkey.action.wait-event
+  id: node-back
+  depends_on: [warm-up]
+  config: {event: kill-node.recovered, timeout_s: 90}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [node-back]
+  config: {seconds: {$ref: inputs.settle_s}}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed, kill-node.recovered]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-node}

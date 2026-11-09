@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e6ea0b34431e6e29dc3020e2b122351dad5d8ab1",
+  "parent": "78e7208b030d31149aceddad8048da4d1b0d9df2",
+  "pr": 2202,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove `get_type` from `ConnectionType` (#2202)",
+  "date": "2025-07-16",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 38,
+    "executed": 24,
+    "percent": 63,
+    "uncovered": [
+      "src/connection.c:116",
+      "src/server.c:3046",
+      "src/server.c:3047",
+      "src/server.c:3048",
+      "src/server.c:3052",
+      "src/server.c:3065",
+      "src/server.c:3066",
+      "src/server.c:3067",
+      "src/server.c:3071",
+      "src/server.c:3088",
+      "src/server.c:6526",
+      "src/server.c:6527",
+      "src/server.c:6529",
+      "src/server.c:6550"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 12.1688,
+  "findings": [],
+  "recorded": []
+}

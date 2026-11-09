@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.tls-auth-clients-user-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: New tls-auth-clients-user enum config registers, validates values,
+    surfaces acl_access_denied_tls_cert in INFO stats, and never changes the identity
+    of a non-TLS client
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: tlsuser
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, tls-auth-clients-user], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [CONFIG, SET, tls-auth-clients-user, bogus], expect_difference: true,
+      expect: {error: "must be one of"}}
+    - {command: [CONFIG, SET, tls-auth-clients-user, ""], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, tls-auth-clients-user, cn], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, tls-auth-clients-user, OFF], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, tls-auth-clients-user, CN], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, tls-auth-clients-user], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [INFO, stats], expect_difference: true, expect: {contains: "acl_access_denied_tls_cert:0"}}
+    - {command: [ACL, SETUSER, Client-only, on, ">clientpass", allcommands, allkeys],
+      expect: {equals: OK}}
+    - {command: [ACL, WHOAMI], connection: fresh, expect: {equals: default}}
+    - {command: [PING], connection: fresh, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [tlsuser.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tlsuser}
