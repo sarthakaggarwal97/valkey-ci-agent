@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e606fcbaffd16760a758de631867ae6b92737bd2",
+  "parent": "cc465383c419a0cbfdd60a17256b7a0fcffe21c8",
+  "pr": 2454,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix AOF rewrite behavior for hashes with expirations (#2454)",
+  "date": "2025-08-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 1,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.2544,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in loadAppendOnlyFiles",
+      "scenario": "ai-aeaca8f29ac8",
+      "seed": 1,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "9d45e3f08da69313d579",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in loadAppendOnlyFiles",
+      "scenario": "ai-aeaca8f29ac8",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2454",
+      "fingerprint": "b503eb41219018395165",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

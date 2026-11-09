@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b7fe0b6435efbe584dd5d3063aca47554edd6e4b",
+  "parent": "52b5519c5ae5f059023b81681514c978853e39f6",
+  "pr": 2418,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Strengthen undefined behavior prevention in checkSignedBitfieldOverflow (#2418)",
+  "date": "2025-08-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.4197,
+  "findings": [],
+  "recorded": []
+}

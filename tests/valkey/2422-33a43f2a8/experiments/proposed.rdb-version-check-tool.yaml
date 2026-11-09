@@ -1,0 +1,26 @@
+extends: [valkey.liveness]
+id: proposed.rdb-version-check-tool
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-rdb accepts a VALKEY080 RDB and rejects reserved/foreign
+    versions, vs the parent whose RDB_VERSION is 11
+components:
+- use: valkey.action.tools
+  id: check
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files:
+      redis0011.rdb: !!binary 'UkVESVMwMDEx/wAAAAAAAAAA'
+      valkey080.rdb: !!binary 'VkFMS0VZMDgw/wAAAAAAAAAA'
+      valkey079.rdb: !!binary 'VkFMS0VZMDc5/wAAAAAAAAAA'
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - {tool: valkey-check-rdb, args: [redis0011.rdb], expect: {exit: {equals: 0},
+        stdout: {contains: "RDB looks OK"}}}
+    - {tool: valkey-check-rdb, args: [valkey080.rdb], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "RDB looks OK"}}}
+    - {tool: valkey-check-rdb, args: [valkey079.rdb], expect_difference: true, expect: {
+        stdout: {contains: "version 79"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check}

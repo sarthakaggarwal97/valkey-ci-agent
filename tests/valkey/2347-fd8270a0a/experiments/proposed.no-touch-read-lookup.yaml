@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.no-touch-read-lookup
+deployment:
+  modes: [standalone]
+metadata:
+  description: A CLIENT NO-TOUCH client issuing ordinary read lookups exercises the
+    executing-client no_touch check in lookupKey (db.c line 120)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: notouch
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [CLIENT, NO-TOUCH, ON], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v}}
+    - {command: [APPEND, k, w], expect: {equals: 2}}
+    - {command: [GET, k], expect: {equals: vw}}
+    - {command: [EXISTS, k], expect: {equals: 1}}
+    - {command: [TOUCH, k], expect: {equals: 1}}
+    - {command: [TOUCH, missing], expect: {equals: 0}}
+    - {command: [CLIENT, NO-TOUCH, OFF], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: vw}}
+required_events: [notouch.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: notouch}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c3b1b0317de9..5a5848a44cb0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0ccd727567c6
+seed: 106
+experiment:
+  id: proposed.module-hashset-volatile-tracking
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7500

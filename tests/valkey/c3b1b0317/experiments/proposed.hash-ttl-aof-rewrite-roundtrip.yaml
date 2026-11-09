@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.hash-ttl-aof-rewrite-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: AOF rewrite in command format of hashes holding volatile fields in
+    every vset shape, restart, and verify fields and expiry times, compared against
+    the parent
+components:
+- use: valkey.action.commands
+  id: aofrw
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes", aof-use-rdb-preamble: "no", auto-aof-rewrite-percentage: 0,
+      hash-max-listpack-entries: 0}
+    timeout_s: 120
+    commands:
+    - {command: [HSET, hs, f, v], expect: {equals: 1}}
+    - {command: [HPEXPIREAT, hs, 4102444800000, FIELDS, 1, f], expect: {equals: [
+          1]}}
+    - {command: [EVAL, "for i=1,10 do redis.call('HSET','hv','f'..i,'v'..i) redis.call('HPEXPIREAT','hv',4102444800000+i*100000,'FIELDS',1,'f'..i)\
+          \ end return redis.call('HLEN','hv')", 0], expect: {equals: 10}}
+    - {command: [EVAL, "for i=1,150 do redis.call('HSET','hr','r'..i,'v') redis.call('HPEXPIREAT','hr',4102444800000+i*100000,'FIELDS',1,'r'..i)\
+          \ end return redis.call('HLEN','hr')", 0], expect: {equals: 150}}
+    - {command: [EVAL, "for i=1,130 do redis.call('HSET','hh','e'..i,'v') redis.call('HPEXPIREAT','hh',4102444800000,'FIELDS',1,'e'..i)\
+          \ end return redis.call('HLEN','hh')", 0], expect: {equals: 130}}
+    - {command: [EVAL, "for i=1,10 do redis.call('HSET','hp','f'..i,'v'..i) end return\
+          \ redis.call('HLEN','hp')", 0], expect: {equals: 10}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {error: false}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HLEN, hr], expect: {equals: 150}}
+    - {command: [HPEXPIRETIME, hs, FIELDS, 1, f], expect: {equals: [4102444800000]}}
+    - {command: [HPEXPIRETIME, hv, FIELDS, 2, f1, f10], expect: {equals: [4102444900000,
+          4102445800000]}}
+    - {command: [HPEXPIRETIME, hh, FIELDS, 2, e1, e130], expect: {equals: [4102444800000,
+          4102444800000]}}
+    - {command: [HPEXPIRETIME, hr, FIELDS, 1, r150], expect: {equals: [4102459800000]}}
+    - {command: [HGET, hh, e7], expect: {equals: v}}
+    - {command: [HLEN, hp], expect: {equals: 10}}
+    - {command: [HGETALL, hp], compare: unordered-pairs}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aofrw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofrw}

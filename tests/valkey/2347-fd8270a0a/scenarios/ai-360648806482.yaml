@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ba7334c7c61a..fd8270a0aab6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-360648806482
+seed: 201
+experiment:
+  id: proposed.no-touch-read-lookup
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100
+  server_config:
+    maxmemory-policy: allkeys-lfu

@@ -1,0 +1,142 @@
+extends: [valkey.liveness]
+id: proposed.hash-field-expire-commands
+deployment:
+  modes: [standalone]
+metadata:
+  description: HEXPIRE-family, HSETEX and HGETEX semantics, lazy field expiry, adversarial
+    inputs, and SET/EXPIRE parser-refactor compatibility, compared against the parent
+    build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_max_listpack_entries: {type: integer, enum: [0, 128], default: 128}
+components:
+- use: valkey.action.commands
+  id: hashexp
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: {$ref: inputs.hash_max_listpack_entries}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [HEXPIREAT, h, 33177702400, FIELDS, 2, f1, f2], expect_difference: true,
+      expect: {equals: [1, 1]}}
+    - {command: [HEXPIRETIME, h, FIELDS, 3, f1, f2, f3], expect_difference: true,
+      expect: {equals: [33177702400, 33177702400, -1]}}
+    - {command: [HEXPIRE, h, 100, NX, FIELDS, 2, f1, f3], expect_difference: true,
+      expect: {equals: [0, 1]}}
+    - {command: [HEXPIRE, h, 200, XX, FIELDS, 2, f1, nope], expect_difference: true,
+      expect: {equals: [1, -2]}}
+    - {command: [HEXPIRE, h, 50, GT, FIELDS, 1, f1], expect_difference: true, expect: {
+        equals: [0]}}
+    - {command: [HEXPIRE, h, 9999999, LT, FIELDS, 1, f1], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [HPERSIST, h, FIELDS, 3, f1, f3, f9], expect_difference: true, expect: {
+        equals: [1, 1, -2]}}
+    - {command: [HPERSIST, h, FIELDS, 1, f1], expect_difference: true, expect: {equals: [
+          -1]}}
+    - {command: [HEXPIRE, h, 0, FIELDS, 1, f3], expect_difference: true, expect: {
+        equals: [2]}}
+    - {command: [HEXISTS, h, f3], expect_difference: true, expect: {equals: 0}}
+    - {command: [HEXPIRE, missing2, 0, FIELDS, 1, f], expect_difference: true, expect: {
+        equals: [-2]}}
+    - {command: [HEXPIRE, h, 100, FIELDS, 0], expect_difference: true, expect: {error: "wrong\
+          \ number"}}
+    - {command: [HEXPIRE, h, 100, FIELDS, 3, f1], expect_difference: true, expect: {
+        error: "numfields"}}
+    - {command: [HEXPIRE, h, 9223372036854775807, FIELDS, 1, f1], expect_difference: true,
+      expect: {error: "invalid expire"}}
+    - {command: [HEXPIRE, h, -1, FIELDS, 1, f1], expect_difference: true, expect: {
+        error: "invalid expire"}}
+    - {command: [HPEXPIRE, h, 9223372036854775807, FIELDS, 1, f1], expect_difference: true,
+      expect: {error: "invalid expire"}}
+    - {command: [SET, str, val], expect: {equals: OK}}
+    - {command: [HEXPIRE, str, 100, FIELDS, 1, f], expect_difference: true, expect: {
+        error: WRONGTYPE}}
+    - {command: [HTTL, missing, FIELDS, 1, f], expect_difference: true, expect: {
+        equals: [-2]}}
+    - {command: [HSET, h2, FIELDS, x, fields, y], expect: {equals: 2}}
+    - {command: [HEXPIREAT, h2, 33177702400, FIELDS, 1, FIELDS], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [HEXPIRETIME, h2, FIELDS, 2, FIELDS, fields], expect_difference: true,
+      expect: {equals: [33177702400, -1]}}
+    - {command: [HSET, h2, "", e], expect: {equals: 1}}
+    - {command: [HEXPIREAT, h2, 33177702400, FIELDS, 1, ""], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [HEXPIREAT, h2, 33177702401, FIELDS, 3, fields, fields, fields], expect_difference: true,
+      expect: {equals: [1, 1, 1]}}
+    - {command: [HSETEX, hs, PXAT, 33177702400000, FIELDS, 1, a, 1], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [HPEXPIRETIME, hs, FIELDS, 1, a], expect_difference: true, expect: {
+        equals: [33177702400000]}}
+    - {command: [HSETEX, hs, FNX, FIELDS, 1, a, 9], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [HSETEX, hs, FXX, FIELDS, 1, a, 9], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [HPEXPIRETIME, hs, FIELDS, 1, a], expect_difference: true, expect: {
+        equals: [-1]}}
+    - {command: [HSETEX, hs, PXAT, 33177702400000, FIELDS, 1, a, 5], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [HSETEX, hs, KEEPTTL, FIELDS, 1, a, 7], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [HPEXPIRETIME, hs, FIELDS, 1, a], expect_difference: true, expect: {
+        equals: [33177702400000]}}
+    - {command: [HGET, hs, a], expect_difference: true, expect: {equals: "7"}}
+    - {command: [HSETEX, hs, PXAT, 1, FIELDS, 1, b, 0], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [HEXISTS, hs, b], expect: {equals: 0}}
+    - {command: [HSETEX, hs, FNX, EX, 100, FIELDS, 2, q, 1, q, 2], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [HGET, hs, q], expect_difference: true, expect: {equals: "2"}}
+    - {command: [HSETEX, hs, EX, 5, FIELDS, 2, a, 1], expect_difference: true, expect: {
+        error: "numfields"}}
+    - {command: [HSET, hg, x, 7], expect: {equals: 1}}
+    - {command: [HGETEX, hg, EXAT, 33177702400, FIELDS, 1, x], expect_difference: true,
+      expect: {equals: ["7"]}}
+    - {command: [HEXPIRETIME, hg, FIELDS, 1, x], expect_difference: true, expect: {
+        equals: [33177702400]}}
+    - {command: [HGETEX, hg, PERSIST, FIELDS, 1, x], expect_difference: true, expect: {
+        equals: ["7"]}}
+    - {command: [HEXPIRETIME, hg, FIELDS, 1, x], expect_difference: true, expect: {
+        equals: [-1]}}
+    - {command: [HGETEX, hg, EX, 0, FIELDS, 1, x], expect_difference: true, expect: {
+        equals: ["7"]}}
+    - {command: [EXISTS, hg], expect_difference: true, expect: {equals: 0}}
+    - {command: [HSET, he, a, 1, b, 2], expect: {equals: 2}}
+    - {command: [HPEXPIRE, he, 80, FIELDS, 1, a], expect_difference: true, expect: {
+        equals: [1]}}
+    - {command: [HGET, he, a], wait_s: 6, expect_difference: true, expect: {equals: null}}
+    - {command: [HMGET, he, a, b], expect_difference: true, expect: {equals: [null,
+          "2"]}}
+    - {command: [HSET, hr, k1, 1, k2, 2, k3, 3], expect: {equals: 3}}
+    - {command: [HEXPIREAT, hr, 1, FIELDS, 2, k2, k3], expect_difference: true, expect: {
+        equals: [2, 2]}}
+    - {command: [HRANDFIELD, hr, 10], compare: unordered, expect_difference: true,
+      expect: {equals: [k1]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HEXPIRE, h, 100, FIELDS, 1, f1], expect_difference: true, expect: {
+        equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [[1]]}}
+    - {command: [EXEC], expect: {error: "without MULTI"}}
+    - {command: [SET, s1, a, EX, 100], expect: {equals: OK}}
+    - {command: [SET, s1, b, KEEPTTL, GET], expect: {equals: a}}
+    - {command: [TTL, s1], compare: skip, expect: {min: 50, max: 100}}
+    - {command: [SET, s1, c, NX], expect: {equals: null}}
+    - {command: [SET, s1, d, XX, GET], expect: {equals: b}}
+    - {command: [SET, s1, e, IFEQ, d], expect: {equals: OK}}
+    - {command: [SET, s1, f, EX, 0], expect: {error: "invalid expire"}}
+    - {command: [GETEX, s1, PERSIST], expect: {equals: e}}
+    - {command: [TTL, s1], expect: {equals: -1}}
+    - {command: [EXPIRE, s1, 100, NX, XX], expect: {error: true}}
+    - {command: [EXPIRE, s1, 100, XX], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hashexp.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hashexp}

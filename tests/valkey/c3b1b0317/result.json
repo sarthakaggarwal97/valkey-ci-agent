@@ -1,0 +1,272 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c3b1b0317de96a3fe2a1336a868c7740c6e7b93c",
+  "parent": "65215e5378db7b47c3460567da134ab7f0bfeb58",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Introduce volatile set -------------",
+  "date": "2025-08-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 20,
+  "proven": 2,
+  "hunted": 18,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 975,
+    "executed": 700,
+    "percent": 71,
+    "uncovered": [
+      "src/vset.c:331",
+      "src/vset.c:332",
+      "src/vset.c:394",
+      "src/vset.c:395",
+      "src/vset.c:485",
+      "src/vset.c:506",
+      "src/vset.c:507",
+      "src/vset.c:821",
+      "src/vset.c:823",
+      "src/vset.c:958",
+      "src/vset.c:1063",
+      "src/vset.c:1064",
+      "src/vset.c:1071",
+      "src/vset.c:1229",
+      "src/vset.c:1242",
+      "src/vset.c:1243",
+      "src/vset.c:1260",
+      "src/vset.c:1263",
+      "src/vset.c:1328",
+      "src/vset.c:1329",
+      "src/vset.c:1349",
+      "src/vset.c:1350",
+      "src/vset.c:1401",
+      "src/vset.c:1408",
+      "src/vset.c:1411",
+      "src/vset.c:1412",
+      "src/vset.c:1413",
+      "src/vset.c:1414",
+      "src/vset.c:1415",
+      "src/vset.c:1416",
+      "src/vset.c:1417",
+      "src/vset.c:1419",
+      "src/vset.c:1422",
+      "src/vset.c:1423",
+      "src/vset.c:1424",
+      "src/vset.c:1425",
+      "src/vset.c:1426",
+      "src/vset.c:1427",
+      "src/vset.c:1429",
+      "src/vset.c:1430",
+      "src/vset.c:1431",
+      "src/vset.c:1433",
+      "src/vset.c:1434",
+      "src/vset.c:1435",
+      "src/vset.c:1436",
+      "src/vset.c:1439",
+      "src/vset.c:1442",
+      "src/vset.c:1445",
+      "src/vset.c:1446",
+      "src/vset.c:1447"
+    ],
+    "rounds": 3
+  },
+  "cost_usd": 29.6184,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 14970:M 09 Nov 2026 04:55:06.564 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-cae3d8b30851",
+      "seed": 65001,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after c3b1b0317de9",
+      "fingerprint": "fc5dd8800759ea043461",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/111"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 14970:M 09 Nov 2026 04:55:06.564 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-cae3d8b30851",
+      "seed": 65001,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after c3b1b0317de9",
+      "fingerprint": "a2d618f987d3c76f00fc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/112"
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 16105:M 09 Nov 2026 05:01:06.965 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-39f8fef93188",
+      "seed": 65002,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after c3b1b0317de9",
+      "fingerprint": "fc5dd8800759ea043461",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/111"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 16105:M 09 Nov 2026 05:01:06.965 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-39f8fef93188",
+      "seed": 65002,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after c3b1b0317de9",
+      "fingerprint": "a2d618f987d3c76f00fc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/112"
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 17355:M 09 Nov 2026 05:04:48.660 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-e0ec29ec70a5",
+      "seed": 65003,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after c3b1b0317de9",
+      "fingerprint": "fc5dd8800759ea043461",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/111"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 17355:M 09 Nov 2026 05:04:48.660 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-e0ec29ec70a5",
+      "seed": 65003,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after c3b1b0317de9",
+      "fingerprint": "a2d618f987d3c76f00fc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/112"
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 18826:M 09 Nov 2026 05:07:18.272 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-d88fbd882574",
+      "seed": 65004,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after c3b1b0317de9",
+      "fingerprint": "fc5dd8800759ea043461",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/111"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 18826:M 09 Nov 2026 05:07:18.272 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-d88fbd882574",
+      "seed": 65004,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after c3b1b0317de9",
+      "fingerprint": "a2d618f987d3c76f00fc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/112"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-117c95cf027c",
+      "seed": 103,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-cae3d8b30851",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hfe' returned ERROR: expectations both builds violate alike, so they are not about the change: 31 (EXISTS h5)"
+    },
+    {
+      "scenario": "ai-cae3d8b30851",
+      "build": "unstable",
+      "seed": 65002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-cae3d8b30851",
+      "build": "unstable",
+      "seed": 65003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-39f8fef93188",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hfe' returned ERROR: expectations both builds violate alike, so they are not about the change: 31 (EXISTS h5)"
+    },
+    {
+      "scenario": "ai-39f8fef93188",
+      "build": "unstable",
+      "seed": 65003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-39f8fef93188",
+      "build": "unstable",
+      "seed": 65004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-117c95cf027c",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-117c95cf027c",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-117c95cf027c",
+      "build": "unstable",
+      "seed": 105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3e9bd55e4447",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "no trustworthy verdict is possible; required components did not do their part outside an oracle or action, depend on one that did not, judged a deployment whose teardown failed, or were skipped: kill-primary"
+    },
+    {
+      "scenario": "ai-978e58639af4",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "no trustworthy verdict is possible; required components did not do their part outside an oracle or action, depend on one that did not, judged a deployment whose teardown failed, or were skipped: kill-primary"
+    }
+  ]
+}

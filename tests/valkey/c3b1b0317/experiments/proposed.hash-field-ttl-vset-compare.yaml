@@ -1,0 +1,141 @@
+extends: [valkey.liveness]
+id: proposed.hash-field-ttl-vset-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Hash field TTL commands drive every vset bucket encoding and transition
+    (single, vector, rax windows, split, hashtable, bulk expiry) and compare replies
+    across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hfe
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [HSET, h, f1, v, f2, v, f3, v, f4, v, f5, v, f6, v, f7, v, f8, v,
+        f9, v, f10, v, f11, v, f12, v, f13, v, f14, v, f15, v, f16, v, f17, v, f18,
+        v, f19, v, f20, v, f21, v, f22, v, f23, v, f24, v, f25, v, f26, v, f27, v,
+        f28, v, f29, v, f30, v, f31, v, f32, v, f33, v, f34, v, f35, v, f36, v, f37,
+        v, f38, v, f39, v, f40, v, f41, v, f42, v, f43, v, f44, v, f45, v, f46, v,
+        f47, v, f48, v, f49, v, f50, v, f51, v, f52, v, f53, v, f54, v, f55, v, f56,
+        v, f57, v, f58, v, f59, v, f60, v, f61, v, f62, v, f63, v, f64, v, f65, v,
+        f66, v, f67, v, f68, v, f69, v, f70, v, f71, v, f72, v, f73, v, f74, v, f75,
+        v, f76, v, f77, v, f78, v, f79, v, f80, v, f81, v, f82, v, f83, v, f84, v,
+        f85, v, f86, v, f87, v, f88, v, f89, v, f90, v, f91, v, f92, v, f93, v, f94,
+        v, f95, v, f96, v, f97, v, f98, v, f99, v, f100, v, f101, v, f102, v, f103,
+        v, f104, v, f105, v, f106, v, f107, v, f108, v, f109, v, f110, v, f111, v,
+        f112, v, f113, v, f114, v, f115, v, f116, v, f117, v, f118, v, f119, v, f120,
+        v, f121, v, f122, v, f123, v, f124, v, f125, v, f126, v, f127, v, f128, v,
+        f129, v, f130, v, f131, v, f132, v, f133, v, f134, v, f135, v, f136, v, f137,
+        v, f138, v, f139, v, f140, v, f141, v, f142, v, f143, v, f144, v, f145, v,
+        f146, v, f147, v, f148, v, f149, v, f150, v], expect: {equals: 150}}
+    - {command: [HPEXPIREAT, h, 4398046511120, FIELDS, 70, f1, f2, f3, f4, f5, f6,
+        f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20, f21, f22,
+        f23, f24, f25, f26, f27, f28, f29, f30, f31, f32, f33, f34, f35, f36, f37,
+        f38, f39, f40, f41, f42, f43, f44, f45, f46, f47, f48, f49, f50, f51, f52,
+        f53, f54, f55, f56, f57, f58, f59, f60, f61, f62, f63, f64, f65, f66, f67,
+        f68, f69, f70], expect: {equals: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [HPEXPIREAT, h, 4398046515104, FIELDS, 70, f71, f72, f73, f74, f75,
+        f76, f77, f78, f79, f80, f81, f82, f83, f84, f85, f86, f87, f88, f89, f90,
+        f91, f92, f93, f94, f95, f96, f97, f98, f99, f100, f101, f102, f103, f104,
+        f105, f106, f107, f108, f109, f110, f111, f112, f113, f114, f115, f116, f117,
+        f118, f119, f120, f121, f122, f123, f124, f125, f126, f127, f128, f129, f130,
+        f131, f132, f133, f134, f135, f136, f137, f138, f139, f140], expect: {equals: [
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [HPEXPIREAT, h, 4398046520104, FIELDS, 10, f141, f142, f143, f144,
+        f145, f146, f147, f148, f149, f150], expect: {equals: [1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1]}}
+    - {command: [HPEXPIREAT, h, 4398046511121, FIELDS, 5, f1, f2, f3, f4, f5], expect: {
+        equals: [1, 1, 1, 1, 1]}}
+    - {command: [HPEXPIREAT, h, 4398046540104, FIELDS, 5, f6, f7, f8, f9, f10], expect: {
+        equals: [1, 1, 1, 1, 1]}}
+    - {command: [HPEXPIREAT, h, 4398046500000, GT, FIELDS, 1, f13], expect: {equals: [
+          0]}}
+    - {command: [HPEXPIREAT, h, 4398046600000, NX, FIELDS, 1, f14], expect: {equals: [
+          0]}}
+    - {command: [HPERSIST, h, FIELDS, 65, f71, f72, f73, f74, f75, f76, f77, f78,
+        f79, f80, f81, f82, f83, f84, f85, f86, f87, f88, f89, f90, f91, f92, f93,
+        f94, f95, f96, f97, f98, f99, f100, f101, f102, f103, f104, f105, f106, f107,
+        f108, f109, f110, f111, f112, f113, f114, f115, f116, f117, f118, f119, f120,
+        f121, f122, f123, f124, f125, f126, f127, f128, f129, f130, f131, f132, f133,
+        f134, f135], expect: {equals: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1]}}
+    - {command: [HPERSIST, h, FIELDS, 1, f71], expect: {equals: [-1]}}
+    - {command: [HPERSIST, h, FIELDS, 1, missing], expect: {equals: [-2]}}
+    - {command: [HDEL, h, f136, f137], expect: {equals: 2}}
+    - {command: [HSET, h, f138, w], expect: {equals: 0}}
+    - {command: [HPEXPIREAT, h, 1, FIELDS, 2, f139, f140], expect: {equals: [2, 2]}}
+    - {command: [HEXISTS, h, f139], expect: {equals: 0}}
+    - {command: [HPEXPIRETIME, h, FIELDS, 5, f1, f13, f71, f138, f141], expect: {
+        equals: [4398046511121, 4398046511120, -1, -1, 4398046520104]}}
+    - {command: [HTTL, h, FIELDS, 1, f1], compare: skip}
+    - {command: [HLEN, h], expect: {equals: 146}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [MEMORY, USAGE, h, SAMPLES, 0], expect_difference: true, expect: {
+        min: 2000}}
+    - {command: [HSET, h3, a, 1, b, 2], expect: {equals: 2}}
+    - {command: [HPEXPIREAT, h3, 1, FIELDS, 2, a, b], expect: {equals: [2, 2]}}
+    - {command: [EXISTS, h3], expect: {equals: 0}}
+    - {command: [HSET, fields, FIELDS, v], expect: {equals: 1}}
+    - {command: [HPEXPIREAT, fields, 4398046520104, FIELDS, 1, FIELDS], expect: {
+        equals: [1]}}
+    - {command: [HPEXPIRETIME, fields, FIELDS, 1, FIELDS], expect: {equals: [4398046520104]}}
+    - {command: [HPEXPIREAT, h, 4398046511120, FIELDS, 3, f1, f2], expect: {error: "numfields"}}
+    - {command: [HPEXPIRE, h, 9223372036854775807, FIELDS, 1, f1], expect: {error: true}}
+    - {command: [HSET, h5, g1, v, g2, v, g3, v, g4, v, g5, v, g6, v, g7, v, g8, v,
+        g9, v, g10, v, g11, v, g12, v, g13, v, g14, v, g15, v, g16, v, g17, v, g18,
+        v, g19, v, g20, v, g21, v, g22, v, g23, v, g24, v, g25, v, g26, v, g27, v,
+        g28, v, g29, v, g30, v, g31, v, g32, v, g33, v, g34, v, g35, v, g36, v, g37,
+        v, g38, v, g39, v, g40, v, g41, v, g42, v, g43, v, g44, v, g45, v, g46, v,
+        g47, v, g48, v, g49, v, g50, v, g51, v, g52, v, g53, v, g54, v, g55, v, g56,
+        v, g57, v, g58, v, g59, v, g60, v, g61, v, g62, v, g63, v, g64, v, g65, v,
+        g66, v, g67, v, g68, v, g69, v, g70, v, g71, v, g72, v, g73, v, g74, v, g75,
+        v, g76, v, g77, v, g78, v, g79, v, g80, v, g81, v, g82, v, g83, v, g84, v,
+        g85, v, g86, v, g87, v, g88, v, g89, v, g90, v, g91, v, g92, v, g93, v, g94,
+        v, g95, v, g96, v, g97, v, g98, v, g99, v, g100, v, g101, v, g102, v, g103,
+        v, g104, v, g105, v, g106, v, g107, v, g108, v, g109, v, g110, v, g111, v,
+        g112, v, g113, v, g114, v, g115, v, g116, v, g117, v, g118, v, g119, v, g120,
+        v, g121, v, g122, v, g123, v, g124, v, g125, v, g126, v, g127, v, g128, v,
+        g129, v, g130, v, g131, v, g132, v], expect: {equals: 132}}
+    - {command: [HPEXPIRE, h5, 400, FIELDS, 132, g1, g2, g3, g4, g5, g6, g7, g8, g9,
+        g10, g11, g12, g13, g14, g15, g16, g17, g18, g19, g20, g21, g22, g23, g24,
+        g25, g26, g27, g28, g29, g30, g31, g32, g33, g34, g35, g36, g37, g38, g39,
+        g40, g41, g42, g43, g44, g45, g46, g47, g48, g49, g50, g51, g52, g53, g54,
+        g55, g56, g57, g58, g59, g60, g61, g62, g63, g64, g65, g66, g67, g68, g69,
+        g70, g71, g72, g73, g74, g75, g76, g77, g78, g79, g80, g81, g82, g83, g84,
+        g85, g86, g87, g88, g89, g90, g91, g92, g93, g94, g95, g96, g97, g98, g99,
+        g100, g101, g102, g103, g104, g105, g106, g107, g108, g109, g110, g111, g112,
+        g113, g114, g115, g116, g117, g118, g119, g120, g121, g122, g123, g124, g125,
+        g126, g127, g128, g129, g130, g131, g132], expect: {equals: [1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [DEBUG, SLEEP, 0.5], compare: skip}
+    - {command: [EXISTS, h5], wait_s: 15, expect: {equals: 0}}
+    - {command: [HLEN, h], expect: {equals: 146}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hfe.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hfe}

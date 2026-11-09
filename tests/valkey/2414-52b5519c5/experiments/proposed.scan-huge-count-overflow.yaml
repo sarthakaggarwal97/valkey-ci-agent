@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.scan-huge-count-overflow
+deployment:
+  modes: [standalone]
+metadata:
+  description: SCAN/HSCAN/SSCAN/ZSCAN with COUNT at LLONG_MAX reaches maxiterations
+    = count*10; the parent computes it as a signed long (overflow UB), the change
+    as unsigned long
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: scan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    server_config:
+      set-max-intset-entries: 0
+      set-max-listpack-entries: 0
+      hash-max-listpack-entries: 0
+      zset-max-listpack-entries: 0
+    commands:
+    - {command: [MSET, k1, v1, k2, v2, k3, v3], expect: {equals: OK}}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [SADD, s, a, b, c], expect: {equals: 3}}
+    - {command: [ZADD, z, 1, a, 2, b], expect: {equals: 2}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: hashtable}}
+    - {command: [OBJECT, ENCODING, s], expect: {equals: hashtable}}
+    - {command: [OBJECT, ENCODING, z], expect: {equals: skiplist}}
+    - {command: [SCAN, 0, COUNT, 9223372036854775807], compare: skip}
+    - {command: [HSCAN, h, 0, COUNT, 9223372036854775807], compare: skip}
+    - {command: [SSCAN, s, 0, COUNT, 9223372036854775807], compare: skip}
+    - {command: [ZSCAN, z, 0, COUNT, 9223372036854775807], compare: skip}
+    - {command: [SCAN, 0, MATCH, "*", COUNT, 9223372036854775807], compare: skip}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scan}

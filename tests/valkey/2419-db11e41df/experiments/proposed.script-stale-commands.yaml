@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.script-stale-commands
+deployment:
+  modes: [standalone]
+metadata:
+  description: SCRIPT EXISTS, SCRIPT SHOW and SCRIPT FLUSH answer on a stale replica
+    (replica-serve-stale-data no, primary link down) where the parent rejects them
+    with MASTERDOWN
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: script-stale
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {replica-serve-stale-data: "no"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SCRIPT, LOAD, "return 1"], expect: {equals: e0e1f9fabfc9d4800c877a703b823ac0578ff831}}
+    - {command: [EVALSHA, e0e1f9fabfc9d4800c877a703b823ac0578ff831, 0], expect: {
+        equals: 1}}
+    - {command: [REPLICAOF, 127.0.0.1, 1], expect: {equals: OK}}
+    - {command: [GET, foo], expect: {error: MASTERDOWN}}
+    - {command: [SCRIPT, EXISTS, e0e1f9fabfc9d4800c877a703b823ac0578ff831], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [SCRIPT, EXISTS, e0e1f9fabfc9d4800c877a703b823ac0578ff831, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+        e0e1f9fabfc9d4800c877a703b823ac0578ff831], expect_difference: true, expect: {
+        equals: [1, 0, 1]}}
+    - {command: [SCRIPT, SHOW, e0e1f9fabfc9d4800c877a703b823ac0578ff831], expect_difference: true,
+      expect: {equals: "return 1"}}
+    - {command: [SCRIPT, SHOW, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa], expect_difference: true,
+      expect: {error: NOSCRIPT}}
+    - {command: [SCRIPT, SHOW, ""], expect_difference: true, expect: {error: NOSCRIPT}}
+    - {command: [SCRIPT, DEBUG, "yes"], expect: {error: MASTERDOWN}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SCRIPT, EXISTS, e0e1f9fabfc9d4800c877a703b823ac0578ff831], expect_difference: true,
+      expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [[1]]}}
+    - {command: [SCRIPT, FLUSH, BOGUS], expect_difference: true, expect: {error: "only\
+          \ support SYNC"}}
+    - {command: [SCRIPT, FLUSH, ASYNC], expect_difference: true, expect: {equals: OK}}
+    - {command: [SCRIPT, EXISTS, e0e1f9fabfc9d4800c877a703b823ac0578ff831], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [SCRIPT, SHOW, e0e1f9fabfc9d4800c877a703b823ac0578ff831], expect_difference: true,
+      expect: {error: NOSCRIPT}}
+    - {command: [SCRIPT, LOAD, "return 2"], expect: {exists: true}}
+    - {command: [SCRIPT, FLUSH, SYNC], expect_difference: true, expect: {equals: OK}}
+    - {command: [REPLICAOF, NO, ONE], expect: {equals: OK}}
+    - {command: [SCRIPT, EXISTS, e0e1f9fabfc9d4800c877a703b823ac0578ff831], expect_difference: true,
+      expect: {equals: [0]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [script-stale.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: script-stale}

@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.hash-field-expiry-persistence-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Hashes with volatile fields survive a SAVE or AOF restart with TTLs
+    intact, and the volatile-items tracking rebuilt at load drives active expiry after
+    the restart
+inputs:
+  properties:
+    aof: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: persist
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: {$ref: inputs.aof}, appendfsync: everysec}
+    timeout_s: 150
+    commands:
+    - {command: [HSET, keep, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [HEXPIREAT, keep, 33278400000, FIELDS, 2, f1, f2], expect: {equals: [
+          1, 1]}}
+    - {command: [HSETEX, rdbkey, PX, 15000, FIELDS, 1, f1, v1], expect: {exists: true}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HEXPIRETIME, keep, FIELDS, 2, f1, f2], expect: {equals: [33278400000,
+          33278400000]}}
+    - {command: [HGETALL, keep], compare: unordered-pairs}
+    - {command: [EXISTS, rdbkey], compare: skip}
+    - {command: [EXISTS, rdbkey], wait_s: 45, expect_difference: true, expect: {equals: 0}}
+    - {command: [HGET, keep, f3], expect: {equals: v3}}
+    - {command: [HSETEX, post, PX, 300, FIELDS, 1, f1, v1], expect: {exists: true}}
+    - {command: [EXISTS, post], wait_s: 25, expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [persist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: persist}

@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.bitfield-signed-overflow-ub
+deployment:
+  modes: [standalone]
+metadata:
+  description: BITFIELD signed i64 SET/INCRBY at the INT64 boundaries drives checkSignedBitfieldOverflow,
+    where the parent computes min - value as a signed subtraction that underflows
+    (UB) whenever the field value is positive.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bf
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [BITFIELD, bf, SET, i64, "#0", "100"], expect: {equals: [0]}}
+    - {command: [BITFIELD, bf, GET, i64, "#0"], expect: {equals: [100]}}
+    - {command: [BITFIELD, bf, OVERFLOW, FAIL, INCRBY, i64, "#0", "9223372036854775807"],
+      expect: {equals: [null]}}
+    - {command: [BITFIELD, bf, GET, i64, "#0"], expect: {equals: [100]}}
+    - {command: [BITFIELD, bf, OVERFLOW, SAT, INCRBY, i64, "#0", "9223372036854775807"],
+      expect: {equals: [9223372036854775807]}}
+    - {command: [BITFIELD, bf, GET, i64, "#0"], expect: {equals: [9223372036854775807]}}
+    - {command: [BITFIELD, bf, OVERFLOW, WRAP, INCRBY, i64, "#0", "1"], expect: {
+        equals: [-9223372036854775808]}}
+    - {command: [BITFIELD, bf, SET, i64, "#0", "-9223372036854775808"], expect: {
+        equals: [-9223372036854775808]}}
+    - {command: [BITFIELD, bf, OVERFLOW, FAIL, INCRBY, i64, "#0", "-1"], expect: {
+        equals: [null]}}
+    - {command: [BITFIELD, bf, OVERFLOW, SAT, INCRBY, i64, "#0", "-1"], expect: {
+        equals: [-9223372036854775808]}}
+    - {command: [BITFIELD, bf2, SET, i64, "#0", "9223372036854775807", INCRBY, i64,
+        "#0", "1"], expect: {equals: [0, -9223372036854775808]}}
+required_events: [bf.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bf}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3c738f08a4c29cd779c116a89286055a81c61f03",
+  "parent": "b7fe0b6435efbe584dd5d3063aca47554edd6e4b",
+  "pr": 2387,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove the unused value duplicate API from dict of libvalkey (#2387)",
+  "date": "2025-08-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2565,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change deletes the unused valDup function pointer from libvalkey's dictType and simplifies dictSetVal accordingly. No dictType in the tree ever set valDup (grep finds no other reference), so dictSetVal already always executed de->val = val; the compiled behavior of the client library's dict is identical before and after. This is pure dead-code removal in a bundled dependency with no observable behavior change in the server, valkey-cli, or any tool, so no scenario can distinguish the builds."
+}

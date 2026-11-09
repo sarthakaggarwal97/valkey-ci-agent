@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a89e529932b8106010b1b8faedc974ff3fbc89ad",
+  "parent": "ee305ce291b98876802b2d232a02d8dcf3ca3976",
+  "pr": 2274,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Redact user data when hide-user-data-from-log enabled (#2274)",
+  "date": "2025-08-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5225,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters the text of a serverPanic log message in moduleRDBLoadError: it substitutes '*redacted*' for the raw key name when hide-user-data-from-log is set. This is a log-redaction-only change with no effect on command replies, stored data, replication, or persistence. The fuzzer's oracles (liveness, ledger, deployment-state) and the compared-sequence/tools experiments observe crashes, data, replies, and tool output \u2014 none of them inspect server log contents \u2014 so there is no observable difference between the two builds to drive or assert on, and no meaningful scenario can be writt"
+}

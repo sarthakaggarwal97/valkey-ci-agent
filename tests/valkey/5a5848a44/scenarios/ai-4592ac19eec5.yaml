@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c3b1b0317de9..5a5848a44cb0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4592ac19eec5
+seed: 107
+experiment:
+  id: proposed.hash-field-ttl-under-fault
+  inputs:
+    target: replica
+    signal: SIGKILL
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7600

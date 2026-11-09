@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bddc9db087a4540d577049871eb1c37b334994e5",
+  "parent": "e606fcbaffd16760a758de631867ae6b92737bd2",
+  "pr": 2462,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix HGETEX to return array response when the hash object is empty (#2462)",
+  "date": "2025-08-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.843,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,69 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ecca21331117d38c9eadbbccf5c80c34cb11ec53",
+  "parent": "d32f9be04ab85eddf5c627ddf789cc950a1c6ef4",
+  "pr": 2464,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix out-of-bound memory access when num-fields is not provided (#2464)",
+  "date": "2025-08-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.3658,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in getLongLongFromObject",
+      "scenario": "ai-e17967111b3c",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2464",
+      "fingerprint": "7a01fbf6830d49e479e5",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in getLongLongFromObject",
+      "scenario": "ai-d8a77024e085",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2464",
+      "fingerprint": "7a01fbf6830d49e479e5",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-e17967111b3c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'trailing_fields' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (HPEXPIRE myhash 10000 FIELDS)"
+    },
+    {
+      "scenario": "ai-d8a77024e085",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'trailing_fields' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (HPEXPIRE myhash 10000 FIELDS)"
+    }
+  ]
+}

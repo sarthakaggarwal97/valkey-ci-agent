@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d32f9be04ab85eddf5c627ddf789cc950a1c6ef4",
+  "parent": "bddc9db087a4540d577049871eb1c37b334994e5",
+  "pr": 2432,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use bool for return types in hashtable functions (#2432)",
+  "date": "2025-08-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.667,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure refactor: hashtable/kvstore functions that already returned exactly 0 or 1 now return C99 bool (false/true, which compare equal to 0/1), plus comment updates and de-nesting rewrites with identical control flow. The one deleted function, kvstoreHashtableAddOrFind, has no remaining callers in the tree, and no call site does arithmetic on or non-boolean comparison of the changed return values. No command reply, data structure, replication or persistence behavior changes, so a compared sequence or fault scenario would have nothing to detect."
+}

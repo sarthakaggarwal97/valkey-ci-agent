@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.hgetex-missing-key-array
+deployment:
+  modes: [standalone]
+metadata:
+  description: HGETEX on a missing or emptied hash returns an array of nulls instead
+    of a flat null, and the NULL-object expiry paths (EXAT in the past, EX, PERSIST)
+    neither crash nor create the key
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_max_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: hgetex
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      hash-max-listpack-entries: {$ref: inputs.hash_max_listpack_entries}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [HGETEX, missing, FIELDS, 3, f1, f2, f3], expect_difference: true,
+      expect: {equals: [null, null, null]}}
+    - {command: [HGETEX, missing, EXAT, 1, FIELDS, 2, f1, f2], expect_difference: true,
+      expect: {equals: [null, null]}}
+    - {command: [HGETEX, missing, EXAT, 1, FIELDS, 3, f1, f1, f1], expect_difference: true,
+      expect: {equals: [null, null, null]}}
+    - {command: [HGETEX, missing, EX, 100, FIELDS, 1, f1], expect_difference: true,
+      expect: {equals: [null]}}
+    - {command: [HGETEX, missing, PERSIST, FIELDS, 1, f1], expect_difference: true,
+      expect: {equals: [null]}}
+    - {command: [EXISTS, missing], expect: {equals: 0}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HGETEX, h, FIELDS, 3, f1, f2, nofield], expect: {equals: [v1, v2,
+          null]}}
+    - {command: [HGETEX, h, EXAT, 1, FIELDS, 2, f1, f2], expect: {equals: [v1, v2]}}
+    - {command: [EXISTS, h], expect: {equals: 0}}
+    - {command: [HGETEX, h, FIELDS, 2, f1, f2], expect_difference: true, expect: {
+        equals: [null, null]}}
+    - {command: [SET, s, v], expect: {equals: OK}}
+    - {command: [HGETEX, s, FIELDS, 1, f1], expect: {error: WRONGTYPE}}
+    - {command: [HGETEX, s, EXAT, 1, FIELDS, 1, f1], expect: {error: WRONGTYPE}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hgetex.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hgetex}

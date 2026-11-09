@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.hash-volatile-keyspace-info-and-active-cycle
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO keyspace volatile-item tracking, HSETNX/HGETEX/HPERSIST tracking
+    toggles, sync FLUSHALL of tracked keys, and the active expiry cycle deleting hash
+    fields, keys, and hitting avg_ttl and time-limit paths
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cycle
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    server_config: {hz: 100}
+    timeout_s: 150
+    commands:
+    - {command: [HSET, h1, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HEXPIRE, h1, 1000, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HSETNX, h1, f3, v3], expect: {equals: 1}}
+    - {command: [HSETNX, h1, f1, zzz], expect: {equals: 0}}
+    - {command: [INFO, keyspace], expect_difference: true, expect: {contains: "keys_with_volatile_items=1"}}
+    - {command: [HGETEX, h1, PERSIST, FIELDS, 1, f1], expect: {equals: [v1]}}
+    - {command: [INFO, keyspace], expect_difference: true, expect: {contains: "keys_with_volatile_items=0"}}
+    - {command: [HGETEX, h1, EX, 1000, FIELDS, 1, f2], expect: {equals: [v2]}}
+    - {command: [HPERSIST, h1, FIELDS, 1, f2], expect: {equals: [1]}}
+    - {command: [HGETEX, h1, PERSIST, FIELDS, 1, f3], expect: {equals: [v3]}}
+    - {command: [HEXPIRE, h1, 1000, FIELDS, 2, f1, f2], expect: {equals: [1, 1]}}
+    - {command: [FLUSHALL, SYNC], expect: {equals: OK}}
+    - {command: [INFO, keyspace], compare: skip, expect: {contains: "Keyspace"}}
+    - {command: [HSET, h2, fx, vx], expect: {equals: 1}}
+    - {command: [HPEXPIRE, h2, 300, FIELDS, 1, fx], expect: {equals: [1]}}
+    - {command: [SET, k3, v, EX, 10000], expect: {equals: OK}}
+    - {command: [SET, k4, v, EX, 20000], expect: {equals: OK}}
+    - {command: [SET, k5, v, EX, 30000], expect: {equals: OK}}
+    - {command: [SET, k6, v, EX, 40000], expect: {equals: OK}}
+    - {command: [SET, k1, v, PX, 400], expect: {equals: OK}}
+    - {command: [SET, k2, v, PX, 450], expect: {equals: OK}}
+    - {command: [DBSIZE], wait_s: 25, expect_difference: true, expect: {equals: 4}}
+    - {command: [EVAL, "for i=1,30000 do redis.call('SET','m'..i,'v','PX',600) end\
+          \ return 1", 0], expect: {equals: 1}}
+    - {command: [DBSIZE], wait_s: 40, expect: {equals: 4}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [cycle.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cycle}

@@ -1,0 +1,73 @@
+extends: [valkey.liveness]
+id: proposed.hash-ttl-vset-ht-bucket-drain
+deployment:
+  modes: [standalone]
+metadata:
+  description: 131 hash fields sharing one PXAT force the volatile set's rax vector
+    bucket to fail splitting (all entries in one 16ms window) and convert to a hashtable
+    bucket, then KEEPTTL updates, cross-bucket moves, persist and HDEL drain it back
+    through SINGLE to NONE
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: htbucket
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [HSETEX, k, PXAT, 33554432000001, FIELDS, 130, x1, v, x2, v, x3, v,
+        x4, v, x5, v, x6, v, x7, v, x8, v, x9, v, x10, v, x11, v, x12, v, x13, v,
+        x14, v, x15, v, x16, v, x17, v, x18, v, x19, v, x20, v, x21, v, x22, v, x23,
+        v, x24, v, x25, v, x26, v, x27, v, x28, v, x29, v, x30, v, x31, v, x32, v,
+        x33, v, x34, v, x35, v, x36, v, x37, v, x38, v, x39, v, x40, v, x41, v, x42,
+        v, x43, v, x44, v, x45, v, x46, v, x47, v, x48, v, x49, v, x50, v, x51, v,
+        x52, v, x53, v, x54, v, x55, v, x56, v, x57, v, x58, v, x59, v, x60, v, x61,
+        v, x62, v, x63, v, x64, v, x65, v, x66, v, x67, v, x68, v, x69, v, x70, v,
+        x71, v, x72, v, x73, v, x74, v, x75, v, x76, v, x77, v, x78, v, x79, v, x80,
+        v, x81, v, x82, v, x83, v, x84, v, x85, v, x86, v, x87, v, x88, v, x89, v,
+        x90, v, x91, v, x92, v, x93, v, x94, v, x95, v, x96, v, x97, v, x98, v, x99,
+        v, x100, v, x101, v, x102, v, x103, v, x104, v, x105, v, x106, v, x107, v,
+        x108, v, x109, v, x110, v, x111, v, x112, v, x113, v, x114, v, x115, v, x116,
+        v, x117, v, x118, v, x119, v, x120, v, x121, v, x122, v, x123, v, x124, v,
+        x125, v, x126, v, x127, v, x128, v, x129, v, x130, v], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33554432000001, FIELDS, 1, x131, v], expect: {equals: 1}}
+    - {command: [HLEN, k], expect: {equals: 131}}
+    - {command: [HSETEX, k, KEEPTTL, FIELDS, 2, x1, w, x2, w], expect: {equals: 1}}
+    - {command: [HPEXPIREAT, k, 33554442000000, FIELDS, 3, x3, x4, x5], expect: {
+        equals: [1, 1, 1]}}
+    - {command: [HPEXPIREAT, k, 33554432000009, FIELDS, 1, x6], expect: {equals: [
+          1]}}
+    - {command: [HPERSIST, k, FIELDS, 1, x7], expect: {equals: [1]}}
+    - {command: [HPEXPIRETIME, k, FIELDS, 5, x1, x3, x6, x7, nosuch], expect: {equals: [
+          33554432000001, 33554442000000, 33554432000009, -1, -2]}}
+    - {command: [MEMORY, USAGE, k], compare: skip}
+    - {command: [HGETALL, k], compare: unordered-pairs}
+    - {command: [HDEL, k, x1, x2, x6, x8, x9, x10, x11, x12, x13, x14, x15, x16, x17,
+        x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, x30, x31, x32,
+        x33, x34, x35, x36, x37, x38, x39, x40, x41, x42, x43, x44, x45, x46, x47,
+        x48, x49, x50, x51, x52, x53, x54, x55, x56, x57, x58, x59, x60, x61, x62,
+        x63, x64, x65, x66, x67, x68, x69, x70, x71, x72, x73, x74, x75, x76, x77,
+        x78, x79, x80, x81, x82, x83, x84, x85, x86, x87, x88, x89, x90, x91, x92,
+        x93, x94, x95, x96, x97, x98, x99, x100, x101, x102, x103, x104, x105, x106,
+        x107, x108, x109, x110, x111, x112, x113, x114, x115, x116, x117, x118, x119,
+        x120, x121, x122, x123, x124, x125, x126, x127, x128, x129, x130], expect: {
+        equals: 126}}
+    - {command: [HDEL, k, x3, x4, x5], expect: {equals: 3}}
+    - {command: [HDEL, k, x131], expect: {equals: 1}}
+    - {command: [HDEL, k, x7], expect: {equals: 1}}
+    - {command: [HLEN, k], expect: {equals: 0}}
+    - {command: [EXISTS, k], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [htbucket.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: htbucket}

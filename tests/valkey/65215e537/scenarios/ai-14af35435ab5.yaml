@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3c738f08a4c2..65215e5378db.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-14af35435ab5
+seed: 102
+experiment:
+  id: proposed.hash-field-expire-commands
+  inputs:
+    resp: 3
+    hash_max_listpack_entries: 128
+deployment:
+  mode: standalone
+  base_port: 7100

@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.hash-volatile-aof-rewrite
+deployment:
+  modes: [standalone]
+metadata:
+  description: AOF rewrite serializes volatile hash fields as per-field HSETEX and
+    the rest as HMSET; a restart reloads them with expiry and db-level tracking intact
+components:
+- use: valkey.action.commands
+  id: aofrw
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes"}
+    timeout_s: 150
+    commands:
+    - {command: [HSET, ah, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [HPEXPIREAT, ah, 33272455800000, FIELDS, 2, f1, f2], expect: {equals: [
+          1, 1]}}
+    - {command: [HSET, plain, a, 1, b, 2], expect: {equals: 2}}
+    - {command: [EVAL, "for i=1,200 do redis.call('HSET','mix','f'..i,'v'..i) end\
+          \ for i=1,50 do redis.call('HPEXPIREAT','mix',33272455800000,'FIELDS',1,'f'..i)\
+          \ end return 1", 0], expect: {equals: 1}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {contains: rewriting}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HGETALL, ah], compare: unordered-pairs}
+    - {command: [HPEXPIRETIME, ah, FIELDS, 3, f1, f2, f3], expect: {equals: [33272455800000,
+          33272455800000, -1]}}
+    - {command: [HLEN, mix], expect: {equals: 200}}
+    - {command: [HPEXPIRETIME, mix, FIELDS, 2, f1, f50], expect: {equals: [33272455800000,
+          33272455800000]}}
+    - {command: [HGETALL, plain], compare: unordered-pairs}
+    - {command: [INFO, keyspace], expect_difference: true, expect: {contains: "keys_with_volatile_items=2"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [aofrw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofrw}

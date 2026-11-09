@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "aac3c76c71242c8d0a87b899e22a99c3f0987d0a",
+  "parent": "dceb9f3b229d232744ee68d12eb2c9edd83e856f",
+  "pr": 2394,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix prefetchNextBucketEntries so it fetches the correct next 2 buckets (#2394)",
+  "date": "2025-08-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4238,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only corrects which buckets prefetchNextBucketEntries passes to __builtin_prefetch during hashtable iteration. Prefetch is a pure cache hint with no architectural effect, the looked-up buckets are bounds-checked and valid in both the old and new code, and the result never affects iteration order, returned entries, replies, or any server state. It is a performance fix with no behaviour change, so no reply comparison, fault injection, or oracle can observe it."
+}

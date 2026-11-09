@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c3b1b0317de9..5a5848a44cb0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d787b998aa67
+seed: 107
+experiment:
+  id: proposed.hash-volatile-aof-rewrite
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7600

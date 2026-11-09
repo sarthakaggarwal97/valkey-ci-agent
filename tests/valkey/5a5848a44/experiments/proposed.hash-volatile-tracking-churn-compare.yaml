@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.hash-volatile-tracking-churn-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Volatile-items tracking stays consistent across COPY/MOVE/SWAPDB/UNLINK/FLUSHALL
+    ASYNC and adversarial field names and TTL boundaries, with active defrag running
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 120
+    commands:
+    - {command: [CONFIG, SET, activedefrag, "yes"], expect: {exists: true}}
+    - {command: [CONFIG, SET, active-defrag-ignore-bytes, "1048576"], expect: {exists: true}}
+    - {command: [CONFIG, SET, active-defrag-threshold-lower, "1"], expect: {exists: true}}
+    - {command: [CONFIG, SET, active-defrag-cycle-min, "25"], expect: {exists: true}}
+    - {command: [CONFIG, SET, hash-max-listpack-entries, "2"], expect: {equals: OK}}
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3, f4, v4, f5, v5, f6, v6, f7, v7,
+        f8, v8, f9, v9, f10, v10, f11, v11, f12, v12, f13, v13, f14, v14, f15, v15,
+        f16, v16], expect: {equals: 16}}
+    - {command: [HEXPIREAT, h, 33278400000, FIELDS, 8, f1, f2, f3, f4, f5, f6, f7,
+        f8], expect: {exists: true}}
+    - {command: [EXPIRE, h, 100000], expect: {equals: 1}}
+    - {command: [PERSIST, h], expect: {equals: 1}}
+    - {command: [COPY, h, hcopy], expect: {equals: 1}}
+    - {command: [MOVE, hcopy, 1], expect: {equals: 1}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [HEXPIRETIME, hcopy, FIELDS, 1, f1], expect: {equals: [33278400000]}}
+    - {command: [SWAPDB, 0, 1], expect: {equals: OK}}
+    - {command: [HDEL, h, f1, f2, f3, f4, f5, f6, f7, f8], expect: {equals: 8}}
+    - {command: [HEXPIREAT, h, 33278400000, FIELDS, 1, f9], expect: {equals: [1]}}
+    - {command: [HSET, h, f9, newv], expect: {equals: 0}}
+    - {command: [HPTTL, h, FIELDS, 1, f9], expect: {equals: [-1]}}
+    - {command: [HEXPIREAT, h, 33278400000, FIELDS, 1, f10], expect: {equals: [1]}}
+    - {command: [UNLINK, h], expect: {equals: 1}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [HSETEX, tmp, EX, 1000, FIELDS, 1, f, v], expect: {exists: true}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [HSET, edge, "", v0, fields, vf], expect: {equals: 2}}
+    - {command: [HEXPIRE, edge, 100000, FIELDS, 2, "", fields], expect: {exists: true}}
+    - {command: [HPEXPIREAT, edge, 9223372036854775807, FIELDS, 1, fields], expect: {
+        exists: true}}
+    - {command: [HGETALL, edge], compare: unordered-pairs}
+    - {command: [HSETEX, solo, PX, 200, FIELDS, 1, f1, v1], expect: {exists: true}}
+    - {command: [EXISTS, solo], wait_s: 25, expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

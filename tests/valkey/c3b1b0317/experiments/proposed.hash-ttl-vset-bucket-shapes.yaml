@@ -1,0 +1,79 @@
+extends: [valkey.liveness]
+id: proposed.hash-ttl-vset-bucket-shapes
+deployment:
+  modes: [standalone]
+metadata:
+  description: Hash field TTLs shaped to hit every vset bucket encoding and transition
+    (SINGLE, VECTOR, RAX, HT, splits, downgrades, frees), compared against the parent
+    build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shapes
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [HSET, h1, f1, v1], expect: {equals: 1}}
+    - {command: [HPEXPIREAT, h1, 4102444800000, FIELDS, 1, f1], expect: {equals: [
+          1]}}
+    - {command: [HPEXPIRETIME, h1, FIELDS, 1, f1], expect: {equals: [4102444800000]}}
+    - {command: [HSET, h1, f1, v2], expect: {equals: 0}}
+    - {command: [HPEXPIRETIME, h1, FIELDS, 1, f1], expect: {equals: [-1]}}
+    - {command: [HPEXPIREAT, h1, 4102444800000, FIELDS, 1, f1], expect: {equals: [
+          1]}}
+    - {command: [HPERSIST, h1, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: [HPEXPIREAT, h1, 4102444800000, FIELDS, 1, f1], expect: {equals: [
+          1]}}
+    - {command: [HDEL, h1, f1], expect: {equals: 1}}
+    - {command: [EXISTS, h1], expect: {equals: 0}}
+    - {command: [HSET, h1, f1, v1], expect: {equals: 1}}
+    - {command: [HPEXPIREAT, h1, 4102444800000, FIELDS, 1, f1], expect: {equals: [
+          1]}}
+    - {command: [DEL, h1], expect: {equals: 1}}
+    - {command: [EVAL, "for i=1,130 do redis.call('HSET','h2','f'..i,'v'..i) redis.call('HPEXPIREAT','h2',4102444800000,'FIELDS',1,'f'..i)\
+          \ end return redis.call('HLEN','h2')", 0], expect: {equals: 130}}
+    - {command: [HTTL, h2, FIELDS, 2, f1, f130], compare: skip}
+    - {command: [EVAL, "local d=0 for i=1,129 do d=d+redis.call('HDEL','h2','f'..i)\
+          \ end return d", 0], expect: {equals: 129}}
+    - {command: [HPEXPIRETIME, h2, FIELDS, 1, f130], expect: {equals: [4102444800000]}}
+    - {command: [HDEL, h2, f130], expect: {equals: 1}}
+    - {command: [EVAL, "for i=1,150 do redis.call('HSET','h3','g'..i,'v'..i) redis.call('HPEXPIREAT','h3',4102444800000+i*100000,'FIELDS',1,'g'..i)\
+          \ end return redis.call('HLEN','h3')", 0], expect: {equals: 150}}
+    - {command: [EVAL, "for i=1,300 do redis.call('HSET','h3','s'..i,'v'..i) redis.call('HPEXPIREAT','h3',4102500000000+i*32,'FIELDS',1,'s'..i)\
+          \ end return redis.call('HLEN','h3')", 0], expect: {equals: 450}}
+    - {command: [HSET, h3, early, v], expect: {equals: 1}}
+    - {command: [HPEXPIREAT, h3, 4102400000000, FIELDS, 1, early], expect: {equals: [
+          1]}}
+    - {command: [HPEXPIREAT, h3, 4102600000000, FIELDS, 1, g5], expect: {equals: [
+          1]}}
+    - {command: [HPEXPIREAT, h3, 4102444900005, FIELDS, 1, g1], expect: {equals: [
+          1]}}
+    - {command: [EVAL, "local p=0 for i=1,150 do local r=redis.call('HPERSIST','h3','FIELDS',1,'g'..i)\
+          \ p=p+r[1] end return p", 0], expect: {equals: 150}}
+    - {command: [EVAL, "local d=0 for i=1,300,2 do d=d+redis.call('HDEL','h3','s'..i)\
+          \ end return d", 0], expect: {equals: 150}}
+    - {command: [HPEXPIRETIME, h3, FIELDS, 1, early], expect: {equals: [4102400000000]}}
+    - {command: [HLEN, h3], expect: {equals: 301}}
+    - {command: [DEL, h3], expect: {equals: 1}}
+    - {command: [EVAL, "for i=1,130 do redis.call('HSET','h4','a'..i,'v') redis.call('HPEXPIREAT','h4',4103000000000,'FIELDS',1,'a'..i)\
+          \ end for i=1,30 do redis.call('HSET','h4','b'..i,'v') redis.call('HPEXPIREAT','h4',4103000000000+i*100000,'FIELDS',1,'b'..i)\
+          \ end return redis.call('HLEN','h4')", 0], expect: {equals: 160}}
+    - {command: [EVAL, "local d=0 for i=1,5 do d=d+redis.call('HDEL','h4','a'..i)\
+          \ end return d", 0], expect: {equals: 5}}
+    - {command: [HLEN, h4], expect: {equals: 155}}
+    - {command: [DEL, h4], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shapes.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shapes}

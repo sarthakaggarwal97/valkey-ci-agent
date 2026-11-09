@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "52b5519c5ae5f059023b81681514c978853e39f6",
+  "parent": "fa8659d3099d01206cc8db310cfd28201c26e69e",
+  "pr": 2414,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use unsigned long for `maxiterations`, fixing undefined behavior in scan with extremely large count (#2414)",
+  "date": "2025-08-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.2814,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ba7334c7c61abd854109f1d19f807098e5f22cb1",
+  "parent": "db11e41dfcc391501e3d9955d472c0983ffe7ddc",
+  "pr": 2436,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix hfe no malloc size unit (#2436)",
+  "date": "2025-08-06",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2356,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff only changes a unit-test mock in src/unit/test_vset.c and adds a build-time guard in src/zmalloc.h that affects which malloc-size macro is compiled on __APPLE__ when NO_MALLOC_USABLE_SIZE is defined (a special test build configuration). On the Linux CI platform the compiled code is byte-for-byte unchanged, and no server command, reply, replication, or persistence behaviour differs between the parent and the change. This is a build/unit-test fix with no runtime behaviour change, so no fuzzer scenario can reach it and none is needed."
+}

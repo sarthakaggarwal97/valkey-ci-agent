@@ -1,0 +1,73 @@
+extends: [valkey.liveness]
+id: proposed.hash-expire-persistence
+deployment:
+  modes: [standalone]
+metadata:
+  description: Field TTLs survive an RDB restart (RDB_TYPE_HASH_2) and an AOF-rewrite
+    restart (HSETEX serialization, including an all-volatile hash), compared with
+    the parent
+components:
+- use: valkey.action.commands
+  id: rdb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 2}
+    timeout_s: 20
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3, f4, v4], expect: {equals: 4}}
+    - {command: [HPEXPIREAT, h, 33177702400000, FIELDS, 2, f1, f2], expect_difference: true,
+      expect: {equals: [1, 1]}}
+    - {command: [HEXPIREAT, h, 33177702401, FIELDS, 1, f3], expect_difference: true,
+      expect: {equals: [1]}}
+    - {command: [HSET, g2, va, 1, vb, 2, vc, 3], expect: {equals: 3}}
+    - {command: [HPEXPIREAT, g2, 33177702400000, FIELDS, 3, va, vb, vc], expect_difference: true,
+      expect: {equals: [1, 1, 1]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HPEXPIRETIME, h, FIELDS, 4, f1, f2, f3, f4], expect_difference: true,
+      expect: {equals: [33177702400000, 33177702400000, 33177702401000, -1]}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HPEXPIRETIME, g2, FIELDS, 3, va, vb, vc], expect_difference: true,
+      expect: {equals: [33177702400000, 33177702400000, 33177702400000]}}
+    - {command: [HGETALL, g2], compare: unordered-pairs}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes", appendfsync: always, hash-max-listpack-entries: 2}
+    timeout_s: 20
+    commands:
+    - {command: [HSET, g, a, 1, b, 2, c, 3, d, 4, e, 5], expect: {equals: 5}}
+    - {command: [HPEXPIREAT, g, 33177702400000, FIELDS, 2, a, b], expect_difference: true,
+      expect: {equals: [1, 1]}}
+    - {command: [HSET, g2, va, 1, vb, 2, vc, 3], expect: {equals: 3}}
+    - {command: [HPEXPIREAT, g2, 33177702400000, FIELDS, 3, va, vb, vc], expect_difference: true,
+      expect: {equals: [1, 1, 1]}}
+    - {command: [BGREWRITEAOF], expect: {contains: rewriting}}
+    - {command: [DEBUG, SLEEP, 0.5], expect: {equals: OK}}
+    - {command: [INFO, persistence], wait_s: 15, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HPEXPIRETIME, g, FIELDS, 5, a, b, c, d, e], expect_difference: true,
+      expect: {equals: [33177702400000, 33177702400000, -1, -1, -1]}}
+    - {command: [HGETALL, g], compare: unordered-pairs}
+    - {command: [HPEXPIRETIME, g2, FIELDS, 3, va, vb, vc], expect_difference: true,
+      expect: {equals: [33177702400000, 33177702400000, 33177702400000]}}
+    - {command: [HGETALL, g2], compare: unordered-pairs}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rdb.completed, aof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rdb}
+- {evidence_id: valkey.command.sequence, source: aof}

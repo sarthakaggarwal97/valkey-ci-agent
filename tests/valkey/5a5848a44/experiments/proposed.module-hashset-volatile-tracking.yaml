@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.module-hashset-volatile-tracking
+deployment:
+  modes: [standalone]
+metadata:
+  description: ValkeyModule_HashSet deleting the last volatile field or adding fields
+    to a tracked hash must update db-level volatile-item tracking (module.c dbUpdateObjectWithVolatileItemsTracking)
+components:
+- use: valkey.action.commands
+  id: modhash
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 60
+    commands:
+    - {command: [HSET, mh, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HEXPIRE, mh, 1000, FIELDS, 1, f1], expect: {equals: [1]}}
+    - {command: ["HASH.SET", mh, "", f1, ":delete:"], expect: {exists: true}}
+    - {command: [INFO, keyspace], expect_difference: true, expect: {contains: "keys_with_volatile_items=0"}}
+    - {command: [HGETALL, mh], compare: unordered-pairs}
+    - {command: [HEXPIRE, mh, 1000, FIELDS, 1, f2], expect: {equals: [1]}}
+    - {command: ["HASH.SET", mh, "", f2, ":delete:"], expect: {exists: true}}
+    - {command: [EXISTS, mh], expect: {equals: 0}}
+    - {command: [HSET, mh2, a, 1], expect: {equals: 1}}
+    - {command: [HEXPIRE, mh2, 1000, FIELDS, 1, a], expect: {equals: [1]}}
+    - {command: ["HASH.SET", mh2, n, b, 2], expect: {exists: true}}
+    - {command: [INFO, keyspace], expect_difference: true, expect: {contains: "keys_with_volatile_items=1"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modhash.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modhash}

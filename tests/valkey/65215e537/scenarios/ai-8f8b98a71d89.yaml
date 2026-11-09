@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3c738f08a4c2..65215e5378db.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8f8b98a71d89
+seed: 106
+experiment:
+  id: proposed.hash-expire-aof-kill
+  inputs:
+    command_rate: 300
+    run_before_crash_s: 4
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7500
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec

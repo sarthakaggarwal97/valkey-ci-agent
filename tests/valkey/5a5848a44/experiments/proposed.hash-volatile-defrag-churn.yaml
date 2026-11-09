@@ -1,0 +1,39 @@
+extends: [valkey.base]
+id: proposed.hash-volatile-defrag-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active defrag runs over hashtable-encoded hashes with volatile fields
+    (small single-pass hashes and one beyond active-defrag-max-scan-fields) while
+    those fields actively expire and a string workload fragments the allocator; asserts
+    in the defrag relocation of keys_with_volatile_items crash on a bug and the liveness
+    oracle catches it
+components:
+- use: valkey.action.commands
+  id: seed
+  config:
+    timeout_s: 90
+    commands:
+    - {command: [EVAL, "for i=1,300 do local k='vh'..i redis.call('HSET',k,'a',string.rep('x',64),'b',string.rep('y',64))\
+          \ redis.call('HPEXPIRE',k,(i%20)*1500+1500,'FIELDS',1,'a') end for i=1,2000\
+          \ do redis.call('HSET','big','f'..i,string.rep('z',48)) end redis.call('HPEXPIREAT','big',33272455800000,'FIELDS',3,'f1','f2','f3')\
+          \ for i=1,40000 do redis.call('SET','frag'..i,string.rep('q',100)) end for\
+          \ i=1,40000,2 do redis.call('DEL','frag'..i) end return 1", 0], expect: {
+        equals: 1}}
+- use: valkey.action.sleep
+  id: churn-window
+  depends_on: [writes, seed]
+  config: {seconds: 25}
+- use: valkey.action.commands
+  id: verify
+  depends_on: [churn-window]
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [HLEN, big], expect: {equals: 2000}}
+    - {command: [HPEXPIRETIME, big, FIELDS, 3, f1, f2, f3], expect: {exists: true}}
+    - {command: [INFO, keyspace], expect: {contains: "keys_with_volatile_items"}}
+    - {command: [DBSIZE], expect: {min: 1}}
+required_events: [verify.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: verify}

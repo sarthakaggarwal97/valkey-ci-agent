@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.hash-scan-rehash
+deployment:
+  modes: [standalone]
+metadata:
+  description: SCAN and HSCAN over hashtables caught mid-rehash (activerehashing off),
+    with and without volatile fields, compared against the parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: scans
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 0, activerehashing: "no"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [EVAL, "for i=1,400 do redis.call('HSET','big','f'..i,'v'..i) end\
+          \ return redis.call('HLEN','big')", 0], expect: {equals: 400}}
+    - {command: [HSCAN, big, 0, COUNT, 500], compare: skip}
+    - {command: [EVAL, "for i=401,900 do redis.call('HSET','big','f'..i,'v'..i) end\
+          \ return redis.call('HLEN','big')", 0], expect: {equals: 900}}
+    - {command: [HSCAN, big, 0, COUNT, 1000], compare: skip}
+    - {command: [EVAL, "for i=901,2000 do redis.call('HSET','big','f'..i,'v'..i) end\
+          \ return redis.call('HLEN','big')", 0], expect: {equals: 2000}}
+    - {command: [HSCAN, big, 0, COUNT, 3000], compare: skip}
+    - {command: [EVAL, "for i=1,200 do redis.call('HPEXPIREAT','big',4102444800000+i*50,'FIELDS',1,'f'..i)\
+          \ end return 1", 0], expect: {equals: 1}}
+    - {command: [HSCAN, big, 0, COUNT, 3000], compare: skip}
+    - {command: [HSCAN, big, 0, COUNT, 100, NOVALUES], compare: skip}
+    - {command: [EVAL, "local d=0 for i=1,1800 do d=d+redis.call('HDEL','big','f'..i)\
+          \ end return d", 0], expect: {equals: 1800}}
+    - {command: [HSCAN, big, 0, COUNT, 500], compare: skip}
+    - {command: [HLEN, big], expect: {equals: 200}}
+    - {command: [EVAL, "for i=1,3000 do redis.call('SET','k'..i,'1') end return 1",
+        0], expect: {equals: 1}}
+    - {command: [SCAN, 0, COUNT, 200], compare: skip}
+    - {command: [EVAL, "for i=3001,6000 do redis.call('SET','k'..i,'1') end return\
+          \ 1", 0], expect: {equals: 1}}
+    - {command: [SCAN, 0, COUNT, 7000], compare: skip}
+    - {command: [DBSIZE], expect: {equals: 6001}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [scans.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scans}

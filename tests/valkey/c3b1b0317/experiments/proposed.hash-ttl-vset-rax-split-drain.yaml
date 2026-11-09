@@ -1,0 +1,104 @@
+extends: [valkey.liveness]
+id: proposed.hash-ttl-vset-rax-split-drain
+deployment:
+  modes: [standalone]
+metadata:
+  description: 160 hash fields with ten distinct PXAT values inside one 8192ms window
+    force the volatile set into rax encoding with vector bucket relocation and findSplitPosition
+    splits, then same-bucket and cross-bucket expiry updates, KEEPTTL rewrites, persist
+    and a full HDEL drain through the small-vector, SINGLE and raxRemove paths back
+    to an empty set
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: raxsplit
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [HSETEX, k, PXAT, 33554432000001, FIELDS, 16, a1, v, a2, v, a3, v,
+        a4, v, a5, v, a6, v, a7, v, a8, v, a9, v, a10, v, a11, v, a12, v, a13, v,
+        a14, v, a15, v, a16, v], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33554432000020, FIELDS, 16, b1, v, b2, v, b3, v,
+        b4, v, b5, v, b6, v, b7, v, b8, v, b9, v, b10, v, b11, v, b12, v, b13, v,
+        b14, v, b15, v, b16, v], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33554432000040, FIELDS, 16, c1, v, c2, v, c3, v,
+        c4, v, c5, v, c6, v, c7, v, c8, v, c9, v, c10, v, c11, v, c12, v, c13, v,
+        c14, v, c15, v, c16, v], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33554432000060, FIELDS, 16, d1, v, d2, v, d3, v,
+        d4, v, d5, v, d6, v, d7, v, d8, v, d9, v, d10, v, d11, v, d12, v, d13, v,
+        d14, v, d15, v, d16, v], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33554432000081, FIELDS, 16, e1, v, e2, v, e3, v,
+        e4, v, e5, v, e6, v, e7, v, e8, v, e9, v, e10, v, e11, v, e12, v, e13, v,
+        e14, v, e15, v, e16, v], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33554432000101, FIELDS, 16, f1, v, f2, v, f3, v,
+        f4, v, f5, v, f6, v, f7, v, f8, v, f9, v, f10, v, f11, v, f12, v, f13, v,
+        f14, v, f15, v, f16, v], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33554432000121, FIELDS, 16, g1, v, g2, v, g3, v,
+        g4, v, g5, v, g6, v, g7, v, g8, v, g9, v, g10, v, g11, v, g12, v, g13, v,
+        g14, v, g15, v, g16, v], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33554432000141, FIELDS, 16, h1, v, h2, v, h3, v,
+        h4, v, h5, v, h6, v, h7, v, h8, v, h9, v, h10, v, h11, v, h12, v, h13, v,
+        h14, v, h15, v, h16, v], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33554432000161, FIELDS, 16, i1, v, i2, v, i3, v,
+        i4, v, i5, v, i6, v, i7, v, i8, v, i9, v, i10, v, i11, v, i12, v, i13, v,
+        i14, v, i15, v, i16, v], expect: {equals: 1}}
+    - {command: [HSETEX, k, PXAT, 33554432000181, FIELDS, 16, j1, v, j2, v, j3, v,
+        j4, v, j5, v, j6, v, j7, v, j8, v, j9, v, j10, v, j11, v, j12, v, j13, v,
+        j14, v, j15, v, j16, v], expect: {equals: 1}}
+    - {command: [HLEN, k], expect: {equals: 160}}
+    - {command: [HPEXPIRETIME, k, FIELDS, 3, a1, e1, j16], expect: {equals: [33554432000001,
+          33554432000081, 33554432000181]}}
+    - {command: [HPEXPIREAT, k, 33554432000005, FIELDS, 2, a1, a2], expect: {equals: [
+          1, 1]}}
+    - {command: [HPEXPIREAT, k, 33554442000000, FIELDS, 16, b1, b2, b3, b4, b5, b6,
+        b7, b8, b9, b10, b11, b12, b13, b14, b15, b16], expect: {equals: [1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [HSETEX, k, KEEPTTL, FIELDS, 4, c1, w, c2, w, c3, w, c4, w], expect: {
+        equals: 1}}
+    - {command: [HPERSIST, k, FIELDS, 16, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10,
+        d11, d12, d13, d14, d15, d16], expect: {equals: [1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [HPEXPIRETIME, k, FIELDS, 4, a1, b1, c1, d1], expect: {equals: [33554432000005,
+          33554442000000, 33554432000040, -1]}}
+    - {command: [MEMORY, USAGE, k], compare: skip}
+    - {command: [HGETALL, k], compare: unordered-pairs}
+    - {command: [HDEL, k, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
+        a14, a15, a16], expect: {equals: 16}}
+    - {command: [HDEL, k, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13,
+        b14, b15, b16], expect: {equals: 16}}
+    - {command: [HDEL, k, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13,
+        c14, c15, c16], expect: {equals: 16}}
+    - {command: [HDEL, k, e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13,
+        e14, e15, e16], expect: {equals: 16}}
+    - {command: [HDEL, k, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13,
+        f14, f15, f16], expect: {equals: 16}}
+    - {command: [HDEL, k, g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12, g13,
+        g14, g15, g16], expect: {equals: 16}}
+    - {command: [HDEL, k, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13,
+        h14, h15, h16], expect: {equals: 16}}
+    - {command: [HDEL, k, i1, i2, i3, i4, i5, i6, i7, i8, i9, i10, i11, i12, i13,
+        i14, i15, i16], expect: {equals: 16}}
+    - {command: [HDEL, k, j1, j2, j3, j4, j5, j6, j7, j8, j9, j10, j11, j12, j13,
+        j14], expect: {equals: 14}}
+    - {command: [HLEN, k], expect: {equals: 18}}
+    - {command: [HDEL, k, j15], expect: {equals: 1}}
+    - {command: [HDEL, k, j16], expect: {equals: 1}}
+    - {command: [HDEL, k, d1, d2, d3, d4, d5, d6, d7, d8, d9, d10, d11, d12, d13,
+        d14, d15, d16], expect: {equals: 16}}
+    - {command: [HLEN, k], expect: {equals: 0}}
+    - {command: [EXISTS, k], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [raxsplit.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: raxsplit}

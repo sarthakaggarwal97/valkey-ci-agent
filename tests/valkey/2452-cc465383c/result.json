@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cc465383c419a0cbfdd60a17256b7a0fcffe21c8",
+  "parent": "de7bb614f1843cebd8fdaf49fdaa29de895519e7",
+  "pr": 2452,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Adding backup directory check for valkey-cli --cluster backup (#2452)",
+  "date": "2025-08-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 1,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.5982,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

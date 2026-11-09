@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cc465383c419..e606fcbaffd1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f7009cedc2c0
+seed: 3
+experiment:
+  id: proposed.aof-rewrite-hash-ttl-crash
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec
+    aof-use-rdb-preamble: 'no'
+    auto-aof-rewrite-percentage: 0

@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.no-touch-unblock-crash
+deployment:
+  modes: [standalone]
+metadata:
+  description: A CLIENT NO-TOUCH client's RPUSH that unblocks a BRPOP must not crash
+    lookupKey
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: notouch
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {connection: blocker, raw: "BRPOP mylist 0\r\n"}
+    - {command: [CLIENT, NO-TOUCH, ON], expect: {equals: OK}}
+    - {command: [RPUSH, mylist, elem], expect_difference: true, expect: {equals: 1}}
+    - {connection: blocker, read: true, expect_difference: true, expect: {contains: elem}}
+    - {command: [LRANGE, mylist, 0, -1], expect_difference: true, expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [notouch.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: notouch}

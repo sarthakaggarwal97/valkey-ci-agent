@@ -1,0 +1,41 @@
+extends: [valkey.base]
+id: proposed.hash-expire-aof-kill
+deployment:
+  modes: [standalone]
+metadata:
+  description: SIGKILL the primary while the command-table workload drives the new
+    hash-TTL commands; it restarts from its AOF and no acknowledged write may be lost
+inputs:
+  properties:
+    command_rate: {type: number, minimum: 1, maximum: 5000, default: 300}
+    run_before_crash_s: {type: number, minimum: 1, maximum: 60, default: 4}
+components:
+- use: valkey.workload.command-table
+  id: cmds
+  config:
+    rate: {$ref: inputs.command_rate}
+- use: valkey.fault.process-signal
+  id: kill-primary
+  config:
+    when_event: warm-up.completed
+    instance: primary
+    signal: SIGKILL
+    restart: true
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, cmds, kill-primary]
+  config: {seconds: {$ref: inputs.run_before_crash_s}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 4}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_s: 2.5
+    loss_window_faults: [kill-primary]
+required_events: [warm-up.completed, kill-primary.recovered]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-primary}

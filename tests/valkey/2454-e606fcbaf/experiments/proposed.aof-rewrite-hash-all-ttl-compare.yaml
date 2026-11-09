@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.aof-rewrite-hash-all-ttl-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: AOF rewrite of a hash whose fields all have TTLs; the parent emits
+    argument-less HMSET headers into the base AOF, so DEBUG LOADAOF fails there and
+    succeeds on the fix
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rewrite-reload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      appendonly: "yes"
+      appendfsync: everysec
+      aof-use-rdb-preamble: "no"
+      auto-aof-rewrite-percentage: 0
+    commands:
+    - {command: [HSETEX, allttl, EXAT, 33000000000, FIELDS, 3, f1, v1, f2, v2, f3,
+        v3], expect: {equals: 1}}
+    - {command: [HLEN, allttl], expect: {equals: 3}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {error: false}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_rewrite_scheduled:0"}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [DEBUG, LOADAOF], expect_difference: true, expect: {error: false}}
+    - {command: [HLEN, allttl], expect: {equals: 3}}
+    - {command: [HGETALL, allttl], compare: unordered-pairs}
+    - {command: [HEXPIRETIME, allttl, FIELDS, 3, f1, f2, f3], expect: {equals: [33000000000,
+          33000000000, 33000000000]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rewrite-reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rewrite-reload}

@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.rdb-dump-restore-version
+deployment:
+  modes: [standalone]
+metadata:
+  description: DUMP carries the bumped RDB version in its footer, and a RESTORE of
+    a version-80 payload is accepted by the change but rejected by the parent (RDB_VERSION
+    11)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dumprestore
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SET, k, hello], expect: {equals: OK}}
+    - {command: [DUMP, k], expect_difference: true, expect: {exists: true}}
+    - {command: [DEBUG, set-skip-checksum-validation, 1], expect: {equals: OK}}
+    - {command: [RESTORE, r, 0, !!binary 'AAF2UAAAAAAAAAAAAA=='], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [GET, r], expect_difference: true, expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dumprestore.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dumprestore}

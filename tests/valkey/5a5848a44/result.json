@@ -1,0 +1,238 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5a5848a44cb0c098e214a33135d5bfa3b313b1ec",
+  "parent": "c3b1b0317de96a3fe2a1336a868c7740c6e7b93c",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add ACTIVE-EXPIRY and ACTIVE-DEFRAG for hash objects with volatile items",
+  "date": "2025-08-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 14,
+  "proven": 9,
+  "hunted": 14,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 322,
+    "executed": 306,
+    "percent": 95,
+    "uncovered": [
+      "src/aof.c:1960",
+      "src/expire.c:281",
+      "src/expire.c:282",
+      "src/t_hash.c:1093",
+      "src/t_hash.c:2123",
+      "src/t_hash.c:2170",
+      "src/t_hash.c:2171",
+      "src/vset.c:1867",
+      "src/vset.c:1868",
+      "src/vset.c:2084",
+      "src/vset.c:2377",
+      "src/vset.c:2378",
+      "src/vset.c:2379",
+      "src/vset.c:2380",
+      "src/vset.c:2381",
+      "src/vset.c:2383"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 10.2406,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 15920:M 09 Nov 2026 05:07:31.051 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-673b0453aa16",
+      "seed": 104,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after 5a5848a44cb0",
+      "fingerprint": "fc5dd8800759ea043461",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/111"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 15920:M 09 Nov 2026 05:07:31.051 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-673b0453aa16",
+      "seed": 104,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after 5a5848a44cb0",
+      "fingerprint": "a2d618f987d3c76f00fc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/112"
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 17565:M 09 Nov 2026 05:26:36.733 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-2136b247768d",
+      "seed": 105,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after 5a5848a44cb0",
+      "fingerprint": "fc5dd8800759ea043461",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/111"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 17565:M 09 Nov 2026 05:26:36.733 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-2136b247768d",
+      "seed": 105,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after 5a5848a44cb0",
+      "fingerprint": "a2d618f987d3c76f00fc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/112"
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 27509:M 09 Nov 2026 06:56:04.384 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-4ea9a861e87e",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after 5a5848a44cb0",
+      "fingerprint": "fc5dd8800759ea043461",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/111"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 27509:M 09 Nov 2026 06:56:04.384 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-4ea9a861e87e",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after 5a5848a44cb0",
+      "fingerprint": "a2d618f987d3c76f00fc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/112"
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 28408:M 09 Nov 2026 07:12:04.959 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-42c784562ad3",
+      "seed": 102,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after 5a5848a44cb0",
+      "fingerprint": "fc5dd8800759ea043461",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/111"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 28408:M 09 Nov 2026 07:12:04.959 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-42c784562ad3",
+      "seed": 102,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after 5a5848a44cb0",
+      "fingerprint": "a2d618f987d3c76f00fc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/112"
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 30050:M 09 Nov 2026 07:23:36.550 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-0ccd727567c6",
+      "seed": 106,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after 5a5848a44cb0",
+      "fingerprint": "fc5dd8800759ea043461",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/111"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 30050:M 09 Nov 2026 07:23:36.550 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-0ccd727567c6",
+      "seed": 106,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after 5a5848a44cb0",
+      "fingerprint": "a2d618f987d3c76f00fc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/112"
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 30928:M 09 Nov 2026 07:25:47.792 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-d787b998aa67",
+      "seed": 107,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after 5a5848a44cb0",
+      "fingerprint": "fc5dd8800759ea043461",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/111"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 30928:M 09 Nov 2026 07:25:47.792 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-d787b998aa67",
+      "seed": 107,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after 5a5848a44cb0",
+      "fingerprint": "a2d618f987d3c76f00fc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/112"
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-4ea9a861e87e",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-4ea9a861e87e",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-42c784562ad3",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-42c784562ad3",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

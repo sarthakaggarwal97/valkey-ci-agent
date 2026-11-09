@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.hash-expire-trailing-fields
+deployment:
+  modes: [standalone]
+metadata:
+  description: HSETEX/HGETEX/HEXPIRE with a trailing FIELDS token and no numfields
+    must return the numfields error, not read past argv
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: trailing_fields
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [HSET, myhash, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HSETEX, myhash, KEEPTTL, KEEPTTL, KEEPTTL, FIELDS], expect_difference: true,
+      expect: {error: "numfields should be greater than 0"}}
+    - {command: [HGETEX, myhash, PERSIST, PERSIST, FIELDS], expect_difference: true,
+      expect: {error: "numfields should be greater than 0"}}
+    - {command: [HEXPIRE, myhash, 10, NX, NX, FIELDS], expect_difference: true, expect: {
+        error: "numfields should be greater than 0"}}
+    - {command: [HPEXPIRE, myhash, 10000, FIELDS], expect_difference: true, expect: {
+        error: "numfields should be greater than 0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: trailing_fields}

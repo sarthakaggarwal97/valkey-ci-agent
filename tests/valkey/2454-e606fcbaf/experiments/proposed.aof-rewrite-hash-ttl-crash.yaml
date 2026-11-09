@@ -1,0 +1,83 @@
+extends: [valkey.base]
+id: proposed.aof-rewrite-hash-ttl-crash
+deployment:
+  modes: [standalone]
+metadata:
+  description: BGREWRITEAOF hashes with field TTLs (all-volatile, and mixed across
+    the 64-item batch boundary), SIGKILL the primary, and verify it reloads the rewritten
+    AOF with fields, values and TTLs intact and no acknowledged write lost
+components:
+- use: valkey.action.commands
+  id: seed-hashes
+  depends_on: [writes]
+  config:
+    timeout_s: 90
+    commands:
+    - {command: [HSETEX, "aofhash:allttl", EXAT, 33000000000, FIELDS, 3, f1, v1, f2,
+        v2, f3, v3], expect: {equals: 1}}
+    - {command: [HSET, "aofhash:mixed", n01, w01, n02, w02, n03, w03, n04, w04, n05,
+        w05, n06, w06, n07, w07, n08, w08, n09, w09, n10, w10, n11, w11, n12, w12,
+        n13, w13, n14, w14, n15, w15, n16, w16, n17, w17, n18, w18, n19, w19, n20,
+        w20, n21, w21, n22, w22, n23, w23, n24, w24, n25, w25, n26, w26, n27, w27,
+        n28, w28, n29, w29, n30, w30, n31, w31, n32, w32, n33, w33, n34, w34, n35,
+        w35], expect: {equals: 35}}
+    - {command: [HSET, "aofhash:mixed", n36, w36, n37, w37, n38, w38, n39, w39, n40,
+        w40, n41, w41, n42, w42, n43, w43, n44, w44, n45, w45, n46, w46, n47, w47,
+        n48, w48, n49, w49, n50, w50, n51, w51, n52, w52, n53, w53, n54, w54, n55,
+        w55, n56, w56, n57, w57, n58, w58, n59, w59, n60, w60, n61, w61, n62, w62,
+        n63, w63, n64, w64, n65, w65, n66, w66, n67, w67, n68, w68, n69, w69, n70,
+        w70], expect: {equals: 35}}
+    - {command: [HSETEX, "aofhash:mixed", EXAT, 33000000000, FIELDS, 8, t1, u1, t2,
+        u2, t3, u3, t4, u4, t5, u5, t6, u6, t7, u7, t8, u8], expect: {equals: 1}}
+    - {command: [HLEN, "aofhash:mixed"], expect: {equals: 78}}
+    - {command: [BGREWRITEAOF], expect: {error: false}}
+    - {command: [INFO, persistence], wait_s: 60, expect: {contains: "aof_rewrite_scheduled:0"}}
+    - {command: [INFO, persistence], wait_s: 60, expect: {contains: "aof_rewrite_in_progress:0"}}
+- use: valkey.fault.process-signal
+  id: crash-primary
+  config:
+    when_event: seed-hashes.completed
+    instance: primary
+    signal: SIGKILL
+    restart: true
+    restart_mode: immediate
+- use: valkey.action.wait-event
+  id: recovered
+  depends_on: [seed-hashes]
+  config: {event: crash-primary.recovered, only_after: crash-primary.injected, timeout_s: 90}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [recovered]
+  config: {seconds: 3}
+- use: valkey.action.commands
+  id: verify
+  depends_on: [settle]
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [HLEN, "aofhash:allttl"], expect: {equals: 3}}
+    - {command: [HEXPIRETIME, "aofhash:allttl", FIELDS, 1, f1], expect: {equals: [
+          33000000000]}}
+    - {command: [HLEN, "aofhash:mixed"], expect: {equals: 78}}
+    - {command: [HEXPIRETIME, "aofhash:mixed", FIELDS, 2, t1, t8], expect: {equals: [
+          33000000000, 33000000000]}}
+    - {command: [HGET, "aofhash:mixed", n01], expect: {equals: w01}}
+    - {command: [HGET, "aofhash:mixed", n70], expect: {equals: w70}}
+- use: valkey.observer.log
+  id: logs
+  config:
+    instances: primary
+    expect:
+    - {evidence_id: valkey.aof.reloaded, pattern: "DB loaded from append only file",
+      required: true}
+    forbidden:
+    - {pattern: "Bad file format reading the append only file"}
+    - {pattern: "Unrecoverable error reading the append only file"}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [seed-hashes.completed, crash-primary.recovered, verify.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seed-hashes}
+- {evidence_id: valkey.fault.injected, source: crash-primary}
+- {evidence_id: valkey.command.sequence, source: verify}

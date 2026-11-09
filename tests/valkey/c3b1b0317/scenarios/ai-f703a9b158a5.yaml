@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 65215e5378db..c3b1b0317de9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f703a9b158a5
+seed: 1004
+experiment:
+  id: proposed.hash-ttl-vset-vector-split-left-drain
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

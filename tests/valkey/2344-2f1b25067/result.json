@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2f1b25067e8428955c938ea6c1c34242d33d9de0",
+  "parent": "772d12ed024632da58846bba86979fc5908060d8",
+  "pr": 2344,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove unused includes (#2344)",
+  "date": "2025-08-06",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2212,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only deletes unused #include lines in db.c, server.c and server.h. No executable code, command behavior, reply, replication, persistence or configuration path changes; the sole risk is a compilation failure, which the build itself catches before any fuzzer scenario could run. A runtime regression test cannot reach anything this change altered."
+}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e606fcbaffd1..bddc9db087a4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-42446b24fd11
+seed: 2
+experiment:
+  id: proposed.hgetex-missing-key-array
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

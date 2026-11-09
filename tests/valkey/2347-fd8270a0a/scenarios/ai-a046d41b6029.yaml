@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ba7334c7c61a..fd8270a0aab6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a046d41b6029
+seed: 202
+experiment:
+  id: proposed.no-touch-unblock-crash
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "725c3608f0676aee50a83e1e33f98ed6538220aa",
+  "parent": "a89e529932b8106010b1b8faedc974ff3fbc89ad",
+  "pr": 2469,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Throw a useful error when underlying operations failed with tls (#2469)",
+  "date": "2025-08-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2325,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters connTLSGetLastError in src/tls.c to return strerror(last_errno) instead of NULL when no SSL error string is stored. The function is the TLS connection type's get_last_error implementation, reachable only over TLS connections, and every caller uses the result solely to format a server log line or an error string for logging; no caller branches on NULL, so there is no change to replies, data, replication, or persistence \u2014 only to log-message wording. The fuzzer cannot exercise it: the catalog has no TLS components, the deployment provider rejects tls-port in any server_con"
+}

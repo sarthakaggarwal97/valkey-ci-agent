@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c3b1b0317de9..5a5848a44cb0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ea3de64d4c1a
+seed: 103
+experiment:
+  id: proposed.hash-volatile-diskless-swapdb-resync
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7200

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ee305ce291b98876802b2d232a02d8dcf3ca3976",
+  "parent": "ecca21331117d38c9eadbbccf5c80c34cb11ec53",
+  "pr": 2467,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replace generic C assert with serverAssert (#2467)",
+  "date": "2025-08-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2344,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only replaces the <assert.h> include with serverassert.h in src/rdma.c and removes unused <assert.h> includes from two unit-test files. No assertion conditions, logic, or command behaviour change: the only difference is the diagnostic output if an assertion ever fails. Moreover rdma.c is compiled only with USE_RDMA on Linux with RDMA hardware, which the fuzzer's throwaway servers do not build or exercise, and the unit-test edits never ship in the server. There is no reachable runtime path to test, so no scenario is needed."
+}

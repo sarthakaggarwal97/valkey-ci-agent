@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fa8659d3099d..52b5519c5ae5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d52c27c810c3
+seed: 2
+experiment:
+  id: proposed.scan-huge-count-overflow
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

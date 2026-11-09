@@ -1,0 +1,121 @@
+extends: [valkey.base]
+id: proposed.hash-field-ttl-replication-fault
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Kill a node while hashes with large vsets (two far windows, a short-TTL
+    group and a 132-entry same-expiry bucket) replicate and expire; verify TTL metadata
+    and field counts after recovery
+inputs:
+  properties:
+    instance: {type: string, enum: [replica, primary], default: replica}
+components:
+- use: valkey.action.commands
+  id: seed
+  config:
+    timeout_s: 60
+    commands:
+    - {command: [HSET, bighash, b1, v, b2, v, b3, v, b4, v, b5, v, b6, v, b7, v, b8,
+        v, b9, v, b10, v, b11, v, b12, v, b13, v, b14, v, b15, v, b16, v, b17, v,
+        b18, v, b19, v, b20, v, b21, v, b22, v, b23, v, b24, v, b25, v, b26, v, b27,
+        v, b28, v, b29, v, b30, v, b31, v, b32, v, b33, v, b34, v, b35, v, b36, v,
+        b37, v, b38, v, b39, v, b40, v, b41, v, b42, v, b43, v, b44, v, b45, v, b46,
+        v, b47, v, b48, v, b49, v, b50, v, b51, v, b52, v, b53, v, b54, v, b55, v,
+        b56, v, b57, v, b58, v, b59, v, b60, v, b61, v, b62, v, b63, v, b64, v, b65,
+        v, b66, v, b67, v, b68, v, b69, v, b70, v, b71, v, b72, v, b73, v, b74, v,
+        b75, v, b76, v, b77, v, b78, v, b79, v, b80, v, b81, v, b82, v, b83, v, b84,
+        v, b85, v, b86, v, b87, v, b88, v, b89, v, b90, v, b91, v, b92, v, b93, v,
+        b94, v, b95, v, b96, v, b97, v, b98, v, b99, v, b100, v, b101, v, b102, v,
+        b103, v, b104, v, b105, v, b106, v, b107, v, b108, v, b109, v, b110, v, b111,
+        v, b112, v, b113, v, b114, v, b115, v, b116, v, b117, v, b118, v, b119, v,
+        b120, v, b121, v, b122, v, b123, v, b124, v, b125, v, b126, v, b127, v, b128,
+        v, b129, v, b130, v, b131, v, b132, v, b133, v, b134, v, b135, v, b136, v,
+        b137, v, b138, v, b139, v, b140, v, b141, v, b142, v, b143, v, b144, v, b145,
+        v, b146, v, b147, v, b148, v, b149, v, b150, v], expect: {equals: 150}}
+    - {command: [HPEXPIREAT, bighash, 4398046511120, FIELDS, 60, b1, b2, b3, b4, b5,
+        b6, b7, b8, b9, b10, b11, b12, b13, b14, b15, b16, b17, b18, b19, b20, b21,
+        b22, b23, b24, b25, b26, b27, b28, b29, b30, b31, b32, b33, b34, b35, b36,
+        b37, b38, b39, b40, b41, b42, b43, b44, b45, b46, b47, b48, b49, b50, b51,
+        b52, b53, b54, b55, b56, b57, b58, b59, b60], expect: {equals: [1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [HPEXPIREAT, bighash, 4398046520104, FIELDS, 60, b61, b62, b63, b64,
+        b65, b66, b67, b68, b69, b70, b71, b72, b73, b74, b75, b76, b77, b78, b79,
+        b80, b81, b82, b83, b84, b85, b86, b87, b88, b89, b90, b91, b92, b93, b94,
+        b95, b96, b97, b98, b99, b100, b101, b102, b103, b104, b105, b106, b107, b108,
+        b109, b110, b111, b112, b113, b114, b115, b116, b117, b118, b119, b120], expect: {
+        equals: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [HPEXPIRE, bighash, 4000, FIELDS, 30, b121, b122, b123, b124, b125,
+        b126, b127, b128, b129, b130, b131, b132, b133, b134, b135, b136, b137, b138,
+        b139, b140, b141, b142, b143, b144, b145, b146, b147, b148, b149, b150], expect: {
+        equals: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1]}}
+    - {command: [HSET, burst, c1, v, c2, v, c3, v, c4, v, c5, v, c6, v, c7, v, c8,
+        v, c9, v, c10, v, c11, v, c12, v, c13, v, c14, v, c15, v, c16, v, c17, v,
+        c18, v, c19, v, c20, v, c21, v, c22, v, c23, v, c24, v, c25, v, c26, v, c27,
+        v, c28, v, c29, v, c30, v, c31, v, c32, v, c33, v, c34, v, c35, v, c36, v,
+        c37, v, c38, v, c39, v, c40, v, c41, v, c42, v, c43, v, c44, v, c45, v, c46,
+        v, c47, v, c48, v, c49, v, c50, v, c51, v, c52, v, c53, v, c54, v, c55, v,
+        c56, v, c57, v, c58, v, c59, v, c60, v, c61, v, c62, v, c63, v, c64, v, c65,
+        v, c66, v, c67, v, c68, v, c69, v, c70, v, c71, v, c72, v, c73, v, c74, v,
+        c75, v, c76, v, c77, v, c78, v, c79, v, c80, v, c81, v, c82, v, c83, v, c84,
+        v, c85, v, c86, v, c87, v, c88, v, c89, v, c90, v, c91, v, c92, v, c93, v,
+        c94, v, c95, v, c96, v, c97, v, c98, v, c99, v, c100, v, c101, v, c102, v,
+        c103, v, c104, v, c105, v, c106, v, c107, v, c108, v, c109, v, c110, v, c111,
+        v, c112, v, c113, v, c114, v, c115, v, c116, v, c117, v, c118, v, c119, v,
+        c120, v, c121, v, c122, v, c123, v, c124, v, c125, v, c126, v, c127, v, c128,
+        v, c129, v, c130, v, c131, v, c132, v], expect: {equals: 132}}
+    - {command: [HPEXPIRE, burst, 5000, FIELDS, 132, c1, c2, c3, c4, c5, c6, c7, c8,
+        c9, c10, c11, c12, c13, c14, c15, c16, c17, c18, c19, c20, c21, c22, c23,
+        c24, c25, c26, c27, c28, c29, c30, c31, c32, c33, c34, c35, c36, c37, c38,
+        c39, c40, c41, c42, c43, c44, c45, c46, c47, c48, c49, c50, c51, c52, c53,
+        c54, c55, c56, c57, c58, c59, c60, c61, c62, c63, c64, c65, c66, c67, c68,
+        c69, c70, c71, c72, c73, c74, c75, c76, c77, c78, c79, c80, c81, c82, c83,
+        c84, c85, c86, c87, c88, c89, c90, c91, c92, c93, c94, c95, c96, c97, c98,
+        c99, c100, c101, c102, c103, c104, c105, c106, c107, c108, c109, c110, c111,
+        c112, c113, c114, c115, c116, c117, c118, c119, c120, c121, c122, c123, c124,
+        c125, c126, c127, c128, c129, c130, c131, c132], expect: {equals: [1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+          1, 1, 1, 1, 1, 1, 1, 1, 1]}}
+- use: valkey.fault.process-signal
+  id: kill-node
+  config:
+    when_event: warm-up.completed
+    instance: {$ref: inputs.instance}
+    signal: SIGKILL
+    restart: true
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, seed, kill-node]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 5}
+- use: valkey.action.commands
+  id: verify
+  depends_on: [settle]
+  config:
+    timeout_s: 90
+    commands:
+    - {command: [HLEN, bighash], wait_s: 60, expect: {equals: 120}}
+    - {command: [EXISTS, burst], wait_s: 60, expect: {equals: 0}}
+    - {command: [HPEXPIRETIME, bighash, FIELDS, 2, b1, b61], expect: {equals: [4398046511120,
+          4398046520104]}}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [seed.completed, warm-up.completed, verify.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-node}
+- {evidence_id: valkey.command.sequence, source: seed}
+- {evidence_id: valkey.command.sequence, source: verify}
