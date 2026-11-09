@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8d686dd74fccedcbd612e6e5c82e95cfc9cc3c16",
+  "parent": "dfd91bf6729d8e0a0faee3606c37f4ce949c745a",
+  "pr": 2091,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix minor memory leak in valkey-cli when command table hint fails due to NOAUTH (#2091)",
+  "date": "2025-05-16",
+  "unstable": "caf5f2bfc20dd5371d87202ee338b348593e2a1b",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 1,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 8.5431,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

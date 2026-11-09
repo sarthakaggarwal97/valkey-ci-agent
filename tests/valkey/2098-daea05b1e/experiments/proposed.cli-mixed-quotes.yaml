@@ -1,0 +1,21 @@
+extends: [valkey.liveness]
+id: proposed.cli-mixed-quotes
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli REPL line splitting accepts mixed quoted and unquoted args,
+    still rejects unterminated quotes
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    runs:
+    - {tool: valkey-cli, args: [-p, $port], stdin: "set k1 \"va\"lue\nget k1\nget\
+        \ \"\"k1\nget 'mis'sing\n", expect_difference: true, expect: {exit: {equals: 0},
+        stdout: {contains: "value"}}}
+    - {tool: valkey-cli, args: [-p, $port], stdin: "get \"unbalanced\nping\n", expect: {
+        exit: {equals: 0}, stdout: {contains: "Invalid argument"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

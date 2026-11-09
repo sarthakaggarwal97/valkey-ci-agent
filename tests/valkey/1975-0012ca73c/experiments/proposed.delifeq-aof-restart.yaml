@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.delifeq-aof-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: A DELIFEQ delete must be written to the AOF so the key stays deleted
+    across a restart
+components:
+- use: valkey.action.commands
+  id: aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes", appendfsync: always}
+    timeout_s: 60
+    commands:
+    - {command: [SET, gone, delme], expect: {equals: OK}}
+    - {command: [SET, kept, stays], expect: {equals: OK}}
+    - {command: [DELIFEQ, gone, delme], expect_difference: true, expect: {equals: 1}}
+    - {command: [EXISTS, gone], expect_difference: true, expect: {equals: 0}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, kept], expect: {equals: stays}}
+    - {command: [EXISTS, gone], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof}

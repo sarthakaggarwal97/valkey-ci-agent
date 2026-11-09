@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f56ff1026864ea7a19164565724a65b04cf7eb85",
+  "parent": "a59635c73f62ea8bc464d7a4ae0e3f7cc572eac3",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove an unnecessary check that seems to overflow in 32-bit",
+  "date": "2025-05-23",
+  "unstable": "caf5f2bfc20dd5371d87202ee338b348593e2a1b",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2176,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff only modifies the project's own C unit test (src/unit/test_hashtable.c), deleting two TEST_ASSERT range checks on a pointer in test_random_entry_sparse_table that could overflow on 32-bit. No server code, command behaviour, replication, persistence or tool code changes, so there is no observable runtime behaviour for a scenario to exercise; the change is covered by simply building and running the unit tests."
+}

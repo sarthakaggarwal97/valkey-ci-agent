@@ -1,0 +1,110 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0012ca73c3958cb574b0bfb8ebaf83e97f4dc724",
+  "parent": "c5511080332945759da2c771836afa028f4d4dd2",
+  "pr": 1975,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add DELIFEQ command (#1975)",
+  "date": "2025-05-22",
+  "unstable": "caf5f2bfc20dd5371d87202ee338b348593e2a1b",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 14,
+    "executed": 12,
+    "percent": 85,
+    "uncovered": [
+      "src/t_string.c:406",
+      "src/t_string.c:407"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 4.218,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"6dc9236d6ed561e588c6e2a43d48f2a483081b2b\"},\"offset\":\"397\"}, replica {\"digest\":{\"reply\":\"549fdd9fb48f49ff78e92ef3e49e08da3fd035be\"},\"offset\":\"397\"}, link up",
+      "scenario": "ai-ebefc3be3d84",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"6dc9236d6ed561e588c6e2a43d48f2a483081b2b\"},\"offset\":\"397\"}, replica {\"digest\":{\"reply\":\"549fdd9fb48f49ff78e92ef3e49e08da3fd035be\"},\"offset\":\"397\"}, link up",
+      "scenario": "ai-32e7f9ec67ef",
+      "seed": 202,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"3d595a8b76f74331c87d62a21f13ef08f0048a9e\"},\"offset\":\"337\"}, replica {\"digest\":{\"reply\":\"525b54820d238e965a598e773d34a1ff6b9811bc\"},\"offset\":\"337\"}, link up",
+      "scenario": "ai-032cfc58ea44",
+      "seed": 404,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-5553345c00b8",
+      "build": "unstable",
+      "seed": 303,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5553345c00b8",
+      "build": "unstable",
+      "seed": 304,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5553345c00b8",
+      "build": "unstable",
+      "seed": 305,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-032cfc58ea44",
+      "build": "unstable",
+      "seed": 404,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-032cfc58ea44",
+      "build": "unstable",
+      "seed": 405,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-032cfc58ea44",
+      "build": "unstable",
+      "seed": 406,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4092c9c8e091058e3103007b8dc05ae8ae00c1fc",
+  "parent": "36b51c9e16cdcccaf11c6a9e05f532c1e8b612b1",
+  "pr": 2099,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize string2ll with load-time CPU feature check using IFUNC resolver (#2099)",
+  "date": "2025-05-23",
+  "unstable": "caf5f2bfc20dd5371d87202ee338b348593e2a1b",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 7,
+    "executed": 6,
+    "percent": 85,
+    "uncovered": [
+      "src/util.c:636"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 3.5185,
+  "findings": [],
+  "recorded": []
+}

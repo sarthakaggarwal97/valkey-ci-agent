@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 227b11bc6b22..36b51c9e16cd.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0fe2559f4827
+seed: 118002
+experiment:
+  id: proposed.debug-htstats-avg-chain-precision
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

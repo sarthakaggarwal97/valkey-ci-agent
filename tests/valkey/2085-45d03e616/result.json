@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "45d03e616421d0a1a303c3d2c84a9f89de9ee1e1",
+  "parent": "8d686dd74fccedcbd612e6e5c82e95cfc9cc3c16",
+  "pr": 2085,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix random element in skewed sparse hash table (#2085)",
+  "date": "2025-05-19",
+  "unstable": "caf5f2bfc20dd5371d87202ee338b348593e2a1b",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.6338,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters how hashtableFairRandomEntry/hashtableSampleEntries pick a random entry in a sparse/skewed hash table: fewer samples when sparse and a fresh random cursor per scan iteration. This is a performance-and-fairness fix to an internal random sampler with no deterministic observable behavior change. The affected commands (RANDOMKEY, SRANDMEMBER, SPOP, HRANDFIELD, ZRANDMEMBER, eviction sampling) still return valid members with the same counts and the same whole-set results; only the random distribution and speed change, both non-deterministic and seeded per process (random() plu"
+}

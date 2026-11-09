@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "20a49ff01387be7a5091d8d51251c9875d1183ea",
+  "parent": "12aaff96b97c50a59c10a3abb9ca13a3ffdf3308",
+  "pr": 2014,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Delete dead code in dict (#2014)",
+  "date": "2025-05-12",
+  "unstable": "caf5f2bfc20dd5371d87202ee338b348593e2a1b",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.5827,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure dead-code deletion in dict.c/dict.h with no behavior change. The deleted entry variants (no_value, keys_are_odd, embedded_entry, no_incremental_rehash, embedKey, the ENTRY_PTR_* tagged pointers), dictTwoPhaseUnlinkFind/Free, dictGetStats*, and the defrag entry callbacks have zero users in the tree: no dictType sets the removed flags (they are deleted from struct dictType, so any user would fail to compile), and the keyspace moved to hashtable.c. For the one entry kind still in use, the tag bits were ENTRY_PTR_NORMAL=0, so encode/decode were identity ops and the collapsed accessors (create"
+}

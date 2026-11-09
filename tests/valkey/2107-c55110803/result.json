@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c5511080332945759da2c771836afa028f4d4dd2",
+  "parent": "30599c4936ccee982f7e94c4913e82014ff0d779",
+  "pr": 2107,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize WATCH by equalStringObjects early length check  (#2107)",
+  "date": "2025-05-22",
+  "unstable": "caf5f2bfc20dd5371d87202ee338b348593e2a1b",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6136,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds an early length-check short-circuit to equalStringObjects(): when both objects are sds-encoded and sdslen differs, it returns 0 without calling compareStringObjects(). This is semantically identical to the old path, since compareStringObjects() always returns non-zero for sds strings of different lengths (memcmp over the common prefix, or alen-blen as tiebreaker), and both paths are binary-safe. Mixed INT/sds and both-INT cases are unchanged. All callers (WATCH dedup in multi.c, expired watched-key handling, cluster importing-slot key check) pass OBJ_STRING objects for which sd"
+}

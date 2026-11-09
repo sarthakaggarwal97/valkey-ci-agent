@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-09T17:56+00:00.
+Updated 2026-11-09T19:01+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1252 | 1255 | #2099 (2025-05-23) | 286 | 178.9 |
+| valkey-io/valkey | 1275 | 1234 | #2039 (2025-05-12) | 309 | 182.1 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 63 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 9.0 |
 | valkey-io/valkey-search | 669 | 0 | f8106e72e984 (2024-11-27) | 34 | 95.6 |
@@ -13,28 +13,28 @@ Updated 2026-11-09T17:56+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-09T17:22:07+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42649336725): 20 merge(s) tested, 1 without a code change.
+[2026-11-09T19:01:56+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42663944049): 20 merge(s) tested, 4 without a code change.
 
+- [valkey-io/valkey#5280](https://github.com/valkey-io/valkey/pull/5280) ([tests](tests/valkey/5280-702a10751/)): Fix full sync loop after PSYNC to SYNC fallback (#5280): declined: The fix changes behaviour only on the PSYNC-to-SYNC fallback path, which is entered solely when a primary rejects PSYNC with a generic -ERR (PSYNC_NOT_SUPPORTED). No real Valkey primary ever does that - it always answers +FULLRESYNC/+CONTINUE/+DUALCHANNELSYNC or a transient -NOMASTERLINK/-
 - [valkey-io/valkey#2146](https://github.com/valkey-io/valkey/pull/2146): to retry, Claude Code failed (rc=1): API Error: Claude's response exceeded the 64000 output token maximum. To configure this behavior, set the CLAUDE_CODE_MAX_OUTPUT_TOKENS environment variable.
-- [valkey-io/valkey#2033](https://github.com/valkey-io/valkey/pull/2033) ([tests](tests/valkey/2033-4aaaf8833/)): Allow dynamic modification of io-threads num (#2033): 2 of 6 test(s) reached the change, coverage 96%; crash, introduced and since fixed (recorded)
-- [valkey-io/valkey#2144](https://github.com/valkey-io/valkey/pull/2144) ([tests](tests/valkey/2144-30d7f08a4/)): Correctly cast the extension lengths (#2144): declined: Correct one-token fix (uint16_t -> uint32_t) for truncating a cluster-bus ping-extension length. It is a genuine remote-input bug, but it only manifests when a received PING/PONG/MEET extension is >= 65536 bytes, and the fuzzer cannot deliver that: there is no cluster-bus packet injector, 
-- [valkey-io/valkey#1838](https://github.com/valkey-io/valkey/pull/1838) ([tests](tests/valkey/1838-f5b92f526/)): Prioritize replication traffic in the replica (#1838): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1943](https://github.com/valkey-io/valkey/pull/1943) ([tests](tests/valkey/1943-b4dbcef90/)): Improve clarity of errors for GEO commands when member does not exist (#1943): 2 of 2 test(s) reached the change, coverage 80%
-- [valkey-io/valkey#2142](https://github.com/valkey-io/valkey/pull/2142) ([tests](tests/valkey/2142-ff7135836/)): Update GEOSEARCH and GEOSEARCHSTORE history documentation for the BYPOLYGON option (#2142): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#2115](https://github.com/valkey-io/valkey/pull/2115) ([tests](tests/valkey/2115-872ee0d6f/)): Add size_t cast in modules (#2115): declined: The change only adds (size_t) casts to the vector-length argument of ValkeyModule_Call in the test modules under tests/modules/ (aclcheck, blockedclient, commandfilter, misc, usercall). module.c reads that variadic argument as size_t ('v' format in moduleCreateArgvFromUserFormat), so the c
-- [valkey-io/valkey#2012](https://github.com/valkey-io/valkey/pull/2012) ([tests](tests/valkey/2012-689a3b158/)): Flip pfail flag while marking node as failed (#2012): declined: The change adds one line that clears the stray CLUSTER_NODE_PFAIL flag when a node is marked NOADDR+FAIL after a node-ID mismatch (a peer that did CLUSTER RESET), restoring the PFAIL/FAIL mutual-exclusion invariant. It has no functional effect: the NOADDR flag already excludes this node fr
-- [valkey-io/valkey#2140](https://github.com/valkey-io/valkey/pull/2140) ([tests](tests/valkey/2140-17e66863a/)): Detect SSL_new() returning NULL in outgoing connections (#2140): declined: The change only alters behavior when OpenSSL's SSL_new() returns NULL inside createTLSConnection, i.e. under OpenSSL-internal allocation failure on a TLS-enabled server; when SSL_new() succeeds the code is behaviorally identical to the parent on both the accepted and outgoing paths. The fu
-- [valkey-io/valkey#1809](https://github.com/valkey-io/valkey/pull/1809) ([tests](tests/valkey/1809-cf5c5f570/)): Support BYPOLYGON option for GEOSEARCH (#1809): 3 of 3 test(s) reached the change, coverage 87%
-- [valkey-io/valkey#2132](https://github.com/valkey-io/valkey/pull/2132) ([tests](tests/valkey/2132-258213ff7/)): Free module context even if there was no content written in auxsave2 (#2132): declined: The change only frees a lazily-allocated ValkeyModuleCtx on the early-return path of rdbSaveSingleModuleAux when a module's aux_save2 callback wrote nothing — a pure memory-leak fix with no observable behaviour change (no reply, RDB content, replication or persistence difference). Triggeri
-- [valkey-io/valkey#2108](https://github.com/valkey-io/valkey/pull/2108) ([tests](tests/valkey/2108-3ceae81fc/)): Fix a case of out of bound read when cluster node ID is provided with wrong length in CLUSTER FORGET (#2108): 0 of 5 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2101](https://github.com/valkey-io/valkey/pull/2101) ([tests](tests/valkey/2101-374718b2a/)): Fix unsigned difference expression compared to zero (#2101): declined: The change rewrites `prev->size - prev->used > 0` as `prev->used < prev->size` in setDeferredReply (src/networking.c). Both fields are size_t with the invariant used <= size, so the two conditions are equivalent for every reachable state; the rewrite only silences a static-analysis 'unsign
-- [valkey-io/valkey#2131](https://github.com/valkey-io/valkey/pull/2131) ([tests](tests/valkey/2131-0b11d347a/)): Correct VM_Yield timing and deflake blockedclient.tcl (#2131): 0 of 6 test(s) reached the change, coverage 0%
-- [valkey-io/valkey#2109](https://github.com/valkey-io/valkey/pull/2109) ([tests](tests/valkey/2109-d00fb8e71/)): Only mark the client reprocessing flag when unblocked on keys (#2109): 0 of 3 test(s) reached the change, coverage 25%
-- [valkey-io/valkey#2116](https://github.com/valkey-io/valkey/pull/2116) ([tests](tests/valkey/2116-729ca117c/)):  Optimize GEORADIUS command performance with  pre-allocated buffer (#2116): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2133](https://github.com/valkey-io/valkey/pull/2133) ([tests](tests/valkey/2133-9dd5a02ce/)): Fix the GNU IFUNC error in alpine (non-glibc) environment (#2133): declined: The change only adds a __GLIBC__ guard to the HAVE_IFUNC preprocessor condition in src/config.h, fixing a compile/link error of the GNU ifunc attribute on musl (Alpine). On glibc Linux, where the fuzzer builds and runs, the condition evaluates identically before and after the change, so pa
-- [valkey-io/valkey#2137](https://github.com/valkey-io/valkey/pull/2137) ([tests](tests/valkey/2137-bd5dcb281/)): Fix bad slot used in sharded pubsub unsubscribe (#2137): 2 of 2 test(s) reached the change, coverage 100%; crash, fixed by #2137 (recorded)
-- [valkey-io/valkey#2120](https://github.com/valkey-io/valkey/pull/2120) ([tests](tests/valkey/2120-28f48ff63/)): Changes and fixes for the new DELIFEQ command (#2120): 3 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2130](https://github.com/valkey-io/valkey/pull/2130) ([tests](tests/valkey/2130-053bf9e5b/)): Mark string2ll_resolver as used (#2130): declined: The change only adds the `used` attribute to the static ifunc resolver string2ll_resolver in src/util.c, preventing compilers from garbage-collecting the symbol and breaking the link. It is a build fix: the resolver still selects the same string2llAVX512/string2llScalar implementations wit
+- [valkey-io/valkey#2099](https://github.com/valkey-io/valkey/pull/2099) ([tests](tests/valkey/2099-4092c9c8e/)): Optimize string2ll with load-time CPU feature check using IFUNC resolver (#2099): 0 of 3 test(s) reached the change, coverage 85%
+- [valkey-io/valkey#2118](https://github.com/valkey-io/valkey/pull/2118) ([tests](tests/valkey/2118-36b51c9e1/)): Show more decimal digits for `avg chain length` field in `debug htstats` full output (#2118): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#2126](https://github.com/valkey-io/valkey/pull/2126) ([tests](tests/valkey/2126-db14ac2f9/)): Fix UBSAN run for hashtable unittest (#2126): declined: The change modifies only src/unit/test_hashtable.c, a unit-test file: it replaces a 1-element stack array with a zmalloc'd array to silence a UBSAN out-of-bounds pointer computation in the test itself, and frees it afterwards. No Valkey server, command, replication, persistence or tool cod
+- [valkey-io/valkey@f56ff1026864](https://github.com/valkey-io/valkey/commit/f56ff1026864ea7a19164565724a65b04cf7eb85) ([tests](tests/valkey/f56ff1026/)): Remove an unnecessary check that seems to overflow in 32-bit: declined: The diff only modifies the project's own C unit test (src/unit/test_hashtable.c), deleting two TEST_ASSERT range checks on a pointer in test_random_entry_sparse_table that could overflow on 32-bit. No server code, command behaviour, replication, persistence or tool code changes, so there i
+- [valkey-io/valkey@a59635c73f62](https://github.com/valkey-io/valkey/commit/a59635c73f62ea8bc464d7a4ae0e3f7cc572eac3) ([tests](tests/valkey/a59635c73/)): Fix object unit test for 32-bit builds: declined: The change modifies only src/unit/test_object.c, adjusting test string lengths so the embedded-string unit test accounts for 32-bit pointer sizes. It is a test-only fix: no server code, command behaviour, replication, or persistence path changes, so there is nothing for a fuzzer scenario t
+- [valkey-io/valkey#1975](https://github.com/valkey-io/valkey/pull/1975) ([tests](tests/valkey/1975-0012ca73c/)): Add DELIFEQ command (#1975): 4 of 4 test(s) reached the change, coverage 85%; check, introduced and since fixed (recorded)
+- [valkey-io/valkey#2107](https://github.com/valkey-io/valkey/pull/2107) ([tests](tests/valkey/2107-c55110803/)): Optimize WATCH by equalStringObjects early length check  (#2107): declined: The change adds an early length-check short-circuit to equalStringObjects(): when both objects are sds-encoded and sdslen differs, it returns 0 without calling compareStringObjects(). This is semantically identical to the old path, since compareStringObjects() always returns non-zero for s
+- [valkey-io/valkey#2113](https://github.com/valkey-io/valkey/pull/2113) ([tests](tests/valkey/2113-30599c493/)): fix commandlog argument schema to use pure tokens (#2113): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#1725](https://github.com/valkey-io/valkey/pull/1725) ([tests](tests/valkey/1725-1531b44a1/)): Respect process umask when creating data files (#1725): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2088](https://github.com/valkey-io/valkey/pull/2088) ([tests](tests/valkey/2088-496f7d142/)): Optimize saving cluster config file using sdscatfmt (#2088): 0 of 3 test(s) reached the change, coverage 38%
+- [valkey-io/valkey#2098](https://github.com/valkey-io/valkey/pull/2098) ([tests](tests/valkey/2098-daea05b1e/)): Allow mixing quoted and unquoted inline args (#2098): 1 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2096](https://github.com/valkey-io/valkey/pull/2096) ([tests](tests/valkey/2096-8b0d952c2/)): Further improve performance of sdssplitargs (#2096): declined: no proposed test validated
+- [valkey-io/valkey#2085](https://github.com/valkey-io/valkey/pull/2085) ([tests](tests/valkey/2085-45d03e616/)): Fix random element in skewed sparse hash table (#2085): declined: The change only alters how hashtableFairRandomEntry/hashtableSampleEntries pick a random entry in a sparse/skewed hash table: fewer samples when sparse and a fresh random cursor per scan iteration. This is a performance-and-fairness fix to an internal random sampler with no deterministic o
+- [valkey-io/valkey#2091](https://github.com/valkey-io/valkey/pull/2091) ([tests](tests/valkey/2091-8d686dd74/)): Fix minor memory leak in valkey-cli when command table hint fails due to NOAUTH (#2091): declined: no proposed test validated
+- [valkey-io/valkey#2087](https://github.com/valkey-io/valkey/pull/2087) ([tests](tests/valkey/2087-11a2b6c4c/)): Fix string embedding decision with keys (#2087): declined: no proposed test validated
+- [valkey-io/valkey#2080](https://github.com/valkey-io/valkey/pull/2080) ([tests](tests/valkey/2080-c4f9b4635/)): Redundant Calculation of mstime() (#2080): declined: The change only hoists a redundant mstime() call out of a loop in clusterNodeAddFailureReport, storing the same timestamp value computed once instead of calling mstime() at each exit path. Control flow, return values, and failure-report semantics are identical; this is a performance/readab
+- [valkey-io/valkey#2081](https://github.com/valkey-io/valkey/pull/2081) ([tests](tests/valkey/2081-41a93a2a7/)): Reverting the panic() introduced in #2027 (#2081): 2 of 4 test(s) reached the change, coverage 100%; crash, predates #2081, since fixed (recorded); crash, fixed by #2081 (recorded)
+- [valkey-io/valkey#2014](https://github.com/valkey-io/valkey/pull/2014) ([tests](tests/valkey/2014-20a49ff01/)): Delete dead code in dict (#2014): declined: Pure dead-code deletion in dict.c/dict.h with no behavior change. The deleted entry variants (no_value, keys_are_odd, embedded_entry, no_incremental_rehash, embedKey, the ENTRY_PTR_* tagged pointers), dictTwoPhaseUnlinkFind/Free, dictGetStats*, and the defrag entry callbacks have zero user
 
 ### valkey-io/valkey-bloom
 
@@ -53,10 +53,10 @@ Updated 2026-11-09T17:56+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 677 of 1028 tested (66%)
-- Changed-line coverage: median 100% of 578 merge(s) measured, 48 under 50%
-- Recall: 189 parents flagged of 289 fix merges
-- Claude: $1162.73 in the last 24 hours, $7436.95 in the last 7 days, $7436.95 in all
+- Merges whose tests reached the change: 682 of 1036 tested (66%)
+- Changed-line coverage: median 100% of 584 merge(s) measured, 49 under 50%
+- Recall: 190 parents flagged of 290 fix merges
+- Claude: $1243.16 in the last 24 hours, $7517.39 in the last 7 days, $7517.39 in all
 - Issues filed: 64
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
@@ -125,4 +125,4 @@ Updated 2026-11-09T17:56+00:00.
 
 ## Retries
 
-- [valkey-io/valkey#2146](https://github.com/valkey-io/valkey/pull/2146): attempt 1 of 3, Claude Code failed (rc=1): API Error: Claude's response exceeded the 64000 output token maximum. To configure this behavior, set the CLAUDE_CODE_MAX_OUTPUT_TOKENS environment variable.
+- [valkey-io/valkey#2146](https://github.com/valkey-io/valkey/pull/2146): attempt 2 of 3, Claude Code failed (rc=1): API Error: Claude's response exceeded the 64000 output token maximum. To configure this behavior, set the CLAUDE_CODE_MAX_OUTPUT_TOKENS environment variable.

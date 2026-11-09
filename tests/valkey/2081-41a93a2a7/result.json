@@ -1,0 +1,112 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "41a93a2a77c1e5ce5c90d616f0fc14f406bfa87b",
+  "parent": "20a49ff01387be7a5091d8d51251c9875d1183ea",
+  "pr": 2081,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reverting the panic() introduced in #2027 (#2081)",
+  "date": "2025-05-13",
+  "unstable": "caf5f2bfc20dd5371d87202ee338b348593e2a1b",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.8588,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: listpack.c:1256 'lpValidateNext(lp, &p, lpbytes)' is not true",
+      "scenario": "ai-a33721dc4f70",
+      "seed": 20810001,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #2081, since fixed",
+      "fingerprint": "1cef6ea31b701a3b379e",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: listpack.c:1256 'lpValidateNext(lp, &p, lpbytes)' is not true",
+      "scenario": "ai-efc03e6001dc",
+      "seed": 20810002,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #2081, since fixed",
+      "fingerprint": "1cef6ea31b701a3b379e",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: listpack.c:1256 'lpValidateNext(lp, &p, lpbytes)' is not true",
+      "scenario": "ai-0614bdc7ab54",
+      "seed": 1001,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "1cef6ea31b701a3b379e",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: Invalid listpack encoding. Byte f5 is not a valid encoding. #listpack.c:549",
+      "scenario": "ai-0614bdc7ab54",
+      "seed": 1001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2081",
+      "fingerprint": "5141677f1864e38523aa",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: listpack.c:1256 'lpValidateNext(lp, &p, lpbytes)' is not true",
+      "scenario": "ai-31e725a74ec2",
+      "seed": 1002,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "1cef6ea31b701a3b379e",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: Invalid listpack encoding. Byte f5 is not a valid encoding. #listpack.c:549",
+      "scenario": "ai-31e725a74ec2",
+      "seed": 1002,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2081",
+      "fingerprint": "5141677f1864e38523aa",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

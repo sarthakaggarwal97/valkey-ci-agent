@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 36b51c9e16cd..4092c9c8e091.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-61b12253baad
+seed: 20992
+experiment:
+  id: proposed.string2ll-ifunc-parity
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

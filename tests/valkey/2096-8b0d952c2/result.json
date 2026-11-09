@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8b0d952c2b2431b59831d99730c1059a5f2c86aa",
+  "parent": "45d03e616421d0a1a303c3d2c84a9f89de9ee1e1",
+  "pr": 2096,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Further improve performance of sdssplitargs (#2096)",
+  "date": "2025-05-19",
+  "unstable": "caf5f2bfc20dd5371d87202ee338b348593e2a1b",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.6177,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

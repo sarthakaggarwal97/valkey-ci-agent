@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.listpack-invalid-encoding-sismember
+deployment:
+  modes: [standalone]
+metadata:
+  description: SISMEMBER over a corrupt listpack set whose second entry has an invalid
+    encoding byte reaches lpGetWithSize's unrecognized-encoding branch; the parent
+    panics, the change returns 0.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: corrupt-read
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {sanitize-dump-payload: no}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, "1"], expect: {equals: OK}}
+    - {command: [RESTORE, s, 0, !!binary "FB8fAAAAAgCKQUFBQUFBQUFBQQv1AAAAAAAAAAAAAAP/CwAAAAAAAAAAAA=="],
+      expect: {equals: OK}}
+    - {command: [SISMEMBER, s, Z], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [corrupt-read.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: corrupt-read}

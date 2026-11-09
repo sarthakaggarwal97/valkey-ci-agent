@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.commandlog-docs-pure-token
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS for COMMANDLOG GET/LEN/RESET reports the type argument
+    as pure tokens (slow, large-request, large-reply) instead of strings, while runtime
+    COMMANDLOG parsing is unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, DOCS, "commandlog|get"], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [COMMAND, DOCS, "commandlog|len"], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [COMMAND, DOCS, "commandlog|reset"], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [COMMANDLOG, RESET, SLOW], expect: {equals: OK}}
+    - {command: [COMMANDLOG, LEN, slow], expect: {equals: 0}}
+    - {command: [COMMANDLOG, LEN, "LARGE-REQUEST"], expect: {equals: 0}}
+    - {command: [COMMANDLOG, GET, 10, "large-reply"], expect: {equals: []}}
+    - {command: [COMMANDLOG, GET, -1, "Large-Request"], expect: {equals: []}}
+    - {command: [COMMANDLOG, GET, 0, slow], expect: {equals: []}}
+    - {command: [COMMANDLOG, GET, 2147483647, slow], expect: {equals: []}}
+    - {command: [COMMANDLOG, RESET, "large-reply"], expect: {equals: OK}}
+    - {command: [COMMANDLOG, GET, 10, bogus], expect: {error: "type should be one\
+          \ of the following"}}
+    - {command: [COMMANDLOG, LEN, ""], expect: {error: "type should be one of the\
+          \ following"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

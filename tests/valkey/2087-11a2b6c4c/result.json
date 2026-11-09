@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "11a2b6c4c64048c75aafdb57747d7c3ceba5f1d7",
+  "parent": "c4f9b4635be4c47d6914f33e4df0539aa9b29e46",
+  "pr": 2087,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix string embedding decision with keys (#2087)",
+  "date": "2025-05-15",
+  "unstable": "caf5f2bfc20dd5371d87202ee338b348593e2a1b",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.6785,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

@@ -1,0 +1,65 @@
+extends: [valkey.liveness]
+id: proposed.delifeq-semantics
+deployment:
+  modes: [standalone]
+metadata:
+  description: DELIFEQ reply semantics - matching, non-matching and missing keys,
+    wrong type, empty, binary and int-encoded values, arity, MULTI/EXEC, TTL cleanup
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: delifeq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [DELIFEQ, nokey, v], expect_difference: true, expect: {equals: 0}}
+    - {command: [SET, k, test], expect: {equals: OK}}
+    - {command: [DELIFEQ, k, test], expect_difference: true, expect: {equals: 1}}
+    - {command: [EXISTS, k], expect_difference: true, expect: {equals: 0}}
+    - {command: [SET, k, nope], expect: {equals: OK}}
+    - {command: [DELIFEQ, k, test], expect_difference: true, expect: {equals: 0}}
+    - {command: [EXISTS, k], expect: {equals: 1}}
+    - {command: [SET, e, ""], expect: {equals: OK}}
+    - {command: [DELIFEQ, e, ""], expect_difference: true, expect: {equals: 1}}
+    - {command: [SET, b, !!binary 'YQBi'], expect: {equals: OK}}
+    - {command: [DELIFEQ, b, !!binary 'YQBj'], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [DELIFEQ, b, !!binary 'YQBi'], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [SET, i, 12345], expect: {equals: OK}}
+    - {command: [DELIFEQ, i, "+12345"], expect_difference: true, expect: {equals: 0}}
+    - {command: [DELIFEQ, i, "012345"], expect_difference: true, expect: {equals: 0}}
+    - {command: [DELIFEQ, i, "12345"], expect_difference: true, expect: {equals: 1}}
+    - {command: [SET, s, 100], expect: {equals: OK}}
+    - {command: [DELIFEQ, s, 100], expect_difference: true, expect: {equals: 1}}
+    - {command: [SET, t, ttlval, EX, 100], expect: {equals: OK}}
+    - {command: [DELIFEQ, t, ttlval], expect_difference: true, expect: {equals: 1}}
+    - {command: [EXISTS, t], expect_difference: true, expect: {equals: 0}}
+    - {command: [SADD, aset, test], expect: {equals: 1}}
+    - {command: [DELIFEQ, aset, test], expect_difference: true, expect: {error: "WRONGTYPE"}}
+    - {command: [EXISTS, aset], expect: {equals: 1}}
+    - {command: [SET, value, key], expect: {equals: OK}}
+    - {command: [DELIFEQ, value, key], expect_difference: true, expect: {equals: 1}}
+    - {command: [DELIFEQ, k], expect_difference: true, expect: {error: "wrong number\
+          \ of arguments"}}
+    - {command: [DELIFEQ, k, v, extra], expect_difference: true, expect: {error: "wrong\
+          \ number of arguments"}}
+    - {command: [SET, m, tx], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [DELIFEQ, m, tx], expect_difference: true, expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [1]}}
+    - {command: [COMMAND, COUNT], expect_difference: true, expect: {min: 100}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [delifeq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: delifeq}

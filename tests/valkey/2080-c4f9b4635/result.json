@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c4f9b4635be4c47d6914f33e4df0539aa9b29e46",
+  "parent": "41a93a2a77c1e5ce5c90d616f0fc14f406bfa87b",
+  "pr": 2080,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Redundant Calculation of mstime() (#2080)",
+  "date": "2025-05-14",
+  "unstable": "caf5f2bfc20dd5371d87202ee338b348593e2a1b",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2222,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only hoists a redundant mstime() call out of a loop in clusterNodeAddFailureReport, storing the same timestamp value computed once instead of calling mstime() at each exit path. Control flow, return values, and failure-report semantics are identical; this is a performance/readability refactor with no observable behaviour change, so there is nothing a scenario could distinguish between the two builds."
+}

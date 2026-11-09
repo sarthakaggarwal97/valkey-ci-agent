@@ -1,0 +1,80 @@
+extends: [valkey.liveness]
+id: proposed.string2ll-ifunc-parity
+deployment:
+  modes: [standalone]
+metadata:
+  description: Integer parsing via string2ll (now dispatched by a load-time IFUNC
+    resolver) replies identically to the parent at every digit length, INT64/UINT64
+    boundary, rejected form, and protocol-length overflow
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: parse
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k, "0"], expect: {equals: OK}}
+    - {command: [INCR, k], expect: {equals: 1}}
+    - {command: [SADD, s, "1", "12", "123", "1234", "12345", "123456", "1234567",
+        "12345678", "123456789", "1234567890", "12345678901", "123456789012", "1234567890123",
+        "12345678901234", "123456789012345", "1234567890123456", "12345678901234567",
+        "123456789012345678", "1234567890123456789"], expect: {equals: 19}}
+    - {command: [SCARD, s], expect: {equals: 19}}
+    - {command: [SMEMBERS, s], compare: unordered, expect: {contains: "1234567890123456789"}}
+    - {command: [OBJECT, ENCODING, s], compare: skip, expect: {equals: intset}}
+    - {command: [SADD, n, "-1", "-12345678", "-123456789", "-1234567890123456", "-12345678901234567",
+        "-9223372036854775808"], expect: {equals: 6}}
+    - {command: [SMEMBERS, n], compare: unordered, expect: {contains: "-9223372036854775808"}}
+    - {command: [OBJECT, ENCODING, n], compare: skip, expect: {equals: intset}}
+    - {command: [SET, max, "9223372036854775807"], expect: {equals: OK}}
+    - {command: [INCR, max], expect: {error: "increment or decrement would overflow"}}
+    - {command: [SET, min, "-9223372036854775808"], expect: {equals: OK}}
+    - {command: [DECR, min], expect: {error: "increment or decrement would overflow"}}
+    - {command: [INCRBY, z1, "9223372036854775807"], expect: {equals: 9223372036854775807}}
+    - {command: [INCRBY, z2, "-9223372036854775808"], expect: {equals: -9223372036854775808}}
+    - {command: [INCRBY, z3, "9223372036854775808"], expect: {error: "not an integer"}}
+    - {command: [INCRBY, z3, "-9223372036854775809"], expect: {error: "not an integer"}}
+    - {command: [INCRBY, z3, "18446744073709551615"], expect: {error: "not an integer"}}
+    - {command: [INCRBY, z3, "18446744073709551616"], expect: {error: "not an integer"}}
+    - {command: [INCRBY, z3, "99999999999999999999"], expect: {error: "not an integer"}}
+    - {command: [INCRBY, z3, "+1"], expect: {error: "not an integer"}}
+    - {command: [INCRBY, z3, "01"], expect: {error: "not an integer"}}
+    - {command: [INCRBY, z3, "-0"], expect: {error: "not an integer"}}
+    - {command: [INCRBY, z3, ""], expect: {error: "not an integer"}}
+    - {command: [INCRBY, z3, "-"], expect: {error: "not an integer"}}
+    - {command: [INCRBY, z3, " 42"], expect: {error: "not an integer"}}
+    - {command: [INCRBY, z3, "42 "], expect: {error: "not an integer"}}
+    - {command: [INCRBY, z3, "1.0"], expect: {error: "not an integer"}}
+    - {command: [INCRBY, z3, "12a4567890123456"], expect: {error: "not an integer"}}
+    - {command: [SADD, strs, "0123456789", "+123", "1e5", " 42", "42 ", ""], expect: {
+        equals: 6}}
+    - {command: [SMEMBERS, strs], compare: unordered, expect: {contains: "0123456789"}}
+    - {command: [OBJECT, ENCODING, strs], compare: skip, expect: {equals: listpack}}
+    - {command: [GETRANGE, k, "-9223372036854775808", "9223372036854775807"], expect: {
+        equals: "1"}}
+    - {command: [SETRANGE, big, "4294967296", x], expect: {error: "exceeds maximum\
+          \ allowed size"}}
+    - {command: [RPUSH, l, a, b, c], expect: {equals: 3}}
+    - {command: [LRANGE, l, "-2147483648", "2147483647"], expect: {equals: [a, b,
+          c]}}
+    - {command: [EXPIRE, k, "9223372036854775807"], expect: {error: "invalid expire"}}
+    - {raw: "*3\r\n$3\r\nSET\r\n$2\r\nrk\r\n$2\r\nhi\r\n", connection: proto1, expect: {
+        equals: OK}}
+    - {raw: "*1\r\n$9999999999999999999999\r\n", connection: proto1, expect: {error: "Protocol\
+          \ error"}}
+    - {raw: "*18446744073709551615\r\n", connection: proto2, expect: {error: "Protocol\
+          \ error"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [parse.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: parse}

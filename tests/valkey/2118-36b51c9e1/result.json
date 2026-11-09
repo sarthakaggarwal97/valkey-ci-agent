@@ -1,0 +1,40 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "36b51c9e16cdcccaf11c6a9e05f532c1e8b612b1",
+  "parent": "227b11bc6b226373c375bbc95f3a162babedbf86",
+  "pr": 2118,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Show more decimal digits for `avg chain length` field in `debug htstats` full output (#2118)",
+  "date": "2025-05-23",
+  "unstable": "caf5f2bfc20dd5371d87202ee338b348593e2a1b",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.0541,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-59048ba984c2",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'htstats' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (DEBUG HTSTATS 0), 1 (DEBUG HTSTATS 0 full)"
+    },
+    {
+      "scenario": "ai-0fe2559f4827",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'htstats' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (DEBUG HTSTATS 0), 1 (DEBUG HTSTATS 0 full)"
+    }
+  ]
+}

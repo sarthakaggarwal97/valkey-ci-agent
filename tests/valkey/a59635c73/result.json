@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a59635c73f62ea8bc464d7a4ae0e3f7cc572eac3",
+  "parent": "0012ca73c3958cb574b0bfb8ebaf83e97f4dc724",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix object unit test for 32-bit builds",
+  "date": "2025-05-23",
+  "unstable": "caf5f2bfc20dd5371d87202ee338b348593e2a1b",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2175,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only src/unit/test_object.c, adjusting test string lengths so the embedded-string unit test accounts for 32-bit pointer sizes. It is a test-only fix: no server code, command behaviour, replication, or persistence path changes, so there is nothing for a fuzzer scenario to reach."
+}

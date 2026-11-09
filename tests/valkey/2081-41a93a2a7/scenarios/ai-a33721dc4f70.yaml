@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 20a49ff01387..41a93a2a77c1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a33721dc4f70
+seed: 20810001
+experiment:
+  id: proposed.listpack-invalid-encoding-read
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

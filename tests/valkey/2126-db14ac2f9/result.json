@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "db14ac2f9e299edc1499dcfab97c11d45dc034e2",
+  "parent": "91bb9c45df7f13c09a51261d65b868d7437d1090",
+  "pr": 2126,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix UBSAN run for hashtable unittest (#2126)",
+  "date": "2025-05-23",
+  "unstable": "caf5f2bfc20dd5371d87202ee338b348593e2a1b",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2251,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only src/unit/test_hashtable.c, a unit-test file: it replaces a 1-element stack array with a zmalloc'd array to silence a UBSAN out-of-bounds pointer computation in the test itself, and frees it afterwards. No Valkey server, command, replication, persistence or tool code changes, so no runtime behaviour can differ between the parent and the change; a fuzzer scenario against real servers cannot reach this test-only fix."
+}

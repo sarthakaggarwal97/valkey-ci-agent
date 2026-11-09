@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "30599c4936ccee982f7e94c4913e82014ff0d779",
+  "parent": "1531b44a153857b9929f2ed5bedbf1cafb4c07d9",
+  "pr": 2113,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "fix commandlog argument schema to use pure tokens (#2113)",
+  "date": "2025-05-21",
+  "unstable": "caf5f2bfc20dd5371d87202ee338b348593e2a1b",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 0.7379,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

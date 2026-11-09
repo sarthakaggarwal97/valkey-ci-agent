@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c55110803329..0012ca73c395.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-32e7f9ec67ef
+seed: 202
+experiment:
+  id: proposed.delifeq-semantics
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

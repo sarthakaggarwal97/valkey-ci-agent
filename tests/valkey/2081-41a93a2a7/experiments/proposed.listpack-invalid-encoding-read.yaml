@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.listpack-invalid-encoding-read
+deployment:
+  modes: [standalone]
+metadata:
+  description: A RESTOREd list whose listpack carries an unrecognized encoding byte
+    crashes the parent (panic) on read but returns a sentinel integer on the change.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: badlp
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {sanitize-dump-payload: "no"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, "1"], expect: {equals: OK}}
+    - {command: [RESTORE, l, "0", !!binary "EgECCAgAAAABAPX/CwAAAAAAAAAAAA=="], expect: {
+        equals: OK}}
+    - {command: [LLEN, l], expect: {equals: 1}}
+    - {command: [LINDEX, l, "0"], expect_difference: true, expect: {equals: "12345678900000245"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [badlp.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: badlp}

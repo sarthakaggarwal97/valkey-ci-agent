@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8b0d952c2b24..daea05b1e26d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0bc6015acccd
+seed: 20985
+experiment:
+  id: proposed.cli-mixed-quotes
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

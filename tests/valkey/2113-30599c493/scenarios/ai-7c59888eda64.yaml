@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1531b44a1538..30599c4936cc.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7c59888eda64
+seed: 21132
+experiment:
+  id: proposed.commandlog-docs-pure-token
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.debug-htstats-avg-chain-precision
+deployment:
+  modes: [standalone]
+metadata:
+  description: DEBUG HTSTATS full and HTSTATS-KEY full print avg chain length with
+    %f (six decimals) instead of %.02f; with a lightly loaded table child_buckets
+    is 0 so the line is deterministically '0.000000' on the change and '0.00' on the
+    parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: htstats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, HTSTATS, "0"], expect: {contains: "number of entries: 0"}}
+    - {command: [DEBUG, HTSTATS, "0", full], expect: {contains: "No stats available\
+          \ for empty hash tables"}}
+    - {command: [MSET, k01, v, k02, v, k03, v, k04, v, k05, v, k06, v, k07, v, k08,
+        v, k09, v, k10, v, k11, v, k12, v, k13, v, k14, v, k15, v, k16, v, k17, v,
+        k18, v, k19, v, k20, v], expect: {equals: OK}}
+    - {command: [DEBUG, HTSTATS, "0"], expect: {contains: "number of entries: 20"}}
+    - {command: [DEBUG, HTSTATS, "0", full], expect_difference: true, expect: {contains: "avg\
+          \ chain length: 0.000000"}}
+    - {command: [HSET, h, f1, v, f2, v, f3, v, f4, v, f5, v, f6, v, f7, v, f8, v],
+      expect: {equals: 8}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: hashtable}}
+    - {command: [DEBUG, HTSTATS-KEY, h, full], expect_difference: true, expect: {
+        contains: "avg chain length: 0.000000"}}
+    - {command: [DEBUG, HTSTATS-KEY, h], expect: {contains: "number of entries: 8"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [htstats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: htstats}
