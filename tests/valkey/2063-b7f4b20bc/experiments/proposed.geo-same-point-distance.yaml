@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.geo-same-point-distance
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    A geo search whose FROMLONLAT center equals a stored point's full-precision decoded
+    coordinates must report the point with distance 0.0000: the haversine epsilon
+    fix (fabs(v) <= 1e-15) in geohashGetDistance. Exercises GEOSEARCH BYRADIUS and
+    BYBOX, legacy GEORADIUS and GEOSEARCHSTORE, on listpack and skiplist zset encodings,
+    with same-member controls that must not change.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: geo
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [GEOADD, points, "-122.40710645914077759", "37.79430076631935975",
+        position], expect: {equals: 1}}
+    - {command: [GEOADD, points, "-122.408", "37.7943", other], expect: {equals: 1}}
+    - {command: [GEOSEARCH, points, FROMMEMBER, position, BYRADIUS, "0", mi, ASC,
+        WITHDIST], expect: {equals: [[position, "0.0000"]]}}
+    - {command: [GEODIST, points, position, position], expect: {equals: "0.0000"}}
+    - {command: [GEOSEARCH, points, FROMLONLAT, "-122.40710645914077759", "37.79430076631935975",
+        BYRADIUS, "0", mi, ASC, WITHDIST], expect_difference: true, expect: {equals: [
+          [position, "0.0000"]]}}
+    - {command: [GEOSEARCH, points, FROMLONLAT, "-122.40710645914077759", "37.79430076631935975",
+        BYRADIUS, "0", m, ASC, WITHDIST], expect_difference: true, expect: {equals: [
+          [position, "0.0000"]]}}
+    - {command: [GEOSEARCH, points, FROMLONLAT, "-122.40710645914077759", "37.79430076631935975",
+        BYBOX, "0", "0", km, ASC, WITHDIST], expect_difference: true, expect: {equals: [
+          [position, "0.0000"]]}}
+    - {command: [GEORADIUS, points, "-122.40710645914077759", "37.79430076631935975",
+        "0", m, ASC, WITHDIST], expect_difference: true, expect: {equals: [[position,
+            "0.0000"]]}}
+    - {command: [GEOSEARCHSTORE, dest, points, FROMLONLAT, "-122.40710645914077759",
+        "37.79430076631935975", BYRADIUS, "0", m, ASC], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [ZCARD, dest], expect_difference: true, expect: {equals: 1}}
+    - {command: [DEL, points], expect: {equals: 1}}
+    - {command: [DEL, dest], expect_difference: true, expect: {equals: 1}}
+    - {command: [CONFIG, SET, zset-max-listpack-entries, "0"], expect: {equals: OK}}
+    - {command: [GEOADD, points, "-122.40710645914077759", "37.79430076631935975",
+        position], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, points], compare: skip}
+    - {command: [GEOSEARCH, points, FROMLONLAT, "-122.40710645914077759", "37.79430076631935975",
+        BYRADIUS, "0", mi, ASC, WITHDIST], expect_difference: true, expect: {equals: [
+          [position, "0.0000"]]}}
+    - {command: [GEOSEARCH, points, FROMLONLAT, "-122.40710645914077759", "37.79430076631935975",
+        BYBOX, "0", "0", ft, ASC, WITHDIST], expect_difference: true, expect: {equals: [
+          [position, "0.0000"]]}}
+    - {command: [GEOSEARCH, points, FROMMEMBER, position, BYRADIUS, "0", m, ASC, WITHDIST],
+      expect: {equals: [[position, "0.0000"]]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [geo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: geo}

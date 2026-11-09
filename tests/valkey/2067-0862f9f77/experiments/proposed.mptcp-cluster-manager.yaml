@@ -1,0 +1,22 @@
+extends: [valkey.liveness]
+id: proposed.mptcp-cluster-manager
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli --cluster subcommands connect to cluster nodes over MPTCP
+    via clusterManagerNodeConnect, compared with the parent build that rejects the
+    flag
+components:
+- use: valkey.action.tools
+  id: clustermgr
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    runs:
+    - {tool: valkey-cli, args: [--mptcp, --cluster, check, "127.0.0.1:$port"], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "All 16384 slots covered"}}}
+    - {tool: valkey-cli, args: [--mptcp, --cluster, call, "127.0.0.1:$port", PING],
+      expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: "PONG"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: clustermgr}

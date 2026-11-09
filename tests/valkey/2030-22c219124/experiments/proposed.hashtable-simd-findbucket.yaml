@@ -1,0 +1,102 @@
+extends: [valkey.liveness]
+id: proposed.hashtable-simd-findbucket
+deployment:
+  modes: [standalone]
+metadata:
+  description: Key lookups over chained hashtable buckets and mid-rehash, compared
+    against the parent build, to exercise the SSE2 findBucket path (candidate masking,
+    presence bits, chained-bucket child pointer slot, deletes that refill holes)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: lookups
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: {$ref: inputs.cluster}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      enable-debug-command: 'yes'
+      hash-max-listpack-entries: 2
+      set-max-listpack-entries: 2
+    commands:
+    - {command: [DEBUG, DICT-RESIZING, '0'], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, '600'], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 600}}
+    - {command: [GET, 'key:0'], expect: {equals: 'value:0'}}
+    - {command: [GET, 'key:299'], expect: {equals: 'value:299'}}
+    - {command: [GET, 'key:599'], expect: {equals: 'value:599'}}
+    - {command: [EXISTS, 'key:600'], expect: {equals: 0}}
+    - {command: [SET, '', emptykey], expect: {equals: OK}}
+    - {command: [GET, ''], expect: {equals: emptykey}}
+    - {command: [APPEND, '', x], expect: {equals: 9}}
+    - {command: [DEL, ''], expect: {equals: 1}}
+    - {command: [MSET, '{a}k0', v0, '{a}k1', v1, '{a}k2', v2, '{a}k3', v3, '{a}k4',
+        v4, '{a}k5', v5, '{a}k6', v6, '{a}k7', v7, '{a}k8', v8, '{a}k9', v9, '{a}k10',
+        v10, '{a}k11', v11, '{a}k12', v12, '{a}k13', v13, '{a}k14', v14, '{a}k15',
+        v15, '{a}k16', v16, '{a}k17', v17, '{a}k18', v18, '{a}k19', v19, '{a}k20',
+        v20, '{a}k21', v21, '{a}k22', v22, '{a}k23', v23], expect: {equals: OK}}
+    - {command: [EXISTS, '{a}k0', '{a}k1', '{a}k2', '{a}k3', '{a}k4', '{a}k5', '{a}k6',
+        '{a}k7', '{a}k8', '{a}k9', '{a}k10', '{a}k11', '{a}k12', '{a}k13', '{a}k14',
+        '{a}k15', '{a}k16', '{a}k17', '{a}k18', '{a}k19', '{a}k20', '{a}k21', '{a}k22',
+        '{a}k23'], expect: {equals: 24}}
+    - {command: [MGET, '{a}k0', '{a}k1', '{a}k2', '{a}k3', '{a}k4', '{a}k5', '{a}k6',
+        '{a}k7'], expect: {equals: [v0, v1, v2, v3, v4, v5, v6, v7]}}
+    - {command: [DEL, '{a}k0', '{a}k1', '{a}k2', '{a}k3', '{a}k4', '{a}k5', '{a}k6',
+        '{a}k7', '{a}k8', '{a}k9', '{a}k10', '{a}k11'], expect: {equals: 12}}
+    - {command: [EXISTS, '{a}k0', '{a}k1', '{a}k2', '{a}k3', '{a}k4', '{a}k5', '{a}k6',
+        '{a}k7', '{a}k8', '{a}k9', '{a}k10', '{a}k11'], expect: {equals: 0}}
+    - {command: [GET, '{a}k12'], expect: {equals: v12}}
+    - {command: [SET, '{a}k3', fresh], expect: {equals: OK}}
+    - {command: [GET, '{a}k3'], expect: {equals: fresh}}
+    - {command: [RENAME, '{a}k12', '{a}k12b'], expect: {equals: OK}}
+    - {command: [EXISTS, '{a}k12'], expect: {equals: 0}}
+    - {command: [GET, '{a}k12b'], expect: {equals: v12}}
+    - {command: [HSET, '{a}fields', f0, w0, f1, w1, f2, w2, f3, w3, f4, w4, f5, w5,
+        f6, w6, f7, w7, f8, w8, f9, w9, f10, w10, f11, w11, f12, w12, f13, w13, f14,
+        w14, f15, w15], expect: {equals: 16}}
+    - {command: [HGET, '{a}fields', f9], expect: {equals: w9}}
+    - {command: [HDEL, '{a}fields', f0, f1, f2, f3], expect: {equals: 4}}
+    - {command: [HEXISTS, '{a}fields', f0], expect: {equals: 0}}
+    - {command: [HLEN, '{a}fields'], expect: {equals: 12}}
+    - {command: [HGETALL, '{a}fields'], compare: unordered-pairs}
+    - {command: [SADD, '{a}s', m0, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12,
+        m13, m14, m15], expect: {equals: 16}}
+    - {command: [SMISMEMBER, '{a}s', m0, m15, zz], expect: {equals: [1, 1, 0]}}
+    - {command: [SREM, '{a}s', m0, m1], expect: {equals: 2}}
+    - {command: [SCARD, '{a}s'], expect: {equals: 14}}
+    - {command: [SMEMBERS, '{a}s'], compare: unordered}
+    - {command: [SET, '{a}e', v, EX, '100000'], expect: {equals: OK}}
+    - {command: [PERSIST, '{a}e'], expect: {equals: 1}}
+    - {command: [PEXPIREAT, '{a}e', '33278400000000'], expect: {equals: 1}}
+    - {command: [PERSIST, '{a}e'], expect: {equals: 1}}
+    - {command: [EXISTS, '{a}e'], expect: {equals: 1}}
+    - {command: [DEBUG, DIGEST]}
+    - {command: [DEBUG, DICT-RESIZING, '1'], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, '1500'], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 1516}}
+    - {command: [GET, 'key:1499'], expect: {equals: 'value:1499'}}
+    - {command: [GET, 'key:42'], expect: {equals: 'value:42'}}
+    - {command: [DEL, 'key:777'], expect: {equals: 1}}
+    - {command: [EXISTS, 'key:777'], expect: {equals: 0}}
+    - {command: [SET, 'key:777', back], expect: {equals: OK}}
+    - {command: [GET, 'key:777'], expect: {equals: back}}
+    - {command: [GET, 'key:1'], expect: {equals: 'value:1'}}
+    - {command: [GET, 'key:2'], expect: {equals: 'value:2'}}
+    - {command: [GET, 'key:3'], expect: {equals: 'value:3'}}
+    - {command: [GET, 'key:4'], expect: {equals: 'value:4'}}
+    - {command: [GET, 'key:5'], expect: {equals: 'value:5'}}
+    - {command: [DEBUG, DIGEST]}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [lookups.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lookups}

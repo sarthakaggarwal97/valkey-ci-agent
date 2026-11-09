@@ -1,0 +1,76 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b7f4b20bc4966a1a30918ff77d36e3f50bfe45ff",
+  "parent": "fe97ba419df86b2face579ef04b109069d36958e",
+  "pr": 2063,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make sure that the same point reports for geo comparisons (#2063)",
+  "date": "2025-05-12",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.6446,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-2f8159f015b1",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'geo' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (GEOSEARCH points FROMLONLAT -122.40710645914077759 37.79430076631935975 BYBOX 0 0 km ASC WITHDIST), 16 (GEOSEARCH points FROMLONLAT -122.4"
+    },
+    {
+      "scenario": "ai-2f8159f015b1",
+      "build": "unstable",
+      "seed": 2063,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2f8159f015b1",
+      "build": "unstable",
+      "seed": 2064,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2f8159f015b1",
+      "build": "unstable",
+      "seed": 2065,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8c63d0c50b57",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'geo' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (GEOSEARCH points FROMLONLAT -122.40710645914077759 37.79430076631935975 BYBOX 0 0 km ASC WITHDIST), 16 (GEOSEARCH points FROMLONLAT -122.4"
+    },
+    {
+      "scenario": "ai-8c63d0c50b57",
+      "build": "unstable",
+      "seed": 20632,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8c63d0c50b57",
+      "build": "unstable",
+      "seed": 20633,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8c63d0c50b57",
+      "build": "unstable",
+      "seed": 20634,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

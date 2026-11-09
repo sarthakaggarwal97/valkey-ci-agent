@@ -1,0 +1,24 @@
+extends: [valkey.liveness]
+id: proposed.mptcp-flag-validation
+deployment:
+  modes: [standalone]
+metadata:
+  description: "--mptcp flag parsing, help text, and the TCP-only validation in valkey-cli\
+    \ and valkey-benchmark, compared with the parent build that rejects the flag"
+components:
+- use: valkey.action.tools
+  id: flags
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    runs:
+    - {tool: valkey-cli, args: [--help], expect_difference: true, expect: {exit: {
+          equals: 0}, stdout: {contains: "--mptcp"}}}
+    - {tool: valkey-benchmark, args: [--help], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "--mptcp"}}}
+    - {tool: valkey-cli, args: [-s, $socket, --mptcp, PING], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "only supported by TCP"}}}
+    - {tool: valkey-benchmark, args: [-s, $socket, --mptcp], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "only supported by TCP"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: flags}

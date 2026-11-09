@@ -1,0 +1,28 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-cluster-slots-refetch
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark --cluster against a one-node private cluster, first
+    healthy (cluster clients created through the refactored valkeyConnectWrapper),
+    then with slot 0 deleted so every command replies CLUSTERDOWN and the benchmark
+    refetches CLUSTER SLOTS through the refactored getValkeyContext
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 90
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, -t, set, -n, 1000, -c,
+        4, -P, 8, -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, DELSLOTS, 0], expect: {stdout: {
+          contains: OK}}}
+    - {tool: valkey-cli, args: [-p, $port, -r, 30, -i, 0.2, CLUSTER, INFO], compare: skip,
+      expect: {stdout: {contains: "cluster_state:fail"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, -t, set, -n, 6, -c, 1,
+        -q], compare: skip, expect: {exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

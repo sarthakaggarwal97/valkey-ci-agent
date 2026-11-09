@@ -1,0 +1,26 @@
+extends: [valkey.liveness]
+id: proposed.mptcp-connect
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli and valkey-benchmark connect to a live server with --mptcp
+    (blocking and non-blocking connect paths), compared with the parent build that
+    rejects the flag
+components:
+- use: valkey.action.tools
+  id: connect
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    runs:
+    - {tool: valkey-cli, args: [--mptcp, -h, 127.0.0.1, -p, $port, PING], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [--mptcp, -p, $port, SET, k, hello], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [--mptcp, -p, $port, GET, k], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "hello\n"}}}
+    - {tool: valkey-benchmark, args: [--mptcp, -h, 127.0.0.1, -p, $port, -c, 2, -n,
+        20, -t, ping, -q], expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: "PING"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: connect}

@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0862f9f77735b047e9ccaf75d444ad0fbf08fe5c",
+  "parent": "70106f06bce49b2af46a790e09494da7ff14eaf2",
+  "pr": 2067,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Support MPTCP for valkey-cli and benchmark (#2067)",
+  "date": "2025-05-09",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 20,
+    "executed": 18,
+    "percent": 90,
+    "uncovered": [
+      "src/valkey-cli.c:2530",
+      "src/valkey-cli.c:7739"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 3.5354,
+  "findings": [],
+  "recorded": []
+}

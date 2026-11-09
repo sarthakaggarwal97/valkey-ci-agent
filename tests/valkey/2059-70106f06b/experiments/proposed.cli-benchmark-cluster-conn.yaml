@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.cli-benchmark-cluster-conn
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    cluster-mode valkey-cli and valkey-benchmark after the RDMA connection-type refactor:
+    cluster-manager and cluster-client node connections must stay TCP when the entry
+    point is a unix socket
+components:
+- use: valkey.action.tools
+  id: ctools
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 120
+    runs:
+    - {tool: valkey-cli, args: [-c, -p, $port, PING], expect: {exit: {equals: 0},
+        stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-c, -s, $socket, PING], expect: {exit: {equals: 1},
+        stderr: {contains: "mutually exclusive"}}}
+    - {tool: valkey-cli, args: [--cluster, info, "127.0.0.1:$port"], compare: skip,
+      expect: {exit: {equals: 0}, stdout: {contains: "16384 slots"}}}
+    - {tool: valkey-cli, args: [-s, $socket, --cluster, info, "127.0.0.1:$port"],
+      compare: skip, expect: {exit: {equals: 0}, stdout: {contains: "16384 slots"}}}
+    - {tool: valkey-benchmark, args: [--cluster, -p, $port, -n, 200, -c, 2, -t, set,
+        -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [--cluster, -s, $socket, -n, 200, -c, 2, -t,
+        set, -q], compare: skip, expect: {exit: {equals: 0}}}
+required_events: [ctools.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: ctools}

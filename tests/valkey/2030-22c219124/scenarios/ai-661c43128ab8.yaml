@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 785ffe648944..22c219124ff6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-661c43128ab8
+seed: 785001
+experiment:
+  id: proposed.hashtable-simd-findbucket
+  inputs:
+    resp: 2
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c17af4ac467af81a1b8dc4807efc19234a785e73",
+  "parent": "911641b297fdeb4fd41509859401c0c534b0b37f",
+  "pr": 2048,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Return only the relevant bit in sdsGetAuxBit() (#2048)",
+  "date": "2025-05-06",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6465,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change masks sdsGetAuxBit()'s return value to a single bit (`& 1U`), but it is purely defensive hardening with no observable behaviour change: the only caller is the hash entry encoding in t_hash.c, which uses only aux bit 0, and the embedded field's flags byte is always written by sdswrite() as exactly the SDS type, so aux bits 1-4 are always zero on both builds. The sole reader, entryHasValuePtr(), additionally returns bool, so even a multi-bit value would have the same truthiness. Both builds compute identical results on every reachable path, so no command sequence, fault, or persistenc"
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6cf69a44b6f7c26cebb7d4e0658f5f5e6d50b91d",
+  "parent": "2205bf99cb867fb8c5612d58e24027f1837cf65a",
+  "pr": 2068,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "valkey-cli: remove RESP version assertion from getDatabases() (#2068)",
+  "date": "2025-05-09",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.0363,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only deletes a defensive assertion in valkey-cli's getDatabases() that required the CONFIG GET reply type to match config.current_resp3. That tracked value can only disagree with the server's actual reply type through the cliSwitchProto() desync (implicit --json RESP3 request plus a HELLO 3 error), which requires an old/pre-HELLO-3 or HELLO-disabled server. Both builds under test (the change and its parent) are modern and never error on HELLO 3 (HELLO is CMD_NO_AUTH, uncancellable by ACL, with no config to reject RESP3), and the valkey.action.tools private server has a fixed harness"
+}

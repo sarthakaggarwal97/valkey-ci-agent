@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9e87473b38c466237cbfe07aa77a836ff13e30a8",
+  "parent": "b5c7743971df5476acbdbbbd3b378496e885e1e4",
+  "pr": 1966,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Disallowing Client Reply is On / Off / Skip when Client is Multi (#1966)",
+  "date": "2025-05-07",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.2527,
+  "findings": [],
+  "recorded": []
+}

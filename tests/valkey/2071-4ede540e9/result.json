@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4ede540e9236430b15100f2e37c4280d2a495c24",
+  "parent": "af25a5247ad0d12f3d85405b6945b775fe3e6283",
+  "pr": 2071,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix variable scope confusion (#2071)",
+  "date": "2025-05-12",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3269,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only removes a local 'size_t len' that shadowed the outer 'uint64_t len' loop counter in rdbLoadObject's RDB_TYPE_LIST branch, inlining sdslen(dec->ptr) into the quicklistPushTail call. The while(len--) condition always referred to the outer counter (the inner declaration is scoped to the loop body), and the value pushed is unchanged, so the parent and the change compute identical results on every path. This is a readability refactor with no behaviour change, no reply change, and no new failure mode to exercise."
+}

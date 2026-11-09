@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2205bf99cb867fb8c5612d58e24027f1837cf65a",
+  "parent": "0862f9f77735b047e9ccaf75d444ad0fbf08fe5c",
+  "pr": 2060,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "move statement in if condition for zremrangeGenericCommand function (#2060)",
+  "date": "2025-05-09",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3162,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change moves `server.dirty += deleted` inside the `if (deleted)` block in zremrangeGenericCommand (ZREMRANGEBYRANK/BYSCORE/BYLEX). When deleted != 0 both versions add the same amount; when deleted == 0 the old code added zero, a no-op. server.dirty, replies, keyspace notifications and command propagation are identical on both builds in all cases, so this is a pure refactor with no observable behaviour change and needs no scenario."
+}

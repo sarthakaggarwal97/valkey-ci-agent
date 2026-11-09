@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-cluster-unix-regression
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    valkey-benchmark --cluster against a one-node cluster after the connection refactor
+    (#2059): cluster-client node selection in createClient over TCP, threaded and
+    unthreaded; the -s + --cluster regression where the new code connects to cluster
+    node addresses with ct=UNIX and fails while the parent connected over TCP; and
+    valkey-cli --cluster import's refactored source-node connect (rejected because
+    the source is a cluster node).
+components:
+- use: valkey.action.tools
+  id: ctools
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, -n, 200, -c, 2, -t, set,
+        -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, --threads, 2, -n, 200,
+        -c, 4, -t, get, -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-s, $socket, --cluster, -n, 100, -c, 1, -t,
+        ping, -q], expect_difference: true, expect: {exit: {equals: 1}, stderr: {
+          contains: "Could not connect to server at 127.0.0.1"}}}
+    - {tool: valkey-cli, args: [--cluster, import, "127.0.0.1:$port", --cluster-from,
+        "127.0.0.1:$port"], compare: skip, expect: {exit: {equals: 1}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: ctools}

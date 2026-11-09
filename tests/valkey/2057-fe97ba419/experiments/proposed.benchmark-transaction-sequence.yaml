@@ -1,0 +1,23 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-transaction-sequence
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark runs a MULTI/.../EXEC transaction as one command sequence
+    after '--'
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 4, "--", multi, ";", set, tk,
+        v, ";", incr, counter, ";", exec], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, counter], expect_difference: true,
+      expect: {stdout: {contains: "1"}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, tk], expect_difference: true, expect: {
+        stdout: {contains: "v"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

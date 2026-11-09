@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.client-reply-in-multi
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLIENT REPLY ON/OFF/SKIP inside MULTI is rejected with an error, without
+    aborting the transaction, and no longer corrupts the EXEC reply array; other CLIENT
+    subcommands still queue and CLIENT REPLY outside MULTI is untouched
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reply-in-multi
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [CLIENT, REPLY, ON], expect_difference: true, expect: {error: "not\
+          \ allowed during MULTI"}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [PONG, PONG]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [CLIENT, REPLY, OFF], expect_difference: true, expect: {error: "not\
+          \ allowed during MULTI"}}
+    - {command: [DISCARD], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [client, reply, skip], expect_difference: true, expect: {error: "not\
+          \ allowed during MULTI"}}
+    - {command: [DISCARD], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [CLIENT, REPLY, bogus], expect_difference: true, expect: {error: "not\
+          \ allowed during MULTI"}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: []}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [CLIENT, REPLY], expect: {error: "wrong number of arguments"}}
+    - {command: [EXEC], expect: {error: EXECABORT}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [CLIENT, NO-EVICT, ON], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK]}}
+    - {connection: sub, raw: "CLIENT REPLY OFF\r\nMULTI\r\nPING pong2\r\nPING pong3\r\
+        \nEXEC\r\nCLIENT REPLY ON\r\nPING\r\n"}
+    - {connection: sub, read: true}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reply-in-multi.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reply-in-multi}

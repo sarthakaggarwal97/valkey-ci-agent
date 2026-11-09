@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4ede540e9236..fe97ba419df8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5f85716d3b6f
+seed: 3
+experiment:
+  id: proposed.benchmark-pipeline-sequence
+deployment:
+  mode: standalone
+  base_port: 7200

@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.libvalkey-cli-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli cluster mode and --cluster subcommands on a one-node cluster
+    of each build, output compared between the libvalkey build and the hiredis parent
+components:
+- use: valkey.action.tools
+  id: cluster-cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 60
+    ignore: ['^\d+:[A-Z] .*\n', '\d+\.\d+ requests per second', 'p50=\d+\.\d+ msec']
+    runs:
+    - {tool: valkey-cli, args: [-c, -p, $port, SET, foo, bar], expect: {stdout: {
+          equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-c, -p, $port, GET, foo], expect: {stdout: {equals: "bar\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, KEYSLOT, foo], expect: {stdout: {
+          contains: "12182"}}}
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, MYID], expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, INFO], compare: skip, expect: {
+        stdout: {contains: "cluster_state:ok"}}}
+    - {tool: valkey-cli, args: [-p, $port, --cluster, check, '127.0.0.1:$port'], expect: {
+        exit: {equals: 0}, stdout: {contains: "16384 slots covered"}}}
+    - {tool: valkey-cli, args: [-p, $port, --cluster, info, '127.0.0.1:$port'], expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --cluster, call, '127.0.0.1:$port', PING],
+      expect: {exit: {equals: 0}, stdout: {contains: "PONG"}}}
+    - {tool: valkey-benchmark, args: [--cluster, -p, $port, -t, set, -n, 100, -c,
+        2, -q], expect: {exit: {equals: 0}}}
+required_events: [cluster-cli.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cluster-cli}

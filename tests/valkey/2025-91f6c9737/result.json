@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "91f6c973797c61e932206434e6527c22355aee4b",
+  "parent": "49e44e5316908dbc351eb5409e55876fe9931c22",
+  "pr": 2025,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Compile with -Wundef (#2025)",
+  "date": "2025-05-05",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3031,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds the -Wundef/-Werror=undef compiler flag and rewrites '#if MACRO' conditionals to '#if defined(MACRO) && MACRO'. Since an undefined macro already evaluates to 0 in a preprocessor #if, every rewritten conditional (config.h, crcspeed.c, debug.c, rdma.c, rio.c, sentinel.c, setproctitle.c, tls.c) selects exactly the same code as before, and lzfP.h's new '#define USE_REP_MOVSB 0' default matches the prior implicit value. This is a build/warning-hygiene change with no runtime behaviour change, so no scenario is needed."
+}

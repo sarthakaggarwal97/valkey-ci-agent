@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9f7aa040dce6908501bcbf183b6b87493b45c818",
+  "parent": "b7f4b20bc4966a1a30918ff77d36e3f50bfe45ff",
+  "pr": 2027,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Additional assertions for listpack (#2027)",
+  "date": "2025-05-12",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.9546,
+  "findings": [],
+  "recorded": [],
+  "reason": "Defensive hardening of listpack internals: it adds assertions that an LP_EOF byte lies at the end of the allocation, makes lpValidateNext reject a mid-listpack LP_EOF, and makes lpGetWithSize panic on an invalid encoding byte instead of returning a sentinel integer. On every valid listpack all these paths are unchanged, so no normal command reply, replication stream, or RDB/AOF round-trip of Valkey-produced data differs between the two builds. The divergence only exists for a structurally-corrupt in-memory listpack, which the fuzzer cannot reach: with the default sanitize-dump-payload yes the "
+}

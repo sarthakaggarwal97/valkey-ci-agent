@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.cluster-manager-mode-flag
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    valkey-cli --cluster subcommands now set config.cluster_mode: -s together with
+    --cluster is refused as mutually exclusive (the changed line's one observable
+    on a one-node cluster), and the common --cluster subcommands (check, rebalance)
+    against a one-node cluster still behave exactly as on the parent build despite
+    running with cluster_mode set.
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, SET, foo, bar], expect: {exit: {equals: 0},
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, GET, cluster-databases], expect: {
+        exit: {equals: 0}, stdout: {contains: "cluster-databases"}}}
+    - {tool: valkey-cli, args: ["--cluster", check, "127.0.0.1:$port"], expect: {
+        exit: {equals: 0}, stdout: {contains: "All 16384 slots covered"}}}
+    - {tool: valkey-cli, args: ["--cluster", rebalance, "127.0.0.1:$port"], expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-s, $socket, "--cluster", info, "127.0.0.1:$port"],
+      expect_difference: true, expect: {exit: {equals: 1}, stderr: {contains: "mutually\
+            \ exclusive"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

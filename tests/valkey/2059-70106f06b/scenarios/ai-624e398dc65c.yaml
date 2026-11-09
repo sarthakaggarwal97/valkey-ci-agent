@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 22c219124ff6..70106f06bce4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-624e398dc65c
+seed: 101
+experiment:
+  id: proposed.cli-benchmark-unix-auth-paths
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

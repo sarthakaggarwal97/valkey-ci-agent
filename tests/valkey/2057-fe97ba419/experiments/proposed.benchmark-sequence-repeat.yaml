@@ -1,0 +1,23 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-sequence-repeat
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark runs a ';'-separated command sequence with a repeat
+    prefix after '--'
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 12, "--", incr, foo, ";", "3",
+        incr, bar], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, foo], expect_difference: true, expect: {
+        stdout: {contains: "3"}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, bar], expect_difference: true, expect: {
+        stdout: {contains: "9"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

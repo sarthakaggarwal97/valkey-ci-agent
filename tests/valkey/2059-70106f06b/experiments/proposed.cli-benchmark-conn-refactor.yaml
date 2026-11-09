@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.cli-benchmark-conn-refactor
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    valkey-cli and valkey-benchmark connection handling (TCP, unix socket, mixed -h/-s
+    option orders, error paths) after the RDMA connection-type refactor, compared
+    run-by-run against the parent build
+components:
+- use: valkey.action.tools
+  id: conn
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 120
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {exit: {equals: 0}, stdout: {
+          equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-s, $socket, PING], expect: {exit: {equals: 0}, stdout: {
+          equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-h, 127.0.0.1, -p, $port, -s, $socket, PING], expect: {
+        exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-s, $socket, -h, 127.0.0.1, -p, $port, PING], expect: {
+        exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-s, nosuch.sock, -s, $socket, PING], expect: {exit: {
+          equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-s, nosuch.sock, PING], expect: {exit: {equals: 1},
+        stderr: {contains: nosuch.sock}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 200, -c, 2, -P, 8, -t, "set,get",
+        -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-s, $socket, -n, 200, -c, 2, -P, 8, -t, "set,get",
+        -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-s, $socket, -h, 127.0.0.1, -p, $port, -n, 100,
+        -c, 2, -t, set, -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-s, nosuch.sock, -n, 10, -c, 1, -t, ping, -q],
+      compare: skip, expect: {exit: {equals: 1}, stderr: {contains: nosuch.sock}}}
+required_events: [conn.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: conn}

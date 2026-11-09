@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "911641b297fdeb4fd41509859401c0c534b0b37f",
+  "parent": "4571886b4178d4afa7f23fe7b3d6593870b4242c",
+  "pr": 2024,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove duplicate macro definitions of HASH_SET_* (#2024)",
+  "date": "2025-05-05",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.247,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only deletes duplicate #define lines for HASH_SET_TAKE_FIELD, HASH_SET_TAKE_VALUE and HASH_SET_COPY from t_hash.c; identical definitions with the same values remain in server.h (lines 3268-3270), so preprocessing, hashTypeSet and all hash commands compile to exactly the same code. A pure refactor with no behavior change needs no scenario."
+}

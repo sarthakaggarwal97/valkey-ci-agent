@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.cli-benchmark-unix-auth-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Connection-type refactor of valkey-cli/valkey-benchmark (#2059): unix-socket repl
+    prompt, AUTH and NOAUTH error prints over TCP and unix, --cluster fetch failure
+    prints on a non-cluster server, the fcall setup connection, help text with the
+    rdma usage block, rejection of --rdma on a non-RDMA build, and the -s/-h override
+    regression where the new code keeps ct=UNIX after -h resets the host, so the candidate
+    fails to connect where the parent used the socket.
+components:
+- use: valkey.action.tools
+  id: tools
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [--help], expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [--help], expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [--rdma], expect: {exit: {equals: 1}, stderr: {contains: "Unrecognized\
+            \ option"}}}
+    - {tool: valkey-benchmark, args: [--rdma], expect: {exit: {equals: 1}}}
+    - {tool: valkey-cli, args: [-s, $socket], stdin: "ping\n", expect: {exit: {equals: 0},
+        stdout: {contains: PONG}}}
+    - {tool: valkey-cli, args: [-s, $socket, -h, 127.0.0.1, PING], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "Could not connect to Valkey\
+            \ at 127.0.0.1"}}}
+    - {tool: valkey-benchmark, args: [-s, $socket, -h, 127.0.0.1, -n, 10, -c, 1, -t,
+        ping, -q], expect_difference: true, expect: {exit: {equals: 1}, stderr: {
+          contains: "Could not connect to server at 127.0.0.1"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, -n, 10, -c, 1, -t, ping],
+      expect: {exit: {equals: 1}, stderr: {contains: "Failed to fetch cluster configuration\
+            \ from 127.0.0.1"}}}
+    - {tool: valkey-benchmark, args: [-s, $socket, --cluster, -n, 10, -c, 1, -t, ping],
+      expect: {exit: {equals: 1}, stderr: {contains: "Failed to fetch cluster configuration\
+            \ from $socket"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 100, -c, 1, -t, fcall, -q], compare: skip,
+      expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, requirepass, pw123], expect: {
+        exit: {equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -a, wrongpw, -n, 10, -c, 1, -t, ping],
+      expect: {exit: {equals: 1}, stderr: {contains: "replied with error"}}}
+    - {tool: valkey-benchmark, args: [-s, $socket, -a, wrongpw, -n, 10, -c, 1, -t,
+        ping], expect: {exit: {equals: 1}, stderr: {contains: "replied with error"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 10, -c, 1, -t, ping], expect: {
+        exit: {equals: 1}, stderr: {contains: NOAUTH}}}
+    - {tool: valkey-benchmark, args: [-s, $socket, -n, 10, -c, 1, -t, ping], expect: {
+        exit: {equals: 1}, stderr: {contains: NOAUTH}}}
+    - {tool: valkey-benchmark, args: [-s, $socket, -a, pw123, -n, 200, -c, 2, --threads,
+        2, -t, ping, -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, -a, pw123, CONFIG, SET, requirepass, ""],
+      expect: {exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: tools}

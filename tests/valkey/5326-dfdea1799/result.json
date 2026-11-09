@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "parent": "caf5f2bfc20dd5371d87202ee338b348593e2a1b",
+  "pr": 5326,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "bgiteration: process ITER_CLOSED after items queued behind it (#5326)",
+  "date": "2026-11-09",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 7,
+    "executed": 7,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.1645,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: bgiteration.c:2717 'wasAdded' is not true",
+      "scenario": "ai-28fe3114d907",
+      "seed": 7001,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "39773d5994ed5d4b9f00",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: bgiteration.c:2717 'wasAdded' is not true",
+      "scenario": "ai-7f1a4bdd1dba",
+      "seed": 7304,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #5326, since fixed",
+      "fingerprint": "39773d5994ed5d4b9f00",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

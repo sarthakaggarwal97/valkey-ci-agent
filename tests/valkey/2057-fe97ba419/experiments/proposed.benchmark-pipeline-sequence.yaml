@@ -1,0 +1,21 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-pipeline-sequence
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark pipelines a multi-command sequence, exercising pending
+    = pipeline * seqlen accounting
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 20, -P, 5, "--", incr, c, ";",
+        incr, c], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, c], expect_difference: true, expect: {
+        stdout: {contains: "20"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

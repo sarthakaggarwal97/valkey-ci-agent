@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.cli-auth-env-fallback
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    valkey-cli VALKEYCLI_AUTH / REDISCLI_AUTH precedence against a requirepass server,
+    compared across the change and its parent. The parent only honoured REDISCLI_AUTH
+    when VALKEYCLI_AUTH was also set, so each variable alone did nothing and the legacy
+    variable won when both were set.
+components:
+- use: valkey.action.tools
+  id: cli-auth
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 30
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, requirepass, secretpw], expect: {
+        exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], env: {VALKEYCLI_AUTH: secretpw},
+      expect_difference: true, expect: {exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], env: {REDISCLI_AUTH: secretpw},
+      expect_difference: true, expect: {exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], env: {VALKEYCLI_AUTH: secretpw,
+        REDISCLI_AUTH: wrong-password}, expect_difference: true, expect: {exit: {
+          equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], env: {VALKEYCLI_AUTH: wrong-password,
+        REDISCLI_AUTH: secretpw}, expect_difference: true, expect: {stderr: {contains: WRONGPASS}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], env: {VALKEYCLI_AUTH: ""}, expect_difference: true,
+      expect: {stderr: {contains: WRONGPASS}}}
+    - {tool: valkey-cli, args: [--no-auth-warning, -p, $port, -a, secretpw, PING],
+      env: {VALKEYCLI_AUTH: wrong-password, REDISCLI_AUTH: also-wrong}, expect: {
+        exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-auth}

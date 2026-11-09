@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7859ba9b196c7eb7c3d779794ae966d327fb3613",
+  "parent": "c17af4ac467af81a1b8dc4807efc19234a785e73",
+  "pr": 2046,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "valkey-cli: Count databases correctly in --cluster subcommands (#2046)",
+  "date": "2025-05-06",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 10.3329,
+  "findings": [],
+  "recorded": []
+}

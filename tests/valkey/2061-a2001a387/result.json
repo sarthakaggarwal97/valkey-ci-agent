@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a2001a38729fa643fb735b7d931890d807f1d514",
+  "parent": "9e87473b38c466237cbfe07aa77a836ff13e30a8",
+  "pr": 2061,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fixed minor grammatical error (#2061)",
+  "date": "2025-05-08",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2042,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewords a sentence in a source comment in src/bio.c ('put here server specific background tasks' -> 'put server specific background tasks here'). No executable code, configuration, protocol, or build artifact changes, so no runtime behaviour can differ and no scenario is needed."
+}

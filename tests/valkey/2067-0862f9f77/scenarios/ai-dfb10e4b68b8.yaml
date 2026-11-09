@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 70106f06bce4..0862f9f77735.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-dfb10e4b68b8
+seed: 3
+experiment:
+  id: proposed.mptcp-cluster-manager
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7200

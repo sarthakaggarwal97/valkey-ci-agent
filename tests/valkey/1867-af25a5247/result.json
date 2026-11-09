@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "af25a5247ad0d12f3d85405b6945b775fe3e6283",
+  "parent": "6cf69a44b6f7c26cebb7d4e0658f5f5e6d50b91d",
+  "pr": 1867,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize BITCOUNT using ARM NEON SIMD (#1867)",
+  "date": "2025-05-11",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.095,
+  "findings": [],
+  "recorded": []
+}

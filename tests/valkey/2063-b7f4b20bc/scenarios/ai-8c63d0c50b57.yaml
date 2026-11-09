@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fe97ba419df8..b7f4b20bc496.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8c63d0c50b57
+seed: 20632
+experiment:
+  id: proposed.geo-same-point-distance
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

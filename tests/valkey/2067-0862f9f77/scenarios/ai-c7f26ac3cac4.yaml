@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 70106f06bce4..0862f9f77735.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c7f26ac3cac4
+seed: 1
+experiment:
+  id: proposed.mptcp-flag-validation
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

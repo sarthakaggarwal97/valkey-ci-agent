@@ -1,0 +1,81 @@
+extends: [valkey.liveness]
+id: proposed.libvalkey-cli-protocol
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli of the libvalkey build and the hiredis parent run the same
+    protocol-heavy commands against private servers of their own build; exit status
+    and output must match
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    files:
+      script.lua: "return {KEYS[1],ARGV[1],2,'three'}"
+    ignore: ['^\d+:[A-Z] .*\n', 'writing \d+ bytes', '\[offset \d+\]']
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {exit: {equals: 0}, stdout: {
+          equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, -r, 3, PING], expect: {stdout: {equals: "PONG\n\
+            PONG\nPONG\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SET, '', ''], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, GET, ''], expect: {stdout: {
+          equals: "\"\"\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, INCR, ''], expect: {exit: {in: [0, 1]}}}
+    - {tool: valkey-cli, args: [-p, $port, MSET, k1, v1, k2, v2, k3, v3], expect: {
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --scan], compare: unordered, expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, -3, DEBUG, PROTOCOL, double],
+      expect: {stdout: {contains: "3.141"}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, -3, DEBUG, PROTOCOL, bignum],
+      expect: {stdout: {contains: "1234567999"}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, -3, DEBUG, PROTOCOL, verbatim],
+      expect: {stdout: {contains: "verbatim"}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, -3, DEBUG, PROTOCOL, map], expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, -3, DEBUG, PROTOCOL, set], expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, -3, DEBUG, PROTOCOL, attrib],
+      expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, --show-pushes, 'no', -3, DEBUG,
+        PROTOCOL, push], expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, -3, DEBUG, PROTOCOL, 'true'],
+      expect: {stdout: {contains: "true"}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, -3, DEBUG, PROTOCOL, 'null'],
+      expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, -2, DEBUG, PROTOCOL, double],
+      expect: {stdout: {contains: "3.141"}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, -2, DEBUG, PROTOCOL, map], expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --json, -3, DEBUG, PROTOCOL, map], expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --json, -3, DEBUG, PROTOCOL, double], expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, -x, SET, binkey], stdin: !!binary 'AAH+/0FCQw==',
+      expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, GET, binkey], expect: {exit: {
+          equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --json, GET, binkey], expect: {exit: {
+          equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --quoted-input, SET, '"q\x00key"', '"v\x41l"'],
+      expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --quoted-input, GET, '"q\x00key"'], expect: {
+        stdout: {equals: "vAl\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, --eval, script.lua, k1, ',',
+        a1], expect: {stdout: {contains: "three"}}}
+    - {tool: valkey-cli, args: [-p, $port, --pipe], stdin: "PING\r\nSET inline-key\
+        \ inline-value\r\n*3\r\n$3\r\nSET\r\n$4\r\nkey2\r\n$4\r\nval2\r\nGET inline-key\r\
+        \n", expect: {exit: {equals: 0}, stdout: {contains: "errors: 0, replies: 4"}}}
+    - {tool: valkey-cli, args: [-p, $port, --rdb, out.rdb], expect: {exit: {equals: 0},
+        stderr: {contains: "Transfer finished with success"}}}
+    - {tool: valkey-check-rdb, args: [out.rdb], expect: {exit: {equals: 0}, stdout: {
+          contains: "RDB looks OK"}}}
+    - {tool: valkey-cli, args: [-p, $port, --bigkeys], compare: skip, expect: {exit: {
+          equals: 0}}}
+required_events: [cli.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

@@ -1,0 +1,21 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-data-placeholder
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark substitutes the __data__ placeholder in a command
+    argument with -d bytes
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, -n, 1, -d, 42, set, k, "value:__data__"],
+      compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, STRLEN, k], expect_difference: true, expect: {
+        stdout: {contains: "48"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

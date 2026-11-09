@@ -1,0 +1,86 @@
+extends: [valkey.liveness]
+id: proposed.bitcount-neon-parity
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    BITCOUNT over string sizes and ranges crossing the NEON popcount thresholds (16-byte
+    entry, 64-byte unrolled blocks, 16-byte chunks, scalar tail, unaligned range starts,
+    BIT-mode first/last correction) returns the exact expected counts and matches
+    the parent build.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bitcount
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k, "UUUUUUUUUUUUUUU"], expect: {equals: OK}}
+    - {command: [BITCOUNT, k], expect: {equals: 60}}
+    - {command: [APPEND, k, "U"], expect: {equals: 16}}
+    - {command: [BITCOUNT, k], expect: {equals: 64}}
+    - {command: [APPEND, k, "U"], expect: {equals: 17}}
+    - {command: [BITCOUNT, k], expect: {equals: 68}}
+    - {command: [APPEND, k, "UUUUUUUUUUUUUU"], expect: {equals: 31}}
+    - {command: [BITCOUNT, k], expect: {equals: 124}}
+    - {command: [APPEND, k, "UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU"], expect: {equals: 63}}
+    - {command: [BITCOUNT, k], expect: {equals: 252}}
+    - {command: [APPEND, k, "U"], expect: {equals: 64}}
+    - {command: [BITCOUNT, k], expect: {equals: 256}}
+    - {command: [APPEND, k, "U"], expect: {equals: 65}}
+    - {command: [BITCOUNT, k], expect: {equals: 260}}
+    - {command: [APPEND, k, "UUUUUUUUUUUUUUU"], expect: {equals: 80}}
+    - {command: [BITCOUNT, k], expect: {equals: 320}}
+    - {command: [APPEND, k, "UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU"], expect: {
+        equals: 127}}
+    - {command: [BITCOUNT, k], expect: {equals: 508}}
+    - {command: [APPEND, k, "U"], expect: {equals: 128}}
+    - {command: [BITCOUNT, k], expect: {equals: 512}}
+    - {command: [APPEND, k, "U"], expect: {equals: 129}}
+    - {command: [BITCOUNT, k], expect: {equals: 516}}
+    - {command: [BITCOUNT, k, 0, -1], expect: {equals: 516}}
+    - {command: [BITCOUNT, k, -1000000, 1000000], expect: {equals: 516}}
+    - {command: [BITCOUNT, k, 1, 127], expect: {equals: 508}}
+    - {command: [BITCOUNT, k, 1, 127, BYTE], expect: {equals: 508}}
+    - {command: [BITCOUNT, k, 3, 120], expect: {equals: 472}}
+    - {command: [BITCOUNT, k, 64, 128], expect: {equals: 260}}
+    - {command: [BITCOUNT, k, 100, 10], expect: {equals: 0}}
+    - {command: [BITCOUNT, k, 5, 999, BIT], expect: {equals: 498}}
+    - {command: [BITCOUNT, k, 7, 7, BIT], expect: {equals: 1}}
+    - {command: [BITCOUNT, k, -1032, -1, BIT], expect: {equals: 516}}
+    - {command: [BITCOUNT, k, 0, 1030, BIT], expect: {equals: 515}}
+    - {command: [SET, b, !!binary "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiYw=="],
+      expect: {equals: OK}}
+    - {command: [STRLEN, b], expect: {equals: 100}}
+    - {command: [BITCOUNT, b], expect: {equals: 316}}
+    - {command: [BITCOUNT, b, 0, 15], expect: {equals: 32}}
+    - {command: [BITCOUNT, b, 16, 79], expect: {equals: 208}}
+    - {command: [BITCOUNT, b, 1, 98], expect: {equals: 312}}
+    - {command: [BITCOUNT, b, -17, -1], expect: {equals: 68}}
+    - {command: [BITCOUNT, b, 5, 77, BIT], expect: {equals: 14}}
+    - {command: [SETBIT, big, 1048575, 1], expect: {equals: 0}}
+    - {command: [STRLEN, big], expect: {equals: 131072}}
+    - {command: [BITCOUNT, big], expect: {equals: 1}}
+    - {command: [SETRANGE, big, 65536, "UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU"],
+      expect: {equals: 131072}}
+    - {command: [BITCOUNT, big], expect: {equals: 257}}
+    - {command: [BITCOUNT, big, 65530, 65610], expect: {equals: 256}}
+    - {command: [BITCOUNT, big, 0, 65535], expect: {equals: 0}}
+    - {command: [BITCOUNT, big, 524288, 524799, BIT], expect: {equals: 256}}
+    - {command: [BITCOUNT, missing], expect: {equals: 0}}
+    - {command: [SET, e, ""], expect: {equals: OK}}
+    - {command: [BITCOUNT, e], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [bitcount.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bitcount}

@@ -1,0 +1,86 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "70106f06bce49b2af46a790e09494da7ff14eaf2",
+  "parent": "22c219124ff6c13bfce757080d41ae243407e476",
+  "pr": 2059,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Support RDMA for valkey-cli and benchmark (#2059)",
+  "date": "2025-05-09",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 2,
+  "hunted": 5,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 74,
+    "executed": 53,
+    "percent": 71,
+    "uncovered": [
+      "src/cli_common.c:445",
+      "src/cli_common.c:450",
+      "src/cli_common.c:454",
+      "src/valkey-benchmark.c:287",
+      "src/valkey-benchmark.c:288",
+      "src/valkey-benchmark.c:290",
+      "src/valkey-benchmark.c:392",
+      "src/valkey-benchmark.c:657",
+      "src/valkey-benchmark.c:658",
+      "src/valkey-benchmark.c:659",
+      "src/valkey-benchmark.c:661",
+      "src/valkey-benchmark.c:662",
+      "src/valkey-benchmark.c:663",
+      "src/valkey-benchmark.c:664",
+      "src/valkey-benchmark.c:665",
+      "src/valkey-benchmark.c:666",
+      "src/valkey-benchmark.c:672",
+      "src/valkey-benchmark.c:675",
+      "src/valkey-benchmark.c:826",
+      "src/valkey-benchmark.c:1209",
+      "src/valkey-cli.c:2529"
+    ],
+    "rounds": 2
+  },
+  "cost_usd": 27.2565,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-624e398dc65c",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-624e398dc65c",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-624e398dc65c",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-f25e109f1470",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'bench' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (valkey-benchmark -p $port --cluster -t set -n 1000 -c 4 -P 8 -q), 3 (valkey-benchmark -p $port --cluster -t set -n 6 -c 1 -q)"
+    },
+    {
+      "scenario": "ai-9a4cde24d8ab",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "no trustworthy verdict is possible; required components did not do their part outside an oracle or action, depend on one that did not, judged a deployment whose teardown failed, or were skipped: kill-primary"
+    },
+    {
+      "scenario": "ai-0e65e2e7a358",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "no trustworthy verdict is possible; required components did not do their part outside an oracle or action, depend on one that did not, judged a deployment whose teardown failed, or were skipped: kill-primary"
+    }
+  ]
+}
