@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-09T02:28+00:00.
+Updated 2026-11-09T02:29+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -48,22 +48,8 @@ Updated 2026-11-09T02:28+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-09T02:28:34+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42531538984): 14 merge(s) tested, 0 without a code change.
+[2026-11-09T02:29:28+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42551147299): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): Implement new RDB format (#68): error: Claude Code failed (rc=1): timeout after 600s
-- [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77) ([tests](tests/valkey-search/77-902b8fa19/)): fixing rdb load to use a detached context (#77): declined: no proposed test validated
-- [valkey-io/valkey-search#76](https://github.com/valkey-io/valkey-search/pull/76) ([tests](tests/valkey-search/76-4fd545d95/)): fixing github integration tests (#76): declined: The change modifies only GitHub Actions workflow files (concurrency group names and a --privileged docker flag) and a unit test file (testing/valkey_search_test.cc, adding a ResetValkeyAlloc call in the test harness). No module runtime source under src/ or vmsdk/src/ is touched, so the mod
-- [valkey-io/valkey-search#73](https://github.com/valkey-io/valkey-search/pull/73) ([tests](tests/valkey-search/73-2b055c9bb/)): fixing integration tests to work with cmake (#73): 3 of 4 test(s) reached the change; check, introduced and since fixed (recorded); crash, introduced and since fixed (recorded); crash, fixed by #73 (recorded); crash, fixed by #73 (recorded); crash, introduced and since fixed (recorded); crash, fixed by #73 (recorded)
-- [valkey-io/valkey-search#60](https://github.com/valkey-io/valkey-search/pull/60) ([tests](tests/valkey-search/60-bf3685a48/)): Automatically configure threadpool size based on physical cpu core count. (#60): 0 of 2 test(s) reached the change
-- [valkey-io/valkey-search#72](https://github.com/valkey-io/valkey-search/pull/72) ([tests](tests/valkey-search/72-cb1e6a70c/)): Fixed crash when loading RDB (#72): 0 of 2 test(s) reached the change; crash, predates #72, since fixed (recorded)
-- [valkey-io/valkey-search#71](https://github.com/valkey-io/valkey-search/pull/71) ([tests](tests/valkey-search/71-5147a35c3/)): Small ACL fixes (#71): declined: The change is build-system and test-only: src/CMakeLists.txt adds the pre-existing acl.cc to the CMake build (a link fix for symbols the command files already referenced), testing/CMakeLists.txt adds a unit-test target, vmsdk's testing_infra teardown change affects only the mock used by un
-- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70) ([tests](tests/valkey-search/70-cd8de7f4b/)): More CMake / Build improvements (#70): declined: The change is purely build/CI tooling: build.sh refactoring (auto-reconfigure detection, ninja/ninja-build selection, dumping test output on failure), a new CI flag, devcontainer and docs updates for libsystemd-dev, submodule checkout hint paths, and a CMake rule linking libsystemd into th
-- [valkey-io/valkey-search#49](https://github.com/valkey-io/valkey-search/pull/49) ([tests](tests/valkey-search/49-ab244e1e2/)): Add ACL support to Valkey Search. (#49): 0 of 5 test(s) reached the change
-- [valkey-io/valkey-search@1d8e30e25ae6](https://github.com/valkey-io/valkey-search/commit/1d8e30e25ae640522f809f839ed2a81fb191e5c1) ([tests](tests/valkey-search/1d8e30e25/)): fixing json data-type handling: 0 of 2 test(s) reached the change
-- [valkey-io/valkey-search#65](https://github.com/valkey-io/valkey-search/pull/65) ([tests](tests/valkey-search/65-f51fd6a62/)): Small aarch64 fixes (#65): declined: The change is purely a build fix with no behaviour change: it adds `target_link_libraries(... pthread)` for test binaries in cmake/Modules/valkey_search.cmake, affecting only how unit-test executables are linked on ARM (not the module artifact), and adds a missing `#include <optional>` to 
-- [valkey-io/valkey-search#64](https://github.com/valkey-io/valkey-search/pull/64) ([tests](tests/valkey-search/64-9304c8ccf/)): Fix parsing double/float from string (#64): 0 of 2 test(s) reached the change
-- [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63) ([tests](tests/valkey-search/63-a332bc008/)): Enforce vector indexed attribute (#63): 0 of 2 test(s) reached the change
-- [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57) ([tests](tests/valkey-search/57-964a49832/)): Ensure that Index names and Prefixes do not have a slot tag (#57): 0 of 4 test(s) reached the change
 
 ## Totals
 
