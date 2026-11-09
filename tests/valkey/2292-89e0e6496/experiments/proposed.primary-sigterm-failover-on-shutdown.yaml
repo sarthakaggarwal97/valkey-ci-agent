@@ -1,0 +1,46 @@
+extends: [valkey.base]
+id: proposed.primary-sigterm-failover-on-shutdown
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: SIGTERM a cluster primary configured with shutdown-on-sigterm failover
+    while writes run; the dying primary must hand primaryship to a fully synced replica
+    and no acknowledged write may be lost
+inputs:
+  properties:
+    warmup_s: {type: number, minimum: 0.5, maximum: 10, default: 2}
+    settle_s: {type: number, minimum: 1, maximum: 60, default: 10}
+    restart_delay_s: {type: number, minimum: 0, maximum: 30, default: 1}
+components:
+- use: valkey.observer.log
+  id: failover-logs
+  config:
+    instances: all
+    expect:
+    - {evidence_id: valkey.shutdown.failover-performed, pattern: "Perform auto failover\
+        \ to replica .* on shutdown", required: true}
+    forbidden:
+    - {pattern: "Unable to perform auto failover on shutdown since there are legacy\
+        \ replicas"}
+- use: valkey.fault.process-signal
+  id: term-primary
+  config:
+    when_event: warm-up.completed
+    instance: primary
+    signal: SIGTERM
+    restart: true
+    restart_mode: background
+    restart_delay_s: {$ref: inputs.restart_delay_s}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, term-primary, failover-logs]
+  config: {seconds: {$ref: inputs.warmup_s}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: {$ref: inputs.settle_s}}
+required_events: [warm-up.completed, term-primary.recovered]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: term-primary}
+- {evidence_id: valkey.shutdown.failover-performed, source: failover-logs}

@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1fbf5fb1fe595ee015ec51cb786e6feb151008aa",
+  "parent": "1c5572fed0c6d1fe3dc0094cb72283555df0bb48",
+  "pr": 2378,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "support negative filtering for client command filters (#2378)",
+  "date": "2025-08-01",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 115,
+    "executed": 113,
+    "percent": 98,
+    "uncovered": [
+      "src/networking.c:4563",
+      "src/networking.c:4564"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 4.0585,
+  "findings": [],
+  "recorded": []
+}

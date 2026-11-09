@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1c5572fed0c6..1fbf5fb1fe59.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-867d5711e417
+seed: 1
+experiment:
+  id: proposed.client-negative-filters
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

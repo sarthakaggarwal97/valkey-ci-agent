@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3b12132ac0be654abaf1cd04fa9fdf8f44314327",
+  "parent": "8973cdf01432c19f9971b0b46ef225b85b4c4b3b",
+  "pr": 2400,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename trace bgsave type to rdb and aof (#2400)",
+  "date": "2025-08-03",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4896,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames LTTng tracepoint providers (valkey_bgsave -> valkey_rdb), adds an aof fork tracepoint instance, and routes serverFork's trace by child type, plus build-file and README updates. All of it is behind the USE_LTTNG compile flag; in normal builds latencyTraceIfNeeded is a no-op macro, so no command reply, persistence, replication or any server behavior changes. Even in an LTTng build the only effect is the names of tracepoints emitted to an external tracing session, which the fuzzer's oracles cannot observe and which is the intended rename. No scenario can reach a behavioral"
+}

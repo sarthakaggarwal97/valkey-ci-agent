@@ -1,0 +1,55 @@
+extends: [valkey.base]
+id: proposed.cluster-pfail-fail-recovery
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: SIGSTOP a cluster node past the node timeout so every peer files failure
+    reports and quorum marks it FAIL, then resume it; the reports must clear, the
+    FAIL flag must lift, and the cluster must converge with no crash
+inputs:
+  properties:
+    target: {type: string, enum: [primary, replica], default: replica}
+    pause_s: {type: number, minimum: 2, maximum: 60, default: 8}
+    settle_s: {type: number, minimum: 5, maximum: 300, default: 30}
+    loss_window_s: {type: number, minimum: 0, maximum: 600, default: 2.5}
+    loss_window_after_s: {type: number, minimum: 0, maximum: 600, default: 0}
+components:
+- use: valkey.observer.log
+  id: fail-logs
+  config:
+    instances: all
+    expect:
+    - {evidence_id: valkey.cluster.failure-detected-logged, pattern: "Marking node\
+        \ .* as failing \\(quorum reached\\)", required: true}
+    - {evidence_id: valkey.cluster.fail-cleared-logged, pattern: "Clear FAIL state\
+        \ for node", required: true}
+- use: valkey.fault.process-signal
+  id: stall
+  config:
+    when_event: warm-up.completed
+    instance: {$ref: inputs.target}
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.pause_s}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, fail-logs, stall]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config:
+    seconds: {$ref: inputs.settle_s}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_s: {$ref: inputs.loss_window_s}
+    loss_window_after_s: {$ref: inputs.loss_window_after_s}
+    loss_window_faults: [stall]
+    converge_timeout_s: 90
+required_events: [warm-up.completed, stall.injected]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: stall}
+- {evidence_id: valkey.cluster.failure-detected-logged, source: fail-logs}
+- {evidence_id: valkey.cluster.fail-cleared-logged, source: fail-logs}

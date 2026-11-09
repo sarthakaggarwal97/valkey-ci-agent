@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7d63bc5babc936402573f067ecd36a4e4557f534",
+  "parent": "e16fc8d8c8afc474f9a275276d75d42f6162177c",
+  "pr": 2417,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Increase TID count to accomodate valkey-search reader/writer pools (#2417)",
+  "date": "2025-08-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3312,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only bumps TIDS_MAX_SIZE from 50 to 150 in src/debug.c, the buffer the crash-report signal handler uses in writeStacktraces()/get_ready_to_signal_threads_tids() to enumerate thread TIDs when dumping stack traces. It changes behavior only when the process has more than 50 threads, which requires the valkey-search module's reader/writer pools; module loading is refused in experiments and a stock valkey-server has far fewer than 50 threads, so both builds behave identically on anything the fuzzer can run. The path is reachable only during a crash dump, has no effect on replies, replica"
+}

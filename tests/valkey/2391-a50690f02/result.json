@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a50690f02c08e4e67b8b472f81587b05c405b6f7",
+  "parent": "36bd5bf926055882b10a65bf277327e5caa96871",
+  "pr": 2391,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update swapdb command comment to mention why cluster mode is not allowed (#2391)",
+  "date": "2025-08-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2033,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff only edits a source comment above swapdbCommand's cluster-mode check in src/db.c; no executable code, reply, or configuration changes, so there is no behaviour to test and a compared run could never show a difference."
+}

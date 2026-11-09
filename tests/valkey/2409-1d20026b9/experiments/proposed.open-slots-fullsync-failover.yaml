@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.open-slots-fullsync-failover
+deployment:
+  modes: [standalone]
+metadata:
+  description: Migrating slot states cross a full sync via the cluster-slot-states
+    RDB aux field (now encoded from a dict in hash order) and survive a manual failover,
+    compared across builds
+components:
+- use: valkey.action.commands
+  id: aux
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    timeout_s: 180
+    commands:
+    - {command: [CLUSTER, SETSLOT, 0, MIGRATING, "<node.2.id>"], expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 42, MIGRATING, "<node.2.id>"], expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 16383, MIGRATING, "<node.2.id>"], expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 42, IMPORTING, "<node.0.id>"], node: 2, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 60, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [CLUSTER, FAILOVER], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 60, compare: skip, expect: {
+        contains: "role:master"}}
+    - {command: [CLUSTER, NODES], node: 1, wait_s: 30, compare: skip, expect: {contains: "[0->-"}}
+    - {command: [CLUSTER, NODES], node: 1, compare: skip, expect: {contains: "[42->-"}}
+    - {command: [CLUSTER, NODES], node: 1, compare: skip, expect: {contains: "[16383->-"}}
+    - {command: [INFO, replication], wait_s: 60, compare: skip, expect: {contains: "role:slave"}}
+    - {command: [CLUSTER, NODES], node: 2, compare: skip, expect: {contains: "[42-<-"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aux.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aux}

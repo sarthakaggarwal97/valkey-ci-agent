@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.check-rdb-key-type-init
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    valkey-check-rdb errors that occur before the first key-type opcode is read no
+    longer print a spurious "[additional info] Reading type 0 (string)" line: rdbstate.key_type
+    is initialized to -1 instead of being left zero (string). Errors after a key's
+    type was genuinely read must still print the line.
+components:
+- use: valkey.action.tools
+  id: check-rdb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files:
+      wrong-sig.rdb: !!binary 'VkFMS0VZMDA5'
+      truncated.rdb: !!binary 'UkVESVMwMDA5'
+      bad-type.rdb: !!binary 'UkVESVMwMDA5CA=='
+      empty-ok.rdb: !!binary 'UkVESVMwMDA5/gL/AAAAAAAAAAA='
+      after-key.rdb: !!binary 'UkVESVMwMDA5AAFr'
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - {tool: valkey-check-rdb, args: [wrong-sig.rdb], expect_difference: true, expect: {
+        exit: {equals: 1}, stdout: {contains: "Wrong signature"}}}
+    - {tool: valkey-check-rdb, args: [truncated.rdb], expect_difference: true, expect: {
+        exit: {equals: 1}, stdout: {contains: "Unexpected EOF reading RDB file"}}}
+    - {tool: valkey-check-rdb, args: [bad-type.rdb], expect_difference: true, expect: {
+        exit: {equals: 1}, stdout: {contains: "Invalid object type: 8"}}}
+    - {tool: valkey-check-rdb, args: [empty-ok.rdb], expect: {exit: {equals: 0}, stdout: {
+          contains: "RDB looks OK"}}}
+    - {tool: valkey-check-rdb, args: [after-key.rdb], expect: {exit: {equals: 1},
+        stdout: {contains: "Reading type 0 (string)"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check-rdb}

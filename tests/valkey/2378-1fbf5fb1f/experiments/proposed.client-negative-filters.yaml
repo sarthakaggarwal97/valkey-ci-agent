@@ -1,0 +1,87 @@
+extends: [valkey.liveness]
+id: proposed.client-negative-filters
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLIENT LIST/KILL negative filters (NOT-*) parse and match semantics,
+    deterministic kill counts, and the FLAGS N semantics fix
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: negfilters
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CLIENT, SETNAME, me], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, u2, on, nopass, "~*", "+@all"], expect: {equals: OK}}
+    - {command: [CLIENT, SETNAME, victim], connection: a, expect: {equals: OK}}
+    - {command: [MULTI], connection: a, expect: {equals: OK}}
+    - {command: [CLIENT, SETNAME, victim], connection: b, expect: {equals: OK}}
+    - {command: [CLIENT, SETNAME, victim2], connection: c, expect: {equals: OK}}
+    - {command: [SELECT, 5], connection: c, expect: {equals: OK}}
+    - {command: [CLIENT, SETINFO, lib-name, mylib], connection: c, expect: {equals: OK}}
+    - {command: [CLIENT, SETINFO, lib-ver, 1.2.3], connection: c, expect: {equals: OK}}
+    - {command: [CLIENT, CAPA, redirect], connection: c, expect: {equals: OK}}
+    - {command: [AUTH, u2, pw], connection: u, expect: {equals: OK}}
+    - {command: [CLIENT, SETNAME, victim4], connection: u, expect: {equals: OK}}
+    - {command: [CLIENT, SETNAME, victim5], connection: d, expect: {equals: OK}}
+    - {command: [CLIENT, LIST, NOT-ID, 0], expect_difference: true, expect: {error: "greater\
+          \ than 0"}}
+    - {command: [CLIENT, LIST, NOT-ID, -1], expect_difference: true, expect: {error: "greater\
+          \ than 0"}}
+    - {command: [CLIENT, LIST, NOT-DB, 99], expect_difference: true, expect: {error: "between\
+          \ 0 and"}}
+    - {command: [CLIENT, LIST, NOT-USER, nosuchuser], expect_difference: true, expect: {
+        error: "No such user"}}
+    - {command: [CLIENT, KILL, NOT-TYPE, wrongtype], expect_difference: true, expect: {
+        error: "Unknown client type"}}
+    - {command: [CLIENT, LIST, NOT-FLAGS, Z], expect_difference: true, expect: {error: "Unknown\
+          \ flags"}}
+    - {command: [CLIENT, KILL, NOT-CAPA, q], expect_difference: true, expect: {error: "Unknown\
+          \ capa"}}
+    - {command: [CLIENT, LIST, NOT-ID, 18446744073709551616], expect: {error: true}}
+    - {command: [CLIENT, LIST, NOT-NAME, ""], expect_difference: true, expect: {error: false}}
+    - {command: [CLIENT, LIST, NOT-NAME, victim], expect_difference: true, expect: {
+        contains: "name=victim2"}}
+    - {command: [CLIENT, LIST, NAME, victim, NOT-FLAGS, x], expect_difference: true,
+      expect: {contains: "name=victim"}}
+    - {command: [CLIENT, LIST, NOT-ID, 100000, 100001, 100002, NOT-DB, 15, NOT-LIB-NAME,
+        nolib, NOT-CAPA, r, NOT-IP, 1.2.3.4], expect_difference: true, expect: {error: false}}
+    - {command: [CLIENT, KILL, NAME, victim2, NOT-DB, 5], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [CLIENT, KILL, NAME, victim2, NOT-LIB-NAME, mylib], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [CLIENT, KILL, NAME, victim2, NOT-CAPA, r], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [CLIENT, KILL, NAME, victim2, NOT-FLAGS, N], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [CLIENT, KILL, NAME, victim4, NOT-USER, u2], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [CLIENT, KILL, NAME, victim4, NOT-USER, default], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [CLIENT, KILL, NAME, victim2, NOT-LIB-VER, 9.9.9], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [CLIENT, KILL, NAME, victim5, NOT-ADDR, "1.2.3.4:5678", NOT-LADDR,
+        "5.6.7.8:9", NOT-IP, 9.9.9.9], expect_difference: true, expect: {equals: 1}}
+    - {command: [CLIENT, KILL, NAME, victim, NOT-TYPE, normal], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [CLIENT, KILL, NAME, victim, FLAGS, N], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [CLIENT, KILL, NAME, victim, NOT-FLAGS, x], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [CLIENT, KILL, NAME, victim, NOT-ID, 9223372036854775807], expect_difference: true,
+      expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [negfilters.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: negfilters}

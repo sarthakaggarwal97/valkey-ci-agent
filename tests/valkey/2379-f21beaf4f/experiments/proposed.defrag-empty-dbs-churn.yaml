@@ -1,0 +1,67 @@
+extends: [valkey.base]
+id: proposed.defrag-empty-dbs-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: Force active defrag cycles over existing-but-empty dbs while dbs are
+    created, populated, flushed and swapped under a live workload; the new per-empty-db
+    defrag stages must not crash, trip an assert, or lose acknowledged writes
+components:
+- use: valkey.action.commands
+  id: churn
+  depends_on: [writes]
+  config:
+    timeout_s: 15
+    commands:
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 30000], expect: {equals: OK}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 20000], expect: {equals: OK}}
+    - {command: [SELECT, 3], expect: {equals: OK}}
+    - {command: [SELECT, 4], expect: {equals: OK}}
+    - {command: [SELECT, 5], expect: {equals: OK}}
+    - {command: [SELECT, 6], expect: {equals: OK}}
+    - {command: [SELECT, 7], expect: {equals: OK}}
+    - {command: [SELECT, 8], expect: {equals: OK}}
+    - {command: [SELECT, 9], expect: {equals: OK}}
+    - {command: [SELECT, 10], expect: {equals: OK}}
+    - {command: [SELECT, 11], expect: {equals: OK}}
+    - {command: [SELECT, 12], expect: {equals: OK}}
+    - {command: [SELECT, 13], expect: {equals: OK}}
+    - {command: [SELECT, 14], expect: {equals: OK}}
+    - {command: [SELECT, 15], expect: {equals: OK}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [FLUSHDB, SYNC], expect: {equals: OK}}
+    - {command: [SELECT, 2], expect: {equals: OK}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: defrag-over-empty
+  depends_on: [churn]
+  config: {seconds: 4}
+- use: valkey.action.commands
+  id: churn2
+  depends_on: [defrag-over-empty]
+  config:
+    timeout_s: 15
+    commands:
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 20000], expect: {equals: OK}}
+    - {command: [SWAPDB, 1, 3], expect: {equals: OK}}
+    - {command: [SWAPDB, 2, 14], expect: {equals: OK}}
+    - {command: [SELECT, 3], expect: {equals: OK}}
+    - {command: [FLUSHDB, SYNC], expect: {equals: OK}}
+    - {command: [SELECT, 6], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 15000], expect: {equals: OK}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: OK}}
+    - {command: [SELECT, 5], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 10000], expect: {equals: OK}}
+    - {command: [UNLINK, 'key:0', 'key:1', 'key:2'], expect: {equals: 3}}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [churn2]
+  config: {seconds: 4}
+required_events: [churn.completed, churn2.completed, settle.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}
+- {evidence_id: valkey.command.sequence, source: churn2}

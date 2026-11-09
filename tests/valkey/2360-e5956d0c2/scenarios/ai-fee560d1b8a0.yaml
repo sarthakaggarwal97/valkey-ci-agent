@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0999007f5c63..e5956d0c2386.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fee560d1b8a0
+seed: 23603
+experiment:
+  id: proposed.tracking-prefix-overhead-eviction
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

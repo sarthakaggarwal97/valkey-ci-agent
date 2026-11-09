@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2a44506b5d18e74128db34d283a3daab5d455309",
+  "parent": "f21beaf4f7be1c5be37f1183e7d4c250f8fe3498",
+  "pr": 2277,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize cluster failure report tracking with RAX (#2277)",
+  "date": "2025-07-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 54,
+    "executed": 54,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.1844,
+  "findings": [],
+  "recorded": []
+}

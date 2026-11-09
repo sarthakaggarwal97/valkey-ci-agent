@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a50690f02c08..1d20026b938a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ffe5b3502d4c
+seed: 104
+experiment:
+  id: proposed.open-slots-fullsync-failover
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7300

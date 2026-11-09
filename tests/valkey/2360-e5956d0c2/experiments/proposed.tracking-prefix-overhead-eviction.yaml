@@ -1,0 +1,271 @@
+extends: [valkey.liveness]
+id: proposed.tracking-prefix-overhead-eviction
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    getClientMemoryUsage now counts tracking-prefix rax overhead as numnodes * (sizeof(raxNode)
+    + sizeof(raxNode*)) = 12 bytes/node instead of the old multiplied form 32 bytes/node.
+    A client registering 1000 distinct BCAST prefixes builds ~2100 rax nodes: the
+    parent estimates ~85KB for that client, the fix ~43KB. With maxmemory-clients
+    at 80kb the parent evicts the tracking client and the fixed build keeps it, so
+    the tracking connection stays alive only on the change.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: trk
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [PING], connection: sub, expect: {equals: PONG}}
+    - command: [CLIENT, TRACKING, 'on', BCAST, PREFIX, q000zz, PREFIX, q001zz, PREFIX,
+        q002zz, PREFIX, q003zz, PREFIX, q004zz, PREFIX, q005zz, PREFIX, q006zz, PREFIX,
+        q007zz, PREFIX, q008zz, PREFIX, q009zz, PREFIX, q010zz, PREFIX, q011zz, PREFIX,
+        q012zz, PREFIX, q013zz, PREFIX, q014zz, PREFIX, q015zz, PREFIX, q016zz, PREFIX,
+        q017zz, PREFIX, q018zz, PREFIX, q019zz, PREFIX, q020zz, PREFIX, q021zz, PREFIX,
+        q022zz, PREFIX, q023zz, PREFIX, q024zz, PREFIX, q025zz, PREFIX, q026zz, PREFIX,
+        q027zz, PREFIX, q028zz, PREFIX, q029zz, PREFIX, q030zz, PREFIX, q031zz, PREFIX,
+        q032zz, PREFIX, q033zz, PREFIX, q034zz, PREFIX, q035zz, PREFIX, q036zz, PREFIX,
+        q037zz, PREFIX, q038zz, PREFIX, q039zz, PREFIX, q040zz, PREFIX, q041zz, PREFIX,
+        q042zz, PREFIX, q043zz, PREFIX, q044zz, PREFIX, q045zz, PREFIX, q046zz, PREFIX,
+        q047zz, PREFIX, q048zz, PREFIX, q049zz, PREFIX, q050zz, PREFIX, q051zz, PREFIX,
+        q052zz, PREFIX, q053zz, PREFIX, q054zz, PREFIX, q055zz, PREFIX, q056zz, PREFIX,
+        q057zz, PREFIX, q058zz, PREFIX, q059zz, PREFIX, q060zz, PREFIX, q061zz, PREFIX,
+        q062zz, PREFIX, q063zz, PREFIX, q064zz, PREFIX, q065zz, PREFIX, q066zz, PREFIX,
+        q067zz, PREFIX, q068zz, PREFIX, q069zz, PREFIX, q070zz, PREFIX, q071zz, PREFIX,
+        q072zz, PREFIX, q073zz, PREFIX, q074zz, PREFIX, q075zz, PREFIX, q076zz, PREFIX,
+        q077zz, PREFIX, q078zz, PREFIX, q079zz, PREFIX, q080zz, PREFIX, q081zz, PREFIX,
+        q082zz, PREFIX, q083zz, PREFIX, q084zz, PREFIX, q085zz, PREFIX, q086zz, PREFIX,
+        q087zz, PREFIX, q088zz, PREFIX, q089zz, PREFIX, q090zz, PREFIX, q091zz, PREFIX,
+        q092zz, PREFIX, q093zz, PREFIX, q094zz, PREFIX, q095zz, PREFIX, q096zz, PREFIX,
+        q097zz, PREFIX, q098zz, PREFIX, q099zz]
+      connection: sub
+      expect: {equals: OK}
+    - command: [CLIENT, TRACKING, 'on', BCAST, PREFIX, q100zz, PREFIX, q101zz, PREFIX,
+        q102zz, PREFIX, q103zz, PREFIX, q104zz, PREFIX, q105zz, PREFIX, q106zz, PREFIX,
+        q107zz, PREFIX, q108zz, PREFIX, q109zz, PREFIX, q110zz, PREFIX, q111zz, PREFIX,
+        q112zz, PREFIX, q113zz, PREFIX, q114zz, PREFIX, q115zz, PREFIX, q116zz, PREFIX,
+        q117zz, PREFIX, q118zz, PREFIX, q119zz, PREFIX, q120zz, PREFIX, q121zz, PREFIX,
+        q122zz, PREFIX, q123zz, PREFIX, q124zz, PREFIX, q125zz, PREFIX, q126zz, PREFIX,
+        q127zz, PREFIX, q128zz, PREFIX, q129zz, PREFIX, q130zz, PREFIX, q131zz, PREFIX,
+        q132zz, PREFIX, q133zz, PREFIX, q134zz, PREFIX, q135zz, PREFIX, q136zz, PREFIX,
+        q137zz, PREFIX, q138zz, PREFIX, q139zz, PREFIX, q140zz, PREFIX, q141zz, PREFIX,
+        q142zz, PREFIX, q143zz, PREFIX, q144zz, PREFIX, q145zz, PREFIX, q146zz, PREFIX,
+        q147zz, PREFIX, q148zz, PREFIX, q149zz, PREFIX, q150zz, PREFIX, q151zz, PREFIX,
+        q152zz, PREFIX, q153zz, PREFIX, q154zz, PREFIX, q155zz, PREFIX, q156zz, PREFIX,
+        q157zz, PREFIX, q158zz, PREFIX, q159zz, PREFIX, q160zz, PREFIX, q161zz, PREFIX,
+        q162zz, PREFIX, q163zz, PREFIX, q164zz, PREFIX, q165zz, PREFIX, q166zz, PREFIX,
+        q167zz, PREFIX, q168zz, PREFIX, q169zz, PREFIX, q170zz, PREFIX, q171zz, PREFIX,
+        q172zz, PREFIX, q173zz, PREFIX, q174zz, PREFIX, q175zz, PREFIX, q176zz, PREFIX,
+        q177zz, PREFIX, q178zz, PREFIX, q179zz, PREFIX, q180zz, PREFIX, q181zz, PREFIX,
+        q182zz, PREFIX, q183zz, PREFIX, q184zz, PREFIX, q185zz, PREFIX, q186zz, PREFIX,
+        q187zz, PREFIX, q188zz, PREFIX, q189zz, PREFIX, q190zz, PREFIX, q191zz, PREFIX,
+        q192zz, PREFIX, q193zz, PREFIX, q194zz, PREFIX, q195zz, PREFIX, q196zz, PREFIX,
+        q197zz, PREFIX, q198zz, PREFIX, q199zz]
+      connection: sub
+      expect: {equals: OK}
+    - command: [CLIENT, TRACKING, 'on', BCAST, PREFIX, q200zz, PREFIX, q201zz, PREFIX,
+        q202zz, PREFIX, q203zz, PREFIX, q204zz, PREFIX, q205zz, PREFIX, q206zz, PREFIX,
+        q207zz, PREFIX, q208zz, PREFIX, q209zz, PREFIX, q210zz, PREFIX, q211zz, PREFIX,
+        q212zz, PREFIX, q213zz, PREFIX, q214zz, PREFIX, q215zz, PREFIX, q216zz, PREFIX,
+        q217zz, PREFIX, q218zz, PREFIX, q219zz, PREFIX, q220zz, PREFIX, q221zz, PREFIX,
+        q222zz, PREFIX, q223zz, PREFIX, q224zz, PREFIX, q225zz, PREFIX, q226zz, PREFIX,
+        q227zz, PREFIX, q228zz, PREFIX, q229zz, PREFIX, q230zz, PREFIX, q231zz, PREFIX,
+        q232zz, PREFIX, q233zz, PREFIX, q234zz, PREFIX, q235zz, PREFIX, q236zz, PREFIX,
+        q237zz, PREFIX, q238zz, PREFIX, q239zz, PREFIX, q240zz, PREFIX, q241zz, PREFIX,
+        q242zz, PREFIX, q243zz, PREFIX, q244zz, PREFIX, q245zz, PREFIX, q246zz, PREFIX,
+        q247zz, PREFIX, q248zz, PREFIX, q249zz, PREFIX, q250zz, PREFIX, q251zz, PREFIX,
+        q252zz, PREFIX, q253zz, PREFIX, q254zz, PREFIX, q255zz, PREFIX, q256zz, PREFIX,
+        q257zz, PREFIX, q258zz, PREFIX, q259zz, PREFIX, q260zz, PREFIX, q261zz, PREFIX,
+        q262zz, PREFIX, q263zz, PREFIX, q264zz, PREFIX, q265zz, PREFIX, q266zz, PREFIX,
+        q267zz, PREFIX, q268zz, PREFIX, q269zz, PREFIX, q270zz, PREFIX, q271zz, PREFIX,
+        q272zz, PREFIX, q273zz, PREFIX, q274zz, PREFIX, q275zz, PREFIX, q276zz, PREFIX,
+        q277zz, PREFIX, q278zz, PREFIX, q279zz, PREFIX, q280zz, PREFIX, q281zz, PREFIX,
+        q282zz, PREFIX, q283zz, PREFIX, q284zz, PREFIX, q285zz, PREFIX, q286zz, PREFIX,
+        q287zz, PREFIX, q288zz, PREFIX, q289zz, PREFIX, q290zz, PREFIX, q291zz, PREFIX,
+        q292zz, PREFIX, q293zz, PREFIX, q294zz, PREFIX, q295zz, PREFIX, q296zz, PREFIX,
+        q297zz, PREFIX, q298zz, PREFIX, q299zz]
+      connection: sub
+      expect: {equals: OK}
+    - command: [CLIENT, TRACKING, 'on', BCAST, PREFIX, q300zz, PREFIX, q301zz, PREFIX,
+        q302zz, PREFIX, q303zz, PREFIX, q304zz, PREFIX, q305zz, PREFIX, q306zz, PREFIX,
+        q307zz, PREFIX, q308zz, PREFIX, q309zz, PREFIX, q310zz, PREFIX, q311zz, PREFIX,
+        q312zz, PREFIX, q313zz, PREFIX, q314zz, PREFIX, q315zz, PREFIX, q316zz, PREFIX,
+        q317zz, PREFIX, q318zz, PREFIX, q319zz, PREFIX, q320zz, PREFIX, q321zz, PREFIX,
+        q322zz, PREFIX, q323zz, PREFIX, q324zz, PREFIX, q325zz, PREFIX, q326zz, PREFIX,
+        q327zz, PREFIX, q328zz, PREFIX, q329zz, PREFIX, q330zz, PREFIX, q331zz, PREFIX,
+        q332zz, PREFIX, q333zz, PREFIX, q334zz, PREFIX, q335zz, PREFIX, q336zz, PREFIX,
+        q337zz, PREFIX, q338zz, PREFIX, q339zz, PREFIX, q340zz, PREFIX, q341zz, PREFIX,
+        q342zz, PREFIX, q343zz, PREFIX, q344zz, PREFIX, q345zz, PREFIX, q346zz, PREFIX,
+        q347zz, PREFIX, q348zz, PREFIX, q349zz, PREFIX, q350zz, PREFIX, q351zz, PREFIX,
+        q352zz, PREFIX, q353zz, PREFIX, q354zz, PREFIX, q355zz, PREFIX, q356zz, PREFIX,
+        q357zz, PREFIX, q358zz, PREFIX, q359zz, PREFIX, q360zz, PREFIX, q361zz, PREFIX,
+        q362zz, PREFIX, q363zz, PREFIX, q364zz, PREFIX, q365zz, PREFIX, q366zz, PREFIX,
+        q367zz, PREFIX, q368zz, PREFIX, q369zz, PREFIX, q370zz, PREFIX, q371zz, PREFIX,
+        q372zz, PREFIX, q373zz, PREFIX, q374zz, PREFIX, q375zz, PREFIX, q376zz, PREFIX,
+        q377zz, PREFIX, q378zz, PREFIX, q379zz, PREFIX, q380zz, PREFIX, q381zz, PREFIX,
+        q382zz, PREFIX, q383zz, PREFIX, q384zz, PREFIX, q385zz, PREFIX, q386zz, PREFIX,
+        q387zz, PREFIX, q388zz, PREFIX, q389zz, PREFIX, q390zz, PREFIX, q391zz, PREFIX,
+        q392zz, PREFIX, q393zz, PREFIX, q394zz, PREFIX, q395zz, PREFIX, q396zz, PREFIX,
+        q397zz, PREFIX, q398zz, PREFIX, q399zz]
+      connection: sub
+      expect: {equals: OK}
+    - command: [CLIENT, TRACKING, 'on', BCAST, PREFIX, q400zz, PREFIX, q401zz, PREFIX,
+        q402zz, PREFIX, q403zz, PREFIX, q404zz, PREFIX, q405zz, PREFIX, q406zz, PREFIX,
+        q407zz, PREFIX, q408zz, PREFIX, q409zz, PREFIX, q410zz, PREFIX, q411zz, PREFIX,
+        q412zz, PREFIX, q413zz, PREFIX, q414zz, PREFIX, q415zz, PREFIX, q416zz, PREFIX,
+        q417zz, PREFIX, q418zz, PREFIX, q419zz, PREFIX, q420zz, PREFIX, q421zz, PREFIX,
+        q422zz, PREFIX, q423zz, PREFIX, q424zz, PREFIX, q425zz, PREFIX, q426zz, PREFIX,
+        q427zz, PREFIX, q428zz, PREFIX, q429zz, PREFIX, q430zz, PREFIX, q431zz, PREFIX,
+        q432zz, PREFIX, q433zz, PREFIX, q434zz, PREFIX, q435zz, PREFIX, q436zz, PREFIX,
+        q437zz, PREFIX, q438zz, PREFIX, q439zz, PREFIX, q440zz, PREFIX, q441zz, PREFIX,
+        q442zz, PREFIX, q443zz, PREFIX, q444zz, PREFIX, q445zz, PREFIX, q446zz, PREFIX,
+        q447zz, PREFIX, q448zz, PREFIX, q449zz, PREFIX, q450zz, PREFIX, q451zz, PREFIX,
+        q452zz, PREFIX, q453zz, PREFIX, q454zz, PREFIX, q455zz, PREFIX, q456zz, PREFIX,
+        q457zz, PREFIX, q458zz, PREFIX, q459zz, PREFIX, q460zz, PREFIX, q461zz, PREFIX,
+        q462zz, PREFIX, q463zz, PREFIX, q464zz, PREFIX, q465zz, PREFIX, q466zz, PREFIX,
+        q467zz, PREFIX, q468zz, PREFIX, q469zz, PREFIX, q470zz, PREFIX, q471zz, PREFIX,
+        q472zz, PREFIX, q473zz, PREFIX, q474zz, PREFIX, q475zz, PREFIX, q476zz, PREFIX,
+        q477zz, PREFIX, q478zz, PREFIX, q479zz, PREFIX, q480zz, PREFIX, q481zz, PREFIX,
+        q482zz, PREFIX, q483zz, PREFIX, q484zz, PREFIX, q485zz, PREFIX, q486zz, PREFIX,
+        q487zz, PREFIX, q488zz, PREFIX, q489zz, PREFIX, q490zz, PREFIX, q491zz, PREFIX,
+        q492zz, PREFIX, q493zz, PREFIX, q494zz, PREFIX, q495zz, PREFIX, q496zz, PREFIX,
+        q497zz, PREFIX, q498zz, PREFIX, q499zz]
+      connection: sub
+      expect: {equals: OK}
+    - command: [CLIENT, TRACKING, 'on', BCAST, PREFIX, q500zz, PREFIX, q501zz, PREFIX,
+        q502zz, PREFIX, q503zz, PREFIX, q504zz, PREFIX, q505zz, PREFIX, q506zz, PREFIX,
+        q507zz, PREFIX, q508zz, PREFIX, q509zz, PREFIX, q510zz, PREFIX, q511zz, PREFIX,
+        q512zz, PREFIX, q513zz, PREFIX, q514zz, PREFIX, q515zz, PREFIX, q516zz, PREFIX,
+        q517zz, PREFIX, q518zz, PREFIX, q519zz, PREFIX, q520zz, PREFIX, q521zz, PREFIX,
+        q522zz, PREFIX, q523zz, PREFIX, q524zz, PREFIX, q525zz, PREFIX, q526zz, PREFIX,
+        q527zz, PREFIX, q528zz, PREFIX, q529zz, PREFIX, q530zz, PREFIX, q531zz, PREFIX,
+        q532zz, PREFIX, q533zz, PREFIX, q534zz, PREFIX, q535zz, PREFIX, q536zz, PREFIX,
+        q537zz, PREFIX, q538zz, PREFIX, q539zz, PREFIX, q540zz, PREFIX, q541zz, PREFIX,
+        q542zz, PREFIX, q543zz, PREFIX, q544zz, PREFIX, q545zz, PREFIX, q546zz, PREFIX,
+        q547zz, PREFIX, q548zz, PREFIX, q549zz, PREFIX, q550zz, PREFIX, q551zz, PREFIX,
+        q552zz, PREFIX, q553zz, PREFIX, q554zz, PREFIX, q555zz, PREFIX, q556zz, PREFIX,
+        q557zz, PREFIX, q558zz, PREFIX, q559zz, PREFIX, q560zz, PREFIX, q561zz, PREFIX,
+        q562zz, PREFIX, q563zz, PREFIX, q564zz, PREFIX, q565zz, PREFIX, q566zz, PREFIX,
+        q567zz, PREFIX, q568zz, PREFIX, q569zz, PREFIX, q570zz, PREFIX, q571zz, PREFIX,
+        q572zz, PREFIX, q573zz, PREFIX, q574zz, PREFIX, q575zz, PREFIX, q576zz, PREFIX,
+        q577zz, PREFIX, q578zz, PREFIX, q579zz, PREFIX, q580zz, PREFIX, q581zz, PREFIX,
+        q582zz, PREFIX, q583zz, PREFIX, q584zz, PREFIX, q585zz, PREFIX, q586zz, PREFIX,
+        q587zz, PREFIX, q588zz, PREFIX, q589zz, PREFIX, q590zz, PREFIX, q591zz, PREFIX,
+        q592zz, PREFIX, q593zz, PREFIX, q594zz, PREFIX, q595zz, PREFIX, q596zz, PREFIX,
+        q597zz, PREFIX, q598zz, PREFIX, q599zz]
+      connection: sub
+      expect: {equals: OK}
+    - command: [CLIENT, TRACKING, 'on', BCAST, PREFIX, q600zz, PREFIX, q601zz, PREFIX,
+        q602zz, PREFIX, q603zz, PREFIX, q604zz, PREFIX, q605zz, PREFIX, q606zz, PREFIX,
+        q607zz, PREFIX, q608zz, PREFIX, q609zz, PREFIX, q610zz, PREFIX, q611zz, PREFIX,
+        q612zz, PREFIX, q613zz, PREFIX, q614zz, PREFIX, q615zz, PREFIX, q616zz, PREFIX,
+        q617zz, PREFIX, q618zz, PREFIX, q619zz, PREFIX, q620zz, PREFIX, q621zz, PREFIX,
+        q622zz, PREFIX, q623zz, PREFIX, q624zz, PREFIX, q625zz, PREFIX, q626zz, PREFIX,
+        q627zz, PREFIX, q628zz, PREFIX, q629zz, PREFIX, q630zz, PREFIX, q631zz, PREFIX,
+        q632zz, PREFIX, q633zz, PREFIX, q634zz, PREFIX, q635zz, PREFIX, q636zz, PREFIX,
+        q637zz, PREFIX, q638zz, PREFIX, q639zz, PREFIX, q640zz, PREFIX, q641zz, PREFIX,
+        q642zz, PREFIX, q643zz, PREFIX, q644zz, PREFIX, q645zz, PREFIX, q646zz, PREFIX,
+        q647zz, PREFIX, q648zz, PREFIX, q649zz, PREFIX, q650zz, PREFIX, q651zz, PREFIX,
+        q652zz, PREFIX, q653zz, PREFIX, q654zz, PREFIX, q655zz, PREFIX, q656zz, PREFIX,
+        q657zz, PREFIX, q658zz, PREFIX, q659zz, PREFIX, q660zz, PREFIX, q661zz, PREFIX,
+        q662zz, PREFIX, q663zz, PREFIX, q664zz, PREFIX, q665zz, PREFIX, q666zz, PREFIX,
+        q667zz, PREFIX, q668zz, PREFIX, q669zz, PREFIX, q670zz, PREFIX, q671zz, PREFIX,
+        q672zz, PREFIX, q673zz, PREFIX, q674zz, PREFIX, q675zz, PREFIX, q676zz, PREFIX,
+        q677zz, PREFIX, q678zz, PREFIX, q679zz, PREFIX, q680zz, PREFIX, q681zz, PREFIX,
+        q682zz, PREFIX, q683zz, PREFIX, q684zz, PREFIX, q685zz, PREFIX, q686zz, PREFIX,
+        q687zz, PREFIX, q688zz, PREFIX, q689zz, PREFIX, q690zz, PREFIX, q691zz, PREFIX,
+        q692zz, PREFIX, q693zz, PREFIX, q694zz, PREFIX, q695zz, PREFIX, q696zz, PREFIX,
+        q697zz, PREFIX, q698zz, PREFIX, q699zz]
+      connection: sub
+      expect: {equals: OK}
+    - command: [CLIENT, TRACKING, 'on', BCAST, PREFIX, q700zz, PREFIX, q701zz, PREFIX,
+        q702zz, PREFIX, q703zz, PREFIX, q704zz, PREFIX, q705zz, PREFIX, q706zz, PREFIX,
+        q707zz, PREFIX, q708zz, PREFIX, q709zz, PREFIX, q710zz, PREFIX, q711zz, PREFIX,
+        q712zz, PREFIX, q713zz, PREFIX, q714zz, PREFIX, q715zz, PREFIX, q716zz, PREFIX,
+        q717zz, PREFIX, q718zz, PREFIX, q719zz, PREFIX, q720zz, PREFIX, q721zz, PREFIX,
+        q722zz, PREFIX, q723zz, PREFIX, q724zz, PREFIX, q725zz, PREFIX, q726zz, PREFIX,
+        q727zz, PREFIX, q728zz, PREFIX, q729zz, PREFIX, q730zz, PREFIX, q731zz, PREFIX,
+        q732zz, PREFIX, q733zz, PREFIX, q734zz, PREFIX, q735zz, PREFIX, q736zz, PREFIX,
+        q737zz, PREFIX, q738zz, PREFIX, q739zz, PREFIX, q740zz, PREFIX, q741zz, PREFIX,
+        q742zz, PREFIX, q743zz, PREFIX, q744zz, PREFIX, q745zz, PREFIX, q746zz, PREFIX,
+        q747zz, PREFIX, q748zz, PREFIX, q749zz, PREFIX, q750zz, PREFIX, q751zz, PREFIX,
+        q752zz, PREFIX, q753zz, PREFIX, q754zz, PREFIX, q755zz, PREFIX, q756zz, PREFIX,
+        q757zz, PREFIX, q758zz, PREFIX, q759zz, PREFIX, q760zz, PREFIX, q761zz, PREFIX,
+        q762zz, PREFIX, q763zz, PREFIX, q764zz, PREFIX, q765zz, PREFIX, q766zz, PREFIX,
+        q767zz, PREFIX, q768zz, PREFIX, q769zz, PREFIX, q770zz, PREFIX, q771zz, PREFIX,
+        q772zz, PREFIX, q773zz, PREFIX, q774zz, PREFIX, q775zz, PREFIX, q776zz, PREFIX,
+        q777zz, PREFIX, q778zz, PREFIX, q779zz, PREFIX, q780zz, PREFIX, q781zz, PREFIX,
+        q782zz, PREFIX, q783zz, PREFIX, q784zz, PREFIX, q785zz, PREFIX, q786zz, PREFIX,
+        q787zz, PREFIX, q788zz, PREFIX, q789zz, PREFIX, q790zz, PREFIX, q791zz, PREFIX,
+        q792zz, PREFIX, q793zz, PREFIX, q794zz, PREFIX, q795zz, PREFIX, q796zz, PREFIX,
+        q797zz, PREFIX, q798zz, PREFIX, q799zz]
+      connection: sub
+      expect: {equals: OK}
+    - command: [CLIENT, TRACKING, 'on', BCAST, PREFIX, q800zz, PREFIX, q801zz, PREFIX,
+        q802zz, PREFIX, q803zz, PREFIX, q804zz, PREFIX, q805zz, PREFIX, q806zz, PREFIX,
+        q807zz, PREFIX, q808zz, PREFIX, q809zz, PREFIX, q810zz, PREFIX, q811zz, PREFIX,
+        q812zz, PREFIX, q813zz, PREFIX, q814zz, PREFIX, q815zz, PREFIX, q816zz, PREFIX,
+        q817zz, PREFIX, q818zz, PREFIX, q819zz, PREFIX, q820zz, PREFIX, q821zz, PREFIX,
+        q822zz, PREFIX, q823zz, PREFIX, q824zz, PREFIX, q825zz, PREFIX, q826zz, PREFIX,
+        q827zz, PREFIX, q828zz, PREFIX, q829zz, PREFIX, q830zz, PREFIX, q831zz, PREFIX,
+        q832zz, PREFIX, q833zz, PREFIX, q834zz, PREFIX, q835zz, PREFIX, q836zz, PREFIX,
+        q837zz, PREFIX, q838zz, PREFIX, q839zz, PREFIX, q840zz, PREFIX, q841zz, PREFIX,
+        q842zz, PREFIX, q843zz, PREFIX, q844zz, PREFIX, q845zz, PREFIX, q846zz, PREFIX,
+        q847zz, PREFIX, q848zz, PREFIX, q849zz, PREFIX, q850zz, PREFIX, q851zz, PREFIX,
+        q852zz, PREFIX, q853zz, PREFIX, q854zz, PREFIX, q855zz, PREFIX, q856zz, PREFIX,
+        q857zz, PREFIX, q858zz, PREFIX, q859zz, PREFIX, q860zz, PREFIX, q861zz, PREFIX,
+        q862zz, PREFIX, q863zz, PREFIX, q864zz, PREFIX, q865zz, PREFIX, q866zz, PREFIX,
+        q867zz, PREFIX, q868zz, PREFIX, q869zz, PREFIX, q870zz, PREFIX, q871zz, PREFIX,
+        q872zz, PREFIX, q873zz, PREFIX, q874zz, PREFIX, q875zz, PREFIX, q876zz, PREFIX,
+        q877zz, PREFIX, q878zz, PREFIX, q879zz, PREFIX, q880zz, PREFIX, q881zz, PREFIX,
+        q882zz, PREFIX, q883zz, PREFIX, q884zz, PREFIX, q885zz, PREFIX, q886zz, PREFIX,
+        q887zz, PREFIX, q888zz, PREFIX, q889zz, PREFIX, q890zz, PREFIX, q891zz, PREFIX,
+        q892zz, PREFIX, q893zz, PREFIX, q894zz, PREFIX, q895zz, PREFIX, q896zz, PREFIX,
+        q897zz, PREFIX, q898zz, PREFIX, q899zz]
+      connection: sub
+      expect: {equals: OK}
+    - command: [CLIENT, TRACKING, 'on', BCAST, PREFIX, q900zz, PREFIX, q901zz, PREFIX,
+        q902zz, PREFIX, q903zz, PREFIX, q904zz, PREFIX, q905zz, PREFIX, q906zz, PREFIX,
+        q907zz, PREFIX, q908zz, PREFIX, q909zz, PREFIX, q910zz, PREFIX, q911zz, PREFIX,
+        q912zz, PREFIX, q913zz, PREFIX, q914zz, PREFIX, q915zz, PREFIX, q916zz, PREFIX,
+        q917zz, PREFIX, q918zz, PREFIX, q919zz, PREFIX, q920zz, PREFIX, q921zz, PREFIX,
+        q922zz, PREFIX, q923zz, PREFIX, q924zz, PREFIX, q925zz, PREFIX, q926zz, PREFIX,
+        q927zz, PREFIX, q928zz, PREFIX, q929zz, PREFIX, q930zz, PREFIX, q931zz, PREFIX,
+        q932zz, PREFIX, q933zz, PREFIX, q934zz, PREFIX, q935zz, PREFIX, q936zz, PREFIX,
+        q937zz, PREFIX, q938zz, PREFIX, q939zz, PREFIX, q940zz, PREFIX, q941zz, PREFIX,
+        q942zz, PREFIX, q943zz, PREFIX, q944zz, PREFIX, q945zz, PREFIX, q946zz, PREFIX,
+        q947zz, PREFIX, q948zz, PREFIX, q949zz, PREFIX, q950zz, PREFIX, q951zz, PREFIX,
+        q952zz, PREFIX, q953zz, PREFIX, q954zz, PREFIX, q955zz, PREFIX, q956zz, PREFIX,
+        q957zz, PREFIX, q958zz, PREFIX, q959zz, PREFIX, q960zz, PREFIX, q961zz, PREFIX,
+        q962zz, PREFIX, q963zz, PREFIX, q964zz, PREFIX, q965zz, PREFIX, q966zz, PREFIX,
+        q967zz, PREFIX, q968zz, PREFIX, q969zz, PREFIX, q970zz, PREFIX, q971zz, PREFIX,
+        q972zz, PREFIX, q973zz, PREFIX, q974zz, PREFIX, q975zz, PREFIX, q976zz, PREFIX,
+        q977zz, PREFIX, q978zz, PREFIX, q979zz, PREFIX, q980zz, PREFIX, q981zz, PREFIX,
+        q982zz, PREFIX, q983zz, PREFIX, q984zz, PREFIX, q985zz, PREFIX, q986zz, PREFIX,
+        q987zz, PREFIX, q988zz, PREFIX, q989zz, PREFIX, q990zz, PREFIX, q991zz, PREFIX,
+        q992zz, PREFIX, q993zz, PREFIX, q994zz, PREFIX, q995zz, PREFIX, q996zz, PREFIX,
+        q997zz, PREFIX, q998zz, PREFIX, q999zz]
+      connection: sub
+      expect: {equals: OK}
+    - {command: [PING], connection: sub, expect: {equals: PONG}}
+    - {command: [CONFIG, SET, maxmemory-clients, 80kb], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [PING], connection: sub, expect_difference: true, expect: {equals: PONG}}
+    - {command: [ECHO, tracking-client-survives], connection: sub, expect_difference: true,
+      expect: {equals: tracking-client-survives}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [trk.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: trk}

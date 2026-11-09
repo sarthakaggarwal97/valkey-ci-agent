@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "34480ac35eaab8e08afecf68a53238a553098b93",
+  "parent": "7d63bc5babc936402573f067ecd36a4e4557f534",
+  "pr": 2381,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Initialize rdbstate.key_type to -1 at the beginning (#2381)",
+  "date": "2025-08-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.6345,
+  "findings": [],
+  "recorded": []
+}

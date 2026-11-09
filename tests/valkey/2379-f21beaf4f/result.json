@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f21beaf4f7be1c5be37f1183e7d4c250f8fe3498",
+  "parent": "a739531106ec54681b2b31a272b91d4875b436c2",
+  "pr": 2379,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Defrag should only skip non-existent dbs, not empty dbs (#2379)",
+  "date": "2025-07-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.3064,
+  "findings": [],
+  "recorded": []
+}

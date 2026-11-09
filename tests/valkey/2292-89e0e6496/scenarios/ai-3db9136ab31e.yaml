@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e5956d0c2386..89e0e64964ed.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3db9136ab31e
+seed: 20292
+experiment:
+  id: proposed.shutdown-failover-command-arg
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

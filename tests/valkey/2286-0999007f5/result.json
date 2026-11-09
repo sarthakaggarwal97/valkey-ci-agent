@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0999007f5c631b74e0eef58322086477c2a100b7",
+  "parent": "663dac97a15449265c56c51f790b746317ea6e03",
+  "pr": 2286,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Include command fullname in error message when returning NO_MULTI error (#2286)",
+  "date": "2025-07-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.0084,
+  "findings": [],
+  "recorded": []
+}

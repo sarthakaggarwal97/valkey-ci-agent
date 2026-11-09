@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f21015c9041463238d2996f6e595c2a00d7e066b",
+  "parent": "89e0e64964ed3a4c58cc73000786462a1f7d9f94",
+  "pr": 2154,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Limiting the new reconnections for failed nodes (#2154)",
+  "date": "2025-07-22",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 16,
+    "executed": 15,
+    "percent": 93,
+    "uncovered": [
+      "src/cluster_legacy.c:5463"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 2.0761,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,22 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bcaf918a7933..025f416b74ea.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f2f1ef177e29
+seed: 106
+experiment:
+  id: valkey.aof-durability
+  inputs:
+    appendfsync: everysec
+    loss_window_s: 2.5
+    mutation_rate: 800
+    stable_keys: 1500
+    value_size: 1024
+    run_before_crash_s: 3
+    run_after_crash_s: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7500
+  server_config:
+    repl-diskless-load: disabled
+    repl-diskless-sync: 'no'
+    dual-channel-replication-enabled: 'no'

@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 89e0e64964ed..f21015c90414.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e1a917ff7a2c
+seed: 215404
+experiment:
+  id: proposed.cluster-node-killed-reconnect
+  inputs:
+    instance: replica
+    signal: SIGKILL
+    restart_delay_s: 0
+    settle_s: 10
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7300

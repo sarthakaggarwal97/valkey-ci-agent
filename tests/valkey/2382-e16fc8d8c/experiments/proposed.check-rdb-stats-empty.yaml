@@ -1,0 +1,25 @@
+extends: [valkey.liveness]
+id: proposed.check-rdb-stats-empty
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-rdb --stats on an empty RDB (no keys, no SELECTDB) must
+    not crash
+inputs:
+  properties:
+    format: {type: string, enum: [info, table, csv], default: info}
+components:
+- use: valkey.action.tools
+  id: check-rdb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files:
+      empty.rdb: !!binary 'UkVESVMwMDEx/wAAAAAAAAAA'
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - {tool: valkey-check-rdb, args: [empty.rdb], expect: {stdout: {contains: RDB
+            looks OK}}}
+    - {tool: valkey-check-rdb, args: [empty.rdb, --stats, --format, {$ref: inputs.format}],
+      expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: "db.0.type.string"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check-rdb}

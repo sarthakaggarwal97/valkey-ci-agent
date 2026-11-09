@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "43c4af0b0e1b19868fbbf940d479a9f0e02f1baa",
+  "parent": "3b12132ac0be654abaf1cd04fa9fdf8f44314327",
+  "pr": 2374,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove obsolete BLOCKED_WAITAOF comment (#2374)",
+  "date": "2025-08-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2043,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only a comment in src/server.h (removing an obsolete mention of BLOCKED_WAITAOF above the blockingState fields). No code, data structure, or behaviour changes; the compiled binary is identical in behaviour to the parent, so no scenario can reach or distinguish the change."
+}

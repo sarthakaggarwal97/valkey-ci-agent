@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.no-multi-error-fullname
+deployment:
+  modes: [standalone]
+metadata:
+  description: NO_MULTI rejection error now names the offending command's fullname,
+    including subcommand fullnames like client|reply; transaction must still abort
+    with EXECABORT
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: nomulti
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [MULTI], expect_difference: true, expect: {error: "not allowed inside\
+          \ a transaction"}}
+    - {command: [WATCH, k1], expect_difference: true, expect: {error: "not allowed\
+          \ inside a transaction"}}
+    - {command: [SAVE], expect_difference: true, expect: {error: "not allowed inside\
+          \ a transaction"}}
+    - {command: [CLIENT, REPLY, ON], expect_difference: true, expect: {error: "not\
+          \ allowed inside a transaction"}}
+    - {command: [CLIENT, REPLY, SKIP], expect_difference: true, expect: {error: "not\
+          \ allowed inside a transaction"}}
+    - {command: [SYNC], expect_difference: true, expect: {error: "not allowed inside\
+          \ a transaction"}}
+    - {command: [PSYNC, "?", "-1"], expect_difference: true, expect: {error: "not\
+          \ allowed inside a transaction"}}
+    - {command: [SET, foo, bar], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {error: "EXECABORT"}}
+    - {command: [GET, foo]}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, foo, bar], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK]}}
+    - {command: [GET, foo], expect: {equals: bar}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [nomulti.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: nomulti}

@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f21beaf4f7be..2a44506b5d18.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b641e437e098
+seed: 1103
+experiment:
+  id: proposed.cluster-pfail-fail-recovery
+  inputs:
+    target: replica
+    pause_s: 6
+    settle_s: 30
+deployment:
+  mode: cluster
+  primaries: 6
+  replicas_per_primary: 1
+  base_port: 7400
+  server_config:
+    cluster-node-timeout: 1500

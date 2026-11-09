@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e5956d0c23863fef127202e06021c171b688c78a",
+  "parent": "0999007f5c631b74e0eef58322086477c2a100b7",
+  "pr": 2360,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix client tracking memory overhead calculation (#2360)",
+  "date": "2025-07-22",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.8003,
+  "findings": [],
+  "recorded": []
+}

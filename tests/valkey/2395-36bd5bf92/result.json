@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "36bd5bf926055882b10a65bf277327e5caa96871",
+  "parent": "34480ac35eaab8e08afecf68a53238a553098b93",
+  "pr": 2395,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Cleanup and rename isExpiryTableValidForSamplingCb to expiryTableShouldSkipForSamplingCb (#2395)",
+  "date": "2025-08-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3036,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure refactor with no behaviour change: the callback is renamed and its return values changed from C_ERR/C_OK (-1/0) to 1/0, but its only caller, kvstoreScan at src/kvstore.c:400, uses the result as a boolean (skip_cb && skip_cb(ht)), and -1 and 1 are equally truthy while 0 is unchanged. The skip-sparse-expiry-table decision in activeExpireCycle is identical on both builds; the remaining hunks in kvstore.c and kvstore.h only edit comments. Nothing observable changed, so no scenario can distinguish the builds."
+}

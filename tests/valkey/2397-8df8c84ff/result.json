@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8df8c84ffe45194d1763d0262d565c3113c8e40c",
+  "parent": "ec58a48434e22efa65149fe5784f98b882bd04bc",
+  "pr": 2397,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Same number of hyphens for summary output (#2397)",
+  "date": "2025-07-31",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.187,
+  "findings": [],
+  "recorded": []
+}

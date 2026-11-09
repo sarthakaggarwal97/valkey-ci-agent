@@ -1,0 +1,75 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e16fc8d8c8afc474f9a275276d75d42f6162177c",
+  "parent": "43c4af0b0e1b19868fbbf940d479a9f0e02f1baa",
+  "pr": 2382,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix check-rdb --stats crash with empty RDB (#2382)",
+  "date": "2025-08-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.1662,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: killed by signal 11",
+      "scenario": "ai-1db39bfbb8b9",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2382",
+      "fingerprint": "3c9b6d82c5da2b04c973",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: killed by signal 11",
+      "scenario": "ai-727dcf6f40db",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2382",
+      "fingerprint": "3c9b6d82c5da2b04c973",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-1db39bfbb8b9",
+      "build": "unstable",
+      "seed": 1,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1db39bfbb8b9",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1db39bfbb8b9",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ec58a48434e22efa65149fe5784f98b882bd04bc",
+  "parent": "ee5b72b18481bb975ae7b2813515df3b5d100b2b",
+  "pr": 2388,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add helper function for padded pointer copy (#2388)",
+  "date": "2025-07-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3536,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only extracts already-identical inline code (memcpy of a pointer plus zero padding on 32-bit) into a new helper writePointerWithPadding(), used by encodeFailureReportKey() and encodeTimeoutKey(). The bytes written to the radix-tree keys are identical before and after on both 32-bit and 64-bit targets, the encodeTimeoutKey parameter reorder is applied at all call sites, decodeTimeoutKey is a pure rename, and the remaining hunks add a unit test for the helper. It is a behaviour-preserving refactor with no reachable observable difference, so no fuzzer scenario is needed."
+}

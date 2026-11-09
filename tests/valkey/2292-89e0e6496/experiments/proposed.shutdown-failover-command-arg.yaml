@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.shutdown-failover-command-arg
+deployment:
+  modes: [standalone]
+metadata:
+  description: SHUTDOWN FAILOVER token parsing and its cluster-mode-only rejection,
+    candidate vs parent via valkey-cli
+components:
+- use: valkey.action.tools
+  id: cli-standalone
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, SHUTDOWN, FAILOVER], expect_difference: true,
+      expect: {stdout: {contains: "only supported in cluster mode"}}}
+    - {tool: valkey-cli, args: [-p, $port, SHUTDOWN, nosave, FaIlOvEr], expect_difference: true,
+      expect: {stdout: {contains: "only supported in cluster mode"}}}
+    - {tool: valkey-cli, args: [-p, $port, SHUTDOWN, ABORT, FAILOVER], expect: {stdout: {
+          contains: "syntax error"}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {stdout: {equals: "PONG\n"}}}
+- use: valkey.action.tools
+  id: cli-cluster
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, SHUTDOWN, SAFE, FAILOVER], expect_difference: true,
+      expect: {stdout: {contains: "Errors trying to SHUTDOWN"}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {stdout: {equals: "PONG\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-standalone}
+- {evidence_id: valkey.tool.runs, source: cli-cluster}

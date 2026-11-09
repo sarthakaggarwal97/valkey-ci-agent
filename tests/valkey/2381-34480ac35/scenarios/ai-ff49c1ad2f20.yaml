@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7d63bc5babc9..34480ac35eaa.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ff49c1ad2f20
+seed: 1
+experiment:
+  id: proposed.check-rdb-key-type-init
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.shutdown-failover-config-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: shutdown-on-sigterm/sigint accept the new failover flag, auto-failover-on-shutdown
+    is removed, and CONFIG REWRITE serializes the flag across a restart, compared
+    against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shutdown-config
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, auto-failover-on-shutdown, yes], expect_difference: true,
+      expect: {error: "Unknown option"}}
+    - {command: [CONFIG, SET, shutdown-on-sigterm, failover], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, shutdown-on-sigterm], expect_difference: true, expect: {
+        equals: [shutdown-on-sigterm, failover]}}
+    - {command: [CONFIG, SET, shutdown-on-sigterm, "nosave force now failover"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, shutdown-on-sigterm], expect_difference: true, expect: {
+        equals: [shutdown-on-sigterm, "nosave now force failover"]}}
+    - {command: [CONFIG, SET, shutdown-on-sigterm, "save nosave failover"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, shutdown-on-sigint, failover], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, shutdown-on-sigterm], expect_difference: true, expect: {
+        equals: [shutdown-on-sigterm, "nosave now force failover"]}}
+    - {command: [CONFIG, GET, shutdown-on-sigint], expect_difference: true, expect: {
+        equals: [shutdown-on-sigint, failover]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shutdown-config.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shutdown-config}

@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.client-negative-filters-replication
+deployment:
+  modes: [standalone]
+metadata:
+  description: Negative CLIENT filters against replication-link clients - NOT-TYPE/NOT-FLAGS
+    exclude or hit the replica and primary link clients, and the link recovers after
+    a kill
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: negrepl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    commands:
+    - {command: [CLIENT, SETNAME, me], expect: {equals: OK}}
+    - {command: [CLIENT, SETNAME, keeper], connection: k, expect: {equals: OK}}
+    - {command: [REPLICAOF, <node.0.host>, <node.0.port>], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [CLIENT, LIST, TYPE, replica], compare: skip, expect: {contains: "flags=S"}}
+    - {command: [CLIENT, LIST, NOT-TYPE, replica], expect_difference: true, expect: {
+        contains: "name=keeper"}}
+    - {command: [CLIENT, LIST, NOT-FLAGS, S], expect_difference: true, expect: {contains: "name=keeper"}}
+    - {command: [CLIENT, KILL, NOT-TYPE, normal], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [CLIENT, LIST, NOT-TYPE, primary], node: 1, expect_difference: true,
+      expect: {error: false}}
+    - {command: [CLIENT, KILL, NOT-TYPE, normal], node: 1, expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [CLIENT, KILL, NAME, keeper, NOT-FLAGS, S], expect_difference: true,
+      expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [negrepl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: negrepl}

@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.cli-summary-header
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli --bigkeys, --memkeys and --hotkeys print the "-------- Summary
+    --------" header with matching hyphen counts (the parent prints "-------- summary
+    -------")
+components:
+- use: valkey.action.tools
+  id: summary
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [-p, $port], stdin: "SET s1 hello\nSET s2 a-much-longer-string-value-0123456789\n\
+        RPUSH l1 a b c d e\nSADD set1 x y z\nHSET h1 f1 v1 f2 v2\nZADD z1 1 a 2 b\n\
+        XADD st1 1-1 f v\n", expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --bigkeys], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "-------- Summary --------"}}}
+    - {tool: valkey-cli, args: [-p, $port, --memkeys], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "-------- Summary --------"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, maxmemory-policy, allkeys-lfu],
+      expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --hotkeys], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "-------- Summary --------"}}}
+required_events: [summary.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: summary}

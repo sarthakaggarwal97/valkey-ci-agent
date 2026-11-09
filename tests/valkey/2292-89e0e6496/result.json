@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "89e0e64964ed3a4c58cc73000786462a1f7d9f94",
+  "parent": "e5956d0c23863fef127202e06021c171b688c78a",
+  "pr": 2292,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Auto-failover on shutdown unified config (#2292)",
+  "date": "2025-07-22",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 3,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 14,
+    "executed": 14,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 9.1326,
+  "findings": [],
+  "recorded": []
+}

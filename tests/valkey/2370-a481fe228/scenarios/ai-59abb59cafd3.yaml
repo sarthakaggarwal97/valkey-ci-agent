@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2a44506b5d18..a481fe228c16.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-59abb59cafd3
+seed: 20261109
+experiment:
+  id: proposed.failover-moves-open-slots
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  base_port: 7000

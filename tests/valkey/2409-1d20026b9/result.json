@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1d20026b938afd96c770f893d63cd314755ff59a",
+  "parent": "a50690f02c08e4e67b8b472f81587b05c405b6f7",
+  "pr": 2409,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Dictionary Implementation for Migrating and Importing slots (#2409)",
+  "date": "2025-08-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 83,
+    "executed": 68,
+    "percent": 81,
+    "uncovered": [
+      "src/cluster_legacy.c:298",
+      "src/cluster_legacy.c:2831",
+      "src/cluster_legacy.c:2853",
+      "src/cluster_legacy.c:2880",
+      "src/cluster_legacy.c:2881",
+      "src/cluster_legacy.c:2882",
+      "src/cluster_legacy.c:2887",
+      "src/cluster_legacy.c:2912",
+      "src/cluster_legacy.c:5982",
+      "src/cluster_legacy.c:5991",
+      "src/cluster_legacy.c:6178",
+      "src/cluster_legacy.c:6186",
+      "src/cluster_legacy.c:6193",
+      "src/cluster_legacy.c:6194",
+      "src/cluster_legacy.c:7855"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 5.2798,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a50690f02c08..1d20026b938a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9b3608ad56ea
+seed: 102
+experiment:
+  id: proposed.open-slots-setslot-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

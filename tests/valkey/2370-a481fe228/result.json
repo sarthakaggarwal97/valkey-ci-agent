@@ -1,0 +1,45 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a481fe228c16c4e33e35f3c2fc1770b34db3737b",
+  "parent": "2a44506b5d18e74128db34d283a3daab5d455309",
+  "pr": 2370,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update clusterMoveNodeSlots to also move importing slots and migrating slots (#2370)",
+  "date": "2025-07-28",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 1,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 25,
+    "executed": 23,
+    "percent": 92,
+    "uncovered": [
+      "src/cluster_legacy.c:2786",
+      "src/cluster_legacy.c:2828"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 7.3756,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 20 (CLUSTER NODES on node 1) replies otherwise with resp 3: {\"reply\":\"<node.1.id> 127.0.0.1:<node.1.port>@<node.1.cluster-port> myself,master - <gossip> connected 5462 [0-<-<node.2.id>] [5462->-<node.2.id>]\\n<node.0.id> 127.0.0.1:<node.0.port>@<node.0.cluster-port> slave <n",
+      "scenario": "ai-59abb59cafd3",
+      "seed": 20261109,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "2bf9a14c1b972d0e3c29",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-09T08:39+00:00.
+Updated 2026-11-09T08:56+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1113 | 1394 | #2427 (2025-08-05) | 226 | 159.0 |
+| valkey-io/valkey | 1138 | 1369 | #2365 (2025-07-17) | 251 | 162.6 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
 | valkey-io/valkey-search | 669 | 0 | f8106e72e984 (2024-11-27) | 94 | 95.6 |
@@ -13,28 +13,28 @@ Updated 2026-11-09T08:39+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-09T07:43:29+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42561872310): 20 merge(s) tested, 9 without a code change.
+[2026-11-09T08:56:04+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42581126511): 20 merge(s) tested, 5 without a code change.
 
-- [valkey-io/valkey#2469](https://github.com/valkey-io/valkey/pull/2469) ([tests](tests/valkey/2469-725c3608f/)): Throw a useful error when underlying operations failed with tls (#2469): declined: The change only alters connTLSGetLastError in src/tls.c to return strerror(last_errno) instead of NULL when no SSL error string is stored. The function is the TLS connection type's get_last_error implementation, reachable only over TLS connections, and every caller uses the result solely t
-- [valkey-io/valkey#2274](https://github.com/valkey-io/valkey/pull/2274) ([tests](tests/valkey/2274-a89e52993/)): Redact user data when hide-user-data-from-log enabled (#2274): declined: The change only alters the text of a serverPanic log message in moduleRDBLoadError: it substitutes '*redacted*' for the raw key name when hide-user-data-from-log is set. This is a log-redaction-only change with no effect on command replies, stored data, replication, or persistence. The fuz
-- [valkey-io/valkey#2467](https://github.com/valkey-io/valkey/pull/2467) ([tests](tests/valkey/2467-ee305ce29/)): Replace generic C assert with serverAssert (#2467): declined: The change only replaces the <assert.h> include with serverassert.h in src/rdma.c and removes unused <assert.h> includes from two unit-test files. No assertion conditions, logic, or command behaviour change: the only difference is the diagnostic output if an assertion ever fails. Moreover 
-- [valkey-io/valkey#2464](https://github.com/valkey-io/valkey/pull/2464) ([tests](tests/valkey/2464-ecca21331/)): Fix out-of-bound memory access when num-fields is not provided (#2464): 0 of 2 test(s) reached the change, coverage 100%; crash, fixed by #2464 (recorded)
-- [valkey-io/valkey#2432](https://github.com/valkey-io/valkey/pull/2432) ([tests](tests/valkey/2432-d32f9be04/)): Use bool for return types in hashtable functions (#2432): declined: The change is a pure refactor: hashtable/kvstore functions that already returned exactly 0 or 1 now return C99 bool (false/true, which compare equal to 0/1), plus comment updates and de-nesting rewrites with identical control flow. The one deleted function, kvstoreHashtableAddOrFind, has n
-- [valkey-io/valkey#2462](https://github.com/valkey-io/valkey/pull/2462) ([tests](tests/valkey/2462-bddc9db08/)): Fix HGETEX to return array response when the hash object is empty (#2462): 3 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2454](https://github.com/valkey-io/valkey/pull/2454) ([tests](tests/valkey/2454-e606fcbaf/)): Fix AOF rewrite behavior for hashes with expirations (#2454): 1 of 2 test(s) reached the change, coverage 100%; crash, introduced and since fixed (recorded); crash, fixed by #2454 (recorded)
-- [valkey-io/valkey#2452](https://github.com/valkey-io/valkey/pull/2452) ([tests](tests/valkey/2452-cc465383c/)): Adding backup directory check for valkey-cli --cluster backup (#2452): declined: no proposed test validated
-- [valkey-io/valkey#2344](https://github.com/valkey-io/valkey/pull/2344) ([tests](tests/valkey/2344-2f1b25067/)): Remove unused includes (#2344): declined: The change only deletes unused #include lines in db.c, server.c and server.h. No executable code, command behavior, reply, replication, persistence or configuration path changes; the sole risk is a compilation failure, which the build itself catches before any fuzzer scenario could run. A 
-- [valkey-io/valkey#2347](https://github.com/valkey-io/valkey/pull/2347) ([tests](tests/valkey/2347-fd8270a0a/)): [CRASH] Fix missing check for executing client (#2347): 0 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2436](https://github.com/valkey-io/valkey/pull/2436) ([tests](tests/valkey/2436-ba7334c7c/)): Fix hfe no malloc size unit (#2436): declined: The diff only changes a unit-test mock in src/unit/test_vset.c and adds a build-time guard in src/zmalloc.h that affects which malloc-size macro is compiled on __APPLE__ when NO_MALLOC_USABLE_SIZE is defined (a special test build configuration). On the Linux CI platform the compiled code i
-- [valkey-io/valkey#2419](https://github.com/valkey-io/valkey/pull/2419) ([tests](tests/valkey/2419-db11e41df/)): Add STALE command flag to SCRIPT-EXISTS, SCRIPT-SHOW and SCRIPT-FLUSH (#2419): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#2422](https://github.com/valkey-io/valkey/pull/2422) ([tests](tests/valkey/2422-33a43f2a8/)): bump the RDB version for Valkey 9.0(#2422): 2 of 4 test(s) reached the change, coverage 94%
-- [valkey-io/valkey@5a5848a44cb0](https://github.com/valkey-io/valkey/commit/5a5848a44cb0c098e214a33135d5bfa3b313b1ec) ([tests](tests/valkey/5a5848a44/)): Add ACTIVE-EXPIRY and ACTIVE-DEFRAG for hash objects with volatile items: 9 of 14 test(s) reached the change, coverage 95%; [check, appeared after 5a5848a44cb0](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/111); [crash, appeared after 5a5848a44cb0](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/112)
-- [valkey-io/valkey@c3b1b0317de9](https://github.com/valkey-io/valkey/commit/c3b1b0317de96a3fe2a1336a868c7740c6e7b93c) ([tests](tests/valkey/c3b1b0317/)): Introduce volatile set -------------: 2 of 20 test(s) reached the change, coverage 71%; [check, appeared after c3b1b0317de9](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/111); [crash, appeared after c3b1b0317de9](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/112); crash, introduced and since fixed (recorded)
-- [valkey-io/valkey@65215e5378db](https://github.com/valkey-io/valkey/commit/65215e5378db7b47c3460567da134ab7f0bfeb58) ([tests](tests/valkey/65215e537/)): Introduce HASH items expiration: 5 of 8 test(s) reached the change, coverage 80%
-- [valkey-io/valkey#2387](https://github.com/valkey-io/valkey/pull/2387) ([tests](tests/valkey/2387-3c738f08a/)): Remove the unused value duplicate API from dict of libvalkey (#2387): declined: The change deletes the unused valDup function pointer from libvalkey's dictType and simplifies dictSetVal accordingly. No dictType in the tree ever set valDup (grep finds no other reference), so dictSetVal already always executed de->val = val; the compiled behavior of the client library's
-- [valkey-io/valkey#2418](https://github.com/valkey-io/valkey/pull/2418) ([tests](tests/valkey/2418-b7fe0b643/)): Strengthen undefined behavior prevention in checkSignedBitfieldOverflow (#2418): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2414](https://github.com/valkey-io/valkey/pull/2414) ([tests](tests/valkey/2414-52b5519c5/)): Use unsigned long for `maxiterations`, fixing undefined behavior in scan with extremely large count (#2414): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2394](https://github.com/valkey-io/valkey/pull/2394) ([tests](tests/valkey/2394-aac3c76c7/)): Fix prefetchNextBucketEntries so it fetches the correct next 2 buckets (#2394): declined: The change only corrects which buckets prefetchNextBucketEntries passes to __builtin_prefetch during hashtable iteration. Prefetch is a pure cache hint with no architectural effect, the looked-up buckets are bounds-checked and valid in both the old and new code, and the result never affect
+- [valkey-io/valkey#2409](https://github.com/valkey-io/valkey/pull/2409) ([tests](tests/valkey/2409-1d20026b9/)): Dictionary Implementation for Migrating and Importing slots (#2409): 0 of 6 test(s) reached the change, coverage 81%
+- [valkey-io/valkey#2391](https://github.com/valkey-io/valkey/pull/2391) ([tests](tests/valkey/2391-a50690f02/)): Update swapdb command comment to mention why cluster mode is not allowed (#2391): declined: The diff only edits a source comment above swapdbCommand's cluster-mode check in src/db.c; no executable code, reply, or configuration changes, so there is no behaviour to test and a compared run could never show a difference.
+- [valkey-io/valkey#2395](https://github.com/valkey-io/valkey/pull/2395) ([tests](tests/valkey/2395-36bd5bf92/)): Cleanup and rename isExpiryTableValidForSamplingCb to expiryTableShouldSkipForSamplingCb (#2395): declined: Pure refactor with no behaviour change: the callback is renamed and its return values changed from C_ERR/C_OK (-1/0) to 1/0, but its only caller, kvstoreScan at src/kvstore.c:400, uses the result as a boolean (skip_cb && skip_cb(ht)), and -1 and 1 are equally truthy while 0 is unchanged. T
+- [valkey-io/valkey#2381](https://github.com/valkey-io/valkey/pull/2381) ([tests](tests/valkey/2381-34480ac35/)): Initialize rdbstate.key_type to -1 at the beginning (#2381): 1 of 1 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2417](https://github.com/valkey-io/valkey/pull/2417) ([tests](tests/valkey/2417-7d63bc5ba/)): Increase TID count to accomodate valkey-search reader/writer pools (#2417): declined: The change only bumps TIDS_MAX_SIZE from 50 to 150 in src/debug.c, the buffer the crash-report signal handler uses in writeStacktraces()/get_ready_to_signal_threads_tids() to enumerate thread TIDs when dumping stack traces. It changes behavior only when the process has more than 50 threads
+- [valkey-io/valkey#2382](https://github.com/valkey-io/valkey/pull/2382) ([tests](tests/valkey/2382-e16fc8d8c/)): Fix check-rdb --stats crash with empty RDB (#2382): 2 of 2 test(s) reached the change, coverage 100%; crash, fixed by #2382 (recorded)
+- [valkey-io/valkey#2374](https://github.com/valkey-io/valkey/pull/2374) ([tests](tests/valkey/2374-43c4af0b0/)): Remove obsolete BLOCKED_WAITAOF comment (#2374): declined: The change edits only a comment in src/server.h (removing an obsolete mention of BLOCKED_WAITAOF above the blockingState fields). No code, data structure, or behaviour changes; the compiled binary is identical in behaviour to the parent, so no scenario can reach or distinguish the change.
+- [valkey-io/valkey#2400](https://github.com/valkey-io/valkey/pull/2400) ([tests](tests/valkey/2400-3b12132ac/)): Rename trace bgsave type to rdb and aof (#2400): declined: The change only renames LTTng tracepoint providers (valkey_bgsave -> valkey_rdb), adds an aof fork tracepoint instance, and routes serverFork's trace by child type, plus build-file and README updates. All of it is behind the USE_LTTNG compile flag; in normal builds latencyTraceIfNeeded is 
+- [valkey-io/valkey#2378](https://github.com/valkey-io/valkey/pull/2378) ([tests](tests/valkey/2378-1fbf5fb1f/)): support negative filtering for client command filters (#2378): 4 of 4 test(s) reached the change, coverage 98%
+- [valkey-io/valkey#1784](https://github.com/valkey-io/valkey/pull/1784) ([tests](tests/valkey/1784-025f416b7/)): Save to Disk in Bio Thread and refactor readSyncBulkPayload (#1784): 0 of 9 test(s) reached the change, coverage 80%
+- [valkey-io/valkey#2397](https://github.com/valkey-io/valkey/pull/2397) ([tests](tests/valkey/2397-8df8c84ff/)): Same number of hyphens for summary output (#2397): 1 of 1 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2388](https://github.com/valkey-io/valkey/pull/2388) ([tests](tests/valkey/2388-ec58a4843/)): Add helper function for padded pointer copy (#2388): declined: The change only extracts already-identical inline code (memcpy of a pointer plus zero padding on 32-bit) into a new helper writePointerWithPadding(), used by encodeFailureReportKey() and encodeTimeoutKey(). The bytes written to the radix-tree keys are identical before and after on both 32-
+- [valkey-io/valkey#2370](https://github.com/valkey-io/valkey/pull/2370) ([tests](tests/valkey/2370-a481fe228/)): Update clusterMoveNodeSlots to also move importing slots and migrating slots (#2370): 1 of 3 test(s) reached the change, coverage 92%; check, introduced and since fixed (recorded)
+- [valkey-io/valkey#2277](https://github.com/valkey-io/valkey/pull/2277) ([tests](tests/valkey/2277-2a44506b5/)): Optimize cluster failure report tracking with RAX (#2277): 0 of 5 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2379](https://github.com/valkey-io/valkey/pull/2379) ([tests](tests/valkey/2379-f21beaf4f/)): Defrag should only skip non-existent dbs, not empty dbs (#2379): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2364](https://github.com/valkey-io/valkey/pull/2364) ([tests](tests/valkey/2364-a73953110/)): Fixing open comments on #1920 PR (#2364): declined: The change is confined to the TLS certificate auto-authentication branch of clientAcceptHandler, reachable only when a client connects over TLS with tls-auth-clients-user enabled and presents an X.509 certificate whose CN names an ACL user (connGetPeerUsername returns non-NULL only for the
+- [valkey-io/valkey#2154](https://github.com/valkey-io/valkey/pull/2154) ([tests](tests/valkey/2154-f21015c90/)): Limiting the new reconnections for failed nodes (#2154): 0 of 5 test(s) reached the change, coverage 93%
+- [valkey-io/valkey#2292](https://github.com/valkey-io/valkey/pull/2292) ([tests](tests/valkey/2292-89e0e6496/)): Auto-failover on shutdown unified config (#2292): 3 of 8 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2360](https://github.com/valkey-io/valkey/pull/2360) ([tests](tests/valkey/2360-e5956d0c2/)): Fix client tracking memory overhead calculation (#2360): 0 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2286](https://github.com/valkey-io/valkey/pull/2286) ([tests](tests/valkey/2286-0999007f5/)): Include command fullname in error message when returning NO_MULTI error (#2286): 2 of 2 test(s) reached the change, coverage 100%
 
 ### valkey-io/valkey-bloom
 
@@ -53,10 +53,10 @@ Updated 2026-11-09T08:39+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 639 of 949 tested (67%)
-- Changed-line coverage: median 100% of 504 merge(s) measured, 38 under 50%
-- Recall: 176 parents flagged of 267 fix merges
-- Claude: $971.36 in the last 24 hours, $6902.13 in the last 7 days, $6902.13 in all
+- Merges whose tests reached the change: 646 of 962 tested (67%)
+- Changed-line coverage: median 100% of 517 merge(s) measured, 38 under 50%
+- Recall: 177 parents flagged of 269 fix merges
+- Claude: $1024.04 in the last 24 hours, $6954.82 in the last 7 days, $6954.82 in all
 - Issues filed: 63
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

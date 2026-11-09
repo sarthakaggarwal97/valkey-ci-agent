@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.open-slots-nodesconf-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: Open migrating/importing slot states on slots 0, 8191 and 16383 survive
+    a restart through nodes.conf, exercising the rewritten clusterLoadConfig and clusterGenNodeDescription
+    on both builds
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 120
+    commands:
+    - {command: [CLUSTER, SETSLOT, 0, MIGRATING, "<node.1.id>"], expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 8191, MIGRATING, "<node.1.id>"], expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 16383, MIGRATING, "<node.1.id>"], expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 0, IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 16383, IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {restart: true, node: 0, expect: {equals: OK}}
+    - {restart: true, node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, NODES], compare: skip, expect: {contains: "[0->-"}}
+    - {command: [CLUSTER, NODES], compare: skip, expect: {contains: "[8191->-"}}
+    - {command: [CLUSTER, NODES], compare: skip, expect: {contains: "[16383->-"}}
+    - {command: [CLUSTER, NODES], node: 1, compare: skip, expect: {contains: "[0-<-"}}
+    - {command: [CLUSTER, NODES], node: 1, compare: skip, expect: {contains: "[16383-<-"}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 0], expect: {equals: 0}}
+    - {command: [CLUSTER, SETSLOT, 0, STABLE], expect: {equals: OK}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

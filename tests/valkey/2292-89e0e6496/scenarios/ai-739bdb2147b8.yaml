@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e5956d0c2386..89e0e64964ed.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-739bdb2147b8
+seed: 304
+experiment:
+  id: proposed.primary-sigterm-failover-on-shutdown
+  inputs:
+    warmup_s: 3
+    settle_s: 15
+    restart_delay_s: 2
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 2
+  base_port: 7600
+  server_config:
+    shutdown-on-sigterm: failover
+    cluster-node-timeout: 5000
