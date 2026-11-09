@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-09T22:25+00:00.
+Updated 2026-11-09T22:41+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1299 | 1211 | #1995 (2025-05-03) | 302 | 185.6 |
+| valkey-io/valkey | 1299 | 1211 | #1995 (2025-05-03) | 272 | 185.6 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 63 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 9.0 |
-| valkey-io/valkey-search | 669 | 0 | f8106e72e984 (2024-11-27) | 14 | 95.6 |
+| valkey-io/valkey-search | 670 | 0 | f8106e72e984 (2024-11-27) | 15 | 95.7 |
 
 ## Last runs
 
@@ -48,15 +48,16 @@ Updated 2026-11-09T22:25+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-09T20:53:20+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42697097484): 0 merge(s) tested, 0 without a code change.
+[2026-11-09T22:41:08+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42702039915): 1 merge(s) tested, 0 without a code change.
 
+- [valkey-io/valkey-search#1432](https://github.com/valkey-io/valkey-search/pull/1432) ([tests](tests/valkey-search/1432-d08f29e1e/)): refactor(text): remove dead RadixTree template and its test (#1432): declined: The change only deletes dead code: src/indexes/text/radix_tree.h was an unused template header (no remaining file includes it; the live text index uses the rax wrapper in rax_wrapper.h), and the other two hunks remove its unit test (testing/radix_test.cc) and its CMake test registration. N
 
 ## Totals
 
 - Merges whose tests reached the change: 689 of 1047 tested (66%)
 - Changed-line coverage: median 100% of 593 merge(s) measured, 49 under 50%
 - Recall: 191 parents flagged of 291 fix merges
-- Claude: $1218.69 in the last 24 hours, $7649.91 in the last 7 days, $7649.91 in all
+- Claude: $1092.72 in the last 24 hours, $7650.24 in the last 7 days, $7650.24 in all
 - Issues filed: 64
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

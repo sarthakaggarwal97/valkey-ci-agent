@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "d08f29e1e36d3eca830344acc0641890bc2dcfac",
+  "parent": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "pr": 1432,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "refactor(text): remove dead RadixTree template and its test (#1432)",
+  "date": "2026-11-09",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": "d08f29e1e36d3eca830344acc0641890bc2dcfac",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3311,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only deletes dead code: src/indexes/text/radix_tree.h was an unused template header (no remaining file includes it; the live text index uses the rax wrapper in rax_wrapper.h), and the other two hunks remove its unit test (testing/radix_test.cc) and its CMake test registration. No compiled module code path, command, reply, index behaviour, persistence or replication behaviour changes, so there is nothing a fuzzer scenario could reach or distinguish between the two builds."
+}
