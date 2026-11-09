@@ -79,8 +79,12 @@ _MAX_CLAUDE_RUNS = 3
 _ANOMALY_PATTERNS: list[tuple[str, str, str, bool]] = [
     ("Node crash or assertion", "critical",
      r"ASSERTION FAILED|Assertion failed|BUG REPORT START|STACK TRACE|crashed by signal|Guru Meditation", True),
+    # A sanitizer flags a bug with ERROR:/SUMMARY: (ThreadSanitizer with WARNING:); the bare name also appears in
+    # benign stderr such as "WARNING: AddressSanitizer failed to allocate N bytes", which under
+    # allocator_may_return_null=1 just returns NULL for Valkey's own OOM handling to catch.
     ("Sanitizer failure", "critical",
-     r"AddressSanitizer|LeakSanitizer|ThreadSanitizer|UndefinedBehaviorSanitizer|runtime error:", True),
+     r"ERROR: (?:Address|Leak|UndefinedBehavior)Sanitizer|WARNING: ThreadSanitizer"
+     r"|SUMMARY: (?:Address|Leak|Thread|UndefinedBehavior)Sanitizer|runtime error:", True),
     ("Segfault", "critical", r"segmentation fault|signal 11", True),
     ("OOM", "critical", r"Out Of Memory|Can't allocate|OOM command not allowed", False),
     ("Failover timeout", "critical",

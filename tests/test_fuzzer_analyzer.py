@@ -36,6 +36,20 @@ def test_scan_logs_detects_crash():
     assert any("crash" in a.title.lower() or "assertion" in a.title.lower() for a in anomalies)
 
 
+def test_scan_logs_ignores_benign_asan_allocation_warning():
+    # Under allocator_may_return_null=1 an oversized allocation (e.g. DEBUG POPULATE with a huge count)
+    # prints this WARNING and returns NULL for Valkey's own OOM handling; it is not a sanitizer report.
+    ctx = _ctx()
+    ctx.node_logs = {"output.log": "==22901==WARNING: AddressSanitizer failed to allocate 0x100000000000000 bytes"}
+    assert not any(a.title == "Sanitizer failure" for a in _scan_logs(ctx))
+
+
+def test_scan_logs_detects_real_sanitizer_error():
+    ctx = _ctx()
+    ctx.node_logs = {"output.log": "==1==ERROR: AddressSanitizer: heap-use-after-free on address 0x60200000"}
+    assert any(a.title == "Sanitizer failure" for a in _scan_logs(ctx))
+
+
 def test_triage_normal():
     assert _triage([]) == ("normal", "expected-chaos-noise")
 
