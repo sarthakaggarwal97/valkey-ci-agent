@@ -498,6 +498,19 @@ def test_a_refused_request_says_why_and_is_not_asked_again(tmp_path, fuzzer_dir)
     assert len(runner.prompts) == 1
 
 
+def test_an_output_token_overflow_is_not_asked_again(tmp_path, fuzzer_dir):
+    # valkey #2146: the response ran past the 64000 output token maximum three runs in a row; a second try
+    # explores the same way and overflows again, so it must not be retried.
+    overflow = "API Error: Claude's response exceeded the 64000 output token maximum."
+    stream = "\n".join([json.dumps({"type": "assistant"}), json.dumps({"type": "result", "result": overflow})])
+    failed = AgentRunResult(profile="fuzzer_proposal_readonly", stdout=stream, stderr="", returncode=1,
+                            prompt_sha256="x", cwd="", allowed_tools="", model="", started_at="", finished_at="")
+    runner = StubRunner(failed, _answer([{"rationale": "a", "scenario": GOOD}]))
+    with pytest.raises(RuntimeError, match=r"Claude Code failed \(rc=1\): API Error: .* output token maximum"):
+        _propose(runner, tmp_path, fuzzer_dir)
+    assert len(runner.prompts) == 1
+
+
 def test_unusable_first_answer_raises(tmp_path, fuzzer_dir):
     # Prose, and prose again when asked to restate it as the object.
     runner = StubRunner(_result("I could not find anything"), _result("Still nothing to say"))

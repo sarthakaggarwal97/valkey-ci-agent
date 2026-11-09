@@ -1119,9 +1119,9 @@ def _ask_claude(runner: Runner, prompt: str, workdir: Path) -> dict[str, Any]:
         text = result_text(result.stdout)
         detail = result.stderr or (text if text != result.stdout else "")
         last_error = RuntimeError(f"Claude Code failed (rc={result.returncode}): {detail[:300]}")
-        if "timeout after" in result.stderr or "Usage Policy" in detail:
-            # The same prompt explores the same way: a second try took as long again and timed out too, or was
-            # refused again.
+        if "timeout after" in result.stderr or "Usage Policy" in detail or "output token maximum" in detail:
+            # The same prompt explores the same way: a second try took as long again and timed out too, was
+            # refused again, or ran past the output token maximum again (valkey #2146).
             raise last_error
         if attempt + 1 < _CLAUDE_MAX_ATTEMPTS:
             logger.warning("Claude failed, retrying: %s", last_error)
