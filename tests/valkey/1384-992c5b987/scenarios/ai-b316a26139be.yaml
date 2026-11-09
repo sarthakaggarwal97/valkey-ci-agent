@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 36312085e785..992c5b98780f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b316a26139be
+seed: 202
+experiment:
+  id: proposed.cluster-flushslot-compare
+  inputs:
+    resp: 3
+    lazy_user_flush: 'yes'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

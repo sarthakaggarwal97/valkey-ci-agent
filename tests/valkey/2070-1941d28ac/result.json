@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1941d28acd53c08335f85700ae8f8d1cf5cdc40c",
+  "parent": "838ba44cd65b15822f4136a4aed33cc13caa4cae",
+  "pr": 2070,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "[NEW] Introduce lttng based tracing (#2070)",
+  "date": "2025-06-08",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 2,
+  "hunted": 6,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 22,
+    "executed": 15,
+    "percent": 68,
+    "uncovered": [
+      "src/sentinel.c:825",
+      "src/server.c:6395",
+      "src/server.c:6396",
+      "src/socket.c:409",
+      "src/socket.c:412",
+      "src/unix.c:38",
+      "src/unix.c:41"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 7.6537,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-4afd6cd317fa",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'modlatency' returned ERROR: expectations both builds violate alike, so they are not about the change: 7 (LATENCY RESET test), 9 (LATENCY RESET test)"
+    }
+  ]
+}

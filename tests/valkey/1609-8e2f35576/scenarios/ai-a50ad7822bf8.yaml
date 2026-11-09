@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b5e012a1083c..8e2f35576446.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a50ad7822bf8
+seed: 103
+experiment:
+  id: proposed.on-demand-db-cluster-slots
+deployment:
+  mode: standalone
+  base_port: 7200

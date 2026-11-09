@@ -1,0 +1,78 @@
+extends: [valkey.liveness]
+id: proposed.flushall-empty-dbs
+deployment:
+  modes: [standalone]
+metadata:
+  description: FLUSHALL and FLUSHDB over mixed empty and non-empty dbs, sync and async,
+    repeated on an all-empty server; dbs must stay usable and replies must match the
+    parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flush
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SET, k0, v0], expect: {equals: OK}}
+    - {command: [EXPIRE, k0, 1000], expect: {equals: 1}}
+    - {command: [SELECT, '5'], expect: {equals: OK}}
+    - {command: [MSET, k5a, v, k5b, v], expect: {equals: OK}}
+    - {command: [SELECT, '15'], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [FLUSHALL, SYNC], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SELECT, '0'], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [TTL, k0], expect: {equals: -2}}
+    - {command: [SELECT, '5'], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [FLUSHALL, SYNC], expect: {equals: OK}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [SET, again, '1'], expect: {equals: OK}}
+    - {command: [PEXPIRE, again, '100000'], expect: {equals: 1}}
+    - {command: [DBSIZE], expect: {equals: 1}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [EXISTS, again], expect: {equals: 0}}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [FLUSHDB, SYNC], expect: {equals: OK}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: OK}}
+    - {command: [SWAPDB, '3', '4'], expect: {equals: OK}}
+    - {command: [FLUSHALL, SYNC], expect: {equals: OK}}
+    - {command: [SELECT, '1'], expect: {equals: OK}}
+    - {command: [SET, e1, v, PX, '90000'], expect: {equals: OK}}
+    - {command: [SELECT, '2'], expect: {equals: OK}}
+    - {command: [SET, e2, v, EX, '900'], expect: {equals: OK}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [SELECT, '1'], expect: {equals: OK}}
+    - {command: [EXISTS, e1], expect: {equals: 0}}
+    - {command: [SET, e1back, v], expect: {equals: OK}}
+    - {command: [INFO, keyspace], compare: skip}
+    - {command: [SELECT, '2'], expect: {equals: OK}}
+    - {command: [EXISTS, e2], expect: {equals: 0}}
+    - {command: [SELECT, '0'], expect: {equals: OK}}
+    - {command: [WATCH, nosuchkey], expect: {equals: OK}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, txk, v], expect: {equals: QUEUED}}
+    - {command: [EXEC]}
+    - {command: [EXISTS, txk]}
+    - {command: [FLUSHALL, SYNC], expect: {equals: OK}}
+    - {command: [SET, final, v], expect: {equals: OK}}
+    - {command: [GET, final], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [flush.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flush}

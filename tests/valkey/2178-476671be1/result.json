@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "476671be194e4296b9100663560193069fa46453",
+  "parent": "1941d28acd53c08335f85700ae8f8d1cf5cdc40c",
+  "pr": 2178,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix replica can't finish failover when config epoch is outdated (#2178)",
+  "date": "2025-06-09",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/cluster_legacy.c:4694",
+      "src/cluster_legacy.c:4699"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 17.2811,
+  "findings": [],
+  "recorded": []
+}

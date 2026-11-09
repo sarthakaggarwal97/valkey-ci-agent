@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 838ba44cd65b..1941d28acd53.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0244951d405c
+seed: 102
+experiment:
+  id: proposed.latency-monitor-units
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

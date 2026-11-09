@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b5e012a1083c..8e2f35576446.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d2b56867046d
+seed: 60904
+experiment:
+  id: proposed.on-demand-db-replica-expire
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

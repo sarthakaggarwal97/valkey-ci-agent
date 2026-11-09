@@ -1,0 +1,132 @@
+extends: [valkey.base]
+id: proposed.expire-del-propagation-churn
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Expire waves of volatile keys so propagateDeletion streams DEL/UNLINK
+    to the AOF and replicas, kill and restart a node mid-churn, and verify liveness,
+    AOF reload and ledger convergence
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+    target: {type: string, enum: [primary, replica], default: primary}
+components:
+- use: valkey.action.commands
+  id: churn-before
+  depends_on: [writes]
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [SET, 'exp:a:1', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:2', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:3', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:4', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:5', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:6', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:7', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:8', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:9', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:10', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:11', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:12', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:13', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:14', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:15', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:16', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:17', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:18', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:19', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:a:20', v, PX, 200], expect: {equals: OK}}
+    - {command: [EXISTS, 'exp:a:1'], expect: {equals: 0}, wait_s: 20}
+    - {command: [EXISTS, 'exp:a:20'], expect: {equals: 0}, wait_s: 20}
+    - {command: [SET, 'exp:b:1', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:2', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:3', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:4', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:5', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:6', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:7', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:8', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:9', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:10', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:11', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:12', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:13', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:14', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:15', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:16', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:17', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:18', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:19', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:b:20', v, PX, 200], expect: {equals: OK}}
+    - {command: [EXISTS, 'exp:b:1'], expect: {equals: 0}, wait_s: 20}
+    - {command: [EXISTS, 'exp:b:20'], expect: {equals: 0}, wait_s: 20}
+    - {command: [SET, 'exp:post:1', v, PX, 10000], expect: {equals: OK}}
+    - {command: [SET, 'exp:post:2', v, PX, 10000], expect: {equals: OK}}
+    - {command: [SET, 'exp:post:3', v, PX, 10000], expect: {equals: OK}}
+    - {command: [SET, 'exp:post:4', v, PX, 10000], expect: {equals: OK}}
+    - {command: [SET, 'exp:post:5', v, PX, 10000], expect: {equals: OK}}
+    - {command: [SET, 'exp:post:6', v, PX, 10000], expect: {equals: OK}}
+    - {command: [SET, 'exp:post:7', v, PX, 10000], expect: {equals: OK}}
+    - {command: [SET, 'exp:post:8', v, PX, 10000], expect: {equals: OK}}
+    - {command: [SET, 'exp:post:9', v, PX, 10000], expect: {equals: OK}}
+    - {command: [SET, 'exp:post:10', v, PX, 10000], expect: {equals: OK}}
+- use: valkey.fault.process-signal
+  id: kill
+  config:
+    when_event: pre-kill.completed
+    instance: {$ref: inputs.target}
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: pre-kill
+  depends_on: [churn-before, kill]
+  config: {seconds: 0.5}
+- use: valkey.action.wait-event
+  id: recovered
+  depends_on: [pre-kill]
+  config: {event: kill.recovered, only_after: kill.injected, timeout_s: 120}
+- use: valkey.action.commands
+  id: churn-after
+  depends_on: [recovered]
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [EXISTS, 'exp:post:1'], expect: {equals: 0}, wait_s: 40}
+    - {command: [EXISTS, 'exp:post:10'], expect: {equals: 0}, wait_s: 40}
+    - {command: [SET, 'exp:c:1', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:2', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:3', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:4', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:5', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:6', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:7', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:8', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:9', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:10', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:11', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:12', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:13', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:14', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:15', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:16', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:17', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:18', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:19', v, PX, 200], expect: {equals: OK}}
+    - {command: [SET, 'exp:c:20', v, PX, 200], expect: {equals: OK}}
+    - {command: [EXISTS, 'exp:c:1'], expect: {equals: 0}, wait_s: 20}
+    - {command: [EXISTS, 'exp:c:20'], expect: {equals: 0}, wait_s: 20}
+    - {command: [WAIT, 1, 2000], expect: {min: 1}, wait_s: 60}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [churn-after]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [churn-before.completed, kill.recovered, churn-after.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn-before}
+- {evidence_id: valkey.command.sequence, source: churn-after}
+- {evidence_id: valkey.fault.injected, source: kill}

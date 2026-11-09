@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.latency-monitor-units
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    LATENCY monitor after the ms->us refactor: thresholds still filter in milliseconds,
+    lazy-expire still records expire-del, and a latency-monitor-threshold at INT64_MAX
+    overflows threshold*1000 on the new build so every command is recorded where the
+    parent records none
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: latency
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, latency-monitor-threshold, 200], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.5], expect: {equals: OK}}
+    - {command: [LATENCY, LATEST], compare: skip}
+    - {command: [LATENCY, RESET, command], expect: {equals: 1}}
+    - {command: [DEBUG, SLEEP, 0.03], expect: {equals: OK}}
+    - {command: [LATENCY, RESET, command], expect: {equals: 0}}
+    - {command: [SET, k, v, PX, 50], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.2], expect: {equals: OK}}
+    - {command: [GET, k]}
+    - {command: [LATENCY, RESET, command, fast-command, expire-del], compare: skip}
+    - {command: [CONFIG, SET, latency-monitor-threshold, 9223372036854775807], expect: {
+        equals: OK}}
+    - {command: [DEBUG, SLEEP, 0], expect: {equals: OK}}
+    - {command: [GET, nosuchkey]}
+    - {command: [LATENCY, RESET, command], expect_difference: true, expect: {equals: 1}}
+    - {command: [LATENCY, RESET, fast-command], expect_difference: true, expect: {
+        equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [latency.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: latency}

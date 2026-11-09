@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "988297d19abea59799cdfaedcf7d0b01f0a559d8",
+  "parent": "4dae83dba19ee06191dcd927e7c9ae20d79f4324",
+  "pr": 2010,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Avoid log spam about cluster node failure detection by each primary (#2010)",
+  "date": "2025-06-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.235,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only lowers the log level of two cluster gossip messages (failure report added / removed) from LL_NOTICE to LL_VERBOSE in clusterProcessGossipSection. The failure-detection logic itself (clusterNodeAddFailureReport, clusterNodeDelFailureReport, markNodeAsFailingIfNeeded) is unchanged; no command reply, cluster state, replication, failover or persistence behavior differs between the builds. It is a logging-verbosity-only change with no externally observable behavior for the fuzzer's oracles or a compared command sequence to detect, so no scenario is needed."
+}

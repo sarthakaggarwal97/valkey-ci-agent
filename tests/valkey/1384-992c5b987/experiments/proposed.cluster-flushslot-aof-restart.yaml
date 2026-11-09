@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.cluster-flushslot-aof-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER FLUSHSLOT reaches the AOF verbatim and replays correctly across
+    a restart, SYNC and ASYNC, keys outside the slot untouched
+components:
+- use: valkey.action.commands
+  id: aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    server_config: {appendonly: "yes", appendfsync: always}
+    timeout_s: 20
+    commands:
+    - {command: [CLUSTER, KEYSLOT, foo], expect: {equals: 12182}}
+    - {command: [MSET, "{foo}1", v1, "{foo}2", v2], expect: {equals: OK}}
+    - {command: [SET, bar, keep], expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182, SYNC], expect_difference: true, expect: {
+        equals: OK}}
+    - {restart: true}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [GET, bar], expect: {equals: keep}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 1}}
+    - {command: [MSET, "{foo}a", 1, "{foo}b", 2], expect: {equals: OK}}
+    - {command: [RPUSH, "{foo}l", a, b, c, d, e, f, g, h], expect: {equals: 8}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182, ASYNC], expect_difference: true, expect: {
+        equals: OK}}
+    - {restart: true}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof}

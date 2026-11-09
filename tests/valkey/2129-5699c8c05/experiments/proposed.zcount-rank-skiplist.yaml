@@ -1,0 +1,127 @@
+extends: [valkey.liveness]
+id: proposed.zcount-rank-skiplist
+deployment:
+  modes: [standalone]
+metadata:
+  description: ZCOUNT, ZRANK/ZREVRANK, score-range LIMIT offsets and GEOSEARCH on
+    skiplist-encoded sorted sets, replies compared across builds after the zslNthInRange/zslGetRank
+    rank rewrite
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    max_listpack_entries: {type: integer, enum: [0, 5], default: 0}
+components:
+- use: valkey.action.commands
+  id: zranks
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: {$ref: inputs.max_listpack_entries}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ZADD, z, 1, m01, 2, m02, 3, m03, 4, m04, 5, m05, 6, m06, 7, m07,
+        8, m08, 9, m09, 10, m10, 11, m11, 12, m12, 13, m13, 14, m14, 15, m15, 16,
+        m16, 17, m17, 18, m18, 19, m19, 20, m20, 21, m21, 22, m22, 23, m23, 24, m24,
+        25, m25, 26, m26, 27, m27, 28, m28, 29, m29, 30, m30], expect: {equals: 30}}
+    - {command: [OBJECT, ENCODING, z], compare: skip}
+    - {command: [ZCOUNT, z, '-inf', '+inf'], expect: {equals: 30}}
+    - {command: [ZCOUNT, z, 1, 30], expect: {equals: 30}}
+    - {command: [ZCOUNT, z, '(1', 30], expect: {equals: 29}}
+    - {command: [ZCOUNT, z, 1, '(30'], expect: {equals: 29}}
+    - {command: [ZCOUNT, z, '(1', '(30'], expect: {equals: 28}}
+    - {command: [ZCOUNT, z, 15, 15], expect: {equals: 1}}
+    - {command: [ZCOUNT, z, '(15', '(16'], expect: {equals: 0}}
+    - {command: [ZCOUNT, z, 1, 1], expect: {equals: 1}}
+    - {command: [ZCOUNT, z, 30, 30], expect: {equals: 1}}
+    - {command: [ZCOUNT, z, 30, '+inf'], expect: {equals: 1}}
+    - {command: [ZCOUNT, z, '(30', '+inf'], expect: {equals: 0}}
+    - {command: [ZCOUNT, z, '-inf', '(1'], expect: {equals: 0}}
+    - {command: [ZCOUNT, z, 31, 40], expect: {equals: 0}}
+    - {command: [ZCOUNT, z, 10, '(10'], expect: {equals: 0}}
+    - {command: [ZCOUNT, z, 20, 10], expect: {equals: 0}}
+    - {command: [ZCOUNT, z, 0.5, 1.5], expect: {equals: 1}}
+    - {command: [ZCOUNT, z, 25, '+inf'], expect: {equals: 6}}
+    - {command: [ZCOUNT, z, '-inf', 5], expect: {equals: 5}}
+    - {command: [ZRANK, z, m01], expect: {equals: 0}}
+    - {command: [ZRANK, z, m15], expect: {equals: 14}}
+    - {command: [ZRANK, z, m30], expect: {equals: 29}}
+    - {command: [ZREVRANK, z, m01], expect: {equals: 29}}
+    - {command: [ZREVRANK, z, m30], expect: {equals: 0}}
+    - {command: [ZRANK, z, nosuch], expect: {exists: false}}
+    - {command: [ZRANGEBYSCORE, z, '-inf', '+inf', LIMIT, 12, 3], expect: {equals: [
+          m13, m14, m15]}}
+    - {command: [ZRANGEBYSCORE, z, 5, '+inf', LIMIT, 14, 2], expect: {equals: [m19,
+          m20]}}
+    - {command: [ZRANGEBYSCORE, z, '-inf', '+inf', LIMIT, 29, 10], expect: {equals: [
+          m30]}}
+    - {command: [ZRANGEBYSCORE, z, '-inf', '+inf', LIMIT, 30, 10], expect: {equals: []}}
+    - {command: [ZREVRANGEBYSCORE, z, '+inf', '-inf', LIMIT, 12, 3], expect: {equals: [
+          m18, m17, m16]}}
+    - {command: [ZREVRANGEBYSCORE, z, '(25', '-inf', LIMIT, 11, 2], expect: {equals: [
+          m13, m12]}}
+    - {command: [ZREVRANGEBYSCORE, z, '+inf', '-inf', LIMIT, 29, 5], expect: {equals: [
+          m01]}}
+    - {command: [ZREVRANGEBYSCORE, z, '+inf', '-inf', LIMIT, 30, 5], expect: {equals: []}}
+    - {command: [ZADD, z2, 1, a1, 2, a2, 3, a3, 5, d01, 5, d02, 5, d03, 5, d04, 5,
+        d05, 5, d06, 5, d07, 5, d08, 5, d09, 5, d10, 5, d11, 5, d12, 5, d13, 5, d14,
+        5, d15, 7, b1, 8, b2, 9, b3], expect: {equals: 21}}
+    - {command: [ZCOUNT, z2, 5, 5], expect: {equals: 15}}
+    - {command: [ZCOUNT, z2, '(3', '(7'], expect: {equals: 15}}
+    - {command: [ZCOUNT, z2, 5, 7], expect: {equals: 16}}
+    - {command: [ZCOUNT, z2, '-inf', '(5'], expect: {equals: 3}}
+    - {command: [ZCOUNT, z2, '(5', '+inf'], expect: {equals: 3}}
+    - {command: [ZRANK, z2, d01], expect: {equals: 3}}
+    - {command: [ZRANK, z2, d15], expect: {equals: 17}}
+    - {command: [ZREVRANK, z2, d15], expect: {equals: 3}}
+    - {command: [ZRANGEBYSCORE, z2, 5, 5, LIMIT, 12, 2], expect: {equals: [d13, d14]}}
+    - {command: [ZREVRANGEBYSCORE, z2, 5, 5, LIMIT, 12, 2], expect: {equals: [d03,
+          d02]}}
+    - {command: [ZINCRBY, z, 100, m05], expect: {exists: true}}
+    - {command: [ZCOUNT, z, '-inf', '+inf'], expect: {equals: 30}}
+    - {command: [ZCOUNT, z, '(30', '+inf'], expect: {equals: 1}}
+    - {command: [ZCOUNT, z, 5, 5], expect: {equals: 0}}
+    - {command: [ZRANK, z, m05], expect: {equals: 29}}
+    - {command: [ZREVRANK, z, m05], expect: {equals: 0}}
+    - {command: [ZRANK, z, m06], expect: {equals: 4}}
+    - {command: [ZINCRBY, z, 0.5, m10], expect: {exists: true}}
+    - {command: [ZCOUNT, z, 10, 11], expect: {equals: 2}}
+    - {command: [ZRANK, z, m10], expect: {equals: 8}}
+    - {command: [ZREM, z, m01, m30], expect: {equals: 2}}
+    - {command: [ZCOUNT, z, '-inf', '+inf'], expect: {equals: 28}}
+    - {command: [ZCOUNT, z, 30, 30], expect: {equals: 0}}
+    - {command: [ZRANK, z, m02], expect: {equals: 0}}
+    - {command: [ZREMRANGEBYSCORE, z, 2, 5], expect: {equals: 3}}
+    - {command: [ZCOUNT, z, '-inf', '+inf'], expect: {equals: 25}}
+    - {command: [ZCOUNT, z, 6, 10], expect: {equals: 4}}
+    - {command: [ZRANK, z, m06], expect: {equals: 0}}
+    - {command: [ZREVRANGEBYSCORE, z, '+inf', '-inf', LIMIT, 12, 2], expect: {equals: [
+          m18, m17]}}
+    - {command: [ZRANGEBYSCORE, z, '-inf', '+inf', LIMIT, 23, 5], expect: {equals: [
+          m29, m05]}}
+    - {command: [GEOADD, geo, 13.361389, 38.115556, Palermo, 15.087269, 37.502669,
+        Catania], expect: {equals: 2}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, 15, 37, BYRADIUS, 200, km, ASC], expect: {
+        equals: [Catania, Palermo]}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, 15, 37, BYRADIUS, 100, km, ASC], expect: {
+        equals: [Catania]}}
+    - {command: [SET, str, hello], expect: {equals: OK}}
+    - {command: [ZCOUNT, str, 0, 1], expect: {error: WRONGTYPE}}
+    - {command: [ZCOUNT, z, foo, bar], expect: {error: 'not a float'}}
+    - {command: [ZCOUNT, missing, '-inf', '+inf'], expect: {equals: 0}}
+    - {command: [ZRANK, missing, m01], expect: {exists: false}}
+    - {command: [ZADD, big, '-1e308', h0, 0, h1, '1e308', h2], expect: {equals: 3}}
+    - {command: [ZCOUNT, big, '-inf', '+inf'], expect: {equals: 3}}
+    - {command: [ZCOUNT, big, 0, '+inf'], expect: {equals: 2}}
+    - {command: [ZCOUNT, big, '(0', '+inf'], expect: {equals: 1}}
+    - {command: [ZRANK, big, h2], expect: {equals: 2}}
+    - {command: [ZREVRANK, big, h0], expect: {equals: 2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [zranks.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zranks}

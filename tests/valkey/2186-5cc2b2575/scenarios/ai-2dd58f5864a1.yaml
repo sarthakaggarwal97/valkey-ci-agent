@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3bc40be6cdef..5cc2b2575300.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2dd58f5864a1
+seed: 103
+experiment:
+  id: proposed.runtime-port-change-cluster-view
+deployment:
+  mode: standalone
+  base_port: 7200

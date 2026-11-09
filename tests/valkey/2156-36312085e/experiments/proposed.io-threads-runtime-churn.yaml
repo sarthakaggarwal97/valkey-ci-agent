@@ -1,0 +1,59 @@
+extends: [valkey.base]
+id: proposed.io-threads-runtime-churn
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Rapid CONFIG SET io-threads changes under offloaded client traffic;
+    threads must exit gracefully with no crash, hang, or lost write
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: churn
+  depends_on: [warm-up]
+  config:
+    timeout_s: 120
+    commands:
+    - {command: [CONFIG, SET, io-threads, 4], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 8], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 3], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 8], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, 0], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 7], expect: {equals: OK}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, 128], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 8], expect: {equals: OK}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 6], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 5], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 4], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 3], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 2], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, 16], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 8], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 8], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 8], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 5], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 2], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 7], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 3], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 6], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 4], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [churn]
+  config: {seconds: 3}
+required_events: [warm-up.completed, churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

@@ -1,0 +1,80 @@
+extends: [valkey.liveness]
+id: proposed.on-demand-db-commands
+deployment:
+  modes: [standalone]
+metadata:
+  description: Multi-DB command sequence over on-demand database allocation (SELECT,
+    SWAPDB, MOVE, COPY, WATCH, expire, RDB save and reload), replies compared with
+    the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: multidb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [DEBUG, HTSTATS, 13]}
+    - {command: [SELECT, 15], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SET, k15, v15], expect: {equals: OK}}
+    - {command: [GET, k15], expect: {equals: v15}}
+    - {command: [SELECT, -1], expect: {error: "out of range"}}
+    - {command: [SELECT, 16], expect: {error: "out of range"}}
+    - {command: [SELECT, 9223372036854775807], expect: {error: true}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SET, k0, v0], expect: {equals: OK}}
+    - {command: [WATCH, k0], expect: {equals: OK}}
+    - {command: [SWAPDB, 0, 7], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, k0], expect: {equals: QUEUED}}
+    - {command: [EXEC]}
+    - {command: [GET, k0]}
+    - {command: [SELECT, 7], expect: {equals: OK}}
+    - {command: [GET, k0], expect: {equals: v0}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SET, mk, mv], expect: {equals: OK}}
+    - {command: [MOVE, mk, 9], expect: {equals: 1}}
+    - {command: [SET, ck, cv], expect: {equals: OK}}
+    - {command: [MOVE, ck, 999], expect: {error: "out of range"}}
+    - {command: [COPY, ck, ck2, DB, 11], expect: {equals: 1}}
+    - {command: [SELECT, 9], expect: {equals: OK}}
+    - {command: [GET, mk], expect: {equals: mv}}
+    - {command: [SELECT, 11], expect: {equals: OK}}
+    - {command: [GET, ck2], expect: {equals: cv}}
+    - {command: [SWAPDB, 12, 13], expect: {equals: OK}}
+    - {command: [SELECT, 14], expect: {equals: OK}}
+    - {command: [SET, ek, ev, PX, 80], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.3], expect: {equals: OK}}
+    - {command: [GET, ek]}
+    - {command: [INFO, keyspace]}
+    - {command: [DEBUG, DIGEST]}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [SELECT, 15], expect: {equals: OK}}
+    - {command: [GET, k15], expect: {equals: v15}}
+    - {command: [SELECT, 11], expect: {equals: OK}}
+    - {command: [GET, ck2], expect: {equals: cv}}
+    - {command: [SELECT, 7], expect: {equals: OK}}
+    - {command: [GET, k0], expect: {equals: v0}}
+    - {command: [DBSIZE], expect: {equals: 1}}
+    - {command: [INFO, keyspace]}
+    - {command: [DEBUG, DIGEST]}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SWAPDB, 3, 4], expect: {equals: OK}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [multidb.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: multidb}

@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.module-latency-sample
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    VM_LatencyAddSample after the ms->us change: module-supplied latencies still filter
+    against the millisecond threshold, and values whose latency*1000 exceeds INT64_MAX
+    wrap negative on the new build so the sample is silently dropped where the parent
+    recorded it
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: modlatency
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, latency-monitor-threshold, 100], expect: {equals: OK}}
+    - {command: [test.latency, 500], expect: {equals: OK}}
+    - {command: [LATENCY, HISTORY, test], compare: skip}
+    - {command: [LATENCY, RESET, test], expect: {equals: 1}}
+    - {command: [test.latency, 50], expect: {equals: OK}}
+    - {command: [LATENCY, RESET, test], expect: {equals: 0}}
+    - {command: [test.latency, 9223372036854776], expect: {equals: OK}}
+    - {command: [LATENCY, RESET, test], expect_difference: true, expect: {equals: 0}}
+    - {command: [test.latency, 9223372036854775807], expect: {equals: OK}}
+    - {command: [LATENCY, RESET, test], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modlatency.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modlatency}

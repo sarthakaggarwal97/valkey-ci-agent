@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0039adcc7eea28a4c3ea9d93380edfda72d16956",
+  "parent": "3789b29e92d4997252352bd9748bffaf7d8f712b",
+  "pr": 2168,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove dead conditions around the multi/exec check (#2168)",
+  "date": "2025-06-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.8299,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure dead-code removal with no behaviour change. The removed conditions (c->cmd->proc != multiCommand && c->cmd->proc != watchCommand) in the transaction-queueing check at server.c:4377 are unreachable on both builds: MULTI and WATCH carry the CMD_NO_MULTI flag (src/commands/multi.json, src/commands/watch.json), so when c->flag.multi is set they are rejected earlier in the same processCommand call at server.c:4145 (\"Command not allowed inside a transaction\") and never reach the queueing check; without flag.multi the branch is skipped entirely. No reply, transaction state, or replication behavi"
+}

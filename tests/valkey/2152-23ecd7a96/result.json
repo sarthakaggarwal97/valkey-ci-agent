@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "23ecd7a967efcdb3505196cc2f946b5277859355",
+  "parent": "51e96c1df2f980d679a33926d3e9dca86929ad27",
+  "pr": 2152,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Unify behavior of CLIENT REPLY in multi with other NO_MULTI commands (#2152)",
+  "date": "2025-05-30",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.213,
+  "findings": [],
+  "recorded": []
+}

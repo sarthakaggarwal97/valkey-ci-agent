@@ -1,0 +1,77 @@
+extends: [valkey.liveness]
+id: proposed.cluster-flushslot-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER FLUSHSLOT semantics, slot and token validation, MULTI/EXEC
+    nesting and keyspace del notifications, compared against the parent build on a
+    one-node cluster
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    lazy_user_flush: {type: string, enum: ["yes", "no"], default: "yes"}
+components:
+- use: valkey.action.commands
+  id: flushslot
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    server_config:
+      notify-keyspace-events: "gE"
+      lazyfree-lazy-user-flush: {$ref: inputs.lazy_user_flush}
+    timeout_s: 15
+    commands:
+    - {command: [CLUSTER, KEYSLOT, foo], expect: {equals: 12182}}
+    - {command: [MSET, "{foo}1", v1, "{foo}2", v2, "{foo}3", v3], expect: {equals: OK}}
+    - {command: [RPUSH, "{foo}list", a, b, c], expect: {equals: 3}}
+    - {command: [SET, "{foo}ttl", v, EX, 1000], expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect: {equals: 5}}
+    - {command: [SUBSCRIBE, "__keyevent@0__:del"], connection: events}
+    - {command: [CLUSTER, FLUSHSLOT, 12182, SYNC], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 0}}
+    - {command: [GET, "{foo}1"], expect_difference: true, expect: {equals: null}}
+    - {read: true, connection: events, compare: skip}
+    - {command: [CLUSTER, FLUSHSLOT, 0, SYNC], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [RPUSH, "{foo}big", e, e, e, e, e, e, e, e, e, e, e, e, e, e, e, e,
+        e, e, e, e, e, e, e, e], expect: {equals: 24}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182, ASYNC], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [SET, "{foo}x", v], expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182], expect_difference: true, expect: {equals: OK}}
+    - {command: [EXISTS, "{foo}x"], expect_difference: true, expect: {equals: 0}}
+    - {command: [CLUSTER, FLUSHSLOT, 16384], expect_difference: true, expect: {error: "Invalid\
+          \ or out of range slot"}}
+    - {command: [CLUSTER, FLUSHSLOT, -1], expect_difference: true, expect: {error: "Invalid\
+          \ or out of range slot"}}
+    - {command: [CLUSTER, FLUSHSLOT, 9223372036854775807], expect_difference: true,
+      expect: {error: "Invalid or out of range slot"}}
+    - {command: [CLUSTER, FLUSHSLOT, notanumber], expect_difference: true, expect: {
+        error: "Invalid or out of range slot"}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182, BOGUS], expect_difference: true, expect: {
+        error: "syntax error"}}
+    - {command: [CLUSTER, FLUSHSLOT], expect_difference: true, expect: {error: "wrong\
+          \ number of arguments"}}
+    - {command: [SET, "{foo}m1", v], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182, SYNC], expect_difference: true, expect: {
+        equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [OK]}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect_difference: true, expect: {
+        equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [flushslot.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flushslot}

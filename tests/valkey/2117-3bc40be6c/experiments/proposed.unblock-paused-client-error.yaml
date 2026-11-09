@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.unblock-paused-client-error
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLIENT UNBLOCK <id> ERROR of a client postponed by CLIENT PAUSE WRITE
+    wrongly unpaused it (returned 1, delivered -UNBLOCKED, dropped its command); the
+    fix returns 0 and keeps it blocked
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: unblock
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CLIENT, PAUSE, 100000, WRITE], expect: {equals: OK}}
+    - {raw: "BLPOP mylist 0\r\n", connection: victim, expect: {exists: false}}
+    - {command: [CLIENT, UNBLOCK, 3, ERROR], expect_difference: true, expect: {equals: 0}}
+    - {read: true, connection: victim, expect_difference: true, expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: unblock}

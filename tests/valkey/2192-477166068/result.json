@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "47716606896c9c6ea4f7aa024957fb946f5b0e9f",
+  "parent": "767302e3ae6ebb535c3ce49279485e135f0e23d7",
+  "pr": 2192,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update extended-redis-compatibility conf to remove the specific words (#2192)",
+  "date": "2025-06-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2184,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only a comment in valkey.conf, rewording the deprecation timeline of extended-redis-compatibility ('Valkey 9.0/10.0' becomes 'a future version'). No code path, config default, parsing, or server behaviour changes; the config option itself is untouched. A documentation-only change needs no scenario."
+}

@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.on-demand-db-dirty-slot
+deployment:
+  modes: [standalone]
+metadata:
+  description: a slot taken over by another node while the old owner still holds keys
+    in it, so the old owner deletes the dirty slot via delKeysInSlot with module-only
+    del notifications
+components:
+- use: valkey.action.commands
+  id: dirtyslot
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 120
+    commands:
+    - {command: [SET, foo, inslot12182], node: 0, expect: {equals: OK}}
+    - {command: [SET, bar, inslot5061, EX, 1000], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 0, expect: {equals: 1}}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 0, wait_s: 60, expect: {
+        equals: 0}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 1, expect: {equals: 0}}
+    - {command: [GET, bar], node: 0, expect: {equals: inslot5061}}
+    - {command: [DBSIZE], node: 0, expect: {equals: 1}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dirtyslot.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dirtyslot}

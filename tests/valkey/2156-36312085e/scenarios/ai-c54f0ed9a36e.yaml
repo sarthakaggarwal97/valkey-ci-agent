@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 831220a30b59..36312085e785.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c54f0ed9a36e
+seed: 20563
+experiment:
+  id: proposed.io-threads-churn-replica-fault
+  inputs:
+    signal: SIGKILL
+    mutation_rate: 800
+    value_size: 1024
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7200
+  server_config:
+    io-threads: 6
+    events-per-io-thread: 0

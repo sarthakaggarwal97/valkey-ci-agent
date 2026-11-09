@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.unblock-paused-client-timeout
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLIENT UNBLOCK <id> TIMEOUT of a client postponed by CLIENT PAUSE WRITE
+    crashed the server (serverPanic in replyToBlockedClientTimedOut, no BLOCKED_POSTPONE
+    branch); the fix returns 0 and leaves it paused
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: unblock
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CLIENT, PAUSE, 100000, WRITE], expect: {equals: OK}}
+    - {raw: "BLPOP mylist 0\r\n", connection: victim, expect: {exists: false}}
+    - {command: [CLIENT, UNBLOCK, 3, TIMEOUT], expect_difference: true, expect: {
+        equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: unblock}

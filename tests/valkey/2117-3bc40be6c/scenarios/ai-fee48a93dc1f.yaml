@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 476671be194e..3bc40be6cdef.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fee48a93dc1f
+seed: 4
+experiment:
+  id: proposed.unblock-paused-client-error
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7300

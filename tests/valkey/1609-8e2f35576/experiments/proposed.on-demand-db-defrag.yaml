@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.on-demand-db-defrag
+deployment:
+  modes: [standalone]
+metadata:
+  description: active defrag stages built per on-demand database, with a SWAPDB and
+    an async FLUSHALL racing the running defrag cycle
+components:
+- use: valkey.action.commands
+  id: defrag
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {databases: 16, activedefrag: "no"}
+    timeout_s: 240
+    commands:
+    - {command: [DEBUG, POPULATE, 50000], expect: {equals: OK}}
+    - {command: [SELECT, 6], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 50000], expect: {equals: OK}}
+    - {command: [EVAL, "for i=0,49999,2 do redis.call('UNLINK','key:'..i) end return\
+          \ 1", "0"], expect: {equals: 1}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [EVAL, "for i=0,49999,2 do redis.call('UNLINK','key:'..i) end return\
+          \ 1", "0"], expect: {equals: 1}}
+    - {command: [CONFIG, SET, active-defrag-ignore-bytes, "1"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, active-defrag-threshold-lower, "0"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, active-defrag-cycle-min, "10"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, activedefrag, yes], expect: {equals: OK}}
+    - {command: [SET, gone1, x, PX, 5000], expect: {equals: OK}}
+    - {command: [EXISTS, gone1], wait_s: 30, expect: {equals: 0}}
+    - {command: [SWAPDB, 6, 2], expect: {equals: OK}}
+    - {command: [SET, gone2, x, PX, 3000], expect: {equals: OK}}
+    - {command: [EXISTS, gone2], wait_s: 30, expect: {equals: 0}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 1000], expect: {equals: OK}}
+    - {command: [SET, gone3, x, PX, 4000], expect: {equals: OK}}
+    - {command: [EXISTS, gone3], wait_s: 30, expect: {equals: 0}}
+    - {command: [CONFIG, SET, activedefrag, no], expect: {equals: OK}}
+    - {command: [INFO, memory], compare: skip}
+    - {command: [DBSIZE], expect: {equals: 1000}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [defrag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: defrag}

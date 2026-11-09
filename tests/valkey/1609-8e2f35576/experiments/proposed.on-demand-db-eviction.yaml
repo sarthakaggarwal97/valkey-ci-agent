@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.on-demand-db-eviction
+deployment:
+  modes: [standalone]
+metadata:
+  description: maxmemory eviction sampling across sparse on-demand databases under
+    allkeys-lru, allkeys-random and volatile-lru, ending in a sync FLUSHALL
+components:
+- use: valkey.action.commands
+  id: evict
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {databases: 32, maxmemory-samples: "5"}
+    timeout_s: 240
+    commands:
+    - {command: [DEBUG, POPULATE, 60000], expect: {equals: OK}}
+    - {command: [SELECT, 7], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 60000], expect: {equals: OK}}
+    - {command: [SELECT, 31], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 60000], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-lru], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, 8mb], expect: {equals: OK}}
+    - {command: [SET, trig1, v], expect: {equals: OK}}
+    - {command: [DBSIZE], wait_s: 90, compare: skip, expect: {max: 59999}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-random], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, 6mb], expect: {equals: OK}}
+    - {command: [SET, trig2, v], expect: {equals: OK}}
+    - {command: [DBSIZE], wait_s: 90, compare: skip, expect: {max: 40000}}
+    - {command: [CONFIG, SET, maxmemory, "0"], expect: {equals: OK}}
+    - {command: [SELECT, 13], expect: {equals: OK}}
+    - {command: [SET, vol1, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vol2, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vol3, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vol4, v, EX, 1000], expect: {equals: OK}}
+    - {command: [SET, vol5, v, EX, 1000], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-policy, volatile-lru], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, 4mb], expect: {equals: OK}}
+    - {command: [SET, oomprobe, v], expect: {error: "OOM"}}
+    - {command: [DBSIZE], wait_s: 30, expect: {equals: 0}}
+    - {command: [CONFIG, SET, maxmemory, "0"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-policy, noeviction], expect: {equals: OK}}
+    - {command: [FLUSHALL, SYNC], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [evict.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evict}

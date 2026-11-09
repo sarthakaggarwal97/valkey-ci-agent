@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b5e012a1083c..8e2f35576446.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3dc5b89923bd
+seed: 104
+experiment:
+  id: proposed.on-demand-db-diskless-swapdb
+  inputs:
+    dual_channel: 'no'
+deployment:
+  mode: standalone
+  base_port: 7300

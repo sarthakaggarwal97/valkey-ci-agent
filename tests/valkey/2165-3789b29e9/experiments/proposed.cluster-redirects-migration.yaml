@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.cluster-redirects-migration
+deployment:
+  modes: [standalone]
+metadata:
+  description: MOVED, ASK, TRYAGAIN and migration-state checks of the rewritten getNodeByQuery
+    compared across builds on two-node clusters
+components:
+- use: valkey.action.commands
+  id: redirects
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    server_config: {io-threads: 4}
+    timeout_s: 15
+    commands:
+    - {command: [SET, foo, v1], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{foo}present", p], node: 0, expect: {equals: OK}}
+    - {command: [GET, bar], node: 0}
+    - {command: [CLUSTER, SETSLOT, 5061, NODE, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [GET, bar], node: 0, expect: {error: MOVED}}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, MIGRATING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [GET, foo], node: 0, expect: {equals: v1}}
+    - {command: [GET, "{foo}missing"], node: 0, expect: {error: ASK}}
+    - {command: [MGET, foo, "{foo}missing"], node: 0, expect: {error: TRYAGAIN}}
+    - {command: [MGET, "{foo}missing", foo], node: 0, expect: {error: TRYAGAIN}}
+    - {command: [MGET, foo, "{foo}present"], node: 0, expect: {equals: [v1, p]}}
+    - {command: [MSET, foo, x, bar, y], node: 0, expect: {error: CROSSSLOT}}
+    - {command: [MOVE, foo, 1], node: 0, expect: {error: true}}
+    - {command: [COPY, foo, "{foo}c", DB, 5], node: 0, expect: {error: true}}
+    - {command: [MULTI], node: 0, expect: {equals: OK}}
+    - {command: [GET, foo], node: 0, expect: {equals: QUEUED}}
+    - {command: [GET, "{foo}missing"], node: 0, expect: {equals: QUEUED}}
+    - {command: [EXEC], node: 0, expect: {error: TRYAGAIN}}
+    - {command: [GET, foo], node: 1, expect: {error: MOVED}}
+    - {command: [ASKING], node: 1, expect: {equals: OK}}
+    - {command: [GET, foo], node: 1}
+    - {command: [DEL, foo, "{foo}present"], node: 0, expect: {equals: 2}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [GET, foo], node: 0, expect: {error: MOVED}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [redirects.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: redirects}

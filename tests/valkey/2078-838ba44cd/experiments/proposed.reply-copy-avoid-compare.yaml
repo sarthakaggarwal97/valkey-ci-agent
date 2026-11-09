@@ -1,0 +1,99 @@
+extends: [valkey.liveness]
+id: proposed.reply-copy-avoid-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Reply copy avoidance compared against the parent build: the new config gates,
+    raw/embstr/int encodings, repeated references in one reply, referenced objects
+    outliving DEL/UNLINK/FLUSHALL inside EXEC, large replies spanning writev partial
+    writes, and pub/sub delivery to an eligible CLIENT_TYPE_PUBSUB client.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, enum: [1, 7], default: 1}
+components:
+- use: valkey.action.commands
+  id: copyavoid
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      io-threads: {$ref: inputs.io_threads}
+      events-per-io-thread: 0
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, min-io-threads-avoid-copy-reply, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SET, k64, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"],
+      expect: {equals: OK}}
+    - {command: [GET, k64], expect: {equals: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}}
+    - {command: [MGET, k64, k64, k64, k64, k64], expect: {equals: ["0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]}}
+    - {command: [SET, k40, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"], expect: {
+        equals: OK}}
+    - {command: [GET, k40], expect: {equals: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}
+    - {command: [SET, kint, 12345], expect: {equals: OK}}
+    - {command: [GET, kint], expect: {equals: "12345"}}
+    - {command: [APPEND, t, xy], expect: {equals: 2}}
+    - {command: [GET, t], expect: {equals: xy}}
+    - {command: [SET, e, ""], expect: {equals: OK}}
+    - {command: [GET, e], expect: {equals: ""}}
+    - {command: [GETRANGE, k64, 0, 9], expect: {equals: "0123456789"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, k64], expect: {equals: QUEUED}}
+    - {command: [SET, k64, "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"],
+      expect: {equals: QUEUED}}
+    - {command: [GET, k64], expect: {equals: QUEUED}}
+    - {command: [DEL, k64], expect: {equals: QUEUED}}
+    - {command: [GET, k64], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: ["0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          OK, "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210",
+          1, null]}}
+    - {command: [SET, u1, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"],
+      expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, u1], expect: {equals: QUEUED}}
+    - {command: [UNLINK, u1], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: ["0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          1]}}
+    - {command: [SET, f1, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"],
+      expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, f1], expect: {equals: QUEUED}}
+    - {command: [FLUSHALL], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: ["0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          OK]}}
+    - {command: [SETRANGE, big, 99999, Z], expect: {equals: 100000}}
+    - {command: [STRLEN, big], expect: {equals: 100000}}
+    - {command: [GET, big]}
+    - {command: [GETRANGE, big, 0, 2147483647]}
+    - {command: [SETRANGE, huge, 1048575, Z], expect: {equals: 1048576}}
+    - {command: [GET, huge]}
+    - {command: [SUBSCRIBE, ch], connection: sub, expect: {exists: true}}
+    - {command: [PUBLISH, ch, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"],
+      expect: {equals: 1}}
+    - {connection: sub, read: true, expect: {exists: true}}
+    - {command: [CONFIG, SET, min-io-threads-avoid-copy-reply, 0], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, min-string-size-avoid-copy-reply, 45], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, min-string-size-avoid-copy-reply-threaded, 45], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SET, p60, "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"],
+      expect: {equals: OK}}
+    - {command: [GET, p60], expect: {equals: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}
+    - {command: [GETDEL, p60], expect: {equals: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}
+    - {command: [GET, p60], expect: {exists: false}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [copyavoid.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: copyavoid}

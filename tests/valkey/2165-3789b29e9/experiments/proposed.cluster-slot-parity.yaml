@@ -1,0 +1,78 @@
+extends: [valkey.liveness]
+id: proposed.cluster-slot-parity
+deployment:
+  modes: [standalone]
+metadata:
+  description: Slot calculation, cross-slot detection, MULTI/EXEC transaction slots
+    and script slot checks compared across builds on a one-node cluster
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slots
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    server_config: {io-threads: 4}
+    timeout_s: 10
+    commands:
+    - {command: [SET, foo, v1], expect: {equals: OK}}
+    - {command: [SET, bar, v2], expect: {equals: OK}}
+    - {command: [MSET, "{foo}a", "1", "{foo}b", "2"], expect: {equals: OK}}
+    - {command: [MSET, foo, x, bar, y], expect: {error: CROSSSLOT}}
+    - {command: [MGET, foo, "{foo}a"], expect: {equals: [v1, "1"]}}
+    - {command: [DEL, foo, bar], expect: {error: CROSSSLOT}}
+    - {command: [SADD, "s{foo}", m1], expect: {equals: 1}}
+    - {command: [SINTERCARD, 2, "s{foo}", bar], expect: {error: CROSSSLOT}}
+    - {command: [XREAD, COUNT, 1, STREAMS, foo, bar, "0", "0"], expect: {error: CROSSSLOT}}
+    - {command: [ZRANGESTORE, "d{foo}", bar, 0, -1], expect: {error: CROSSSLOT}}
+    - {command: [EXEC], expect: {error: "without MULTI"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, foo], expect: {equals: QUEUED}}
+    - {command: [GET, bar], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {error: CROSSSLOT}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, foo], expect: {equals: QUEUED}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [GET, "{foo}a"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [v1, PONG, "1"]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [MSET, foo, x, bar, y], expect: {error: CROSSSLOT}}
+    - {command: [EXEC], expect: {error: EXECABORT}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, foo], expect: {equals: QUEUED}}
+    - {command: [DISCARD], expect: {equals: OK}}
+    - {command: [GET, bar], expect: {equals: v2}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [ECHO, hi], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [PONG, hi]}}
+    - {command: [WATCH, foo], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, foo], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [v1]}}
+    - {command: [SET, "", empty], expect: {equals: OK}}
+    - {command: [GET, ""], expect: {equals: empty}}
+    - {command: [SET, fields, kw], expect: {equals: OK}}
+    - {command: [SET, "{}", v], expect: {equals: OK}}
+    - {command: [SET, "{foo", v], expect: {equals: OK}}
+    - {command: [SET, "a{}b", v], expect: {equals: OK}}
+    - {command: [GET, "a{}b"], expect: {equals: v}}
+    - {command: [EVAL, "local ok, e = pcall(function() return redis.call('MSET','foo','x','bar','y')\
+          \ end) return redis.call('GET','{foo}a')", 0], expect: {equals: "1"}}
+    - {command: [EVAL, "return redis.call('GET','foo')", 0], expect: {equals: v1}}
+    - {command: [EVAL, "return 1", 2, foo, bar], expect: {error: CROSSSLOT}}
+    - {command: [EVAL, "return redis.call('GET', KEYS[1])", 1, foo], expect: {equals: v1}}
+    - {command: [GET, foo], expect: {equals: v1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slots.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slots}

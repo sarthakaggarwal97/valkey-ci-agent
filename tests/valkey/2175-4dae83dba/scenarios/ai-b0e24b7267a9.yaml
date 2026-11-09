@@ -1,0 +1,19 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0039adcc7eea..4dae83dba19e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b0e24b7267a9
+seed: 11
+experiment:
+  id: proposed.expire-del-propagation-churn
+  inputs:
+    signal: SIGKILL
+    target: primary
+    mutation_rate: 500
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7000
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec
+    lazyfree-lazy-expire: 'no'
+    hz: 100

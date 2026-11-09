@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.runtime-port-change-cluster-view
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG SET port at runtime must update myself's announced port in CLUSTER
+    NODES and invalidate the cached CLUSTER SLOTS reply (RESP2 and RESP3 cache entries);
+    the parent keeps announcing the old port
+components:
+- use: valkey.action.tools
+  id: portflip
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 30
+    runs:
+    - {tool: valkey-cli, args: [-s, $socket, --json, CLUSTER, SLOTS]}
+    - {tool: valkey-cli, args: [-s, $socket, -3, --json, CLUSTER, SLOTS]}
+    - {tool: valkey-cli, args: [-s, $socket, CONFIG, SET, port, "0"], expect: {stdout: {
+          equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-s, $socket, CLUSTER, NODES], expect_difference: true,
+      expect: {stdout: {contains: ":0@"}}}
+    - {tool: valkey-cli, args: [-s, $socket, --json, CLUSTER, SLOTS], expect_difference: true,
+      expect: {stdout: {contains: '",0,"'}}}
+    - {tool: valkey-cli, args: [-s, $socket, -3, --json, CLUSTER, SLOTS], expect_difference: true,
+      expect: {stdout: {contains: '",0,"'}}}
+    - {tool: valkey-cli, args: [-s, $socket, CONFIG, SET, port, $port], expect: {
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-s, $socket, --json, CLUSTER, SLOTS]}
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {stdout: {equals: "PONG\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: portflip}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4dae83dba19ee06191dcd927e7c9ae20d79f4324",
+  "parent": "0039adcc7eea28a4c3ea9d93380edfda72d16956",
+  "pr": 2175,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove unnecessary refcount increment in propagateDelete (#2175)",
+  "date": "2025-06-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 7.653,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

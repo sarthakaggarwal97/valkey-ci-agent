@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "36312085e785304a71467ff555081a4576687f26",
+  "parent": "831220a30b5973fcd4b999e3f541ba53e057850e",
+  "pr": 2156,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Have threads gracefully exit instead of killing them when checking thread count (#2156)",
+  "date": "2025-06-01",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.9427,
+  "findings": [],
+  "recorded": []
+}

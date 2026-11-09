@@ -1,0 +1,65 @@
+extends: [valkey.base]
+id: proposed.compat-toggle-under-replication
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Kill and restart a replica under writes while the primary rapidly toggles
+    extended-redis-compatibility
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+components:
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.commands
+  id: toggles
+  config:
+    instances: primaries
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, extended-redis-compatibility, "yes"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, extended-redis-compatibility, "no"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, extended-redis-compatibility, "yes"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, extended-redis-compatibility, "no"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, extended-redis-compatibility, "yes"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, extended-redis-compatibility, "no"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, extended-redis-compatibility, "yes"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, extended-redis-compatibility, "no"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-replica, toggles]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: toggles-during-resync
+  depends_on: [warm-up]
+  config:
+    instances: primaries
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, extended-redis-compatibility, "yes"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, extended-redis-compatibility, "no"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, extended-redis-compatibility, "yes"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, extended-redis-compatibility, "no"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, extended-redis-compatibility, "yes"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, extended-redis-compatibility, "no"], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [toggles-during-resync]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}
+- {evidence_id: valkey.command.sequence, source: toggles}

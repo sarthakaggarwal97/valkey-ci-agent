@@ -1,0 +1,70 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8e2f355764463102fdb6aac5b38f3af96749c947",
+  "parent": "b5e012a1083cbfda3ab27c6df3fc8d82534d6a80",
+  "pr": 1609,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "On-demand database allocation instead of preallocation (#1609)",
+  "date": "2025-06-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 16,
+  "proven": 0,
+  "hunted": 16,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 148,
+    "executed": 148,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 22.6107,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-0b7a8b3805d0",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0b7a8b3805d0",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0b7a8b3805d0",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-26a7a63f5242",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-26a7a63f5242",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-26a7a63f5242",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a50ad7822bf8",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'slots' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (CLUSTER COUNTKEYSINSLOT 12182)"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 26b6202b82cc..5699c8c05a20.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-dcfd1169af22
+seed: 303
+experiment:
+  id: proposed.zcount-rank-skiplist
+  inputs:
+    resp: 2
+    max_listpack_entries: 5
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "767302e3ae6ebb535c3ce49279485e135f0e23d7",
+  "parent": "8e2f355764463102fdb6aac5b38f3af96749c947",
+  "pr": 2074,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update commandlog parameters conf text to mention special value settings (#2074)",
+  "date": "2025-06-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.219,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only comment text in valkey.conf (documentation for the commandlog-* parameters: deprecation note and the meaning of -1/0 thresholds). No configuration defaults, parsing, or server code change; behaviour is identical on both builds, so there is nothing a scenario could reach or compare."
+}

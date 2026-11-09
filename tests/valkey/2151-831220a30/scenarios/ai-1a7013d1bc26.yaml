@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 23ecd7a967ef..831220a30b59.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1a7013d1bc26
+seed: 2151
+experiment:
+  id: proposed.flushall-empty-dbs
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

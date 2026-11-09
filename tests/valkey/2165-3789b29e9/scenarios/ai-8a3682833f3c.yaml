@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5699c8c05a20..3789b29e92d4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8a3682833f3c
+seed: 12
+experiment:
+  id: proposed.cluster-slot-parity
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

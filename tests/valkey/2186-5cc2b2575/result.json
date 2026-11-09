@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5cc2b2575300f09c004bf73f0a5f69ed1775c00c",
+  "parent": "3bc40be6cdef24f9db8a30e5f8659ea5c404027a",
+  "pr": 2186,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix cluster myself CLUSTER SLOTS/NODES wrong port after updating port/tls-port (#2186)",
+  "date": "2025-06-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 4,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 2,
+    "percent": 50,
+    "uncovered": [
+      "src/cluster_legacy.c:1058",
+      "src/config.c:2722"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 22.7828,
+  "findings": [],
+  "recorded": []
+}

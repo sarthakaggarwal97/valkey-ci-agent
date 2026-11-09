@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.on-demand-db-aof-rewrite
+deployment:
+  modes: [standalone]
+metadata:
+  description: AOF rewrite in command format over sparse on-demand databases, reloaded
+    across a restart, plus DEBUG HTSTATS, MEMORY STATS, WATCH totals and the verbose
+    serverCron DB log
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aofrw
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    server_config:
+      appendonly: "yes"
+      aof-use-rdb-preamble: "no"
+      appendfsync: everysec
+      loglevel: verbose
+      databases: 16
+    timeout_s: 120
+    commands:
+    - {command: [SET, k0, v0], expect: {equals: OK}}
+    - {command: [SELECT, 3], expect: {equals: OK}}
+    - {command: [SET, k3, v3, EX, 1000], expect: {equals: OK}}
+    - {command: [RPUSH, l3, a, b, c], expect: {equals: 3}}
+    - {command: [SELECT, 9], expect: {equals: OK}}
+    - {command: [MSET, k9a, x, k9b, y], expect: {equals: OK}}
+    - {command: [SELECT, 15], expect: {equals: OK}}
+    - {command: [SET, hightail, z], expect: {equals: OK}}
+    - {command: [FLUSHDB, SYNC], expect: {equals: OK}}
+    - {command: [DEBUG, HTSTATS, 3], compare: skip}
+    - {command: [DEBUG, HTSTATS, 3, full], compare: skip}
+    - {command: [DEBUG, HTSTATS, 12], compare: skip}
+    - {command: [DEBUG, HTSTATS, 15], compare: skip}
+    - {command: [MEMORY, STATS], compare: skip}
+    - {command: [MEMORY, DOCTOR], compare: skip}
+    - {command: [SELECT, 5], expect: {equals: OK}}
+    - {command: [WATCH, wkey], expect: {equals: OK}}
+    - {command: [INFO, clients], compare: skip}
+    - {command: [UNWATCH], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {error: false}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [SET, timer, t, PX, 6000], expect: {equals: OK}}
+    - {command: [EXISTS, timer], wait_s: 30, expect: {equals: 0}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, k0], expect: {equals: v0}}
+    - {command: [SELECT, 3], expect: {equals: OK}}
+    - {command: [GET, k3], expect: {equals: v3}}
+    - {command: [LRANGE, l3, 0, -1], expect: {equals: [a, b, c]}}
+    - {command: [TTL, k3], compare: skip, expect: {min: 1}}
+    - {command: [SELECT, 9], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 2}}
+    - {command: [SELECT, 15], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aofrw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofrw}

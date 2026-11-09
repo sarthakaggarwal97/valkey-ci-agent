@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 73696bf6e2cf..92c859de6813.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0fbbc09a1dc0
+seed: 215002
+experiment:
+  id: proposed.testrdb-module-save-load-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

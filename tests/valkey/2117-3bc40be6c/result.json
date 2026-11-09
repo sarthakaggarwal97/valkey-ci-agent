@@ -1,0 +1,45 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3bc40be6cdef24f9db8a30e5f8659ea5c404027a",
+  "parent": "476671be194e4296b9100663560193069fa46453",
+  "pr": 2117,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "CLIENT UNBLOCK should't be able to unpause paused clients (#2117)",
+  "date": "2025-06-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 1,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 10,
+    "executed": 8,
+    "percent": 80,
+    "uncovered": [
+      "src/blocked.c:262",
+      "src/blocked.c:269"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 14.9601,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: Unknown btype in replyToBlockedClientTimedOut(). #blocked.c:280",
+      "scenario": "ai-7aa2883f0c0a",
+      "seed": 2117,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2117",
+      "fingerprint": "7c7eb143c715965547c3",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

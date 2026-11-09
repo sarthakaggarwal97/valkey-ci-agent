@@ -1,0 +1,31 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "992c5b98780fb5c74d80856b368d5007df26e61a",
+  "parent": "36312085e785304a71467ff555081a4576687f26",
+  "pr": 1384,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add CLUSTER FLUSHSLOT command (#1384)",
+  "date": "2025-06-02",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 4,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 26,
+    "executed": 23,
+    "percent": 88,
+    "uncovered": [
+      "src/cluster_legacy.c:2865",
+      "src/cluster_legacy.c:5920",
+      "src/cluster_legacy.c:6573"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 10.5954,
+  "findings": [],
+  "recorded": []
+}

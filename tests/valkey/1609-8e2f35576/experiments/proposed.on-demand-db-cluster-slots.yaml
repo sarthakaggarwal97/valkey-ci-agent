@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.on-demand-db-cluster-slots
+deployment:
+  modes: [standalone]
+metadata:
+  description: Slot-wide deletion and emptiness guards (CLUSTER FLUSHSLOT, COUNTKEYSINSLOT,
+    RESET, FLUSHSLOTS) over on-demand databases in cluster mode with cluster-databases
+    8, compared with the parent build
+components:
+- use: valkey.action.commands
+  id: slots
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    timeout_s: 60
+    server_config: {cluster-databases: 8}
+    commands:
+    - {command: [SET, "{foo}a", v1], expect: {equals: OK}}
+    - {command: [SELECT, 3], expect: {equals: OK}}
+    - {command: [SET, "{foo}b", v2], expect: {equals: OK}}
+    - {command: [SET, "{foo}c", v3], expect: {equals: OK}}
+    - {command: [CLUSTER, KEYSLOT, foo], expect: {equals: 12182}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect: {equals: 3}}
+    - {command: [CLUSTER, RESET, SOFT], expect: {error: "containing keys"}}
+    - {command: [CLUSTER, FLUSHSLOTS], expect: {error: "DB must be empty"}}
+    - {command: [DEBUG, HTSTATS, 5]}
+    - {command: [CLUSTER, FLUSHSLOT, 12182, SYNC], expect: {equals: OK}}
+    - {command: [GET, "{foo}b"]}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect: {equals: 0}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [GET, "{foo}a"]}
+    - {command: [SELECT, 6], expect: {equals: OK}}
+    - {command: [SET, "{foo}d", v4], expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182, ASYNC], expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect: {equals: 0}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOTS], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slots.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slots}

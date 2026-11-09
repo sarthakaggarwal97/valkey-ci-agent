@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 47716606896c..1b531e560b62.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5836cddd55c8
+seed: 303
+experiment:
+  id: proposed.compat-toggle-under-replication
+  inputs:
+    signal: SIGKILL
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7200

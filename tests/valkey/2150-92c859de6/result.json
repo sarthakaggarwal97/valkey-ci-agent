@@ -1,0 +1,79 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "92c859de6813d71aa4cb99f6731faefd88c458b8",
+  "parent": "73696bf6e2cf754acc3ec24eaf9ca6b879bfc5d7",
+  "pr": 2150,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update tests to catch module context leaks if using aux save/load  (#2150)",
+  "date": "2025-05-30",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.3753,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-use-after-free",
+      "scenario": "ai-93461a2e489e",
+      "seed": 215001,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "shown by ASan on unstable, the one build with it",
+      "fingerprint": "80d79339943dd8f93790",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/61"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in stringObjectLen",
+      "scenario": "ai-93461a2e489e",
+      "seed": 215001,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #2150, since fixed",
+      "fingerprint": "610eb5bcf219176da14b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-use-after-free",
+      "scenario": "ai-0fbbc09a1dc0",
+      "seed": 215002,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "shown by ASan on unstable, the one build with it",
+      "fingerprint": "80d79339943dd8f93790",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/61"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in stringObjectLen",
+      "scenario": "ai-0fbbc09a1dc0",
+      "seed": 215002,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #2150, since fixed",
+      "fingerprint": "610eb5bcf219176da14b",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

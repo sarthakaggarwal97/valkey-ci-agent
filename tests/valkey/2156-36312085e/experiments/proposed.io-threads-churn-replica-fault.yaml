@@ -1,0 +1,70 @@
+extends: [valkey.base]
+id: proposed.io-threads-churn-replica-fault
+deployment:
+  modes: [standalone, cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Kill or stall a replica while CONFIG SET io-threads churns on the primary;
+    threads exit gracefully during the resync with no crash, hang, or lost acknowledged
+    write
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM, SIGSTOP], default: SIGKILL}
+components:
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-replica]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: churn
+  depends_on: [warm-up]
+  config:
+    timeout_s: 120
+    commands:
+    - {command: [CONFIG, SET, io-threads, 4], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 8], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 3], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 8], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, 0], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 7], expect: {equals: OK}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, 128], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 8], expect: {equals: OK}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, 16], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 6], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 5], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 4], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 3], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 2], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 8], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 8], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 5], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 2], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 7], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 4], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [churn]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed, churn.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}
+- {evidence_id: valkey.command.sequence, source: churn}

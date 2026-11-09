@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3789b29e92d4997252352bd9748bffaf7d8f712b",
+  "parent": "5699c8c05a207dd2590aa37843a60b2131f3a2da",
+  "pr": 2165,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Offload slot calculation and cross-slot detection to I/O threads (#2165)",
+  "date": "2025-06-04",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 91,
+    "executed": 75,
+    "percent": 82,
+    "uncovered": [
+      "src/cluster.c:1087",
+      "src/cluster.c:1088",
+      "src/cluster.c:1364",
+      "src/module.c:741",
+      "src/module.c:6554",
+      "src/module.c:6555",
+      "src/module.c:10948",
+      "src/module.c:10949",
+      "src/server.c:4017",
+      "src/server.c:4027",
+      "src/server.c:4028",
+      "src/server.c:4029",
+      "src/server.c:4033",
+      "src/server.c:4034",
+      "src/server.c:4086",
+      "src/server.c:4098"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 2.7737,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-111f5d3bb822",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'prepare' returned ERROR: command 6 () got no reply: TimeoutError: Timeout reading from /tmp/vfc-ny85mddn/s.sock"
+    }
+  ]
+}

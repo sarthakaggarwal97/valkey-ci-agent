@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b5e012a1083cbfda3ab27c6df3fc8d82534d6a80",
+  "parent": "5cc2b2575300f09c004bf73f0a5f69ed1775c00c",
+  "pr": 2097,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix invalid functionname processMultibulkBuffer typo in comments. (#2097)",
+  "date": "2025-06-10",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.205,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff only edits a comment in src/networking.c, fixing the capitalization of the function name processMultibulkBuffer referenced in the readToQueryBuf comment. No executable code, protocol behaviour, replies, or configuration are affected, so there is no changed path for a scenario to reach."
+}

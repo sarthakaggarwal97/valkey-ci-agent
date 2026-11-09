@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.cluster-flushslot-replication
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER FLUSHSLOT propagates verbatim to a cluster replica (flushslot
+    in the replica's commandstats, keys gone), and a replica refuses a direct FLUSHSLOT
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: repl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [MSET, "{foo}1", a, "{foo}2", b, "{foo}3", c], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 1, wait_s: 20, expect: {
+        equals: 3}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182, SYNC], node: 1, expect_difference: true,
+      expect: {error: true}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 1, expect: {equals: 3}}
+    - {command: [CLUSTER, FLUSHSLOT, 12182, SYNC], node: 0, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 0, expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 1, wait_s: 20, expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [INFO, commandstats], node: 1, compare: skip, expect: {contains: "cmdstat_cluster|flushslot:calls=1"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [repl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: repl}

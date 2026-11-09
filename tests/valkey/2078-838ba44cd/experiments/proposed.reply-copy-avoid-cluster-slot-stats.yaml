@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.reply-copy-avoid-cluster-slot-stats
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Copy-avoided replies in cluster mode with cluster-slot-stats-enabled: per-slot
+    payload headers (slot stored in the header, asserted on release), network-bytes-out
+    accounted from header reply_len, and the rewritten sharded pub/sub slot path.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slotstats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    server_config: {cluster-slot-stats-enabled: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, min-io-threads-avoid-copy-reply, 1], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SET, "{t1}k", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"],
+      expect: {equals: OK}}
+    - {command: [GET, "{t1}k"], expect: {equals: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"}}
+    - {command: [MGET, "{t1}k", "{t1}k", "{t1}k"], expect: {equals: ["0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]}}
+    - {command: [SET, "{t2}k", "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"],
+      expect: {equals: OK}}
+    - {command: [GET, "{t2}k"], expect: {equals: "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, "{t1}k"], expect: {equals: QUEUED}}
+    - {command: [DEL, "{t1}k"], expect: {equals: QUEUED}}
+    - {command: [GET, "{t1}k"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: ["0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+          1, null]}}
+    - {command: [SETRANGE, "{t2}big", 99999, Z], expect: {equals: 100000}}
+    - {command: [STRLEN, "{t2}big"], expect: {equals: 100000}}
+    - {command: [GET, "{t2}big"]}
+    - {command: [SSUBSCRIBE, sch], connection: sub, expect: {exists: true}}
+    - {command: [SPUBLISH, sch, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"],
+      expect: {equals: 1}}
+    - {connection: sub, read: true, expect: {exists: true}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 0, 16383], compare: skip}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slotstats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotstats}

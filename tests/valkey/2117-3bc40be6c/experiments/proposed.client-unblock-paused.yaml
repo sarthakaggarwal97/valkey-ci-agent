@@ -1,0 +1,29 @@
+extends: [valkey.liveness]
+id: proposed.client-unblock-paused
+mode: experiment
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLIENT UNBLOCK must not unblock a client parked by CLIENT PAUSE (valkey-io/valkey#2117)
+components:
+- use: valkey.action.commands
+  id: unblock-paused
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 2
+    commands:
+    - {command: [CLIENT, PAUSE, 100000, WRITE], expect: {equals: OK}}
+    - {raw: "BLPOP listA 0\r\n", connection: blockerA}
+    - {raw: "BLPOP listB 0\r\n", connection: blockerB}
+    - {command: [CLIENT, UNBLOCK, 3, ERROR], expect_difference: true, expect: {equals: 0}}
+    - {command: [CLIENT, UNBLOCK, 4, TIMEOUT], expect_difference: true, expect: {
+        equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: unblock-paused}

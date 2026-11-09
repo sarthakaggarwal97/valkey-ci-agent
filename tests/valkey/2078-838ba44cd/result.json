@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "838ba44cd65b15822f4136a4aed33cc13caa4cae",
+  "parent": "988297d19abea59799cdfaedcf7d0b01f0a559d8",
+  "pr": 2078,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reply Copy Avoidance (#2078)",
+  "date": "2025-06-07",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 10,
+  "proven": 6,
+  "hunted": 10,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 297,
+    "executed": 284,
+    "percent": 95,
+    "uncovered": [
+      "src/networking.c:586",
+      "src/networking.c:628",
+      "src/networking.c:629",
+      "src/networking.c:630",
+      "src/networking.c:691",
+      "src/networking.c:1570",
+      "src/networking.c:2376",
+      "src/networking.c:2377",
+      "src/networking.c:2558",
+      "src/networking.c:2559",
+      "src/networking.c:2569",
+      "src/networking.c:2690",
+      "src/networking.c:2699"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 10.1854,
+  "findings": [],
+  "recorded": []
+}

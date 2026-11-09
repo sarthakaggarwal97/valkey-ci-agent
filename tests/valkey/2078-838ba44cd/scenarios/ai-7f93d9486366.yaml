@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 988297d19abe..838ba44cd65b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7f93d9486366
+seed: 21
+experiment:
+  id: proposed.reply-copy-avoid-cluster-slot-stats
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7400
