@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 25ef0b3aff50..70f205761499.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1f92bc77b344
+seed: 1002
+experiment:
+  id: proposed.string2ll-boundaries
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9fb850dabeba57a8635d9ea70a2dca70c81d17a1",
+  "parent": "18408715a32c85807ad0ddc6ec70983b902c98b3",
+  "pr": 1985,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Only enable defrag for vendored jemalloc (#1985)",
+  "date": "2025-04-22",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3054,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a build-time guard: HAVE_DEFRAG now requires VALKEY_VENDORED_JEMALLOC, a macro the vendored jemalloc header defines. The fuzzer's builds of both the change and its parent use the vendored jemalloc, so HAVE_DEFRAG is defined on both and runtime behavior (activedefrag config, defrag cycle) is identical. The only difference appears when linking against a system jemalloc, a build configuration the runner does not produce, so no scenario can reach the changed path."
+}

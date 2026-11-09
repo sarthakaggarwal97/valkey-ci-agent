@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.replica-shardid-gossip-reject
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Adding a replica then restarting its primary must not corrupt nodes.conf
+    via a divergent shard id
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.commands
+  id: shardid
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 2
+    server_config: {cluster-node-timeout: 1000}
+    timeout_s: 120
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [WAIT, 1, 2000], node: 0, wait_s: 20, expect: {equals: 1}}
+    - {restart: true, node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [PING], node: 0, wait_s: 20, expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shardid.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shardid}

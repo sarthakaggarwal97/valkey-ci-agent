@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2d200dfa3d8b7c78b9bc6b2c79f9c97295d19925",
+  "parent": "9cbcaa2586400e3a16469c1b817526e5a6e3e357",
+  "pr": 2001,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Minor change for sadd command (#2001)",
+  "date": "2025-04-28",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2784,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change moves `server.dirty += added` inside the `if (added)` guard in saddCommand. When added == 0 the old code added 0 to server.dirty, which is a no-op, and when added > 0 both versions execute identically. The dirty counter delta (and thus replication propagation), keyspace notifications, and the SADD reply are unchanged in all cases, so this is a pure refactor with no behaviour change and needs no scenario."
+}

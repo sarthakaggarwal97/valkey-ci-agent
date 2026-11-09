@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "38846504dcfc39c088b016ada7da18def7abfb25",
+  "parent": "1766416499b12023da7c12820920bd26d571258d",
+  "pr": 1989,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "blocking client followup fix related to log_req_res (#1989)",
+  "date": "2025-04-23",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5697,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only relocates the reqresSaveClientReplyOffset call inside _addReplyToBufferOrList so the request/response-log offset is saved before replies are diverted to the deferred-reply or pending-push lists. That function is compiled only under the LOG_REQ_RES debug build flag; in standard builds (what the fuzzer runner compiles) it is an empty inline stub, so both builds behave identically. Even on a LOG_REQ_RES build the fix affects only the contents of the hidden req-res-logfile used by Valkey's reply-schema CI, not any reply, data, replication or persistence behavior, so no fuzzer oracl"
+}

@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.strlen-acl-loadfile
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL LOAD splits the aclfile by sdslen(acls) and loads the same users
+    after the strlen cleanup
+components:
+- use: valkey.action.commands
+  id: aclload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 10
+    files: {users.acl: "user default on nopass ~* &* +@all\nuser alice on >pw ~app:*\
+        \ +@read\n"}
+    server_config: {aclfile: users.acl}
+    commands:
+    - {command: [ACL, LOAD], expect: {equals: OK}}
+    - {command: [ACL, WHOAMI], expect: {equals: default}}
+    - {command: [ACL, LIST], compare: unordered, expect: {exists: true}}
+    - {command: [ACL, GETUSER, alice], compare: skip, expect: {exists: true}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [aclload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aclload}

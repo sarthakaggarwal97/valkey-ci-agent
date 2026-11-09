@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.scripting-engine-abi-v2
+deployment:
+  modes: [standalone]
+metadata:
+  description: A module scripting engine on the new v2 compile ABI (helloscripting)
+    compiles and runs through the version-dispatch branch, while core Lua accepts
+    NUL bytes
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: engine-abi
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [FUNCTION, LOAD, "#!hello name=mylib\nFUNCTION foo\nARGS 0\nRETURN\n\
+          FUNCTION bar\nCONSTI 432\nRETURN"], expect: {equals: mylib}}
+    - {command: [FCALL, foo, 0, 134], expect: {equals: 134}}
+    - {command: [FCALL, bar, 0], expect: {equals: 432}}
+    - {command: [FUNCTION, LOAD, "#!wasm name=nolib\nFUNCTION a\nARGS 0\nRETURN"],
+      expect: {error: "not found"}}
+    - {command: [EVAL, "#!hello\nFUNCTION baz\nARGS 0\nRETURN", 0, 145], expect: {
+        equals: 145}}
+    - {command: [EVAL, "#!hello\nFUNCTION qux\nCONSTI 7\nRETURN", 0], expect: {equals: 7}}
+    - {command: [SCRIPT, LOAD, "#!hello\nFUNCTION quux\nARGS 0\nRETURN"], expect: {
+        error: false}}
+    - {command: [EVAL, !!binary "IyFoZWxsbwpGVU5DVElPTiBubgpDT05TVEkgNQpSRVRVUk4AIEJBRA==",
+        0], expect: {equals: 5}}
+    - {command: [EVAL, !!binary "cmV0dXJuICIAIjs=", 0], expect_difference: true, expect: {
+        equals: !!binary "AA=="}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [engine-abi.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: engine-abi}

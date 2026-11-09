@@ -1,0 +1,44 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "83d2979028d660d60ea4738c7bafb3a0b8ac0700",
+  "parent": "38846504dcfc39c088b016ada7da18def7abfb25",
+  "pr": 1933,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add --hotkeys-count option for Valkey-cli (#1933)",
+  "date": "2025-04-24",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 16,
+    "executed": 15,
+    "percent": 93,
+    "uncovered": [
+      "src/valkey-cli.c:2693"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 1.8954,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: used more than 4 GiB of memory",
+      "scenario": "ai-9d030845e1cc",
+      "seed": 2,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "6b4ccf3594465778b1a1",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

@@ -1,0 +1,73 @@
+extends: [valkey.liveness]
+id: proposed.cluster-multidb-slot-migration
+deployment:
+  modes: [standalone]
+metadata:
+  description: Cluster multi-DB behaviour compared across builds - per-DB COUNTKEYSINSLOT
+    and GETKEYSINSLOT, SELECT and MOVE and COPY semantics, MULTI deferral of open-slot
+    key checks, delKeysInSlot on a slot takeover, dbHasNoKeys in FLUSHSLOTS and RESET
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    lazyfree: {type: string, enum: ["no", "yes"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: slotops
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    server_config: {lazyfree-lazy-server-del: {$ref: inputs.lazyfree}}
+    timeout_s: 30
+    commands:
+    - {command: [SET, "{foo}a", v1], expect: {equals: OK}}
+    - {command: [SET, "{foo}b", v2], expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect: {equals: 2}}
+    - {command: [CLUSTER, GETKEYSINSLOT, 12182, 10], compare: unordered}
+    - {command: [CLUSTER, GETKEYSINSLOT, 12182, 0]}
+    - {command: [SELECT, 1], expect_difference: true, expect: {error: "DB index is\
+          \ out of range"}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [MOVE, "{foo}a", 1], expect_difference: true, expect: {error: "DB\
+          \ index is out of range"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: QUEUED}}
+    - {command: [GET, "{foo}a"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, v1]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SELECT, 1], expect: {equals: QUEUED}}
+    - {command: [GET, "{foo}a"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: true}}
+    - {command: [SET, "{foo}c", v3], expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, MIGRATING, "<node.1.id>"], expect: {equals: OK}}
+    - {command: [GET, "{foo}a"], expect: {equals: v1}}
+    - {command: [GET, "{foo}missing"], expect: {error: ASK}}
+    - {command: [MOVE, "{foo}a", 1], expect_difference: true, expect: {error: TRYAGAIN}}
+    - {command: [COPY, "{foo}a", "{foo}c", DB, 5, REPLACE], expect_difference: true,
+      expect: {error: TRYAGAIN}}
+    - {command: [COPY, "{foo}a", "{foo}c", DB, 0, REPLACE], expect: {equals: 1}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, "{foo}missing"], expect_difference: true, expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {error: ASK}}
+    - {command: [CLUSTER, SETSLOT, 12182, STABLE], expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], wait_s: 30, expect: {equals: 0}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SET, bar, v4], expect: {equals: OK}}
+    - {command: [CLUSTER, FLUSHSLOTS], expect: {error: "DB must be empty"}}
+    - {command: [CLUSTER, RESET], expect: {error: "containing keys"}}
+    - {command: [GET, bar], expect: {equals: v4}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slotops.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotops}

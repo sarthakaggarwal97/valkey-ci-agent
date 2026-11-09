@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.strlen-bitops-stream
+deployment:
+  modes: [standalone]
+metadata:
+  description: Bit-offset, bitfield-type and stream-ID parsing still parse identically
+    after the strlen->sdslen cleanup
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: parse
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SETBIT, bk, "7", "1"], expect: {equals: 0}}
+    - {command: [GETBIT, bk, "7"], expect: {equals: 1}}
+    - {command: [SETBIT, bk, "100", "1"], expect: {equals: 0}}
+    - {command: [SETBIT, bk, "", "1"], expect: {error: true}}
+    - {command: [SETBIT, bk, "4294967296", "1"], expect: {error: true}}
+    - {command: [BITFIELD, bf, SET, u8, "#0", "255", GET, u8, "#0"], expect: {equals: [
+          0, 255]}}
+    - {command: [BITFIELD, bf, GET, i16, "0"], expect: {equals: [255]}}
+    - {command: [BITFIELD, bf, GET, u64, "0"], expect: {error: true}}
+    - {command: [XADD, st, "5-5", f, v], expect: {equals: "5-5"}}
+    - {command: [XADD, st, "11", f, v], expect: {equals: "11-0"}}
+    - {command: [XADD, st, "12-*", f, v], expect: {equals: "12-0"}}
+    - {command: [XADD, st, "notanum-1", f, v], expect: {error: true}}
+    - {command: [XADD, st, "50-notanum", f, v], expect: {error: true}}
+    - {command: [XLEN, st], expect: {equals: 3}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [parse.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: parse}

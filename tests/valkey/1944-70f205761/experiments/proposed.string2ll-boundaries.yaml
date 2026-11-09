@@ -1,0 +1,129 @@
+extends: [valkey.liveness]
+id: proposed.string2ll-boundaries
+deployment:
+  modes: [standalone]
+metadata:
+  description: string2ll AVX512 rewrite checked at digit-count lane boundaries and
+    INT64/UINT64 overflow edges through INCR-family commands, OBJECT ENCODING, listpack
+    find (LPOS/LREM/LINSERT), hash HINCRBY, intset conversions, expire/range argument
+    parsing and raw protocol bulk and multibulk lengths, compared against the parent
+    build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: boundaries
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, d1, "7"], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, d1], compare: skip, expect: {equals: int}}
+    - {command: [INCRBY, d1, "0"], expect: {equals: 7}}
+    - {command: [SET, d0, "0"], expect: {equals: OK}}
+    - {command: [INCRBY, d0, "0"], expect: {equals: 0}}
+    - {command: [SET, dneg0, "-0"], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, dneg0], compare: skip, expect: {equals: embstr}}
+    - {command: [INCR, dneg0], expect: {error: "not an integer"}}
+    - {command: [SET, dz, "0123"], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, dz], compare: skip, expect: {equals: embstr}}
+    - {command: [INCR, dz], expect: {error: "not an integer"}}
+    - {command: [SET, b8, "99999999"], expect: {equals: OK}}
+    - {command: [INCRBY, b8, "0"], expect: {equals: 99999999}}
+    - {command: [SET, b9, "100000000"], expect: {equals: OK}}
+    - {command: [INCRBY, b9, "0"], expect: {equals: 100000000}}
+    - {command: [SET, b16, "9999999999999999"], expect: {equals: OK}}
+    - {command: [INCRBY, b16, "0"], expect: {equals: 9999999999999999}}
+    - {command: [SET, b17, "10000000000000000"], expect: {equals: OK}}
+    - {command: [INCRBY, b17, "0"], expect: {equals: 10000000000000000}}
+    - {command: [SET, mx, "9223372036854775807"], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, mx], compare: skip, expect: {equals: int}}
+    - {command: [INCR, mx], expect: {error: "overflow"}}
+    - {command: [SET, ov1, "9223372036854775808"], expect: {equals: OK}}
+    - {command: [INCR, ov1], expect: {error: "not an integer"}}
+    - {command: [SET, n19, "9999999999999999999"], expect: {equals: OK}}
+    - {command: [INCR, n19], expect: {error: "not an integer"}}
+    - {command: [SET, u64, "18446744073709551615"], expect: {equals: OK}}
+    - {command: [INCR, u64], expect: {error: "not an integer"}}
+    - {command: [SET, wrap, "18446744073709551616"], expect: {equals: OK}}
+    - {command: [INCR, wrap], expect: {error: "not an integer"}}
+    - {command: [SET, big20, "99999999999999999999"], expect: {equals: OK}}
+    - {command: [INCR, big20], expect: {error: "not an integer"}}
+    - {command: [SET, mn, "-9223372036854775808"], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, mn], compare: skip, expect: {equals: int}}
+    - {command: [DECR, mn], expect: {error: "overflow"}}
+    - {command: [INCRBY, mn, "0"], expect: {equals: -9223372036854775808}}
+    - {command: [SET, mn1, "-9223372036854775809"], expect: {equals: OK}}
+    - {command: [INCR, mn1], expect: {error: "not an integer"}}
+    - {command: [SET, junk, ""], expect: {equals: OK}}
+    - {command: [INCR, junk], expect: {error: "not an integer"}}
+    - {command: [SET, plus, "+123"], expect: {equals: OK}}
+    - {command: [INCR, plus], expect: {error: "not an integer"}}
+    - {command: [SET, sp, " 123"], expect: {equals: OK}}
+    - {command: [INCR, sp], expect: {error: "not an integer"}}
+    - {command: [SET, sp2, "123 "], expect: {equals: OK}}
+    - {command: [INCR, sp2], expect: {error: "not an integer"}}
+    - {command: [SET, mid, "123456789012345x7"], expect: {equals: OK}}
+    - {command: [INCR, mid], expect: {error: "not an integer"}}
+    - {command: [SET, minus, "-"], expect: {equals: OK}}
+    - {command: [INCR, minus], expect: {error: "not an integer"}}
+    - {command: [SET, acc, "0"], expect: {equals: OK}}
+    - {command: [INCRBY, acc, "9223372036854775807"], expect: {equals: 9223372036854775807}}
+    - {command: [DECRBY, acc, "9223372036854775807"], expect: {equals: 0}}
+    - {command: [INCRBY, acc, "9223372036854775808"], expect: {error: "not an integer"}}
+    - {command: [INCRBY, acc, "18446744073709551616"], expect: {error: "not an integer"}}
+    - {command: [INCRBY, acc, "0123"], expect: {error: "not an integer"}}
+    - {command: [RPUSH, lst, "123", "9223372036854775807", hello, "0123", "-9223372036854775808"],
+      expect: {equals: 5}}
+    - {command: [OBJECT, ENCODING, lst], compare: skip, expect: {equals: listpack}}
+    - {command: [LPOS, lst, "123"], expect: {equals: 0}}
+    - {command: [LPOS, lst, "9223372036854775807"], expect: {equals: 1}}
+    - {command: [LPOS, lst, "0123"], expect: {equals: 3}}
+    - {command: [LPOS, lst, "-9223372036854775808"], expect: {equals: 4}}
+    - {command: [LPOS, lst, "124", COUNT, "0"], expect: {equals: []}}
+    - {command: [LINSERT, lst, BEFORE, "9223372036854775807", "18446744073709551616"],
+      expect: {equals: 6}}
+    - {command: [LRANGE, lst, 0, -1], expect: {equals: ["123", "18446744073709551616",
+          "9223372036854775807", hello, "0123", "-9223372036854775808"]}}
+    - {command: [LREM, lst, 0, "9223372036854775807"], expect: {equals: 1}}
+    - {command: [LREM, lst, 0, "18446744073709551616"], expect: {equals: 1}}
+    - {command: [LRANGE, lst, 0, -1], expect: {equals: ["123", hello, "0123", "-9223372036854775808"]}}
+    - {command: [HSET, h, f, "9223372036854775806", g, "00", k, "-9223372036854775808"],
+      expect: {equals: 3}}
+    - {command: [HINCRBY, h, f, "1"], expect: {equals: 9223372036854775807}}
+    - {command: [HINCRBY, h, f, "1"], expect: {error: "overflow"}}
+    - {command: [HINCRBY, h, g, "1"], expect: {error: "hash value is not an integer"}}
+    - {command: [HINCRBY, h, k, "-1"], expect: {error: "overflow"}}
+    - {command: [SADD, is, "1", "100000000", "9223372036854775807", "-9223372036854775808"],
+      expect: {equals: 4}}
+    - {command: [OBJECT, ENCODING, is], compare: skip, expect: {equals: intset}}
+    - {command: [SISMEMBER, is, "9223372036854775807"], expect: {equals: 1}}
+    - {command: [SISMEMBER, is, "9223372036854775808"], expect: {equals: 0}}
+    - {command: [SADD, is, "18446744073709551615"], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, is], compare: skip, expect: {equals: listpack}}
+    - {command: [SISMEMBER, is, "-9223372036854775808"], expect: {equals: 1}}
+    - {command: [SMEMBERS, is], compare: unordered}
+    - {command: [SET, s, hello], expect: {equals: OK}}
+    - {command: [GETRANGE, s, "0", "9223372036854775807"], expect: {equals: hello}}
+    - {command: [GETRANGE, s, "0", "99999999999999999999"], expect: {error: "not an\
+          \ integer"}}
+    - {command: [EXPIRE, s, "9223372036854775808"], expect: {error: "not an integer"}}
+    - {command: [SETBIT, s2, "18446744073709551616", "1"], expect: {error: true}}
+    - {connection: raw1, raw: "*1\r\n$4\r\nPING\r\n", expect: {equals: PONG}}
+    - {connection: raw2, raw: "*1\r\n$04\r\nPING\r\n", expect: {error: "invalid bulk\
+          \ length"}}
+    - {connection: raw3, raw: "*01\r\n", expect: {error: "invalid multibulk length"}}
+    - {connection: raw4, raw: "*1\r\n$18446744073709551616\r\nPING\r\n", expect: {
+        error: "invalid bulk length"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [boundaries.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: boundaries}

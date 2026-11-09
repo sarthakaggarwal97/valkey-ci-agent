@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.unauth-obuf-disconnect
+deployment:
+  modes: [standalone]
+metadata:
+  description: Unauthenticated never-authenticated clients are force-closed when their
+    output buffer exceeds 1KB; once-authenticated clients and a DELUSER-killed client
+    are handled by clientSetUser
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: obuf
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, requirepass, foobar], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, alice, on, ">apass", "~*", "+@all"], expect: {equals: OK}}
+    - {command: [AUTH, foobar], connection: keep, expect: {equals: OK}}
+    - {command: [RESET], connection: keep, expect: {equals: RESET}}
+    - {command: [AUTH, alice, apass], connection: probe3, expect: {equals: OK}}
+    - {command: [DEBUG, CLIENT-ENFORCE-REPLY-LIST, 1], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [PING], connection: probe, expect_difference: true, expect: {exists: false}}
+    - {command: [PING], connection: keep, expect: {error: "NOAUTH"}}
+    - {command: [ACL, DELUSER, alice], expect: {equals: 1}}
+    - {command: [PING], connection: probe3, expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: obuf}

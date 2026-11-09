@@ -1,0 +1,40 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dd772c490ed7798e2ec95b8ec973c69d961c8ad0",
+  "parent": "8df0a6b67587cb5505d628d76e5c83532f4a4c39",
+  "pr": 1859,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Hyperloglog ARM NEON SIMD optimization (#1859)",
+  "date": "2025-05-02",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.7094,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-86bfc08d32fc",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hll' returned ERROR: expectations both builds violate alike, so they are not about the change: 19 (PFCOUNT dest3)"
+    },
+    {
+      "scenario": "ai-60e4bc110712",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hll' returned ERROR: expectations both builds violate alike, so they are not about the change: 19 (PFCOUNT dest3)"
+    }
+  ]
+}

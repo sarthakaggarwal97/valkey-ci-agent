@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 57118a47545e..05d8fd47426a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9e13a1910234
+seed: 573
+experiment:
+  id: proposed.replica-shardid-divergence-restart
+  inputs:
+    online_pattern: state=online
+deployment:
+  mode: standalone
+  base_port: 7000

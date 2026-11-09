@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.multidb-tools-cluster-select
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli and valkey-benchmark SELECT handling against a one-node
+    cluster of each build, plus the getDatabases cluster fallback via --stat
+components:
+- use: valkey.action.tools
+  id: cluster-tools
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 15
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, GET, cluster-databases], expect_difference: true,
+      expect: {stdout: {contains: cluster-databases}}}
+    - {tool: valkey-cli, args: [-p, $port, -n, 1, PING], expect_difference: true,
+      expect: {stderr: {contains: "DB index is out of range"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --dbnum, 1, -q, -n, 10, -c, 1, -t,
+        set], expect_difference: true, expect: {exit: {equals: 1}, stderr: {contains: "DB\
+            \ index is out of range"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, --dbnum, 1, -q, -n, 100,
+        -c, 1, -t, set], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, ACL, SETUSER, default, "-config|get"],
+      expect: {stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-p, $port, -c, --stat], compare: skip, expect: {stderr: {
+          contains: "use default value 1 instead"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cluster-tools}

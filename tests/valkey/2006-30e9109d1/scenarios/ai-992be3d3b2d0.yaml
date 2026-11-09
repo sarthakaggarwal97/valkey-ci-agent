@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 83d2979028d6..30e9109d19b0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-992be3d3b2d0
+seed: 1001
+experiment:
+  id: proposed.unauth-obuf-disconnect
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

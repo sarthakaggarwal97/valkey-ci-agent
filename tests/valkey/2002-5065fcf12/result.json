@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5065fcf12d324fc65f9346af8ff0a2fdf1ecb09c",
+  "parent": "d3b6559d7dc698cb469a9ba6bf7432f31ba2a9b0",
+  "pr": 2002,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Correct rpushx description (#2002)",
+  "date": "2025-04-26",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 0.9832,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

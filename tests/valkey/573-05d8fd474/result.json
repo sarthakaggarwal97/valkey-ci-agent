@@ -1,0 +1,31 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "05d8fd47426a63b160742f2421e237ce5a4886d5",
+  "parent": "57118a47545e3e81b8432f3b0a8b96744664c271",
+  "pr": 573,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Avoid shard id update of replica if not matching with primary shard id (#573)",
+  "date": "2025-04-18",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 5,
+    "executed": 2,
+    "percent": 40,
+    "uncovered": [
+      "src/cluster_legacy.c:818",
+      "src/cluster_legacy.c:1103",
+      "src/cluster_legacy.c:1107"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 10.0932,
+  "findings": [],
+  "recorded": []
+}

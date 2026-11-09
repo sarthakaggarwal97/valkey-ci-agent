@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.cli-auth-env-conversion
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli env auth (VALKEYCLI_AUTH / REDISCLI_AUTH) against a requirepass
+    server, compared with the parent build
+components:
+- use: valkey.action.tools
+  id: cli-auth-env
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 30
+    runs:
+    - {tool: valkey-cli, args: [-e, -p, $port, CONFIG, SET, requirepass, s3cret-pw],
+      expect: {exit: {equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-e, -p, $port, PING], env: {REDISCLI_AUTH: s3cret-pw},
+      expect: {exit: {equals: 0}, stdout: {contains: PONG}}}
+    - {tool: valkey-cli, args: [-e, -p, $port, PING], env: {VALKEYCLI_AUTH: s3cret-pw},
+      compare: skip}
+    - {tool: valkey-cli, args: [-e, -p, $port, PING], env: {VALKEYCLI_AUTH: wrong-pw,
+        REDISCLI_AUTH: s3cret-pw}, expect: {exit: {equals: 0}, stdout: {contains: PONG}}}
+    - {tool: valkey-cli, args: [-e, --no-auth-warning, -a, s3cret-pw, -p, $port, PING],
+      env: {VALKEYCLI_AUTH: wrong-pw, REDISCLI_AUTH: wrong-pw}, expect: {exit: {equals: 0},
+        stdout: {contains: PONG}}}
+    - {tool: valkey-cli, args: [-e, -s, $socket, PING], env: {REDISCLI_AUTH: s3cret-pw},
+      expect: {exit: {equals: 0}, stdout: {contains: PONG}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-auth-env}

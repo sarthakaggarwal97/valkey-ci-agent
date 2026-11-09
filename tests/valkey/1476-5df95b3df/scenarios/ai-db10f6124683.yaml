@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 30e9109d19b0..5df95b3df1f2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-db10f6124683
+seed: 103
+experiment:
+  id: valkey.replication-partial-resync
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7200
+  server_config:
+    dual-channel-replication-enabled: 'yes'

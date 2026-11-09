@@ -1,0 +1,27 @@
+extends: [valkey.liveness]
+id: proposed.multidb-tools-standalone-state
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli db-state tracking through SELECT and AUTH, and the valkey-benchmark
+    SELECT prefix, on standalone servers of both builds
+components:
+- use: valkey.action.tools
+  id: cli-state
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 20
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, GET, cluster-databases], expect_difference: true,
+      expect: {stdout: {contains: cluster-databases}}}
+    - {tool: valkey-cli, args: [-p, $port, -n, 3, SET, k, v3], expect: {stdout: {
+          contains: OK}}}
+    - {tool: valkey-cli, args: [-p, $port, -n, 3, GET, k], expect: {stdout: {contains: v3}}}
+    - {tool: valkey-cli, args: [-p, $port], stdin: "SELECT 2\nSET s2 v2\nAUTH wrongpass\n\
+        GET s2\nSELECT 0\nGET s2\n", expect: {stdout: {contains: v2}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --dbnum, 7, -q, -n, 100, -c, 2, -t,
+        set], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, -n, 7, DBSIZE], expect: {stdout: {min: 1}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-state}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e113a5e31da4..1766416499b1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2498f8e460fd
+seed: 228003
+experiment:
+  id: proposed.scripting-engine-v1-rdb-reload
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

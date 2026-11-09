@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "49e44e5316908dbc351eb5409e55876fe9931c22",
+  "parent": "2fe08f86468a55da4e7bdf058b84b1901a64f3ab",
+  "pr": 1995,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Environment variable REDISCLI_AUTH to VALKEYCLI_AUTH conversion (#1995)",
+  "date": "2025-05-03",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.9179,
+  "findings": [],
+  "recorded": []
+}

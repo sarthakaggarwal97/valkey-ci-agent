@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-mget
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark -t mget runs the new MGET (10 keys) test on the change;
+    the parent build selects nothing for it
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    requests: {type: integer, minimum: 100, maximum: 100000, default: 1000}
+    clients: {type: integer, minimum: 1, maximum: 50, default: 4}
+    pipeline: {type: integer, minimum: 1, maximum: 64, default: 1}
+    keyspace: {type: integer, minimum: 1, maximum: 1000000, default: 100}
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: inputs.parent}
+    server: true
+    timeout_s: 300
+    runs:
+    - tool: valkey-benchmark
+      args: [-p, $port, -t, mget, -n, {$ref: inputs.requests}, -c, {$ref: inputs.clients},
+        -P, {$ref: inputs.pipeline}, -r, {$ref: inputs.keyspace}, --csv]
+      expect_difference: true
+      expect: {exit: {equals: 0}, stdout: {contains: '"MGET (10 keys)"'}}
+    - tool: valkey-benchmark
+      args: [-p, $port, -t, 'set,mget', -n, {$ref: inputs.requests}, -c, {$ref: inputs.clients},
+        -P, {$ref: inputs.pipeline}, -r, {$ref: inputs.keyspace}, --csv]
+      expect_difference: true
+      expect: {exit: {equals: 0}, stdout: {contains: '"MGET (10 keys)"'}}
+    - tool: valkey-benchmark
+      args: [-p, $port, -n, {$ref: inputs.requests}, -c, {$ref: inputs.clients}, -P,
+        {$ref: inputs.pipeline}, -r, {$ref: inputs.keyspace}, --csv]
+      expect_difference: true
+      expect: {exit: {equals: 0}, stdout: {contains: '"MGET (10 keys)"'}}
+- use: valkey.action.tools
+  id: bench-cluster
+  config:
+    compare_with: {$ref: inputs.parent}
+    server: true
+    cluster: true
+    timeout_s: 300
+    runs:
+    - tool: valkey-benchmark
+      args: [--cluster, -p, $port, -t, mget, -n, {$ref: inputs.requests}, -c, {$ref: inputs.clients},
+        -r, {$ref: inputs.keyspace}, --csv]
+      expect_difference: true
+      expect: {exit: {equals: 0}, stdout: {contains: '"MGET (10 keys)"'}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}
+- {evidence_id: valkey.tool.runs, source: bench-cluster}

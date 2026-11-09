@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.scripting-engine-v1-rdb-reload
+deployment:
+  modes: [standalone]
+metadata:
+  description: A FUNCTION library of an ABI v1 scripting-engine module survives SAVE
+    and restart, recompiled at RDB load through the compile_code_v1 dispatch
+components:
+- use: valkey.action.commands
+  id: v1reload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module_parent.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 30
+    commands:
+    - {command: [FUNCTION, LOAD, "#!hello name=mylib\nFUNCTION foo\nARGS 0\nRETURN\n\
+          FUNCTION bar\nCONSTI 432\nRETURN"], expect: {equals: mylib}}
+    - {command: [FCALL, bar, 0], expect: {equals: 432}}
+    - {command: [SET, marker, before-restart], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, marker], expect: {equals: before-restart}}
+    - {command: [FCALL, bar, 0], expect: {equals: 432}}
+    - {command: [FCALL, foo, 0, 88], expect: {equals: 88}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [v1reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: v1reload}

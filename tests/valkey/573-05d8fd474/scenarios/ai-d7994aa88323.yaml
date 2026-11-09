@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 57118a47545e..05d8fd47426a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d7994aa88323
+seed: 573001
+experiment:
+  id: proposed.replica-shardid-gossip-reject
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 249495a3ff36..c9c49b446623.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6bc1db6d6366
+seed: 19618
+experiment:
+  id: proposed.repl-mptcp-config
+deployment:
+  mode: standalone
+  base_port: 7700

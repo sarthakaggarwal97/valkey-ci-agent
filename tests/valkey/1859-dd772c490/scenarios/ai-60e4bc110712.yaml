@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8df0a6b67587..dd772c490ed7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-60e4bc110712
+seed: 12
+experiment:
+  id: proposed.hll-neon-merge-compress
+  inputs:
+    resp: 3
+    hll_sparse_max_bytes: 64
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

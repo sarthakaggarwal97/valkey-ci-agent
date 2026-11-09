@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.cluster-multidb-tools
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli -n and valkey-benchmark --dbnum against private servers
+    of both builds - the cli now sends SELECT to cluster servers and the benchmark
+    no longer skips SELECT for cluster clients
+components:
+- use: valkey.action.tools
+  id: cli-cluster
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    ignore: ['^\d+:[A-Z] .*\n', '^.* requests per second.*\n', '[^\r\n]*\r']
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, -n, 0, PING], expect: {exit: {equals: 0},
+        stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, -n, 1, PING], expect_difference: true,
+      expect: {stderr: {contains: "DB index is out of range"}}}
+    - {tool: valkey-benchmark, args: [--cluster, -p, $port, --dbnum, 1, -c, 1, -n,
+        5, -q, PING], expect_difference: true, expect: {exit: {equals: 1}, stderr: {
+          contains: "DB index is out of range"}}}
+- use: valkey.action.tools
+  id: cli-standalone
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    ignore: ['^\d+:[A-Z] .*\n', '^.* requests per second.*\n', '[^\r\n]*\r']
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, -n, 2, SET, k, v], expect: {exit: {equals: 0},
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, -n, 2, GET, k], expect: {stdout: {equals: "v\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --dbnum, 3, -c, 1, -n, 5, -q, SET,
+        "key:std", val], expect: {exit: {equals: 0}}, compare: skip}
+    - {tool: valkey-cli, args: [-p, $port, -n, 3, GET, "key:std"], expect: {stdout: {
+          equals: "val\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-cluster}
+- {evidence_id: valkey.tool.runs, source: cli-standalone}

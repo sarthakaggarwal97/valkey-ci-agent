@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.strlen-serverinfo-getu
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_ServerInfoGetFieldUnsigned (string2ull now taking sdslen) exercised
+    through infotest.so's info.getu on module and core INFO fields, across both builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: infoget
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [info.getu, infotest, infotest_uglobal], expect: {equals: -2}}
+    - {command: [info.getu, infotest, infotest_global], expect: {error: "not found"}}
+    - {command: [info.geti, infotest, infotest_uglobal], expect: {error: "not found"}}
+    - {command: [info.getu, infotest_spanish, infotest_uno], expect: {error: "not\
+          \ found"}}
+    - {command: [info.getu, infotest_italian, infotest_tre], expect: {error: "not\
+          \ found"}}
+    - {command: [info.getu, infotest_keyspace, infotest_db0], expect: {error: "not\
+          \ found"}}
+    - {command: [info.getu, infotest, infotest_missing_field], expect: {error: "not\
+          \ found"}}
+    - {command: [info.getu, stats, expired_keys], expect: {equals: 0}}
+    - {command: [CONFIG, SET, maxmemory, 9223372036854775807], expect: {equals: OK}}
+    - {command: [info.getu, memory, maxmemory], expect: {equals: 9223372036854775807}}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: [info.getc, infotest_spanish, infotest_uno], expect: {equals: one}}
+    - {command: [info.gets, infotest, infotest_global], expect: {equals: "-2"}}
+    - {command: [info.getd, infotest_italian, infotest_tre]}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [infoget.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: infoget}

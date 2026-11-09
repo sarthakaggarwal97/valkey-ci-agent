@@ -1,0 +1,28 @@
+extends: [valkey.liveness]
+id: proposed.strlen-module-ull
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_StringToULongLong parses with sdslen(str->ptr) across ULLONG_MAX,
+    overflow and negative inputs
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ull
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [test.ull_conversion], expect: {equals: ok}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [ull.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ull}

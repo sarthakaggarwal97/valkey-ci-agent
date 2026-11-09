@@ -1,0 +1,26 @@
+extends: [valkey.liveness]
+id: proposed.cli-repr-output
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli --no-raw escapes backslash and double quote in a string
+    reply through sdscatrepr
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: inputs.parent}
+    server: true
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, SET, k, 'a\b"c'], expect: {stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, GET, k], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: 'a\\b\"c'}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

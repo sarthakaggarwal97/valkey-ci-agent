@@ -1,0 +1,26 @@
+extends: [valkey.liveness]
+id: proposed.hotkeys-count
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli --hotkeys-count builds a heap eviction pool sized by an
+    unvalidated atoi count; compared against the parent build, which lacks the option
+inputs:
+  properties:
+    count: {type: integer, default: 16}
+components:
+- use: valkey.action.tools
+  id: hot
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 30
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, maxmemory-policy, allkeys-lfu],
+      expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, MSET, a, 1, b, 2, c, 3, d, 4, e, 5, f,
+        6], expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --hotkeys-count, {$ref: inputs.count}],
+      expect_difference: true, expect: {exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: hot}

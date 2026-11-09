@@ -1,0 +1,46 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9cbcaa2586400e3a16469c1b817526e5a6e3e357",
+  "parent": "c9c49b446623a6b626f6b61663a8768b68431739",
+  "pr": 2015,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "valkey-benchmark: Add test for MGET (#2015)",
+  "date": "2025-04-28",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 9,
+    "executed": 9,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.4752,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-292befdd3923",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'bench-cluster' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (valkey-benchmark --cluster -p $port -t mget -n 1000 -c 4 -r 100 --csv)"
+    },
+    {
+      "scenario": "ai-40b692d87c89",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'bench-cluster' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (valkey-benchmark --cluster -p $port -t mget -n 5000 -c 8 -r 1 --csv)"
+    },
+    {
+      "scenario": "ai-bf310c304013",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'bench-cluster' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (valkey-benchmark --cluster -p $port -t mget -n 5000 -c 16 -r 1000000 --csv)"
+    }
+  ]
+}

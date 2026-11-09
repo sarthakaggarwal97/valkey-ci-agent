@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.cluster-multidb-routing
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Cluster-mode guard removal for SELECT/MOVE/COPY and the new slot-migration
+    routing blocks, replies compared to the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: routing
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SET, "{3560}k", v], expect: {equals: OK}}
+    - {command: [SELECT, 1], expect_difference: true, expect: {error: "out of range"}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 0, MIGRATING, "<node.1.id>"], expect: {equals: OK}}
+    - {command: [MOVE, "{3560}k", 1], expect_difference: true, expect: {error: true}}
+    - {command: [COPY, "{3560}k", "{3560}k2", DB, 1], expect_difference: true, expect: {
+        error: true}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 0], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [routing.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: routing}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e113a5e31da4..1766416499b1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-25529a9ea2c0
+seed: 202
+experiment:
+  id: proposed.eval-nul-bytes
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

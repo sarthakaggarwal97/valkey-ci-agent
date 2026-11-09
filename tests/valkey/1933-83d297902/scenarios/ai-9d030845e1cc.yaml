@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 38846504dcfc..83d2979028d6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9d030845e1cc
+seed: 2
+experiment:
+  id: proposed.hotkeys-count
+  inputs:
+    count: -1
+deployment:
+  mode: standalone
+  base_port: 7100

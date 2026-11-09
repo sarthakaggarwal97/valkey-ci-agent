@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 70f205761499..8df0a6b67587.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8f9f05b96d44
+seed: 2011
+experiment:
+  id: proposed.cluster-link-accept-storm
+  inputs:
+    target: replica
+    signal: SIGKILL
+    settle_s: 15
+deployment:
+  mode: cluster
+  primaries: 6
+  replicas_per_primary: 2
+  base_port: 7200
+  server_config:
+    max-new-connections-per-cycle: 1

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 30e9109d19b0..5df95b3df1f2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-11515dc85787
+seed: 311004
+experiment:
+  id: proposed.failover-psync-compare
+  inputs:
+    resp: 3
+    dual_channel: 'yes'
+    diskless_sync: 'yes'
+deployment:
+  mode: standalone
+  base_port: 7300

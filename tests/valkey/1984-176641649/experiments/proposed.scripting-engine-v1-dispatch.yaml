@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.scripting-engine-v1-dispatch
+deployment:
+  modes: [standalone]
+metadata:
+  description: A scripting-engine module built against ABI v1 (the parent commit's
+    helloscripting.so) still compiles EVAL scripts and FUNCTION libraries on the new
+    build through the compile_code_v1 back-compat dispatch
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: v1compat
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module_parent.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [FUNCTION, LOAD, "#!hello name=mylib\nFUNCTION foo\nARGS 0\nRETURN\n\
+          FUNCTION bar\nCONSTI 432\nRETURN"], expect: {equals: mylib}}
+    - {command: [FCALL, foo, 0, 134], expect: {equals: 134}}
+    - {command: [FCALL, bar, 0], expect: {equals: 432}}
+    - {command: [FUNCTION, LOAD, "#!hello name=badlib\nFUNCTION baz\nARGS 0\nSEND"],
+      expect: {error: "Failed to parse instruction"}}
+    - {command: [EVAL, "#!hello\nFUNCTION evalfn\nARGS 0\nRETURN", 0, 145], expect: {
+        equals: 145}}
+    - {command: [EVAL, "#!hello\nFUNCTION evalfn\nARGS 0\nRETURN", 0, 167], expect: {
+        equals: 167}}
+    - {command: [SCRIPT, LOAD, "#!hello\nFUNCTION constfn\nCONSTI 99\nRETURN"], expect: {
+        exists: true}}
+    - {command: [EVAL, "#!hello\nFUNCTION badfn\nXYZ 1", 0], expect: {error: "Failed\
+          \ to parse instruction"}}
+    - {command: [EVAL, "#!hello\nFUNCTION nulfn\nCONSTI 7\nRETURN\n\0junk after the\
+          \ null byte", 0], expect: {equals: 7}}
+    - {command: [FUNCTION, LOAD, "#!hello name=nullib\nFUNCTION nfn\nCONSTI 5\nRETURN\n\
+          \0trailing junk"], expect: {equals: nullib}}
+    - {command: [FCALL, nfn, 0], expect: {equals: 5}}
+    - {command: [FUNCTION, LOAD, REPLACE, "#!hello name=mylib\nFUNCTION foo\nARGS\
+          \ 0\nRETURN\nFUNCTION bar2\nCONSTI 500\nRETURN"], expect: {equals: mylib}}
+    - {command: [FCALL, bar2, 0], expect: {equals: 500}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [v1compat.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: v1compat}

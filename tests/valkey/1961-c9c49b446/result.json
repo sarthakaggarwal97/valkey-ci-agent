@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c9c49b446623a6b626f6b61663a8768b68431739",
+  "parent": "249495a3ff364f3fb66096223a98efde72e37b7a",
+  "pr": 1961,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Introduce MPTCP for replication (#1961)",
+  "date": "2025-04-27",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 1,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 10,
+    "executed": 10,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.9952,
+  "findings": [],
+  "recorded": []
+}

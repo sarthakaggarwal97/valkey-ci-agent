@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8dca8019df1e9ac553e0f5a1cf3d02a2629a32e3",
+  "parent": "4eeffda56987edd7329ee71540dfc591af01d3f9",
+  "pr": 2034,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove redundancy if condition statement (#2034)",
+  "date": "2025-05-02",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2894,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure refactor with no behavior change: the removed `if (sdslen(value) > 0)` guard in setrangeCommand was dead code, since both the non-existing-key branch (t_string.c:523-526) and the existing-key branch (t_string.c:543-546) return early when the value is empty before reaching it. The write, signalModifiedKey, keyspace notification, server.dirty increment, and reply execute under identical conditions on both builds, so no reply, replication, persistence, or notification behavior differs and no reachable input can distinguish the two builds."
+}

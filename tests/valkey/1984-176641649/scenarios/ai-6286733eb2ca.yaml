@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e113a5e31da4..1766416499b1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6286733eb2ca
+seed: 505
+experiment:
+  id: proposed.scripting-engine-abi-v2
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

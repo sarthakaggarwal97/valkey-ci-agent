@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 57118a47545e..05d8fd47426a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-48c114718f63
+seed: 4242
+experiment:
+  id: proposed.cluster-primary-crash-reload
+  inputs:
+    signal: SIGKILL
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec

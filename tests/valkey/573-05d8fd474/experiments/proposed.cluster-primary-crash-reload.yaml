@@ -1,0 +1,35 @@
+extends: [valkey.base]
+id: proposed.cluster-primary-crash-reload
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: SIGKILL a cluster primary under writes and restart it at once, so it
+    reloads nodes.conf (whose replica shard-id check now panics on a mismatch), rejoins,
+    and re-gossips shard ids with its replicas; no acknowledged write may be lost
+    beyond the fsync window and no node may crash
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+components:
+- use: valkey.fault.process-signal
+  id: kill-primary
+  config:
+    when_event: warm-up.completed
+    instance: primary
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-primary]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 5}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-primary}

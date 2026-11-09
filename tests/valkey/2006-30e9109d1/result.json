@@ -1,0 +1,55 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "30e9109d19b0cd38c384560abdbd23e9e5719361",
+  "parent": "83d2979028d660d60ea4738c7bafb3a0b8ac0700",
+  "pr": 2006,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add output buffer limiting for unauthenticated clients (#2006)",
+  "date": "2025-04-25",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 4,
+  "recall": true,
+  "coverage": {
+    "lines": 24,
+    "executed": 22,
+    "percent": 91,
+    "uncovered": [
+      "src/acl.c:498",
+      "src/module.c:9706"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 10.566,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-1ed458fcb4c0",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'unauth' returned ERROR: the parent build (/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent/src/valkey-server) does not start with {'sanitize-dump-payload': 'yes', 'enable-debug-command': 'yes', 'requirepass': 'foobar'}"
+    },
+    {
+      "scenario": "ai-3629596fe8bb",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'unauth' returned ERROR: the parent build (/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent/src/valkey-server) does not start with {'sanitize-dump-payload': 'yes', 'enable-debug-command': 'yes', 'requirepass': 'foobar'}"
+    },
+    {
+      "scenario": "ai-c874026999ea",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'obuf' returned ERROR: command 2 (AUTH foobar on connection keep) got no reply: cannot connect: ResponseError: NOAUTH HELLO must be called with the client already authenticated, otherwise the HELLO <proto> AUTH <user> <pass> option can b"
+    },
+    {
+      "scenario": "ai-451cef218c23",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'modauth' returned ERROR: command 2 (auth.authmoduleuser on connection mprobe) got no reply: cannot connect: ResponseError: NOAUTH HELLO must be called with the client already authenticated, otherwise the HELLO <proto> AUTH <user> <pass>"
+    }
+  ]
+}

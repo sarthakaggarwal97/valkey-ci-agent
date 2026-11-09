@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-09T23:26+00:00.
+Updated 2026-11-09T23:29+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1299 | 1211 | #1995 (2025-05-03) | 272 | 185.6 |
+| valkey-io/valkey | 1323 | 1187 | #1819 (2025-04-17) | 296 | 189.0 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 63 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 9.0 |
 | valkey-io/valkey-search | 670 | 0 | f8106e72e984 (2024-11-27) | 15 | 95.7 |
@@ -13,28 +13,28 @@ Updated 2026-11-09T23:26+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-09T20:36:46+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42679435884): 20 merge(s) tested, 4 without a code change.
+[2026-11-09T23:29:13+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42694658068): 20 merge(s) tested, 4 without a code change.
 
-- [valkey-io/valkey#5326](https://github.com/valkey-io/valkey/pull/5326) ([tests](tests/valkey/5326-dfdea1799/)): bgiteration: process ITER_CLOSED after items queued behind it (#5326): 0 of 4 test(s) reached the change, coverage 100%; crash, introduced and since fixed (recorded)
-- [valkey-io/valkey#2146](https://github.com/valkey-io/valkey/pull/2146): Incorporate Redis CVE for CVE-2025-27151 (#2146): error: Claude Code failed (rc=1): API Error: Claude's response exceeded the 64000 output token maximum. To configure this behavior, set the CLAUDE_CODE_MAX_OUTPUT_TOKENS environment variable.
-- [valkey-io/valkey#2027](https://github.com/valkey-io/valkey/pull/2027) ([tests](tests/valkey/2027-9f7aa040d/)): Additional assertions for listpack (#2027): declined: Defensive hardening of listpack internals: it adds assertions that an LP_EOF byte lies at the end of the allocation, makes lpValidateNext reject a mid-listpack LP_EOF, and makes lpGetWithSize panic on an invalid encoding byte instead of returning a sentinel integer. On every valid listpack
-- [valkey-io/valkey#2063](https://github.com/valkey-io/valkey/pull/2063) ([tests](tests/valkey/2063-b7f4b20bc/)): Make sure that the same point reports for geo comparisons (#2063): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2057](https://github.com/valkey-io/valkey/pull/2057) ([tests](tests/valkey/2057-fe97ba419/)): valkey-benchmark: Arbitrary command sequence (#2057): 4 of 4 test(s) reached the change, coverage 92%
-- [valkey-io/valkey#2071](https://github.com/valkey-io/valkey/pull/2071) ([tests](tests/valkey/2071-4ede540e9/)): Fix variable scope confusion (#2071): declined: The change only removes a local 'size_t len' that shadowed the outer 'uint64_t len' loop counter in rdbLoadObject's RDB_TYPE_LIST branch, inlining sdslen(dec->ptr) into the quicklistPushTail call. The while(len--) condition always referred to the outer counter (the inner declaration is sco
-- [valkey-io/valkey#1867](https://github.com/valkey-io/valkey/pull/1867) ([tests](tests/valkey/1867-af25a5247/)): Optimize BITCOUNT using ARM NEON SIMD (#1867): 0 of 2 test(s) reached the change
-- [valkey-io/valkey#2068](https://github.com/valkey-io/valkey/pull/2068) ([tests](tests/valkey/2068-6cf69a44b/)): valkey-cli: remove RESP version assertion from getDatabases() (#2068): declined: The change only deletes a defensive assertion in valkey-cli's getDatabases() that required the CONFIG GET reply type to match config.current_resp3. That tracked value can only disagree with the server's actual reply type through the cliSwitchProto() desync (implicit --json RESP3 request pl
-- [valkey-io/valkey#2060](https://github.com/valkey-io/valkey/pull/2060) ([tests](tests/valkey/2060-2205bf99c/)): move statement in if condition for zremrangeGenericCommand function (#2060): declined: The change moves `server.dirty += deleted` inside the `if (deleted)` block in zremrangeGenericCommand (ZREMRANGEBYRANK/BYSCORE/BYLEX). When deleted != 0 both versions add the same amount; when deleted == 0 the old code added zero, a no-op. server.dirty, replies, keyspace notifications and 
-- [valkey-io/valkey#2067](https://github.com/valkey-io/valkey/pull/2067) ([tests](tests/valkey/2067-0862f9f77/)): Support MPTCP for valkey-cli and benchmark (#2067): 3 of 3 test(s) reached the change, coverage 90%
-- [valkey-io/valkey#2059](https://github.com/valkey-io/valkey/pull/2059) ([tests](tests/valkey/2059-70106f06b/)): Support RDMA for valkey-cli and benchmark (#2059): 2 of 7 test(s) reached the change, coverage 71%
-- [valkey-io/valkey#2030](https://github.com/valkey-io/valkey/pull/2030) ([tests](tests/valkey/2030-22c219124/)): Optimize findBucket performance using SIMD (#2030): 0 of 5 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2061](https://github.com/valkey-io/valkey/pull/2061) ([tests](tests/valkey/2061-a2001a387/)): Fixed minor grammatical error (#2061): declined: The change only rewords a sentence in a source comment in src/bio.c ('put here server specific background tasks' -> 'put server specific background tasks here'). No executable code, configuration, protocol, or build artifact changes, so no runtime behaviour can differ and no scenario is ne
-- [valkey-io/valkey#1966](https://github.com/valkey-io/valkey/pull/1966) ([tests](tests/valkey/1966-9e87473b3/)): Disallowing Client Reply is On / Off / Skip when Client is Multi (#1966): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2032](https://github.com/valkey-io/valkey/pull/2032) ([tests](tests/valkey/2032-b5c774397/)): Replace dependency `hiredis` with `libvalkey` (#2032): 0 of 3 test(s) reached the change
-- [valkey-io/valkey#2046](https://github.com/valkey-io/valkey/pull/2046) ([tests](tests/valkey/2046-7859ba9b1/)): valkey-cli: Count databases correctly in --cluster subcommands (#2046): 1 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2048](https://github.com/valkey-io/valkey/pull/2048) ([tests](tests/valkey/2048-c17af4ac4/)): Return only the relevant bit in sdsGetAuxBit() (#2048): declined: The change masks sdsGetAuxBit()'s return value to a single bit (`& 1U`), but it is purely defensive hardening with no observable behaviour change: the only caller is the hash entry encoding in t_hash.c, which uses only aux bit 0, and the embedded field's flags byte is always written by sds
-- [valkey-io/valkey#2024](https://github.com/valkey-io/valkey/pull/2024) ([tests](tests/valkey/2024-911641b29/)): Remove duplicate macro definitions of HASH_SET_* (#2024): declined: The change only deletes duplicate #define lines for HASH_SET_TAKE_FIELD, HASH_SET_TAKE_VALUE and HASH_SET_COPY from t_hash.c; identical definitions with the same values remain in server.h (lines 3268-3270), so preprocessing, hashTypeSet and all hash commands compile to exactly the same cod
-- [valkey-io/valkey#2038](https://github.com/valkey-io/valkey/pull/2038) ([tests](tests/valkey/2038-4571886b4/)): Fix VALKEYCLI_AUTH env variable fallback to REDISCLI_AUTH mistake (#2038): 1 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2025](https://github.com/valkey-io/valkey/pull/2025) ([tests](tests/valkey/2025-91f6c9737/)): Compile with -Wundef (#2025): declined: The change only adds the -Wundef/-Werror=undef compiler flag and rewrites '#if MACRO' conditionals to '#if defined(MACRO) && MACRO'. Since an undefined macro already evaluates to 0 in a preprocessor #if, every rewritten conditional (config.h, crcspeed.c, debug.c, rdma.c, rio.c, sentinel.c,
+- [valkey-io/valkey#1995](https://github.com/valkey-io/valkey/pull/1995) ([tests](tests/valkey/1995-49e44e531/)): Environment variable REDISCLI_AUTH to VALKEYCLI_AUTH conversion (#1995): 0 of 1 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1671](https://github.com/valkey-io/valkey/pull/1671) ([tests](tests/valkey/1671-2fe08f864/)): Add multi-database support to cluster mode (#1671): 9 of 14 test(s) reached the change, coverage 67%
+- [valkey-io/valkey#2034](https://github.com/valkey-io/valkey/pull/2034) ([tests](tests/valkey/2034-8dca8019d/)): Remove redundancy if condition statement (#2034): declined: Pure refactor with no behavior change: the removed `if (sdslen(value) > 0)` guard in setrangeCommand was dead code, since both the non-existing-key branch (t_string.c:523-526) and the existing-key branch (t_string.c:543-546) return early when the value is empty before reaching it. The writ
+- [valkey-io/valkey#2036](https://github.com/valkey-io/valkey/pull/2036) ([tests](tests/valkey/2036-4eeffda56/)): Properly escape double quotes and backslash in sdscatrepr (#2036): 0 of 1 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1859](https://github.com/valkey-io/valkey/pull/1859) ([tests](tests/valkey/1859-dd772c490/)): Hyperloglog ARM NEON SIMD optimization (#1859): 0 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2009](https://github.com/valkey-io/valkey/pull/2009) ([tests](tests/valkey/2009-8df0a6b67/)): Accept limited number of new cluster link connections per cycle (#2009): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1944](https://github.com/valkey-io/valkey/pull/1944) ([tests](tests/valkey/1944-70f205761/)): Optimize string2ll performance using AVX512 (#1944): 0 of 3 test(s) reached the change, coverage 14%
+- [valkey-io/valkey#2001](https://github.com/valkey-io/valkey/pull/2001) ([tests](tests/valkey/2001-2d200dfa3/)): Minor change for sadd command (#2001): declined: The change moves `server.dirty += added` inside the `if (added)` guard in saddCommand. When added == 0 the old code added 0 to server.dirty, which is a no-op, and when added > 0 both versions execute identically. The dirty counter delta (and thus replication propagation), keyspace notifica
+- [valkey-io/valkey#2015](https://github.com/valkey-io/valkey/pull/2015) ([tests](tests/valkey/2015-9cbcaa258/)): valkey-benchmark: Add test for MGET (#2015): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1961](https://github.com/valkey-io/valkey/pull/1961) ([tests](tests/valkey/1961-c9c49b446/)): Introduce MPTCP for replication (#1961): 1 of 8 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2007](https://github.com/valkey-io/valkey/pull/2007) ([tests](tests/valkey/2007-249495a3f/)): Convert pubsub dicts to hashtables (#2007): declined: no proposed test validated
+- [valkey-io/valkey#2002](https://github.com/valkey-io/valkey/pull/2002) ([tests](tests/valkey/2002-5065fcf12/)): Correct rpushx description (#2002): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#1976](https://github.com/valkey-io/valkey/pull/1976) ([tests](tests/valkey/1976-d3b6559d7/)): Clean up unnecessary use of strlen (#1976): 2 of 8 test(s) reached the change, coverage 63%
+- [valkey-io/valkey#1476](https://github.com/valkey-io/valkey/pull/1476) ([tests](tests/valkey/1476-5df95b3df/)): Refactor syncWithPrimary and replicaTryPartialResynchronization (#1476): 0 of 18 test(s) reached the change, coverage 61%
+- [valkey-io/valkey#2006](https://github.com/valkey-io/valkey/pull/2006) ([tests](tests/valkey/2006-30e9109d1/)): Add output buffer limiting for unauthenticated clients (#2006): 2 of 8 test(s) reached the change, coverage 91%
+- [valkey-io/valkey#1933](https://github.com/valkey-io/valkey/pull/1933) ([tests](tests/valkey/1933-83d297902/)): Add --hotkeys-count option for Valkey-cli (#1933): 3 of 3 test(s) reached the change, coverage 93%; crash, introduced and since fixed (recorded)
+- [valkey-io/valkey#1989](https://github.com/valkey-io/valkey/pull/1989) ([tests](tests/valkey/1989-38846504d/)): blocking client followup fix related to log_req_res (#1989): declined: The change only relocates the reqresSaveClientReplyOffset call inside _addReplyToBufferOrList so the request/response-log offset is saved before replies are diverted to the deferred-reply or pending-push lists. That function is compiled only under the LOG_REQ_RES debug build flag; in stand
+- [valkey-io/valkey#1984](https://github.com/valkey-io/valkey/pull/1984) ([tests](tests/valkey/1984-176641649/)): Allow scripts to support null characters again (#1984): 5 of 8 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1985](https://github.com/valkey-io/valkey/pull/1985) ([tests](tests/valkey/1985-9fb850dab/)): Only enable defrag for vendored jemalloc (#1985): declined: This is a build-time guard: HAVE_DEFRAG now requires VALKEY_VENDORED_JEMALLOC, a macro the vendored jemalloc header defines. The fuzzer's builds of both the change and its parent use the vendored jemalloc, so HAVE_DEFRAG is defined on both and runtime behavior (activedefrag config, defrag 
+- [valkey-io/valkey#573](https://github.com/valkey-io/valkey/pull/573) ([tests](tests/valkey/573-05d8fd474/)): Avoid shard id update of replica if not matching with primary shard id (#573): 0 of 5 test(s) reached the change, coverage 40%
 
 ### valkey-io/valkey-bloom
 
@@ -53,10 +53,10 @@ Updated 2026-11-09T23:26+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 689 of 1047 tested (66%)
-- Changed-line coverage: median 100% of 593 merge(s) measured, 49 under 50%
+- Merges whose tests reached the change: 696 of 1062 tested (66%)
+- Changed-line coverage: median 100% of 607 merge(s) measured, 51 under 50%
 - Recall: 191 parents flagged of 291 fix merges
-- Claude: $1092.72 in the last 24 hours, $7650.24 in the last 7 days, $7650.24 in all
+- Claude: $1239.87 in the last 24 hours, $7797.39 in the last 7 days, $7797.39 in all
 - Issues filed: 64
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

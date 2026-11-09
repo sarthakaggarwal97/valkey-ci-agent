@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "249495a3ff364f3fb66096223a98efde72e37b7a",
+  "parent": "5065fcf12d324fc65f9346af8ff0a2fdf1ecb09c",
+  "pr": 2007,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Convert pubsub dicts to hashtables (#2007)",
+  "date": "2025-04-27",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 5,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.5681,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

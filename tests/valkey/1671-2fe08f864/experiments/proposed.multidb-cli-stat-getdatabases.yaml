@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.multidb-cli-stat-getdatabases
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    valkey-cli --stat database discovery through the new getDatabases(ctx): the cluster-mode
+    branch (CONFIG GET cluster-databases under -c), the standalone branch, the RESP3
+    reply-type path, and the CONFIG GET failure fallback (default 1 in cluster client
+    mode vs the parent's 16), compared across the two builds. --stat never exits,
+    so each stat run ends at timeout_s on both sides; the fallback message goes to
+    unbuffered stderr, which is where the marked runs differ.
+components:
+- use: valkey.action.tools
+  id: stat
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 6
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, MSET, k1, v, k2, v, k3, v], expect: {exit: {
+          equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-p, $port, -n, 1, MSET, a1, v, a2, v, a3, v], expect: {
+        exit: {equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-p, $port, --stat, -i, 1], compare: skip, expect: null}
+    - {tool: valkey-cli, args: [-p, $port, -c, --stat, -i, 1], compare: skip, expect: null}
+    - {tool: valkey-cli, args: [-p, $port, -3, -c, --stat, -i, 1], compare: skip,
+      expect: null}
+    - {tool: valkey-cli, args: [-p, $port, ACL, SETUSER, default, "-config|get"],
+      expect: {exit: {equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-p, $port, -c, --stat, -i, 1], expect_difference: true,
+      expect: {stderr: {contains: "cluster-databases fails"}}}
+    - {tool: valkey-cli, args: [-p, $port, -3, -c, --stat, -i, 1], expect_difference: true,
+      expect: {stderr: {contains: "use default value 1 instead"}}}
+    - {tool: valkey-cli, args: [-p, $port, --stat, -i, 1], compare: skip, expect: {
+        stderr: {contains: "databases fails"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: stat}

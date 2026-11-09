@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.unauth-module-auth-obuf
+deployment:
+  modes: [standalone]
+metadata:
+  description: A client authenticated by a module via authenticateClientWithUser sets
+    ever_authenticated, so after RESET it is not force-closed, unlike a never-authenticated
+    client
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: modauth
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [auth.createmoduleuser], expect: {equals: OK}}
+    - {command: [CONFIG, SET, requirepass, foobar], expect: {equals: OK}}
+    - {command: [auth.authmoduleuser], connection: mprobe, compare: skip}
+    - {command: [PING], connection: mprobe, expect: {equals: PONG}}
+    - {command: [RESET], connection: mprobe, expect: {equals: RESET}}
+    - {command: [DEBUG, CLIENT-ENFORCE-REPLY-LIST, 1], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [PING], connection: mprobe, expect: {error: "NOAUTH"}}
+    - {command: [PING], connection: nprobe, expect_difference: true, expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modauth}

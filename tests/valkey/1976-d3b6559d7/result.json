@@ -1,0 +1,94 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d3b6559d7dc698cb469a9ba6bf7432f31ba2a9b0",
+  "parent": "5df95b3df1f2ffc56f90610ac56f67e4030329f5",
+  "pr": 1976,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Clean up unnecessary use of strlen (#1976)",
+  "date": "2025-04-26",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 2,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 30,
+    "executed": 19,
+    "percent": 63,
+    "uncovered": [
+      "src/module.c:10643",
+      "src/sentinel.c:4193",
+      "src/sentinel.c:4201",
+      "src/sentinel.c:4206",
+      "src/sentinel.c:4210",
+      "src/sentinel.c:4218",
+      "src/sentinel.c:4224",
+      "src/sentinel.c:4228",
+      "src/sentinel.c:4230",
+      "src/sentinel.c:4236",
+      "src/sentinel.c:4238"
+    ],
+    "rounds": 2
+  },
+  "cost_usd": 8.5562,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-ce5ebb1072eb",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (SCAN <binary>), 2 (HSCAN h <binary>), 4 (SSCAN s <binary>), 6 (ZSCAN z <binary>)"
+    },
+    {
+      "scenario": "ai-c9b54fe6bb08",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (SCAN <binary>), 2 (HSCAN h <binary>), 4 (SSCAN s <binary>), 6 (ZSCAN z <binary>)"
+    },
+    {
+      "scenario": "ai-13878587df01",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'parse' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (BITFIELD bf GET i16 0)"
+    },
+    {
+      "scenario": "ai-606ab9181dd0",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'parse' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (BITFIELD bf GET i16 0)"
+    },
+    {
+      "scenario": "ai-f515fefbedf3",
+      "build": "unstable",
+      "seed": 1003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-f515fefbedf3",
+      "build": "unstable",
+      "seed": 1004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-f515fefbedf3",
+      "build": "unstable",
+      "seed": 1005,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-14dd84481a10",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'infoget' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (info.getu infotest infotest_uglobal), 1 (info.getu infotest infotest_global), 2 (info.geti infotest infotest_uglobal), 3 (info.getu in"
+    },
+    {
+      "scenario": "ai-4d013634936d",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'infoget' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (info.getu infotest infotest_uglobal), 1 (info.getu infotest infotest_global), 2 (info.geti infotest infotest_uglobal), 3 (info.getu in"
+    }
+  ]
+}

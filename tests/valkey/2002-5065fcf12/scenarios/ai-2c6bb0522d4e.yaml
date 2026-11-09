@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d3b6559d7dc6..5065fcf12d32.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2c6bb0522d4e
+seed: 20021
+experiment:
+  id: proposed.rpushx-docs-summary
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

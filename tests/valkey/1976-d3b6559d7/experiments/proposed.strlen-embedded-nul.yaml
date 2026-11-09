@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.strlen-embedded-nul
+deployment:
+  modes: [standalone]
+metadata:
+  description: SCAN cursors and BITFIELD types with an embedded NUL byte now parse
+    the whole binary-safe argument instead of stopping at the NUL
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SCAN, !!binary "MAB4"], expect_difference: true, expect: {error: "invalid\
+          \ cursor"}}
+    - {command: [HSET, h, f, v], expect: {equals: 1}}
+    - {command: [HSCAN, h, !!binary "MAB4"], expect_difference: true, expect: {error: "invalid\
+          \ cursor"}}
+    - {command: [SADD, s, m], expect: {equals: 1}}
+    - {command: [SSCAN, s, !!binary "MAB4"], expect_difference: true, expect: {error: "invalid\
+          \ cursor"}}
+    - {command: [ZADD, z, 1, m], expect: {equals: 1}}
+    - {command: [ZSCAN, z, !!binary "MAB4"], expect_difference: true, expect: {error: "invalid\
+          \ cursor"}}
+    - {command: [BITFIELD, bk, GET, !!binary "aTgAeA==", 0], expect_difference: true,
+      expect: {error: "Invalid bitfield type"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

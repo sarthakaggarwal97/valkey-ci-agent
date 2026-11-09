@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8dca8019df1e..2fe08f86468a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6971891b7082
+seed: 982451653
+experiment:
+  id: proposed.multidb-cli-stat-getdatabases
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

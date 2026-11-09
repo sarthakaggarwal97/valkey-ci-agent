@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.rpushx-docs-summary
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS RPUSHX summary says one or more elements on the change
+    and not on the parent, while RPUSHX multi-element behaviour is identical on both
+    builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, DOCS, RPUSHX], expect_difference: true, expect: {contains: "one\
+          \ or more elements"}}
+    - {command: [COMMAND, DOCS, rpushx], expect_difference: true, expect: {contains: "one\
+          \ or more elements"}}
+    - {command: [COMMAND, DOCS, RPUSH], expect: {contains: "one or more elements"}}
+    - {command: [RPUSHX, mylist, a], expect: {equals: 0}}
+    - {command: [EXISTS, mylist], expect: {equals: 0}}
+    - {command: [RPUSH, mylist, a], expect: {equals: 1}}
+    - {command: [RPUSHX, mylist, b, c, d], expect: {equals: 4}}
+    - {command: [LRANGE, mylist, 0, -1], expect: {equals: [a, b, c, d]}}
+    - {command: [RPUSHX, mylist, "", ""], expect: {equals: 6}}
+    - {command: [LLEN, mylist], expect: {equals: 6}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8df0a6b67587cb5505d628d76e5c83532f4a4c39",
+  "parent": "70f205761499854e429e5dd3862d6245b12d1b24",
+  "pr": 2009,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Accept limited number of new cluster link connections per cycle (#2009)",
+  "date": "2025-04-29",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.7043,
+  "findings": [],
+  "recorded": []
+}

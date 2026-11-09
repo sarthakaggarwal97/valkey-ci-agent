@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1766416499b12023da7c12820920bd26d571258d",
+  "parent": "e113a5e31da42cf30d0ebedb0330b22f3bc1526c",
+  "pr": 1984,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Allow scripts to support null characters again (#1984)",
+  "date": "2025-04-22",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 5,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 8,
+    "executed": 8,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 13.7649,
+  "findings": [],
+  "recorded": []
+}
