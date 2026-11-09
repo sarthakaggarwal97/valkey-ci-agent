@@ -17,6 +17,7 @@ from scripts.ci_fix.models import (
     CandidateAction,
     Failure,
     FixCandidate,
+    FixContext,
     FixPolicy,
     FixResult,
     FixTarget,
@@ -1556,3 +1557,51 @@ def test_an_isolated_failure_unlike_cis_falls_through_to_the_whole_file(tmp_path
     )
 
     assert seen == ["only", "isolated", "whole"] and chosen is whole and reproduction.reproduced
+
+
+def test_verification_may_use_the_rest_of_the_deadline_not_one_commands_default():
+    """#5301 and 9.2's 40-loop checks died at 1800s with hours of the session left."""
+    assert engine_mod._timeout(time.monotonic() + 3 * 3600) > engine_mod.TEST_TIMEOUT_S
+    assert engine_mod._timeout(time.monotonic() - 5) == 60
+
+
+def test_a_reproduction_that_cannot_run_is_a_failed_attempt_not_a_refusal():
+    """About the runner, not the test: retried and posted nowhere, unlike a refusal that retires it."""
+    plan = ReproPlan(build="make", test="t", tests=())
+    unrunnable = Reproduction(ReproStatus.UNRUNNABLE, command="t", reason="exited in 30s")
+
+    with pytest.raises(engine_mod.ReproductionUnrunnable, match="could not run"):
+        _REAL_REPRODUCTION_REFUSAL(FixContext(), plan, unrunnable)
+    passed = Reproduction(ReproStatus.NOT_REPRODUCED, command="t", all_attempts_passed=True)
+    assert _REAL_REPRODUCTION_REFUSAL(FixContext(), plan, passed).action is CandidateAction.REFUSE
+
+
+def test_a_block_that_passes_is_followed_by_one_whole_file_run(tmp_path, monkeypatch):
+    seen = []
+    whole = ReproPlan(build="make", test="whole", tests=(), single_run=True, attributed=True)
+    isolated = ReproPlan(build="make", test="isolated", tests=(), fallback=whole, attributed=True, isolated_block=True)
+    plan = ReproPlan(build="make", test="only", tests=(), fallback=isolated)
+    monkeypatch.setattr(engine_mod, "plan_for", lambda *a, **k: plan)
+    statuses = {"only": ReproStatus.UNRUNNABLE, "isolated": ReproStatus.NOT_REPRODUCED,
+                "whole": ReproStatus.REPRODUCED}
+    monkeypatch.setattr(engine_mod, "reproduce", lambda selected, run, *, deadline: (
+        seen.append(selected.test) or Reproduction(statuses[selected.test], command=selected.test)))
+
+    _context, chosen, reproduction = engine_mod._establish(
+        _task("a" * 40), str(tmp_path), (), (), lambda *a: None, repro_deadline=time.monotonic() + 60,
+    )
+
+    assert seen == ["only", "isolated", "whole"] and chosen is whole and reproduction.reproduced
+
+
+def test_the_reproduction_transcript_is_saved_for_the_runs_artifact(tmp_path, monkeypatch):
+    monkeypatch.setenv(engine_mod.EVIDENCE_DIR_ENV, str(tmp_path / "evidence"))
+    plan = ReproPlan(build="make", test="t", tests=(), notes=("a note",))
+    output = "\n".join(f"line {n}" for n in range(500)) + "\nwait_for_sync failed"
+
+    engine_mod._write_transcript(plan, Reproduction(ReproStatus.UNRUNNABLE, command="make && t",
+                                                    output=output, reason="exited in 30s"))
+
+    text = (tmp_path / "evidence" / "reproduction.md").read_text(encoding="utf-8")
+    assert "Status: unrunnable" in text and "Reason: exited in 30s" in text and "`make && t`" in text
+    assert "a note" in text and "wait_for_sync failed" in text and "line 100\n" not in text

@@ -72,7 +72,10 @@ _MAX_OK_LINES = 2_000
 # 40). It must fire well inside the reproduction budget, or a hanging test is
 # killed from outside before runtest can report it as ``[TIMEOUT]``. One test,
 # even under valgrind, makes progress well within it.
+# A test's watchdog in the reproduction: the job's own, up to the cap, else
+# the default (a hang without valgrind shows well before 600s).
 _RUNTEST_TIMEOUT_S = 600
+_MAX_RUNTEST_TIMEOUT_S = 2400
 
 # Busy-loop every core around the test command, and stop the loops
 # afterwards whatever the command's exit status. The command runs in a
@@ -295,17 +298,15 @@ def plan_for(
     moduleapi = bool(job.moduleapi) and _in_moduleapi(tests[0].file)
     tests = tuple(test for test in tests if _in_moduleapi(test.file) == moduleapi)
     base = job.moduleapi if moduleapi else job.runtest
-    # runtest keeps the last --timeout. The job's own watchdog is kept when
-    # it is under 600s; a longer one (Daily's valgrind jobs pass 2400) would
-    # let a hang outlive the reproduction budget unreported, so it is
-    # lowered, and the notes say so: a [TIMEOUT] at 600s may then be the
-    # reproduction's own limit, not the failure.
+    # runtest keeps the last --timeout. The job's own watchdog is kept (Daily's
+    # valgrind jobs pass 2400: a test under valgrind is slow, not hung) up to
+    # the cap; past it, the notes say a [TIMEOUT] may be the reproduction's.
     job_timeout = _job_timeout(base)
-    options = ["--timeout", str(min(job_timeout or _RUNTEST_TIMEOUT_S, _RUNTEST_TIMEOUT_S))]
-    if job_timeout > _RUNTEST_TIMEOUT_S:
+    options = ["--timeout", str(min(job_timeout or _RUNTEST_TIMEOUT_S, _MAX_RUNTEST_TIMEOUT_S))]
+    if job_timeout > _MAX_RUNTEST_TIMEOUT_S:
         notes.append(
-            f"The job's --timeout {job_timeout} was lowered to {_RUNTEST_TIMEOUT_S}s for the reproduction: "
-            f"a test that times out at {_RUNTEST_TIMEOUT_S}s may be slow here, not hung."
+            f"The job's --timeout {job_timeout} was lowered to {_MAX_RUNTEST_TIMEOUT_S}s for the reproduction: "
+            f"a test that times out at {_MAX_RUNTEST_TIMEOUT_S}s may be slow here, not hung."
         )
     if "--clients" not in base.split() and any(_runs_solo(repo_dir, test) for test in tests):
         # Under --loops, runtest runs a run_solo block inline, so with several

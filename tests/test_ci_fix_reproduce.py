@@ -155,17 +155,19 @@ def test_without_gtest_parallel_the_binary_repeats_in_one_process_and_no_gtest_m
     assert any("no gtest-parallel" in note for note in plan.notes)
 
 
-def test_a_jobs_shorter_runtest_watchdog_is_kept_and_a_longer_one_is_not(checkout):
-    """runtest takes the last --timeout; a hang must still be reported inside the reproduction budget."""
-    shorter = JobCommands(build="make", runtest="./runtest --timeout 300 --dump-logs")
-    longer = JobCommands(build="make valgrind", runtest="./runtest --valgrind --clients 1 --timeout 2400 --dump-logs")
+def test_the_jobs_own_runtest_watchdog_is_kept_up_to_the_cap(checkout):
+    """A valgrind job's 2400s is kept: lowered to 600s, slow tests timed out instead of failing as CI did."""
+    def plan(runtest):
+        return plan_for(checkout, (TEST,), scheduled=True, job=JobCommands(build="make", runtest=runtest))
 
-    kept, lowered = plan_for(checkout, (TEST,), scheduled=True, job=shorter), plan_for(checkout, (TEST,), scheduled=True, job=longer)
-    assert kept.test.endswith("--timeout 300") and kept.notes == ()
-    assert lowered.test.endswith("--timeout 600")
-    # So that a [TIMEOUT] at 600s is not read as the failure the job saw.
-    assert lowered.notes == ("The job's --timeout 2400 was lowered to 600s for the reproduction: "
-                             "a test that times out at 600s may be slow here, not hung.",)
+    assert plan("./runtest --timeout 300 --dump-logs").test.endswith("--timeout 300")
+    assert plan("./runtest --dump-logs").test.endswith("--timeout 600")
+    valgrind = plan("./runtest --valgrind --clients 1 --timeout 2400 --dump-logs")
+    assert valgrind.test.endswith("--timeout 2400") and valgrind.notes == ()
+    longer = plan("./runtest --timeout 3600 --dump-logs")
+    assert longer.test.endswith("--timeout 2400")
+    assert longer.notes == ("The job's --timeout 3600 was lowered to 2400s for the reproduction: "
+                            "a test that times out at 2400s may be slow here, not hung.",)
 
 
 def test_there_is_no_plan_without_runtest(tmp_path):
