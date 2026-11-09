@@ -1,0 +1,196 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "2b055c9bb404ef25b63bea774c443bacb0c548a8",
+  "parent": "bf3685a48e61c357824d1bc08de90973c32df926",
+  "pr": 73,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fixing integration tests to work with cmake (#73)",
+  "date": "2025-03-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 3,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 13.6212,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"05525c0e03dd7b4d65d569d2122de6b6cc0b431a\"},\"offset\":\"43\"}, replica {\"digest\":{\"reply\":\"5246e9a1bcd782811bcbafde402957cb2def4552\"},\"offset\":\"448\"}, link down",
+      "scenario": "ai-c972ec766d15",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "171d9e116799c9e9d37c",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: heap-use-after-free /home/runner/work/_temp/head/valkey/src/object.c:57:15 in objectGetType",
+      "scenario": "ai-c972ec766d15",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "17a5ec3b5fdf1ecd4e00",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: unknown-crash (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server+0x27766f) (BuildId: 3d3dc47cf3f26effb954e342afb6dd3278545677) in __asan_memcpy",
+      "scenario": "ai-c972ec766d15",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #73",
+      "fingerprint": "3e7345c8dafcf1a68e2b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in moduleCreateArgvFromUserFormat",
+      "scenario": "ai-c972ec766d15",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #73",
+      "fingerprint": "5e0828c3d70112fec0d1",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-use-after-free",
+      "scenario": "ai-a7a65af6fddb",
+      "seed": 102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "80d79339943dd8f93790",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: unknown-crash (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server+0x27766f) (BuildId: 3d3dc47cf3f26effb954e342afb6dd3278545677) in __asan_memcpy",
+      "scenario": "ai-a7a65af6fddb",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #73",
+      "fingerprint": "3e7345c8dafcf1a68e2b",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: crashed by signal: 11 in moduleCreateArgvFromUserFormat",
+      "scenario": "ai-a7a65af6fddb",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #73",
+      "fingerprint": "5e0828c3d70112fec0d1",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in moduleCreateArgvFromUserFormat",
+      "scenario": "ai-99f5542c46c4",
+      "seed": 103,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #73",
+      "fingerprint": "27ca83a17a7a461dbff7",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"265eb97e8d7ddb80d1cefa5d233f6ac5b232f730\"},\"offset\":\"42\"}, replica {\"digest\":{\"reply\":\"265eb97e8d7ddb80d1cefa5d233f6ac5b232f730\"},\"offset\":\"301\"}, link down",
+      "scenario": "ai-0067020cae5e",
+      "seed": 104,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "171d9e116799c9e9d37c",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: SUMMARY: AddressSanitizer: heap-use-after-free /home/runner/work/_temp/head/valkey/src/object.c:57:15 in objectGetType",
+      "scenario": "ai-0067020cae5e",
+      "seed": 104,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "17a5ec3b5fdf1ecd4e00",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in moduleCreateArgvFromUserFormat",
+      "scenario": "ai-0067020cae5e",
+      "seed": 104,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #73",
+      "fingerprint": "27ca83a17a7a461dbff7",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-0067020cae5e",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0067020cae5e",
+      "build": "unstable",
+      "seed": 105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0067020cae5e",
+      "build": "unstable",
+      "seed": 106,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

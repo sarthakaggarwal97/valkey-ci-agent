@@ -1,0 +1,88 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "cb1e6a70c2db4d52519b24f2a0a693f94b5c63c4",
+  "parent": "5147a35c35b9c3f624a5472d7a967a4af0238e05",
+  "pr": 72,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fixed crash when loading RDB (#72)",
+  "date": "2025-03-19",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.1428,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-use-after-free",
+      "scenario": "ai-5ea50c5d2927",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #72, since fixed",
+      "fingerprint": "80d79339943dd8f93790",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-use-after-free",
+      "scenario": "ai-d3ed99e6b036",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #72, since fixed",
+      "fingerprint": "80d79339943dd8f93790",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-5ea50c5d2927",
+      "build": "unstable",
+      "seed": 1,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5ea50c5d2927",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5ea50c5d2927",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d3ed99e6b036",
+      "build": "unstable",
+      "seed": 2,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d3ed99e6b036",
+      "build": "unstable",
+      "seed": 3,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d3ed99e6b036",
+      "build": "unstable",
+      "seed": 4,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

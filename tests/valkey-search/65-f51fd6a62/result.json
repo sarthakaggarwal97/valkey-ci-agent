@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "f51fd6a62f0488b2c331c36147cd3805fb785fec",
+  "parent": "af1e11c711ba4c27e8ae53327c0ff0707efb4b91",
+  "pr": 65,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Small aarch64 fixes (#65)",
+  "date": "2025-03-11",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2333,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely a build fix with no behaviour change: it adds `target_link_libraries(... pthread)` for test binaries in cmake/Modules/valkey_search.cmake, affecting only how unit-test executables are linked on ARM (not the module artifact), and adds a missing `#include <optional>` to vmsdk/src/utils.h, which only fixes compilation on toolchains where the header was not transitively included. Both builds, when they compile, produce identical runtime behaviour, so no command reply, indexing path, replication, or persistence path differs and no scenario can reach anything the change altered."
+}

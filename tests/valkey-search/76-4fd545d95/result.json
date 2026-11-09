@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "4fd545d954d57a3ef95d2ac9c2b9f9b822372a23",
+  "parent": "2b055c9bb404ef25b63bea774c443bacb0c548a8",
+  "pr": 76,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fixing github integration tests (#76)",
+  "date": "2025-03-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.254,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only GitHub Actions workflow files (concurrency group names and a --privileged docker flag) and a unit test file (testing/valkey_search_test.cc, adding a ResetValkeyAlloc call in the test harness). No module runtime source under src/ or vmsdk/src/ is touched, so the module built at the change is behaviorally identical to the parent; there is no reachable behavior change for a scenario to exercise."
+}

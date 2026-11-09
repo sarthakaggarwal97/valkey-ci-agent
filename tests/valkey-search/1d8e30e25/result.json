@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "1d8e30e25ae640522f809f839ed2a81fb191e5c1",
+  "parent": "f51fd6a62f0488b2c331c36147cd3805fb785fec",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fixing json data-type handling",
+  "date": "2025-03-14",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.5311,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-5012cf2c847c",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'ret' returned ERROR: the parent build (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server) does not start with {'sanitize-dump-payload': 'yes', 'enable-debug-command': 'yes'} and modules ['/home/runner/work/val"
+    },
+    {
+      "scenario": "ai-cb2ad93a463b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'ret' returned ERROR: the parent build (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server) does not start with {'sanitize-dump-payload': 'yes', 'enable-debug-command': 'yes'} and modules ['/home/runner/work/val"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

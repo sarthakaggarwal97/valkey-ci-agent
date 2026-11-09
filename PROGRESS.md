@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-09T02:26+00:00.
+Updated 2026-11-09T02:28+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 1055 | 1452 | #2512 (2025-08-19) | 215 | 150.7 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
-| valkey-io/valkey-search | 655 | 14 | f8106e72e984 (2024-11-27) | 125 | 93.6 |
+| valkey-io/valkey-search | 669 | 0 | f8106e72e984 (2024-11-27) | 139 | 95.6 |
 
 ## Last runs
 
@@ -48,29 +48,29 @@ Updated 2026-11-09T02:26+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-08T22:42:04+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42526127195): 14 merge(s) tested, 0 without a code change.
+[2026-11-09T02:28:34+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42531538984): 14 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): to retry, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77): to retry, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#76](https://github.com/valkey-io/valkey-search/pull/76): to retry, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#73](https://github.com/valkey-io/valkey-search/pull/73): to retry, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#60](https://github.com/valkey-io/valkey-search/pull/60): to retry, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#72](https://github.com/valkey-io/valkey-search/pull/72): to retry, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#71](https://github.com/valkey-io/valkey-search/pull/71): to retry, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): Checking for gcc...[32;1mok[0m Checking for ninja...[32;1mok[0m [35;1mBuilding[0m [1/26] Linking CXX executable tests/ft_search_test FAILED: [
-- [valkey-io/valkey-search#49](https://github.com/valkey-io/valkey-search/pull/49): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/.build-release/.deps/install/lib/libgrpc.a(syste
-- [valkey-io/valkey-search@1d8e30e25ae6](https://github.com/valkey-io/valkey-search/commit/1d8e30e25ae640522f809f839ed2a81fb191e5c1): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
-- [valkey-io/valkey-search#65](https://github.com/valkey-io/valkey-search/pull/65): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
-- [valkey-io/valkey-search#64](https://github.com/valkey-io/valkey-search/pull/64): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
-- [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
-- [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57): to retry, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
+- [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): Implement new RDB format (#68): error: Claude Code failed (rc=1): timeout after 600s
+- [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77) ([tests](tests/valkey-search/77-902b8fa19/)): fixing rdb load to use a detached context (#77): declined: no proposed test validated
+- [valkey-io/valkey-search#76](https://github.com/valkey-io/valkey-search/pull/76) ([tests](tests/valkey-search/76-4fd545d95/)): fixing github integration tests (#76): declined: The change modifies only GitHub Actions workflow files (concurrency group names and a --privileged docker flag) and a unit test file (testing/valkey_search_test.cc, adding a ResetValkeyAlloc call in the test harness). No module runtime source under src/ or vmsdk/src/ is touched, so the mod
+- [valkey-io/valkey-search#73](https://github.com/valkey-io/valkey-search/pull/73) ([tests](tests/valkey-search/73-2b055c9bb/)): fixing integration tests to work with cmake (#73): 3 of 4 test(s) reached the change; check, introduced and since fixed (recorded); crash, introduced and since fixed (recorded); crash, fixed by #73 (recorded); crash, fixed by #73 (recorded); crash, introduced and since fixed (recorded); crash, fixed by #73 (recorded)
+- [valkey-io/valkey-search#60](https://github.com/valkey-io/valkey-search/pull/60) ([tests](tests/valkey-search/60-bf3685a48/)): Automatically configure threadpool size based on physical cpu core count. (#60): 0 of 2 test(s) reached the change
+- [valkey-io/valkey-search#72](https://github.com/valkey-io/valkey-search/pull/72) ([tests](tests/valkey-search/72-cb1e6a70c/)): Fixed crash when loading RDB (#72): 0 of 2 test(s) reached the change; crash, predates #72, since fixed (recorded)
+- [valkey-io/valkey-search#71](https://github.com/valkey-io/valkey-search/pull/71) ([tests](tests/valkey-search/71-5147a35c3/)): Small ACL fixes (#71): declined: The change is build-system and test-only: src/CMakeLists.txt adds the pre-existing acl.cc to the CMake build (a link fix for symbols the command files already referenced), testing/CMakeLists.txt adds a unit-test target, vmsdk's testing_infra teardown change affects only the mock used by un
+- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70) ([tests](tests/valkey-search/70-cd8de7f4b/)): More CMake / Build improvements (#70): declined: The change is purely build/CI tooling: build.sh refactoring (auto-reconfigure detection, ninja/ninja-build selection, dumping test output on failure), a new CI flag, devcontainer and docs updates for libsystemd-dev, submodule checkout hint paths, and a CMake rule linking libsystemd into th
+- [valkey-io/valkey-search#49](https://github.com/valkey-io/valkey-search/pull/49) ([tests](tests/valkey-search/49-ab244e1e2/)): Add ACL support to Valkey Search. (#49): 0 of 5 test(s) reached the change
+- [valkey-io/valkey-search@1d8e30e25ae6](https://github.com/valkey-io/valkey-search/commit/1d8e30e25ae640522f809f839ed2a81fb191e5c1) ([tests](tests/valkey-search/1d8e30e25/)): fixing json data-type handling: 0 of 2 test(s) reached the change
+- [valkey-io/valkey-search#65](https://github.com/valkey-io/valkey-search/pull/65) ([tests](tests/valkey-search/65-f51fd6a62/)): Small aarch64 fixes (#65): declined: The change is purely a build fix with no behaviour change: it adds `target_link_libraries(... pthread)` for test binaries in cmake/Modules/valkey_search.cmake, affecting only how unit-test executables are linked on ARM (not the module artifact), and adds a missing `#include <optional>` to 
+- [valkey-io/valkey-search#64](https://github.com/valkey-io/valkey-search/pull/64) ([tests](tests/valkey-search/64-9304c8ccf/)): Fix parsing double/float from string (#64): 0 of 2 test(s) reached the change
+- [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63) ([tests](tests/valkey-search/63-a332bc008/)): Enforce vector indexed attribute (#63): 0 of 2 test(s) reached the change
+- [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57) ([tests](tests/valkey-search/57-964a49832/)): Ensure that Index names and Prefixes do not have a slot tag (#57): 0 of 4 test(s) reached the change
 
 ## Totals
 
-- Merges whose tests reached the change: 626 of 913 tested (69%)
+- Merges whose tests reached the change: 627 of 921 tested (68%)
 - Changed-line coverage: median 100% of 477 merge(s) measured, 36 under 50%
-- Recall: 171 parents flagged of 254 fix merges
-- Claude: $1127.81 in the last 24 hours, $6644.42 in the last 7 days, $6644.42 in all
+- Recall: 173 parents flagged of 258 fix merges
+- Claude: $1189.51 in the last 24 hours, $6706.12 in the last 7 days, $6706.12 in all
 - Issues filed: 60
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
@@ -135,18 +135,4 @@ Updated 2026-11-09T02:26+00:00.
 
 ## Retries
 
-- [valkey-io/valkey-search#68](https://github.com/valkey-io/valkey-search/pull/68): attempt 2 of 3, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#77](https://github.com/valkey-io/valkey-search/pull/77): attempt 2 of 3, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#76](https://github.com/valkey-io/valkey-search/pull/76): attempt 2 of 3, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#73](https://github.com/valkey-io/valkey-search/pull/73): attempt 2 of 3, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#60](https://github.com/valkey-io/valkey-search/pull/60): attempt 2 of 3, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#72](https://github.com/valkey-io/valkey-search/pull/72): attempt 2 of 3, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#71](https://github.com/valkey-io/valkey-search/pull/71): attempt 2 of 3, building valkey-search left no .build-release/libsearch.so
-- [valkey-io/valkey-search#70](https://github.com/valkey-io/valkey-search/pull/70): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): Checking for gcc...[32;1mok[0m Checking for ninja...[32;1mok[0m [35;1mBuilding[0m [1/26] Linking CXX executable tests/ft_search_test FAILED: [
-- [valkey-io/valkey-search#49](https://github.com/valkey-io/valkey-search/pull/49): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/merge/.build-release/.deps/install/lib/libgrpc.a(syste
-- [valkey-io/valkey-search@1d8e30e25ae6](https://github.com/valkey-io/valkey-search/commit/1d8e30e25ae640522f809f839ed2a81fb191e5c1): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
-- [valkey-io/valkey-search#65](https://github.com/valkey-io/valkey-search/pull/65): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
-- [valkey-io/valkey-search#64](https://github.com/valkey-io/valkey-search/pull/64): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
-- [valkey-io/valkey-search#63](https://github.com/valkey-io/valkey-search/pull/63): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
-- [valkey-io/valkey-search#57](https://github.com/valkey-io/valkey-search/pull/57): attempt 2 of 3, `export NINJA_TOOL=ninja` failed in merge (exit 1): systemd_utils.cc:(.text+0x6f): undefined reference to `sd_is_socket_unix' /usr/bin/x86_64-linux-gnu-ld.bfd: /home/runner/work/valkey-ci-agent/valkey
 - [valkey-io/valkey#3800](https://github.com/valkey-io/valkey/pull/3800): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict

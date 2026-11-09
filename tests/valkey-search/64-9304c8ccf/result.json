@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "9304c8ccfa55179e513e3233905c69c7b1884cba",
+  "parent": "a332bc0080fa8b88a097b15ae073221b1f94b84d",
+  "pr": 64,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Fix parsing double/float from string (#64)",
+  "date": "2025-03-06",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.2075,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-68a49733cd86",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'nan-parse' returned ERROR: the parent build (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server) does not start with {'sanitize-dump-payload': 'yes', 'enable-debug-command': 'yes'} and modules ['/home/runner/wo"
+    },
+    {
+      "scenario": "ai-4db75e4c6821",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'nan-parse' returned ERROR: the parent build (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server) does not start with {'sanitize-dump-payload': 'yes', 'enable-debug-command': 'yes'} and modules ['/home/runner/wo"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

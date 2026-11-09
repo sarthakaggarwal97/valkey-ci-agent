@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "cd8de7f4bb165a31bb5f6bdb0da1632bf3327c9c",
+  "parent": "ab244e1e2de03c257faa5ab3cdb2e99c6f40b5e1",
+  "pr": 70,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "More CMake / Build improvements (#70)",
+  "date": "2025-03-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3258,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely build/CI tooling: build.sh refactoring (auto-reconfigure detection, ninja/ninja-build selection, dumping test output on failure), a new CI flag, devcontainer and docs updates for libsystemd-dev, submodule checkout hint paths, and a CMake rule linking libsystemd into the module. No module source code changes: no command, reply, indexing, persistence, or replication behavior is affected, and the added systemd library is linked but never called by any changed code, so there is no runtime behavior for a scenario to exercise or compare."
+}

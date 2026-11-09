@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-lua-multi
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH and HSET inside Lua take the synchronous path (MultiOrLua);
+    the parent tries to block the client inside a script and errors
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ft
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [FT.CREATE, idx, PREFIX, 1, 'data:', SCHEMA, vec, VECTOR, FLAT, 6,
+        DIM, 2, TYPE, FLOAT32, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, 'data:1', vec, !!binary 'AACAPwAAAAA='], expect: {equals: 1}}
+    - {command: [HSET, 'data:2', vec, !!binary 'AAAAAAAAgD8='], expect: {equals: 1}}
+    - {command: [HSET, 'data:3', vec, !!binary 'AACAPwAAgD8='], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 1 @vec $BLOB]', NOCONTENT, PARAMS, 2, BLOB,
+        !!binary 'AACAPwAAAAA=', DIALECT, 2], wait_s: 30, expect: {equals: [1, 'data:1']}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 1 @vec $BLOB]', NOCONTENT, PARAMS, 2, BLOB,
+        !!binary 'AAAAAAAAgD8=', DIALECT, 2], wait_s: 30, expect: {equals: [1, 'data:2']}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 1 @vec $BLOB]', NOCONTENT, PARAMS, 2, BLOB,
+        !!binary 'AACAPwAAgD8=', DIALECT, 2], wait_s: 30, expect: {equals: [1, 'data:3']}}
+    - {command: [EVAL, "return redis.call('FT.SEARCH', KEYS[1], '*=>[KNN 1 @vec $BLOB]',\
+          \ 'PARAMS', '2', 'BLOB', ARGV[1], 'DIALECT', '2', 'NOCONTENT')", 1, idx,
+        !!binary 'AAAAAAAAgD8='], expect_difference: true, expect: {equals: [1, 'data:2']}}
+    - {command: [EVAL, "return redis.call('FT.SEARCH', KEYS[1], '*=>[KNN 3 @vec $BLOB]',\
+          \ 'PARAMS', '2', 'BLOB', ARGV[1], 'DIALECT', '2', 'NOCONTENT')", 1, idx,
+        !!binary 'AACAPwAAAAA='], expect_difference: true, expect: {contains: 'data:1'},
+      compare: unordered}
+    - {command: [EVAL, "return redis.call('HSET', KEYS[1], 'vec', ARGV[1])", 1, 'data:4',
+        !!binary 'AAAAQAAAAAA='], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 1 @vec $BLOB]', NOCONTENT, PARAMS, 2, BLOB,
+        !!binary 'AAAAQAAAAAA=', DIALECT, 2], wait_s: 30, expect: {equals: [1, 'data:4']}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HSET, 'data:5', vec, !!binary 'AAAAAAAAAEA='], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [1]}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 1 @vec $BLOB]', NOCONTENT, PARAMS, 2, BLOB,
+        !!binary 'AAAAAAAAAEA=', DIALECT, 2], wait_s: 30, expect: {equals: [1, 'data:5']}}
+    - {command: [FT.INFO, idx], compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ft.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ft}

@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search bf3685a48e61..2b055c9bb404.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0067020cae5e
+seed: 104
+experiment:
+  id: proposed.ft-acl-aof-replay
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

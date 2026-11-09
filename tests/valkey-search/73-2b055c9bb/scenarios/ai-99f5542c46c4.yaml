@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search bf3685a48e61..2b055c9bb404.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-99f5542c46c4
+seed: 103
+experiment:
+  id: proposed.ft-acl-replicated-skip
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7200

@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "a332bc0080fa8b88a097b15ae073221b1f94b84d",
+  "parent": "964a49832f77e735e830101c17621e54b662c280",
+  "pr": 63,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Enforce vector indexed attribute (#63)",
+  "date": "2025-03-05",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.1585,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-8dc01cb205bc",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'ftcreate' returned ERROR: the parent build (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server) does not start with {'sanitize-dump-payload': 'yes', 'enable-debug-command': 'yes'} and modules ['/home/runner/wor"
+    },
+    {
+      "scenario": "ai-9b2eb5da19ee",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'ftcreate' returned ERROR: the parent build (/home/runner/work/valkey-ci-agent/valkey-ci-agent/unstable/src/valkey-server) does not start with {'sanitize-dump-payload': 'yes', 'enable-debug-command': 'yes'} and modules ['/home/runner/wor"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

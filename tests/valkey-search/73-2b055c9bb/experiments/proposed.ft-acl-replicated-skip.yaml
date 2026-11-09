@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.ft-acl-replicated-skip
+deployment:
+  modes: [standalone]
+metadata:
+  description: A replicated FT.CREATE must skip the module's ACL prefix check on the
+    replica (IsRealUserClient); the parent's replica denies it and loses the index
+components:
+- use: valkey.action.commands
+  id: repl
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    nodes: 2
+    timeout_s: 15
+    commands:
+    - {node: 1, command: [REPLICAOF, '<node.0.host>', '<node.0.port>'], expect: {
+        equals: OK}}
+    - {node: 1, command: [INFO, replication], wait_s: 30, expect: {contains: 'master_link_status:up'},
+      compare: skip}
+    - {node: 1, command: [ACL, SETUSER, default, resetkeys, '~other:*'], expect: {
+        equals: OK}}
+    - {node: 0, command: [FT.CREATE, idx, PREFIX, 1, 'data:', SCHEMA, vec, VECTOR,
+        FLAT, 6, DIM, 2, TYPE, FLOAT32, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {node: 0, command: [HSET, 'data:1', vec, !!binary 'AACAPwAAAAA='], expect: {
+        equals: 1}}
+    - {node: 0, command: [FT._LIST], expect: {equals: [idx]}, compare: unordered}
+    - {node: 1, command: [FT._LIST], wait_s: 20, expect_difference: true, expect: {
+        equals: [idx]}, compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [repl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: repl}

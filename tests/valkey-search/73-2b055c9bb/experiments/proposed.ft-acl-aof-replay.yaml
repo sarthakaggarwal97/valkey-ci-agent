@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.ft-acl-aof-replay
+deployment:
+  modes: [standalone]
+metadata:
+  description: AOF replay of FT.CREATE must skip the module's ACL prefix check (IsAOFClient);
+    on the parent a restricted saved ACL makes the replay fail and the index is lost
+    after restart
+components:
+- use: valkey.action.commands
+  id: aof
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    files: {users.acl: "user default on nopass ~* &* +@all\n"}
+    server_config: {aclfile: users.acl, appendonly: 'yes'}
+    timeout_s: 15
+    commands:
+    - {command: [FT.CREATE, idx, PREFIX, 1, 'data:', SCHEMA, vec, VECTOR, FLAT, 6,
+        DIM, 2, TYPE, FLOAT32, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, 'data:1', vec, !!binary 'AACAPwAAAAA='], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 1 @vec $BLOB]', NOCONTENT, PARAMS, 2, BLOB,
+        !!binary 'AACAPwAAAAA=', DIALECT, 2], wait_s: 30, expect: {equals: [1, 'data:1']}}
+    - {command: [ACL, SETUSER, default, resetkeys, '~other:*'], expect: {equals: OK}}
+    - {command: [ACL, SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT._LIST], expect_difference: true, expect: {equals: [idx]}, compare: unordered}
+    - {command: [FT.SEARCH, idx, '*=>[KNN 1 @vec $BLOB]', NOCONTENT, PARAMS, 2, BLOB,
+        !!binary 'AACAPwAAAAA=', DIALECT, 2], expect_difference: true, expect: {error: 'permission'}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5147a35c35b9c3f624a5472d7a967a4af0238e05",
+  "parent": "cd8de7f4bb165a31bb5f6bdb0da1632bf3327c9c",
+  "pr": 71,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Small ACL fixes (#71)",
+  "date": "2025-03-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": "6e403afa19bd5e3835a1da6c88f78b21f80ecdee",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2069,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is build-system and test-only: src/CMakeLists.txt adds the pre-existing acl.cc to the CMake build (a link fix for symbols the command files already referenced), testing/CMakeLists.txt adds a unit-test target, vmsdk's testing_infra teardown change affects only the mock used by unit tests, and the acl.cc/acl.h edits are comment typo fixes. No runtime behavior of the loaded module differs between the two builds \u2014 the AclPrefixCheck logic is identical \u2014 so no command reply, persistence or replication path can distinguish them; a compared sequence would have no command to mark expect_dif"
+}
