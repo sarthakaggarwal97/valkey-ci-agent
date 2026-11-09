@@ -1,0 +1,46 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "729ca117cc8cbddd1f936b80f36bb8fd27ce8f74",
+  "parent": "9dd5a02cec8db8b7c16ac11092340bd15ec65fc6",
+  "pr": 2116,
+  "pr_repo": "valkey-io/valkey",
+  "subject": " Optimize GEORADIUS command performance with  pre-allocated buffer (#2116)",
+  "date": "2025-05-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 21,
+    "executed": 21,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.4832,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-16fba3ce6c5b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'geo' returned ERROR: expectations both builds violate alike, so they are not about the change: 15 (GEORADIUSBYMEMBER geo g04 950 m ASC)"
+    },
+    {
+      "scenario": "ai-614d8f7efaac",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'geo' returned ERROR: expectations both builds violate alike, so they are not about the change: 15 (GEORADIUSBYMEMBER geo g04 950 m ASC)"
+    },
+    {
+      "scenario": "ai-0a5e91d388d7",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'geo' returned ERROR: expectations both builds violate alike, so they are not about the change: 15 (GEORADIUSBYMEMBER geo g04 950 m ASC)"
+    }
+  ]
+}

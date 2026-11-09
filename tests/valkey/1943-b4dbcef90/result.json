@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b4dbcef90da740cc687c27cacf8518f4ccef66d8",
+  "parent": "ff7135836b5d9ccaa19d5dbaf2a0b0325755c8b4",
+  "pr": 1943,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Improve clarity of errors for GEO commands when member does not exist (#1943)",
+  "date": "2025-05-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 10,
+    "executed": 8,
+    "percent": 80,
+    "uncovered": [
+      "src/geo.c:133",
+      "src/geo.c:134"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 1.4374,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-2ebc529284a7",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'geo' returned ERROR: expectations both builds violate alike, so they are not about the change: 12 (GEOSEARCH Sicily FROMMEMBER zeromember BYRADIUS 1 km), 13 (GEORADIUSBYMEMBER Sicily zeromember 1 km)"
+    },
+    {
+      "scenario": "ai-d6e78c4002ae",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'geo' returned ERROR: expectations both builds violate alike, so they are not about the change: 12 (GEOSEARCH Sicily FROMMEMBER zeromember BYRADIUS 1 km), 13 (GEORADIUSBYMEMBER Sicily zeromember 1 km)"
+    }
+  ]
+}

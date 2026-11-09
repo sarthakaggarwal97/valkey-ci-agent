@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "17e66863a5f9d6065544d0b3d655ba8f40081570",
+  "parent": "cf5c5f570cf8240ef86a43ec3cdd9a9aee8e7b29",
+  "pr": 2140,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Detect SSL_new() returning NULL in outgoing connections (#2140)",
+  "date": "2025-05-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.8387,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters behavior when OpenSSL's SSL_new() returns NULL inside createTLSConnection, i.e. under OpenSSL-internal allocation failure on a TLS-enabled server; when SSL_new() succeeds the code is behaviorally identical to the parent on both the accepted and outgoing paths. The fuzzer cannot reach this: tls-port is a provider-rejected config option, no installed component or artifact sets up TLS, so src/tls.c never executes in any deployment it can build, and no installed fault can make OpenSSL's internal allocation fail. Any scenario would run only the unchanged plain-TCP paths, and "
+}

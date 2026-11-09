@@ -1,0 +1,49 @@
+extends: [valkey.base]
+id: proposed.io-threads-resize-under-writes
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Rapid CONFIG SET io-threads cycles on the primaries while the key-value
+    workload writes, so every resize drains in-flight IO jobs; liveness, ledger and
+    deployment-state oracles judge the run
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: resize
+  depends_on: [warm-up]
+  config:
+    judge_replies: false
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, events-per-io-thread, 0]}
+    - {command: [PING]}
+    - {command: [CONFIG, SET, io-threads, 8]}
+    - {command: [PING]}
+    - {command: [CONFIG, SET, io-threads, 1]}
+    - {command: [CONFIG, SET, io-threads, 12]}
+    - {command: [PING]}
+    - {command: [CONFIG, SET, io-threads, 2]}
+    - {command: [CONFIG, SET, io-threads, 16]}
+    - {command: [PING]}
+    - {command: [CONFIG, SET, io-threads, 16]}
+    - {command: [CONFIG, SET, io-threads, 3]}
+    - {command: [CONFIG, SET, io-threads, 9]}
+    - {command: [PING]}
+    - {command: [CONFIG, SET, io-threads, 1]}
+    - {command: [CONFIG, SET, io-threads, 10]}
+    - {command: [CONFIG, SET, io-threads, 4]}
+    - {command: [PING]}
+    - {command: [CONFIG, SET, io-threads, 16]}
+    - {command: [CONFIG, SET, io-threads, 1]}
+    - {command: [CONFIG, SET, io-threads, 8]}
+    - {command: [PING]}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [resize]
+  config: {seconds: 3}
+required_events: [resize.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: resize}

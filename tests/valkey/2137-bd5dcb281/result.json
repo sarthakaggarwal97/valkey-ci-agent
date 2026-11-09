@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bd5dcb2819cd35f2e346f94ed26a8e1182f5c245",
+  "parent": "28f48ff638ec00409a1a2b5ddae979c90ed2bb1c",
+  "pr": 2137,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix bad slot used in sharded pubsub unsubscribe (#2137)",
+  "date": "2025-05-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.6916,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: pubsub.c:350 'hashtableDelete(clients, c)' is not true",
+      "scenario": "ai-cf102c0ee8fb",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2137",
+      "fingerprint": "5d4fc0c3797f7e78a59d",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: pubsub.c:350 'hashtableDelete(clients, c)' is not true",
+      "scenario": "ai-f0cc91e07af8",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2137",
+      "fingerprint": "5d4fc0c3797f7e78a59d",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

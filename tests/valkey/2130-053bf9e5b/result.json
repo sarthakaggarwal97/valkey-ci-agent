@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "053bf9e5bfa63b7dc6cccdc95ff7619c38846c5f",
+  "parent": "4092c9c8e091058e3103007b8dc05ae8ae00c1fc",
+  "pr": 2130,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Mark string2ll_resolver as used (#2130)",
+  "date": "2025-05-23",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2826,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds the `used` attribute to the static ifunc resolver string2ll_resolver in src/util.c, preventing compilers from garbage-collecting the symbol and breaking the link. It is a build fix: the resolver still selects the same string2llAVX512/string2llScalar implementations with identical semantics, so there is no runtime behaviour difference between the change and its parent for any command, reply, replication, or persistence path. Both builds the fuzzer would run already compiled successfully, so no scenario can reach or distinguish the change."
+}

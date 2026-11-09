@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.sharded-pubsub-unsub-wrong-slot
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Sharded-channel unsubscribe triggered as a side effect of CLIENT KILL
+    inside a transaction uses the channel's own slot, not the executing client's cached
+    key slot
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: unsub
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SSUBSCRIBE, "ch{foo}"], connection: sub, expect: {exists: true}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "k{bar}", v], expect: {equals: QUEUED}}
+    - {command: [CLIENT, KILL, TYPE, pubsub], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [OK, 1]}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: unsub}

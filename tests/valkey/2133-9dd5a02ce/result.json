@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9dd5a02cec8db8b7c16ac11092340bd15ec65fc6",
+  "parent": "bd5dcb2819cd35f2e346f94ed26a8e1182f5c245",
+  "pr": 2133,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix the GNU IFUNC error in alpine (non-glibc) environment (#2133)",
+  "date": "2025-05-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3585,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a __GLIBC__ guard to the HAVE_IFUNC preprocessor condition in src/config.h, fixing a compile/link error of the GNU ifunc attribute on musl (Alpine). On glibc Linux, where the fuzzer builds and runs, the condition evaluates identically before and after the change, so parent and change compile to the same code and no runtime difference is reachable. On musl the parent commit does not build at all, so there is no parent binary to compare. Both dispatch paths select the same string2llAVX512/string2llScalar implementations with the same CPU checks, so string2ll semantics are un"
+}

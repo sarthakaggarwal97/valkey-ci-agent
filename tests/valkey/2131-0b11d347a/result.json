@@ -1,0 +1,71 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0b11d347a319e69e9d170c5f692e9c1b5412812d",
+  "parent": "d00fb8e713d651f7c42a36f052a4fd12a9637e0e",
+  "pr": 2131,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Correct VM_Yield timing and deflake blockedclient.tcl (#2131)",
+  "date": "2025-05-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 6,
+  "recall": false,
+  "coverage": {
+    "lines": 6,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/module.c:946",
+      "src/module.c:953",
+      "src/module.c:954",
+      "src/module.c:956",
+      "src/module.c:979",
+      "src/module.c:2552"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 12.9541,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-dc1ca620a835",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'busyyield' returned ERROR: command 1 (slow_fg_command 0 on connection slow) got no reply: TimeoutError: Timeout reading from /tmp/vfc-98nvwj9z/s.sock"
+    },
+    {
+      "scenario": "ai-c130546cbf59",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'busyyield' returned ERROR: command 1 (slow_fg_command 0 on connection slow) got no reply: TimeoutError: Timeout reading from /tmp/vfc-6igyd76q/s.sock"
+    },
+    {
+      "scenario": "ai-9b8fc426b89f",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'busyyield' returned ERROR: command 1 (slow_fg_command 0 on connection slow) got no reply: TimeoutError: Timeout reading from /tmp/vfc-ohsyf_f4/s.sock"
+    },
+    {
+      "scenario": "ai-d896755d9d31",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'yieldprobe' returned ERROR: command 1 (slow_fg_command 0 on connection blk) got no reply: TimeoutError: Timeout reading from /tmp/vfc-e6bf43ds/s.sock"
+    },
+    {
+      "scenario": "ai-c143d8198d5d",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'yieldprobe' returned ERROR: command 1 (slow_fg_command 0 on connection blk) got no reply: TimeoutError: Timeout reading from /tmp/vfc-v_feahxl/s.sock"
+    },
+    {
+      "scenario": "ai-fed67197addb",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'bgyield' returned ERROR: command 3 (do_bg_rm_call hgetall h on connection blk) got no reply: TimeoutError: Timeout reading from /tmp/vfc-2melq65x/s.sock"
+    }
+  ]
+}

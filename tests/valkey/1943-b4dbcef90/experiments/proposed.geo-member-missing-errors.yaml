@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.geo-member-missing-errors
+deployment:
+  modes: [standalone]
+metadata:
+  description: GEO commands reply specific errors when FROMMEMBER/BYMEMBER member
+    is missing or its score is not a decodable geohash
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: geo
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [GEOADD, Sicily, "13.361389", "38.115556", Palermo, "15.087269", "37.502669",
+        Catania], expect: {equals: 2}}
+    - {command: [GEORADIUSBYMEMBER, Sicily, none_exist_member, 300, km], expect_difference: true,
+      expect: {error: "member none_exist_member does not exist"}}
+    - {command: [GEORADIUSBYMEMBER_RO, Sicily, none_exist_member, 300, km], expect_difference: true,
+      expect: {error: "does not exist"}}
+    - {command: [GEOSEARCH, Sicily, FROMMEMBER, none_exist_member, BYRADIUS, 300,
+        km], expect_difference: true, expect: {error: "member none_exist_member does\
+          \ not exist"}}
+    - {command: [GEOSEARCHSTORE, dst, Sicily, FROMMEMBER, none_exist_member, BYRADIUS,
+        300, km], expect_difference: true, expect: {error: "does not exist"}}
+    - {command: [EXISTS, dst], expect: {equals: 0}}
+    - {command: [GEORADIUSBYMEMBER, Sicily, none_exist_member, 300, km, STORE, dst],
+      expect_difference: true, expect: {error: "does not exist"}}
+    - {command: [EXISTS, dst], expect: {equals: 0}}
+    - {command: [GEORADIUSBYMEMBER, Sicily, "", 300, km], expect_difference: true,
+      expect: {error: "does not exist"}}
+    - {command: [GEOSEARCH, Sicily, FROMMEMBER, "bad\r\nmember", BYRADIUS, 300, km],
+      expect_difference: true, expect: {error: "does not exist"}}
+    - {command: [GEORADIUSBYMEMBER, Sicily, "%n%s%p%x", 300, km], expect_difference: true,
+      expect: {error: "%n%s%p%x does not exist"}}
+    - {command: [ZADD, Sicily, 0, zeromember], expect: {equals: 1}}
+    - {command: [GEOSEARCH, Sicily, FROMMEMBER, zeromember, BYRADIUS, 1, km], expect_difference: true,
+      expect: {error: "not a valid geohash"}}
+    - {command: [GEORADIUSBYMEMBER, Sicily, zeromember, 1, km], expect_difference: true,
+      expect: {error: "not a valid geohash"}}
+    - {command: [GEOSEARCH, Sicily, FROMMEMBER, Palermo, BYRADIUS, 200, km, ASC],
+      expect: {equals: [Palermo, Catania]}}
+    - {command: [GEORADIUSBYMEMBER, missingkey, m, 1, km], expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [geo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: geo}

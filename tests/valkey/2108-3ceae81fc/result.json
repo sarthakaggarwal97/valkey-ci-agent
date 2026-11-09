@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3ceae81fc4cf065dae00888ab92b7aa069fde111",
+  "parent": "374718b2a365ca69f715d542709b7d71540b1387",
+  "pr": 2108,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix a case of out of bound read when cluster node ID is provided with wrong length in CLUSTER FORGET (#2108)",
+  "date": "2025-05-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 3.4912,
+  "findings": [],
+  "recorded": []
+}

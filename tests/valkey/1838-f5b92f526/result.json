@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f5b92f526a79c65f3a11c19a7853cfff8d177ddf",
+  "parent": "b4dbcef90da740cc687c27cacf8518f4ccef66d8",
+  "pr": 1838,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Prioritize replication traffic in the replica (#1838)",
+  "date": "2025-05-28",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 14,
+    "executed": 14,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.6381,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.geosearch-bypolygon
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: GEOSEARCH/GEOSEARCHSTORE BYPOLYGON replies and error/cleanup paths
+    compared across builds
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: geo
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [GEOADD, k, '0', '0', origin], expect: {equals: 1}}
+    - {command: [GEOADD, k, '4', '4', inside2], expect: {equals: 1}}
+    - {command: [GEOADD, k, '10', '10', ne], expect: {equals: 1}}
+    - {command: [GEOADD, k, '-10', '-10', sw], expect: {equals: 1}}
+    - {command: [GEOSEARCH, k, BYPOLYGON, '4', '-5', '-5', '5', '-5', '5', '5', '-5',
+        '5', ASC], expect_difference: true, expect: {equals: [origin, inside2]}}
+    - {command: [GEOSEARCH, k, BYPOLYGON, '4', '-5', '-5', '5', '-5', '5', '5', '-5',
+        '5', WITHCOORD, WITHDIST, ASC], expect_difference: true, expect: {error: false}}
+    - {command: [GEOSEARCH, k, BYPOLYGON, '2', '0', '0', '1', '1'], expect_difference: true,
+      expect: {error: "at least 3 vertices"}}
+    - {command: [GEOSEARCH, k, BYPOLYGON, '2147483648', '0', '0', '1', '1', '2', '2'],
+      expect_difference: true, expect: {error: "invalid number of vertices"}}
+    - {command: [GEOSEARCH, k, BYPOLYGON, '3', '0', '0', '1', '1', '999', '999'],
+      expect_difference: true, expect: {error: "invalid longitude"}}
+    - {command: [GEOSEARCH, k, BYPOLYGON, '4', '-5', '-5', '5', '-5', '5', '5', '-5',
+        '5', COUNT, '0'], expect_difference: true, expect: {error: "COUNT must be\
+          \ > 0"}}
+    - {command: [GEOSEARCHSTORE, dest, k, BYPOLYGON, '4', '-5', '-5', '5', '-5', '5',
+        '5', '-5', '5', STOREDIST], expect_difference: true, expect: {equals: 2}}
+    - {command: [ZRANGE, dest, '0', '-1'], expect_difference: true, expect: {equals: [
+          origin, inside2]}}
+    - {command: [GEOSEARCHSTORE, dest2, k, BYPOLYGON, '4', '-5', '-5', '5', '-5',
+        '5', '5', '-5', '5', WITHCOORD], expect_difference: true, expect: {error: "not\
+          \ compatible"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [geo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: geo}

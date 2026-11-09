@@ -1,0 +1,58 @@
+extends: [valkey.base]
+id: proposed.io-threads-resize-replica-killed
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: SIGKILL a replica as the primary starts cycling CONFIG SET io-threads
+    under writes, so the restart and full resync run while the primary's IO thread
+    pool grows and shrinks; no acknowledged write may be lost outside the fsync window
+components:
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: resize.started
+    instance: replica
+    signal: SIGKILL
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-replica]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: resize
+  depends_on: [warm-up]
+  config:
+    judge_replies: false
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, events-per-io-thread, 0]}
+    - {command: [CONFIG, SET, io-threads, 8]}
+    - {command: [PING]}
+    - {command: [CONFIG, SET, io-threads, 1]}
+    - {command: [CONFIG, SET, io-threads, 12]}
+    - {command: [PING]}
+    - {command: [CONFIG, SET, io-threads, 2]}
+    - {command: [CONFIG, SET, io-threads, 16]}
+    - {command: [PING]}
+    - {command: [CONFIG, SET, io-threads, 3]}
+    - {command: [CONFIG, SET, io-threads, 9]}
+    - {command: [PING]}
+    - {command: [CONFIG, SET, io-threads, 1]}
+    - {command: [CONFIG, SET, io-threads, 10]}
+    - {command: [PING]}
+    - {command: [CONFIG, SET, io-threads, 16]}
+    - {command: [CONFIG, SET, io-threads, 1]}
+    - {command: [CONFIG, SET, io-threads, 6]}
+    - {command: [PING]}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [resize]
+  config: {seconds: 4}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [resize.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: resize}
+- {evidence_id: valkey.fault.injected, source: kill-replica}

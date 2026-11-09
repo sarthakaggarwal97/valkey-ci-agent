@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.cluster-forget-boundary-id
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTER FORGET with a 39-byte node ID (one byte under CLUSTER_NAMELEN)
+    must not over-read
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: forget
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CLUSTER, FORGET, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa], expect_difference: true,
+      expect: {error: "Unknown node"}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: forget}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 053bf9e5bfa6..28f48ff638ec.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-943f7cc84d90
+seed: 104
+experiment:
+  id: proposed.delifeq-del-under-replica-kill
+  inputs:
+    mutation_rate: 500
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7300

@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4aaaf88337e14365ff56dcc75131af20d150ae93",
+  "parent": "30d7f08a4e62d2686f69ef21615adf27b0c42a75",
+  "pr": 2033,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Allow dynamic modification of io-threads num (#2033)",
+  "date": "2025-05-28",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 2,
+  "hunted": 5,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 27,
+    "executed": 26,
+    "percent": 96,
+    "uncovered": [
+      "src/io_threads.c:230"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 5.4586,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in pthread_mutex_trylock",
+      "scenario": "ai-41949d55e960",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "e86268f0843f195bab19",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-fade2d5574af",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'resize' returned ERROR: valkey-0: command 4 (CONFIG SET io-threads 1) got no reply: ConnectionError: Connection closed by server."
+    }
+  ]
+}

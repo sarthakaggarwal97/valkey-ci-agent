@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.geosearch-bypolygon-docs-history
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS for GEOSEARCH and GEOSEARCHSTORE gains a 9.0.0 BYPOLYGON
+    history entry (num_history 1 -> 2); BYPOLYGON search behaviour itself is unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, DOCS, geosearch], expect_difference: true, expect: {contains: "Added\
+          \ support for the BYPOLYGON option."}}
+    - {command: [COMMAND, DOCS, geosearchstore], expect_difference: true, expect: {
+        contains: "Added support for the BYPOLYGON option."}}
+    - {command: [GEOADD, geo, 1.0, 1.0, inside, 20.0, 20.0, outside], expect: {equals: 2}}
+    - {command: [GEOSEARCH, geo, BYPOLYGON, 3, 0, 0, 10, 0, 0, 10], compare: unordered,
+      expect: {equals: [inside]}}
+    - {command: [GEOSEARCHSTORE, dst, geo, BYPOLYGON, 3, 0, 0, 10, 0, 0, 10], expect: {
+        equals: 1}}
+    - {command: [ZRANGE, dst, 0, -1], expect: {equals: [inside]}}
+    - {command: [GEOSEARCH, geo, BYPOLYGON, 2, 0, 0, 10, 0], expect: {error: "at least\
+          \ 3 vertices"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

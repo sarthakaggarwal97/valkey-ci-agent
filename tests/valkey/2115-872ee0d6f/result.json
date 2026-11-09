@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "872ee0d6f77bff004b32ef974235b4f6adab4593",
+  "parent": "689a3b15813758cfce0b8699baf5f147093ef215",
+  "pr": 2115,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add size_t cast in modules (#2115)",
+  "date": "2025-05-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5513,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds (size_t) casts to the vector-length argument of ValkeyModule_Call in the test modules under tests/modules/ (aclcheck, blockedclient, commandfilter, misc, usercall). module.c reads that variadic argument as size_t ('v' format in moduleCreateArgvFromUserFormat), so the casts merely fix the variadic type mismatch; the values passed are always small non-negative counts and are bit-identical as int or size_t on all supported ABIs. No server source, command behaviour, reply, replication, persistence, or tool changed, so there is no reachable behavioural difference between the tw"
+}

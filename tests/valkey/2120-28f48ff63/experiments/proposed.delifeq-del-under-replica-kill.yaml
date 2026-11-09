@@ -1,0 +1,64 @@
+extends: [valkey.base]
+id: proposed.delifeq-del-under-replica-kill
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: >-
+    DELIFEQ's propagated DEL reaches a replica through a full resync after a SIGKILL
+    and over the live link afterwards, under the key-value workload.
+components:
+- use: valkey.action.commands
+  id: delifeq-before-kill
+  depends_on: [writes, kill-replica]
+  config:
+    instances: primaries
+    timeout_s: 15
+    commands:
+    - {command: [SET, "delifeq:k1", v1], expect: {equals: OK}}
+    - {command: [DELIFEQ, "delifeq:k1", v1], expect: {equals: 1}}
+    - {command: [SET, "delifeq:k2", v2], expect: {equals: OK}}
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: delifeq-before-kill.completed
+    instance: replica
+    signal: SIGKILL
+    restart_mode: immediate
+- use: valkey.action.wait-event
+  id: replica-back
+  depends_on: [delifeq-before-kill]
+  config: {event: kill-replica.recovered, timeout_s: 90}
+- use: valkey.action.poll
+  id: links-up
+  depends_on: [replica-back]
+  config:
+    instances: replicas
+    section: replication
+    field: master_link_status
+    predicate: {equals: up}
+    timeout_s: 120
+- use: valkey.action.commands
+  id: delifeq-after-resync
+  depends_on: [links-up]
+  config:
+    instances: primaries
+    timeout_s: 15
+    commands:
+    - {command: [DELIFEQ, "delifeq:k2", v2], expect: {equals: 1}}
+- use: valkey.action.commands
+  id: replica-check
+  depends_on: [delifeq-after-resync]
+  config:
+    instances: replicas
+    timeout_s: 30
+    commands:
+    - {command: [GET, "delifeq:k1"], wait_s: 20, expect: {equals: null}}
+    - {command: [GET, "delifeq:k2"], wait_s: 20, expect: {equals: null}}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [kill-replica.recovered, replica-check.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}
+- {evidence_id: valkey.command.sequence, source: replica-check}

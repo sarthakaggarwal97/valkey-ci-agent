@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "374718b2a365ca69f715d542709b7d71540b1387",
+  "parent": "94c81bc5c15587cda35cf317cfbcf35a0da39171",
+  "pr": 2101,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix unsigned difference expression compared to zero (#2101)",
+  "date": "2025-05-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3168,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change rewrites `prev->size - prev->used > 0` as `prev->used < prev->size` in setDeferredReply (src/networking.c). Both fields are size_t with the invariant used <= size, so the two conditions are equivalent for every reachable state; the rewrite only silences a static-analysis 'unsigned difference compared to zero' warning. No reply, replication, or persistence behaviour differs between the parent and the change, so there is nothing a scenario could distinguish or break."
+}

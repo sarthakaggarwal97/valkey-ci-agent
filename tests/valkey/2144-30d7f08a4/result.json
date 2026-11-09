@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "30d7f08a4e62d2686f69ef21615adf27b0c42a75",
+  "parent": "f5b92f526a79c65f3a11c19a7853cfff8d177ddf",
+  "pr": 2144,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Correctly cast the extension lengths (#2144)",
+  "date": "2025-05-28",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.6464,
+  "findings": [],
+  "recorded": [],
+  "reason": "Correct one-token fix (uint16_t -> uint32_t) for truncating a cluster-bus ping-extension length. It is a genuine remote-input bug, but it only manifests when a received PING/PONG/MEET extension is >= 65536 bytes, and the fuzzer cannot deliver that: there is no cluster-bus packet injector, the only in-band trigger (an uncapped >64 KiB cluster-announce-human-nodename) is on the provider's forbidden-config list so no fault/cluster experiment can set it, normal-sized gossip never reaches the changed path (identical on both builds), and a received node's human-nodename is not reflected in any clien"
+}

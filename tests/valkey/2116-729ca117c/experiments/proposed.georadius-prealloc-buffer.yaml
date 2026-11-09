@@ -1,0 +1,113 @@
+extends: [valkey.liveness]
+id: proposed.georadius-prealloc-buffer
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    GEORADIUS/GEOSEARCH result sets sized around the new 8-entry inline geoArray buffer
+    (0, 1, 8, 9, 13, 17, 26 and 36 results), with STORE, STOREDIST, COUNT, ANY, DESC
+    and WITH* options, compared against the parent build. Exercises the inline-to-heap
+    migration (zmalloc+memcpy at the 9th element), the later zrealloc growth, and
+    geoArrayCleanup on the empty-result early return and the store path; replies must
+    be identical on both builds and the new build must not crash or corrupt results.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    zset_max_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: geo
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      zset-max-listpack-entries: {$ref: inputs.zset_max_listpack_entries}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [GEOADD, geo, "0", "0", g00, "0.001", "0", g01, "0.002", "0", g02,
+        "0.003", "0", g03, "0.004", "0", g04, "0.005", "0", g05, "0.006", "0", g06,
+        "0.007", "0", g07, "0.008", "0", g08, "0.009", "0", g09, "0.010", "0", g10,
+        "0.011", "0", g11, "0.012", "0", g12, "0.013", "0", g13, "0.014", "0", g14,
+        "0.015", "0", g15, "0.016", "0", g16, "0.017", "0", g17, "0.018", "0", g18,
+        "0.019", "0", g19, "0.020", "0", g20, "0.021", "0", g21, "0.022", "0", g22,
+        "0.023", "0", g23, "0.024", "0", g24, "0.025", "0", g25], expect: {equals: 26}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, "0", "0", BYRADIUS, "1", m, ASC], expect: {
+        equals: [g00]}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, "0", "0", BYRADIUS, "800", m, ASC], expect: {
+        equals: [g00, g01, g02, g03, g04, g05, g06, g07]}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, "0", "0", BYRADIUS, "950", m, ASC], expect: {
+        equals: [g00, g01, g02, g03, g04, g05, g06, g07, g08]}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, "0", "0", BYRADIUS, "1850", m, ASC],
+      expect: {equals: [g00, g01, g02, g03, g04, g05, g06, g07, g08, g09, g10, g11,
+          g12, g13, g14, g15, g16]}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, "0", "0", BYRADIUS, "5000", m, ASC],
+      expect: {equals: [g00, g01, g02, g03, g04, g05, g06, g07, g08, g09, g10, g11,
+          g12, g13, g14, g15, g16, g17, g18, g19, g20, g21, g22, g23, g24, g25]}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, "0", "0", BYRADIUS, "950", m, DESC],
+      expect: {equals: [g08, g07, g06, g05, g04, g03, g02, g01, g00]}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, "0", "0", BYRADIUS, "950", m, WITHCOORD,
+        WITHDIST, WITHHASH, ASC]}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, "90", "45", BYRADIUS, "100", m, ASC],
+      expect: {equals: []}}
+    - {command: [GEOSEARCH, nokey, FROMLONLAT, "0", "0", BYRADIUS, "100", m, ASC],
+      expect: {equals: []}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, "0", "0", BYRADIUS, "5000", m, ASC, COUNT,
+        "8"], expect: {equals: [g00, g01, g02, g03, g04, g05, g06, g07]}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, "0", "0", BYRADIUS, "5000", m, ASC, COUNT,
+        "9"], expect: {equals: [g00, g01, g02, g03, g04, g05, g06, g07, g08]}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, "0", "0", BYRADIUS, "5000", m, ASC, COUNT,
+        "9223372036854775807"], expect: {equals: [g00, g01, g02, g03, g04, g05, g06,
+          g07, g08, g09, g10, g11, g12, g13, g14, g15, g16, g17, g18, g19, g20, g21,
+          g22, g23, g24, g25]}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, "0", "0", BYRADIUS, "5000", m, ASC, COUNT,
+        "0"], expect: {error: "COUNT must be > 0"}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, "0", "0", BYRADIUS, "5000", m, COUNT,
+        "9", ANY], compare: unordered}
+    - {command: [GEORADIUSBYMEMBER, geo, g04, "950", m, ASC], expect: {equals: [g00,
+          g01, g02, g03, g04, g05, g06, g07, g08, g09, g10, g11, g12]}}
+    - {command: [GEORADIUS_RO, geo, "0", "0", "950", m, ASC], expect: {equals: [g00,
+          g01, g02, g03, g04, g05, g06, g07, g08]}}
+    - {command: [GEOSEARCH, geo, FROMLONLAT, "0", "0", BYBOX, "1900", "100", m, ASC],
+      expect: {equals: [g00, g01, g02, g03, g04, g05, g06, g07, g08]}}
+    - {command: [GEORADIUS, geo, "0", "0", "950", m, STORE, dst1], expect: {equals: 9}}
+    - {command: [ZRANGE, dst1, "0", "-1"], compare: unordered, expect: {equals: [
+          g00, g01, g02, g03, g04, g05, g06, g07, g08]}}
+    - {command: [GEORADIUS, geo, "0", "0", "950", m, STOREDIST, dst2], expect: {equals: 9}}
+    - {command: [ZSCORE, dst2, g08], expect: {exists: true}}
+    - {command: [GEORADIUS, geo, "100", "40", "10", m, STORE, dstempty], expect: {
+        equals: 0}}
+    - {command: [EXISTS, dstempty], expect: {equals: 0}}
+    - {command: [SET, str, v], expect: {equals: OK}}
+    - {command: [GEOSEARCH, str, FROMLONLAT, "0", "0", BYRADIUS, "1", m], expect: {
+        error: "WRONGTYPE"}}
+    - {command: [GEOADD, geo2, "0", "0", h00, "0.0001", "0", h01, "0.0002", "0", h02,
+        "0.0003", "0", h03, "0.0004", "0", h04, "0.0005", "0", h05, "0.0006", "0",
+        h06, "0.0007", "0", h07, "0.0008", "0", h08, "0.0009", "0", h09, "0.0010",
+        "0", h10, "0.0011", "0", h11, "0.0012", "0", h12, "0.0013", "0", h13, "0.0014",
+        "0", h14, "0.0015", "0", h15, "0.0016", "0", h16, "0.0017", "0", h17, "0.0018",
+        "0", h18, "0.0019", "0", h19, "0.0020", "0", h20, "0.0021", "0", h21, "0.0022",
+        "0", h22, "0.0023", "0", h23, "0.0024", "0", h24, "0.0025", "0", h25, "0.0026",
+        "0", h26, "0.0027", "0", h27, "0.0028", "0", h28, "0.0029", "0", h29, "0.0030",
+        "0", h30, "0.0031", "0", h31, "0.0032", "0", h32, "0.0033", "0", h33, "0.0034",
+        "0", h34, "0.0035", "0", h35], expect: {equals: 36}}
+    - {command: [GEOSEARCH, geo2, FROMLONLAT, "0", "0", BYRADIUS, "450", m, ASC],
+      expect: {equals: [h00, h01, h02, h03, h04, h05, h06, h07, h08, h09, h10, h11,
+          h12, h13, h14, h15, h16, h17, h18, h19, h20, h21, h22, h23, h24, h25, h26,
+          h27, h28, h29, h30, h31, h32, h33, h34, h35]}}
+    - {command: [GEOSEARCH, geo2, FROMLONLAT, "0", "0", BYRADIUS, "450", m, ASC, COUNT,
+        "10"], expect: {equals: [h00, h01, h02, h03, h04, h05, h06, h07, h08, h09]}}
+    - {command: [GEOSEARCH, geo2, FROMLONLAT, "0", "0", BYRADIUS, "450", m, WITHCOORD,
+        WITHDIST, WITHHASH, ASC, COUNT, "12"]}
+    - {command: [GEOSEARCHSTORE, dst3, geo2, FROMLONLAT, "0", "0", BYRADIUS, "450",
+        m], expect: {equals: 36}}
+    - {command: [ZCARD, dst3], expect: {equals: 36}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [geo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: geo}

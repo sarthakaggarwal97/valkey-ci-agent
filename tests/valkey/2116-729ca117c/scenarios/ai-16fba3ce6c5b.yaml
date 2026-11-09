@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9dd5a02cec8d..729ca117cc8c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-16fba3ce6c5b
+seed: 20261101
+experiment:
+  id: proposed.georadius-prealloc-buffer
+  inputs:
+    resp: 2
+    zset_max_listpack_entries: 128
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

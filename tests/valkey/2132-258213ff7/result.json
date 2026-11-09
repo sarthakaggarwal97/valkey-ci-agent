@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "258213ff7e305b7bd77549577712084cd2d9e512",
+  "parent": "3ceae81fc4cf065dae00888ab92b7aa069fde111",
+  "pr": 2132,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Free module context even if there was no content written in auxsave2 (#2132)",
+  "date": "2025-05-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.1863,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only frees a lazily-allocated ValkeyModuleCtx on the early-return path of rdbSaveSingleModuleAux when a module's aux_save2 callback wrote nothing \u2014 a pure memory-leak fix with no observable behaviour change (no reply, RDB content, replication or persistence difference). Triggering even the leak requires a loaded module whose aux_save2 writes no data yet calls ValkeyModule_GetContextFromIO to allocate io.ctx; no in-tree module does this (testrdb's test2rdb_aux_save never obtains a context, leaving io.ctx NULL), and fuzzer experiments cannot load modules: MODULE LOAD is refused in com"
+}

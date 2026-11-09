@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ff7135836b5d..b4dbcef90da7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d6e78c4002ae
+seed: 1944
+experiment:
+  id: proposed.geo-member-missing-errors
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

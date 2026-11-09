@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 258213ff7e30..cf5c5f570cf8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4665eaeea583
+seed: 101
+experiment:
+  id: proposed.geosearch-bypolygon
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "689a3b15813758cfce0b8699baf5f147093ef215",
+  "parent": "17e66863a5f9d6065544d0b3d655ba8f40081570",
+  "pr": 2012,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Flip pfail flag while marking node as failed (#2012)",
+  "date": "2025-05-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.9426,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds one line that clears the stray CLUSTER_NODE_PFAIL flag when a node is marked NOADDR+FAIL after a node-ID mismatch (a peer that did CLUSTER RESET), restoring the PFAIL/FAIL mutual-exclusion invariant. It has no functional effect: the NOADDR flag already excludes this node from the gossip sections (cluster_legacy.c:4265,4298), the stats_pfail_nodes counter returns early for NOADDR nodes before counting (line 5291 precedes line 5293), and reachability/quorum counting (line 5801) excludes any FAIL node regardless of PFAIL. So failover, data, quorum and liveness are unchanged; the s"
+}

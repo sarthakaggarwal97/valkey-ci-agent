@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.delifeq-aof-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    A key deleted by DELIFEQ stays deleted across an AOF reload; the parent never
+    fed the delete to the AOF, so the key resurrects after restart.
+components:
+- use: valkey.action.commands
+  id: aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes", appendfsync: always, save: ""}
+    timeout_s: 15
+    commands:
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [SET, keep, me], expect: {equals: OK}}
+    - {command: [DELIFEQ, foo, bar], expect: {equals: 1}}
+    - {command: [DELIFEQ, keep, wrongvalue], expect: {equals: 0}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, foo], expect_difference: true, expect: {equals: null}}
+    - {command: [GET, keep], expect: {equals: me}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof}

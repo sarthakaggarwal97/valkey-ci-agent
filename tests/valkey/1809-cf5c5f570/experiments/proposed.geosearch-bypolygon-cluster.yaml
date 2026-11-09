@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.geosearch-bypolygon-cluster
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: GEOSEARCH/GEOSEARCHSTORE BYPOLYGON on a cluster, replies and stored
+    zset compared across builds
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: geo
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [GEOADD, 'pts{t}', '0', '0', origin], expect: {equals: 1}}
+    - {command: [GEOADD, 'pts{t}', '4', '4', inside2], expect: {equals: 1}}
+    - {command: [GEOADD, 'pts{t}', '10', '10', ne], expect: {equals: 1}}
+    - {command: [GEOSEARCH, 'pts{t}', BYPOLYGON, '4', '-5', '-5', '5', '-5', '5',
+        '5', '-5', '5', ASC], expect_difference: true, expect: {equals: [origin, inside2]}}
+    - {command: [GEOSEARCHSTORE, 'dest{t}', 'pts{t}', BYPOLYGON, '4', '-5', '-5',
+        '5', '-5', '5', '5', '-5', '5', STOREDIST], expect_difference: true, expect: {
+        equals: 2}}
+    - {command: [ZRANGE, 'dest{t}', '0', '-1'], expect_difference: true, expect: {
+        equals: [origin, inside2]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [geo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: geo}

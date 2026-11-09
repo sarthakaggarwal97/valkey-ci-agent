@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 053bf9e5bfa6..28f48ff638ec.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-024682a73bfc
+seed: 101
+experiment:
+  id: proposed.delifeq-propagation-effects
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

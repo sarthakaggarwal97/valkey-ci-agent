@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 28f48ff638ec..bd5dcb2819cd.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f0cc91e07af8
+seed: 2
+experiment:
+  id: proposed.sharded-pubsub-unsub-wrong-slot
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

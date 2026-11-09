@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 30d7f08a4e62..4aaaf88337e1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-74ff4fa2fb16
+seed: 106
+experiment:
+  id: proposed.io-threads-resize-replica-killed
+  inputs:
+    mutation_rate: 600
+    mutable_keys: 400
+    value_size: 1024
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7500
+  server_config:
+    io-threads: 6
+    events-per-io-thread: 0

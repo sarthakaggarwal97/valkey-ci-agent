@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.io-threads-runtime-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG SET io-threads grows, shrinks, no-ops and bound-checks the IO
+    thread pool at runtime, compared against the parent where the config is immutable;
+    a second sequence carries the new value through CONFIG REWRITE and a restart
+inputs:
+  properties:
+    start_threads: {type: integer, enum: [1, 6], default: 1}
+components:
+- use: valkey.action.commands
+  id: resize
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      io-threads: {$ref: inputs.start_threads}
+      events-per-io-thread: 0
+    timeout_s: 60
+    checks: {concurrency: 8}
+    commands:
+    - {command: [SET, k0, v0], expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 2], expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, io-threads], expect_difference: true, expect: {equals: [
+          io-threads, "2"]}}
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [CONFIG, SET, io-threads, 9], expect_difference: true, expect: {equals: OK}}
+    - {command: [RPUSH, l, a, b, c, d, e, f, g, h], expect: {equals: 8}}
+    - {command: [LRANGE, l, 0, -1], expect: {equals: [a, b, c, d, e, f, g, h]}}
+    - {command: [CONFIG, SET, io-threads, 9], expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, SET, io-threads, 3], expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, io-threads], expect_difference: true, expect: {equals: [
+          io-threads, "3"]}}
+    - {command: [CONFIG, SET, io-threads, 0], expect_difference: true, expect: {error: true}}
+    - {command: [CONFIG, SET, io-threads, 257], expect_difference: true, expect: {
+        error: true}}
+    - {command: [CONFIG, SET, io-threads, -1], expect_difference: true, expect: {
+        error: true}}
+    - {command: [CONFIG, SET, io-threads, 256], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, io-threads, 1], expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [CONFIG, SET, io-threads, 4], expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, io-threads], expect_difference: true, expect: {equals: [
+          io-threads, "4"]}}
+- use: valkey.action.commands
+  id: rewrite-restart
+  depends_on: [resize]
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      io-threads: {$ref: inputs.start_threads}
+      events-per-io-thread: 0
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, io-threads, 5], expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, io-threads], expect_difference: true, expect: {equals: [
+          io-threads, "5"]}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [resize.completed, rewrite-restart.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: resize}
+- {evidence_id: valkey.command.sequence, source: rewrite-restart}

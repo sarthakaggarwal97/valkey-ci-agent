@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 053bf9e5bfa6..28f48ff638ec.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fd980f4f4ddc
+seed: 103
+experiment:
+  id: proposed.delifeq-aof-restart
+deployment:
+  mode: standalone
+  base_port: 7200
