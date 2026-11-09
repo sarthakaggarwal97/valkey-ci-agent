@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.slot-import-ownership-change
+deployment:
+  modes: [standalone]
+metadata:
+  description: SETSLOT refused during an atomic import, ESTABLISH argument errors,
+    and an import failed by a slot ownership change, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+        SLOTSRANGE, 100, 200], node: 1, connection: job, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 100, IMPORTING, "<node.0.id>"], node: 1, expect_difference: true,
+      expect: {error: "Slot import in progress"}}
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
+        SLOTSRANGE, 150, 160], node: 1, connection: job2, expect_difference: true,
+      expect: {error: "already being imported"}}
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, cccccccccccccccccccccccccccccccccccccccc,
+        SLOTSRANGE, 300, 200], node: 2, connection: job3, expect_difference: true,
+      expect: {error: "greater than end slot"}}
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.1.id>", NAME, dddddddddddddddddddddddddddddddddddddddd,
+        SLOTSRANGE, 400, 500], node: 2, connection: job3, expect_difference: true,
+      expect: {error: "does not agree about current slot ownership"}}
+    - {command: [CLUSTER, SETSLOT, 999, IMPORTING, "<node.0.id>"], node: 2, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 998, 998, NODE, "<node.0.id>"],
+      node: 2, expect_difference: true, expect: {error: "manually imported"}}
+    - {command: [CLUSTER, SETSLOT, 999, STABLE], node: 2, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 150, NODE, "<node.2.id>"], node: 2, expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 1, wait_s: 30, expect_difference: true,
+      expect: {contains: "no longer owned by source node"}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [PING], node: 2, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

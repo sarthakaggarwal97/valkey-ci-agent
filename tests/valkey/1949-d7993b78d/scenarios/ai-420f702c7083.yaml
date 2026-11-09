@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 725c3608f067..d7993b78d82d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-420f702c7083
+seed: 301
+experiment:
+  id: proposed.migrateslots-roundtrip-epoch
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7400

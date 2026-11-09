@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 725c3608f067..d7993b78d82d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-489fede9feba
+seed: 102
+experiment:
+  id: proposed.migrateslots-parse-errors
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.slot-migration-log-grouping
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Cross-shard slot migrations in consecutive and gapped ranges, from two source
+    nodes, complete identically on both builds while the new grouped "Slot range [a,
+    b] is migrated" logging runs on source, target, and observer nodes, including
+    a restart of the old owner that relearns the whole migrated topology in one batch
+    of claims.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, KEYSLOT, hello], expect: {equals: 866}}
+    - {command: [CLUSTER, KEYSLOT, bar], expect: {equals: 5061}}
+    - {command: [CLUSTER, KEYSLOT, foo], expect: {equals: 12182}}
+    - {command: [SET, hello, h1], expect: {equals: OK}}
+    - {command: [SET, bar, b1], expect: {equals: OK}}
+    - {command: [SET, foo, f1], expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 800, 1200, NODE, "<node.1.id>"],
+      expect: {equals: OK}}
+    - {command: [GET, hello], node: 1, wait_s: 60, expect: {equals: h1}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 5000, 5100, 12100, 12300, NODE,
+        "<node.2.id>"], expect: {equals: OK}}
+    - {command: [GET, bar], node: 2, wait_s: 60, expect: {equals: b1}}
+    - {command: [GET, foo], node: 2, wait_s: 60, expect: {equals: f1}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 860, 870, NODE, "<node.2.id>"],
+      node: 1, expect: {equals: OK}}
+    - {command: [GET, hello], node: 2, wait_s: 60, expect: {equals: h1}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 866], node: 1, wait_s: 30, expect: {equals: 0}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 5061], node: 0, wait_s: 30, expect: {equals: 0}}
+    - {restart: true, node: 0, expect: {equals: OK}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 0, expect: {equals: 0}}
+    - {command: [GET, foo], node: 0, compare: skip, expect: {error: "MOVED 12182"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [migrate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

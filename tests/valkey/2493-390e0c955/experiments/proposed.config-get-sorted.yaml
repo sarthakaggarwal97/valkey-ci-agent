@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.config-get-sorted
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CONFIG GET returns keys in strcmp-sorted order with each value still paired to
+    its own key, across exact names, glob patterns, aliases, mixed-case and duplicate
+    arguments, and patterns that match nothing (the new zero-length sort buffer);
+    the parent replies in hash order.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: config-get
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 10
+    commands:
+    - command: [CONFIG, GET, timeout, set-max-listpack-value, maxmemory-samples, TCP-BACKLOG,
+        maxmemory, appendonly, appendfsync, zset-max-listpack-entries]
+      expect_difference: true
+      expect:
+        equals: [TCP-BACKLOG, "511", appendfsync, everysec, appendonly, "no", maxmemory,
+          "0", maxmemory-samples, "5", set-max-listpack-value, "64", timeout, "0",
+          zset-max-listpack-entries, "128"]
+    - command: [CONFIG, GET, "hash-max-*", "zset-max-*"]
+      expect_difference: true
+      expect:
+        equals: [hash-max-listpack-entries, "512", hash-max-listpack-value, "64",
+          hash-max-ziplist-entries, "512", hash-max-ziplist-value, "64", zset-max-listpack-entries,
+          "128", zset-max-listpack-value, "64", zset-max-ziplist-entries, "128", zset-max-ziplist-value,
+          "64"]
+    - command: [CONFIG, GET, maxmemory, MAXMEMORY, maxmemory]
+    - command: [CONFIG, GET, "nosuchprefix-*"]
+    - command: [CONFIG, GET, ""]
+    - command: [CONFIG, SET, maxmemory-samples, 7]
+      expect: {equals: OK}
+    - command: [CONFIG, SET, maxmemory-eviction-tenacity, 42]
+      expect: {equals: OK}
+    - command: [CONFIG, SET, maxmemory-policy, allkeys-lru]
+      expect: {equals: OK}
+    - command: [CONFIG, GET, "maxmemory*", appendfsync, appendonly]
+      expect_difference: true
+      expect:
+        equals: [appendfsync, everysec, appendonly, "no", maxmemory, "0", maxmemory-clients,
+          "0", maxmemory-eviction-tenacity, "42", maxmemory-policy, allkeys-lru, maxmemory-samples,
+          "7"]
+    - command: [CONFIG, GET, "*", "*", "*", "*"]
+      compare: skip
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [config-get.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: config-get}

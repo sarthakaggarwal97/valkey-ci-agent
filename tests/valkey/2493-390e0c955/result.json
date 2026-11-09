@@ -1,0 +1,34 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "390e0c95551236c863da76fb0675f55b8b53cfcd",
+  "parent": "4a120217075c5ca4bacbeb13db6fdfe9df9e321e",
+  "pr": 2493,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "CONFIG GET command return sorted output (#2493)",
+  "date": "2025-08-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 16,
+    "executed": 16,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.7517,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-af30446dad4c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'config-get' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (CONFIG GET timeout set-max-listpack-value maxmemory-samples TCP-BACKLOG maxmemory appendonly appendfsync zset-max-listpack-entries)"
+    }
+  ]
+}

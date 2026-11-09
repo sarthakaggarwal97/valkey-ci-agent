@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bb81f8d14f6b32df7b4798dd8e35f45f257f6968",
+  "parent": "fb9503bfd12bf8331647b151c3af0b28fa4d7e7a",
+  "pr": 2505,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "fix hash ignore ttl management during active expiry (#2505)",
+  "date": "2025-08-19",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 9,
+    "executed": 9,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.4905,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,28 @@
+extends: [valkey.liveness]
+id: proposed.rdb-hfe-bad-expiry-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE of a HASH_2 (hash-field-expiration) dump with an out-of-range
+    per-field expiry is rejected without leaking the half-built hash
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: restore
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, "1"], expect: {equals: OK}}
+    - {command: [RESTORE, k1, "0", !!binary "FgEBZgF2/v////////1QAAAAAAAAAAAA"], expect: {
+        error: "Bad data format"}}
+    - {command: [RESTORE, k2, "0", !!binary "FgEBZgF2AAAAAAAAAIBQAAAAAAAAAAAA"], expect: {
+        error: "Bad data format"}}
+    - {command: [RESTORE, k3, "0", !!binary "FgIBYQFiAAAAAAAAAAABYwFk/v////////1QAAAAAAAAAAAA"],
+      expect: {error: "Bad data format"}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+required_events: [restore.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore}

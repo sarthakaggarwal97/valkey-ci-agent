@@ -1,0 +1,20 @@
+extends: [valkey.liveness]
+id: proposed.rdb-zset-oom-check
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-rdb on a ZSET whose declared length cannot be allocated
+    prints the renamed hashtableTryExpand OOM message
+components:
+- use: valkey.action.tools
+  id: check-rdb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files:
+      zset-oom.rdb: !!binary 'UkVESVMwMDEx/gAFAXqBABAAAAAAAAD/AAAAAAAAAAA='
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - {tool: valkey-check-rdb, args: [zset-oom.rdb], expect_difference: true, expect: {
+        exit: {equals: 1}, stdout: {contains: "OOM in hashtableTryExpand"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check-rdb}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7a9ef29f1ae6baa571a1ca30e68eed1fa0304fa2",
+  "parent": "8131c2b07bcff0dd62c79f8495e45563eacadec1",
+  "pr": 2431,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Change the same shard failover assert to if condition to avoid crash (#2431)",
+  "date": "2025-08-12",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.5488,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

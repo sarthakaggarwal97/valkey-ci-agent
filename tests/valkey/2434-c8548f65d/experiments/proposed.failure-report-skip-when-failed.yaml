@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.failure-report-skip-when-failed
+deployment:
+  modes: [standalone]
+metadata:
+  description: Once a node is in FAIL state, gossip from a voting primary must no
+    longer create or refresh a failure report for it; the parent refreshes the report
+    forever, the change lets it expire, so CLUSTER COUNT-FAILURE-REPORTS diverges
+components:
+- use: valkey.action.commands
+  id: fail-reports
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    timeout_s: 120
+    server_config:
+      cluster-node-timeout: 4000
+    commands:
+    - {command: [CLUSTER, DELSLOTS, 0], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, ADDSLOTS, 0], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, BUMPEPOCH], node: 1, compare: skip, expect: {contains: BUMPED}}
+    - {command: [CLUSTER, INFO], node: 0, compare: skip, wait_s: 30, expect: {contains: "cluster_size:2"}}
+    - {command: [CLUSTER, INFO], node: 1, compare: skip, wait_s: 30, expect: {contains: "cluster_size:2"}}
+    - {command: [CONFIG, SET, cluster-node-timeout, "2000"], node: 0, expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "60"], node: 2, connection: sleeper}
+    - {command: [CLUSTER, NODES], node: 1, compare: skip, wait_s: 45, expect: {contains: "master,fail "}}
+    - {command: [CLUSTER, COUNT-FAILURE-REPORTS, "<node.2.id>"], node: 1, wait_s: 20,
+      expect_difference: true, expect: {equals: 0}}
+    - {command: [CLUSTER, COUNT-FAILURE-REPORTS, "<node.2.id>"], node: 0, compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [fail-reports.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fail-reports}

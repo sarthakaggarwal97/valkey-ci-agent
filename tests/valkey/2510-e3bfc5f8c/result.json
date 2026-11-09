@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e3bfc5f8c7146198ef2eb749866d7226f3b098d8",
+  "parent": "c8548f65d23725bcd70b92f4e06844274a940f40",
+  "pr": 2510,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Atomically update cluster and replication layer while marking self node as primary (#2510)",
+  "date": "2025-08-19",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 6,
+    "executed": 5,
+    "percent": 83,
+    "uncovered": [
+      "src/cluster_legacy.c:4082"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 2.9909,
+  "findings": [],
+  "recorded": []
+}

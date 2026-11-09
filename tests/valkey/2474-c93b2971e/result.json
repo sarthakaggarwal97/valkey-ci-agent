@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c93b2971e6780a8f4c427752b9be1443a0f52d6a",
+  "parent": "58f5562d221d74ab85624a11ac330d9c5f69ae78",
+  "pr": 2474,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Increment expired_fields stat when assigned TTL is in the past (#2474)",
+  "date": "2025-08-13",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.6751,
+  "findings": [],
+  "recorded": []
+}

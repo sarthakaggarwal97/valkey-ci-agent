@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c93b2971e678..15355124d42b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1fc839ac3799
+seed: 24751
+experiment:
+  id: proposed.hsetex-expired-hset-notification
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

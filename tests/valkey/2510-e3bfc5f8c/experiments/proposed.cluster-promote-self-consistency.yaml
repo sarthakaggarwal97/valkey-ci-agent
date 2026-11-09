@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.cluster-promote-self-consistency
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CLUSTER REPLICATE NO ONE and CLUSTER RESET on a synced replica now unset the replication
+    layer inside clusterSetNodeAsPrimary (before the flush) instead of after it; verify
+    both layers end up primary, the dataset is flushed, and the replies match the
+    parent build.
+components:
+- use: valkey.action.commands
+  id: promote
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    server_config: {cluster-node-timeout: 2000}
+    timeout_s: 180
+    commands:
+    - {command: [SET, k1, v1], node: 0, expect: {equals: OK}}
+    - {command: [SET, k2, v2], node: 0, expect: {equals: OK}}
+    - {command: [SET, k3, v3], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, <node.0.id>], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, compare: skip, wait_s: 30, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [DBSIZE], node: 1, wait_s: 30, expect: {equals: 3}}
+    - {command: [CLUSTER, REPLICATE, NO, ONE], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, compare: skip, wait_s: 10, expect: {
+        contains: "role:master"}}
+    - {command: [DBSIZE], node: 1, wait_s: 30, expect: {equals: 0}}
+    - {command: [CLUSTER, REPLICATE, <node.0.id>], node: 2, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 2, compare: skip, wait_s: 30, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [DBSIZE], node: 2, wait_s: 30, expect: {equals: 3}}
+    - {command: [CLUSTER, RESET, SOFT], node: 2, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 2, compare: skip, wait_s: 10, expect: {
+        contains: "role:master"}}
+    - {command: [DBSIZE], node: 2, wait_s: 30, expect: {equals: 0}}
+    - {command: [DBSIZE], node: 0, expect: {equals: 3}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [promote.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: promote}

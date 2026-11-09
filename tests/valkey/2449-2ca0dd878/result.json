@@ -1,0 +1,58 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2ca0dd878196033811a69a9a2a3381030e5264dd",
+  "parent": "7a5c0d0ebf72354f122c64cd52788c671ae04064",
+  "pr": 2449,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make cluster failover delay relative to node timeout (#2449)",
+  "date": "2025-08-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 9,
+    "executed": 7,
+    "percent": 77,
+    "uncovered": [
+      "src/cluster_legacy.c:5233",
+      "src/cluster_legacy.c:5276"
+    ],
+    "rounds": 2
+  },
+  "cost_usd": 5.8671,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 8 in clusterHandleReplicaFailover",
+      "scenario": "ai-4b9f7cb065ef",
+      "seed": 20260101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "991f3f2ad51256ddbe43",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-c01d8ca2ebc5",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "no trustworthy verdict is possible; required components did not do their part outside an oracle or action, depend on one that did not, judged a deployment whose teardown failed, or were skipped: chaos"
+    },
+    {
+      "scenario": "ai-852cd913e3ba",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "no trustworthy verdict is possible; required components did not do their part outside an oracle or action, depend on one that did not, judged a deployment whose teardown failed, or were skipped: chaos"
+    }
+  ]
+}

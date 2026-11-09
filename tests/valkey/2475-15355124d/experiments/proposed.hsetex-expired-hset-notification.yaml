@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.hsetex-expired-hset-notification
+deployment:
+  modes: [standalone]
+metadata:
+  description: HSETEX with an already-past expiry must emit only hexpired (and del),
+    not a spurious hset keyspace notification; non-expired paths still emit hset
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_max_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: hsetex
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      notify-keyspace-events: KEA
+      hash-max-listpack-entries: {$ref: inputs.hash_max_listpack_entries}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {connection: sub, command: [PSUBSCRIBE, "__keyevent@0__:*"]}
+    - {command: [HSETEX, h1, PX, 100000, FIELDS, 1, f1, v1], expect: {equals: 1}}
+    - {connection: sub, read: true, expect: {contains: hexpire}}
+    - {command: [HSETEX, h2, EXAT, 1, FIELDS, 1, f1, v1], expect: {equals: 1}}
+    - {command: [EXISTS, h2], expect: {equals: 0}}
+    - {connection: sub, read: true, expect_difference: true, expect: {contains: hexpired}}
+    - {command: [HSET, h3, keep, v], expect: {equals: 1}}
+    - {connection: sub, read: true, expect: {contains: hset}}
+    - {command: [HSETEX, h3, PXAT, 1, FIELDS, 2, f1, v1, f2, v2], expect: {equals: 1}}
+    - {command: [HLEN, h3], expect: {equals: 1}}
+    - {command: [HTTL, h3, FIELDS, 2, f1, f2], expect: {equals: [-2, -2]}}
+    - {connection: sub, read: true, expect_difference: true, expect: {contains: hexpired}}
+    - {command: [HSETEX, h4, FIELDS, 1, f1, v1], expect: {equals: 1}}
+    - {connection: sub, read: true, expect: {contains: hset}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hsetex.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hsetex}

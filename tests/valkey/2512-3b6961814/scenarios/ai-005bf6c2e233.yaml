@@ -1,0 +1,19 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e3bfc5f8c714..3b6961814b02.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-005bf6c2e233
+seed: 202
+experiment:
+  id: proposed.gossip-pong-failed-node-recovery
+  inputs:
+    target: primary
+    pause_s: 8
+    settle_s: 25
+    loss_window_s: 2.5
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7100
+  server_config:
+    cluster-node-timeout: 2000
+    cluster-ping-interval: 200

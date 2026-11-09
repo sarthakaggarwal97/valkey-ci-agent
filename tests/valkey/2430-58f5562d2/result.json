@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "58f5562d221d74ab85624a11ac330d9c5f69ae78",
+  "parent": "6c2e4f955310f956b25696fd9d008ea0e13d980e",
+  "pr": 2430,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix duplicate Acks for RDMA events and fix extremely large max latency for RDMA benchmark. (#2430)",
+  "date": "2025-08-13",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4188,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to RDMA-only code: src/rdma.c is compiled only under USE_RDMA, the valkey-benchmark changes are inside #ifdef USE_RDMA / config.ct == VALKEY_CONN_RDMA guards (the TCP branch of createClient is behaviorally unchanged), and tests/rdma/rdma-test.c is an RDMA test harness. Reaching the changed paths requires an RDMA transport (RDMA NIC or root-configured soft-RoCE) and RDMA-enabled builds and clients, none of which the fuzzer's TCP-only local deployments or installed components provide. Any scenario over TCP would exercise identical code on both builds and could not observe "
+}

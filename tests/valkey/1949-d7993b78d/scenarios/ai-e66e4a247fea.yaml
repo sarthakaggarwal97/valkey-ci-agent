@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 725c3608f067..d7993b78d82d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e66e4a247fea
+seed: 202
+experiment:
+  id: proposed.slot-import-ownership-change
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7300

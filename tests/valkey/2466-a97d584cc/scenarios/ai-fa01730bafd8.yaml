@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bb81f8d14f6b..a97d584cc200.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fa01730bafd8
+seed: 1
+experiment:
+  id: proposed.debug-populate-prealloc
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

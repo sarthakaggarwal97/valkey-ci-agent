@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 725c3608f067..d7993b78d82d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-46ef311c95f0
+seed: 101
+experiment:
+  id: proposed.slot-migrate-types-serialize
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e7bb2354da5c7c0b4f2135173ec00097178eec93",
+  "parent": "87d2330c222acf9efc181b98483af1566e213635",
+  "pr": 2490,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Don't call SSL_write() with num=0 (#2490)",
+  "date": "2025-08-15",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.6771,
+  "findings": [],
+  "recorded": []
+}

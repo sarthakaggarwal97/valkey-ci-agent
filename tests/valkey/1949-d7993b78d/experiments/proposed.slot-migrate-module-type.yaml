@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.slot-migrate-module-type
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Atomic slot migration of a slot holding a module data type, driving
+    the OBJ_MODULE branch of rewriteObjectRio and rewriteModuleObject with its db_num
+    argument in the snapshot fork child
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: true
+    nodes: 2
+    timeout_s: 40
+    commands:
+    - {command: [FSL.PUSH, m, 1], node: 0, expect: {equals: OK}}
+    - {command: [FSL.PUSH, m, 2], node: 0, expect: {equals: OK}}
+    - {command: [FSL.PUSH, m, 3], node: 0, expect: {equals: OK}}
+    - {command: [FSL.GETALL, m], node: 0, expect: {equals: [1, 2, 3]}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 16383, NODE, "<node.1.id>"],
+      node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [FSL.GETALL, m], node: 1, wait_s: 30, expect_difference: true, expect: {
+        equals: [1, 2, 3]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.debug-populate-oom
+deployment:
+  modes: [standalone]
+metadata:
+  description: DEBUG POPULATE with an unallocatable key count replies the renamed
+    dbExpand OOM error
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: populate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: yes}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, POPULATE, "4503599627370496"], expect_difference: true, expect: {
+        error: "OOM in dbExpand"}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [populate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: populate}

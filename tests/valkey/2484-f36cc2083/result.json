@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f36cc208368c4dd63f8e4a26f56d4ea1daf629f6",
+  "parent": "e7bb2354da5c7c0b4f2135173ec00097178eec93",
+  "pr": 2484,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix cluster test module to pass null terminated node-id to SendClusterMessage (#2484)",
+  "date": "2025-08-15",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.9024,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only modifies the test module tests/modules/cluster.c, null-terminating sender_id before passing it to ValkeyModule_SendClusterMessage. On both the change's build and its parent, the server already delivers sender_id to module cluster-message receivers as a null-terminated sds (sdsnewlen at cluster_legacy.c:3337), so strlen in clusterSendModuleMessageToTarget reads the same 40 bytes either way and the module behaves identically on both builds: same replies, same DONG delivery, no crash possible. The fix matters only for cross-version compatibility with older servers that are not und"
+}

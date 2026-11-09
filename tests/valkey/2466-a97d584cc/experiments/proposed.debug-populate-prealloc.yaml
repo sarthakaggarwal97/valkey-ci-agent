@@ -1,0 +1,20 @@
+extends: [valkey.liveness]
+id: proposed.debug-populate-prealloc
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: DEBUG POPULATE drives dbExpand's try-expand path (kvstoreHashtableTryExpand),
+    which preallocates and creates the per-slot/per-db hashtables
+components:
+- use: valkey.action.commands
+  id: populate
+  config:
+    timeout_s: 60
+    commands:
+    - {command: [DEBUG, POPULATE, "200000"], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {min: 1}}
+    - {command: [DEBUG, POPULATE, "400000"], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {min: 1}}
+    - {command: [PING], expect: {equals: PONG}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: populate}

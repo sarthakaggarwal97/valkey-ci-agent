@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c8548f65d23725bcd70b92f4e06844274a940f40",
+  "parent": "eae23babe63e4e32498da3d16e4cb368354c044b",
+  "pr": 2434,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Skip failure reports for already failed nodes (#2434)",
+  "date": "2025-08-19",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.2198,
+  "findings": [],
+  "recorded": []
+}

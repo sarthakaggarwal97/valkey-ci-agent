@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.cluster-migrateslots-cmd
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTER MIGRATESLOTS/CANCELSLOTMIGRATIONS/GETSLOTMIGRATIONS argument
+    validation and the unguarded DEBUG SLOTMIGRATION subcommand, compared across builds
+    on two-node clusters
+components:
+- use: valkey.action.commands
+  id: migrateslots
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 20
+    commands:
+    - {command: [CLUSTER, MIGRATESLOTS], node: 0, expect_difference: true, expect: {
+        error: "wrong number of arguments"}}
+    - {command: [CLUSTER, MIGRATESLOTS, INVALID, 0, 1], node: 0, expect_difference: true,
+      expect: {error: "syntax error"}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE], node: 0, expect_difference: true,
+      expect: {error: "wrong number of arguments"}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0], node: 0, expect_difference: true,
+      expect: {error: "No end slot"}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 16385, 16388], node: 0, expect_difference: true,
+      expect: {error: "out of range"}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 2147483648, 2147483648], node: 0,
+      expect_difference: true, expect: {error: "out of range"}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 1, 0], node: 0, expect_difference: true,
+      expect: {error: "greater than end slot"}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 5, 3, 6], node: 0, expect_difference: true,
+      expect: {error: "overlaps"}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, a, 0], node: 0, expect_difference: true,
+      expect: {error: "No slot ranges specified"}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 0, NODE, blah], node: 0, expect_difference: true,
+      expect: {error: "Invalid node name"}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 0, NODE, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      node: 0, expect_difference: true, expect: {error: "Unknown node name"}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 0, expect_difference: true, expect: {
+        equals: []}}
+    - {command: [CLUSTER, CANCELSLOTMIGRATIONS], node: 0, expect_difference: true,
+      expect: {error: "No migrations"}}
+    - {command: [CLUSTER, CANCELSLOTMIGRATIONS, ARG], node: 0, expect_difference: true,
+      expect: {error: "wrong number of arguments"}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [DEBUG, SLOTMIGRATION], node: 0, compare: skip}
+    - {command: [DEBUG, SLOTMIGRATION, PREVENT-PAUSE], node: 0, compare: skip}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [migrateslots.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrateslots}

@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fb9503bfd12bf8331647b151c3af0b28fa4d7e7a",
+  "parent": "2ca0dd878196033811a69a9a2a3381030e5264dd",
+  "pr": 2500,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "CLUSTER SYNCSLOTS ESTABLISH added source node == myself check (#2500)",
+  "date": "2025-08-19",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.3264,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 410976d509eb..4a120217075c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9d754b8e748a
+seed: 24603
+experiment:
+  id: proposed.rdb-hfe-neg-expiry-leak
+  inputs:
+    resp: 2
+    sanitize: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

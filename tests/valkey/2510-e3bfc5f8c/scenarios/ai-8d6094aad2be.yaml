@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c8548f65d237..e3bfc5f8c714.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8d6094aad2be
+seed: 3303
+experiment:
+  id: proposed.cluster-promote-self-consistency
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

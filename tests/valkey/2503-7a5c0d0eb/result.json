@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7a5c0d0ebf72354f122c64cd52788c671ae04064",
+  "parent": "390e0c95551236c863da76fb0675f55b8b53cfcd",
+  "pr": 2503,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix memory leak in saveSnapshotToConnectionSockets (#2503)",
+  "date": "2025-08-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 0,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 10,
+    "executed": 3,
+    "percent": 30,
+    "uncovered": [
+      "src/rdb.c:3601",
+      "src/rdb.c:3602",
+      "src/rdb.c:3609",
+      "src/rdb.c:3610",
+      "src/rdb.c:3619",
+      "src/rdb.c:3620",
+      "src/rdb.c:3630"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 7.1318,
+  "findings": [],
+  "recorded": []
+}

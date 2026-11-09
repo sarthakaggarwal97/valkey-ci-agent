@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fb9503bfd12b..bb81f8d14f6b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2512f78b78bb
+seed: 101
+experiment:
+  id: proposed.hash-field-active-expiry
+  inputs:
+    resp: 2
+    effort: 1
+    lazy_expire: 'no'
+deployment:
+  mode: standalone
+  base_port: 7000

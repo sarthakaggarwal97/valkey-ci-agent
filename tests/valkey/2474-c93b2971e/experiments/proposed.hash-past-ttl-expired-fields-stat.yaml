@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.hash-past-ttl-expired-fields-stat
+deployment:
+  modes: [standalone]
+metadata:
+  description: HSETEX/HGETEX/HEXPIRE with a TTL already in the past delete the field
+    and now increment the expired_fields INFO stat
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hash_max_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: hash-past-ttl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: {$ref: inputs.hash_max_listpack_entries}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [HSET, h1, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HSETEX, h1, EX, 0, FIELDS, 1, f1, nv], expect: {equals: 1}}
+    - {command: [HTTL, h1, FIELDS, 1, f1], expect: {equals: [-2]}}
+    - {command: [INFO, stats], expect_difference: true, expect: {contains: "expired_fields:1\r"}}
+    - {command: [HGETEX, h1, EXAT, 1, FIELDS, 1, f2], expect: {equals: [v2]}}
+    - {command: [EXISTS, h1], expect: {equals: 0}}
+    - {command: [INFO, stats], expect_difference: true, expect: {contains: "expired_fields:2\r"}}
+    - {command: [HSET, h2, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [HEXPIRE, h2, 0, FIELDS, 2, f1, f2], expect: {equals: [2, 2]}}
+    - {command: [HPEXPIREAT, h2, 1, FIELDS, 1, f3], expect: {equals: [2]}}
+    - {command: [EXISTS, h2], expect: {equals: 0}}
+    - {command: [INFO, stats], expect_difference: true, expect: {contains: "expired_fields:5\r"}}
+    - {command: [HSET, h3, f1, v1], expect: {equals: 1}}
+    - {command: [HGETEX, h3, PXAT, 1, FIELDS, 2, f1, nofield], expect: {exists: true}}
+    - {command: [INFO, stats], expect_difference: true, expect: {contains: "expired_fields:6\r"}}
+    - {command: [HSET, h4, a, 1], expect: {equals: 1}}
+    - {command: [HSETEX, h4, PXAT, 1, FIELDS, 2, a, x, b, y], expect: {equals: 0}}
+    - {command: [INFO, stats], expect_difference: true, expect: {contains: "expired_fields:7\r"}}
+    - {command: [HSET, h5, f1, v1], expect: {equals: 1}}
+    - {command: [HEXPIREAT, h5, -1, FIELDS, 1, f1], expect: {equals: [2]}}
+    - {command: [HGETEX, nokey, EX, 0, FIELDS, 1, f], expect: {exists: true}}
+    - {command: [INFO, stats], expect_difference: true, expect: {contains: "expired_fields:8\r"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hash-past-ttl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hash-past-ttl}

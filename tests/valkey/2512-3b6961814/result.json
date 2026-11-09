@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3b6961814b027b864b340c4e5c7dd41a2fc34cd2",
+  "parent": "e3bfc5f8c7146198ef2eb749866d7226f3b098d8",
+  "pr": 2512,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update pong_received time via gossip only if the node is healthy from our view (#2512)",
+  "date": "2025-08-19",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.7423,
+  "findings": [],
+  "recorded": []
+}

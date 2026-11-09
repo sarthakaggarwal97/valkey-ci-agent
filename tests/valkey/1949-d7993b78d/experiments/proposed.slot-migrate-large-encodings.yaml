@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.slot-migrate-large-encodings
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Atomic slot migration of populated slots held in non-listpack encodings
+    with a per-key save delay, driving the large-encoding branches of the AOF object
+    writers and the rdb_key_save_delay path in the snapshot fork child
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 40
+    server_config:
+      list-max-listpack-size: 1
+      hash-max-listpack-entries: 0
+      set-max-listpack-entries: 0
+      set-max-intset-entries: 0
+      zset-max-listpack-entries: 0
+      rdb-key-save-delay: 50
+    commands:
+    - {command: [RPUSH, l, a, b, c, d], node: 0, expect: {equals: 4}}
+    - {command: [SADD, st, alpha, beta, gamma], node: 0, expect: {equals: 3}}
+    - {command: [ZADD, zs, 1, a, 2, b, 3, c], node: 0, expect: {equals: 3}}
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3], node: 0, expect: {equals: 3}}
+    - {command: [SET, s, hello], node: 0, expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, l], node: 0, compare: skip}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 16383, NODE, "<node.1.id>"],
+      node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [LRANGE, l, 0, -1], node: 1, wait_s: 30, expect_difference: true,
+      expect: {equals: [a, b, c, d]}}
+    - {command: [SMEMBERS, st], node: 1, compare: unordered, expect_difference: true,
+      expect: {equals: [alpha, beta, gamma]}}
+    - {command: [ZRANGE, zs, 0, -1, WITHSCORES], node: 1, expect_difference: true,
+      expect: {equals: [a, "1", b, "2", c, "3"]}}
+    - {command: [HGETALL, h], node: 1, compare: unordered-pairs, expect_difference: true,
+      expect: {equals: [f1, v1, f2, v2, f3, v3]}}
+    - {command: [GET, s], node: 1, expect_difference: true, expect: {equals: hello}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

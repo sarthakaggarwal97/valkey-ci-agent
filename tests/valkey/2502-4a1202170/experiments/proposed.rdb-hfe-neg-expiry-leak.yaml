@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.rdb-hfe-neg-expiry-leak
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE of a HASH_2 payload whose field expiry is negative (< EXPIRY_NONE)
+    must free the field, value and partial hash object instead of leaking them
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    sanitize: {type: string, enum: ["yes", "no"], default: "yes"}
+components:
+- use: valkey.action.commands
+  id: hferestore
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {sanitize-dump-payload: {$ref: inputs.sanitize}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, set-skip-checksum-validation, "1"], expect: {equals: OK}}
+    - {command: [RESTORE, k1, 0, !!binary "FgEBZgF2/v////////1QAAAAAAAAAAAA"], expect: {
+        error: "Bad data format"}}
+    - {command: [RESTORE, k2, 0, !!binary "FgIBYQEx//////////wBYgEy/v////////1QAAAAAAAAAAAA"],
+      expect: {error: "Bad data format"}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hferestore.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hferestore}

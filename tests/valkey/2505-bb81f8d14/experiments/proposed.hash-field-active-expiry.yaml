@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.hash-field-active-expiry
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active expiry drains large same-expiry hash-field groups without crash,
+    UAF, or assert
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    effort: {type: integer, enum: [1, 5, 10], default: 1}
+    lazy_expire: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: drive
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      hash-max-listpack-entries: 8
+      hz: 100
+      active-expire-effort: {$ref: inputs.effort}
+      lazyfree-lazy-expire: {$ref: inputs.lazy_expire}
+    commands:
+    - command:
+      - EVAL
+      - "redis.call('FLUSHALL'); local sizes={129,181,201,281,200,300,400}; for s=1,#sizes\
+        \ do local n=sizes[s]; for c=1,2 do local k='h:'..s..':'..c; for i=1,n do\
+        \ redis.call('HSET',k,'f'..i,'v') end; local a={k,ARGV[1],'FIELDS',n}; for\
+        \ i=1,n do a[#a+1]='f'..i end; redis.call('HPEXPIRE',unpack(a)) end end; return\
+        \ 'SETUP'"
+      - "0"
+      - "400"
+      expect: {equals: SETUP}
+    - {command: [DBSIZE], expect: {min: 1}}
+    - {command: [DBSIZE], wait_s: 25, expect: {equals: 0}}
+    - {command: [DEBUG, JMAP], expect: {error: false}}
+    - {command: [PING], expect: {equals: PONG}}
+required_events: [drive.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: drive}

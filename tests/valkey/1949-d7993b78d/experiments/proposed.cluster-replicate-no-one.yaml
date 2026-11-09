@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.cluster-replicate-no-one
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER REPLICATE NO ONE promotes a synced cluster replica to an empty
+    primary, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [SET, foo, v1], expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [DBSIZE], node: 1, wait_s: 30, expect: {equals: 1}}
+    - {command: [CLUSTER, REPLICATE, NO, ONE], node: 1, expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [ROLE], node: 1, expect_difference: true, expect: {contains: master}}
+    - {command: [DBSIZE], node: 1, wait_s: 10, expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [GET, foo], expect: {equals: v1}}
+    - {command: [CLUSTER, REPLICATE, NO, ONE], node: 1, expect_difference: true, expect: {
+        equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

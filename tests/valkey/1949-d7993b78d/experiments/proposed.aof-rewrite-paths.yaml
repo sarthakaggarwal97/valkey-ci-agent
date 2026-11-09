@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.aof-rewrite-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: BGREWRITEAOF over functions, every object type, expires and two DBs,
+    then restart from the rewritten AOF, compared across builds
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes"}
+    timeout_s: 120
+    commands:
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nredis.register_function('myfunc',\
+          \ function(keys, args) return 1 end)"], expect: {equals: mylib}}
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [RPUSH, l, a, b, c], expect: {equals: 3}}
+    - {command: [SADD, s, a, b, c], expect: {equals: 3}}
+    - {command: [ZADD, z, 1, a, 2, b], expect: {equals: 2}}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [XADD, st, "1-1", f, v], expect: {equals: "1-1"}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [PEXPIREAT, k2, 9999999999999], expect: {equals: 1}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [SET, dbk, dv], expect: {equals: OK}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [BGREWRITEAOF], compare: skip}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [LRANGE, l, 0, -1], expect: {equals: [a, b, c]}}
+    - {command: [SMEMBERS, s], compare: unordered}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES], expect: {equals: [a, "1", b, "2"]}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [XRANGE, st, "-", "+"]}
+    - {command: [PTTL, k2], compare: skip, expect: {min: 1}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [GET, dbk], expect: {equals: dv}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [FCALL, myfunc, 0], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

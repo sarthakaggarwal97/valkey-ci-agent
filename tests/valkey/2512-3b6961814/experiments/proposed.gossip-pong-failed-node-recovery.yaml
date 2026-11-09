@@ -1,0 +1,39 @@
+extends: [valkey.base]
+id: proposed.gossip-pong-failed-node-recovery
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Freeze a node past cluster-node-timeout so peers mark it FAIL, resume
+    it, and require every peer to clear the FAIL state and the cluster to reconverge
+inputs:
+  properties:
+    target: {type: string, enum: [primary, replica], default: primary}
+    pause_s: {type: number, minimum: 1, maximum: 60, default: 5}
+    settle_s: {type: number, minimum: 1, maximum: 120, default: 20}
+    loss_window_s: {type: number, minimum: 0, maximum: 600, default: 0}
+components:
+- use: valkey.fault.process-signal
+  id: pause-node
+  config:
+    when_event: warm-up.completed
+    instance: {$ref: inputs.target}
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.pause_s}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, pause-node]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config:
+    seconds: {$ref: inputs.settle_s}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_s: {$ref: inputs.loss_window_s}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: pause-node}

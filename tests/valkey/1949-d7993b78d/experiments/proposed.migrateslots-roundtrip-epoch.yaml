@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.migrateslots-roundtrip-epoch
+deployment:
+  modes: [standalone]
+metadata:
+  description: End-to-end atomic slot migration there and back with inflated source
+    epoch, data verified on both owners, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 240
+    commands:
+    - {command: [SET, bar, v1], expect: {equals: OK}}
+    - {command: [SET, "{bar}2", v2], expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 5061], expect: {equals: 2}}
+    - {command: [CLUSTER, BUMPEPOCH], compare: skip}
+    - {command: [CLUSTER, BUMPEPOCH], compare: skip}
+    - {command: [CLUSTER, BUMPEPOCH], compare: skip}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 5000, 5100, NODE, "<node.1.id>"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 5061], node: 1, wait_s: 30, expect_difference: true,
+      expect: {equals: 2}}
+    - {command: [GET, bar], node: 1, expect_difference: true, expect: {equals: v1}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], wait_s: 20, expect_difference: true,
+      expect: {contains: success}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 5000, 5100, NODE, "<node.0.id>"],
+      node: 1, expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 5061], wait_s: 30, expect: {equals: 2}}
+    - {command: [GET, bar], expect: {equals: v1}}
+    - {command: [CLUSTER, CANCELSLOTMIGRATIONS], expect_difference: true, expect: {
+        error: "No migrations ongoing"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

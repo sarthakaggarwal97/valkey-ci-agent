@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey eae23babe63e..c8548f65d237.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e36d1131a16c
+seed: 101
+experiment:
+  id: proposed.failure-report-skip-when-failed
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

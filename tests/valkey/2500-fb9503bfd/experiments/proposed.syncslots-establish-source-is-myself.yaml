@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.syncslots-establish-source-is-myself
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTER SYNCSLOTS ESTABLISH with SOURCE set to the target node itself
+    is rejected instead of creating a self-import job
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: establish
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CLUSTER, SYNCSLOTS, ESTABLISH, SOURCE, "<node.0.id>", NAME, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+        SLOTSRANGE, 0, 0], connection: job, expect_difference: true, expect: {error: "Source\
+          \ node is target node itself"}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CLUSTER, SLOTS]}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: establish}

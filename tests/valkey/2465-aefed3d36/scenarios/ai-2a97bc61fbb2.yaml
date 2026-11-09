@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey dcbaecddce5d..aefed3d363d1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2a97bc61fbb2
+seed: 2
+experiment:
+  id: proposed.rdb-zset-oom-check
+deployment:
+  mode: standalone
+  base_port: 7100

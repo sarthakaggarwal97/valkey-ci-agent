@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.cluster-migrateslots-import
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: A full CLUSTER MIGRATESLOTS one-shot migration between two cluster
+    nodes moves the keys to the target and empties the source, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: import
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, "{6ZJ}:k1", v1], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{6ZJ}:k2", v2], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{6ZJ}:k3", v3], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16383], node: 0, expect: {equals: 3}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 16383, 16383, NODE, "<node.1.id>"],
+      node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16383], node: 1, wait_s: 25, expect_difference: true,
+      expect: {equals: 3}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 16383], node: 0, wait_s: 25, expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [GET, "{6ZJ}:k1"], node: 1, expect_difference: true, expect: {equals: v1}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 0, compare: skip, expect_difference: true,
+      expect: {exists: true}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [import.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: import}

@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.slot-migrate-types-serialize
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Atomic slot migration of populated slots serializes every value type
+    and an expire through the new AOF helpers in the snapshot fork child; the target
+    reads them back
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 40
+    commands:
+    - {command: [SET, s, hello], node: 0, expect: {equals: OK}}
+    - {command: [RPUSH, l, a, b, c], node: 0, expect: {equals: 3}}
+    - {command: [SADD, st, x, y, z], node: 0, expect: {equals: 3}}
+    - {command: [ZADD, zs, 1, a, 2, b], node: 0, expect: {equals: 2}}
+    - {command: [HSET, h, f1, v1, f2, v2], node: 0, expect: {equals: 2}}
+    - {command: [XADD, strm, "1-1", field, val], node: 0, expect: {equals: "1-1"}}
+    - {command: [SET, exp, survive], node: 0, expect: {equals: OK}}
+    - {command: [PEXPIREAT, exp, 99999999999999], node: 0, expect: {equals: 1}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 16383, NODE, "<node.1.id>"],
+      node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, s], node: 1, wait_s: 30, expect_difference: true, expect: {
+        equals: hello}}
+    - {command: [LRANGE, l, 0, -1], node: 1, expect_difference: true, expect: {equals: [
+          a, b, c]}}
+    - {command: [SMEMBERS, st], node: 1, compare: unordered, expect_difference: true,
+      expect: {equals: [x, y, z]}}
+    - {command: [ZRANGE, zs, 0, -1, WITHSCORES], node: 1, expect_difference: true,
+      expect: {equals: [a, "1", b, "2"]}}
+    - {command: [HGETALL, h], node: 1, compare: unordered-pairs, expect_difference: true,
+      expect: {equals: [f1, v1, f2, v2]}}
+    - {command: [XRANGE, strm, "-", "+"], node: 1, expect_difference: true, expect: {
+        equals: [["1-1", [field, val]]]}}
+    - {command: [GET, exp], node: 1, expect_difference: true, expect: {equals: survive}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

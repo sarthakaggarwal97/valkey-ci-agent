@@ -1,0 +1,34 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4a120217075c5ca4bacbeb13db6fdfe9df9e321e",
+  "parent": "410976d509eb276cbdefd145257f83adafa9738f",
+  "pr": 2502,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix memory leak in rdbLoadObject when loading a wrong HFE (#2502)",
+  "date": "2025-08-18",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 2
+  },
+  "cost_usd": 9.3911,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-49aa320a8e03",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'restore' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (RESTORE h 0 <binary>), 2 (EXISTS h)"
+    }
+  ]
+}

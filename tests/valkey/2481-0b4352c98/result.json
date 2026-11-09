@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0b4352c98ccefac61e33c5da805357e909bf6d2f",
+  "parent": "3d1ff2a38c3a17644afa4b64f086ea110df5fa86",
+  "pr": 2481,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Consolidate slot migration logs by grouping consecutive slot migrations into a single log entry (#2481)",
+  "date": "2025-08-14",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 17,
+    "executed": 17,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.2375,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,49 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "aefed3d363d1c7d7cb391d3f605484c78c9a88f2",
+  "parent": "dcbaecddce5d56076189bcfb514eece917c1297e",
+  "pr": 2465,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Don't allow resize hashtable if rehashing is ongoing (#2465)",
+  "date": "2025-08-15",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 2,
+  "hunted": 5,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 7,
+    "executed": 7,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 11.9077,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Sanitizer failure: ==22901==WARNING: AddressSanitizer failed to allocate 0x100000000000000 bytes",
+      "scenario": "ai-7f9edca36b36",
+      "seed": 1,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "shown by ASan on unstable, the one build with it",
+      "fingerprint": "a53f4bd380496b3e3ffe",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/110"
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-716ba777bdbe",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during workload.start: RunnerError: workload 'writes' returned ERROR: preload failed: Command # 659 (SET vf:writes:stable:390658 s390658:Pb00NVUSSIpuBcJTjnFtYFtPQV3WX78Fh2Nkaq7Qrl24d06X7eJxVZURs6Jl6J07hQ54bQ8bsY6fHzT4YLAwqJ8OWHE018HlBGKsR9MRlgowDyKp80AagpRcu5f5i4PY6SVacni9UcU"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 58f5562d221d..c93b2971e678.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1003c5503fca
+seed: 24742
+experiment:
+  id: proposed.hash-past-ttl-expired-fields-stat
+  inputs:
+    resp: 3
+    hash_max_listpack_entries: 128
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

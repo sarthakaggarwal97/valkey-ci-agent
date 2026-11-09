@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4a120217075c..390e0c955512.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-276b8b3ee77b
+seed: 24933
+experiment:
+  id: proposed.config-get-sorted
+  inputs:
+    resp: 2
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200
