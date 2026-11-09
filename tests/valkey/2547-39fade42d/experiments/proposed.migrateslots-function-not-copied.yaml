@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.migrateslots-function-not-copied
+deployment:
+  modes: [standalone]
+metadata:
+  description: Atomic slot migration (CLUSTER MIGRATESLOTS) no longer copies functions
+    to the target, and migrating the slot back no longer fails on the duplicate FUNCTION
+    LOAD the parent's copy causes
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SET, "{6ZJ}:k1", v1], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=test1\nserver.register_function('test1',\
+          \ function() return 'hello1' end)"], expect: {equals: test1}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, "16383", "16383", NODE, "<node.1.id>"],
+      wait_s: 15, expect: {equals: OK}}
+    - {command: [GET, "{6ZJ}:k1"], node: 1, wait_s: 30, expect: {equals: v1}}
+    - {command: [FUNCTION, LIST], node: 1, expect_difference: true, expect: {equals: []}}
+    - {command: [FUNCTION, LIST], node: 0}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, "16383", "16383", NODE, "<node.0.id>"],
+      node: 1, wait_s: 15, expect: {equals: OK}}
+    - {command: [GET, "{6ZJ}:k1"], node: 0, wait_s: 30, expect_difference: true, expect: {
+        equals: v1}}
+    - {command: [FUNCTION, LIST], node: 1, expect_difference: true, expect: {equals: []}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 1, compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [migrate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

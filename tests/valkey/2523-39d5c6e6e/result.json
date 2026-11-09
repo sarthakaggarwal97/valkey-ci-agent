@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "39d5c6e6ee46b839c935974eb7ff4de7d87399f7",
+  "parent": "3b6961814b027b864b340c4e5c7dd41a2fc34cd2",
+  "pr": 2523,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix vset unittest compilation warning for bad signedness comparison (#2523)",
+  "date": "2025-08-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2085,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only src/unit/test_vset.c, changing a unit-test loop counter from int to size_t to fix a compiler signedness warning. It is a build/test hygiene fix with no change to any server code path, command behaviour, reply, or data handling, so no fuzzer scenario can reach or exercise it."
+}

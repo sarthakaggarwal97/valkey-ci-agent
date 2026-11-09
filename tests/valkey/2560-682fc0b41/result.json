@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "682fc0b4197311a2bc0ea2512151ee29a2b1d327",
+  "parent": "06cefc181abbe458d59a0c4865670810a9cb65d3",
+  "pr": 2560,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove the trailing chars of the --cluster reshard log message in valkey-cli (#2560)",
+  "date": "2025-08-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.1413,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only removes the trailing ': ' from the informational 'Moving slot ...' progress message clusterManagerMoveSlot() prints on valkey-cli's stdout during --cluster reshard/fix; no server code, command reply, data path, or exit status changes, so there is no behavior a server-side experiment could observe. The one component that runs and compares valkey-cli output, valkey.action.tools, provides each build a single one-node private cluster, and every call site that prints this message requires at least two primaries: reshard aborts with 'No source nodes given' when the only node is the t"
+}

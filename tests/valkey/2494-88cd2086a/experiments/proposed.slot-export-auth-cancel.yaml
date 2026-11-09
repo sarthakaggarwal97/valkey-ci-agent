@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.slot-export-auth-cancel
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CANCELSLOTMIGRATIONS lands while the export job waits in the new READ_AUTH_RESPONSE
+    state with a read handler holding the job as connection private data: the connection
+    must close cleanly, the job must report cancelled, and the late AUTH response
+    the stalled target then writes to the closed connection must not crash the source.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: auth-cancel
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, primaryauth, wrongpass], node: 0, expect: {equals: OK}}
+    - {raw: "DEBUG SLEEP 2\r\n", connection: sleeper, node: 1}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 100, 200, NODE, <node.1.id>],
+      node: 0, wait_s: 10, expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 0, wait_s: 5, expect_difference: true,
+      expect: {contains: reading-auth-response}}
+    - {command: [CLUSTER, CANCELSLOTMIGRATIONS], node: 0, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 0, expect_difference: true, expect: {
+        contains: cancelled}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [CONFIG, SET, primaryauth, ""], node: 0, expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [auth-cancel.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: auth-cancel}

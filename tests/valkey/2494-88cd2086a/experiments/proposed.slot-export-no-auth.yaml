@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.slot-export-no-auth
+deployment:
+  modes: [standalone]
+metadata:
+  description: A cluster slot migration with no masterauth set takes the no-auth export
+    branch (SLOT_EXPORT_SEND_ESTABLISH, skipping SEND_AUTH) and still transfers slots
+    and data
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 45
+    commands:
+    - {command: [SET, "{alpha}1", v1], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{bravo}1", v2], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 16383, NODE, "<node.1.id>"],
+      node: 0, expect: {equals: OK}}
+    - {command: [GET, "{alpha}1"], node: 1, wait_s: 30, expect: {equals: v1}}
+    - {command: [GET, "{bravo}1"], node: 1, expect: {equals: v2}}
+    - {command: [GET, "{alpha}1"], node: 0, expect: {error: "MOVED"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [migrate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9aeab8ccbac0ca4923676c749c98d0de4718c872",
+  "parent": "8c55547999a980680997a2c0c2bd292a7112da9c",
+  "pr": 2538,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Consistently use static_assert across code (#2538)",
+  "date": "2025-08-24",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2427,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters how the static_assert fallback macro is defined (removing duplicate per-file fallbacks and switching the header fallback from the extern-negative-array trick to C11 _Static_assert). static_assert is a compile-time construct that generates no runtime code: a passing assertion is invisible in the binary and a failing one breaks the build, not the server. There is no runtime behaviour, reply, data format, replication, or persistence path to exercise, so no fuzzer scenario can reach the change; successful compilation of the head commit is the complete test."
+}

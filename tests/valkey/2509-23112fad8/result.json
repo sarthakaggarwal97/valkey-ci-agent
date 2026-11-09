@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "23112fad87e65380d4774233fc0fa1edb65c9364",
+  "parent": "39d5c6e6ee46b839c935974eb7ff4de7d87399f7",
+  "pr": 2509,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "fix hsetex handling of wrong number of fields (#2509)",
+  "date": "2025-08-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.2422,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in hsetexCommand",
+      "scenario": "ai-1bd93713a22c",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2509",
+      "fingerprint": "21ff086deb6a32e336b0",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in hsetexCommand",
+      "scenario": "ai-b31f930e1ab0",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #2509",
+      "fingerprint": "21ff086deb6a32e336b0",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

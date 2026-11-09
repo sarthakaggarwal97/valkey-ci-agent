@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.pipeline-parse
+deployment:
+  modes: [standalone]
+metadata:
+  description: Pipelined commands delivered in one packet parse, prefetch and execute
+    identically on both builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    prefetch_batch: {type: integer, minimum: 0, maximum: 128, default: 16}
+components:
+- use: valkey.action.commands
+  id: pipe
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    server_config: {prefetch-batch-max-size: {$ref: inputs.prefetch_batch}}
+    timeout_s: 15
+    commands:
+    - {raw: "*3\r\n$3\r\nSET\r\n$2\r\nk1\r\n$2\r\nv1\r\n*3\r\n$3\r\nSET\r\n$2\r\n\
+        k2\r\n$2\r\nv2\r\n*3\r\n$6\r\nAPPEND\r\n$2\r\nk1\r\n$1\r\nX\r\n*2\r\n$3\r\n\
+        GET\r\n$2\r\nk1\r\n*2\r\n$3\r\nGET\r\n$2\r\nk2\r\n*4\r\n$4\r\nMGET\r\n$2\r\
+        \nk1\r\n$2\r\nk2\r\n$5\r\nnokey\r\n*4\r\n$6\r\nEXISTS\r\n$2\r\nk1\r\n$2\r\n\
+        k2\r\n$5\r\nnokey\r\n*1\r\n$4\r\nPING\r\n", connection: main, expect: {equals: OK}}
+    - {read: true, connection: main, expect: {equals: [OK, 3, v1X, v2, [v1X, v2, null],
+          2, PONG]}}
+    - {raw: "*1\r\n$5\r\nMULTI\r\n*3\r\n$3\r\nSET\r\n$1\r\nm\r\n$1\r\n7\r\n*2\r\n\
+        $4\r\nINCR\r\n$1\r\nm\r\n*1\r\n$4\r\nEXEC\r\n", connection: tx, expect: {
+        equals: OK}}
+    - {read: true, connection: tx, expect: {equals: [QUEUED, QUEUED, [OK, 8]]}}
+    - {raw: "\r\n*1\r\n$4\r\nPING\r\n", connection: e1, expect: {equals: PONG}}
+    - {raw: "*-10\r\n*1\r\n$4\r\nPING\r\n", connection: e2, expect: {equals: PONG}}
+    - {raw: "PING\r\n*1\r\n$4\r\nping\r\n", connection: e3, expect: {equals: PONG}}
+    - {read: true, connection: e3, expect: {equals: [PONG]}}
+    - {raw: "*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\
+        \nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\
+        \n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\
+        \n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\n\
+        PING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n\
+        $4\r\nPING\r\n*1\r\n$4\r\nPING\r\n", connection: grow, expect: {equals: PONG}}
+    - {read: true, connection: grow, expect: {equals: [PONG, PONG, PONG, PONG, PONG,
+          PONG, PONG, PONG, PONG, PONG, PONG, PONG, PONG, PONG, PONG, PONG, PONG,
+          PONG, PONG]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pipe}

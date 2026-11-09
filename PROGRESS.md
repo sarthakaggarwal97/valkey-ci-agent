@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-09T00:51+00:00.
+Updated 2026-11-09T00:52+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1027 | 1480 | #2566 (2025-08-30) | 215 | 146.7 |
+| valkey-io/valkey | 1055 | 1452 | #2512 (2025-08-19) | 243 | 150.7 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 62 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.9 |
 | valkey-io/valkey-search | 655 | 14 | f8106e72e984 (2024-11-27) | 125 | 93.6 |
@@ -13,28 +13,28 @@ Updated 2026-11-09T00:51+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-08T22:41:07+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42513425064): 20 merge(s) tested, 10 without a code change.
+[2026-11-09T00:52:29+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42531463432): 20 merge(s) tested, 8 without a code change.
 
-- [valkey-io/valkey#2658](https://github.com/valkey-io/valkey/pull/2658) ([tests](tests/valkey/2658-80cec0a18/)): Minor fix for dual rdb channel connection conn error log (#2658): declined: The change only corrects which connection's last-error string is interpolated into a warning log message when the dual-channel RDB connection fails to connect (connGetLastError(server.repl_rdb_transfer_s) instead of server.repl_transfer_s). The surrounding error-handling control flow (conn
-- [valkey-io/valkey#2631](https://github.com/valkey-io/valkey/pull/2631) ([tests](tests/valkey/2631-d21d52985/)): Optimize skiplist random level generation logic (#2631): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2632](https://github.com/valkey-io/valkey/pull/2632) ([tests](tests/valkey/2632-298f7dae6/)): Adding unit tests for sha256 (#2632): declined: The change only adds unit tests: a new src/unit/test_sha256.c with three SHA-256 test vectors and their registration in src/unit/test_files.h. No server, command, replication, persistence, or tool code is modified — the SHA-256 implementation itself is untouched — so no runtime behavior ch
-- [valkey-io/valkey#2630](https://github.com/valkey-io/valkey/pull/2630) ([tests](tests/valkey/2630-8d562d26d/)): Fix closing slot migration pipe read (#2630): 0 of 3 test(s) reached the change, coverage 50%
-- [valkey-io/valkey#2533](https://github.com/valkey-io/valkey/pull/2533) ([tests](tests/valkey/2533-f6a0f8cfc/)): Separate RDB snapshotting from atomic slot migration (#2533): 8 of 18 test(s) reached the change, coverage 78%; check, not reproduced (recorded); check, not reproduced (recorded); crash, introduced and since fixed (recorded); crash, fixed by #2533 (recorded)
-- [valkey-io/valkey#2615](https://github.com/valkey-io/valkey/pull/2615) ([tests](tests/valkey/2615-80bbbcf6f/)): Fix memory leak in deferred reply buffer (#2615): declined: The fix only adds a free method to the deferred reply list in initDeferredReplyBuffer(), which is created solely when a module has subscribed to keyspace notifications (moduleNotifyKeyspaceSubscribersCnt() > 0). No installed experiment loads a module, MODULE LOAD is refused in command sequ
-- [valkey-io/valkey#2602](https://github.com/valkey-io/valkey/pull/2602) ([tests](tests/valkey/2602-93d7ccab0/)): Fix accounting for dual channel RDB bytes in replication stats (#2602): 2 of 5 test(s) reached the change, coverage 92%
-- [valkey-io/valkey#2593](https://github.com/valkey-io/valkey/pull/2593) ([tests](tests/valkey/2593-2b7d5f776/)): Make modules opt-in to atomic slot migration and add server events (#2593): 6 of 6 test(s) reached the change, coverage 94%; [crash, predates #2593](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/87)
-- [valkey-io/valkey#2596](https://github.com/valkey-io/valkey/pull/2596) ([tests](tests/valkey/2596-9b11d3d9e/)): Evict client only when limit is breached (#2596): declined: The change is a single `>=`-to-`>` edit in evictClients()'s loop guard; the old and new builds differ only when the summed NORMAL+PUBSUB client memory exactly equals the eviction limit (otherwise both evict the same clients or neither does). That boundary is measure-zero and not constructi
-- [valkey-io/valkey#2595](https://github.com/valkey-io/valkey/pull/2595) ([tests](tests/valkey/2595-3213f48fd/)): Increase frequency of time check during fields active expiration (#2595): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2583](https://github.com/valkey-io/valkey/pull/2583) ([tests](tests/valkey/2583-cef8822f6/)): valkey-cli: Add word-jump navigation (Alt/Option/Ctrl + ←/→) (#2583): declined: The change is confined to valkey-cli's interactive line editor (linenoise word-jump navigation and extended CSI escape parsing) plus a fix to the linenoise example program, which is not compiled into any shipped binary. The new code runs only inside linenoiseEdit, which is reached only whe
-- [valkey-io/valkey#2429](https://github.com/valkey-io/valkey/pull/2429) ([tests](tests/valkey/2429-3b13a7cd1/)): Add cluster-announce-client-(port|tls-port) configs (#2429): 2 of 3 test(s) reached the change, coverage 91%; [check, appeared after #2429](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/107); check, introduced and since fixed (recorded)
-- [valkey-io/valkey#2573](https://github.com/valkey-io/valkey/pull/2573) ([tests](tests/valkey/2573-d9382bd9f/)): ARM Neon SIMD optimization for hashtable findBucket() (#2573): 0 of 9 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2543](https://github.com/valkey-io/valkey/pull/2543) ([tests](tests/valkey/2543-9d10abfbd/)): Relaxed RDB check for foreign RDB formats (#2543): 6 of 8 test(s) reached the change, coverage 67%
-- [valkey-io/valkey#2546](https://github.com/valkey-io/valkey/pull/2546) ([tests](tests/valkey/2546-811a64407/)): Un-deprecate commands (#2546): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#2571](https://github.com/valkey-io/valkey/pull/2571) ([tests](tests/valkey/2571-971cdb783/)): Don't use AVX2 instructions if the CPU don't support it (#2571): declined: The fix adds a runtime __builtin_cpu_supports("avx2") check before dispatching to popcountAVX2 in serverPopcount. It changes behaviour only on x86-64 CPUs that lack AVX2, where the parent build would execute illegal instructions and die with SIGILL on BITCOUNT of a 32+ byte string. On the 
-- [valkey-io/valkey#2572](https://github.com/valkey-io/valkey/pull/2572) ([tests](tests/valkey/2572-47d2203c1/)): Store number of keys with volatile items per slot in RDB aux field and pre-size hashtables on load (#2572): 0 of 5 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2215](https://github.com/valkey-io/valkey/pull/2215) ([tests](tests/valkey/2215-eebed8842/)): Remove deny_blocking check in moduleBlockClient, cleanup code and doc (#2215): 4 of 4 test(s) reached the change, coverage 100%; crash, fixed by #2215 (recorded)
-- [valkey-io/valkey#2237](https://github.com/valkey-io/valkey/pull/2237) ([tests](tests/valkey/2237-b44de37b7/)): New module API event for tracking authentication attempts (#2237): 3 of 6 test(s) reached the change, coverage 60%; [check, introduced by #2237](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/106)
-- [valkey-io/valkey#2358](https://github.com/valkey-io/valkey/pull/2358) ([tests](tests/valkey/2358-c039b691c/)): Fix module context object re-usage in scripting engines (#2358): declined: no proposed test validated
+- [valkey-io/valkey#2553](https://github.com/valkey-io/valkey/pull/2553) ([tests](tests/valkey/2553-d6e011f95/)): Reduce active defrag test latency by lowering hit threshold (#2553): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2565](https://github.com/valkey-io/valkey/pull/2565) ([tests](tests/valkey/2565-6774d173c/)): Fix the issue of incorrect commandlog metrics in the script (#2565): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2458](https://github.com/valkey-io/valkey/pull/2458) ([tests](tests/valkey/2458-3db75f555/)): Reset cluster related stats in CONFIG RESETSTATS (#2458): 2 of 2 test(s) reached the change, coverage 100%; [check, appeared after #2458](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/108); check, introduced and since fixed (recorded); check, introduced and since fixed (recorded)
+- [valkey-io/valkey#2494](https://github.com/valkey-io/valkey/pull/2494) ([tests](tests/valkey/2494-88cd2086a/)): Split SLOT_EXPORT_AUTHENTICATING into SEND and READ to avoid synchronous reading of auth response (#2494): 4 of 6 test(s) reached the change, coverage 80%
+- [valkey-io/valkey#2547](https://github.com/valkey-io/valkey/pull/2547) ([tests](tests/valkey/2547-39fade42d/)): Do not migrate function in new atomic slot migration (#2547): 3 of 3 test(s) reached the change; check, introduced and since fixed (recorded)
+- [valkey-io/valkey#2560](https://github.com/valkey-io/valkey/pull/2560) ([tests](tests/valkey/2560-682fc0b41/)): Remove the trailing chars of the --cluster reshard log message in valkey-cli (#2560): declined: The change only removes the trailing ': ' from the informational 'Moving slot ...' progress message clusterManagerMoveSlot() prints on valkey-cli's stdout during --cluster reshard/fix; no server code, command reply, data path, or exit status changes, so there is no behavior a server-side e
+- [valkey-io/valkey#2548](https://github.com/valkey-io/valkey/pull/2548) ([tests](tests/valkey/2548-06cefc181/)): Attempt to fix sub-replica getting out of sync (#2548): 0 of 5 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2541](https://github.com/valkey-io/valkey/pull/2541) ([tests](tests/valkey/2541-3086e61d4/)): Update reply schema for LMOVE and BLMOVE (#2541): declined: The change edits only the reply_schema metadata in lmove.json and blmove.json to document the existing nil reply when the source key is missing. No C code or runtime behaviour changes: LMOVE/BLMOVE reply identically on the parent and the change, so a compared sequence would find no differe
+- [valkey-io/valkey#2530](https://github.com/valkey-io/valkey/pull/2530) ([tests](tests/valkey/2530-9d682bad0/)): bio.c: Organize all worker data in a struct (#2530): declined: The change is a mechanical refactor of bio.c that gathers the four parallel per-worker arrays (thread id, mutex, condvar, job list) into one struct array, plus __thread→_Thread_local spelling swaps in io_threads.c, networking.c and vset.c. Every lock/condvar/queue access maps 1:1 to the sa
+- [valkey-io/valkey#2538](https://github.com/valkey-io/valkey/pull/2538) ([tests](tests/valkey/2538-9aeab8ccb/)): Consistently use static_assert across code (#2538): declined: The change only alters how the static_assert fallback macro is defined (removing duplicate per-file fallbacks and switching the header fallback from the extern-negative-array trick to C11 _Static_assert). static_assert is a compile-time construct that generates no runtime code: a passing a
+- [valkey-io/valkey#2497](https://github.com/valkey-io/valkey/pull/2497) ([tests](tests/valkey/2497-8c5554799/)): Don't allow slot migration to myself node (#2497): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#2092](https://github.com/valkey-io/valkey/pull/2092) ([tests](tests/valkey/2092-09fb436cf/)): Optimize pipelining by parsing and prefetching multiple commands (#2092): 0 of 19 test(s) reached the change, coverage 98%; [check, predates #2092](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/109)
+- [valkey-io/valkey#2522](https://github.com/valkey-io/valkey/pull/2522) ([tests](tests/valkey/2522-d2eee78a1/)): Module API: Add READONLY flag to ClientInfo.flags output structure (#2522): 2 of 2 test(s) reached the change, coverage 100%; check, not reproduced (recorded); check, introduced and since fixed (recorded); check, not reproduced (recorded); check, introduced and since fixed (recorded)
+- [valkey-io/valkey#2527](https://github.com/valkey-io/valkey/pull/2527) ([tests](tests/valkey/2527-b8357e5be/)): Fix slot range lists overlap to rewind the nested list again  (#2527): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey@2db4eeb1fcd8](https://github.com/valkey-io/valkey/commit/2db4eeb1fcd8316a792476c3023e705be24fdd70) ([tests](tests/valkey/2db4eeb1f/)): Remove temporary build correction for RDMA and libvalkey 0.1.0: declined: The change is build-system only: it removes a temporary CMake link-order workaround (explicitly linking valkey::valkey after valkey::valkey_rdma) that was needed for a bug in libvalkey 0.1.0, now fixed upstream. No source file, command, reply, replication, cluster, or persistence behaviour
+- [valkey-io/valkey@11780db513b1](https://github.com/valkey-io/valkey/commit/11780db513b14034b3a314d4d4e5f52a3be44477) ([tests](tests/valkey/11780db51/)): Update deps/libvalkey to version 0.2.1: 0 of 3 test(s) reached the change
+- [valkey-io/valkey#2514](https://github.com/valkey-io/valkey/pull/2514) ([tests](tests/valkey/2514-84fd62641/)): Refactor scanLaterList to fix latency issue (#2514): 0 of 5 test(s) reached the change, coverage 75%
+- [valkey-io/valkey#2526](https://github.com/valkey-io/valkey/pull/2526) ([tests](tests/valkey/2526-c6c91d152/)): Fix assumptions that pthread functions set errno (#2526): declined: The change only corrects the error string logged when pthread_create or pthread_sigmask fails (using the returned error code instead of errno). Control flow is unchanged: pthread_create failure still exits(1), pthread_sigmask failure still only logs a warning. These failure paths fire only
+- [valkey-io/valkey#2509](https://github.com/valkey-io/valkey/pull/2509) ([tests](tests/valkey/2509-23112fad8/)): fix hsetex handling of wrong number of fields (#2509): 2 of 2 test(s) reached the change, coverage 100%; crash, fixed by #2509 (recorded)
+- [valkey-io/valkey#2523](https://github.com/valkey-io/valkey/pull/2523) ([tests](tests/valkey/2523-39d5c6e6e/)): Fix vset unittest compilation warning for bad signedness comparison (#2523): declined: The change edits only src/unit/test_vset.c, changing a unit-test loop counter from int to size_t to fix a compiler signedness warning. It is a build/test hygiene fix with no change to any server code path, command behaviour, reply, or data handling, so no fuzzer scenario can reach or exerc
 
 ### valkey-io/valkey-bloom
 
@@ -67,11 +67,11 @@ Updated 2026-11-09T00:51+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 618 of 900 tested (69%)
-- Changed-line coverage: median 100% of 466 merge(s) measured, 36 under 50%
-- Recall: 168 parents flagged of 249 fix merges
-- Claude: $1155.92 in the last 24 hours, $6557.52 in the last 7 days, $6557.52 in all
-- Issues filed: 58
+- Merges whose tests reached the change: 626 of 913 tested (69%)
+- Changed-line coverage: median 100% of 477 merge(s) measured, 36 under 50%
+- Recall: 171 parents flagged of 254 fix merges
+- Claude: $1242.82 in the last 24 hours, $6644.42 in the last 7 days, $6644.42 in all
+- Issues filed: 60
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/102
@@ -80,6 +80,8 @@ Updated 2026-11-09T00:51+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/105
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/106
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/107
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/108
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/109
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42

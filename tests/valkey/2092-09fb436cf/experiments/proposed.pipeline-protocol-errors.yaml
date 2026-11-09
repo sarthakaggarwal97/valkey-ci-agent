@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.pipeline-protocol-errors
+deployment:
+  modes: [standalone]
+metadata:
+  description: Malformed, unknown, bad-arity, QUIT, MULTI and blocking commands inside
+    single pipelined packets, replies compared with the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: pipe
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {raw: "*1\r\n$4\r\nPING\r\n*7\r\n$7\r\nNOTACMD\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\
+        \nc\r\n$1\r\nd\r\n$1\r\ne\r\n$1\r\nf\r\n*1\r\n$3\r\nGET\r\n*2\r\n$3\r\nGET\r\
+        \n$2\r\nk1\r\n", connection: e1, expect: {equals: PONG}}
+    - {read: true, connection: e1}
+    - {raw: "*1\r\n$4\r\nPING\r\n*99999999999999999999\r\n", connection: e2, expect: {
+        equals: PONG}}
+    - {read: true, connection: e2}
+    - {raw: "*1\r\n$4\r\nPING\r\n*1\r\n+OK\r\n", connection: e3, expect: {equals: PONG}}
+    - {read: true, connection: e3}
+    - {raw: "*1\r\n$4\r\nPING\r\n*2\r\n$3\r\nGET\r\n$abc\r\n", connection: e4, expect: {
+        equals: PONG}}
+    - {read: true, connection: e4}
+    - {raw: "*1\r\n$4\r\nPING\r\n*3\r\n$3\r\nSET\r\n$1\r\nk\r\n$99999999999999\r\n",
+      connection: e5, expect: {equals: PONG}}
+    - {read: true, connection: e5}
+    - {raw: "*-10\r\n*1\r\n$4\r\nPING\r\n", connection: e6, expect: {equals: PONG}}
+    - {raw: "\r\n*1\r\n$4\r\nPING\r\n", connection: e7, expect: {equals: PONG}}
+    - {raw: "*1\r\n$4\r\nPING\r\nECHO hi\r\n*2\r\n$4\r\nECHO\r\n$2\r\nyo\r\n", connection: e8,
+      expect: {equals: PONG}}
+    - {read: true, connection: e8}
+    - {raw: "*2\r\n$3\r\nGET\r\n$2\r\nk1\r\n*1\r\n$4\r\nQUIT\r\n*2\r\n$3\r\nGET\r\n\
+        $2\r\nk1\r\n*2\r\n$3\r\nGET\r\n$2\r\nk1\r\n", connection: e9, expect: {equals: v1}}
+    - {read: true, connection: e9}
+    - {raw: "*1\r\n$4\r\nEXEC\r\n*1\r\n$5\r\nMULTI\r\n*3\r\n$3\r\nSET\r\n$2\r\nk2\r\
+        \n$2\r\nv2\r\n*1\r\n$4\r\nEXEC\r\n*2\r\n$3\r\nGET\r\n$2\r\nk2\r\n", connection: e10,
+      expect: {error: "without MULTI"}}
+    - {read: true, connection: e10}
+    - {raw: "*3\r\n$3\r\nSET\r\n$2\r\nk3\r\n$2\r\nv3\r\n*3\r\n$5\r\nBLPOP\r\n$6\r\n\
+        nolist\r\n$3\r\n0.1\r\n*2\r\n$3\r\nGET\r\n$2\r\nk3\r\n", connection: e11,
+      expect: {equals: OK}}
+    - {command: [GET, k3], expect: {equals: v3}}
+    - {read: true, connection: e11}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [pipe.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pipe}

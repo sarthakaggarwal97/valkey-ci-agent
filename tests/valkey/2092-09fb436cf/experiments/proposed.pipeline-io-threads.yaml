@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.pipeline-io-threads
+deployment:
+  modes: [standalone]
+metadata:
+  description: Pipelined packets parsed, prepared and key-prefetched by I/O threads,
+    with command-queue growth and shrink, compared with the parent build
+inputs:
+  properties:
+    prefetch: {type: integer, minimum: 0, maximum: 128, default: 16}
+components:
+- use: valkey.action.commands
+  id: iopipe
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      io-threads: 4
+      events-per-io-thread: 0
+      prefetch-batch-max-size: {$ref: inputs.prefetch}
+    timeout_s: 15
+    commands:
+    - {command: [SET, k1, AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA], expect: {
+        equals: OK}}
+    - {command: [SET, k2, AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA], expect: {
+        equals: OK}}
+    - {command: [SET, k3, AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA], expect: {
+        equals: OK}}
+    - {command: [SET, k4, AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA], expect: {
+        equals: OK}}
+    - {raw: "*2\r\n$3\r\nGET\r\n$2\r\nk1\r\n*2\r\n$3\r\nGET\r\n$2\r\nk2\r\n*2\r\n\
+        $3\r\nGET\r\n$2\r\nk3\r\n*2\r\n$3\r\nGET\r\n$2\r\nk4\r\n*1\r\n$3\r\nBAD\r\n\
+        *2\r\n$3\r\nGET\r\n$2\r\nkx\r\n*2\r\n$3\r\nGET\r\n$2\r\nk1\r\n*2\r\n$3\r\n\
+        GET\r\n$2\r\nk2\r\n*2\r\n$3\r\nGET\r\n$2\r\nk3\r\n*2\r\n$3\r\nGET\r\n$2\r\n\
+        k4\r\n*2\r\n$3\r\nGET\r\n$2\r\nk1\r\n*2\r\n$3\r\nGET\r\n$2\r\nk2\r\n*2\r\n\
+        $3\r\nGET\r\n$2\r\nk3\r\n*2\r\n$3\r\nGET\r\n$2\r\nk4\r\n*2\r\n$3\r\nGET\r\n\
+        $2\r\nk1\r\n*2\r\n$3\r\nGET\r\n$2\r\nk2\r\n*2\r\n$3\r\nGET\r\n$2\r\nk3\r\n\
+        *2\r\n$3\r\nGET\r\n$2\r\nk4\r\n", connection: p1, expect: {equals: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA}}
+    - {read: true, connection: p1}
+    - {raw: "*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\
+        \nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\
+        \n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\
+        \n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\n\
+        PING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n\
+        $4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n\
+        *1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\
+        \n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\n\
+        PING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n\
+        $4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n", connection: p2, expect: {
+        equals: PONG}}
+    - {read: true, connection: p2}
+    - {raw: "*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n", connection: p2,
+      expect: {equals: PONG}}
+    - {read: true, connection: p2}
+    - {command: [DBSIZE], expect: {equals: 4}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [iopipe.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: iopipe}

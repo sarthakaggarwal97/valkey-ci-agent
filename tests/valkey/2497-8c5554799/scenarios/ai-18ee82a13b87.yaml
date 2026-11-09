@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 09fb436cf0e8..8c55547999a9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-18ee82a13b87
+seed: 2498
+experiment:
+  id: proposed.migrateslots-to-self
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

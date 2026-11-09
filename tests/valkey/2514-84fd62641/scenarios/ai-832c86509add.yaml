@@ -1,0 +1,21 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c6c91d152fb7..84fd62641900.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-832c86509add
+seed: 202
+experiment:
+  id: proposed.defrag-biglist-churn
+  inputs:
+    mutation_rate: 300
+    value_size: 64
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    active-defrag-ignore-bytes: 1
+    active-defrag-threshold-lower: 0
+    active-defrag-cycle-min: 90
+    active-defrag-cycle-max: 99
+    active-defrag-cycle-us: 100000
+    active-defrag-max-scan-fields: 1
+    list-max-listpack-size: 16

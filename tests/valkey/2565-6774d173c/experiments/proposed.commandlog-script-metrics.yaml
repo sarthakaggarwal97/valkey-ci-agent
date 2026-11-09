@@ -1,0 +1,73 @@
+extends: [valkey.liveness]
+id: proposed.commandlog-script-metrics
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Commandlog entries for commands run inside EVAL/FCALL must use the executing (fake)
+    client's duration and per-command network byte counters, not the script caller's.
+    On the parent, inner commands inherit the caller's metrics: duration 0 (never
+    slow-logged), input bytes equal to the whole EVAL request (every inner command
+    of a large EVAL floods the large-request log), output bytes 0 (large inner replies
+    never logged).
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cmdlog
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      commandlog-execution-slower-than: -1
+      commandlog-request-larger-than: -1
+      commandlog-reply-larger-than: -1
+    commands:
+    - {command: [CONFIG, SET, commandlog-reply-larger-than, 100], expect: {equals: OK}}
+    - {command: [SET, bigkey, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      expect: {equals: OK}}
+    - {command: [EVAL, "redis.call('GET', KEYS[1]) return 0", 1, bigkey], expect: {
+        equals: 0}}
+    - {command: [COMMANDLOG, LEN, large-reply], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [COMMANDLOG, GET, -1, large-reply], compare: skip}
+    - {command: [CONFIG, SET, commandlog-reply-larger-than, -1, commandlog-request-larger-than,
+        100], expect: {equals: OK}}
+    - {command: [EVAL, "redis.call('SET', KEYS[1], 'v') return 0 --pad_pad_pad_pad_pad_pad_pad_pad_pad_pad_pad_pad",
+        1, k1], expect: {equals: 0}}
+    - {command: [COMMANDLOG, LEN, large-request], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [COMMANDLOG, RESET, large-request], expect: {equals: OK}}
+    - {command: [EVAL, "for i=1,500 do redis.call('RPUSH', KEYS[1], 'x') end return\
+          \ 0 --pad_pad_pad_pad_pad_pad_pad_pad", 1, list1], expect: {equals: 0}}
+    - {command: [COMMANDLOG, LEN, large-request], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, -1], expect: {equals: OK}}
+    - {command: [EVAL, "for i=1,100000 do redis.call('RPUSH', KEYS[1], '0123456789')\
+          \ end return 0", 1, biglist], expect: {equals: 0}}
+    - {command: [CONFIG, SET, commandlog-execution-slower-than, 1000], expect: {equals: OK}}
+    - {command: [EVAL, "redis.call('LRANGE', KEYS[1], 0, -1) return 0", 1, biglist],
+      expect: {equals: 0}}
+    - {command: [COMMANDLOG, LEN, slow], expect_difference: true, expect: {min: 2}}
+    - {command: [COMMANDLOG, GET, -1, slow], compare: skip}
+    - {command: [CONFIG, SET, commandlog-execution-slower-than, -1, commandlog-reply-larger-than,
+        100], expect: {equals: OK}}
+    - {command: [COMMANDLOG, RESET, large-reply], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=cmdlogtest\nredis.register_function('readbig',\
+          \ function(keys, args) redis.call('GET', keys[1]) return 0 end)"], expect: {
+        equals: cmdlogtest}}
+    - {command: [FCALL, readbig, 1, bigkey], expect: {equals: 0}}
+    - {command: [COMMANDLOG, LEN, large-reply], expect_difference: true, expect: {
+        equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cmdlog.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cmdlog}

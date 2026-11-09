@@ -1,0 +1,46 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "09fb436cf0e8804b1e16c8d83ccf9c27775e8742",
+  "parent": "ac515159a1e79ada6e43ed49c9ed9cb11178c50d",
+  "pr": 2092,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize pipelining by parsing and prefetching multiple commands (#2092)",
+  "date": "2025-08-22",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 19,
+  "proven": 0,
+  "hunted": 19,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 199,
+    "executed": 196,
+    "percent": 98,
+    "uncovered": [
+      "src/networking.c:3429",
+      "src/networking.c:3476",
+      "src/networking.c:3551"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 8.0022,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 9 (PING) replies otherwise with resp 3: null, not {\"reply\":\"PONG\"}",
+      "scenario": "ai-02febeccc112",
+      "seed": 103,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #2092",
+      "fingerprint": "02ec73aaec4ad373c99d",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/109"
+    }
+  ],
+  "recorded": []
+}

@@ -1,0 +1,94 @@
+extends: [valkey.base]
+id: proposed.defrag-biglist-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Active defrag of large multi-node quicklists queued through defragLater into scanLaterList:
+    the cycle suspends and resumes via the _AD bookmark while the lists are popped,
+    drained, deleted and rebuilt and the key-value workload churns allocations. INFO
+    active_defrag_key_hits+misses (incremented only by the defrag-later path) proves
+    the changed code ran; every list must stay byte-identical and the server must
+    not crash.
+components:
+- use: valkey.action.commands
+  id: biglists
+  config:
+    timeout_s: 60
+    commands:
+    - command: [CONFIG, SET, activedefrag, "no"]
+      expect: {equals: OK}
+    - command: [EVAL, "for i=1,30000 do redis.call('RPUSH', KEYS[1], 'v'..i) end return\
+          \ redis.call('LLEN', KEYS[1])", "1", "biglist:1"]
+      expect: {equals: 30000}
+    - command: [EVAL, "for i=1,30000 do redis.call('RPUSH', KEYS[1], 'v'..i) end return\
+          \ redis.call('LLEN', KEYS[1])", "1", "biglist:2"]
+      expect: {equals: 30000}
+    - command: [EVAL, "for i=1,30000 do redis.call('RPUSH', KEYS[1], 'v'..i) end return\
+          \ redis.call('LLEN', KEYS[1])", "1", "biglist:3"]
+      expect: {equals: 30000}
+    - command: [EVAL, "for i=1,30000 do redis.call('RPUSH', KEYS[1], 'v'..i) end return\
+          \ redis.call('LLEN', KEYS[1])", "1", "biglist:4"]
+      expect: {equals: 30000}
+    - command: [EVAL, "for i=1,30000 do redis.call('RPUSH', KEYS[1], 'v'..i) end return\
+          \ redis.call('LLEN', KEYS[1])", "1", "biglist:5"]
+      expect: {equals: 30000}
+    - command: [EVAL, "for i=1,30000 do redis.call('RPUSH', KEYS[1], 'v'..i) end return\
+          \ redis.call('LLEN', KEYS[1])", "1", "biglist:6"]
+      expect: {equals: 30000}
+    - command: [CONFIG, SET, activedefrag, "yes"]
+      expect: {equals: OK}
+    - command: [EVAL, "local s=redis.call('INFO','stats') local h=tonumber(string.match(s,'active_defrag_key_hits:(%d+)'))\
+          \ or 0 local m=tonumber(string.match(s,'active_defrag_key_misses:(%d+)'))\
+          \ or 0 return h+m", "0"]
+      expect: {min: 1}
+      wait_s: 60
+    - command: [DEL, "biglist:1"]
+      expect: {equals: 1}
+    - command: [EVAL, "for i=1,20000 do redis.call('RPUSH', KEYS[1], 'r'..i) end return\
+          \ redis.call('LLEN', KEYS[1])", "1", "biglist:1"]
+      expect: {equals: 20000}
+    - command: [EVAL, "redis.call('LPOP', KEYS[1], 15000) return redis.call('LLEN',\
+          \ KEYS[1])", "1", "biglist:2"]
+      expect: {equals: 15000}
+    - command: [EVAL, "while redis.call('LLEN', KEYS[1]) > 0 do redis.call('RPOP',\
+          \ KEYS[1], 1000) end return redis.call('EXISTS', KEYS[1])", "1", "biglist:3"]
+      expect: {equals: 0}
+    - command: [EVAL, "for i=1,20000 do redis.call('RPUSH', KEYS[1], 'w'..i) end return\
+          \ redis.call('LLEN', KEYS[1])", "1", "biglist:4"]
+      expect: {equals: 50000}
+    - command: [CONFIG, SET, activedefrag, "no"]
+      expect: {equals: OK}
+    - command: [CONFIG, SET, activedefrag, "yes"]
+      expect: {equals: OK}
+    - command: [EVAL, "local s=redis.call('INFO','stats') local h=tonumber(string.match(s,'active_defrag_key_hits:(%d+)'))\
+          \ or 0 local m=tonumber(string.match(s,'active_defrag_key_misses:(%d+)'))\
+          \ or 0 return h+m", "0"]
+      expect: {min: 3}
+      wait_s: 60
+    - command: [EVAL, "local t=redis.call('LRANGE',KEYS[1],0,-1) if #t~=20000 then\
+          \ return -1 end local bad=0 for i=1,20000 do if t[i]~='r'..i then bad=bad+1\
+          \ end end return bad", "1", "biglist:1"]
+      expect: {equals: 0}
+    - command: [EVAL, "local t=redis.call('LRANGE',KEYS[1],0,-1) if #t~=15000 then\
+          \ return -1 end local bad=0 for i=1,15000 do if t[i]~='v'..(i+15000) then\
+          \ bad=bad+1 end end return bad", "1", "biglist:2"]
+      expect: {equals: 0}
+    - command: [EXISTS, "biglist:3"]
+      expect: {equals: 0}
+    - command: [EVAL, "local t=redis.call('LRANGE',KEYS[1],0,-1) if #t~=50000 then\
+          \ return -1 end local bad=0 for i=1,30000 do if t[i]~='v'..i then bad=bad+1\
+          \ end end for i=30001,50000 do if t[i]~='w'..(i-30000) then bad=bad+1 end\
+          \ end return bad", "1", "biglist:4"]
+      expect: {equals: 0}
+    - command: [EVAL, "local t=redis.call('LRANGE',KEYS[1],0,-1) if #t~=30000 then\
+          \ return -1 end local bad=0 for i=1,30000 do if t[i]~='v'..i then bad=bad+1\
+          \ end end return bad", "1", "biglist:5"]
+      expect: {equals: 0}
+    - command: [EVAL, "local t=redis.call('LRANGE',KEYS[1],0,-1) if #t~=30000 then\
+          \ return -1 end local bad=0 for i=1,30000 do if t[i]~='v'..i then bad=bad+1\
+          \ end end return bad", "1", "biglist:6"]
+      expect: {equals: 0}
+required_events: [biglists.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: biglists}

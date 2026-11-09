@@ -1,0 +1,37 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "39fade42d11a22d4a13beb98d6e36adaa12ecba3",
+  "parent": "682fc0b4197311a2bc0ea2512151ee29a2b1d327",
+  "pr": 2547,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Do not migrate function in new atomic slot migration (#2547)",
+  "date": "2025-08-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 8.9729,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "lost-data: node 1 came back from a restart before command 4 with DEBUG DIGEST {\"reply\":\"0000000000000000000000000000000000000000\"}, not {\"reply\":\"35fdb3c031d7aa91939bd95cd5974331cee34994\"}",
+      "scenario": "ai-e54ffa750c49",
+      "seed": 68231,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "e26e9a874f358e64033d",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

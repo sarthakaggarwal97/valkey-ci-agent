@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cf90acbc6137..88cd2086aef2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-184b8a01bd2e
+seed: 2495
+experiment:
+  id: proposed.slot-export-auth-async
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

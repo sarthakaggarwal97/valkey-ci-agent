@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 39d5c6e6ee46..23112fad87e6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b31f930e1ab0
+seed: 2
+experiment:
+  id: proposed.hsetex-wrong-field-count
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6774d173c4a3..d6e011f955b1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-cc5e545a093d
+seed: 202
+experiment:
+  id: proposed.active-defrag-under-writes
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
+  server_config:
+    active-defrag-threshold-lower: 1
+    active-defrag-ignore-bytes: 1
+    active-defrag-cycle-min: 5
+    active-defrag-cycle-max: 10
+    active-defrag-cycle-us: 50

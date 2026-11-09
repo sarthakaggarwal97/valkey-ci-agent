@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3086e61d4b06a81602fc74163eb7d4eb6b6bfe41",
+  "parent": "9d682bad0bb731de8e21e15e4a1795c73aee9d0d",
+  "pr": 2541,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update reply schema for LMOVE and BLMOVE (#2541)",
+  "date": "2025-08-26",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2317,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only the reply_schema metadata in lmove.json and blmove.json to document the existing nil reply when the source key is missing. No C code or runtime behaviour changes: LMOVE/BLMOVE reply identically on the parent and the change, so a compared sequence would find no difference and there is nothing to exercise."
+}

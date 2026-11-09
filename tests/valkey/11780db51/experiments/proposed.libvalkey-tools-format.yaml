@@ -1,0 +1,88 @@
+extends: [valkey.liveness]
+id: proposed.libvalkey-tools-format
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    valkey-cli and valkey-benchmark of the libvalkey-0.2.1 build and of the parent
+    build, compared on commands whose RESP framing (the *argc and $len headers written
+    by sdscatfmt) crosses the digit boundaries of the rewritten ll2string/ull2string
+    in libvalkey's sds.c. No difference is intended by the change, so no run is marked
+    expect_difference; the candidate must meet every expect and any divergence is
+    recorded.
+inputs:
+  properties:
+    resp_flag:
+      type: string
+      enum: ["-2", "-3"]
+      default: "-2"
+    pipeline:
+      type: integer
+      minimum: 1
+      maximum: 64
+      default: 1
+components:
+- use: valkey.action.tools
+  id: fmt
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 120
+    runs:
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, SET, k9, aaaaaaaaa],
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, STRLEN, k9],
+      expect: {stdout: {equals: "9\n"}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, SET, k10, bbbbbbbbbb],
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, STRLEN, k10],
+      expect: {stdout: {equals: "10\n"}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, SET, k99, ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc],
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, STRLEN, k99],
+      expect: {stdout: {equals: "99\n"}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, SET, k100, dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd],
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, STRLEN, k100],
+      expect: {stdout: {equals: "100\n"}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, SET, k101, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee],
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, STRLEN, k101],
+      expect: {stdout: {equals: "101\n"}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, GET, k100], expect: {
+        stdout: {equals: "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd\n"}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, RPUSH, biglist,
+        e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13, e14, e15, e16, e17,
+        e18, e19, e20, e21, e22, e23, e24, e25, e26, e27, e28, e29, e30, e31, e32,
+        e33, e34, e35, e36, e37, e38, e39, e40, e41, e42, e43, e44, e45, e46, e47,
+        e48, e49, e50, e51, e52, e53, e54, e55, e56, e57, e58, e59, e60, e61, e62,
+        e63, e64, e65, e66, e67, e68, e69, e70, e71, e72, e73, e74, e75, e76, e77,
+        e78, e79, e80, e81, e82, e83, e84, e85, e86, e87, e88, e89, e90, e91, e92,
+        e93, e94, e95, e96, e97, e98, e99, e100], expect: {stdout: {equals: "100\n"}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, LLEN, biglist],
+      expect: {stdout: {equals: "100\n"}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, LRANGE, biglist,
+        0, -1], expect: {stdout: {contains: "e100\n"}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, INCRBY, ctr,
+        9223372036854775807], expect: {stdout: {equals: "9223372036854775807\n"}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, DECRBY, ctr,
+        9223372036854775806], expect: {stdout: {equals: "1\n"}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, ZADD, z, 1.5,
+        m], expect: {stdout: {equals: "1\n"}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, ZSCORE, z, m],
+      expect: {stdout: {equals: "1.5\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, set, -n, 200, -c, 2, -P, {$ref: inputs.pipeline},
+        -d, 999, -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, set, -n, 200, -c, 2, -P, {$ref: inputs.pipeline},
+        -d, 1000, -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, set, -n, 200, -c, 2, -P, {$ref: inputs.pipeline},
+        -d, 99999, -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, set, -n, 200, -c, 2, -P, {$ref: inputs.pipeline},
+        -d, 100000, -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, set, -n, 50, -c, 2, -P, {$ref: inputs.pipeline},
+        -d, 1000000, -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [{$ref: inputs.resp_flag}, -p, $port, PING], expect: {
+        exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+required_events: [fmt.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: fmt}

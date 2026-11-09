@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "84fd6264190094c045de488308b905853683d135",
+  "parent": "c6c91d152fb706da9c7d40b7ed5dfd7216a88b5d",
+  "pr": 2514,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Refactor scanLaterList to fix latency issue (#2514)",
+  "date": "2025-08-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 8,
+    "executed": 6,
+    "percent": 75,
+    "uncovered": [
+      "src/defrag.c:389",
+      "src/defrag.c:406"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 13.5634,
+  "findings": [],
+  "recorded": []
+}

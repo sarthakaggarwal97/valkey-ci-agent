@@ -1,0 +1,20 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c6c91d152fb7..84fd62641900.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-db2180512cc8
+seed: 7001
+experiment:
+  id: proposed.defrag-list-bookmark-stale
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000
+  server_config:
+    enable-debug-command: 'yes'
+    activedefrag: 'yes'
+    active-defrag-ignore-bytes: 1
+    active-defrag-threshold-lower: 0
+    active-defrag-cycle-min: 99
+    active-defrag-cycle-max: 99
+    active-defrag-cycle-us: 1
+    active-defrag-max-scan-fields: 1
+    list-max-listpack-size: 1

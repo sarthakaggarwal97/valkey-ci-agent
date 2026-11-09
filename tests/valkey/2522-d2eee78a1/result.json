@@ -1,0 +1,84 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d2eee78a151884518441572c53fc378bf6689e81",
+  "parent": "85a0a017d28c1471885a0e10c3c9c3be64c3e4e8",
+  "pr": 2522,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Module API: Add READONLY flag to ClientInfo.flags output structure (#2522)",
+  "date": "2025-08-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.8349,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 5 (EXEC) replies otherwise with resp 3: {\"reply\":[[\"flags\",\"::::unixsocket:multi:readonly:::::authenticated:ever_authenticated:\",\"id\",4,\"addr\",\"/tmp/vfc-37xwl2km/s.sock:0\",\"port\",0,\"db\",0]]}, not {\"reply\":[[\"flags\",\"::::unixsocket:multi:readonly:::::authenticated:ever_authe",
+      "scenario": "ai-0494b1a4858f",
+      "seed": 1,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "628576ae4e2597c0b15f",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 5 (EXEC) replies otherwise with resp 3: {\"reply\":[[\"flags\",\"::::unixsocket:multi:readonly\",\"id\",4,\"addr\",\"/tmp/vfc-udg445z8/s.sock:0\",\"port\",0,\"db\",0]]}, not {\"reply\":[[\"flags\",\"::::unixsocket:multi:readonly\",\"id\",4,\"addr\",\"/tmp/vfc-7e62t1sy/s.sock:0\",\"port\",0,\"db\",0]]}",
+      "scenario": "ai-0494b1a4858f",
+      "seed": 1,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "c27ca062710c7ca91ea9",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 5 (EXEC) replies otherwise with resp 2: {\"reply\":[[\"flags\",\"::::unixsocket:multi:readonly:::::authenticated:ever_authenticated:\",\"id\",4,\"addr\",\"/tmp/vfc-x6u53kem/s.sock:0\",\"port\",0,\"db\",0]]}, not {\"reply\":[[\"flags\",\"::::unixsocket:multi:readonly:::::authenticated:ever_authe",
+      "scenario": "ai-31f7c08b9306",
+      "seed": 2,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "dd7db7e77656f7a312c9",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 5 (EXEC) replies otherwise with resp 2: {\"reply\":[[\"flags\",\"::::unixsocket:multi:readonly\",\"id\",4,\"addr\",\"/tmp/vfc-95w3nikf/s.sock:0\",\"port\",0,\"db\",0]]}, not {\"reply\":[[\"flags\",\"::::unixsocket:multi:readonly\",\"id\",4,\"addr\",\"/tmp/vfc-gimpy7nk/s.sock:0\",\"port\",0,\"db\",0]]}",
+      "scenario": "ai-31f7c08b9306",
+      "seed": 2,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "d7242d2a1a3ae5a13542",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

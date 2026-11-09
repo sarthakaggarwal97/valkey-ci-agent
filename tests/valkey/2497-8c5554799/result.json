@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8c55547999a980680997a2c0c2bd292a7112da9c",
+  "parent": "09fb436cf0e8804b1e16c8d83ccf9c27775e8742",
+  "pr": 2497,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Don't allow slot migration to myself node (#2497)",
+  "date": "2025-08-22",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.4888,
+  "findings": [],
+  "recorded": []
+}

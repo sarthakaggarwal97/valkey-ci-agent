@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9d682bad0bb731de8e21e15e4a1795c73aee9d0d",
+  "parent": "9aeab8ccbac0ca4923676c749c98d0de4718c872",
+  "pr": 2530,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "bio.c: Organize all worker data in a struct (#2530)",
+  "date": "2025-08-25",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2401,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a mechanical refactor of bio.c that gathers the four parallel per-worker arrays (thread id, mutex, condvar, job list) into one struct array, plus __thread\u2192_Thread_local spelling swaps in io_threads.c, networking.c and vset.c. Every lock/condvar/queue access maps 1:1 to the same worker as before; inBioThread() keeps identical semantics (thread-local index, 0 for worker 0 and the main thread), bioKillThreads' pthread_self comparison becomes the equivalent pthread_equal, and initialization order in bioInit is unchanged. No job routing, locking order, drain condition, reply, or confi"
+}

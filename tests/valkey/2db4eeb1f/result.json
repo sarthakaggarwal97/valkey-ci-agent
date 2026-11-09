@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2db4eeb1fcd8316a792476c3023e705be24fdd70",
+  "parent": "11780db513b14034b3a314d4d4e5f52a3be44477",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove temporary build correction for RDMA and libvalkey 0.1.0",
+  "date": "2025-08-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2203,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is build-system only: it removes a temporary CMake link-order workaround (explicitly linking valkey::valkey after valkey::valkey_rdma) that was needed for a bug in libvalkey 0.1.0, now fixed upstream. No source file, command, reply, replication, cluster, or persistence behaviour changes; any breakage would show as a link failure when building with USE_RDMA, which the fuzzer's compile step covers, not a runtime scenario. No scenario is needed."
+}

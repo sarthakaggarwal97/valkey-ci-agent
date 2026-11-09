@@ -1,0 +1,74 @@
+extends: [valkey.base]
+id: proposed.active-defrag-under-writes
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Active defrag over a fragmented dataset (many string keys plus a large hash, list,
+    zset and set that go through the defrag_later path) while the key-value workload
+    writes. After the per-hit time-check change, defrag must still make progress (active_defrag_hits
+    accumulates, polled via EVAL), survive CONFIG RESETSTAT mid-cycle (the hits stat
+    drops below the loop's snapshot, the signed/unsigned edge of the change), leave
+    the data intact, and not crash.
+components:
+- use: valkey.action.commands
+  id: defrag
+  config:
+    timeout_s: 60
+    commands:
+    - {command: [EVAL, "local v=string.rep('x',150) for i=tonumber(ARGV[1]),tonumber(ARGV[2])\
+          \ do redis.call('SET','str:'..i,v) end return 1", 0, 1, 20000], expect: {
+        equals: 1}}
+    - {command: [EVAL, "local v=string.rep('x',150) for i=tonumber(ARGV[1]),tonumber(ARGV[2])\
+          \ do redis.call('SET','str:'..i,v) end return 1", 0, 20001, 40000], expect: {
+        equals: 1}}
+    - {command: [EVAL, "local v=string.rep('x',150) for i=tonumber(ARGV[1]),tonumber(ARGV[2])\
+          \ do redis.call('SET','str:'..i,v) end return 1", 0, 40001, 60000], expect: {
+        equals: 1}}
+    - {command: [EVAL, "local v=string.rep('h',100) for i=tonumber(ARGV[1]),tonumber(ARGV[2])\
+          \ do redis.call('HSET','bighash','f:'..i,v) end return redis.call('HLEN','bighash')",
+        0, 1, 20000], expect: {equals: 20000}}
+    - {command: [EVAL, "local v=string.rep('h',100) for i=tonumber(ARGV[1]),tonumber(ARGV[2])\
+          \ do redis.call('HSET','bighash','f:'..i,v) end return redis.call('HLEN','bighash')",
+        0, 20001, 40000], expect: {equals: 40000}}
+    - {command: [EVAL, "local v=string.rep('l',100) for i=tonumber(ARGV[1]),tonumber(ARGV[2])\
+          \ do redis.call('RPUSH','biglist',v..i) end return redis.call('LLEN','biglist')",
+        0, 1, 20000], expect: {equals: 20000}}
+    - {command: [EVAL, "local v=string.rep('l',100) for i=tonumber(ARGV[1]),tonumber(ARGV[2])\
+          \ do redis.call('RPUSH','biglist',v..i) end return redis.call('LLEN','biglist')",
+        0, 20001, 40000], expect: {equals: 40000}}
+    - {command: [EVAL, "for i=tonumber(ARGV[1]),tonumber(ARGV[2]) do redis.call('ZADD','bigzset',i,'m:'..i..string.rep('z',60))\
+          \ end return redis.call('ZCARD','bigzset')", 0, 1, 25000], expect: {equals: 25000}}
+    - {command: [EVAL, "for i=tonumber(ARGV[1]),tonumber(ARGV[2]) do redis.call('SADD','bigset','m:'..i..string.rep('s',60))\
+          \ end return redis.call('SCARD','bigset')", 0, 1, 25000], expect: {equals: 25000}}
+    - {command: [EVAL, "for i=tonumber(ARGV[1]),tonumber(ARGV[2]),2 do redis.call('DEL','str:'..i)\
+          \ end return 1", 0, 1, 60000], expect: {equals: 1}}
+    - {command: [EVAL, "for i=tonumber(ARGV[1]),tonumber(ARGV[2]),2 do redis.call('HDEL','bighash','f:'..i)\
+          \ end return redis.call('HLEN','bighash')", 0, 1, 40000], expect: {equals: 20000}}
+    - {command: [EVAL, "for i=tonumber(ARGV[1]),tonumber(ARGV[2]),2 do redis.call('ZREM','bigzset','m:'..i..string.rep('z',60))\
+          \ end return redis.call('ZCARD','bigzset')", 0, 1, 25000], expect: {equals: 12500}}
+    - {command: [EVAL, "for i=tonumber(ARGV[1]),tonumber(ARGV[2]),2 do redis.call('SREM','bigset','m:'..i..string.rep('s',60))\
+          \ end return redis.call('SCARD','bigset')", 0, 1, 25000], expect: {equals: 12500}}
+    - {command: [CONFIG, SET, activedefrag, yes], expect: {equals: OK}}
+    - {command: [EVAL, "local s=redis.call('INFO','stats') local h=string.match(s,'active_defrag_hits:(%d+)')\
+          \ if h then return tonumber(h) end return -1", 0], wait_s: 90, expect: {
+        min: 100}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [EVAL, "for i=tonumber(ARGV[1]),tonumber(ARGV[2]),4 do redis.call('DEL','str:'..i)\
+          \ end return 1", 0, 2, 60000], expect: {equals: 1}}
+    - {command: [EVAL, "for i=tonumber(ARGV[1]),tonumber(ARGV[2]),4 do redis.call('HDEL','bighash','f:'..i)\
+          \ end return redis.call('HLEN','bighash')", 0, 2, 40000], expect: {equals: 10000}}
+    - {command: [EVAL, "local s=redis.call('INFO','stats') local h=string.match(s,'active_defrag_hits:(%d+)')\
+          \ if h then return tonumber(h) end return -1", 0], wait_s: 90, expect: {
+        min: 1}}
+    - {command: [HLEN, bighash], expect: {equals: 10000}}
+    - {command: [LLEN, biglist], expect: {equals: 40000}}
+    - {command: [ZCARD, bigzset], expect: {equals: 12500}}
+    - {command: [SCARD, bigset], expect: {equals: 12500}}
+    - {command: [STRLEN, 'str:4'], expect: {equals: 150}}
+    - {command: [EXISTS, 'str:3'], expect: {equals: 0}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [CONFIG, SET, activedefrag, no], expect: {equals: OK}}
+required_events: [defrag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: defrag}

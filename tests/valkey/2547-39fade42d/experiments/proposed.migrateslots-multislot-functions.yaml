@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.migrateslots-multislot-functions
+deployment:
+  modes: [standalone]
+metadata:
+  description: A multi-slot CLUSTER MIGRATESLOTS range with functions loaded succeeds
+    on the fix; the parent emits FUNCTION LOAD once per slot (even an empty slot)
+    and the duplicate load fails the whole migration
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SET, "{6ZJ}:k1", v1], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=test1\nserver.register_function('test1',\
+          \ function() return 'hello1' end)"], expect: {equals: test1}}
+    - {command: [FUNCTION, LOAD, "#!lua name=test2\nserver.register_function('test2',\
+          \ function() return 'hello2' end)"], expect: {equals: test2}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, "16382", "16383", NODE, "<node.1.id>"],
+      wait_s: 15, expect: {equals: OK}}
+    - {command: [GET, "{6ZJ}:k1"], node: 1, wait_s: 30, expect_difference: true, expect: {
+        equals: v1}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, "16383"], node: 1, expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [FUNCTION, LIST], node: 1, compare: skip}
+    - {command: [CLUSTER, GETSLOTMIGRATIONS], node: 0, compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [migrate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

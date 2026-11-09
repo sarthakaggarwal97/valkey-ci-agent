@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.pipeline-parse-cluster
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Pipelined commands with per-command cluster slot calculation compared
+    across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: pipe
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {raw: "*3\r\n$3\r\nSET\r\n$4\r\n{t}a\r\n$1\r\n1\r\n*3\r\n$3\r\nSET\r\n$4\r\n\
+        {t}b\r\n$1\r\n2\r\n*3\r\n$4\r\nMGET\r\n$4\r\n{t}a\r\n$4\r\n{t}b\r\n*2\r\n\
+        $4\r\nINCR\r\n$4\r\n{t}c\r\n", connection: main, expect: {equals: OK}}
+    - {read: true, connection: main, expect: {equals: [OK, ["1", "2"], 1]}}
+    - {command: [MGET, "{t1}k", "{t2}k"], connection: xs, expect: {error: "CROSSSLOT"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pipe}

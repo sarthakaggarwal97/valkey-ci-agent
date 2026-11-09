@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.clientinfo-readonly-flag
+deployment:
+  modes: [standalone]
+metadata:
+  description: misc.so test.clientinfo exposes the new READONLY flag after READONLY/READWRITE
+    and inside MULTI/EXEC
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: clientinfo
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [test.clientinfo], expect_difference: true, expect: {exists: true}}
+    - {command: [READONLY], expect: {equals: OK}}
+    - {command: [test.clientinfo], expect_difference: true, expect: {contains: readonly}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [test.clientinfo], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {contains: readonly}}
+    - {command: [READWRITE], expect: {equals: OK}}
+    - {command: [test.clientinfo], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [clientinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: clientinfo}

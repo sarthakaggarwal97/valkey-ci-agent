@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.config-resetstat-cluster-stats
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG RESETSTAT zeroes cluster bus message counters and total_cluster_links_buffer_limit_exceeded;
+    the parent build keeps them
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    nodes: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: resetstat
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: {$ref: inputs.nodes}
+    resp: {$ref: inputs.resp}
+    server_config: {cluster-node-timeout: 2000}
+    timeout_s: 120
+    commands:
+    - {command: [CLUSTER, INFO], wait_s: 30, expect: {contains: "cluster_stats_messages_ping_sent:"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], wait_s: 30, expect: {contains: "cluster_stats_messages_ping_received:"},
+      compare: skip}
+    - {command: [CONFIG, SET, cluster-link-sendbuf-limit, "1"], expect: {equals: OK}}
+    - {command: [SET, gate, v, PX, 5000], expect: {equals: OK}}
+    - {command: [GET, gate], wait_s: 30, expect: {equals: null}}
+    - {command: [CONFIG, SET, cluster-link-sendbuf-limit, "0"], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], wait_s: 30, expect: {contains: "cluster_state:ok"},
+      compare: skip}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: QUEUED}}
+    - {command: [CLUSTER, INFO], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {contains: "cluster_stats_messages_sent:0"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: QUEUED}}
+    - {command: [CLUSTER, INFO], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {contains: "cluster_stats_messages_received:0"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: QUEUED}}
+    - {command: [CLUSTER, INFO], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {contains: "total_cluster_links_buffer_limit_exceeded:0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [resetstat.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: resetstat}

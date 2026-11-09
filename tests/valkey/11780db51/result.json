@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "11780db513b14034b3a314d4d4e5f52a3be44477",
+  "parent": "84fd6264190094c045de488308b905853683d135",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update deps/libvalkey to version 0.2.1",
+  "date": "2025-08-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.663,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-53558ac876e2",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'fmt' returned ERROR: expectations both builds violate alike, so they are not about the change: 7 (valkey-cli -2 -p $port STRLEN k100)"
+    },
+    {
+      "scenario": "ai-eda63dd33922",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'fmt' returned ERROR: expectations both builds violate alike, so they are not about the change: 7 (valkey-cli -3 -p $port STRLEN k100)"
+    },
+    {
+      "scenario": "ai-9138638b648d",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'fmt' returned ERROR: expectations both builds violate alike, so they are not about the change: 7 (valkey-cli -2 -p $port STRLEN k100)"
+    }
+  ],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 682fc0b41973..39fade42d11a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-648bb26663c1
+seed: 68233
+experiment:
+  id: proposed.migrateslots-function-not-copied
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

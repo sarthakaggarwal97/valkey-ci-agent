@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b8357e5be83dd19411c77a4e5f1052a3f863e8c9",
+  "parent": "2db4eeb1fcd8316a792476c3023e705be24fdd70",
+  "pr": 2527,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix slot range lists overlap to rewind the nested list again  (#2527)",
+  "date": "2025-08-21",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.6568,
+  "findings": [],
+  "recorded": []
+}

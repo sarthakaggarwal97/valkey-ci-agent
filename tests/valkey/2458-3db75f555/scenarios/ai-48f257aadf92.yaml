@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 88cd2086aef2..3db75f5551cd.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-48f257aadf92
+seed: 1
+experiment:
+  id: proposed.config-resetstat-cluster-stats
+  inputs:
+    resp: 2
+    nodes: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

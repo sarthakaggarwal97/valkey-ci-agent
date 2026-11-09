@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "06cefc181abbe458d59a0c4865670810a9cb65d3",
+  "parent": "1ba622bad5369ece4e88946e7a9b1d65541bc8db",
+  "pr": 2548,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Attempt to fix sub-replica getting out of sync (#2548)",
+  "date": "2025-08-27",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.9211,
+  "findings": [],
+  "recorded": []
+}

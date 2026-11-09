@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c6c91d152fb706da9c7d40b7ed5dfd7216a88b5d",
+  "parent": "ab3ee2ca9530ba527959fa36b1c3b0222a2675a6",
+  "pr": 2526,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix assumptions that pthread functions set errno (#2526)",
+  "date": "2025-08-20",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2452,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only corrects the error string logged when pthread_create or pthread_sigmask fails (using the returned error code instead of errno). Control flow is unchanged: pthread_create failure still exits(1), pthread_sigmask failure still only logs a warning. These failure paths fire only when the OS cannot create a thread or mask a signal at startup, which cannot be triggered by commands, faults, replication, persistence or the bundled tools, and the only observable difference is log message text on an otherwise-fatal path. No scenario can reach or validate this change."
+}

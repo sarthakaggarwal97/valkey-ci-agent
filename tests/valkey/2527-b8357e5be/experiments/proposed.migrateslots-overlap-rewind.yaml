@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.migrateslots-overlap-rewind
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER MIGRATESLOTS rejects a later migration group whose ranges overlap
+    a non-first range of an earlier group in the same command
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: overlap
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, "0", "0", "0", "0", NODE, "<node.1.id>"],
+      expect: {error: "overlaps with previous range"}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, "1", "1", NODE, "<node.1.id>",
+        SLOTSRANGE, "0", "2", NODE, "<node.2.id>"], wait_s: 30, expect: {error: "Slot\
+          \ ranges in migrations overlap"}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, "0", "0", "2", "2", NODE, "<node.1.id>",
+        SLOTSRANGE, "2", "2", NODE, "<node.2.id>"], expect_difference: true, expect: {
+        error: "Slot ranges in migrations overlap"}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, "100", "200", "16383", "16383",
+        NODE, "<node.1.id>", SLOTSRANGE, "16383", "16383", NODE, "<node.2.id>"], expect_difference: true,
+      expect: {error: "Slot ranges in migrations overlap"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [overlap.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: overlap}

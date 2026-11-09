@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ac515159a1e7..09fb436cf0e8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fde115e5dbc6
+seed: 106
+experiment:
+  id: proposed.pipeline-io-threads
+  inputs:
+    prefetch: 0
+deployment:
+  mode: standalone
+  base_port: 7500

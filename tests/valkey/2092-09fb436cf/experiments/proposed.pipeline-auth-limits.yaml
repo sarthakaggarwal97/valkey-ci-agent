@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.pipeline-auth-limits
+deployment:
+  modes: [standalone]
+metadata:
+  description: Unauthenticated parser limits and AUTH inside one pipelined packet,
+    replies compared with the parent build
+components:
+- use: valkey.action.commands
+  id: auth
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 10
+    commands:
+    - {command: [SET, a, x], expect: {equals: OK}}
+    - {command: [CONFIG, SET, requirepass, pw123], expect: {equals: OK}}
+    - {raw: "*2\r\n$4\r\nAUTH\r\n$5\r\npw123\r\n*11\r\n$4\r\nMGET\r\n$1\r\na\r\n$1\r\
+        \na\r\n$1\r\na\r\n$1\r\na\r\n$1\r\na\r\n$1\r\na\r\n$1\r\na\r\n$1\r\na\r\n\
+        $1\r\na\r\n$1\r\na\r\n", connection: c1, expect: {equals: OK}}
+    - {read: true, connection: c1}
+    - {raw: "*11\r\n$4\r\nMGET\r\n$1\r\na\r\n$1\r\na\r\n$1\r\na\r\n$1\r\na\r\n$1\r\
+        \na\r\n$1\r\na\r\n$1\r\na\r\n$1\r\na\r\n$1\r\na\r\n$1\r\na\r\n", connection: c2,
+      expect: {error: "unauthenticated multibulk length"}}
+    - {raw: "*3\r\n$3\r\nSET\r\n$1\r\nk\r\n$20000\r\n", connection: c3, expect: {
+        error: "unauthenticated bulk length"}}
+    - {raw: "*1\r\n$4\r\nPING\r\n*2\r\n$4\r\nAUTH\r\n$5\r\npw123\r\n*1\r\n$4\r\nPING\r\
+        \n", connection: c4, expect: {error: "NOAUTH"}}
+    - {read: true, connection: c4}
+    - {command: [CONFIG, SET, requirepass, ""], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [auth.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: auth}

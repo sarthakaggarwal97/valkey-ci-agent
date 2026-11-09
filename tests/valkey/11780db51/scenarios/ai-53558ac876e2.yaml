@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 84fd62641900..11780db513b1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-53558ac876e2
+seed: 101
+experiment:
+  id: proposed.libvalkey-tools-format
+  inputs:
+    resp_flag: '-2'
+    pipeline: 1
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

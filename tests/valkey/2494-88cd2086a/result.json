@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "88cd2086aef25183ae0c5fb8bc154d8206dd07f1",
+  "parent": "cf90acbc6137ede7ae17fb1450c8aa19a62d163c",
+  "pr": 2494,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Split SLOT_EXPORT_AUTHENTICATING into SEND and READ to avoid synchronous reading of auth response (#2494)",
+  "date": "2025-08-29",
+  "unstable": "aa7545348b688b469d073a01ce4836ed637577f9",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 4,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 35,
+    "executed": 28,
+    "percent": 80,
+    "uncovered": [
+      "src/cluster_migrateslots.c:1036",
+      "src/cluster_migrateslots.c:1037",
+      "src/cluster_migrateslots.c:1061",
+      "src/cluster_migrateslots.c:1062",
+      "src/cluster_migrateslots.c:1063",
+      "src/cluster_migrateslots.c:1064",
+      "src/cluster_migrateslots.c:1065"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 14.2036,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.defrag-list-bookmark-stale
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active defrag resumes a large quicklist whose _AD bookmark was invalidated
+    by deleting and recreating the key mid-scan, exercising the stale-bookmark fallback
+    in scanLaterList
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    timeout_s: 90
+    commands:
+    - {command: [RPUSH, biglist, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a,
+        a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a], expect: {
+        equals: 40}}
+    - {command: [LLEN, biglist], expect: {equals: 40}}
+    - {command: [DEL, biglist], expect: {equals: 1}}
+    - {command: [RPUSH, biglist, b, b, b, b, b, b, b, b, b, b, b, b], expect: {equals: 12}}
+    - {command: [RPOP, biglist, 6], expect: {exists: true}}
+    - {command: [LLEN, biglist], expect: {equals: 6}}
+    - {command: [DEL, biglist], expect: {equals: 1}}
+    - {command: [RPUSH, biglist, c, c, c, c, c, c, c, c, c, c, c, c, c, c, c, c, c,
+        c, c, c], expect: {equals: 20}}
+    - {command: [LTRIM, biglist, 0, 2], expect: {equals: OK}}
+    - {command: [DEL, biglist], expect: {equals: 1}}
+    - {command: [RPUSH, biglist, d, d, d, d, d, d, d, d, d, d, d, d, d, d, d, d],
+      expect: {equals: 16}}
+    - {command: [RPOP, biglist, 12], expect: {exists: true}}
+    - {command: [DEL, biglist], expect: {equals: 1}}
+    - {command: [RPUSH, biglist, e, e, e, e, e, e, e, e, e, e, e, e, e, e, e, e, e,
+        e, e, e, e, e, e, e], expect: {equals: 24}}
+    - {command: [LTRIM, biglist, 0, 1], expect: {equals: OK}}
+    - {command: [DEL, biglist], expect: {equals: 1}}
+    - {command: [RPUSH, biglist, f, f, f, f, f, f, f, f, f, f, f, f, f, f], expect: {
+        equals: 14}}
+    - {command: [RPOP, biglist, 10], expect: {exists: true}}
+    - {command: [DEL, biglist], expect: {equals: 1}}
+    - {command: [RPUSH, biglist, g, g, g, g, g, g, g, g, g, g, g, g, g, g, g, g, g,
+        g, g, g, g, g, g, g, g, g, g, g, g, g], expect: {equals: 30}}
+    - {command: [LTRIM, biglist, 0, 3], expect: {equals: OK}}
+    - {command: [DEL, biglist], expect: {equals: 1}}
+    - {command: [RPUSH, biglist, h, h, h, h, h, h, h, h, h, h, h, h, h, h, h, h, h,
+        h], expect: {equals: 18}}
+    - {command: [RPOP, biglist, 14], expect: {exists: true}}
+    - {command: [DEL, biglist], expect: {equals: 1}}
+    - {command: [RPUSH, biglist, i, i, i, i, i, i, i, i, i, i, i, i, i, i, i, i, i,
+        i, i, i, i, i, i, i, i, i], expect: {equals: 26}}
+    - {command: [LTRIM, biglist, 0, 1], expect: {equals: OK}}
+    - {command: [DEL, biglist], expect: {equals: 1}}
+    - {command: [RPUSH, biglist, j, j, j, j, j, j, j, j, j, j, j, j, j, j, j, j, j,
+        j, j, j], expect: {equals: 20}}
+    - {command: [RPOP, biglist, 16], expect: {exists: true}}
+    - {command: [DEL, biglist], expect: {equals: 1}}
+    - {command: [RPUSH, biglist, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k, k,
+        k, k, k, k, k, k, k, k, k, k, k, k, k, k, k], expect: {equals: 32}}
+    - {command: [LTRIM, biglist, 0, 2], expect: {equals: OK}}
+    - {command: [DEL, biglist], expect: {equals: 1}}
+    - {command: [PING], expect: {equals: PONG}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}
