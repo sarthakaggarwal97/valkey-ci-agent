@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-09T22:41+00:00.
+Updated 2026-11-09T22:42+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -48,9 +48,8 @@ Updated 2026-11-09T22:41+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-09T22:41:08+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42702039915): 1 merge(s) tested, 0 without a code change.
+[2026-11-09T22:42:10+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42714080105): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search#1432](https://github.com/valkey-io/valkey-search/pull/1432) ([tests](tests/valkey-search/1432-d08f29e1e/)): refactor(text): remove dead RadixTree template and its test (#1432): declined: The change only deletes dead code: src/indexes/text/radix_tree.h was an unused template header (no remaining file includes it; the live text index uses the rax wrapper in rax_wrapper.h), and the other two hunks remove its unit test (testing/radix_test.cc) and its CMake test registration. N
 
 ## Totals
 
