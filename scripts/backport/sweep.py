@@ -528,6 +528,29 @@ def _prepare_branch(
                 + (setup_output[:500] or "setup command failed")
             )
 
+        if existing_pr is not None and test_commands:
+            baseline_ok, baseline_output = run_test_commands(
+                tmpdir,
+                test_commands,
+            )
+            if not baseline_ok:
+                logger.warning(
+                    "Existing backport sweep PR #%d does not pass baseline "
+                    "validation; refusing to attribute that failure to new "
+                    "candidates",
+                    existing_pr.number,
+                )
+                with log_group(
+                    f"Existing sweep baseline output for {target_branch} "
+                    "(last 4000 chars)"
+                ):
+                    logger.warning("%s", baseline_output[-4000:])
+                raise RuntimeError(
+                    f"existing backport sweep PR #{existing_pr.number} fails "
+                    "baseline validation before any new candidate is applied: "
+                    + validation_failure_detail(baseline_output)
+                )
+
         logger.info("Already on %s: %s", backport_branch,
                     ", ".join(f"#{n}" for n in sorted(already_applied, key=int)) or "nothing yet")
         applied_count = 0

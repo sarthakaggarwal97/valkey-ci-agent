@@ -1861,6 +1861,83 @@ def test_prepare_prefetches_before_token_free_validation(monkeypatch, tmp_path):
     backport_sweep.shutil.rmtree(prepared.repo_dir)
 
 
+def test_prepare_stops_before_candidates_when_existing_sweep_is_red(
+    monkeypatch,
+    tmp_path,
+):
+    candidate = _candidate(10)
+    plan = _source_plan(candidate)
+    existing_pr = SimpleNamespace(number=5075, title="Backport sweep for 8.1")
+    events: list[str] = []
+
+    monkeypatch.setattr(backport_sweep, "clone_target_branch", lambda *_a, **_k: None)
+    monkeypatch.setattr(backport_sweep, "_run_git", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        backport_sweep.subprocess,
+        "run",
+        lambda cmd, **_kwargs: subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout="",
+            stderr="",
+        ),
+    )
+    monkeypatch.setattr(backport_sweep, "head_sha", lambda _repo: "existing-head")
+    monkeypatch.setattr(
+        backport_sweep,
+        "find_existing_pr",
+        lambda *_a, **_k: existing_pr,
+    )
+    monkeypatch.setattr(
+        backport_sweep,
+        "_remote_branch_sha",
+        lambda _gh, _repo, branch: (
+            "existing-head"
+            if branch == "agent/backport/sweep/8.1"
+            else "target-head"
+        ),
+    )
+    monkeypatch.setattr(backport_sweep, "list_already_applied", lambda *_a, **_k: set())
+    monkeypatch.setattr(
+        backport_sweep,
+        "prepare_source_change",
+        lambda *_a, **_k: plan,
+    )
+
+    def run_commands(_repo, commands, **_kwargs):
+        events.append(commands[0] if commands else "setup")
+        if commands == ["make"]:
+            return False, "hyperloglog.c: error: unknown type name 'bool'"
+        return True, ""
+
+    monkeypatch.setattr(backport_sweep, "run_test_commands", run_commands)
+    monkeypatch.setattr(
+        backport_sweep,
+        "apply_candidate",
+        lambda *_a, **_k: pytest.fail("candidate must not be attempted"),
+    )
+
+    result, prepared = backport_sweep._prepare_branch(
+        gh=MagicMock(),
+        repo_full_name="valkey-io/valkey",
+        github_token="preparation-token",
+        target_branch="8.1",
+        candidates=[candidate],
+        push_repo="valkey-io/valkey",
+        validation_setup_commands=["setup"],
+        test_commands=["make"],
+        work_root=str(tmp_path),
+    )
+
+    assert prepared is None
+    assert events == ["setup", "make"]
+    assert (
+        "existing backport sweep PR #5075 fails baseline validation"
+        in result.error
+    )
+    assert "unknown type name 'bool'" in result.error
+
+
 def test_prepared_state_binds_identity_and_uses_fresh_token(monkeypatch, tmp_path):
     repo_dir = tmp_path / "worktree"
     repo_dir.mkdir()
