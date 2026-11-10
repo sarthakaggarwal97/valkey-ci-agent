@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-10T22:13+00:00.
+Updated 2026-11-10T22:14+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -43,9 +43,8 @@ Updated 2026-11-10T22:13+00:00.
 
 ### valkey-io/valkey-json
 
-[2026-11-10T22:13:48+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42910348454): 1 merge(s) tested, 0 without a code change.
+[2026-11-10T22:14:40+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42912611000): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-json#124](https://github.com/valkey-io/valkey-json/pull/124) ([tests](tests/valkey-json/124-0ef7c8adb/)): Fix overflow in JSONPath slice iteration (#124): 2 of 2 test(s) reached the change
 
 ### valkey-io/valkey-search
 
