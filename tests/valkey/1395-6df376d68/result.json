@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6df376d68a97e9c0da4549f57db96742b5482202",
+  "parent": "6b3e1228cd043ebd35eec9c4354c933d5a8f968c",
+  "pr": 1395,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix coredump when use hellodict example module (#1395)",
+  "date": "2024-12-05",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2711,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits src/modules/hellodict.c, an example module that is not compiled into valkey-server and is only reachable via an explicit MODULE LOAD of a separately built hellodict.so. The fuzzer's experiments cannot load modules (MODULE LOAD/LOADEX are refused in command sequences, and the only environment artifact available is the parent server binary, not a module shared object), so no scenario can reach the fixed keystep behaviour. The server-side key-extraction code the bug crashed is unchanged; only the example's key-spec arguments were corrected."
+}

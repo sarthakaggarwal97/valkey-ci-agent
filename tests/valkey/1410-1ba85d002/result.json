@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1ba85d002a824a12b0107bdd2b493a3a0516cec9",
+  "parent": "5be4ce6d27c0fb8c046508ff04016a1395ca9d5e",
+  "pr": 1410,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use binary representation in assert crash log, cleanup in crash log (#1410)",
+  "date": "2024-12-10",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3843,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a cleanup/refactor of crash-log formatting in src/debug.c (_serverAssertPrintClientInfo and logCurrentClient), which only executes while the server is already aborting. It changes no command reply, data, replication, or persistence behavior; its only effect is the textual form of a crash report, a path no command/fault/workload scenario can reach or meaningfully compare without first inducing a crash, so there is nothing a scenario's oracles can drive or judge."
+}

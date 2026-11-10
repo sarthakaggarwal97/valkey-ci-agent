@@ -1,0 +1,80 @@
+extends: [valkey.liveness]
+id: proposed.defrag-refactor-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Drive the refactored active-defrag timer through full cycles, the defrag_later
+    big-key path, mid-cycle disable, fork pause, defragWhileBlocked and the new active-defrag-cycle-us
+    config, comparing replies and the final dataset against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: defrag
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    server_config:
+      hz: 100
+      active-defrag-ignore-bytes: 1
+      active-defrag-threshold-lower: 1
+      active-defrag-cycle-min: 60
+      active-defrag-cycle-max: 80
+    commands:
+    - {command: [CONFIG, SET, active-defrag-cycle-us, 200], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, active-defrag-cycle-us], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [CONFIG, SET, active-defrag-cycle-us, 100001], expect_difference: true,
+      expect: {error: true}}
+    - {command: [EVAL, "for i=1,150000 do redis.call('SET','k'..i,string.rep('x',32))\
+          \ end return 1", 0], expect: {equals: 1}}
+    - {command: [EVAL, "for i=1,20000 do redis.call('PEXPIREAT','k'..i,33278400000000)\
+          \ end return 1", 0], expect: {equals: 1}}
+    - {command: [EVAL, "local d=0 for i=1,150000,2 do d=d+redis.call('DEL','k'..i)\
+          \ end return d", 0], expect: {equals: 75000}}
+    - {command: [EVAL, "for i=1,3000 do redis.call('HSET','h1','f'..i,string.rep('y',40))\
+          \ redis.call('ZADD','z1',i,'m'..i) redis.call('RPUSH','l1','e'..string.rep('z',30)..i)\
+          \ redis.call('SADD','s1','s'..string.rep('w',30)..i) end return 1", 0],
+      expect: {equals: 1}}
+    - {command: [SUBSCRIBE, c1], connection: sub1}
+    - {command: [SUBSCRIBE, c2], connection: sub2}
+    - {command: [SSUBSCRIBE, sc1], connection: sub3}
+    - {command: [CONFIG, SET, activedefrag, yes], expect: {equals: OK}}
+    - {command: [WAIT, 1, 2000], expect: {equals: 0}}
+    - {command: [EVAL, "local d=0 for i=2,100000,4 do d=d+redis.call('DEL','k'..i)\
+          \ end for i=1,20000 do redis.call('SET','n'..i,string.rep('q',48)) end return\
+          \ d", 0], expect: {equals: 25000}}
+    - {command: [DEL, h1], expect: {equals: 1}}
+    - {command: [UNLINK, l1], expect: {equals: 1}}
+    - {command: [WAIT, 1, 2000], expect: {equals: 0}}
+    - {command: [CONFIG, SET, active-defrag-cycle-min, 99], expect: {equals: OK}}
+    - {command: [CONFIG, SET, active-defrag-cycle-max, 99], expect: {equals: OK}}
+    - {command: [EVAL, "local x=0 for i=1,20000000 do x=x+i end return x", 0], expect: {
+        equals: 200000010000000}}
+    - {command: [CONFIG, SET, activedefrag, no], expect: {equals: OK}}
+    - {command: [WAIT, 1, 500], expect: {equals: 0}}
+    - {command: [CONFIG, SET, activedefrag, yes], expect: {equals: OK}}
+    - {command: [WAIT, 1, 2000], expect: {equals: 0}}
+    - {command: [BGSAVE], expect: {equals: "Background saving started"}}
+    - {command: [WAIT, 1, 2000], expect: {equals: 0}}
+    - {command: [DBSIZE], expect: {equals: 70002}}
+    - {command: [ZCARD, z1], expect: {equals: 3000}}
+    - {command: [SCARD, s1], expect: {equals: 3000}}
+    - {command: [GET, k4], expect: {equals: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}}
+    - {command: [DEBUG, DIGEST]}
+    - {command: [INFO, stats], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [defrag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: defrag}

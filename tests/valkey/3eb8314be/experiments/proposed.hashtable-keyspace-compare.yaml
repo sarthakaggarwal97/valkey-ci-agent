@@ -1,0 +1,106 @@
+extends: [valkey.liveness]
+id: proposed.hashtable-keyspace-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Keyspace, expire-embedding and overwrite-swap semantics compared across
+    the hashtable keyspace change and its dict parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: keyspace
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [SET, k0, 123], expect: {equals: OK}}
+    - {command: [OBJECT, REFCOUNT, k0], expect_difference: true, expect: {equals: 1}}
+    - {command: [INCR, k0], expect: {equals: 124}}
+    - {command: [OBJECT, REFCOUNT, k0], expect_difference: true, expect: {equals: 1}}
+    - {command: [SETRANGE, k0, 0, "9"], expect: {equals: 3}}
+    - {command: [GET, k0], expect: {equals: "924"}}
+    - {command: [SET, bigs, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa], expect: {
+        equals: OK}}
+    - {command: [PEXPIREAT, bigs, 33177117600000], expect: {equals: 1}}
+    - {command: [SET, bigs, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, KEEPTTL],
+      expect: {equals: OK}}
+    - {command: [PEXPIRETIME, bigs], expect: {equals: 33177117600000}}
+    - {command: [GET, bigs], expect: {equals: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb}}
+    - {command: [RPUSH, mylist, a, b, c], expect: {equals: 3}}
+    - {command: [PEXPIREAT, mylist, 33177117600000], expect: {equals: 1}}
+    - {command: [SET, mylist, cccccccccccccccccccccccccccccccccccccccccccccccccc,
+        KEEPTTL], expect: {equals: OK}}
+    - {command: [PEXPIRETIME, mylist], expect: {equals: 33177117600000}}
+    - {command: [GET, mylist], expect: {equals: cccccccccccccccccccccccccccccccccccccccccccccccccc}}
+    - {command: [SET, s1, hello], expect: {equals: OK}}
+    - {command: [PEXPIREAT, s1, 33177117600000], expect: {equals: 1}}
+    - {command: [APPEND, s1, world], expect: {equals: 10}}
+    - {command: [PEXPIRETIME, s1], expect: {equals: 33177117600000}}
+    - {command: [GET, s1], expect: {equals: helloworld}}
+    - {command: [SET, n, 10], expect: {equals: OK}}
+    - {command: [PEXPIREAT, n, 33177117600000], expect: {equals: 1}}
+    - {command: [INCR, n], expect: {equals: 11}}
+    - {command: [PEXPIRETIME, n], expect: {equals: 33177117600000}}
+    - {command: [RENAME, n, m], expect: {equals: OK}}
+    - {command: [PEXPIRETIME, m], expect: {equals: 33177117600000}}
+    - {command: [EXISTS, n], expect: {equals: 0}}
+    - {command: [COPY, m, m2], expect: {equals: 1}}
+    - {command: [PEXPIRETIME, m2], expect: {equals: 33177117600000}}
+    - {command: [PERSIST, m], expect: {equals: 1}}
+    - {command: [PEXPIRETIME, m], expect: {equals: -1}}
+    - {command: [PEXPIREAT, m, 33177117700000], expect: {equals: 1}}
+    - {command: [PEXPIRETIME, m], expect: {equals: 33177117700000}}
+    - {command: [SET, f, v], expect: {equals: OK}}
+    - {command: [PEXPIREAT, f, 33177117600000, NX], expect: {equals: 1}}
+    - {command: [PEXPIREAT, f, 33177117700000, NX], expect: {equals: 0}}
+    - {command: [PEXPIREAT, f, 33177117700000, GT], expect: {equals: 1}}
+    - {command: [PEXPIREAT, f, 33177117600000, GT], expect: {equals: 0}}
+    - {command: [PEXPIRETIME, f], expect: {equals: 33177117700000}}
+    - {command: [SET, KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK,
+        v], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK],
+      expect_difference: true, expect: {equals: raw}}
+    - {command: [PEXPIREAT, KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK,
+        33177117600000], expect: {equals: 1}}
+    - {command: [PEXPIRETIME, KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK],
+      expect: {equals: 33177117600000}}
+    - {command: [GET, KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK],
+      expect: {equals: v}}
+    - {command: [SET, "", ev], expect: {equals: OK}}
+    - {command: [GET, ""], expect: {equals: ev}}
+    - {command: [PEXPIREAT, "", 33177117600000], expect: {equals: 1}}
+    - {command: [PEXPIRETIME, ""], expect: {equals: 33177117600000}}
+    - {command: [DEL, ""], expect: {equals: 1}}
+    - {command: [DEL, bigs, mylist, s1], expect: {equals: 3}}
+    - {command: [DEL, nosuch, nosuch, nosuch], expect: {equals: 0}}
+    - {command: [SET, g, v], expect: {equals: OK}}
+    - {command: [PEXPIREAT, g, 33177117600000], expect: {equals: 1}}
+    - {command: [GETEX, g, PERSIST], expect: {equals: v}}
+    - {command: [PEXPIRETIME, g], expect: {equals: -1}}
+    - {command: [GETEX, g, PXAT, 33177117600000], expect: {equals: v}}
+    - {command: [PEXPIRETIME, g], expect: {equals: 33177117600000}}
+    - {command: [SET, gone, v, PX, 50], expect: {equals: OK}}
+    - {command: [EXISTS, gone], wait_s: 10, expect: {equals: 0}}
+    - {command: [EXEC], expect: {error: true}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, t1, 1], expect: {equals: QUEUED}}
+    - {command: [INCR, t1], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, 2]}}
+    - {command: [KEYS, "*"], compare: unordered}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [SET, only, v], expect: {equals: OK}}
+    - {command: [RANDOMKEY], expect: {equals: only}}
+    - {command: [DBSIZE], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [keyspace.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: keyspace}

@@ -1,0 +1,118 @@
+extends: [valkey.liveness]
+id: proposed.zrank-skiplist-spans
+deployment:
+  modes: [standalone]
+metadata:
+  description: Deterministic ZRANK/ZREVRANK/ZCOUNT/range-offset replies on skiplist-encoded
+    zsets under inserts, score moves, rank/score deletes and a restart, compared against
+    the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    zset_entries: {type: integer, minimum: 0, maximum: 1024, default: 4}
+components:
+- use: valkey.action.commands
+  id: zrank
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: {$ref: inputs.zset_entries}, appendonly: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [ZADD, z, 1, m01, 2, m02, 3, m03, 4, m04, 5, m05, 6, m06, 7, m07,
+        8, m08, 9, m09, 10, m10, 11, m11, 12, m12, 13, m13, 14, m14, 15, m15, 16,
+        m16, 17, m17, 18, m18, 19, m19, 20, m20], expect: {equals: 20}}
+    - {command: [OBJECT, ENCODING, z], compare: skip, expect: {equals: skiplist}}
+    - {command: [ZRANK, z, m01], expect: {equals: 0}}
+    - {command: [ZRANK, z, m10], expect: {equals: 9}}
+    - {command: [ZRANK, z, m20], expect: {equals: 19}}
+    - {command: [ZRANK, z, m20, WITHSCORE], expect: null}
+    - {command: [ZREVRANK, z, m20], expect: {equals: 0}}
+    - {command: [ZREVRANK, z, m01], expect: {equals: 19}}
+    - {command: [ZREVRANK, z, m10], expect: {equals: 10}}
+    - {command: [ZRANK, z, nosuch], expect: {equals: null}}
+    - {command: [ZRANK, nokey, a], expect: {equals: null}}
+    - {command: [ZADD, z, 10, aa], expect: {equals: 1}}
+    - {command: [ZRANK, z, aa], expect: {equals: 9}}
+    - {command: [ZRANK, z, m10], expect: {equals: 10}}
+    - {command: [ZREVRANK, z, aa], expect: {equals: 11}}
+    - {command: [ZINCRBY, z, 100, m05], expect: null}
+    - {command: [ZRANK, z, m05], expect: {equals: 20}}
+    - {command: [ZREVRANK, z, m05], expect: {equals: 0}}
+    - {command: [ZRANK, z, m06], expect: {equals: 4}}
+    - {command: [ZREMRANGEBYRANK, z, 0, 2], expect: {equals: 3}}
+    - {command: [ZRANK, z, m04], expect: {equals: 0}}
+    - {command: [ZRANK, z, m05], expect: {equals: 17}}
+    - {command: [ZREMRANGEBYSCORE, z, 11, 15], expect: {equals: 5}}
+    - {command: [ZRANK, z, m16], expect: {equals: 7}}
+    - {command: [ZRANK, z, m20], expect: {equals: 11}}
+    - {command: [ZCOUNT, z, 10, 20], expect: {equals: 7}}
+    - {command: [ZCOUNT, z, (10, +inf], expect: {equals: 6}}
+    - {command: [ZRANGEBYSCORE, z, -inf, +inf, LIMIT, 5, 3], expect: {equals: [aa,
+          m10, m16]}}
+    - {command: [ZRANGE, z, +inf, -inf, BYSCORE, REV, LIMIT, 1, 3], expect: {equals: [
+          m20, m19, m18]}}
+    - {command: [ZADD, z, GT, CH, 200, m04], expect: {equals: 1}}
+    - {command: [ZRANK, z, m04], expect: {equals: 12}}
+    - {command: [ZRANK, z, m06], expect: {equals: 0}}
+    - {command: [ZADD, z, GT, XX, CH, 5, m04], expect: {equals: 0}}
+    - {command: [ZRANK, z, m04], expect: {equals: 12}}
+    - {command: [ZRANGESTORE, dst, z, 2, 8], expect: {equals: 7}}
+    - {command: [ZRANK, dst, m08], expect: {equals: 0}}
+    - {command: [ZRANK, dst, m16], expect: {equals: 4}}
+    - {command: [ZRANK, dst, m18], expect: {equals: 6}}
+    - {command: [ZREVRANK, dst, aa], expect: {equals: 4}}
+    - {command: [ZPOPMIN, z], expect: null}
+    - {command: [ZPOPMAX, z], expect: null}
+    - {command: [ZRANK, z, m07], expect: {equals: 0}}
+    - {command: [ZRANK, z, m05], expect: {equals: 10}}
+    - {command: [ZCARD, z], expect: {equals: 11}}
+    - {command: [ZADD, lex, 0, a, 0, b, 0, c, 0, d, 0, e, 0, f], expect: {equals: 6}}
+    - {command: [ZLEXCOUNT, lex, '-', '+'], expect: {equals: 6}}
+    - {command: [ZLEXCOUNT, lex, '[b', '[e'], expect: {equals: 4}}
+    - {command: [ZLEXCOUNT, lex, '(a', '(f'], expect: {equals: 4}}
+    - {command: [ZRANGEBYLEX, lex, '-', '+', LIMIT, 2, 2], expect: {equals: [c, d]}}
+    - {command: [ZREVRANGEBYLEX, lex, '+', '-', LIMIT, 1, 2], expect: {equals: [e,
+          d]}}
+    - {command: [ZADD, big, 1, b01, 2, b02, 3, b03, 4, b04, 5, b05, 6, b06, 7, b07,
+        8, b08, 9, b09, 10, b10, 11, b11, 12, b12, 13, b13, 14, b14, 15, b15, 16,
+        b16, 17, b17, 18, b18, 19, b19, 20, b20, 21, b21, 22, b22, 23, b23, 24, b24,
+        25, b25, 26, b26, 27, b27, 28, b28, 29, b29, 30, b30, 31, b31, 32, b32, 33,
+        b33, 34, b34, 35, b35, 36, b36, 37, b37, 38, b38, 39, b39, 40, b40, 41, b41,
+        42, b42, 43, b43, 44, b44, 45, b45, 46, b46, 47, b47, 48, b48, 49, b49, 50,
+        b50, 51, b51, 52, b52, 53, b53, 54, b54, 55, b55, 56, b56, 57, b57, 58, b58,
+        59, b59, 60, b60, 61, b61, 62, b62, 63, b63, 64, b64], expect: {equals: 64}}
+    - {command: [ZRANK, big, b01], expect: {equals: 0}}
+    - {command: [ZRANK, big, b32], expect: {equals: 31}}
+    - {command: [ZRANK, big, b64], expect: {equals: 63}}
+    - {command: [ZREMRANGEBYRANK, big, 10, 19], expect: {equals: 10}}
+    - {command: [ZRANK, big, b21], expect: {equals: 10}}
+    - {command: [ZRANK, big, b32], expect: {equals: 21}}
+    - {command: [ZRANK, big, b64], expect: {equals: 53}}
+    - {command: [ZREVRANK, big, b64], expect: {equals: 0}}
+    - {command: [ZREVRANK, big, b21], expect: {equals: 43}}
+    - {command: [ZCOUNT, big, 1, 32], expect: {equals: 22}}
+    - {command: [ZADD, one, 5, solo], expect: {equals: 1}}
+    - {command: [ZRANK, one, solo], expect: {equals: 0}}
+    - {command: [ZREVRANK, one, solo], expect: {equals: 0}}
+    - {command: [ZRANK, one, other], expect: {equals: null}}
+    - {command: [ZREM, one, solo], expect: {equals: 1}}
+    - {command: [ZRANK, one, solo], expect: {equals: null}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ZRANK, z, m05], expect: {equals: 10}}
+    - {command: [ZCARD, z], expect: {equals: 11}}
+    - {command: [ZRANK, dst, m18], expect: {equals: 6}}
+    - {command: [ZRANK, big, b32], expect: {equals: 21}}
+    - {command: [ZCARD, big], expect: {equals: 54}}
+    - {command: [ZLEXCOUNT, lex, '-', '+'], expect: {equals: 6}}
+    - {command: [ZRANK, one, solo], expect: {equals: null}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [zrank.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zrank}

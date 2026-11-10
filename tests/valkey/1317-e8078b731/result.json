@@ -1,0 +1,65 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e8078b7315250dc052b4020a4ea73471a8c0e4a9",
+  "parent": "176fafcaf71793efdadefba8e49ef711748b0c20",
+  "pr": 1317,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Allow MEMORY MALLOC-STATS and MEMORY PURGE during loading phase (#1317)",
+  "date": "2024-12-08",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.8449,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "compat-load: the parent's RDB loads into the candidate with DEBUG DIGEST {\"error\":\"LOADING Valkey is loading the dataset in memory\"}, not the parent's {\"reply\":\"e887f963eeae4e2eb678628d7364f88b1aa77644\"}",
+      "scenario": "ai-10fdb9a361af",
+      "seed": 11701,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #1317",
+      "fingerprint": "22ded0820d4eb170eddc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/117"
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the parent's RDB loads into the candidate with DEBUG DIGEST {\"error\":\"LOADING Valkey is loading the dataset in memory\"}, not the parent's {\"reply\":\"e887f963eeae4e2eb678628d7364f88b1aa77644\"}",
+      "scenario": "ai-74cade412217",
+      "seed": 11702,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #1317",
+      "fingerprint": "22ded0820d4eb170eddc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/117"
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the parent's RDB loads into the candidate with DEBUG DIGEST {\"error\":\"LOADING Valkey is loading the dataset in memory\"}, not the parent's {\"reply\":\"e887f963eeae4e2eb678628d7364f88b1aa77644\"}",
+      "scenario": "ai-440d615dcf68",
+      "seed": 11703,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #1317",
+      "fingerprint": "22ded0820d4eb170eddc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/117"
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

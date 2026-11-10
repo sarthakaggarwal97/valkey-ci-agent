@@ -1,0 +1,54 @@
+extends: [valkey.base]
+id: proposed.cluster-fail-reason-change
+deployment:
+  modes: [cluster]
+metadata:
+  description: Pause cluster primaries with SIGSTOP so the cluster state drops to
+    fail and the fail reason moves between not-full-coverage and minority-partition,
+    then resume them and verify the cluster recovers with no crash and no acknowledged
+    write lost
+inputs:
+  properties:
+    gap_s: {type: number, minimum: 0, maximum: 60, default: 6}
+    pause0_s: {type: number, minimum: 1, maximum: 120, default: 20}
+    pause1_s: {type: number, minimum: 1, maximum: 120, default: 15}
+    settle_s: {type: number, minimum: 1, maximum: 120, default: 30}
+components:
+- use: valkey.observer.log
+  id: fail-logs
+  config:
+    instances: all
+    expect:
+    - {pattern: "Cluster is currently down: At least one hash slot is not served",
+      evidence_id: valkey.cluster.fail-coverage-logged}
+    - {pattern: "Cluster is currently down: I am part of a minority partition", evidence_id: valkey.cluster.fail-minority-logged}
+- use: valkey.fault.process-signal
+  id: stop-first-primary
+  config:
+    when_event: warm-up.completed
+    instance: valkey-0
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.pause0_s}
+- use: valkey.fault.process-signal
+  id: stop-second-primary
+  config:
+    when_event: gap.completed
+    instance: valkey-1
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.pause1_s}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, fail-logs, stop-first-primary, stop-second-primary]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: gap
+  depends_on: [warm-up]
+  config: {seconds: {$ref: inputs.gap_s}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [gap]
+  config: {seconds: {$ref: inputs.settle_s}}
+required_events: [warm-up.completed, gap.completed, settle.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: stop-first-primary}
+- {evidence_id: valkey.fault.injected, source: stop-second-primary}

@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.hashtable-cluster-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Per-slot hashtables, slot key counting and shard-pubsub teardown on
+    slot removal, compared on two-node clusters
+components:
+- use: valkey.action.commands
+  id: slots
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 90
+    commands:
+    - {command: [SET, key, 42], expect: {equals: OK}}
+    - {command: [OBJECT, REFCOUNT, key], expect_difference: true, expect: {equals: 1}}
+    - {command: [SET, foo, v1], expect: {equals: OK}}
+    - {command: [MSET, "{foo}1", a, "{foo}2", b], expect: {equals: OK}}
+    - {command: [PEXPIREAT, foo, 33177117600000], expect: {equals: 1}}
+    - {command: [PEXPIRETIME, foo], expect: {equals: 33177117600000}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect: {equals: 3}}
+    - {command: [CLUSTER, GETKEYSINSLOT, 12182, 10], compare: unordered}
+    - {command: [KEYS, "{foo}*"], compare: unordered}
+    - {command: [KEYS, "*"], compare: unordered}
+    - {command: [DBSIZE], expect: {equals: 4}}
+    - {command: [SSUBSCRIBE, foo], connection: ss}
+    - {command: [PUBSUB, SHARDCHANNELS], expect: {equals: [foo]}}
+    - {command: [PUBSUB, SHARDNUMSUB, foo], expect: {equals: [foo, 1]}}
+    - {command: [SPUBLISH, foo, hi], expect: {equals: 1}}
+    - {connection: ss, read: true}
+    - {command: [DEL, foo, "{foo}1", "{foo}2"], expect: {equals: 3}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.1.id>"], expect: {equals: OK}}
+    - {connection: ss, read: true, expect: {contains: sunsubscribe}}
+    - {command: [PUBSUB, SHARDCHANNELS], expect: {equals: []}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect: {equals: 0}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slots.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slots}

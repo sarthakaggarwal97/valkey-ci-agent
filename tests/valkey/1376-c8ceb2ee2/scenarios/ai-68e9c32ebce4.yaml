@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4695d118dd61..c8ceb2ee255c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-68e9c32ebce4
+seed: 7002
+experiment:
+  id: proposed.client-buffer-resize-churn
+  inputs:
+    resp: 3
+    io_threads: 4
+deployment:
+  mode: standalone
+  base_port: 7100

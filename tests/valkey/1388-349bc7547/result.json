@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "349bc7547bf28ae304537bd6888d575e2409f25c",
+  "parent": "9f8b174c2eec4be1b6bc15745ac479c95dbd3a6b",
+  "pr": 1388,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "defrag: use monotime in module interface (#1388)",
+  "date": "2024-12-03",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 4.4067,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is an internally consistent clock refactor with no behavior the fuzzer can observe. Both the producer (defragLaterItem in defrag.c, which previously converted the monotonic deadline to wall-clock) and the consumer (VM_DefragShouldStop and the ValkeyModuleDefragCtx.endtime field in module.c) switched to monotime together, the endtime==0 'no deadline' sentinel used by moduleDefragValue and moduleDefragGlobals is preserved, and ValkeyModuleDefragCtx is defined privately in module.c, so modules see only the unchanged boolean of DefragShouldStop. The only semantic difference is robustnes"
+}

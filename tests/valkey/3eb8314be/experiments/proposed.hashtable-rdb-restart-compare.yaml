@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.hashtable-rdb-restart-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: RDB save and reload of embedded key/expire objects across a restart,
+    compared against the dict parent
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 120
+    commands:
+    - {command: [SET, int1, 123], expect: {equals: OK}}
+    - {command: [SET, emb, hello], expect: {equals: OK}}
+    - {command: [SET, raw1, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx], expect: {
+        equals: OK}}
+    - {command: [SET, KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK,
+        bigkeyval], expect: {equals: OK}}
+    - {command: [SET, "", emptykeyval], expect: {equals: OK}}
+    - {command: [PEXPIREAT, emb, 33177117600000], expect: {equals: 1}}
+    - {command: [PEXPIREAT, KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK,
+        33177117600000], expect: {equals: 1}}
+    - {command: [RPUSH, l, a, b, c], expect: {equals: 3}}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [SADD, s, m1, m2, m3], expect: {equals: 3}}
+    - {command: [ZADD, z, 1, one, 2, two], expect: {equals: 2}}
+    - {command: [XADD, st, "1-1", f, v], expect: {equals: "1-1"}}
+    - {command: [PFADD, hll, a, b, c], expect: {equals: 1}}
+    - {command: [PEXPIREAT, h, 33177117600000], expect: {equals: 1}}
+    - {command: [DEBUG, DIGEST]}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 11}}
+    - {command: [GET, int1], expect: {equals: "123"}}
+    - {command: [GET, emb], expect: {equals: hello}}
+    - {command: [PEXPIRETIME, emb], expect: {equals: 33177117600000}}
+    - {command: [GET, raw1], expect: {equals: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}}
+    - {command: [GET, KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK],
+      expect: {equals: bigkeyval}}
+    - {command: [PEXPIRETIME, KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK],
+      expect: {equals: 33177117600000}}
+    - {command: [GET, ""], expect: {equals: emptykeyval}}
+    - {command: [LRANGE, l, 0, -1], expect: {equals: [a, b, c]}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [PEXPIRETIME, h], expect: {equals: 33177117600000}}
+    - {command: [SMEMBERS, s], compare: unordered}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES], expect: {equals: [one, "1", two, "2"]}}
+    - {command: [XLEN, st], expect: {equals: 1}}
+    - {command: [PFCOUNT, hll], expect: {equals: 3}}
+    - {command: [DEBUG, DIGEST]}
+    - {command: [INCR, int1], expect: {equals: 124}}
+    - {command: [OBJECT, REFCOUNT, int1], expect_difference: true, expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

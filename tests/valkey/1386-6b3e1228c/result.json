@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6b3e1228cd043ebd35eec9c4354c933d5a8f968c",
+  "parent": "71560a2a4a1a73085dba9a8ea8f835c371358cfa",
+  "pr": 1386,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "RDMA: Fix dead loop when transfer large data (20KB) (#1386)",
+  "date": "2024-12-05",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4549,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to src/rdma.c: it implements the already-existing postpone_update_state/update_state connection hooks for the RDMA transport to fix a dead loop on large (~20KB) transfers. That code is compiled only with BUILD_RDMA and executes only for clients connected over an RDMA channel, which needs RDMA hardware or root-level soft-RoCE kernel setup, an --rdma-port, and an RDMA-capable client. No installed fuzzer component or writable experiment can open an RDMA connection (all workloads, actions and faults use TCP/Unix sockets, whose ConnectionType leaves these hooks NULL), so no s"
+}

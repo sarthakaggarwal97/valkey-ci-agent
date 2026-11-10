@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9c48f567907087637e19bf30a5a137d8b50e0df3",
+  "parent": "c8ceb2ee255c899b0cb05b69f0511fc7dcf4ddca",
+  "pr": 1149,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reset repl_down_since to zero only on state change (#1149)",
+  "date": "2024-12-01",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 7.6061,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,81 @@
+extends: [valkey.liveness]
+id: proposed.hashtable-subscan-defrag-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: HSCAN/SSCAN/ZSCAN over hashtable-encoded values (scanCallback) and
+    an active-defrag pass over quicklist, hash, set, zset and stream values, including
+    the defragLater path for large values
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: subscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    server_config:
+      hash-max-listpack-entries: 0
+      set-max-listpack-entries: 0
+      zset-max-listpack-entries: 0
+      list-max-listpack-size: 4
+      active-defrag-threshold-lower: 0
+      active-defrag-ignore-bytes: 1
+      active-defrag-cycle-min: 30
+      active-defrag-cycle-max: 60
+      active-defrag-max-scan-fields: 10
+    commands:
+    - {command: [RPUSH, biglist, a01, a02, a03, a04, a05, a06, a07, a08, a09, a10,
+        a11, a12, a13, a14, a15, a16, a17, a18, a19, a20, a21, a22, a23, a24, a25,
+        a26, a27, a28, a29, a30, a31, a32, a33, a34, a35, a36, a37, a38, a39, a40,
+        a41, a42, a43, a44, a45, a46, a47, a48], expect: {equals: 48}}
+    - {command: [HSET, bighash, f01, v01, f02, v02, f03, v03, f04, v04, f05, v05,
+        f06, v06, f07, v07, f08, v08, f09, v09, f10, v10, f11, v11, f12, v12, f13,
+        v13, f14, v14, f15, v15], expect: {equals: 15}}
+    - {command: [SADD, bigset, m01, m02, m03, m04, m05, m06, m07, m08, m09, m10, m11,
+        m12, m13, m14, m15], expect: {equals: 15}}
+    - {command: [ZADD, bigzset, 1, m01, 2, m02, 3, m03, 4, m04, 5, m05, 6, m06, 7,
+        m07, 8, m08, 9, m09, 10, m10, 11, m11, 12, m12, 13, m13, 14, m14, 15, m15],
+      expect: {equals: 15}}
+    - {command: [XADD, st, 1-1, f, v], expect: {equals: 1-1}}
+    - {command: [XADD, st, 2-1, f, v], expect: {equals: 2-1}}
+    - {command: [XADD, st, 3-1, f, v], expect: {equals: 3-1}}
+    - {command: [HSET, h1, f, v], expect: {equals: 1}}
+    - {command: [SADD, s1, m], expect: {equals: 1}}
+    - {command: [ZADD, z1, 1, m], expect: {equals: 1}}
+    - {command: [RPUSH, l1, a, b], expect: {equals: 2}}
+    - {command: [SET, e1, v, EX, 9000], expect: {equals: OK}}
+    - {command: [SET, e2, v, EX, 9000], expect: {equals: OK}}
+    - {command: [SUBSCRIBE, defragchan], connection: subconn, expect: {exists: true}}
+    - {command: [HSCAN, bighash, 0, COUNT, 100], compare: skip, expect: {exists: true}}
+    - {command: [HSCAN, bighash, 0, COUNT, 100, NOVALUES], compare: skip}
+    - {command: [HSCAN, bighash, 0, MATCH, "f0*", COUNT, 100], compare: skip}
+    - {command: [SSCAN, bigset, 0, COUNT, 100], compare: skip}
+    - {command: [SSCAN, bigset, 0, MATCH, "m0*", COUNT, 100], compare: skip}
+    - {command: [ZSCAN, bigzset, 0, COUNT, 100], compare: skip}
+    - {command: [HSCAN, h1, 0]}
+    - {command: [SSCAN, s1, 0]}
+    - {command: [ZSCAN, z1, 0]}
+    - {command: [CONFIG, SET, activedefrag, yes], expect: {equals: OK}}
+    - {command: [SET, defraggate, x, PX, 5000], expect: {equals: OK}}
+    - {command: [GET, defraggate], wait_s: 30, expect: {exists: false}}
+    - {command: [CONFIG, SET, activedefrag, no], expect: {equals: OK}}
+    - {command: [LLEN, biglist], expect: {equals: 48}}
+    - {command: [LRANGE, biglist, 0, 2], expect: {equals: [a01, a02, a03]}}
+    - {command: [HLEN, bighash], expect: {equals: 15}}
+    - {command: [HGET, bighash, f07], expect: {equals: v07}}
+    - {command: [SCARD, bigset], expect: {equals: 15}}
+    - {command: [SISMEMBER, bigset, m15], expect: {equals: 1}}
+    - {command: [ZCARD, bigzset], expect: {equals: 15}}
+    - {command: [ZSCORE, bigzset, m09], expect: {equals: "9"}}
+    - {command: [XLEN, st], expect: {equals: 3}}
+    - {command: [HSCAN, bighash, 0, COUNT, 100], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [subscan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: subscan}

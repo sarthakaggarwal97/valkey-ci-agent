@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.hashtable-keypaths-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Key paths that the dict-to-hashtable swap rewrote (MSETNX dup, SETBIT/BITOP
+    create, MOVE with TTL, keyspace SCAN with expiry) reply the same on both builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: keys
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [MSETNX, dk, v1, dk, v2], expect: {equals: 1}}
+    - {command: [GET, dk], expect: {equals: v2}}
+    - {command: [SETBIT, bk, 7, 1], expect: {equals: 0}}
+    - {command: [GET, bk], expect: {equals: !!binary 'AQ=='}}
+    - {command: [SET, s1, abc], expect: {equals: OK}}
+    - {command: [SET, s2, abd], expect: {equals: OK}}
+    - {command: [BITOP, AND, dest, s1, s2], expect: {equals: 3}}
+    - {command: [GET, dest], expect: {equals: "ab`"}}
+    - {command: [SET, mk, mv, EX, 100], expect: {equals: OK}}
+    - {command: [MOVE, mk, 1], expect: {equals: 1}}
+    - {command: [EXISTS, mk], expect: {equals: 0}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [GET, mk], expect: {equals: mv}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [SET, expk, x, EXAT, 1], expect: {equals: OK}}
+    - {command: [SCAN, 0, MATCH, expk, COUNT, 1000], expect: {equals: ["0", []]}}
+    - {command: [SET, strk, s], expect: {equals: OK}}
+    - {command: [SCAN, 0, MATCH, strk, TYPE, string, COUNT, 1000], expect: {equals: [
+          "0", [strk]]}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 1], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: keys}

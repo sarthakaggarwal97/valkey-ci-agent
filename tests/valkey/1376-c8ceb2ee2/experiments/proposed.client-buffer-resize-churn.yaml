@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.client-buffer-resize-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Drive clientsCronResizeOutputBuffer through repeated shrink/expand cycles (DEBUG
+    REPLYBUFFER PEAK-RESET-TIME 50 plus alternating 16KB and small replies), then
+    close clients whose reply buffers are pristine, shrunk and expanded, so every
+    zfree_with_size of c->buf (freeClient and the cron resize) frees a buffer whose
+    recorded usable size must match the allocation; a size mismatch crashes or trips
+    the sanitizer, which fails the compared run.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, enum: [1, 4], default: 1}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {io-threads: {$ref: inputs.io_threads}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, REPLYBUFFER, RESIZING, "1"], expect: {equals: OK}}
+    - {command: [DEBUG, REPLYBUFFER, PEAK-RESET-TIME, "50"], expect: {equals: OK}}
+    - {command: [SETRANGE, big, 15999, x], expect: {equals: 16000}}
+    - {command: [GET, big], expect: {exists: true}}
+    - {command: [CLIENT, INFO], wait_s: 20, expect: {contains: "rbs=10"}, compare: skip}
+    - {command: [GET, big], expect: {exists: true}}
+    - {command: [CLIENT, INFO], wait_s: 20, expect: {contains: "rbs=20"}, compare: skip}
+    - {command: [CLIENT, INFO], wait_s: 20, expect: {contains: "rbs=10"}, compare: skip}
+    - {command: [GET, big], expect: {exists: true}}
+    - {command: [CLIENT, INFO], wait_s: 20, expect: {contains: "rbs=20"}, compare: skip}
+    - {command: [CLIENT, INFO], connection: c2, wait_s: 20, expect: {contains: "rbs=10"},
+      compare: skip}
+    - {command: [GET, big], connection: c2, expect: {exists: true}}
+    - {command: [CLIENT, INFO], connection: c2, wait_s: 20, expect: {contains: "rbs=20"},
+      compare: skip}
+    - {command: [QUIT], connection: c2, expect: {exists: false}}
+    - {command: [PING], connection: fresh, expect: {equals: PONG}}
+    - {command: [QUIT], connection: fresh, expect: {exists: false}}
+    - {command: [GET, big], connection: busy, expect: {exists: true}}
+    - {command: [QUIT], connection: busy, expect: {exists: false}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-10T22:30+00:00.
+Updated 2026-11-10T22:39+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1584 | 937 | #1324 (2024-12-10) | 285 | 226.3 |
+| valkey-io/valkey | 1610 | 912 | #1209 (2024-11-29) | 311 | 230.0 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 64 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 9.1 |
 | valkey-io/valkey-search | 672 | 0 | f8106e72e984 (2024-11-27) | 3 | 96.0 |
@@ -13,28 +13,28 @@ Updated 2026-11-10T22:30+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-10T19:49:27+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42857906082): 20 merge(s) tested, 7 without a code change.
+[2026-11-10T22:39:05+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42889123124): 20 merge(s) tested, 6 without a code change.
 
-- [valkey-io/valkey#1451](https://github.com/valkey-io/valkey/pull/1451) ([tests](tests/valkey/1451-e203ca35b/)): Fix undefined behavior defined by ASAN (#1451): declined: The change is a pure undefined-behavior cleanup: every hunk replaces a function-pointer cast (calling e.g. sdsfree or streamFreeCG through an incompatible void(*)(void*) cast) with a trivially equivalent void*-typed wrapper that calls the same free function on the same object. I verified e
-- [valkey-io/valkey#1446](https://github.com/valkey-io/valkey/pull/1446) ([tests](tests/valkey/1446-b66698b88/)): Discover and fix new typos (#1446): declined: The change only fixes typos: comments in geohash_helper.c and zmalloc.c, a CI tool version bump, Tcl test-suite variable/proc renames, and a C identifier rename (shared.special_asterick -> special_asterisk) whose object is created with the same value "*" and used in the same call site, so 
-- [valkey-io/valkey#1303](https://github.com/valkey-io/valkey/pull/1303) ([tests](tests/valkey/1303-ba25b586d/)): Introduce FORCE_DEFRAG compilation option to allow activedefrag run when allocator is not jemalloc (#1303): declined: The change introduces a DEBUG_FORCE_DEFRAG compile-time option: all new runtime code (the defrag allocator stubs, HAVE_DEFRAG definition, and the activedefrag default of 1) is compiled only when that flag is passed at build time, which the fuzzer's standard builds of both commits never do.
-- [valkey-io/valkey#1379](https://github.com/valkey-io/valkey/pull/1379) ([tests](tests/valkey/1379-7892bf808/)): Fix test_reclaimFilePageCache to avoid tmpfs (#1379): declined: The change modifies only src/unit/test_util.c, adding a statfs check so the unit test test_reclaimFilePageCache skips itself based on whether /tmp is tmpfs (where posix_fadvise page-cache reclaim can't be observed). It is a test-infrastructure/CI fix with no change to any server, command, 
-- [valkey-io/valkey#1436](https://github.com/valkey-io/valkey/pull/1436) ([tests](tests/valkey/1436-e024b4bd2/)): Drop the MEET packet if the link node is in handshake state (#1436): 0 of 2 test(s) reached the change, coverage 40%
-- [valkey-io/valkey#1356](https://github.com/valkey-io/valkey/pull/1356) ([tests](tests/valkey/1356-ad2422068/)): Automatic failover vote is not limited by two times the node timeout (#1356): 0 of 3 test(s) reached the change
-- [valkey-io/valkey#1176](https://github.com/valkey-io/valkey/pull/1176) ([tests](tests/valkey/1176-88942c8e6/)): Replace dict with new hashtable for sets datatype (#1176): 5 of 17 test(s) reached the change, coverage 83%
-- [valkey-io/valkey#1442](https://github.com/valkey-io/valkey/pull/1442) ([tests](tests/valkey/1442-3cd176dc3/)): Avoid importing memory aligned malloc (#1442): declined: The change only defines __MM_MALLOC_H before including immintrin.h in hyperloglog.c to suppress the declaration of the unused _mm_malloc/_mm_free aligned-allocation functions. It is a compile-time/header-hygiene change with no modification to any executed code path: the AVX2 HyperLogLog im
-- [valkey-io/valkey#1431](https://github.com/valkey-io/valkey/pull/1431) ([tests](tests/valkey/1431-b60097ba0/)): Check length before reading in `stringmatchlen` (#1431): 0 of 2 test(s) reached the change, coverage 80%
-- [valkey-io/valkey#1430](https://github.com/valkey-io/valkey/pull/1430) ([tests](tests/valkey/1430-32f2c73cb/)): defrag: eliminate persistent kvstore pointer and edge case fixes (#1430): 0 of 3 test(s) reached the change, coverage 81%
-- [valkey-io/valkey#1429](https://github.com/valkey-io/valkey/pull/1429) ([tests](tests/valkey/1429-3a1043a4f/)): Fix Valkey binary build workflow, version support changes. (#1429): declined: The change modifies only CI/build infrastructure: .github/workflows/call-build-linux-x86-packages.yml changes the GitHub Actions runner label, and utils/releasetools/build-config.json updates the Ubuntu distro package build matrix. No server, replication, persistence, command, or tool code
-- [valkey-io/valkey#1414](https://github.com/valkey-io/valkey/pull/1414) ([tests](tests/valkey/1414-2d9240452/)): Avoid defragging scripts during EVAL command execution (#1414): declined: no proposed test validated
-- [valkey-io/valkey#1307](https://github.com/valkey-io/valkey/pull/1307) ([tests](tests/valkey/1307-5f7fe9ef2/)): Send MEET packet to node if there is no inbound link to fix inconsistency when handshake timedout (#1307): 0 of 4 test(s) reached the change, coverage 90%; crash, introduced and since fixed (recorded)
-- [valkey-io/valkey#1420](https://github.com/valkey-io/valkey/pull/1420) ([tests](tests/valkey/1420-0c8ad5cd3/)): defrag: allow defrag to start during AOF loading (#1420): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1421](https://github.com/valkey-io/valkey/pull/1421) ([tests](tests/valkey/1421-1acf7f71c/)): Fix memory leak in the new hashtable unittest (#1421): declined: The change is a one-line fix in src/unit/test_hashtable.c, adding free(e) to plug a memory leak in the hashtable unit test's own test code. It modifies only the unittest binary, not the server: no command, reply, replication, cluster, persistence or tool behaviour changes, so no fuzzer sce
-- [valkey-io/valkey@3eb8314be6af](https://github.com/valkey-io/valkey/commit/3eb8314be6af0777e69f852b65f933dd9186d30b): to retry, 1 of 110 run(s) could not start: the run could not start: runner execution failed during deployment.provision: LocalDeploymentError: the 6 cluster nodes did not all learn of each other within 30.00s o
-- [valkey-io/valkey#1065](https://github.com/valkey-io/valkey/pull/1065) ([tests](tests/valkey/1065-4efff42f0/)): Replace dict with hashtable in command tables (#1065): 0 of 13 test(s) reached the change, coverage 84%
-- [valkey-io/valkey@c8ee5c2c46c5](https://github.com/valkey-io/valkey/commit/c8ee5c2c46c52bcb2b48e190a8f5131fdbcf355e) ([tests](tests/valkey/c8ee5c2c4/)): Hashtable implementation including unit tests: declined: The change only adds a new, not-yet-used data structure: src/hashtable.c/.h are added and linked into the build, but no server code includes or calls the new hashtable at this commit (only hashtable.c itself and src/unit/test_hashtable.c reference it). No command, reply, replication, persi
-- [valkey-io/valkey#1408](https://github.com/valkey-io/valkey/pull/1408) ([tests](tests/valkey/1408-7e564887b/)): Set HIDDEN_CONFIG flag on events-per-io-thread (#1408): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#1398](https://github.com/valkey-io/valkey/pull/1398) ([tests](tests/valkey/1398-f951a1ca7/)): Add new flag in `CLIENT LIST` for import-source client (#1398): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#5338](https://github.com/valkey-io/valkey/pull/5338) ([tests](tests/valkey/5338-9abbfd255/)): Use the effective replica output buffer limit for the steady-state throttle target (#5338): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey@3eb8314be6af](https://github.com/valkey-io/valkey/commit/3eb8314be6af0777e69f852b65f933dd9186d30b) ([tests](tests/valkey/3eb8314be/)): Replace dict with hashtable for keys, expires and pubsub channels: 6 of 23 test(s) reached the change, coverage 80%
+- [valkey-io/valkey#1324](https://github.com/valkey-io/valkey/pull/1324) ([tests](tests/valkey/1324-9cfe1b3d8/)): Set Command with IFEQ Support (#1324): 3 of 3 test(s) reached the change, coverage 87%
+- [valkey-io/valkey#1410](https://github.com/valkey-io/valkey/pull/1410) ([tests](tests/valkey/1410-1ba85d002/)): Use binary representation in assert crash log, cleanup in crash log (#1410): declined: The change is a cleanup/refactor of crash-log formatting in src/debug.c (_serverAssertPrintClientInfo and logCurrentClient), which only executes while the server is already aborting. It changes no command reply, data, replication, or persistence behavior; its only effect is the textual for
+- [valkey-io/valkey#1389](https://github.com/valkey-io/valkey/pull/1389) ([tests](tests/valkey/1389-5be4ce6d2/)): Optimize ZRANK to avoid path comparisons (#1389): 0 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1339](https://github.com/valkey-io/valkey/pull/1339) ([tests](tests/valkey/1339-924729eb1/)): Fix the election was reset wrongly before failover epoch was obtained (#1339): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1317](https://github.com/valkey-io/valkey/pull/1317) ([tests](tests/valkey/1317-e8078b731/)): Allow MEMORY MALLOC-STATS and MEMORY PURGE during loading phase (#1317): 3 of 3 test(s) reached the change; [check, introduced by #1317](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/117)
+- [valkey-io/valkey#887](https://github.com/valkey-io/valkey/pull/887) ([tests](tests/valkey/887-176fafcaf/)): Add a note to conf about the dangers of modifying dir at runtime (#887): declined: The change touches only valkey.conf comments (a note about modifying 'dir' at runtime) and adds a TCL test that starting the server with --dir given twice works. No source code changes: no command, reply, config handling, persistence or replication behaviour differs between the change and 
+- [valkey-io/valkey#1402](https://github.com/valkey-io/valkey/pull/1402) ([tests](tests/valkey/1402-f20d629db/)): Fix sanitizer builds with clang (#1402): declined: The change only moves the #include <stdatomic.h> line in src/unit/test_networking.c (a unit-test source file) so the file compiles under clang sanitizer builds. It is a build fix for test code with no change to server behaviour, commands, replication, persistence or tools, so no fuzzer sce
+- [valkey-io/valkey#1395](https://github.com/valkey-io/valkey/pull/1395) ([tests](tests/valkey/1395-6df376d68/)): Fix coredump when use hellodict example module (#1395): declined: The change only edits src/modules/hellodict.c, an example module that is not compiled into valkey-server and is only reachable via an explicit MODULE LOAD of a separately built hellodict.so. The fuzzer's experiments cannot load modules (MODULE LOAD/LOADEX are refused in command sequences, 
+- [valkey-io/valkey#1386](https://github.com/valkey-io/valkey/pull/1386) ([tests](tests/valkey/1386-6b3e1228c/)): RDMA: Fix dead loop when transfer large data (20KB) (#1386): declined: The change is confined to src/rdma.c: it implements the already-existing postpone_update_state/update_state connection hooks for the RDMA transport to fix a dead loop on large (~20KB) transfers. That code is compiled only with BUILD_RDMA and executes only for clients connected over an RDMA
+- [valkey-io/valkey#1041](https://github.com/valkey-io/valkey/pull/1041) ([tests](tests/valkey/1041-71560a2a4/)): Add API UpdateRuntimeArgs for updating the module arguments during runtime (#1041): declined: The change is a purely additive module API (ValkeyModule_UpdateRuntimeArgs) plus a new test module that is its only caller. No core command, reply, replication, persistence, or cluster path changes: MODULE LIST's arg display and CONFIG REWRITE's loadmodule rewriting are both unchanged and 
+- [valkey-io/valkey#1388](https://github.com/valkey-io/valkey/pull/1388) ([tests](tests/valkey/1388-349bc7547/)): defrag: use monotime in module interface (#1388): declined: The change is an internally consistent clock refactor with no behavior the fuzzer can observe. Both the producer (defragLaterItem in defrag.c, which previously converted the monotonic deadline to wall-clock) and the consumer (VM_DefragShouldStop and the ValkeyModuleDefragCtx.endtime field 
+- [valkey-io/valkey#1360](https://github.com/valkey-io/valkey/pull/1360) ([tests](tests/valkey/1360-9f8b174c2/)): Optimize IO thread offload for modified argv (#1360): 0 of 6 test(s) reached the change, coverage 95%
+- [valkey-io/valkey#1242](https://github.com/valkey-io/valkey/pull/1242) ([tests](tests/valkey/1242-397201c48/)): Refactor of ActiveDefrag to reduce latencies (#1242): 3 of 6 test(s) reached the change, coverage 92%
+- [valkey-io/valkey#1293](https://github.com/valkey-io/valkey/pull/1293) ([tests](tests/valkey/1293-3df609ef0/)): Optimize PFCOUNT, PFMERGE command by SIMD acceleration (#1293): 5 of 5 test(s) reached the change, coverage 93%
+- [valkey-io/valkey#1188](https://github.com/valkey-io/valkey/pull/1188) ([tests](tests/valkey/1188-fbbfe5d3d/)): Print logs when the cluster state changes to fail or the fail reason changes (#1188): 0 of 7 test(s) reached the change, coverage 91%
+- [valkey-io/valkey#905](https://github.com/valkey-io/valkey/pull/905) ([tests](tests/valkey/905-90475af59/)): Free strings during BGSAVE/BGAOFRW to reduce copy-on-write (#905): 0 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1149](https://github.com/valkey-io/valkey/pull/1149) ([tests](tests/valkey/1149-9c48f5679/)): Reset repl_down_since to zero only on state change (#1149): 0 of 6 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1376](https://github.com/valkey-io/valkey/pull/1376) ([tests](tests/valkey/1376-c8ceb2ee2/)): Use zfree_with_size for client buffer (#1376): 0 of 4 test(s) reached the change, coverage 100%
 
 ### valkey-io/valkey-bloom
 
@@ -53,11 +53,11 @@ Updated 2026-11-10T22:30+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 760 of 1184 tested (64%)
-- Changed-line coverage: median 100% of 713 merge(s) measured, 57 under 50%
-- Recall: 204 parents flagged of 323 fix merges
-- Claude: $990.40 in the last 24 hours, $8640.30 in the last 7 days, $8640.30 in all
-- Issues filed: 66
+- Merges whose tests reached the change: 765 of 1197 tested (64%)
+- Changed-line coverage: median 100% of 725 merge(s) measured, 57 under 50%
+- Recall: 204 parents flagged of 324 fix merges
+- Claude: $1073.69 in the last 24 hours, $8723.60 in the last 7 days, $8723.60 in all
+- Issues filed: 67
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/102
@@ -74,6 +74,7 @@ Updated 2026-11-10T22:30+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/113
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/114
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/115
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/117
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -129,4 +130,3 @@ Updated 2026-11-10T22:30+00:00.
 
 - [valkey-io/valkey#1948](https://github.com/valkey-io/valkey/pull/1948): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
 - [valkey-io/valkey#1535](https://github.com/valkey-io/valkey/pull/1535): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
-- [valkey-io/valkey@3eb8314be6af](https://github.com/valkey-io/valkey/commit/3eb8314be6af0777e69f852b65f933dd9186d30b): attempt 1 of 3, 1 of 110 run(s) could not start: the run could not start: runner execution failed during deployment.provision: LocalDeploymentError: the 6 cluster nodes did not all learn of each other within 30.00s o

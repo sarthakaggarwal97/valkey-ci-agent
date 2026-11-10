@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fbbfe5d3d383..3df609ef06f7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-885aeb6cbd04
+seed: 11002
+experiment:
+  id: proposed.hll-simd-merge-compress
+  inputs:
+    resp: 3
+    sparse_max: 3000
+deployment:
+  mode: standalone
+  base_port: 7100

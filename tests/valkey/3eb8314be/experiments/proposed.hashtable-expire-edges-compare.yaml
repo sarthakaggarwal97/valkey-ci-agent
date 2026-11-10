@@ -1,0 +1,79 @@
+extends: [valkey.liveness]
+id: proposed.hashtable-expire-edges-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Lazy-expire edges of the keys hashtable - RANDOMKEY and SCAN over expired
+    entries, import mode, WATCH on an expired key, SWAPDB with a blocked client, RESTORE
+    with TTL, DEBUG key lookups via dbFind
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: edges
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [SET, onlykey, v, PX, 1], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.1], expect: {equals: OK}}
+    - {command: [RANDOMKEY], expect: {exists: false}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SET, scankey, v, PX, 1], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.1], expect: {equals: OK}}
+    - {command: [SCAN, 0, COUNT, 1000]}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SET, wkey, wv, PX, 80], expect: {equals: OK}}
+    - {command: [WATCH, wkey], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.2], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, txout, done], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: false}}
+    - {command: [GET, wkey], expect: {exists: false}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [CONFIG, SET, import-mode, yes], expect: {equals: OK}}
+    - {command: [CLIENT, IMPORT-SOURCE, ON], expect: {equals: OK}}
+    - {command: [SET, impkey, iv, PX, 1], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.1], expect: {equals: OK}}
+    - {command: [GET, impkey], expect: {equals: iv}}
+    - {command: [RANDOMKEY], expect: {equals: impkey}}
+    - {command: [CLIENT, IMPORT-SOURCE, OFF], expect: {equals: OK}}
+    - {command: [GET, impkey], expect: {exists: false}}
+    - {command: [DBSIZE], expect: {equals: 1}}
+    - {command: [RANDOMKEY], expect: {equals: impkey}}
+    - {command: [CONFIG, SET, import-mode, no], expect: {equals: OK}}
+    - {command: [GET, impkey], expect: {exists: false}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {raw: "BLPOP swaplist 0\r\n", connection: blocked}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [RPUSH, swaplist, hello], expect: {equals: 1}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SWAPDB, 0, 1], expect: {equals: OK}}
+    - {command: [LLEN, swaplist], expect: {equals: 0}}
+    - {read: true, connection: blocked, expect: {equals: [[swaplist, hello]]}}
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, 1], expect: {equals: OK}}
+    - {command: [RESTORE, rk1, 100000, !!binary "AAF2CwAAAAAAAAAAAA=="], expect: {
+        equals: OK}}
+    - {command: [PTTL, rk1], compare: skip, expect: {min: 1}}
+    - {command: [GET, rk1], expect: {equals: v}}
+    - {command: [RESTORE, rk2, 33077311740000, !!binary "AAF2CwAAAAAAAAAAAA==", ABSTTL],
+      expect: {equals: OK}}
+    - {command: [PTTL, rk2], compare: skip, expect: {min: 1}}
+    - {command: [GET, rk2], expect: {equals: v}}
+    - {command: [DEBUG, POPULATE, 5, pkey, 32], expect: {equals: OK}}
+    - {command: [GET, "pkey:0"], compare: skip}
+    - {command: [DEBUG, OBJECT, "pkey:1"], compare: skip}
+    - {command: [DEBUG, OBJECT, missingkey], expect: {error: "no such key"}}
+    - {command: [DEBUG, SDSLEN, "pkey:2"], compare: skip}
+    - {command: [DEBUG, SDSLEN, missingkey], expect: {error: "no such key"}}
+    - {command: [DEBUG, DIGEST-VALUE, "pkey:0", missingkey]}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [edges.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: edges}

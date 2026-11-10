@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "90475af59429583182402ee3b408d7bcb36d56cd",
+  "parent": "7043ef0bbb627b66bcaa75351b1b141c96852df8",
+  "pr": 905,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Free strings during BGSAVE/BGAOFRW to reduce copy-on-write (#905)",
+  "date": "2024-12-01",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 8,
+    "executed": 8,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.6201,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-24bfb528da14",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "no trustworthy verdict is possible; required components did not do their part outside an oracle or action, depend on one that did not, judged a deployment whose teardown failed, or were skipped: kill-primary, snapshot"
+    },
+    {
+      "scenario": "ai-b30ba24bfe9c",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "no trustworthy verdict is possible; required components did not do their part outside an oracle or action, depend on one that did not, judged a deployment whose teardown failed, or were skipped: kill-primary, snapshot"
+    }
+  ]
+}

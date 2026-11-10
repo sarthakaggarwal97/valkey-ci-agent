@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "71560a2a4a1a73085dba9a8ea8f835c371358cfa",
+  "parent": "a401e3789d58c4d41769c3099a5f1cc009130994",
+  "pr": 1041,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add API UpdateRuntimeArgs for updating the module arguments during runtime (#1041)",
+  "date": "2024-12-05",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5772,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a purely additive module API (ValkeyModule_UpdateRuntimeArgs) plus a new test module that is its only caller. No core command, reply, replication, persistence, or cluster path changes: MODULE LIST's arg display and CONFIG REWRITE's loadmodule rewriting are both unchanged and only reflect the API when a module invokes it. The sole caller is tests/modules/moduleparameter.so, which is new in this commit (so it does not exist at the parent for a compared/module_parent sequence) and is not among the test modules the runner can build (the available list has moduleconfigs.so and modulec"
+}

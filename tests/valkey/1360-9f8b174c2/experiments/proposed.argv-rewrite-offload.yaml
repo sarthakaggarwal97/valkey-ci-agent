@@ -1,0 +1,93 @@
+extends: [valkey.liveness]
+id: proposed.argv-rewrite-offload
+deployment:
+  modes: [standalone]
+metadata:
+  description: Commands that rewrite, extend, or redact their argv (SET EX, EXPIRE,
+    GETEX, INCRBYFLOAT, XADD *, MULTI-EXEC, redaction), run with IO-thread argv offload
+    active, compared against the parent build and verified for replica and persistence
+    propagation
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, enum: [1, 4], default: 4}
+    checks: {type: object, default: {replica: true, concurrency: 8, faults: true}}
+components:
+- use: valkey.action.commands
+  id: rewrites
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      io-threads: {$ref: inputs.io_threads}
+      events-per-io-thread: 0
+      slowlog-log-slower-than: 0
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    checks: {$ref: inputs.checks}
+    commands:
+    - {command: [SET, k1, v1, EX, 3600], expect: {equals: OK}}
+    - {command: [INCRBYFLOAT, f1, 1.5], expect: {equals: "1.5"}}
+    - {command: [INCRBYFLOAT, f1, 2.5], expect: {equals: "4"}}
+    - {command: [GET, f1], expect: {equals: "4"}}
+    - {command: [GETSET, k1, v2], expect: {equals: v1}}
+    - {command: [GETEX, k1, EX, 100], expect: {equals: v2}}
+    - {command: [GETEX, k1, PERSIST], expect: {equals: v2}}
+    - {command: [EXPIRE, k1, 2147483647], expect: {equals: 1}}
+    - {command: [EXPIRE, k1, 9223372036854775807], expect: {error: "invalid expire"}}
+    - {command: [PERSIST, k1], expect: {equals: 1}}
+    - {command: [SETEX, k2, 100, v3], expect: {equals: OK}}
+    - {command: [GETDEL, k2], expect: {equals: v3}}
+    - {command: [SET, "", "", EX, 100], expect: {equals: OK}}
+    - {command: [GETDEL, ""], expect: {equals: ""}}
+    - {command: [HSET, h1, fld, "1"], expect: {equals: 1}}
+    - {command: [HINCRBYFLOAT, h1, fld, 0.25], expect: {equals: "1.25"}}
+    - {command: [XADD, s1, "*", a, b], compare: skip}
+    - {command: [XLEN, s1], expect: {equals: 1}}
+    - {command: [RPUSH, biglist, a, a, a, "", b, b, c, c, c, c, d, ""], expect: {
+        equals: 12}}
+    - {command: [BLPOP, nokey, 0.1], expect: {exists: false}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, mk1, v1, EX, 1800], expect: {equals: QUEUED}}
+    - {command: [INCRBYFLOAT, mf, 0.5], expect: {equals: QUEUED}}
+    - {command: [GETEX, mk1, PERSIST], expect: {equals: QUEUED}}
+    - {command: [EXPIRE, mk1, 500], expect: {equals: QUEUED}}
+    - {command: [GETDEL, mf], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, "0.5", v1, 1, "0.5"]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [XADD, ms, "*", f, v], expect: {equals: QUEUED}}
+    - {command: [SET, mk2, v2, EX, 900], expect: {equals: QUEUED}}
+    - {command: [INCRBYFLOAT, mf2, 1.25], expect: {equals: QUEUED}}
+    - {command: [EXEC], compare: skip, expect: {exists: true}}
+    - {command: [SLOWLOG, GET, 10], compare: skip}
+    - {command: [DBSIZE], expect: {equals: 7}}
+- use: valkey.action.commands
+  id: redaction
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      io-threads: {$ref: inputs.io_threads}
+      events-per-io-thread: 0
+      slowlog-log-slower-than: 0
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [ACL, SETUSER, u1, on, ">pw1", "~*", "+@all"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, u1, ">pw2", ">pw3"], expect: {equals: OK}}
+    - {command: [AUTH, u1, pw1], connection: auth, expect: {equals: OK}}
+    - {command: [CONFIG, SET, masterauth, secretpw], expect: {equals: OK}}
+    - {command: [CONFIG, SET, masterauth, ""], expect: {equals: OK}}
+    - {command: [SLOWLOG, GET, 10], compare: skip}
+    - {command: [ACL, DELUSER, u1], expect: {equals: 1}}
+    - {command: [SET, k, v, EX, 60], expect: {equals: OK}}
+    - {command: [GETDEL, k], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rewrites.completed, redaction.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rewrites}
+- {evidence_id: valkey.command.sequence, source: redaction}

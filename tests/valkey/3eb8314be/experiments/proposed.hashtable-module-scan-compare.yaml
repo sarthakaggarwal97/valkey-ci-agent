@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.hashtable-module-scan-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module cursor scan over the keyspace drives the new dbScan/kvstoreScan
+    wrapper, and VM_ScanKey walks a hashtable-encoded hash
+components:
+- use: valkey.action.commands
+  id: modscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {hash-max-listpack-entries: 0}
+    timeout_s: 10
+    commands:
+    - {command: [MSET, s1, a, s2, b, s3, c], expect: {equals: OK}}
+    - {command: [HSET, bh, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: ["scan.scan_strings"], compare: skip, expect: {exists: true}}
+    - {command: ["scan.scan_key", bh], compare: skip, expect: {exists: true}}
+    - {command: ["scan.scan_key", missing], expect: {error: "not found"}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [SET, exp1, x, PX, 1], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.1], expect: {equals: OK}}
+    - {command: ["scan.scan_strings"], compare: skip, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modscan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modscan}

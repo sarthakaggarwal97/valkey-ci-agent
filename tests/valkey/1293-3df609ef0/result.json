@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3df609ef06f71c37a45049ec1df9611b9f763d55",
+  "parent": "fbbfe5d3d3833c74d86c324ca9ffee8b97856724",
+  "pr": 1293,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize PFCOUNT, PFMERGE command by SIMD acceleration (#1293)",
+  "date": "2024-12-02",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 5,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 89,
+    "executed": 83,
+    "percent": 93,
+    "uncovered": [
+      "src/hyperloglog.c:1621",
+      "src/hyperloglog.c:1622",
+      "src/hyperloglog.c:1623",
+      "src/hyperloglog.c:1624",
+      "src/hyperloglog.c:1625",
+      "src/hyperloglog.c:1626"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.0238,
+  "findings": [],
+  "recorded": []
+}

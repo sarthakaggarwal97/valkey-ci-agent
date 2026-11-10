@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.hashtable-pubsub-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Pubsub channel table (channel robj now stored in clients-dict metadata)
+    compared across the hashtable change and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: pubsub
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [SET, anchor, 7], expect: {equals: OK}}
+    - {command: [OBJECT, REFCOUNT, anchor], expect_difference: true, expect: {equals: 1}}
+    - {command: [SUBSCRIBE, ch], connection: c1}
+    - {command: [SUBSCRIBE, ch], connection: c2}
+    - {command: [SUBSCRIBE, ""], connection: c3}
+    - {command: [PUBSUB, CHANNELS], compare: unordered}
+    - {command: [PUBSUB, NUMSUB, ch], expect: {equals: [ch, 2]}}
+    - {command: [PUBLISH, ch, hello], expect: {equals: 2}}
+    - {command: [PUBLISH, "", hi], expect: {equals: 1}}
+    - {connection: c1, read: true}
+    - {connection: c3, read: true}
+    - {command: [UNSUBSCRIBE, ch], connection: c2}
+    - {command: [PUBSUB, NUMSUB, ch], expect: {equals: [ch, 1]}}
+    - {command: [UNSUBSCRIBE, ch], connection: c1}
+    - {command: [PUBSUB, CHANNELS], expect: {equals: [""]}}
+    - {command: [PUBSUB, NUMSUB, ch], expect: {equals: [ch, 0]}}
+    - {command: [UNSUBSCRIBE, ""], connection: c3}
+    - {command: [PUBSUB, CHANNELS], expect: {equals: []}}
+    - {command: [PSUBSCRIBE, "ch*"], connection: c4}
+    - {command: [PUBSUB, NUMPAT], expect: {equals: 1}}
+    - {command: [PUBLISH, ch, again], expect: {equals: 1}}
+    - {connection: c4, read: true}
+    - {command: [SSUBSCRIBE, sch], connection: c5}
+    - {command: [PUBSUB, SHARDCHANNELS], expect: {equals: [sch]}}
+    - {command: [SPUBLISH, sch, x], expect: {equals: 1}}
+    - {connection: c5, read: true}
+    - {command: [SUNSUBSCRIBE, sch], connection: c5}
+    - {command: [PUBSUB, SHARDCHANNELS], expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [pubsub.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pubsub}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f20d629dbe31d31eb82e360f9da4ef94ba9aabdc",
+  "parent": "a2fe6af457e353425d39c858b8cf68f1b4d6a9b7",
+  "pr": 1402,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix sanitizer builds with clang (#1402)",
+  "date": "2024-12-07",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2125,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only moves the #include <stdatomic.h> line in src/unit/test_networking.c (a unit-test source file) so the file compiles under clang sanitizer builds. It is a build fix for test code with no change to server behaviour, commands, replication, persistence or tools, so no fuzzer scenario can exercise it and none is needed."
+}

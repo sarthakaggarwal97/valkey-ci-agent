@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 176fafcaf717..e8078b731525.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-10fdb9a361af
+seed: 11701
+experiment:
+  id: proposed.memory-commands-during-loading
+  inputs:
+    resp: 2
+    key_load_delay_us: 50
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

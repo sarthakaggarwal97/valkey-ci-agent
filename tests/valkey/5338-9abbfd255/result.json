@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "parent": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "pr": 5338,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use the effective replica output buffer limit for the steady-state throttle target (#5338)",
+  "date": "2026-11-10",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.0222,
+  "findings": [],
+  "recorded": []
+}

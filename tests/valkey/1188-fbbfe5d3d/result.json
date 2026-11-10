@@ -1,0 +1,44 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fbbfe5d3d3833c74d86c324ca9ffee8b97856724",
+  "parent": "90475af59429583182402ee3b408d7bcb36d56cd",
+  "pr": 1188,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Print logs when the cluster state changes to fail or the fail reason changes (#1188)",
+  "date": "2024-12-02",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 23,
+    "executed": 21,
+    "percent": 91,
+    "uncovered": [
+      "src/cluster_legacy.c:4497",
+      "src/cluster_legacy.c:5378"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 4.4554,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-77a2ee4dcb9f",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'first-resumed' returned ERROR: pause-first.recovered observed 0/1 times before timeout"
+    },
+    {
+      "scenario": "ai-5f5ed96bf4a4",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'first-resumed' returned ERROR: pause-first.recovered observed 0/1 times before timeout"
+    }
+  ]
+}

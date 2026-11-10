@@ -1,0 +1,85 @@
+extends: [valkey.liveness]
+id: proposed.set-ifeq
+deployment:
+  modes: [standalone]
+metadata:
+  description: SET IFEQ comparison semantics - abort replies, GET flag, wrong type,
+    NX/XX exclusion, encodings and TTL handling - compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ifeq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k, v1, IFEQ, whatever], expect_difference: true, expect: {error: false}}
+    - {command: [EXISTS, k], expect: {equals: 0}}
+    - {command: [SET, k, v1], expect: {equals: OK}}
+    - {command: [SET, k, v2, IFEQ, v1], expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, k], expect_difference: true, expect: {equals: v2}}
+    - {command: [SET, k, v3, IFEQ, wrong], expect_difference: true, expect: {error: false}}
+    - {command: [GET, k], expect_difference: true, expect: {equals: v2}}
+    - {command: [SET, k, v3, ifeq, v2], expect_difference: true, expect: {equals: OK}}
+    - {command: [SET, k, v4, IFEQ, v3, GET], expect_difference: true, expect: {equals: v3}}
+    - {command: [GET, k], expect_difference: true, expect: {equals: v4}}
+    - {command: [SET, k, v5, IFEQ, nope, GET], expect_difference: true, expect: {
+        equals: v4}}
+    - {command: [GET, k], expect_difference: true, expect: {equals: v4}}
+    - {command: [SET, miss, x, IFEQ, y, GET], expect_difference: true, expect: {error: false}}
+    - {command: [EXISTS, miss], expect: {equals: 0}}
+    - {command: [SADD, s, m], expect: {equals: 1}}
+    - {command: [SET, s, v, IFEQ, m], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [SET, s, v, IFEQ, m, GET], expect_difference: true, expect: {error: WRONGTYPE}}
+    - {command: [SET, k, v, IFEQ, x, NX], expect: {error: "syntax error"}}
+    - {command: [SET, k, v, NX, IFEQ, x], expect: {error: "syntax error"}}
+    - {command: [SET, k, v, IFEQ, x, XX], expect: {error: "syntax error"}}
+    - {command: [SET, k, v, XX, IFEQ, x], expect: {error: "syntax error"}}
+    - {command: [SET, k, v, IFEQ], expect: {error: "syntax error"}}
+    - {command: [SET, k, v, IFEQ, a, IFEQ, b], expect: {error: "syntax error"}}
+    - {command: [SET, n, 12345], expect: {equals: OK}}
+    - {command: [SET, n, 99, IFEQ, 12345], expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, n], expect_difference: true, expect: {equals: "99"}}
+    - {command: [SET, n2, "012345"], expect: {equals: OK}}
+    - {command: [SET, n2, x, IFEQ, 12345], expect_difference: true, expect: {error: false}}
+    - {command: [GET, n2], expect: {equals: "012345"}}
+    - {command: [SET, n3, 5], expect: {equals: OK}}
+    - {command: [SET, n3, 6, IFEQ, 5], expect_difference: true, expect: {equals: OK}}
+    - {command: [SET, e, ""], expect: {equals: OK}}
+    - {command: [SET, e, full, IFEQ, ""], expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, e], expect_difference: true, expect: {equals: full}}
+    - {command: [SET, b, !!binary 'YQBi'], expect: {equals: OK}}
+    - {command: [SET, b, v, IFEQ, !!binary 'YQBi'], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [SET, kw, GET], expect: {equals: OK}}
+    - {command: [SET, kw, v, IFEQ, GET], expect_difference: true, expect: {equals: OK}}
+    - {command: [SET, kw, w, IFEQ, v, GET], expect_difference: true, expect: {equals: v}}
+    - {command: [SET, t, old, EX, 100], expect: {equals: OK}}
+    - {command: [SET, t, new, IFEQ, old], expect_difference: true, expect: {equals: OK}}
+    - {command: [TTL, t], expect_difference: true, expect: {equals: -1}}
+    - {command: [SET, t2, old, EX, 100], expect: {equals: OK}}
+    - {command: [SET, t2, new, IFEQ, old, KEEPTTL], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [TTL, t2], compare: skip, expect: {min: 1, max: 100}}
+    - {command: [SET, t3, old], expect: {equals: OK}}
+    - {command: [SET, t3, new, IFEQ, old, EX, 100], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [TTL, t3], expect_difference: true, expect: {min: 1, max: 100}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, mk, a], expect: {equals: QUEUED}}
+    - {command: [SET, mk, b, IFEQ, a], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [OK, OK]}}
+    - {command: [GET, mk], expect_difference: true, expect: {equals: b}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ifeq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ifeq}

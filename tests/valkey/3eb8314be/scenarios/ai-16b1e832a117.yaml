@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4efff42f0417..3eb8314be6af.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-16b1e832a117
+seed: 101
+experiment:
+  id: proposed.hashtable-keypaths-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

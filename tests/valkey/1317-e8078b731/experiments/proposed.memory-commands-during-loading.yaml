@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.memory-commands-during-loading
+deployment:
+  modes: [standalone]
+metadata:
+  description: MEMORY MALLOC-STATS and MEMORY PURGE answer during RDB loading; DOCTOR,
+    STATS and USAGE still refuse, and the load completes intact
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    key_load_delay_us: {type: integer, minimum: 10, maximum: 1000, default: 50}
+components:
+- use: valkey.action.commands
+  id: loading
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    server_config:
+      enable-debug-command: "yes"
+      key-load-delay: {$ref: inputs.key_load_delay_us}
+      loading-process-events-interval-bytes: 1024
+    commands:
+    - {command: [DEBUG, POPULATE, "100000", "key:", "1000"], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [MEMORY, MALLOC-STATS], expect_difference: true, expect: {error: false}}
+    - {command: [MEMORY, PURGE], expect_difference: true, expect: {equals: OK}}
+    - {command: [MEMORY, HELP], expect: {error: false}}
+    - {command: [MEMORY, DOCTOR], expect: {error: "LOADING"}}
+    - {command: [MEMORY, STATS], expect: {error: "LOADING"}}
+    - {command: [MEMORY, USAGE, "key:1"], expect: {error: "LOADING"}}
+    - {command: [DBSIZE], wait_s: 90, expect: {equals: 100000}}
+    - {command: [STRLEN, "key:1"], expect: {equals: 1000}}
+    - {command: [MEMORY, PURGE], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [loading.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: loading}

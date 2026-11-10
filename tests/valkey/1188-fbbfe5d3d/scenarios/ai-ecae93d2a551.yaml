@@ -1,0 +1,19 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 90475af59429..fbbfe5d3d383.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ecae93d2a551
+seed: 1002
+experiment:
+  id: proposed.cluster-fail-reason-change
+  inputs:
+    gap_s: 6
+    pause0_s: 20
+    pause1_s: 15
+    settle_s: 30
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 0
+  base_port: 7100
+  server_config:
+    cluster-node-timeout: 1000
+    cluster-require-full-coverage: 'no'

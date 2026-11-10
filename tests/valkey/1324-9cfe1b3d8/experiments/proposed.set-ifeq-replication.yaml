@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.set-ifeq-replication
+deployment:
+  modes: [standalone]
+metadata:
+  description: SET IFEQ propagates verbatim to a replica - the replica's compare matches
+    and applies, an aborted IFEQ propagates nothing, and the TTL clear reaches the
+    replica
+components:
+- use: valkey.action.commands
+  id: repl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 2
+    timeout_s: 90
+    commands:
+    - {command: [REPLICAOF, <node.0.host>, <node.0.port>], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [SET, k, v1], expect: {equals: OK}}
+    - {command: [GET, k], node: 1, wait_s: 15, expect: {equals: v1}}
+    - {command: [SET, k, v2, IFEQ, v1], expect_difference: true, expect: {equals: OK}}
+    - {command: [SET, marker, m1], expect: {equals: OK}}
+    - {command: [GET, marker], node: 1, wait_s: 15, expect: {equals: m1}}
+    - {command: [GET, k], node: 1, expect_difference: true, expect: {equals: v2}}
+    - {command: [SET, k, v3, IFEQ, wrong], expect_difference: true, expect: {error: false}}
+    - {command: [SET, marker, m2], expect: {equals: OK}}
+    - {command: [GET, marker], node: 1, wait_s: 15, expect: {equals: m2}}
+    - {command: [GET, k], node: 1, expect_difference: true, expect: {equals: v2}}
+    - {command: [SET, k, v4, IFEQ, v2, GET], expect_difference: true, expect: {equals: v2}}
+    - {command: [SET, k2, x, EX, 100], expect: {equals: OK}}
+    - {command: [SET, k2, y, IFEQ, x], expect_difference: true, expect: {equals: OK}}
+    - {command: [SET, marker, m3], expect: {equals: OK}}
+    - {command: [GET, marker], node: 1, wait_s: 15, expect: {equals: m3}}
+    - {command: [GET, k], node: 1, expect_difference: true, expect: {equals: v4}}
+    - {command: [GET, k2], node: 1, expect_difference: true, expect: {equals: y}}
+    - {command: [TTL, k2], node: 1, expect_difference: true, expect: {equals: -1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [repl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: repl}

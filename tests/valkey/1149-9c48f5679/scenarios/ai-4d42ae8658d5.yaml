@@ -1,0 +1,43 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c8ceb2ee255c..9c48f5679070.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4d42ae8658d5
+seed: 1102
+experiment:
+  id: valkey.replication-chaos
+  inputs:
+    mutation_rate: 500
+    value_size: 1024
+    waves:
+    - - op: stall
+        target: replica
+        duration_s: 1.5
+      - op: kill
+        target: primary
+        signal: SIGKILL
+        delay_s: 0.5
+    - - op: backlog_pressure
+        repl_backlog_size: 16384
+        output_limit: 65536
+        duration_s: 2.0
+        delay_s: 0.2
+      - op: stall
+        target: replica
+        duration_s: 2.0
+    - - op: promote
+        target: replica
+        mode: force
+        split_s: 0.5
+      - op: kill
+        target: replica
+        delay_s: 0.5
+      - op: restart
+        target: killed
+        delay_s: 1.5
+deployment:
+  mode: standalone
+  replicas_per_primary: 3
+  base_port: 7100
+  server_config:
+    dual-channel-replication-enabled: 'yes'
+    repl-diskless-sync: 'yes'
+    repl-diskless-sync-delay: '0'

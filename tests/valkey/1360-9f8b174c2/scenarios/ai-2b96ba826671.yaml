@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 397201c48f4c..9f8b174c2eec.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2b96ba826671
+seed: 70001
+experiment:
+  id: proposed.argv-rewrite-offload
+  inputs:
+    resp: 2
+    io_threads: 4
+    checks:
+      replica: true
+      concurrency: 8
+      faults: true
+deployment:
+  mode: standalone
+  base_port: 7000

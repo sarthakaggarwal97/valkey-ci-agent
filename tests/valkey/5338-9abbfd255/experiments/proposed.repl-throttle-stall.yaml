@@ -1,0 +1,59 @@
+extends: [valkey.base]
+id: proposed.repl-throttle-stall
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Stall a replica under writes with replication throttling enabled and
+    a replica output buffer limit below repl-backlog-size, so the steady-state throttle
+    target comes from the effective (backlog-floored) limit; the throttler must activate,
+    the replica must relink, and no acknowledged write may be lost
+inputs:
+  properties:
+    stall_s: {type: number, minimum: 0.5, maximum: 30, default: 2}
+    output_buffer_limit: {type: string, default: replica 8mb 128kb 3}
+    backlog_size: {type: string, default: 4mb}
+startup_overlays:
+- overlay_id: repl-throttle
+  server_config:
+    repl-throttling-enabled: "yes"
+    client-output-buffer-limit: {$ref: inputs.output_buffer_limit}
+    repl-backlog-size: {$ref: inputs.backlog_size}
+components:
+- use: valkey.observer.info
+  id: throttle-info
+  config:
+    instances: primary
+    sections: [throttling]
+    interval_s: 0.1
+    expectations:
+    - {field: repl_throttle_activation_events, delta_min: 1, evidence_id: valkey.throttle.activated,
+      required: true}
+- use: valkey.fault.process-signal
+  id: stall-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.stall_s}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, throttle-info, stall-replica]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 6}
+- use: valkey.action.poll
+  id: links-up
+  depends_on: [settle]
+  config:
+    instances: replicas
+    section: replication
+    field: master_link_status
+    predicate: {equals: up}
+    timeout_s: 120
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: stall-replica}
+- {evidence_id: valkey.throttle.activated, source: throttle-info}
