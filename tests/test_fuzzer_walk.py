@@ -1341,3 +1341,65 @@ def test_a_panic_the_change_adds_is_intended_not_filed():
     assert not walk.intended_crash('+    serverAssert(x > 0);\n', "crash: assertion failed: 'x > 0' is not true")
     finding = {"builds": {"parent": False, "merge": True, "unstable": True}, "verdict": "intended by #5155: a panic"}
     assert not walk.files(finding) and walk.files({**finding, "verdict": "introduced by #5155"})
+
+
+def test_the_marked_commands_are_those_an_experiment_expects_to_differ():
+    assert walk.marked_commands(EXPERIMENT) == [("compared", 1, ["LSET", "l", 9223372036854775807, "x"])]
+    assert walk.marked_commands("not: [yaml") == [] and walk.marked_commands("") == []
+
+
+def test_the_recall_section_shows_each_tests_marked_commands_and_both_builds_replies():
+    tests = [{"scenario": "ai-1", "experiment": "proposed.lset", "summary": "unreached-change",
+              "commands": [{"command": ["LSET", "l", 1, "x"], "merge": {"error": "ERR index out of range"},
+                            "parent": {"error": "ERR index out of range"}}]},
+             {"scenario": "ai-2", "experiment": "valkey.forkless-save", "summary": "PASS", "commands": []}]
+    text = walk.unreached_section(tests, ["proposed.lset"])
+    assert text.startswith("## The tests never showed the fix")
+    assert '- `["LSET", "l", 1, "x"]`: the merge replied `{"error": "ERR index out of range"}`, the parent ' in text
+    assert "marks no command with `expect_difference`" in text.split("### ai-2")[1]
+    assert "Experiment ids already used: proposed.lset" in text
+    long = [{**tests[0], "commands": [{"command": "x" * 500, "merge": None, "parent": None}] * 30}]
+    assert walk.unreached_section(long, []).count("- `") == walk.MARKED_KEPT
+    assert "x" * walk.REPLY_CHARS + "..." in walk.unreached_section(long, [])
+
+
+@pytest.mark.parametrize("subject, shown", [("Fix LSET (#4716)", True), ("Optimize LSET (#4716)", False)])
+def test_a_fix_merge_whose_tests_never_showed_the_change_gets_one_more_round_shown_their_replies(
+        monkeypatch, tmp_path, subject, shown):
+    first, second = (_scenario(f"seed: {seed}\nexperiment: {{id: proposed.lset}}\ndeployment: {{mode: standalone}}\n")
+                     for seed in (10, 20))
+
+    def fuzz(fuzzer_bin, doc, seed, *, candidate, compare, core, experiment_dir, run_dir):
+        # The first test's marked LSET replies alike on both builds; the second round's test reaches the change.
+        reached = doc["seed"] == 20 and _build(run_dir) == "merge"
+        return {"status": "PASS" if reached else "ERROR", "reason": None if reached else "unreached-change",
+                "reached": reached, "parent_exited": False, "reached_commands": {("compared", 1)} if reached else set(),
+                "replies": {("compared", 1): {"error": "ERR index out of range"}}, "found": {},
+                "summary": "ok" if reached else "command 1 replied alike"}
+
+    extras: list[str] = []
+    result, _ = _walk_merge(monkeypatch, tmp_path, fuzz, (first,), (second,), merge=_merge(subject=subject),
+                            extras=extras)
+    assert "error" not in result
+    if not shown:
+        # Not a fix: no round for its unshown change.
+        assert extras == [""] and "recall_round" not in result and result["recall"] is False
+        return
+    assert len(extras) == 2 and extras[1].startswith("## The tests never showed the fix")
+    assert '`["LSET", "l", 9223372036854775807, "x"]`: the merge replied `{"error": "ERR index out of range"}`' in extras[1]
+    assert "Its run on the merge: command 1 replied alike" in extras[1]
+    assert result["recall"] is True and result["recall_round"] == {"tests": 1, "recall": True}
+    assert (result["proposed"], result["proven"]) == (2, 1)
+    assert walk._summary(_merge(subject=subject), result, "now")["recall_round"] == {"tests": 1, "recall": True}
+
+
+def test_a_fix_merge_already_shown_gets_no_recall_round(monkeypatch, tmp_path):
+    test = _scenario("seed: 10\nexperiment: {id: proposed.lset}\ndeployment: {mode: standalone}\n")
+
+    def fuzz(fuzzer_bin, doc, seed, *, candidate, compare, core, experiment_dir, run_dir):
+        return {"status": "PASS", "reason": None, "reached": True, "parent_exited": False,
+                "reached_commands": {("compared", 1)}, "found": {}}
+
+    extras: list[str] = []
+    result, _ = _walk_merge(monkeypatch, tmp_path, fuzz, (test,), extras=extras)
+    assert extras == [""] and result["recall"] is True and "recall_round" not in result

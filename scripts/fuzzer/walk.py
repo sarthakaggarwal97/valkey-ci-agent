@@ -142,6 +142,12 @@ COVERAGE_ROUNDS = 3
 ROUNDS_WITHIN_S = 3 * 3600
 UNCOVERED_KEPT = 50
 CONTEXT_LINES = 3
+# A fix merge (its subject says "fix") whose tests never showed the change, by a marked command replying
+# otherwise on the parent or a crash of the parent, gets RECALL_ROUNDS more round: shown what its tests' marked
+# commands replied on both builds, alike, the first MARKED_KEPT of them, each reply cut to REPLY_CHARS.
+RECALL_ROUNDS = 1
+MARKED_KEPT = 24
+REPLY_CHARS = 200
 MERGE_KEYS = ("repo", "sha", "parent", "pr", "pr_repo", "subject", "date")
 # The coverage_reason values that mean "nothing to measure", not a measurement that failed: any other reason
 # (the gcov build, its runs or gcov itself failed, or it left no notes of a changed file) shows in PROGRESS.md,
@@ -528,6 +534,53 @@ def uncovered_section(found: dict[str, Any], tree: Path, experiment_ids: list[st
             f"({found['percent']}%); the lines marked > below never ran. Write new scenarios, unlike the earlier ones, "
             "that reach them: find in the code the commands, arguments, config or state that lead there." + ids
             + "\n\n" + "\n\n".join(blocks))
+
+
+def marked_commands(experiment: str) -> list[tuple[str, int, Any]]:
+    """The commands an experiment marks as the change's (``expect_difference``), as (component id, index, command):
+    those that must reply otherwise on the parent."""
+    try:
+        doc = yaml.safe_load(experiment) or {}
+    except yaml.YAMLError:
+        return []
+    marked = []
+    for component in doc.get("components") or []:
+        if not isinstance(component, dict) or component.get("use") != "valkey.action.commands":
+            continue
+        for index, item in enumerate((component.get("config") or {}).get("commands") or []):
+            if isinstance(item, dict) and item.get("expect_difference"):
+                marked.append((str(component.get("id")), index, item.get("command", item.get("raw"))))
+    return marked
+
+
+def _shown(value: Any) -> str:
+    text = value if isinstance(value, str) else json.dumps(value, sort_keys=True, default=str)
+    return text if len(text) <= REPLY_CHARS else text[:REPLY_CHARS] + "..."
+
+
+def unreached_section(tests: list[dict[str, Any]], experiment_ids: list[str]) -> str:
+    """The prompt's section for a fix merge whose tests never showed the change: each test, how its run ended, and
+    what its marked commands replied on the merge and on the parent (``tests``: {"scenario", "experiment",
+    "summary", "commands": [{"command", "merge", "parent"}]})."""
+
+    blocks, kept = [], MARKED_KEPT
+    for test in tests:
+        rows = [f"### {test['scenario']} (experiment {test['experiment']})", f"Its run on the merge: {test['summary']}"]
+        if not test["commands"]:
+            rows.append("It marks no command with `expect_difference`, so nothing in it can show the change.")
+        for command in test["commands"][:kept]:
+            rows.append(f"- `{_shown(command['command'])}`: the merge replied `{_shown(command['merge'])}`, "
+                        f"the parent `{_shown(command['parent'])}`")
+        kept -= min(kept, len(test["commands"]))
+        blocks.append("\n".join(rows))
+    ids = f" Experiment ids already used: {', '.join(experiment_ids)}; give new experiments other ids." \
+        if experiment_ids else ""
+    return ("## The tests never showed the fix\n"
+            "This merge fixes a bug, but no test so far made the parent behave otherwise than the merge: every "
+            "command marked `expect_difference` replied alike on both builds, and the parent never crashed. Below "
+            "is what each test's marked commands replied. Find in the diff what the parent got wrong and the "
+            "commands, arguments, config, data or timing that make it show, then write new scenarios, unlike the "
+            "earlier ones, whose marked commands reply otherwise on the parent." + ids + "\n\n" + "\n\n".join(blocks))
 
 
 def cover(measure: Callable[[list[Any]], dict[str, Any]], more: Callable[[dict[str, Any]], list[Any]],
@@ -1007,6 +1060,8 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
     plain_dir, experiment_dir = work / "experiments-plain", work / "experiments"
     walked: set[str] = set()
     rounds: list[ProposalRun] = []
+    # Every round's tests that ran to their end, as (scenario, its document).
+    finished: list[tuple[str, dict[str, Any]]] = []
 
     def ask_tests(extra: str = "") -> tuple[ProposalRun, dict[str, str]]:
         """One round of proposals: Claude's run, and the validated scenarios not walked yet."""
@@ -1184,6 +1239,7 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
                     logger.info("%s %s: %s", action, url, finding["detail"])
                 result["findings"].append({key: finding.get(key) for key in (
                     "rule", "detail", "scenario", "seed", "builds", "verdict", "fingerprint", "issue")})
+        finished.extend(hunting)
         return hunting
 
     tests = walk_tests(scenarios)
@@ -1234,6 +1290,29 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
                     else COVERAGE_NO_CODE)
         except _Unmeasured as exc:
             result["coverage_reason"] = str(exc)
+    if (_FIX_RE.search(merge.get("subject") or "") and not result["recall"] and finished
+            and time.monotonic() - started < ROUNDS_WITHIN_S):
+        shown = []
+        for test, doc in finished:
+            seed = int(doc["seed"])
+            on_merge, on_parent = runs.get((test, "merge", seed), {}), runs.get((test, "parent", seed), {})
+            experiment = f"{doc['experiment']['id']}.yaml"
+            shown.append({"scenario": test, "experiment": doc["experiment"]["id"],
+                          "summary": on_merge.get("summary") or on_merge.get("reason") or on_merge.get("status"),
+                          "commands": [{"command": command,
+                                        "merge": (on_merge.get("replies") or {}).get((component, index)),
+                                        "parent": (on_parent.get("replies") or {}).get((component, index))}
+                                       for component, index, command in marked_commands(plain.get(experiment, ""))]})
+        logger.info("No test of fix %s showed the change: asking once more, with what its tests replied", pr)
+        retried: list[tuple[str, dict[str, Any]]] = []
+        for _ in range(RECALL_ROUNDS):
+            try:
+                _, scenarios = ask_tests(unreached_section(shown, sorted(file[:-5] for file in plain)))
+            except Exception as exc:
+                logger.warning("The recall round proposed nothing: %s", exc)
+                break
+            retried += walk_tests(scenarios)
+        result["recall_round"] = {"tests": len(retried), "recall": result["recall"]}
     all_started()
 
 
@@ -1255,6 +1334,9 @@ def _summary(merge: dict[str, Any], result: dict[str, Any] | None, now: str) -> 
     if result is None:
         return {**entry, "outcome": merge.get("skip_outcome", "no-code-change")}
     entry.update({key: result.get(key) for key in ("outcome", "proposed", "proven", "hunted", "recall", "cost_usd")})
+    if result.get("recall_round"):
+        # Whether the round a fix merge got for its unshown change found it, to judge the round by.
+        entry["recall_round"] = result["recall_round"]
     entry["coverage"] = (result.get("coverage") or {}).get("percent")
     # A measurement that failed (the gcov build, its runs or gcov), kept so the failure shows in PROGRESS.md;
     # a merge with nothing to measure keeps no reason.
