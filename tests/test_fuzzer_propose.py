@@ -1315,6 +1315,9 @@ def test_the_prompts_render():
     # the probed experiments, or every test of an old merge is skipped as unsupported (valkey #2753, #2852).
     assert "src/config.c has forkless-infrastructure-enabled" in prompt
     assert "only when it has\ncluster-config-save-behavior" in prompt
+    # These runs have no root: a scenario on valkey.cluster-partition or valkey.bgsave-disk-full is skipped
+    # whole by their host probe (valkey #5145, #4655, #4654, #3438), so the prompt names them as never-pick.
+    assert "never\npick valkey.cluster-partition or valkey.bgsave-disk-full" in prompt
     repair = propose_mod._REPAIR_PROMPT.format(change_line="c", source_note="s", failures="f",
                                                references="{$ref: artifacts.parent.binary}", module_note="")
     assert '"experiments": [{"index": <its number>' in repair

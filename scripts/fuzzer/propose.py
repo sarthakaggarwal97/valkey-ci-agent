@@ -949,7 +949,9 @@ examples/valkey/experiments/replica-killed-under-writes.yaml is a worked
 one. A SIGKILL may lose what the killed instance acknowledged within its
 fsync window, so give the `data` ledger `loss_window_s: 2.5` under
 appendfsync everysec (validation says when it needs one). Network
-partitions need root, which these runs do not have.
+partitions and a full disk need root, which these runs do not have: never
+pick valkey.cluster-partition or valkey.bgsave-disk-full, whose host probe
+skips the whole test without it.
 {module_section}
 ### Adversarial inputs
 The shapes the maintainers' own audits keep finding bugs with
