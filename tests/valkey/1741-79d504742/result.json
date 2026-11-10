@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "79d504742d24762d82f7ce48a685579ee5056ade",
+  "parent": "b360f96a7d658e89af8575fd37f121c6705339fa",
+  "pr": 1741,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize bitcount command by SIMD (#1741)",
+  "date": "2025-02-26",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 34,
+    "executed": 34,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.4894,
+  "findings": [],
+  "recorded": []
+}

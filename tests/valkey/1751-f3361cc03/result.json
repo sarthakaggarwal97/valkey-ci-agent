@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f3361cc038bac74b4d2d9b4c64f75621a9cb2fbe",
+  "parent": "206f7f60e50bbf11fc430af9ff56407ba1e7bfd3",
+  "pr": 1751,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Allow to specify the random number generator seed in unit tests (#1751)",
+  "date": "2025-02-20",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2985,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a --seed flag to the standalone unit-test binary (src/unit/test_main.c) and refactors src/util.c's getRandomBytes to expose its seed via new setRandomSeedCString/getRandomSeedCString helpers used exclusively by the test harness. The refactored getRandomBytes is behaviour-identical (same /dev/urandom seeding and weak-seed fallback semantics), the moved declarations from server.h to util.h are compile-time only, and the new functions are never called by the running server. No server-visible behaviour, command reply, replication, persistence, or config path changes, so there "
+}

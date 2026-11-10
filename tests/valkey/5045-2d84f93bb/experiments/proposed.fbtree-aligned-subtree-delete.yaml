@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.fbtree-aligned-subtree-delete
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Range deletes whose rank and score boundaries land exactly on fbtree leaf and
+    inner-subtree boundaries, so the right boundary subtree and a whole ancestor child
+    empty out and are freed through the counter-maintaining paths; the exact leaf
+    count is observable through MEMORY USAGE against the parent's sampled estimate.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: surgery
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [EVAL, "for i=0,7441 do redis.call('ZADD','za',i,'m'..i) end return\
+          \ redis.call('ZCARD','za')", 0], expect: {equals: 7442}}
+    - {command: [MEMORY, USAGE, za, SAMPLES, 0], expect_difference: true, expect: {
+        min: 100000, max: 1500000}}
+    - {command: [ZREMRANGEBYRANK, za, 1830, 3659], expect: {equals: 1830}}
+    - {command: [MEMORY, USAGE, za, SAMPLES, 0], expect_difference: true, expect: {
+        min: 80000, max: 1200000}}
+    - {command: [ZRANGE, za, 1828, 1832], expect: {equals: [m1828, m1829, m3660, m3661,
+          m3662]}}
+    - {command: [ZREMRANGEBYSCORE, za, 5490, 7441], expect: {equals: 1952}}
+    - {command: [ZCARD, za], expect: {equals: 3660}}
+    - {command: [MEMORY, USAGE, za, SAMPLES, 0], expect_difference: true, expect: {
+        min: 60000, max: 1000000}}
+    - {command: [EVAL, "for i=0,7441 do redis.call('ZADD','zb',i,'m'..i) end return\
+          \ redis.call('ZCARD','zb')", 0], expect: {equals: 7442}}
+    - {command: [ZREMRANGEBYRANK, zb, 3700, 5489], expect: {equals: 1790}}
+    - {command: [ZRANGE, zb, 3698, 3702], expect: {equals: [m3698, m3699, m5490, m5491,
+          m5492]}}
+    - {command: [MEMORY, USAGE, zb, SAMPLES, 0], compare: skip, expect: {min: 80000,
+        max: 1200000}}
+    - {command: [EVAL, "for i=1,500 do redis.call('ZADD','za',-i,'n'..i) end return\
+          \ redis.call('ZCARD','za')", 0], expect: {equals: 4160}}
+    - {command: [ZRANGE, za, 0, 2], expect: {equals: [n500, n499, n498]}}
+    - {command: [MEMORY, USAGE, za, SAMPLES, 0], compare: skip, expect: {min: 60000,
+        max: 1000000}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [surgery.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: surgery}

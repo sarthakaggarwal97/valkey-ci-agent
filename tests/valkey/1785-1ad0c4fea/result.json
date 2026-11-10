@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1ad0c4feafb149a6f03627de03f4f810801ab875",
+  "parent": "7db01d88c271d4fa483d5b8e9e968bbbf979cb35",
+  "pr": 1785,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove unicode optimization in Lua cjson library (#1785)",
+  "date": "2025-02-26",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.5608,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-7991ed342f63",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'cjson' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (EVAL local t={} for i=0,255 do t[i+1]=string.char(i) end return cjson.encode(table.concat(t)) 0)"
+    },
+    {
+      "scenario": "ai-6921c6a4bf97",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'cjson' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (EVAL local t={} for i=0,255 do t[i+1]=string.char(i) end return cjson.encode(table.concat(t)) 0)"
+    }
+  ],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

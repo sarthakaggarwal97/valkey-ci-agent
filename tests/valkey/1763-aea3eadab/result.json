@@ -1,0 +1,36 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "aea3eadab53a14549e6a039a1d4635704637c0cc",
+  "parent": "421b2a40e6ac850c097f7b91763b2e30917135fd",
+  "pr": 1763,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Enable TCP_NODELAY by default in incoming and outgoing connections (#1763)",
+  "date": "2025-02-25",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 12,
+  "proven": 0,
+  "hunted": 12,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 2,
+    "percent": 66,
+    "uncovered": [
+      "src/anet.c:500"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 10.5888,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-53684039db33",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'migrate' returned ERROR: expectations both builds violate alike, so they are not about the change: 8 (EXISTS {foo}a)"
+    }
+  ]
+}

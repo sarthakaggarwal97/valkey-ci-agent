@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.hash-embedded-value-persistence
+deployment:
+  modes: [standalone]
+metadata:
+  description: Hashtable hashes with embedded and pointer-value entries survive BGSAVE
+    (fork dismiss path), SAVE plus restart, and AOF rewrite plus restart, compared
+    against the parent build
+components:
+- use: valkey.action.commands
+  id: hash-persist
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 0, save: ''}
+    timeout_s: 120
+    commands:
+    - {command: [HSET, hp, small1, v1, small2, v2], expect: {equals: 2}}
+    - {command: [HSET, hp, bigval, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv],
+      expect: {equals: 1}}
+    - {command: [HSET, hbig, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq,
+        bigfieldvalue], expect: {equals: 1}}
+    - {command: [MEMORY, USAGE, hp, SAMPLES, '0'], expect_difference: true, expect: {
+        min: 1}}
+    - {command: [BGSAVE], expect: {contains: 'Background saving started'}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: 'rdb_bgsave_in_progress:0'}}
+    - {command: [HSET, hp, small1, replaced], expect: {equals: 0}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HGETALL, hp], compare: unordered-pairs}
+    - {command: [HGET, hbig, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq],
+      expect: {equals: bigfieldvalue}}
+    - {command: [HSET, hp, bigval, tiny], expect: {equals: 0}}
+    - {command: [HGET, hp, bigval], expect: {equals: tiny}}
+    - {command: [CONFIG, SET, appendonly, 'yes'], expect: {equals: OK}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 60, expect: {contains: 'aof_rewrite_in_progress:0'}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HGETALL, hp], compare: unordered-pairs}
+    - {command: [HGET, hbig, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq],
+      expect: {equals: bigfieldvalue}}
+    - {command: [HSET, hp, small2, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee],
+      expect: {equals: 0}}
+    - {command: [HGET, hp, small2]}
+    - {command: [DEL, hp, hbig], expect: {equals: 2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hash-persist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hash-persist}

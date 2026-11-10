@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "462cba58010a94316ce8ea354f1c376bfa8c94db",
+  "parent": "99ec47a784b47f9d21d59eb30dcb18a39ac968ef",
+  "pr": 1733,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Modify parameter of clientMatchesFilter function. (#1733)",
+  "date": "2025-02-15",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2536,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change converts clientMatchesFilter's clientFilter parameter from pass-by-value to pass-by-pointer and updates its two call sites (getAllFilteredClientsInfoString and clientKillCommand) accordingly. The function only reads the filter's fields and never mutates them, and the callers pass the same filter object they held before, so every condition evaluates to identical values on both builds. This is a pure refactor (avoiding a struct copy) with no observable behavior change to CLIENT LIST/KILL filtering or anything else, so no scenario is needed."
+}

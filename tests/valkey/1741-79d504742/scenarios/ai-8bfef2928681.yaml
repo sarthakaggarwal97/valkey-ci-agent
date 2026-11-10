@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b360f96a7d65..79d504742d24.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8bfef2928681
+seed: 102
+experiment:
+  id: proposed.bitcount-simd-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

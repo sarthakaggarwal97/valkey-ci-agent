@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.cjson-encode-parity
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    cjson.encode output parity after removing the 6x unicode pre-reservation: escape-heavy,
+    boundary and oscillating-size strings force the new incremental strbuf growth
+    and keep-buffer reuse paths, compared byte-for-byte against the parent build.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cjson
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [EVAL, 'return cjson.encode("")', '0'], expect: {equals: '""'}}
+    - {command: [EVAL, 'return cjson.encode(string.char(0))', '0'], expect: {equals: '"\u0000"'}}
+    - {command: [EVAL, 'local t={} for i=0,255 do t[i+1]=string.char(i) end return
+          cjson.encode(table.concat(t))', '0'], expect: {contains: '\u001f'}}
+    - {command: [EVAL, 'return cjson.encode(string.rep("a",65533) .. "\"")', '0'],
+      expect: {contains: 'aaa'}}
+    - {command: [EVAL, 'return string.len(cjson.encode(string.rep(string.char(1),1000000)))',
+        '0'], expect: {equals: 6000002}}
+    - {command: [EVAL, 'return redis.sha1hex(cjson.encode(string.rep(string.char(1),1000000)))',
+        '0'], expect: {exists: true}}
+    - {command: [EVAL, 'return cjson.encode(string.rep("ab\"\\\n", 20000))', '0'],
+      expect: {contains: 'ab'}}
+    - {command: [EVAL, 'local r={} for i=1,200 do local n=(i*7919)%5000+1 r[i]=string.len(cjson.encode(string.rep(string.char(i%32),
+          n))) end return r', '0'], expect: {exists: true}}
+    - {command: [EVAL, 'return redis.sha1hex(cjson.encode(string.rep("h\195\169llo
+          w\195\182rld ", 100000)))', '0'], expect: {exists: true}}
+    - {command: [EVAL, 'return cjson.encode(cjson.decode("[\"\\uD83D\\uDE00\",\"\\u0000\\u001F\\u007F\"]"))',
+        '0'], expect: {contains: '\u0000'}}
+    - {command: [EVAL, 'local t={} local c=t for i=1,50 do c[1]=string.rep("\"",10)
+          c[2]={} c=c[2] end return redis.sha1hex(cjson.encode(t))', '0'], expect: {
+        exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cjson.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cjson}

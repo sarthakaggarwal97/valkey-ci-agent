@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "be9d9487bd6ba5d5c5d6d6ca351e020fb33268a1",
+  "parent": "3a64260e415d4c1ae3e0eb7ebe6359ea53d841ca",
+  "pr": 1748,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix murmur32 on large strings (#1748)",
+  "date": "2025-02-23",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.505,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change fixes a 32-bit int overflow in murmur32 (deps/lua/src/lstring.c), the hash used only by Lua's internal string-interning table (luaS_newlstr is its sole caller). The overflow only triggers for strings larger than ~8.59 GB, and even then it merely yields a wrong hash with no out-of-bounds access or crash. The hash is never exposed through any command reply; string-interning correctness is guaranteed by the memcmp fallback, so EVAL/FUNCTION results, data, persistence and replication are byte-identical on both builds. The only effect is Lua string-table bucket distribution (performance)"
+}

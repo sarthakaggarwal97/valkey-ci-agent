@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7db01d88c271d4fa483d5b8e9e968bbbf979cb35",
+  "parent": "79d504742d24762d82f7ce48a685579ee5056ade",
+  "pr": 1786,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix undefined behaviour in bitops unit test (#1786)",
+  "date": "2025-02-26",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.208,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only the unit test file src/unit/test_bitops.c, replacing a zero-length VLA (undefined behaviour in the test harness itself) with a minimum size of 1. No server code, command behaviour, replies, replication, or persistence paths change, so no runtime scenario can exercise it; the unit test suite itself covers it."
+}

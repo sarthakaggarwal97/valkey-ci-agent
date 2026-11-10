@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ee8465ce3bf8a7291f6f7e3cb66184064a6a5312",
+  "parent": "0ca3974d3ac8edec21994add5d2c7cbb7175f9eb",
+  "pr": 1773,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fixed active-expire-effort description in conf file (#1773)",
+  "date": "2025-02-25",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2029,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits a descriptive comment in valkey.conf (fixing the wording of the active-expire-effort description). Comments in the conf file are ignored by the config parser, so no server behaviour, replies, persistence, or replication paths are affected; there is nothing a scenario could exercise."
+}

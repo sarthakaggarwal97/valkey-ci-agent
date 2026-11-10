@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.cluster-module-message-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module cluster-bus DING/DONG round trip on 3-node clusters; the DONG
+    reply needs the null-terminated sender ID the fix passes to receivers
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module the candidate server loads, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module the parent server loads: the parent commit's own build,\
+        \ or the change's build to reproduce the sender-ID truncation bug on the parent\
+        \ server"
+components:
+- use: valkey.action.commands
+  id: dingdong
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    cluster: true
+    nodes: 3
+    timeout_s: 15
+    commands:
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 60, expect: {contains: "cluster_state:ok"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 60, expect: {contains: "cluster_known_nodes:3"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 60, expect: {contains: "cluster_known_nodes:3"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 2, wait_s: 60, expect: {contains: "cluster_known_nodes:3"},
+      compare: skip}
+    - {command: [test.pingall], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, expect: {contains: "cluster_stats_messages_module_received:1"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 2, wait_s: 30, expect: {contains: "cluster_stats_messages_module_received:1"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 30, expect_difference: true, expect: {
+        contains: "cluster_stats_messages_module_received:2"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [dingdong.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dingdong}

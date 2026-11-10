@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b7116d4a72364db32b320a92b253c54fb2b20b11",
+  "parent": "54c4bbcec712d1f8ae0aaf1940040fd579abed48",
+  "pr": 1706,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Move TCP/TLS specific options from generic client to connection type (#1706)",
+  "date": "2025-02-20",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.777,
+  "findings": [],
+  "recorded": []
+}

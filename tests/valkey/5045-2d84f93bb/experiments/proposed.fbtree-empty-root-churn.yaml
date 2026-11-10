@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.fbtree-empty-root-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: Delete and pop a btree zset down to empty so the emptied root is freed
+    through freeEmptyNodeAlreadyUnlinked in fbtreePostDeleteCleanup (fbtree.c:1041),
+    via both subtreeDeleteItem (ZREM) and subtreePop (ZPOPMIN/ZPOPMAX); then rebuild
+    a sparse-tail tree whose MEMORY USAGE separates the exact leaf count from the
+    parent's sampled estimate
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [EVAL, "for i=0,2439 do redis.call('ZADD',KEYS[1],0,string.format('m%05d',i))\
+          \ end return redis.call('ZCARD',KEYS[1])", "1", zrem], expect: {equals: 2440}}
+    - {command: [EVAL, "local n=0 for i=0,2438 do n=n+redis.call('ZREM',KEYS[1],string.format('m%05d',i))\
+          \ end return n", "1", zrem], expect: {equals: 2439}}
+    - {command: [ZCARD, zrem], expect: {equals: 1}}
+    - {command: [ZREM, zrem, m02439], expect: {equals: 1}}
+    - {command: [EXISTS, zrem], expect: {equals: 0}}
+    - {command: [EVAL, "for i=0,2439 do redis.call('ZADD',KEYS[1],0,string.format('m%05d',i))\
+          \ end return redis.call('ZCARD',KEYS[1])", "1", zpop], expect: {equals: 2440}}
+    - {command: [EVAL, "while redis.call('EXISTS',KEYS[1])==1 do redis.call('ZPOPMIN',KEYS[1])\
+          \ redis.call('ZPOPMAX',KEYS[1]) end return redis.call('EXISTS',KEYS[1])",
+        "1", zpop], expect: {equals: 0}}
+    - {command: [EVAL, "for i=0,2439 do redis.call('ZADD',KEYS[1],0,string.format('m%05d',i))\
+          \ end return redis.call('ZCARD',KEYS[1])", "1", zmem], expect: {equals: 2440}}
+    - {command: [EVAL, "local n=0 for i=1220,2439,2 do n=n+redis.call('ZREM',KEYS[1],string.format('m%05d',i))\
+          \ end return n", "1", zmem], expect: {equals: 610}}
+    - {command: [ZCARD, zmem], expect: {equals: 1830}}
+    - {command: [MEMORY, USAGE, zmem, SAMPLES, "0"], expect_difference: true, expect: {
+        min: 1000}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

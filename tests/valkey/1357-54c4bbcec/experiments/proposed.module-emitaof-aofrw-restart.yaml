@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.module-emitaof-aofrw-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: BGREWRITEAOF with aof-use-rdb-preamble no rewrites a module data type
+    through VM_EmitAOF's command-validation path on both builds, then a restart reloads
+    the module-emitted AOF
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aofrw
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {appendonly: "yes", aof-use-rdb-preamble: "no"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [mem.alloc, memkey, 3], expect: {equals: 3}}
+    - {command: [mem.write, memkey, 0, hello], expect: {equals: 5}}
+    - {command: [mem.write, memkey, 2, world], expect: {equals: 5}}
+    - {command: [mem.alloc, fields, 64], expect: {equals: 64}}
+    - {command: [mem.write, fields, 63, edge], expect: {equals: 4}}
+    - {command: [mem.alloc, tofree, 2], expect: {equals: 2}}
+    - {command: [mem.free, tofree], expect: {equals: 1}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [mem.alloc, dbone, 2], expect: {equals: 2}}
+    - {command: [mem.write, dbone, 1, seconddb], expect: {equals: 8}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [SET, plain, v1], expect: {equals: OK}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {contains: rewriting}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_last_bgrewrite_status:ok"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [mem.read, memkey, 0], expect: {equals: hello}}
+    - {command: [mem.read, memkey, 2], expect: {equals: world}}
+    - {command: [mem.read, fields, 63], expect: {equals: edge}}
+    - {command: [EXISTS, tofree], expect: {equals: 0}}
+    - {command: [GET, plain], expect: {equals: v1}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [mem.read, dbone, 1], expect: {equals: seconddb}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {contains: rewriting}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_last_bgrewrite_status:ok"}}
+    - {command: [mem.read, dbone, 1], expect: {equals: seconddb}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [aofrw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofrw}

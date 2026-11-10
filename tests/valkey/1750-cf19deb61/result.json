@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cf19deb61d8ea0ba01a61f57edc1e9440367d98b",
+  "parent": "f85c93301ca63f070164b307c6a7371a9ab5ac7b",
+  "pr": 1750,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix hashtable memory leak and kvstore `overhead_hashtable_lut` assert (#1750)",
+  "date": "2025-02-19",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.4378,
+  "findings": [],
+  "recorded": []
+}

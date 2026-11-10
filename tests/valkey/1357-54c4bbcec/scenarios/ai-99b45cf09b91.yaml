@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f3361cc038ba..54c4bbcec712.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-99b45cf09b91
+seed: 1101
+experiment:
+  id: proposed.module-skip-validation-replication
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,124 @@
+extends: [valkey.liveness]
+id: proposed.bitcount-simd-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: BITCOUNT across the AVX2 threshold, part boundaries, unaligned ranges
+    and BIT masks, replies compared with the parent's scalar-only build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bitcount
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, fb6, foobar], expect: {equals: OK}}
+    - {command: [BITCOUNT, fb6], expect: {equals: 26}}
+    - {command: [BITCOUNT, fb6, 0, 0], expect: {equals: 4}}
+    - {command: [BITCOUNT, fb6, 1, 1], expect: {equals: 6}}
+    - {command: [BITCOUNT, fb6, 5, 30, BIT], expect: {equals: 17}}
+    - {command: [BITCOUNT, missing], expect: {equals: 0}}
+    - {command: [SET, e, ""], expect: {equals: OK}}
+    - {command: [BITCOUNT, e], expect: {equals: 0}}
+    - {command: [RPUSH, l, a], expect: {equals: 1}}
+    - {command: [BITCOUNT, l], expect: {error: WRONGTYPE}}
+    - {command: [SET, n, "7"], expect: {equals: OK}}
+    - {command: [BITCOUNT, n], expect: {equals: 5}}
+    - {command: [SET, u32, UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU], expect: {equals: OK}}
+    - {command: [STRLEN, u32], expect: {equals: 32}}
+    - {command: [BITCOUNT, u32], expect: {equals: 128}}
+    - {command: [BITCOUNT, u32, 0, 30], expect: {equals: 124}}
+    - {command: [SET, u33, UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU], expect: {equals: OK}}
+    - {command: [APPEND, u33, U], expect: {equals: 33}}
+    - {command: [BITCOUNT, u33], expect: {equals: 132}}
+    - {command: [BITCOUNT, u33, 1, 32], expect: {equals: 128}}
+    - {command: [SET, u256, UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU], expect: {equals: OK}}
+    - {command: [APPEND, u256, UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU], expect: {equals: 64}}
+    - {command: [APPEND, u256, UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU], expect: {equals: 96}}
+    - {command: [APPEND, u256, UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU], expect: {equals: 128}}
+    - {command: [APPEND, u256, UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU], expect: {equals: 160}}
+    - {command: [APPEND, u256, UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU], expect: {equals: 192}}
+    - {command: [APPEND, u256, UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU], expect: {equals: 224}}
+    - {command: [APPEND, u256, UUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUU], expect: {equals: 256}}
+    - {command: [BITCOUNT, u256], expect: {equals: 1024}}
+    - {command: [BITCOUNT, u256, 0, 254], expect: {equals: 1020}}
+    - {command: [BITCOUNT, u256, 1, 255], expect: {equals: 1020}}
+    - {command: [APPEND, u256, U], expect: {equals: 257}}
+    - {command: [BITCOUNT, u256], expect: {equals: 1028}}
+    - {command: [SET, b33, !!binary "gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAB"],
+      expect: {equals: OK}}
+    - {command: [STRLEN, b33], expect: {equals: 33}}
+    - {command: [BITCOUNT, b33], expect: {equals: 33}}
+    - {command: [BITCOUNT, b33, 0, 31], expect: {equals: 32}}
+    - {command: [BITCOUNT, b33, 1, 32], expect: {equals: 32}}
+    - {command: [SET, fb36, foobarfoobarfoobarfoobarfoobarfoobar], expect: {equals: OK}}
+    - {command: [STRLEN, fb36], expect: {equals: 36}}
+    - {command: [BITCOUNT, fb36], expect: {equals: 156}}
+    - {command: [BITCOUNT, fb36, 4, 35], expect: {equals: 137}}
+    - {command: [SET, fb258, foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar],
+      expect: {equals: OK}}
+    - {command: [APPEND, fb258, foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar],
+      expect: {equals: 120}}
+    - {command: [APPEND, fb258, foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar],
+      expect: {equals: 180}}
+    - {command: [APPEND, fb258, foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar],
+      expect: {equals: 240}}
+    - {command: [APPEND, fb258, foobarfoobarfoobar], expect: {equals: 258}}
+    - {command: [BITCOUNT, fb258], expect: {equals: 1118}}
+    - {command: [BITCOUNT, fb258, 2, 257], expect: {equals: 1108}}
+    - {command: [SET, fb600, foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar],
+      expect: {equals: OK}}
+    - {command: [APPEND, fb600, foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar],
+      expect: {equals: 120}}
+    - {command: [APPEND, fb600, foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar],
+      expect: {equals: 180}}
+    - {command: [APPEND, fb600, foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar],
+      expect: {equals: 240}}
+    - {command: [APPEND, fb600, foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar],
+      expect: {equals: 300}}
+    - {command: [APPEND, fb600, foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar],
+      expect: {equals: 360}}
+    - {command: [APPEND, fb600, foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar],
+      expect: {equals: 420}}
+    - {command: [APPEND, fb600, foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar],
+      expect: {equals: 480}}
+    - {command: [APPEND, fb600, foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar],
+      expect: {equals: 540}}
+    - {command: [APPEND, fb600, foobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobarfoobar],
+      expect: {equals: 600}}
+    - {command: [BITCOUNT, fb600], expect: {equals: 2600}}
+    - {command: [BITCOUNT, fb600, 6, 599], expect: {equals: 2574}}
+    - {command: [BITCOUNT, fb600, 3, 598], expect: {equals: 2580}}
+    - {command: [BITCOUNT, fb600, -6, -1], expect: {equals: 26}}
+    - {command: [BITCOUNT, fb600, 0, 4799, BIT], expect: {equals: 2600}}
+    - {command: [SETRANGE, big, 999999, !!binary "////////////////"], expect: {equals: 1000011}}
+    - {command: [BITCOUNT, big], expect: {equals: 96}}
+    - {command: [BITCOUNT, big, 0, 999998], expect: {equals: 0}}
+    - {command: [BITCOUNT, big, -12, -1], expect: {equals: 96}}
+    - {command: [BITCOUNT, big, 7999992, 8000087, BIT], expect: {equals: 96}}
+    - {command: [BITCOUNT, big, 7999994, 8000085, BIT], expect: {equals: 92}}
+    - {command: [BITCOUNT, big, 0, 7999991, BIT], expect: {equals: 0}}
+    - {command: [BITOP, NOT, inv, big], expect: {equals: 1000011}}
+    - {command: [BITCOUNT, inv], expect: {equals: 7999992}}
+    - {command: [BITCOUNT, inv, 0, 31], expect: {equals: 256}}
+    - {command: [BITCOUNT, inv, 0, 30], expect: {equals: 248}}
+    - {command: [BITCOUNT, inv, 3, 100002], expect: {equals: 800000}}
+    - {command: [BITCOUNT, inv, 5, 100004, BIT], expect: {equals: 100000}}
+    - {command: [BITCOUNT, inv, -13, -1], expect: {equals: 8}}
+    - {command: [BITCOUNT, inv, 999999, 1000010], expect: {equals: 0}}
+    - {command: [BITCOUNT, inv, 10, 5], expect: {equals: 0}}
+    - {command: [BITCOUNT, inv, -1, -5], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [bitcount.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bitcount}

@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cf19deb61d8e..206f7f60e50b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e3074c10b950
+seed: 202
+experiment:
+  id: proposed.cluster-module-message-compare
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+deployment:
+  mode: standalone
+  base_port: 7100

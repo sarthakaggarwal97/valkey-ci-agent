@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "206f7f60e50bbf11fc430af9ff56407ba1e7bfd3",
+  "parent": "cf19deb61d8ea0ba01a61f57edc1e9440367d98b",
+  "pr": 1708,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Pass null-terminated node ID for `VM_RegisterClusterMessageReceiver` and add test coverage (#1708)",
+  "date": "2025-02-20",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.4275,
+  "findings": [],
+  "recorded": []
+}

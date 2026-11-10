@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3a64260e415d4c1ae3e0eb7ebe6359ea53d841ca",
+  "parent": "b7116d4a72364db32b320a92b253c54fb2b20b11",
+  "pr": 1737,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix error \"SSL routines::bad length\" when connTLSWrite is called second time with smaller buffer (#1737)",
+  "date": "2025-02-21",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.5385,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to src/tls.c (connTLSWrite/connTLSWritev): it only executes on a TLS connection, which requires a BUILD_TLS build, a tls-port with certificates, and a TLS client or TLS replication link. The fuzzer cannot produce any of these: tls-port is on the provider's rejected config list (so neither deployment server_config nor valkey.action.commands private servers can open a TLS listener, and CONFIG SET of a port is refused in sequences), no installed component speaks TLS as a client (all workloads, command sequences and tools connect over plain TCP or unix sockets, and replicati"
+}

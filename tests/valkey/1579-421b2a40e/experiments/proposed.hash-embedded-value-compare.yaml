@@ -1,0 +1,103 @@
+extends: [valkey.liveness]
+id: proposed.hash-embedded-value-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Hashtable-encoded hash entries exercise every embedded-value layout,
+    the 128-byte embed boundary and all value-replacement transitions, compared against
+    the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hash-embed
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [HSET, h1, f1, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      expect: {equals: 1}}
+    - {command: [HGET, h1, f1]}
+    - {command: [HSET, h1, f1, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb],
+      expect: {equals: 0}}
+    - {command: [HGET, h1, f1]}
+    - {command: [HSET, h1, f1, ccccc], expect: {equals: 0}}
+    - {command: [HGET, h1, f1], expect: {equals: ccccc}}
+    - {command: [HSET, h1, f1, dddddd], expect: {equals: 0}}
+    - {command: [HGET, h1, f1], expect: {equals: dddddd}}
+    - {command: [HSET, h1, f1, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee],
+      expect: {equals: 0}}
+    - {command: [HGET, h1, f1]}
+    - {command: [HSET, h1, f1, ffffffffff], expect: {equals: 0}}
+    - {command: [HGET, h1, f1], expect: {equals: ffffffffff}}
+    - {command: [HSTRLEN, h1, f1], expect: {equals: 10}}
+    - {command: [HSET, h1, churn, mmmmmmmmmmmmmmmmmmmm], expect: {equals: 1}}
+    - {command: [HSET, h1, churn, ppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppp],
+      expect: {equals: 0}}
+    - {command: [HSET, h1, churn, ooo], expect: {equals: 0}}
+    - {command: [HSET, h1, churn, nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn],
+      expect: {equals: 0}}
+    - {command: [HSET, h1, churn, rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr],
+      expect: {equals: 0}}
+    - {command: [HGET, h1, churn]}
+    - {command: [HGETALL, h1], compare: unordered-pairs}
+    - {command: [HLEN, h1], expect: {equals: 2}}
+    - {command: [HDEL, h1, f1], expect: {equals: 1}}
+    - {command: [DEL, h1], expect: {equals: 1}}
+    - {command: [HSET, h2, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg],
+      expect: {equals: 1}}
+    - {command: [HSET, h2, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh],
+      expect: {equals: 0}}
+    - {command: [HGET, h2, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx]}
+    - {command: [HSET, h2, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq,
+        vv], expect: {equals: 1}}
+    - {command: [HGET, h2, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq],
+      expect: {equals: vv}}
+    - {command: [HDEL, h2, qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq],
+      expect: {equals: 1}}
+    - {command: [HSET, h3, '', ''], expect: {equals: 1}}
+    - {command: [HGET, h3, ''], expect: {equals: ''}}
+    - {command: [HSET, h3, '', vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv],
+      expect: {equals: 0}}
+    - {command: [HSTRLEN, h3, ''], expect: {min: 150}}
+    - {command: [HDEL, h3, ''], expect: {equals: 1}}
+    - {command: [HSET, fields, fields, fields], expect: {equals: 1}}
+    - {command: [HGET, fields, fields], expect: {equals: fields}}
+    - {command: [HSET, h6, x, 1, x, 2, x, 3], expect: {equals: 1}}
+    - {command: [HGET, h6, x], expect: {equals: '3'}}
+    - {command: [HSET, h5, n, 100], expect: {equals: 1}}
+    - {command: [HINCRBY, h5, n, 23], expect: {equals: 123}}
+    - {command: [HINCRBYFLOAT, h5, n, 0.5], expect: {equals: '123.5'}}
+    - {command: [HSETNX, h5, n, zzz], expect: {equals: 0}}
+    - {command: [CONFIG, SET, hash-max-listpack-entries, 128], expect: {equals: OK}}
+    - {command: [HSET, h7, a, 1, b, 2, c, 3], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, h7], compare: skip, expect: {equals: listpack}}
+    - {command: [HSET, h7, big, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv],
+      expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, h7], compare: skip, expect: {equals: hashtable}}
+    - {command: [HGETALL, h7], compare: unordered-pairs}
+    - {command: [HSET, h7, big, tiny], expect: {equals: 0}}
+    - {command: [HGET, h7, big], expect: {equals: tiny}}
+    - {command: [CONFIG, SET, hash-max-listpack-entries, 0], expect: {equals: OK}}
+    - {command: [HSET, mem1, k1, val1, k2, val2, k3, val3], expect: {equals: 3}}
+    - {command: [MEMORY, USAGE, mem1, SAMPLES, '0'], expect_difference: true, expect: {
+        min: 1}}
+    - {command: [HSET, mem2, fieldfield, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv],
+      expect: {equals: 1}}
+    - {command: [MEMORY, USAGE, mem2, SAMPLES, '0'], expect_difference: true, expect: {
+        min: 1}}
+    - {command: [DEL, h2, h5, h6, h7, fields], expect: {equals: 5}}
+    - {command: [DBSIZE], expect: {equals: 2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hash-embed.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hash-embed}

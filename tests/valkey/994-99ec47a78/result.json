@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "99ec47a784b47f9d21d59eb30dcb18a39ac968ef",
+  "parent": "c5ae37f223cc00ce9f1ea0633693eba64566dfa1",
+  "pr": 994,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Simplify isNodeAvailable function and add comments (#994)",
+  "date": "2025-02-15",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2967,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure refactor with no behavior change: isNodeAvailable previously computed node->repl_offset via clusterNodeReplOffset and replaced it with getNodeReplicationOffset(node) only for the myself node; getNodeReplicationOffset already performs exactly that branching internally (live offset for myself, node->repl_offset otherwise), so calling it directly yields identical results on every path. The failing-node check is unchanged, the removed clusterNodeReplOffset was a trivial unused accessor, and the remaining diff is comments. No observable behavior differs between the builds, so a scenario cannot"
+}

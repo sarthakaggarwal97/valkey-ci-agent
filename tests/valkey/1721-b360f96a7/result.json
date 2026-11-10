@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b360f96a7d658e89af8575fd37f121c6705339fa",
+  "parent": "221ff441d92ad74f3758d6492182b0ae7d4255df",
+  "pr": 1721,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix temp file leak druing replication error handling (#1721)",
+  "date": "2025-02-26",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 16,
+    "executed": 14,
+    "percent": 87,
+    "uncovered": [
+      "src/replication.c:2868",
+      "src/replication.c:3810"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 1.9203,
+  "findings": [],
+  "recorded": []
+}

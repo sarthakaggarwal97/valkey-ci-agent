@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f85c93301ca63f070164b307c6a7371a9ab5ac7b",
+  "parent": "d588bb3bee0122ead9671647c34b7452bee81381",
+  "pr": 1745,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Comment out assert in kvstore for overhead lut (#1745)",
+  "date": "2025-02-17",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4014,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only comments out a debug consistency assert in kvstoreRelease(); no code path, reply, data structure, or persistence/replication behaviour changes. The only state in which the two builds would differ is one where the overhead_hashtable_lut accounting is nonzero at release time, causing the parent to abort - a condition whose cause is unknown (per the TODO the maintainers added) and which cannot be deliberately reached from client commands; in every normal run both builds behave identically through FLUSHALL ASYNC, SWAPDB and shutdown, the callers of kvstoreRelease. Any scenario woul"
+}

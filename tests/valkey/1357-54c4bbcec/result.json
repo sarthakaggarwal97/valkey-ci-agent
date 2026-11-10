@@ -1,0 +1,54 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "54c4bbcec712d1f8ae0aaf1940040fd579abed48",
+  "parent": "f3361cc038bac74b4d2d9b4c64f75621a9cb2fbe",
+  "pr": 1357,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add new module API flag to bypass command validation (#1357)",
+  "date": "2025-02-20",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 10,
+    "executed": 3,
+    "percent": 30,
+    "uncovered": [
+      "src/module.c:7549",
+      "src/module.c:7550",
+      "src/module.c:7551",
+      "src/module.c:7552",
+      "src/module.c:7556",
+      "src/module.c:7557",
+      "src/module.c:7558"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 14.1098,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-cb3320fe8b71",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'aofrw' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (mem.alloc memkey 3), 1 (mem.write memkey 0 hello), 2 (mem.write memkey 2 world), 3 (mem.alloc fields 64), 4 (mem.write fields 63 edge), "
+    },
+    {
+      "scenario": "ai-59f3701962e5",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'aofrw' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (mem.alloc memkey 3), 1 (mem.write memkey 0 hello), 2 (mem.write memkey 2 world), 3 (mem.alloc fields 64), 4 (mem.write fields 63 edge), "
+    },
+    {
+      "scenario": "ai-80526c8031dd",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'enableaof' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (mem.alloc k1 5), 1 (mem.write k1 0 first), 2 (mem.write k1 4 last), 3 (mem.alloc fields 64), 4 (mem.write fields 63 boundary), 5 (me"
+    }
+  ]
+}

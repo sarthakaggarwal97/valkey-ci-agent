@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ee8465ce3bf8..421b2a40e6ac.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-30248f1e7c4e
+seed: 421002
+experiment:
+  id: proposed.hash-embedded-value-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

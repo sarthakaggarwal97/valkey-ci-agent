@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 838999bd5258..2d84f93bbf1d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-be24d242707e
+seed: 47004
+experiment:
+  id: proposed.fbtree-aligned-subtree-delete
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

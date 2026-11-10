@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.module-emitaof-enable-aof
+deployment:
+  modes: [standalone]
+metadata:
+  description: Enabling AOF at runtime over existing module-type keys triggers the
+    startAppendOnly rewrite through VM_EmitAOF's validation path, then CONFIG REWRITE
+    and a restart reload the module-emitted AOF
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: enableaof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {appendonly: "no", aof-use-rdb-preamble: "no"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [mem.alloc, k1, 5], expect: {equals: 5}}
+    - {command: [mem.write, k1, 0, first], expect: {equals: 5}}
+    - {command: [mem.write, k1, 4, last], expect: {equals: 4}}
+    - {command: [mem.alloc, fields, 64], expect: {equals: 64}}
+    - {command: [mem.write, fields, 63, boundary], expect: {equals: 8}}
+    - {command: [mem.alloc, emptied, 1], expect: {equals: 1}}
+    - {command: [mem.free, emptied], expect: {equals: 1}}
+    - {command: [SET, plain, v2], expect: {equals: OK}}
+    - {command: [CONFIG, SET, appendonly, yes], expect: {equals: OK}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_last_bgrewrite_status:ok"}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [mem.read, k1, 0], expect: {equals: first}}
+    - {command: [mem.read, k1, 4], expect: {equals: last}}
+    - {command: [mem.read, fields, 63], expect: {equals: boundary}}
+    - {command: [EXISTS, emptied], expect: {equals: 0}}
+    - {command: [GET, plain], expect: {equals: v2}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [enableaof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: enableaof}

@@ -1,0 +1,39 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "421b2a40e6ac850c097f7b91763b2e30917135fd",
+  "parent": "ee8465ce3bf8a7291f6f7e3cb66184064a6a5312",
+  "pr": 1579,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Embed hash value in hash type entry (#1579)",
+  "date": "2025-02-25",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 3,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 89,
+    "executed": 78,
+    "percent": 87,
+    "uncovered": [
+      "src/t_hash.c:193",
+      "src/t_hash.c:194",
+      "src/t_hash.c:195",
+      "src/t_hash.c:196",
+      "src/t_hash.c:228",
+      "src/t_hash.c:229",
+      "src/t_hash.c:230",
+      "src/t_hash.c:231",
+      "src/t_hash.c:233",
+      "src/t_hash.c:240",
+      "src/t_hash.c:241"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 6.9487,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d588bb3bee0122ead9671647c34b7452bee81381",
+  "parent": "e6e65c64a36aca0dce7ef382ea8ec35d8fa0481f",
+  "pr": 1722,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix raxRemove crash at memcpy() due to key size exceeds max Rax size (#1722)",
+  "date": "2025-02-17",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7526,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix adds a size-limit guard (comprsize + h->size > RAX_NODE_MAX_SIZE, ~512MB) to the recompression populate-loop in raxRemove(), preventing a heap-overflow memcpy that crashes only when a single rax key spans a compressible chain exceeding RAX_NODE_MAX_SIZE. All command-reachable rax tables with user-controlled key lengths (stream group/consumer names, ACL usernames, client-tracking prefixes/keys) would each require one command argument larger than ~512MB to reach this path, since recompression merges only the unique suffix of a single remaining key and many small shared-prefix keys cannot"
+}

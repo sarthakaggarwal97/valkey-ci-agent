@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.fbtree-middle-split-leafcount
+deployment:
+  modes: [standalone]
+metadata:
+  description: Middle 50/50 leaf splits (fbtree.c:487) maintain the new leaf counter;
+    MEMORY USAGE compares the exact leaf count against the parent's sampled estimate
+    on head-split and tail-split tree shapes
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [EVAL, "for i=0,2439 do redis.call('ZADD',KEYS[1],0,string.format('m%05d',i))\
+          \ end return redis.call('ZCARD',KEYS[1])", "1", zhead], expect: {equals: 2440}}
+    - {command: [EVAL, "local n=0 for i=0,15 do n=n+redis.call('ZADD',KEYS[1],0,string.format('m%05dx',i*61+30))\
+          \ end return n", "1", zhead], expect: {equals: 16}}
+    - {command: [ZCARD, zhead], expect: {equals: 2456}}
+    - {command: [ZRANGEBYLEX, zhead, "[m00030", "[m00032"], expect: {equals: [m00030,
+          m00030x, m00031, m00032]}}
+    - {command: [MEMORY, USAGE, zhead, SAMPLES, "0"], expect_difference: true, expect: {
+        min: 1000}}
+    - {command: [EVAL, "for i=0,2439 do redis.call('ZADD',KEYS[1],0,string.format('m%05d',i))\
+          \ end return redis.call('ZCARD',KEYS[1])", "1", ztail], expect: {equals: 2440}}
+    - {command: [EVAL, "local n=0 for i=24,39 do n=n+redis.call('ZADD',KEYS[1],0,string.format('m%05dx',i*61+30))\
+          \ end return n", "1", ztail], expect: {equals: 16}}
+    - {command: [ZCARD, ztail], expect: {equals: 2456}}
+    - {command: [MEMORY, USAGE, ztail, SAMPLES, "0"], expect_difference: true, expect: {
+        min: 1000}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

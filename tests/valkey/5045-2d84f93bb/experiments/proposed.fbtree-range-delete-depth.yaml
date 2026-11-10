@@ -1,0 +1,87 @@
+extends: [valkey.liveness]
+id: proposed.fbtree-range-delete-depth
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Three-level fbtrees (about 3965 items, 65 full leaves, two inner children under
+    the root) hit the deleteRangeCore boundary cleanups: unaligned spans free middle
+    subtrees per depth (fbtree.c:1971, 1992); a start rank aligned to a leaf boundary
+    empties the left boundary child (1977); an end rank aligned empties the right
+    one (2003); a span inside one root child empties boundary leaves at the split
+    node (2031) and, covering the whole child, frees it on the shared path (2054,
+    via freeEmptyNodeAlreadyUnlinked 439-441). A same-leaf full-span rank delete hits
+    1836. A full-head, sparse-tail tree makes the parent's sampled MEMORY USAGE provably
+    under-extrapolate, so that command is the marked difference; small-tree MEMORY
+    USAGE afterwards must be equal across builds, catching counter drift.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rangedel
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    commands:
+    - {command: [EVAL, "local n=0 for i=1,200 do n=n+redis.call('ZADD','z1',i,string.format('a%04d',i))\
+          \ end return n", "0"], expect: {equals: 200}}
+    - {command: [ZREMRANGEBYRANK, z1, 61, 121], expect: {equals: 61}}
+    - {command: [ZCARD, z1], expect: {equals: 139}}
+    - {command: [EVAL, "local n=0 for i=1,3965 do n=n+redis.call('ZADD','z2',i,string.format('b%04d',i))\
+          \ end return n", "0"], expect: {equals: 3965}}
+    - {command: [ZREMRANGEBYRANK, z2, 100, 3900], expect: {equals: 3801}}
+    - {command: [ZCARD, z2], expect: {equals: 164}}
+    - {command: [EVAL, "local n=0 for i=1,3965 do n=n+redis.call('ZADD','z3',i,string.format('c%04d',i))\
+          \ end return n", "0"], expect: {equals: 3965}}
+    - {command: [ZREMRANGEBYRANK, z3, 61, 3900], expect: {equals: 3840}}
+    - {command: [ZCARD, z3], expect: {equals: 125}}
+    - {command: [EVAL, "local n=0 for i=1,3965 do n=n+redis.call('ZADD','z4',i,string.format('d%04d',i))\
+          \ end return n", "0"], expect: {equals: 3965}}
+    - {command: [ZREMRANGEBYRANK, z4, 100, 3842], expect: {equals: 3743}}
+    - {command: [ZCARD, z4], expect: {equals: 222}}
+    - {command: [EVAL, "local n=0 for i=1,3965 do n=n+redis.call('ZADD','z5',i,string.format('e%04d',i))\
+          \ end return n", "0"], expect: {equals: 3965}}
+    - {command: [ZREMRANGEBYRANK, z5, 61, 3000], expect: {equals: 2940}}
+    - {command: [ZCARD, z5], expect: {equals: 1025}}
+    - {command: [EVAL, "local n=0 for i=1,3965 do n=n+redis.call('ZADD','z6',i,string.format('f%04d',i))\
+          \ end return n", "0"], expect: {equals: 3965}}
+    - {command: [ZREMRANGEBYRANK, z6, 0, 3720], expect: {equals: 3721}}
+    - {command: [ZCARD, z6], expect: {equals: 244}}
+    - {command: [EVAL, "local n=0 for i=1,4000 do n=n+redis.call('ZADD','z7',i,string.format('g%04d',i))\
+          \ end return n", "0"], expect: {equals: 4000}}
+    - {command: [EVAL, "local n=0 for i=2001,4000,2 do n=n+redis.call('ZREM','z7',string.format('g%04d',i))\
+          \ end return n", "0"], expect: {equals: 1000}}
+    - {command: [ZCARD, z7], expect: {equals: 3000}}
+    - {command: [MEMORY, USAGE, z7], expect_difference: true, expect: {min: 20000}}
+    - {command: [ZREMRANGEBYRANK, z1, 0, -9], expect: {equals: 131}}
+    - {command: [ZREMRANGEBYRANK, z2, 0, -9], expect: {equals: 156}}
+    - {command: [ZREMRANGEBYRANK, z3, 0, -9], expect: {equals: 117}}
+    - {command: [ZREMRANGEBYRANK, z4, 0, -9], expect: {equals: 214}}
+    - {command: [ZREMRANGEBYRANK, z5, 0, -9], expect: {equals: 1017}}
+    - {command: [ZREMRANGEBYRANK, z6, 0, -9], expect: {equals: 236}}
+    - {command: [ZREMRANGEBYRANK, z7, 0, -9], expect: {equals: 2992}}
+    - {command: [ZCARD, z6], expect: {equals: 8}}
+    - {command: [ZRANGE, z1, 0, -1]}
+    - {command: [ZRANGE, z5, 0, -1]}
+    - {command: [ZRANGE, z6, 0, -1], expect: {equals: [f3958, f3959, f3960, f3961,
+          f3962, f3963, f3964, f3965]}}
+    - {command: [MEMORY, USAGE, z1], expect: {min: 64, max: 65536}}
+    - {command: [MEMORY, USAGE, z2], expect: {min: 64, max: 65536}}
+    - {command: [MEMORY, USAGE, z3], expect: {min: 64, max: 65536}}
+    - {command: [MEMORY, USAGE, z4], expect: {min: 64, max: 65536}}
+    - {command: [MEMORY, USAGE, z5], expect: {min: 64, max: 65536}}
+    - {command: [MEMORY, USAGE, z6], expect: {min: 64, max: 65536}}
+    - {command: [MEMORY, USAGE, z7], expect: {min: 64, max: 65536}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rangedel.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rangedel}

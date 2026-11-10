@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.module-skip-validation-aof-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: Commands propagated through VM_Replicate's skip-validation path land
+    in the AOF and replay to the same state after a restart and after BGREWRITEAOF,
+    on the change and its parent
+components:
+- use: valkey.action.commands
+  id: aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {appendonly: "yes", appendfsync: always}
+    timeout_s: 20
+    commands:
+    - {command: [propagate-test.simple], expect: {equals: OK}}
+    - {command: [propagate-test.mixed], expect: {equals: OK}}
+    - {command: [propagate-test.incr, vkey], expect: {equals: 1}}
+    - {command: [GET, counter-1], expect: {equals: null}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, counter-1], expect: {equals: "2"}}
+    - {command: [GET, counter-2], expect: {equals: "2"}}
+    - {command: [GET, using-call], expect: {equals: "1"}}
+    - {command: [GET, after-call], expect: {equals: "1"}}
+    - {command: [GET, vkey], expect: {equals: "1"}}
+    - {command: [propagate-test.obeyed], expect: {equals: 1}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {error: false}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, counter-1], expect: {equals: "2"}}
+    - {command: [GET, counter-2], expect: {equals: "2"}}
+    - {command: [GET, vkey], expect: {equals: "1"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [aof.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof}

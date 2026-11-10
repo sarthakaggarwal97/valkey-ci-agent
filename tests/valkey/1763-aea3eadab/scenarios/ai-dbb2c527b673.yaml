@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 421b2a40e6ac..aea3eadab53a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-dbb2c527b673
+seed: 500606
+experiment:
+  id: proposed.replicaof-connect-churn
+  inputs:
+    dual_channel: 'yes'
+deployment:
+  mode: standalone
+  base_port: 7500
