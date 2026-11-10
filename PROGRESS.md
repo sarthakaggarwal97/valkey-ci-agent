@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-10T01:04+00:00.
+Updated 2026-11-10T01:05+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -48,9 +48,8 @@ Updated 2026-11-10T01:04+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-10T01:04:59+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42722707590): 1 merge(s) tested, 0 without a code change.
+[2026-11-10T01:05:51+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42733161765): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search#1554](https://github.com/valkey-io/valkey-search/pull/1554) ([tests](tests/valkey-search/1554-5ca6f4950/)): Reject every NaN spelling in numeric parsing and sort NaN last in SORTBY (#1554): 4 of 6 test(s) reached the change
 
 ## Totals
 
