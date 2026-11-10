@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "74075203d2b95214af853a9d28f48010bdc76a4c",
+  "parent": "204097dac46730e9eb125c822c1dc2959c6572c5",
+  "pr": 1674,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Implement: CLUSTER REPLICATE NO ONE (#1674)",
+  "date": "2025-04-07",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 21,
+    "executed": 21,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.7247,
+  "findings": [],
+  "recorded": []
+}

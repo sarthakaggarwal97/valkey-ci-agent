@@ -1,0 +1,45 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "04104361791be789f514d3731ea7cca353d0292b",
+  "parent": "772bd8b57a49bf8db4834ef92701cb74858eba82",
+  "pr": 1793,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replaced the use of sdsReplyDictType and hashDictType. (#1793)",
+  "date": "2025-04-08",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 68,
+    "executed": 64,
+    "percent": 94,
+    "uncovered": [
+      "src/rdb.c:2115",
+      "src/rdb.c:2132",
+      "src/rdb.c:2151",
+      "src/rdb.c:2152"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 10.2731,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-cb4c96c65dfd",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'reload' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (RESTORE rawhash 0 <binary>), 3 (HLEN rawhash), 4 (HGET rawhash a), 5 (RESTORE rawhashdup 0 <binary>)"
+    },
+    {
+      "scenario": "ai-c4cc598108e4",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'reload' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (RESTORE rawhash 0 <binary>), 3 (HLEN rawhash), 4 (HGET rawhash a), 5 (RESTORE rawhashdup 0 <binary>)"
+    }
+  ]
+}

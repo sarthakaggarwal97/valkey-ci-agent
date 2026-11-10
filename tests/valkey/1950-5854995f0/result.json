@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5854995f01a79b1bf3a13cccec62ebe681caca68",
+  "parent": "e169c83d746a0872dbf388a493bc5741502a3b44",
+  "pr": 1950,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix cluster slot stats assertion during promotion of replica (#1950)",
+  "date": "2025-04-15",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.8082,
+  "findings": [],
+  "recorded": []
+}

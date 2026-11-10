@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.cluster-info-pfail-counters
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CLUSTER INFO's new cluster_nodes_pfail/cluster_voting_nodes_pfail fields count
+    a voting peer blocked past cluster-node-timeout, stay PFAIL without FAIL quorum
+    (two voting primaries, quorum 2, only one reporter), and clear when the peer wakes;
+    the parent build lacks the fields entirely.
+components:
+- use: valkey.action.commands
+  id: pfail-info
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    server_config:
+      cluster-node-timeout: 1000
+      enable-debug-command: "yes"
+    timeout_s: 45
+    commands:
+    - {command: [CLUSTER, INFO], wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:2"}}
+    - {command: [CLUSTER, SETSLOT, "16383", NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "16383", NODE, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 20, compare: skip, expect: {contains: "cluster_size:2"}}
+    - {command: [CLUSTER, INFO], node: 0, expect_difference: true, expect: {contains: "cluster_voting_nodes_pfail:0"}}
+    - {command: [CLUSTER, INFO], node: 0, expect_difference: true, expect: {contains: "cluster_voting_nodes_fail:0"}}
+    - {raw: "DEBUG SLEEP 20\r\n", node: 1, connection: sleeper, compare: skip}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 15, expect_difference: true, expect: {
+        contains: "cluster_nodes_pfail:1"}}
+    - {command: [CLUSTER, INFO], node: 0, expect_difference: true, expect: {contains: "cluster_voting_nodes_pfail:1"}}
+    - {command: [CLUSTER, INFO], node: 0, expect_difference: true, expect: {contains: "cluster_nodes_fail:0"}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 15, expect_difference: true, expect: {
+        contains: "cluster_nodes_pfail:0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [pfail-info.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pfail-info}

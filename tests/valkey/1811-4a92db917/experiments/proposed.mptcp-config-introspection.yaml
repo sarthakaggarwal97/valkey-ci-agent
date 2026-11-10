@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.mptcp-config-introspection
+deployment:
+  modes: [standalone]
+metadata:
+  description: The new immutable mptcp config is registered, readable via CONFIG GET
+    (exact and glob), and refuses CONFIG SET on the changed build; the parent has
+    no such option
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: mptcp-config
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, GET, mptcp], expect_difference: true, expect: {equals: [
+          mptcp, "no"]}}
+    - {command: [CONFIG, GET, "mptc*"], expect_difference: true, expect: {equals: [
+          mptcp, "no"]}}
+    - {command: [CONFIG, SET, mptcp, "yes"], expect_difference: true, expect: {error: "immutable"}}
+    - {command: [CONFIG, SET, mptcp, "no"], expect_difference: true, expect: {error: "immutable"}}
+    - {command: [CONFIG, GET, mptcp], expect_difference: true, expect: {equals: [
+          mptcp, "no"]}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [mptcp-config.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mptcp-config}

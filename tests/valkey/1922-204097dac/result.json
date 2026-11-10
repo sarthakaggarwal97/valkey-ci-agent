@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "204097dac46730e9eb125c822c1dc2959c6572c5",
+  "parent": "dfdcbfe9148706e2c51b33d10b9e3f388f234e7a",
+  "pr": 1922,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix the build on less common platforms in zmalloc.c (#1922)",
+  "date": "2025-04-07",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2338,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only relocates the declaration of the used_memory_thread pointer into the #if/#else in zmalloc.c so that on non-x86/ARM/PowerPC platforms it is declared _Atomic size_t* to match the _Atomic array, fixing a compile error there. On the platforms the fuzzer runs (linux x86_64/arm) the preprocessed source is identical to the parent, so there is no runtime behaviour change to exercise; it is purely a build fix."
+}

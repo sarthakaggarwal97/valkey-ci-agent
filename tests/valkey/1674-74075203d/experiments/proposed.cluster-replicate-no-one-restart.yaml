@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.cluster-replicate-no-one-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: A replica detached with CLUSTER REPLICATE NO ONE keeps its primary
+    role and fresh shard across a restart (nodes.conf saved by CLUSTER_TODO_SAVE_CONFIG)
+    and can replicate its old primary again afterwards
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: detach-restart
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SET, k1, v1], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, compare: skip, wait_s: 60, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [DBSIZE], node: 1, wait_s: 30, expect: {equals: 1}}
+    - {command: [CLUSTER, REPLICATE, "NO", "ONE"], node: 1, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DBSIZE], node: 1, expect_difference: true, expect: {equals: 0}}
+    - {command: [CLUSTER, REPLICAS, "<node.0.id>"], node: 0, wait_s: 30, expect_difference: true,
+      expect: {equals: []}}
+    - {restart: true, node: 1}
+    - {command: [INFO, replication], node: 1, compare: skip, wait_s: 30, expect: {
+        contains: "role:master"}}
+    - {command: [CLUSTER, MYSHARDID], node: 1, expect_difference: true, expect: {
+        exists: true}}
+    - {command: [CLUSTER, REPLICAS, "<node.0.id>"], node: 0, wait_s: 10, expect_difference: true,
+      expect: {equals: []}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, compare: skip, wait_s: 60, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [DBSIZE], node: 1, wait_s: 30, expect: {equals: 1}}
+    - {command: [CLUSTER, MYSHARDID], node: 1, wait_s: 10, expect: {equals: "<node.0.shard-id>"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [detach-restart.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: detach-restart}

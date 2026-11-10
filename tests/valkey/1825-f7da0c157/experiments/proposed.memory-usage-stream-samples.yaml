@@ -1,0 +1,85 @@
+extends: [valkey.liveness]
+id: proposed.memory-usage-stream-samples
+deployment:
+  modes: [standalone]
+metadata:
+  description: MEMORY USAGE on a stream samples consumer groups and consumer trees
+    and extrapolates, instead of walking every group and consumer
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: memuse
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [XADD, s, 1-1, f, v1], expect: {equals: "1-1"}}
+    - {command: [XADD, s, 1-2, f, v2], expect: {equals: "1-2"}}
+    - {command: [XADD, s, 1-3, f, v3], expect: {equals: "1-3"}}
+    - {command: [XADD, s, 1-4, f, v4], expect: {equals: "1-4"}}
+    - {command: [XADD, s, 1-5, f, v5], expect: {equals: "1-5"}}
+    - {command: [XADD, s, 1-6, f, v6], expect: {equals: "1-6"}}
+    - {command: [XADD, s, 1-7, f, v7], expect: {equals: "1-7"}}
+    - {command: [XADD, s, 1-8, f, v8], expect: {equals: "1-8"}}
+    - {command: [XGROUP, CREATE, s, g0, 0], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s, g1, 0], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s, g2, 0], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s, g3, 0], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s, g4, 0], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s, g5, 0], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s, g6, 0], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s, g7, 0], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g0, cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc,
+        COUNT, 8, STREAMS, s, ">"], expect: {exists: true}}
+    - {command: [XGROUP, CREATECONSUMER, s, g0, z01], expect: {equals: 1}}
+    - {command: [XGROUP, CREATECONSUMER, s, g0, z02], expect: {equals: 1}}
+    - {command: [XGROUP, CREATECONSUMER, s, g0, z03], expect: {equals: 1}}
+    - {command: [XGROUP, CREATECONSUMER, s, g0, z04], expect: {equals: 1}}
+    - {command: [XGROUP, CREATECONSUMER, s, g0, z05], expect: {equals: 1}}
+    - {command: [XGROUP, CREATECONSUMER, s, g0, z06], expect: {equals: 1}}
+    - {command: [XGROUP, CREATECONSUMER, s, g0, z07], expect: {equals: 1}}
+    - {command: [XGROUP, CREATECONSUMER, s, g0, z08], expect: {equals: 1}}
+    - {command: [XGROUP, CREATECONSUMER, s, g0, z09], expect: {equals: 1}}
+    - {command: [XGROUP, CREATECONSUMER, s, g0, z10], expect: {equals: 1}}
+    - {command: [XGROUP, CREATECONSUMER, s, g0, z11], expect: {equals: 1}}
+    - {command: [XGROUP, CREATECONSUMER, s, g0, z12], expect: {equals: 1}}
+    - {command: [MEMORY, USAGE, s, SAMPLES, 1], expect_difference: true, expect: {
+        min: 25000}}
+    - {command: [MEMORY, USAGE, s, SAMPLES, 3], expect_difference: true, expect: {
+        min: 3500}}
+    - {command: [MEMORY, USAGE, s], expect_difference: true, expect: {min: 2000}}
+    - {command: [MEMORY, USAGE, s, SAMPLES, 0], compare: skip, expect: {exists: true}}
+    - {command: [XADD, s2, 1-1, f, v1], expect: {equals: "1-1"}}
+    - {command: [XADD, s2, 1-2, f, v2], expect: {equals: "1-2"}}
+    - {command: [XADD, s2, 1-3, f, v3], expect: {equals: "1-3"}}
+    - {command: [XADD, s2, 1-4, f, v4], expect: {equals: "1-4"}}
+    - {command: [XADD, s2, 1-5, f, v5], expect: {equals: "1-5"}}
+    - {command: [XADD, s2, 1-6, f, v6], expect: {equals: "1-6"}}
+    - {command: [XADD, s2, 1-7, f, v7], expect: {equals: "1-7"}}
+    - {command: [XADD, s2, 1-8, f, v8], expect: {equals: "1-8"}}
+    - {command: [XGROUP, CREATE, s2, a0, 0], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s2, a1, 0], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s2, a2, 0], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s2, a3, 0], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s2, a4, 0], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s2, a5, 0], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s2, a6, 0], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, s2, zbig, 0], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, zbig, cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc,
+        COUNT, 8, STREAMS, s2, ">"], expect: {exists: true}}
+    - {command: [MEMORY, USAGE, s2, SAMPLES, 1], expect_difference: true, expect: {
+        max: 20000}}
+    - {command: [MEMORY, USAGE, s2], expect_difference: true, expect: {max: 20000}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [memuse.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: memuse}

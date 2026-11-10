@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.hash-legacy-encoding-reload
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE of legacy hash encodings (raw hash, zipmap, ziplist) exercises
+    the refactored hashtable-based duplicate-field detection on RDB load, including
+    its error/cleanup release paths
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {sanitize-dump-payload: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, "1"], expect: {equals: OK}}
+    - {command: [RESTORE, zlhashdup, "0", !!binary "DRsbAAAAFgAAAAQAAAJhAAQCYgAEAmEABAJkAP8JAKGYNnjMjpMu"],
+      expect: {error: "Bad data format"}}
+    - {command: [RESTORE, rawhash, "0", !!binary "BAIBYQFiAWMBZAkAAAAAAAAAAA=="],
+      expect: {equals: OK}}
+    - {command: [HLEN, rawhash], expect: {equals: 2}}
+    - {command: [HGET, rawhash, a], expect: {equals: b}}
+    - {command: [RESTORE, rawhashdup, "0", !!binary "BAIBYQFiAWEBZAkAAAAAAAAAAA=="],
+      expect: {error: "Bad data format"}}
+    - {command: [RESTORE, rawhashnullfield, "0", !!binary "BAIBYQFigP////8JAAAAAAAAAAAA"],
+      expect: {error: "Bad data format"}}
+    - {command: [RESTORE, rawhashnullval, "0", !!binary "BAIBYQFiCQAAAAAAAAAAAA=="],
+      expect: {error: "Bad data format"}}
+    - {command: [RESTORE, zmhash, "0", !!binary "CRACAmYxAgB2MQJmMgIAdjL/CQAAAAAAAAAAAA=="],
+      expect: {equals: OK}}
+    - {command: [HLEN, zmhash], expect: {equals: 2}}
+    - {command: [HGET, zmhash, f1], expect: {equals: v1}}
+    - {command: [RESTORE, zmhashdup, "0", !!binary "CRACAmYxAgB2MQJmMQIAdjL/CQAAAAAAAAAAAA=="],
+      expect: {error: "Bad data format"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

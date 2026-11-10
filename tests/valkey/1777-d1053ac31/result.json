@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d1053ac3198795a6e913b1cf143f06f3d8631734",
+  "parent": "ee9a305b5bc7b0cc4495d3ee8d212269e91675a0",
+  "pr": 1777,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Ignore stale gossip packets that arrive out of order (#1777)",
+  "date": "2025-04-15",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 2,
+    "percent": 66,
+    "uncovered": [
+      "src/cluster_legacy.c:3589"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 5.0964,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 51387ddc9940..be60586f1735.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-64c0527ba975
+seed: 101
+experiment:
+  id: proposed.client-filters-flag-reach
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5f5ad43ebbc1..f7da0c1578cc.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-66c8f4820906
+seed: 101
+experiment:
+  id: proposed.memory-usage-stream-samples
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

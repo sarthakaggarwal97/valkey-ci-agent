@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.client-filters-flag-reach
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLIENT LIST/KILL FLAGS filter matched against real client states (no-evict,
+    no-touch, import-source, dirty CAS, blocked) plus the ID-filter free paths in
+    freeClientFilter
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flagreach
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CLIENT, SETNAME, mainclient], expect: {equals: OK}}
+    - {command: [CLIENT, NO-EVICT, ON], expect: {equals: OK}}
+    - {command: [CLIENT, LIST, FLAGS, e], expect_difference: true, expect: {contains: "name=mainclient"}}
+    - {command: [CLIENT, NO-TOUCH, ON], expect: {equals: OK}}
+    - {command: [CLIENT, LIST, FLAGS, T], expect_difference: true, expect: {contains: "name=mainclient"}}
+    - {command: [CLIENT, LIST, FLAGS, eT], expect_difference: true, expect: {contains: "name=mainclient"}}
+    - {command: [CONFIG, SET, import-mode, yes], expect: {equals: OK}}
+    - {connection: imp, command: [CLIENT, SETNAME, impclient], expect: {equals: OK}}
+    - {connection: imp, command: [CLIENT, IMPORT-SOURCE, ON], expect: {equals: OK}}
+    - {command: [CLIENT, LIST, FLAGS, I], expect_difference: true, expect: {contains: "name=impclient"}}
+    - {connection: w, command: [CLIENT, SETNAME, watcher], expect: {equals: OK}}
+    - {connection: w, command: [WATCH, wk], expect: {equals: OK}}
+    - {command: [SET, wk, v1], expect: {equals: OK}}
+    - {command: [CLIENT, LIST, FLAGS, d], expect_difference: true, expect: {contains: "name=watcher"}}
+    - {connection: blk, raw: "BLPOP blkkey 0\r\n"}
+    - {command: [CLIENT, LIST, FLAGS, b], wait_s: 10, expect_difference: true, expect: {
+        contains: "cmd=blpop"}}
+    - {command: [LPUSH, blkkey, x], expect: {equals: 1}}
+    - {command: [CLIENT, LIST, FLAGS, O], expect_difference: true, expect: {error: false}}
+    - {command: [CLIENT, LIST, FLAGS, c], expect_difference: true, expect: {error: false}}
+    - {command: [CLIENT, LIST, FLAGS, u], expect_difference: true, expect: {error: false}}
+    - {command: [CLIENT, LIST, FLAGS, A], expect_difference: true, expect: {error: false}}
+    - {command: [CLIENT, LIST, FLAGS, U], expect_difference: true, expect: {error: false}}
+    - {command: [CLIENT, LIST, FLAGS, R], expect_difference: true, expect: {error: false}}
+    - {command: [CLIENT, LIST, ID, 987654321], expect: {error: false}}
+    - {command: [CLIENT, LIST, ID, 987654321, FLAGS, Z], expect_difference: true,
+      expect: {error: "Unknown flags"}}
+    - {command: [CLIENT, KILL, ID, 987654321, FLAGS, N], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [CLIENT, KILL, NAME, nosuchclient, IDLE, 1000], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [CLIENT, KILL, FLAGS, I], expect_difference: true, expect: {equals: 1}}
+    - {command: [CLIENT, LIST, FLAGS, I], wait_s: 5, expect_difference: true, expect: {
+        equals: ""}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [flagreach.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flagreach}

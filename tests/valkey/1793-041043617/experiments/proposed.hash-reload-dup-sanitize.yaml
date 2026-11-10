@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.hash-reload-dup-sanitize
+deployment:
+  modes: [standalone]
+metadata:
+  description: Reload listpack-, hashtable- and skiplist-encoded keys from RDB under
+    sanitize-dump-payload yes (the harness default) so the load runs the hashtable-based
+    duplicate-field validation the change rewrote; a false dup detection aborts the
+    load and drops the key, a leak or corruption shows as a missing or changed key
+    or a node that fails to restart
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "no", save: "", hash-max-listpack-entries: 4, zset-max-listpack-entries: 4,
+      set-max-listpack-entries: 4, set-max-intset-entries: 4}
+    timeout_s: 30
+    commands:
+    - {command: [HSET, hsmall, a, 1, b, 2, c, 3], expect: {equals: 3}}
+    - {command: [HSET, hbig, f0, 0, f1, 1, f2, 2, f3, 3, f4, 4, f5, 5, f6, 6, f7,
+        7, f8, 8, f9, 9], expect: {equals: 10}}
+    - {command: [ZADD, zsmall, 1, a, 2, b, 3, c], expect: {equals: 3}}
+    - {command: [ZADD, zbig, 0, m0, 1, m1, 2, m2, 3, m3, 4, m4, 5, m5, 6, m6, 7, m7,
+        8, m8, 9, m9], expect: {equals: 10}}
+    - {command: [SADD, sstr, a, b, c], expect: {equals: 3}}
+    - {command: [SADD, sbig, s0, s1, s2, s3, s4, s5, s6, s7], expect: {equals: 8}}
+    - {command: [SADD, sint, 1, 2, 3], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, hsmall], compare: skip, expect: {equals: listpack}}
+    - {command: [OBJECT, ENCODING, hbig], compare: skip, expect: {equals: hashtable}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HGETALL, hsmall], compare: unordered-pairs}
+    - {command: [HGETALL, hbig], compare: unordered-pairs}
+    - {command: [ZRANGE, zsmall, 0, -1, WITHSCORES]}
+    - {command: [ZRANGE, zbig, 0, -1, WITHSCORES]}
+    - {command: [SMEMBERS, sstr], compare: unordered}
+    - {command: [SMEMBERS, sbig], compare: unordered}
+    - {command: [SMEMBERS, sint], compare: unordered}
+    - {command: [DBSIZE], expect: {equals: 7}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f7da0c1578cc..44dafba2ce56.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-97c573e75613
+seed: 404
+experiment:
+  id: proposed.auto-failover-replconf-compare
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7300

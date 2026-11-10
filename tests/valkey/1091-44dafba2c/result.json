@@ -1,0 +1,38 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "44dafba2ce5635c5945c52bc6d2aa798e3537448",
+  "parent": "f7da0c1578cc48db8c7a0e7ed6a3619fa950ee58",
+  "pr": 1091,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Trigger manual failover on SIGTERM / shutdown to cluster primary (#1091)",
+  "date": "2025-04-08",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 2,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 71,
+    "executed": 61,
+    "percent": 85,
+    "uncovered": [
+      "src/cluster_legacy.c:1271",
+      "src/cluster_legacy.c:1272",
+      "src/cluster_legacy.c:1273",
+      "src/cluster_legacy.c:1285",
+      "src/cluster_legacy.c:7234",
+      "src/cluster_legacy.c:7256",
+      "src/replication.c:1514",
+      "src/replication.c:1515",
+      "src/replication.c:3749",
+      "src/replication.c:3759"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 10.2499,
+  "findings": [],
+  "recorded": []
+}

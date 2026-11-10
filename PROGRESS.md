@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-10T00:28+00:00.
+Updated 2026-11-10T00:42+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1323 | 1187 | #1819 (2025-04-17) | 296 | 189.0 |
+| valkey-io/valkey | 1345 | 1165 | #1918 (2025-04-05) | 318 | 192.1 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 63 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 9.0 |
 | valkey-io/valkey-search | 670 | 0 | f8106e72e984 (2024-11-27) | 15 | 95.7 |
@@ -13,28 +13,28 @@ Updated 2026-11-10T00:28+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-09T23:29:13+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42694658068): 20 merge(s) tested, 4 without a code change.
+[2026-11-10T00:42:00+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42720840888): 20 merge(s) tested, 3 without a code change.
 
-- [valkey-io/valkey#1995](https://github.com/valkey-io/valkey/pull/1995) ([tests](tests/valkey/1995-49e44e531/)): Environment variable REDISCLI_AUTH to VALKEYCLI_AUTH conversion (#1995): 0 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1671](https://github.com/valkey-io/valkey/pull/1671) ([tests](tests/valkey/1671-2fe08f864/)): Add multi-database support to cluster mode (#1671): 9 of 14 test(s) reached the change, coverage 67%
-- [valkey-io/valkey#2034](https://github.com/valkey-io/valkey/pull/2034) ([tests](tests/valkey/2034-8dca8019d/)): Remove redundancy if condition statement (#2034): declined: Pure refactor with no behavior change: the removed `if (sdslen(value) > 0)` guard in setrangeCommand was dead code, since both the non-existing-key branch (t_string.c:523-526) and the existing-key branch (t_string.c:543-546) return early when the value is empty before reaching it. The writ
-- [valkey-io/valkey#2036](https://github.com/valkey-io/valkey/pull/2036) ([tests](tests/valkey/2036-4eeffda56/)): Properly escape double quotes and backslash in sdscatrepr (#2036): 0 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1859](https://github.com/valkey-io/valkey/pull/1859) ([tests](tests/valkey/1859-dd772c490/)): Hyperloglog ARM NEON SIMD optimization (#1859): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2009](https://github.com/valkey-io/valkey/pull/2009) ([tests](tests/valkey/2009-8df0a6b67/)): Accept limited number of new cluster link connections per cycle (#2009): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1944](https://github.com/valkey-io/valkey/pull/1944) ([tests](tests/valkey/1944-70f205761/)): Optimize string2ll performance using AVX512 (#1944): 0 of 3 test(s) reached the change, coverage 14%
-- [valkey-io/valkey#2001](https://github.com/valkey-io/valkey/pull/2001) ([tests](tests/valkey/2001-2d200dfa3/)): Minor change for sadd command (#2001): declined: The change moves `server.dirty += added` inside the `if (added)` guard in saddCommand. When added == 0 the old code added 0 to server.dirty, which is a no-op, and when added > 0 both versions execute identically. The dirty counter delta (and thus replication propagation), keyspace notifica
-- [valkey-io/valkey#2015](https://github.com/valkey-io/valkey/pull/2015) ([tests](tests/valkey/2015-9cbcaa258/)): valkey-benchmark: Add test for MGET (#2015): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1961](https://github.com/valkey-io/valkey/pull/1961) ([tests](tests/valkey/1961-c9c49b446/)): Introduce MPTCP for replication (#1961): 1 of 8 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#2007](https://github.com/valkey-io/valkey/pull/2007) ([tests](tests/valkey/2007-249495a3f/)): Convert pubsub dicts to hashtables (#2007): declined: no proposed test validated
-- [valkey-io/valkey#2002](https://github.com/valkey-io/valkey/pull/2002) ([tests](tests/valkey/2002-5065fcf12/)): Correct rpushx description (#2002): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#1976](https://github.com/valkey-io/valkey/pull/1976) ([tests](tests/valkey/1976-d3b6559d7/)): Clean up unnecessary use of strlen (#1976): 2 of 8 test(s) reached the change, coverage 63%
-- [valkey-io/valkey#1476](https://github.com/valkey-io/valkey/pull/1476) ([tests](tests/valkey/1476-5df95b3df/)): Refactor syncWithPrimary and replicaTryPartialResynchronization (#1476): 0 of 18 test(s) reached the change, coverage 61%
-- [valkey-io/valkey#2006](https://github.com/valkey-io/valkey/pull/2006) ([tests](tests/valkey/2006-30e9109d1/)): Add output buffer limiting for unauthenticated clients (#2006): 2 of 8 test(s) reached the change, coverage 91%
-- [valkey-io/valkey#1933](https://github.com/valkey-io/valkey/pull/1933) ([tests](tests/valkey/1933-83d297902/)): Add --hotkeys-count option for Valkey-cli (#1933): 3 of 3 test(s) reached the change, coverage 93%; crash, introduced and since fixed (recorded)
-- [valkey-io/valkey#1989](https://github.com/valkey-io/valkey/pull/1989) ([tests](tests/valkey/1989-38846504d/)): blocking client followup fix related to log_req_res (#1989): declined: The change only relocates the reqresSaveClientReplyOffset call inside _addReplyToBufferOrList so the request/response-log offset is saved before replies are diverted to the deferred-reply or pending-push lists. That function is compiled only under the LOG_REQ_RES debug build flag; in stand
-- [valkey-io/valkey#1984](https://github.com/valkey-io/valkey/pull/1984) ([tests](tests/valkey/1984-176641649/)): Allow scripts to support null characters again (#1984): 5 of 8 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1985](https://github.com/valkey-io/valkey/pull/1985) ([tests](tests/valkey/1985-9fb850dab/)): Only enable defrag for vendored jemalloc (#1985): declined: This is a build-time guard: HAVE_DEFRAG now requires VALKEY_VENDORED_JEMALLOC, a macro the vendored jemalloc header defines. The fuzzer's builds of both the change and its parent use the vendored jemalloc, so HAVE_DEFRAG is defined on both and runtime behavior (activedefrag config, defrag 
-- [valkey-io/valkey#573](https://github.com/valkey-io/valkey/pull/573) ([tests](tests/valkey/573-05d8fd474/)): Avoid shard id update of replica if not matching with primary shard id (#573): 0 of 5 test(s) reached the change, coverage 40%
+- [valkey-io/valkey#1819](https://github.com/valkey-io/valkey/pull/1819) ([tests](tests/valkey/1819-57118a475/)): Fix engine crash on module client blocking during keyspace events (#1819): 0 of 4 test(s) reached the change, coverage 15%; crash, introduced and since fixed (recorded)
+- [valkey-io/valkey#1931](https://github.com/valkey-io/valkey/pull/1931) ([tests](tests/valkey/1931-1119765df/)): Fix CLUSTER RESET to use lazyfree-lazy-user-flush to do the lazyfree (#1931): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1952](https://github.com/valkey-io/valkey/pull/1952) ([tests](tests/valkey/1952-c8bfd23d9/)): Fix incorrect lag reported in XINFO GROUPS (#1952): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1904](https://github.com/valkey-io/valkey/pull/1904) ([tests](tests/valkey/1904-5d6e77f1c/)): Add sentinel_total_tilt to sentinel INFO sentinel (#1904): declined: The change is confined to Sentinel mode: sentinel.c adds an int total_tilt counter, increments it when sentinelCheckTiltCondition() enters TILT, and prints it as a new sentinel_total_tilt line in INFO sentinel. That code only runs in a valkey-sentinel process (started with --sentinel or th
+- [valkey-io/valkey#1910](https://github.com/valkey-io/valkey/pull/1910) ([tests](tests/valkey/1910-30dc9a7ae/)): Add node pfail and fail count to cluster info metrics (#1910): 2 of 3 test(s) reached the change, coverage 92%
+- [valkey-io/valkey#1777](https://github.com/valkey-io/valkey/pull/1777) ([tests](tests/valkey/1777-d1053ac31/)): Ignore stale gossip packets that arrive out of order (#1777): 0 of 4 test(s) reached the change, coverage 66%
+- [valkey-io/valkey#1948](https://github.com/valkey-io/valkey/pull/1948): to retry, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
+- [valkey-io/valkey#1950](https://github.com/valkey-io/valkey/pull/1950) ([tests](tests/valkey/1950-5854995f0/)): Fix cluster slot stats assertion during promotion of replica (#1950): 0 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1955](https://github.com/valkey-io/valkey/pull/1955) ([tests](tests/valkey/1955-2399f1077/)): Fix crash during TLS handshake with I/O threads (#1955): declined: The change adds one atomic_thread_fence in ioThreadAccept (io_threads.c), which runs only when a TLS accept is offloaded to an I/O thread: trySendAcceptToIOThreads is called solely from connTLSAccept in tls.c, so on plain-TCP connections the changed code never executes. The fuzzer cannot c
+- [valkey-io/valkey#1811](https://github.com/valkey-io/valkey/pull/1811) ([tests](tests/valkey/1811-4a92db917/)): Introduce MPTCP (#1811): 1 of 9 test(s) reached the change, coverage 66%
+- [valkey-io/valkey#1466](https://github.com/valkey-io/valkey/pull/1466) ([tests](tests/valkey/1466-be60586f1/)): [Client Introspection] Client Commands Extended Filtering (#1466): 8 of 8 test(s) reached the change, coverage 80%; crash, predates #1466, since fixed (recorded)
+- [valkey-io/valkey#1934](https://github.com/valkey-io/valkey/pull/1934) ([tests](tests/valkey/1934-51387ddc9/)): Update function clusterNodeSetSlotBit() return type to void (#1934): declined: The change only alters clusterNodeSetSlotBit()'s return type from int to void. Its sole caller, clusterAddSlot() (cluster_legacy.c:5651), already discarded the return value before the change, and the function's side effects (setting the slot bit, incrementing numslots, setting CLUSTER_NODE
+- [valkey-io/valkey#1945](https://github.com/valkey-io/valkey/pull/1945) ([tests](tests/valkey/1945-e2b28c6a0/)): Rebranding in security warning log (#1945): declined: The change only substitutes the SERVER_TITLE macro ("Valkey") for the hardcoded string "Redis" in the security-warning log message of securityWarningCommand (networking.c). No reply, connection handling, rate limiting, or any other runtime behaviour changes: the client is still aborted the
+- [valkey-io/valkey#1091](https://github.com/valkey-io/valkey/pull/1091) ([tests](tests/valkey/1091-44dafba2c/)): Trigger manual failover on SIGTERM / shutdown to cluster primary (#1091): 2 of 5 test(s) reached the change, coverage 85%
+- [valkey-io/valkey#1825](https://github.com/valkey-io/valkey/pull/1825) ([tests](tests/valkey/1825-f7da0c157/)): fix: add samples to stream object consumer trees (#1825): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1793](https://github.com/valkey-io/valkey/pull/1793) ([tests](tests/valkey/1793-041043617/)): Replaced the use of sdsReplyDictType and hashDictType. (#1793): 0 of 5 test(s) reached the change, coverage 94%
+- [valkey-io/valkey#1926](https://github.com/valkey-io/valkey/pull/1926) ([tests](tests/valkey/1926-772bd8b57/)): Kill RDB child process on CLUSTER RESET command (#1926): 0 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1674](https://github.com/valkey-io/valkey/pull/1674) ([tests](tests/valkey/1674-74075203d/)): Implement: CLUSTER REPLICATE NO ONE (#1674): 4 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1922](https://github.com/valkey-io/valkey/pull/1922) ([tests](tests/valkey/1922-204097dac/)): Fix the build on less common platforms in zmalloc.c (#1922): declined: The change only relocates the declaration of the used_memory_thread pointer into the #if/#else in zmalloc.c so that on non-x86/ARM/PowerPC platforms it is declared _Atomic size_t* to match the _Atomic array, fixing a compile error there. On the platforms the fuzzer runs (linux x86_64/arm) 
+- [valkey-io/valkey#1919](https://github.com/valkey-io/valkey/pull/1919) ([tests](tests/valkey/1919-dfdcbfe91/)): Fix minor comment typo (#1919): declined: The change only rewords a comment above quicklistCompare in src/quicklist.c; no executable code, configuration, or build file changes, so there is no behaviour to exercise and no scenario is needed.
 
 ### valkey-io/valkey-bloom
 
@@ -53,10 +53,10 @@ Updated 2026-11-10T00:28+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 696 of 1062 tested (66%)
-- Changed-line coverage: median 100% of 607 merge(s) measured, 51 under 50%
-- Recall: 191 parents flagged of 291 fix merges
-- Claude: $1239.87 in the last 24 hours, $7797.39 in the last 7 days, $7797.39 in all
+- Merges whose tests reached the change: 704 of 1075 tested (65%)
+- Changed-line coverage: median 100% of 620 merge(s) measured, 52 under 50%
+- Recall: 194 parents flagged of 296 fix merges
+- Claude: $1348.61 in the last 24 hours, $7906.12 in the last 7 days, $7906.12 in all
 - Issues filed: 64
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
@@ -125,4 +125,4 @@ Updated 2026-11-10T00:28+00:00.
 
 ## Retries
 
-None.
+- [valkey-io/valkey#1948](https://github.com/valkey-io/valkey/pull/1948): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict

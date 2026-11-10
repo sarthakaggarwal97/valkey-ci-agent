@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dfdcbfe9148706e2c51b33d10b9e3f388f234e7a",
+  "parent": "cc31c20a409c738a058e685c5adb41e9761d8332",
+  "pr": 1919,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix minor comment typo (#1919)",
+  "date": "2025-04-06",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2006,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewords a comment above quicklistCompare in src/quicklist.c; no executable code, configuration, or build file changes, so there is no behaviour to exercise and no scenario is needed."
+}

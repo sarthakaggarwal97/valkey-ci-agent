@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.cluster-reset-kills-rdb-child
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTER RESET on a replica kills a running RDB child, so a restart
+    cannot resurrect pre-reset data from the child's snapshot
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    replica_lazy_flush: {type: string, enum: ["yes", "no"], default: "yes"}
+components:
+- use: valkey.action.commands
+  id: reset
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    server_config:
+      save: ""
+      replica-lazy-flush: {$ref: inputs.replica_lazy_flush}
+    commands:
+    - {command: [DEBUG, POPULATE, 100000], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [DBSIZE], node: 1, wait_s: 60, expect: {equals: 100000}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, 50], node: 1, expect: {equals: OK}}
+    - {command: [BGSAVE], node: 1, expect: {contains: "Background saving started"}}
+    - {command: [CLUSTER, RESET], node: 1, expect: {equals: OK}}
+    - {command: [DBSIZE], node: 1, expect: {equals: 0}}
+    - {command: [INFO, persistence], node: 1, compare: skip, wait_s: 90, expect: {
+        contains: "rdb_bgsave_in_progress:0"}}
+    - {restart: true, node: 1, expect: {equals: OK}}
+    - {command: [DBSIZE], node: 1, expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reset.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reset}

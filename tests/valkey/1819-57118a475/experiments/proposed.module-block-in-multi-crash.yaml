@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.module-block-in-multi-crash
+deployment:
+  modes: [standalone]
+metadata:
+  description: A module blocking command executed inside MULTI/EXEC must not crash
+    the engine
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: blk
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [block.debug, "0", "0"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: true}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [blk.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: blk}

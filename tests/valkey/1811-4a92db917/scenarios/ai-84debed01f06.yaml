@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey be60586f1735..4a92db917858.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-84debed01f06
+seed: 1105
+experiment:
+  id: valkey.aof-durability
+  inputs:
+    appendfsync: always
+    run_before_crash_s: 2
+    run_after_crash_s: 2
+    mutation_rate: 500
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7400
+  server_config:
+    mptcp: 'yes'

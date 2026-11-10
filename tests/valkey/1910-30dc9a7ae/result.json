@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "30dc9a7aeb2372791088055d152df93c7c747f6e",
+  "parent": "d1053ac3198795a6e913b1cf143f06f3d8631734",
+  "pr": 1910,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add node pfail and fail count to cluster info metrics (#1910)",
+  "date": "2025-04-15",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 14,
+    "executed": 13,
+    "percent": 92,
+    "uncovered": [
+      "src/cluster_legacy.c:6461"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 4.1554,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 772bd8b57a49..04104361791b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-cb4c96c65dfd
+seed: 1793001
+experiment:
+  id: proposed.hash-legacy-encoding-reload
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

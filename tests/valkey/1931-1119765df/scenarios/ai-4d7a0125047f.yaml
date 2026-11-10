@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c8bfd23d9107..1119765df951.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4d7a0125047f
+seed: 2
+experiment:
+  id: proposed.cluster-reset-lazyfree-gate
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.auto-failover-replconf-compare
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: auto-failover-on-shutdown config, REPLCONF SET-CLUSTER-NODE-ID and
+    the loosened CLUSTER FAILOVER parser, replies compared against the parent build
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cfg
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, auto-failover-on-shutdown, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [REPLCONF, SET-CLUSTER-NODE-ID, "<node.0.id>"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [REPLCONF, SET-CLUSTER-NODE-ID, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      expect_difference: true, expect: {error: "Unknown node"}}
+    - {command: [CLUSTER, FAILOVER, FORCE, EXTRA], expect_difference: true, expect: {
+        error: "syntax error"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cfg}

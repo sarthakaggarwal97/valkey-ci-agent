@@ -1,0 +1,131 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "be60586f1735b5cee04265a2f2699e325cc97279",
+  "parent": "51387ddc99404dd4ecb426f43fbe4630659922ea",
+  "pr": 1466,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "[Client Introspection] Client Commands Extended Filtering (#1466)",
+  "date": "2025-04-14",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 8,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 191,
+    "executed": 154,
+    "percent": 80,
+    "uncovered": [
+      "src/networking.c:3868",
+      "src/networking.c:3870",
+      "src/networking.c:3885",
+      "src/networking.c:3886",
+      "src/networking.c:3887",
+      "src/networking.c:3900",
+      "src/networking.c:3901",
+      "src/networking.c:3902",
+      "src/networking.c:3908",
+      "src/networking.c:3912",
+      "src/networking.c:3913",
+      "src/networking.c:3914",
+      "src/networking.c:3915",
+      "src/networking.c:3916",
+      "src/networking.c:3917",
+      "src/networking.c:3918",
+      "src/networking.c:3919",
+      "src/networking.c:3920",
+      "src/networking.c:3921",
+      "src/networking.c:3922",
+      "src/networking.c:3923",
+      "src/networking.c:3924",
+      "src/networking.c:3925",
+      "src/networking.c:3926",
+      "src/networking.c:3930",
+      "src/networking.c:3931",
+      "src/networking.c:3932",
+      "src/networking.c:3933",
+      "src/networking.c:3934",
+      "src/networking.c:3935",
+      "src/networking.c:3936",
+      "src/networking.c:3937",
+      "src/networking.c:3938",
+      "src/networking.c:3951",
+      "src/networking.c:3953",
+      "src/networking.c:4212",
+      "src/networking.c:4213"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 6.0984,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in lookupKey",
+      "scenario": "ai-64c0527ba975",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #1466, since fixed",
+      "fingerprint": "80d4c5882ea4107d2ffa",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in lookupKey",
+      "scenario": "ai-5d1a13deb149",
+      "seed": 102,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #1466, since fixed",
+      "fingerprint": "80d4c5882ea4107d2ffa",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-64c0527ba975",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-64c0527ba975",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-64c0527ba975",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5d1a13deb149",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5d1a13deb149",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-5d1a13deb149",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

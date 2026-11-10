@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c8bfd23d910708f40919c62d443839e080db9fc9",
+  "parent": "5d6e77f1c5ccaa798f01286a29f6f204368cd989",
+  "pr": 1952,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix incorrect lag reported in XINFO GROUPS (#1952)",
+  "date": "2025-04-17",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.7103,
+  "findings": [],
+  "recorded": []
+}

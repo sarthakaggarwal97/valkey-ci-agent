@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2399f107729171f9e8e35c9997b19d3e8c9c58ef",
+  "parent": "4a92db917858696120c9ef078b08f8e17c21125b",
+  "pr": 1955,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix crash during TLS handshake with I/O threads (#1955)",
+  "date": "2025-04-15",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.6123,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds one atomic_thread_fence in ioThreadAccept (io_threads.c), which runs only when a TLS accept is offloaded to an I/O thread: trySendAcceptToIOThreads is called solely from connTLSAccept in tls.c, so on plain-TCP connections the changed code never executes. The fuzzer cannot create that condition: tls-port is a provider-owned option rejected in every server_config (including valkey.action.commands/tools private servers), no installed component speaks TLS or configures a TLS listener, and CONFIG SET of a port is refused inside sequences, so no installed or writable experiment can d"
+}

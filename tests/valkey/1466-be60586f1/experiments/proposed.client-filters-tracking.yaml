@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.client-filters-tracking
+deployment:
+  modes: [standalone]
+metadata:
+  description: FLAGS t and B filter matching against a RESP3 client with CLIENT TRACKING
+    ON BCAST, and CLIENT KILL by those flags
+components:
+- use: valkey.action.commands
+  id: trkfilter
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 3
+    timeout_s: 30
+    commands:
+    - {connection: trk, command: [CLIENT, SETNAME, trkclient], expect: {equals: OK}}
+    - {connection: trk, command: [CLIENT, TRACKING, ON, BCAST], expect: {equals: OK}}
+    - {command: [CLIENT, LIST, FLAGS, t], expect_difference: true, expect: {contains: "name=trkclient"}}
+    - {command: [CLIENT, LIST, FLAGS, B], expect_difference: true, expect: {contains: "name=trkclient"}}
+    - {command: [CLIENT, LIST, FLAGS, tB], expect_difference: true, expect: {contains: "name=trkclient"}}
+    - {command: [CLIENT, LIST, FLAGS, R], expect_difference: true, expect: {error: false}}
+    - {command: [CLIENT, KILL, FLAGS, B], expect_difference: true, expect: {equals: 1}}
+    - {command: [CLIENT, KILL, FLAGS, t], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [trkfilter.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: trkfilter}

@@ -1,0 +1,40 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1119765df9511936d8bee80b7d1769a4bf5dc28b",
+  "parent": "c8bfd23d910708f40919c62d443839e080db9fc9",
+  "pr": 1931,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix CLUSTER RESET to use lazyfree-lazy-user-flush to do the lazyfree (#1931)",
+  "date": "2025-04-17",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.198,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-7b217f1bbc28",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'reset-flush' returned ERROR: expectations both builds violate alike, so they are not about the change: 11 (CLUSTER MEET <node.0.host> <node.0.port> on node 1)"
+    },
+    {
+      "scenario": "ai-4d7a0125047f",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'reset-flush' returned ERROR: expectations both builds violate alike, so they are not about the change: 11 (CLUSTER MEET <node.0.host> <node.0.port> on node 1)"
+    }
+  ]
+}

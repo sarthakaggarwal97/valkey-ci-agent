@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f7da0c1578cc..44dafba2ce56.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7a0bd60c2a95
+seed: 101
+experiment:
+  id: proposed.shutdown-failover-cluster
+  inputs:
+    signal: SIGTERM
+    mutation_rate: 400
+    loss_window_s: 2.5
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7000
+  server_config:
+    auto-failover-on-shutdown: 'yes'

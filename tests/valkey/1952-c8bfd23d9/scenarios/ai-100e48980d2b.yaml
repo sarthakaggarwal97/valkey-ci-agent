@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5d6e77f1c5cc..c8bfd23d9107.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-100e48980d2b
+seed: 1
+experiment:
+  id: proposed.xinfo-groups-lag-resp2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

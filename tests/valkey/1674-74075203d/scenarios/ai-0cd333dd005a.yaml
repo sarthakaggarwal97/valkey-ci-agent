@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 204097dac467..74075203d2b9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0cd333dd005a
+seed: 3
+experiment:
+  id: proposed.cluster-replicate-no-one
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+    lazy_flush: 'no'
+deployment:
+  mode: standalone
+  base_port: 7200

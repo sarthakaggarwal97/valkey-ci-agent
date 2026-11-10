@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 74075203d2b9..772bd8b57a49.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c96e6a1cd460
+seed: 19262
+experiment:
+  id: proposed.cluster-reset-kills-rdb-child
+  inputs:
+    resp: 3
+    replica_lazy_flush: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

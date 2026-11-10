@@ -1,0 +1,34 @@
+extends: [valkey.base]
+id: proposed.shutdown-failover-cluster
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: SIGTERM a cluster primary with auto-failover-on-shutdown enabled; a
+    replica must take over and the old primary resync with no acknowledged write lost
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGTERM, SIGKILL], default: SIGTERM}
+    loss_window_s: {type: number, default: 2.5}
+components:
+- use: valkey.fault.process-signal
+  id: shutdown-primary
+  config:
+    when_event: warm-up.completed
+    instance: primary
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, shutdown-primary]
+  config: {seconds: 3}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 6}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: {$ref: inputs.loss_window_s}}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: shutdown-primary}

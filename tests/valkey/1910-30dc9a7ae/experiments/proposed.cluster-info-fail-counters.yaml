@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.cluster-info-fail-counters
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    With one voting primary (quorum 1), a slotless peer blocked past cluster-node-timeout
+    is escalated straight to FAIL: CLUSTER INFO's new cluster_nodes_fail counts it
+    while cluster_voting_nodes_fail stays 0, and the count clears when the non-voting
+    peer is reachable again; the parent build lacks the fields.
+components:
+- use: valkey.action.commands
+  id: fail-info
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    server_config:
+      cluster-node-timeout: 1000
+      enable-debug-command: "yes"
+    timeout_s: 45
+    commands:
+    - {command: [CLUSTER, INFO], wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:2"}}
+    - {command: [CLUSTER, INFO], expect_difference: true, expect: {contains: "cluster_nodes_fail:0"}}
+    - {command: [CLUSTER, INFO], expect_difference: true, expect: {contains: "cluster_nodes_pfail:0"}}
+    - {raw: "DEBUG SLEEP 20\r\n", node: 1, connection: sleeper, compare: skip}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 15, expect_difference: true, expect: {
+        contains: "cluster_nodes_fail:1"}}
+    - {command: [CLUSTER, INFO], node: 0, expect_difference: true, expect: {contains: "cluster_voting_nodes_fail:0"}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 15, expect_difference: true, expect: {
+        contains: "cluster_nodes_fail:0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [fail-info.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fail-info}

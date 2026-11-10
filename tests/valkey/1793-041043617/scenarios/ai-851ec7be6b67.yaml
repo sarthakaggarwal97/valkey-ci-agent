@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 772bd8b57a49..04104361791b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-851ec7be6b67
+seed: 1
+experiment:
+  id: proposed.rand-nonlistpack-encodings
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

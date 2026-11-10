@@ -1,0 +1,114 @@
+extends: [valkey.liveness]
+id: proposed.client-filters-extended
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLIENT LIST/KILL new filters NAME, IDLE, FLAGS, LIB-NAME, LIB-VER,
+    DB, CAPA and IP compared against the parent build, including validation errors,
+    repeated options and kill counts
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    databases: {type: integer, default: 16}
+components:
+- use: valkey.action.commands
+  id: filters
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {databases: {$ref: inputs.databases}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CLIENT, SETNAME, main], expect: {equals: OK}}
+    - {connection: c1, command: [CLIENT, SETNAME, target1], expect: {equals: OK}}
+    - {connection: c1, command: [CLIENT, SETINFO, lib-name, mylib], expect: {equals: OK}}
+    - {connection: c1, command: [CLIENT, SETINFO, lib-ver, 1.2.3], expect: {equals: OK}}
+    - {connection: c1, command: [CLIENT, CAPA, redirect], expect: {equals: OK}}
+    - {connection: c1, command: [SELECT, 2], expect: {equals: OK}}
+    - {connection: c2, command: [CLIENT, SETNAME, other], expect: {equals: OK}}
+    - {command: [CLIENT, LIST, NAME, target1], expect_difference: true, expect: {
+        contains: "name=target1"}}
+    - {command: [CLIENT, LIST, DB, 2], expect_difference: true, expect: {contains: "name=target1"}}
+    - {command: [CLIENT, LIST, LIB-NAME, mylib], expect_difference: true, expect: {
+        contains: "lib-name=mylib"}}
+    - {command: [CLIENT, LIST, LIB-VER, 1.2.3], expect_difference: true, expect: {
+        contains: "lib-ver=1.2.3"}}
+    - {command: [CLIENT, LIST, CAPA, r], expect_difference: true, expect: {contains: "name=target1"}}
+    - {command: [CLIENT, LIST, IP, 127.0.0.1], expect_difference: true, expect: {
+        contains: "name=main"}}
+    - {command: [CLIENT, LIST, FLAGS, N], expect_difference: true, expect: {contains: "name=main"}}
+    - {command: [CLIENT, LIST, NAME, target1, DB, 2, LIB-NAME, mylib, LIB-VER, 1.2.3,
+        CAPA, r, IP, 127.0.0.1, FLAGS, N], expect_difference: true, expect: {contains: "name=target1"}}
+    - {command: [CLIENT, LIST, IP, "127"], expect_difference: true, expect: {equals: ""}}
+    - {command: [CLIENT, LIST, IP, ""], expect_difference: true, expect: {equals: ""}}
+    - {command: [CLIENT, LIST, IP, "127.0.0.1:"], expect_difference: true, expect: {
+        equals: ""}}
+    - {command: [CLIENT, LIST, NAME, ""], expect_difference: true, expect: {equals: ""}}
+    - {command: [CLIENT, LIST, NAME, nosuch], expect_difference: true, expect: {equals: ""}}
+    - {command: [CLIENT, LIST, IDLE, 1000000], expect_difference: true, expect: {
+        equals: ""}}
+    - {command: [CLIENT, LIST, NAME, target1, MAXAGE, 1000000], expect_difference: true,
+      expect: {equals: ""}}
+    - {command: [CLIENT, LIST, DB, 3], expect_difference: true, expect: {equals: ""}}
+    - {command: [CLIENT, LIST, FLAGS, ""], expect_difference: true, expect: {contains: "name=main"}}
+    - {command: [CLIENT, LIST, CAPA, ""], expect_difference: true, expect: {contains: "name=main"}}
+    - {command: [CLIENT, LIST, IDLE, 0], expect_difference: true, expect: {error: "idle\
+          \ should be greater than 0"}}
+    - {command: [CLIENT, LIST, IDLE, -9223372036854775808], expect_difference: true,
+      expect: {error: "idle should be greater than 0"}}
+    - {command: [CLIENT, LIST, IDLE, notanumber], expect_difference: true, expect: {
+        error: "idle is not an integer"}}
+    - {command: [CLIENT, LIST, FLAGS, Q], expect_difference: true, expect: {error: "Unknown\
+          \ flags"}}
+    - {command: [CLIENT, LIST, FLAGS, NZ], expect_difference: true, expect: {error: "Unknown\
+          \ flags"}}
+    - {command: [CLIENT, LIST, FLAGS, Z, FLAGS, N], expect_difference: true, expect: {
+        error: "Unknown flags"}}
+    - {command: [CLIENT, LIST, CAPA, x], expect_difference: true, expect: {error: "Unknown\
+          \ capa"}}
+    - {command: [CLIENT, LIST, DB, 16], expect_difference: true, expect: {error: "DB\
+          \ number should be between 0 and"}}
+    - {command: [CLIENT, LIST, DB, -1], expect_difference: true, expect: {error: "DB\
+          \ number should be between 0 and"}}
+    - {command: [CLIENT, LIST, DB, 9223372036854775807], expect_difference: true,
+      expect: {error: "not an integer or out of range"}}
+    - {command: [CLIENT, LIST, NAME], expect: {error: true}}
+    - {command: [CLIENT, LIST, NAME, bogus, NAME, target1], expect_difference: true,
+      expect: {contains: "name=target1"}}
+    - {command: [CLIENT, LIST, LIB-NAME, foo, LIB-NAME, bar, LIB-NAME, baz, LIB-NAME,
+        mylib], expect_difference: true, expect: {contains: "lib-name=mylib"}}
+    - {command: [CLIENT, LIST, FLAGS, N, FLAGS, N, FLAGS, N, FLAGS, N, FLAGS, N, FLAGS,
+        N], expect_difference: true, expect: {contains: "name=main"}}
+    - {command: [CLIENT, KILL, FLAGS, Y], expect_difference: true, expect: {error: "Unknown\
+          \ flags"}}
+    - {command: [CLIENT, KILL, IDLE, 0], expect_difference: true, expect: {error: "idle\
+          \ should be greater than 0"}}
+    - {command: [CLIENT, KILL, NAME, nosuch], expect_difference: true, expect: {equals: 0}}
+    - {command: [CLIENT, KILL, NAME, main, SKIPME, yes], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [CLIENT, KILL, LIB-NAME, wronglib], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [CLIENT, KILL, IDLE, 1000000], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [CLIENT, KILL, LIB-NAME, mylib], expect_difference: true, expect: {
+        equals: 1}}
+    - {connection: c1, command: [PING], expect_difference: true, expect: {exists: false}}
+    - {command: [CLIENT, KILL, DB, 2], expect_difference: true, expect: {equals: 0}}
+    - {command: [CLIENT, KILL, LIB-VER, 1.2.3], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [CLIENT, KILL, NAME, other, FLAGS, N], expect_difference: true, expect: {
+        equals: 1}}
+    - {connection: c2, command: [PING], expect_difference: true, expect: {exists: false}}
+    - {command: [CLIENT, KILL, CAPA, r], expect_difference: true, expect: {equals: 0}}
+    - {command: [CLIENT, KILL, NAME, main, SKIPME, no], expect_difference: true, expect: {
+        equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [filters.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: filters}

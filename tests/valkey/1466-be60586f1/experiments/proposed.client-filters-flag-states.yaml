@@ -1,0 +1,94 @@
+extends: [valkey.liveness]
+id: proposed.client-filters-flag-states
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLIENT LIST/KILL FLAGS filter against real client states - pubsub (P),
+    MULTI (x), cluster readonly (r), replication links (S, M) - compared against the
+    parent build
+components:
+- use: valkey.action.commands
+  id: states
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 2
+    timeout_s: 60
+    commands:
+    - {command: [CLIENT, SETNAME, main], expect: {equals: OK}}
+    - {connection: ps, command: [CLIENT, SETNAME, psc], expect: {equals: OK}}
+    - {connection: ps, command: [SUBSCRIBE, ch1], expect: {exists: true}}
+    - {connection: mx, command: [CLIENT, SETNAME, mxc], expect: {equals: OK}}
+    - {connection: mx, command: [MULTI], expect: {equals: OK}}
+    - {command: [CLIENT, LIST, FLAGS, P], expect_difference: true, expect: {contains: "name=psc"}}
+    - {command: [CLIENT, LIST, FLAGS, x], expect_difference: true, expect: {contains: "name=mxc"}}
+    - {command: [CLIENT, LIST, FLAGS, Px], expect_difference: true, expect: {equals: ""}}
+    - {command: [CLIENT, LIST, NAME, psc, FLAGS, N], expect_difference: true, expect: {
+        equals: ""}}
+    - {command: [CLIENT, KILL, FLAGS, x], expect_difference: true, expect: {equals: 1}}
+    - {connection: mx, command: [EXEC], expect_difference: true, expect: {exists: false}}
+    - {command: [CLIENT, KILL, FLAGS, P], expect_difference: true, expect: {equals: 1}}
+    - {connection: ps, command: [PING], expect_difference: true, expect: {exists: false}}
+    - {command: [CLIENT, LIST, FLAGS, N], expect_difference: true, expect: {contains: "name=main"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: clusterro
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: 2
+    timeout_s: 60
+    commands:
+    - {command: [CLIENT, SETNAME, main], expect: {equals: OK}}
+    - {connection: ro, command: [CLIENT, SETNAME, roc], expect: {equals: OK}}
+    - {connection: ro, command: [READONLY], expect: {equals: OK}}
+    - {command: [CLIENT, LIST, FLAGS, r], expect_difference: true, expect: {contains: "name=roc"}}
+    - {command: [CLIENT, LIST, FLAGS, S], expect_difference: true, expect: {equals: ""}}
+    - {command: [CLIENT, KILL, FLAGS, r], expect_difference: true, expect: {equals: 1}}
+    - {connection: ro, command: [PING], expect_difference: true, expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: repl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 2
+    resp: 2
+    timeout_s: 60
+    commands:
+    - {node: 1, command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], expect: {
+        equals: OK}}
+    - {node: 0, command: [SET, k, v], expect: {equals: OK}}
+    - {node: 0, command: [WAIT, 1, 10000], expect: {min: 1}}
+    - {node: 0, command: [CLIENT, LIST, FLAGS, S], expect_difference: true, expect: {
+        contains: "flags=S"}}
+    - {node: 0, command: [CLIENT, LIST, TYPE, replica, FLAGS, S], expect_difference: true,
+      expect: {contains: "flags=S"}}
+    - {node: 0, command: [CLIENT, LIST, FLAGS, M], expect_difference: true, expect: {
+        equals: ""}}
+    - {node: 1, command: [CLIENT, LIST, FLAGS, M], expect_difference: true, expect: {
+        contains: "flags=M"}}
+    - {node: 1, command: [CLIENT, LIST, FLAGS, S], expect_difference: true, expect: {
+        equals: ""}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [states.completed, clusterro.completed, repl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: states}
+- {evidence_id: valkey.command.sequence, source: clusterro}
+- {evidence_id: valkey.command.sequence, source: repl}

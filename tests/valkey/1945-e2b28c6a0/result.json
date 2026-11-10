@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e2b28c6a07bc0883c6846e8164bb55ea1b636123",
+  "parent": "44dafba2ce5635c5945c52bc6d2aa798e3537448",
+  "pr": 1945,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rebranding in security warning log (#1945)",
+  "date": "2025-04-13",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6426,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only substitutes the SERVER_TITLE macro (\"Valkey\") for the hardcoded string \"Redis\" in the security-warning log message of securityWarningCommand (networking.c). No reply, connection handling, rate limiting, or any other runtime behaviour changes: the client is still aborted the same way on POST/Host:, and the only difference is the wording of a serverLog line, which no fuzzer oracle observes and which is identical in effect on both builds. This is a cosmetic rebranding of log text and needs no scenario."
+}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 51387ddc9940..be60586f1735.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2cacb2f7ec98
+seed: 303
+experiment:
+  id: proposed.client-filters-extended
+  inputs:
+    resp: 2
+    databases: 4
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

@@ -1,0 +1,78 @@
+extends: [valkey.liveness]
+id: proposed.xinfo-groups-lag-resp3
+deployment:
+  modes: [standalone]
+metadata:
+  description: XINFO GROUPS entries-read and lag across tombstones and trims (RESP3
+    map replies), compared with the parent build
+components:
+- use: valkey.action.commands
+  id: lag
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 3
+    timeout_s: 10
+    commands:
+    - {command: [XADD, x, 1-0, d, a]}
+    - {command: [XADD, x, 2-0, d, b]}
+    - {command: [XADD, x, 3-0, d, c]}
+    - {command: [XADD, x, 4-0, d, d]}
+    - {command: [XADD, x, 5-0, d, e]}
+    - {command: [XADD, x, 6-0, d, f]}
+    - {command: [XADD, x, 7-0, d, g]}
+    - {command: [XADD, x, 8-0, d, h]}
+    - {command: [XADD, x, 9-0, d, i]}
+    - {command: [XADD, x, 10-0, d, j]}
+    - {command: [XGROUP, CREATE, x, g1, 0], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g1, c1, COUNT, 8, STREAMS, x, ">"]}
+    - {command: [XDEL, x, 9-0], expect: {equals: 1}}
+    - {command: [XINFO, GROUPS, x], expect: {equals: [{name: g1, consumers: 1, pending: 8,
+            last-delivered-id: "8-0", entries-read: 8, lag: null}]}}
+    - {command: [XREADGROUP, GROUP, g1, c1, COUNT, 2, STREAMS, x, ">"]}
+    - {command: [XINFO, GROUPS, x], expect_difference: true, expect: {equals: [{name: g1,
+            consumers: 1, pending: 9, last-delivered-id: "10-0", entries-read: 10,
+            lag: 0}]}}
+    - {command: [XADD, y, 1-0, d, a]}
+    - {command: [XADD, y, 2-0, d, b]}
+    - {command: [XADD, y, 3-0, d, c]}
+    - {command: [XADD, y, 4-0, d, d]}
+    - {command: [XADD, y, 5-0, d, e]}
+    - {command: [XDEL, y, 3-0], expect: {equals: 1}}
+    - {command: [XGROUP, CREATE, y, g1, 0], expect: {equals: OK}}
+    - {command: [XGROUP, CREATE, y, g2, 0], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g1, c1, COUNT, 10, STREAMS, y, ">"]}
+    - {command: [XADD, y, 6-0, d, f]}
+    - {command: [XADD, y, 7-0, d, g]}
+    - {command: [XTRIM, y, MINID, "=", 7-0], expect: {equals: 5}}
+    - {command: [XINFO, GROUPS, y], expect: {equals: [{name: g1, consumers: 1, pending: 4,
+            last-delivered-id: "5-0", entries-read: 5, lag: 2}, {name: g2, consumers: 0,
+            pending: 0, last-delivered-id: "0-0", entries-read: null, lag: 1}]}}
+    - {command: [XREADGROUP, GROUP, g1, c1, STREAMS, y, ">"]}
+    - {command: [XINFO, GROUPS, y], expect_difference: true, expect: {equals: [{name: g1,
+            consumers: 1, pending: 5, last-delivered-id: "7-0", entries-read: 7, lag: 0},
+          {name: g2, consumers: 0, pending: 0, last-delivered-id: "0-0", entries-read: null,
+            lag: 1}]}}
+    - {command: [XADD, z, 1-0, d, a]}
+    - {command: [XADD, z, 2-0, d, b]}
+    - {command: [XADD, z, 3-0, d, c]}
+    - {command: [XADD, z, 4-0, d, d]}
+    - {command: [XADD, z, 5-0, d, e]}
+    - {command: [XGROUP, CREATE, z, g1, 0], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g1, c1, COUNT, 2, STREAMS, z, ">"]}
+    - {command: [XDEL, z, 3-0], expect: {equals: 1}}
+    - {command: [XTRIM, z, MINID, "=", 4-0], expect: {equals: 2}}
+    - {command: [XINFO, GROUPS, z], expect_difference: true, expect: {equals: [{name: g1,
+            consumers: 1, pending: 2, last-delivered-id: "2-0", entries-read: 2, lag: null}]}}
+    - {command: [XREADGROUP, GROUP, g1, c1, STREAMS, z, ">"]}
+    - {command: [XINFO, GROUPS, z], expect_difference: true, expect: {equals: [{name: g1,
+            consumers: 1, pending: 4, last-delivered-id: "5-0", entries-read: 5, lag: 0}]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [lag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lag}

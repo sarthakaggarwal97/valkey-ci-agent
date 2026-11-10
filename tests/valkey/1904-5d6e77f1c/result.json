@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5d6e77f1c5ccaa798f01286a29f6f204368cd989",
+  "parent": "89d45775c42241c537d366d6fb61d334386f887c",
+  "pr": 1904,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add sentinel_total_tilt to sentinel INFO sentinel (#1904)",
+  "date": "2025-04-17",
+  "unstable": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.0503,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to Sentinel mode: sentinel.c adds an int total_tilt counter, increments it when sentinelCheckTiltCondition() enters TILT, and prints it as a new sentinel_total_tilt line in INFO sentinel. That code only runs in a valkey-sentinel process (started with --sentinel or the valkey-sentinel exec name). No installed experiment, component, or deployment mode can start a Sentinel: deployment modes are standalone and cluster only, the private servers of valkey.action.commands and valkey.action.tools are ordinary servers whose mode cannot be switched via server_config (sentinel mode"
+}

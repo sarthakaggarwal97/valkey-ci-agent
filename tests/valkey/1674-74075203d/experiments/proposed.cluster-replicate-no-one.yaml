@@ -1,0 +1,77 @@
+extends: [valkey.liveness]
+id: proposed.cluster-replicate-no-one
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER REPLICATE NO ONE turns a replica into an empty primary in a
+    fresh shard, is a no-op on a primary, and rejects malformed NO/ONE forms; the
+    parent build rejects every 4-argument form
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+    lazy_flush:
+      type: string
+      enum: ["yes", "no"]
+      default: "yes"
+      description: replica-lazy-flush on both private servers; the detach flushes
+        async or sync by it
+components:
+- use: valkey.action.commands
+  id: detach
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    server_config: {replica-lazy-flush: {$ref: inputs.lazy_flush}}
+    timeout_s: 15
+    commands:
+    - {command: [SET, k1, v1], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, compare: skip, wait_s: 60, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [DBSIZE], node: 1, wait_s: 30, expect: {equals: 1}}
+    - {command: [CLUSTER, MYSHARDID], node: 1, wait_s: 10, expect: {equals: "<node.0.shard-id>"}}
+    - {command: [CLUSTER, REPLICATE, "NO"], node: 1, expect: {error: "Unknown node"}}
+    - {command: [CLUSTER, REPLICATE, "NO", "TWO"], node: 1, expect_difference: true,
+      expect: {error: true}}
+    - {command: [CLUSTER, REPLICATE, "ONE", "NO"], node: 1, expect_difference: true,
+      expect: {error: true}}
+    - {command: [CLUSTER, REPLICATE, "NO", "ONE", EXTRA], node: 1, expect_difference: true,
+      expect: {error: true}}
+    - {command: [CLUSTER, REPLICATE, "no", "one"], node: 1, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DBSIZE], node: 1, expect_difference: true, expect: {equals: 0}}
+    - {command: [INFO, replication], node: 1, compare: skip, wait_s: 15, expect: {
+        contains: "role:master"}}
+    - {command: [CLUSTER, MYSHARDID], node: 1, expect_difference: true, expect: {
+        exists: true}}
+    - {command: [GET, k1], node: 1, expect: {error: "MOVED"}}
+    - {command: [CLUSTER, REPLICAS, "<node.0.id>"], node: 0, wait_s: 30, expect_difference: true,
+      expect: {equals: []}}
+    - {command: [CLUSTER, SLOTS], node: 0, expect_difference: true, expect: {exists: true}}
+    - {command: [CLUSTER, REPLICATE, "NO", "ONE"], node: 0, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DBSIZE], node: 0, expect: {equals: 1}}
+    - {command: [CLUSTER, REPLICATE, "NO", "ONE"], node: 2, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, compare: skip, wait_s: 60, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [DBSIZE], node: 1, wait_s: 30, expect: {equals: 1}}
+    - {command: [CLUSTER, MYSHARDID], node: 1, wait_s: 10, expect: {equals: "<node.0.shard-id>"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [detach.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: detach}
