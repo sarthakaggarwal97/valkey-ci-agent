@@ -144,8 +144,11 @@ UNCOVERED_KEPT = 50
 CONTEXT_LINES = 3
 MERGE_KEYS = ("repo", "sha", "parent", "pr", "pr_repo", "subject", "date")
 # The coverage_reason values that mean "nothing to measure", not a measurement that failed: any other reason
-# (the gcov build, its runs or gcov itself failed) shows in PROGRESS.md, so a breakage is not silent.
-COVERAGE_NOT_APPLICABLE = ("not measured for modules yet", "the merge adds no line to a C file under src/")
+# (the gcov build, its runs or gcov itself failed, or it left no notes of a changed file) shows in PROGRESS.md,
+# so a breakage is not silent.
+COVERAGE_NO_CODE = "gcov counts none of the changed lines as code"
+COVERAGE_NOT_APPLICABLE = ("not measured for modules yet", "the merge adds no line to a C file under src/",
+                           COVERAGE_NO_CODE)
 # The checks the walk turns on in every compared command sequence.
 CHECKS = {"variants": True, "replica": True, "acl": True, "concurrency": 4, "compat": True, "faults": True}
 # The diagnostics.reason a failed check gives.
@@ -487,14 +490,16 @@ def gcov(tree: Path, path: str) -> dict[int, int] | None:
 
 
 def coverage(changed: dict[str, list[int]], counts: dict[str, dict[int, int] | None]) -> dict[str, Any]:
-    """The changed lines gcov counts as code, how many of them ran, the percent (rounded down) and the first
-    UNCOVERED_KEPT that never ran, as ``file:line``."""
+    """The changed lines gcov counts as code, how many of them ran, the percent (rounded down), the first
+    UNCOVERED_KEPT that never ran, as ``file:line``, and the changed files the build left no gcov notes of
+    (their lines went unmeasured, not measured as non-code: the lua engine compiled without them, #5117)."""
     executable = [(path, line, (counts.get(path) or {})[line]) for path, lines in changed.items()
                   for line in lines if line in (counts.get(path) or {})]
     uncovered = [f"{path}:{line}" for path, line, ran in executable if not ran]
     executed = len(executable) - len(uncovered)
     return {"lines": len(executable), "executed": executed,
-            "percent": 100 * executed // len(executable) if executable else None, "uncovered": uncovered[:UNCOVERED_KEPT]}
+            "percent": 100 * executed // len(executable) if executable else None, "uncovered": uncovered[:UNCOVERED_KEPT],
+            "unnoted": sorted(path for path in changed if counts.get(path) is None)}
 
 
 def uncovered_section(found: dict[str, Any], tree: Path, experiment_ids: list[str]) -> str:
@@ -1217,7 +1222,13 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
             return walk_tests(scenarios)
 
         try:
-            result["coverage"] = cover(measure, more, tests, started)
+            found = cover(measure, more, tests, started)
+            result["coverage"] = found
+            if found["percent"] is None:
+                # No changed line was measured: say why, so the merge is not a silent gap in PROGRESS.md.
+                result["coverage_reason"] = (
+                    f"the build left no gcov notes of {', '.join(found['unnoted'])}" if found["unnoted"]
+                    else COVERAGE_NO_CODE)
         except _Unmeasured as exc:
             result["coverage_reason"] = str(exc)
     all_started()

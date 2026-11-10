@@ -1128,7 +1128,8 @@ def test_coverage_counts_the_changed_lines_gcov_marks_as_code():
     assert 0 not in counts and 857 not in counts and 880 not in counts
     found = walk.coverage({"src/hyperloglog.c": [857, 864, 865, 888, 891, 999], "src/other.c": [5]},
                           {"src/hyperloglog.c": counts, "src/other.c": None})
-    assert found == {"lines": 3, "executed": 2, "percent": 66, "uncovered": ["src/hyperloglog.c:864"]}
+    assert found == {"lines": 3, "executed": 2, "percent": 66, "uncovered": ["src/hyperloglog.c:864"],
+                     "unnoted": ["src/other.c"]}
     assert walk.coverage({"src/a.c": [1]}, {"src/a.c": {}})["percent"] is None
 
 
@@ -1217,7 +1218,7 @@ def test_a_merge_gets_rounds_aimed_at_its_unrun_lines_until_one_covers_nothing_n
                             counts=counts, build=built)
     assert "error" not in result
     assert result["coverage"] == {"lines": 3, "executed": 2, "percent": 66, "uncovered": ["src/t_list.c:42"],
-                                  "rounds": 2}
+                                  "unnoted": [], "rounds": 2}
     assert on_coverage == {10, 20, 30}
     assert (result["proposed"], result["hunted"]) == (3, 3)
     # The first round asks plainly; the next show the lines no test ran, with code around them.
@@ -1230,6 +1231,27 @@ def test_a_merge_gets_rounds_aimed_at_its_unrun_lines_until_one_covers_nothing_n
     folder = tmp_path / "out" / merge_folder(_merge())
     assert sorted(p.name for p in (folder / "scenarios").iterdir()) == sorted(
         f"{doc['scenario_id']}.yaml" for doc in (first, second, third))
+
+
+def test_a_coverage_of_no_measured_line_says_why(monkeypatch, tmp_path):
+    # 66 valkey merges had coverage None with no reason: the gcov build left no notes of the changed file
+    # (modules/lua before the CFLAGS fix), so percent was None and nothing showed in PROGRESS.md.
+    test = _scenario("seed: 10\nexperiment: {id: proposed.lset}\ndeployment: {mode: standalone}\n")
+
+    def fuzz(fuzzer_bin, doc, seed, *, candidate, compare, core, experiment_dir, run_dir):
+        return {"status": "PASS", "reason": None, "reached": True, "parent_exited": False,
+                "reached_commands": {("lset", 1)}, "found": {}}
+
+    result, _ = _walk_merge(monkeypatch, tmp_path / "unnoted", fuzz, (test,), diff=DIFF,
+                            counts=lambda tree, path: None)
+    assert result["coverage"]["percent"] is None
+    assert result["coverage_reason"] == "the build left no gcov notes of src/t_list.c"
+
+    # All changed lines non-code (a table, a declaration): nothing to measure, not a failure.
+    result, _ = _walk_merge(monkeypatch, tmp_path / "no-code", fuzz, (test,), diff=DIFF,
+                            counts=lambda tree, path: {})
+    assert result["coverage"]["percent"] is None
+    assert result["coverage_reason"] == walk.COVERAGE_NO_CODE
 
 
 def test_a_coverage_build_that_fails_leaves_the_coverage_unknown_and_the_merge_tested(monkeypatch, tmp_path):
