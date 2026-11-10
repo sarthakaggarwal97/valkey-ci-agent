@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b3b4bdcda40380048b302c6dd957396340b88d6c",
+  "parent": "fe72c784b74b88e4b642a1796f235a2f886f23d4",
+  "pr": 1503,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "CMake: fail on warnings (#1503)",
+  "date": "2025-01-03",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2806,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds -Werror -Wall to the CMake build and an unreachable 'return NULL' after assert(0) in valkey-cli's jsonStringOutput to silence the resulting warning. jsonStringOutput is only called with OUTPUT_JSON or OUTPUT_QUOTED_JSON, both of which return earlier, so the new statement never executes and no binary's runtime behavior, replies, or output change. This is a build/CI change with no testable behavior difference."
+}

@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.module-scankey-set-zset-hashtable-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_ScanKey via scan.so on hashtable-encoded sets (OBJ_SET branch of
+    moduleScanKeyHashtableCallback) and skiplist zsets, replies compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: scankey
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, set-max-listpack-entries, "0"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, zset-max-listpack-entries, "0"], expect: {equals: OK}}
+    - {command: [SADD, s1, solo], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, s1], compare: skip}
+    - {command: [scan.scan_key, s1], expect: {equals: [[solo, null]]}}
+    - {command: [SADD, s3, x, y, z, w, v], expect: {equals: 5}}
+    - {command: [scan.scan_key, s3], compare: unordered}
+    - {command: [ZADD, zz, 3, m], expect: {equals: 1}}
+    - {command: [scan.scan_key, zz], expect: {equals: [[m, "3"]]}}
+    - {command: [ZADD, zz2, 2.5, n, 7, o], expect: {equals: 2}}
+    - {command: [scan.scan_key, zz2], compare: unordered}
+    - {command: [ZADD, zbig, 1, p1, 2, p2, 3, p3, 4, p4, 5, p5, 6, p6, 7, p7, 8, p8,
+        9, p9, 10, p10, 11, p11, 12, p12, 13, p13, 14, p14, 15, p15, 16, p16], expect: {
+        equals: 16}}
+    - {command: [scan.scan_key, zbig], compare: unordered}
+    - {command: [scan.scan_key, missing], expect: {error: "not found"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [scankey.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scankey}

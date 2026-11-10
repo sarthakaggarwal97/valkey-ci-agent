@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.zset-active-defrag-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active defrag over a large fragmented skiplist zset (direct scan or
+    scan-later path by max_scan_fields), zset intact and equal across builds
+inputs:
+  properties:
+    max_scan_fields: {type: integer, default: 1000000}
+components:
+- use: valkey.action.commands
+  id: defrag
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 180
+    server_config:
+      zset-max-listpack-entries: 0
+      enable-debug-command: "yes"
+      active-defrag-ignore-bytes: 1
+      active-defrag-threshold-lower: 0
+      active-defrag-cycle-min: 25
+      active-defrag-cycle-max: 75
+      active-defrag-max-scan-fields: {$ref: inputs.max_scan_fields}
+    commands:
+    - {command: [EVAL, "for i=1,100000 do redis.call('zadd','z',i+0.5,'m:'..i..':aaaaaaaaaaaaaaaaaaaaaaaa')\
+          \ end return redis.call('zcard','z')", 0], expect: {equals: 100000}}
+    - {command: [EVAL, "for i=1,100000,2 do redis.call('zrem','z','m:'..i..':aaaaaaaaaaaaaaaaaaaaaaaa')\
+          \ end return redis.call('zcard','z')", 0], expect: {equals: 50000}}
+    - {command: [CONFIG, SET, activedefrag, "yes"], expect: {equals: OK}}
+    - {command: [EVAL, "local s=redis.call('info','stats') local h=tonumber(string.match(s,'active_defrag_key_hits:(%d+)'))\
+          \ local m=tonumber(string.match(s,'active_defrag_key_misses:(%d+)')) if\
+          \ h+m>0 then return 1 else return 0 end", 0], wait_s: 90, expect: {equals: 1}}
+    - {command: [CONFIG, SET, activedefrag, "no"], expect: {equals: OK}}
+    - {command: [ZCARD, z], expect: {equals: 50000}}
+    - {command: [ZRANGE, z, 0, 4, WITHSCORES]}
+    - {command: [ZRANGE, z, -5, -1, WITHSCORES]}
+    - {command: [ZSCORE, z, "m:2:aaaaaaaaaaaaaaaaaaaaaaaa"]}
+    - {command: [ZRANGEBYSCORE, z, 49999, 50003, WITHSCORES]}
+    - {command: [DEBUG, DIGEST-VALUE, z]}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [defrag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: defrag}

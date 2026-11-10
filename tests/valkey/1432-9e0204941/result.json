@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9e0204941d4193daba18485e73c87f30ac117c6f",
+  "parent": "0a89571dccc5ac007a9fbbda99c5e47dff615227",
+  "pr": 1432,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "valkey-cli auto-exit from subscribed mode (#1432)",
+  "date": "2025-01-08",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 25,
+    "executed": 24,
+    "percent": 96,
+    "uncovered": [
+      "src/valkey-cli.c:3152"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.2756,
+  "findings": [],
+  "recorded": []
+}

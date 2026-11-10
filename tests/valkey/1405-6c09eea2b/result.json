@@ -1,0 +1,151 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6c09eea2bcb996d70aeda9f78f4304c6309cf475",
+  "parent": "dc4628d444cdc871b2e009b8de523451d17c795a",
+  "pr": 1405,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "client struct: lazy init components and optimize struct layout (#1405)",
+  "date": "2025-01-08",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 27,
+  "proven": 0,
+  "hunted": 23,
+  "dropped": 8,
+  "recall": false,
+  "coverage": {
+    "lines": 539,
+    "executed": 436,
+    "percent": 80,
+    "uncovered": [
+      "src/blocked.c:224",
+      "src/blocked.c:288",
+      "src/cluster.c:1237",
+      "src/module.c:654",
+      "src/module.c:655",
+      "src/module.c:656",
+      "src/module.c:662",
+      "src/module.c:663",
+      "src/module.c:664",
+      "src/module.c:7812",
+      "src/module.c:7820",
+      "src/module.c:7824",
+      "src/module.c:7827",
+      "src/module.c:7929",
+      "src/module.c:7939",
+      "src/module.c:7948",
+      "src/module.c:7949",
+      "src/module.c:7965",
+      "src/module.c:7966",
+      "src/module.c:7979",
+      "src/module.c:8007",
+      "src/module.c:8029",
+      "src/module.c:8241",
+      "src/module.c:8358",
+      "src/module.c:8420",
+      "src/module.c:8422",
+      "src/module.c:9579",
+      "src/module.c:9584",
+      "src/module.c:9585",
+      "src/module.c:9586",
+      "src/module.c:9617",
+      "src/module.c:9619",
+      "src/module.c:9927",
+      "src/module.c:9928",
+      "src/module.c:9929",
+      "src/module.c:9930",
+      "src/networking.c:1876",
+      "src/networking.c:1878",
+      "src/networking.c:1882",
+      "src/networking.c:4517",
+      "src/pubsub.c:379",
+      "src/pubsub.c:774",
+      "src/rdb.c:3649",
+      "src/rdb.c:3650",
+      "src/replication.c:253",
+      "src/replication.c:254",
+      "src/replication.c:1006",
+      "src/replication.c:1007",
+      "src/replication.c:1240",
+      "src/replication.c:1244"
+    ],
+    "unnoted": [],
+    "rounds": 3
+  },
+  "cost_usd": 32.863,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in clientCommand",
+      "scenario": "ai-19b82f1e3a1a",
+      "seed": 1001,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "a3825bb5e2120857b27c",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in clientCommand",
+      "scenario": "ai-84f2a6ed9f0e",
+      "seed": 1002,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "a3825bb5e2120857b27c",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-e4ad8dc3aed9",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'modblk' returned ERROR: expectations both builds violate alike, so they are not about the change: 16 (wait_and_do_rm_call SET wk wv), 17 (GET wk)"
+    },
+    {
+      "scenario": "ai-f887d3bd5c41",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'modblk' returned ERROR: expectations both builds violate alike, so they are not about the change: 16 (wait_and_do_rm_call SET wk wv), 17 (GET wk)"
+    },
+    {
+      "scenario": "ai-c62172872575",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (INFO clients), 4 (INFO clients), 6 (INFO clients), 17 (INFO clients)"
+    },
+    {
+      "scenario": "ai-e81fb051e171",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: command 13 (EXEC on connection c2) got no reply: TimeoutError: Timeout reading from /tmp/vfc-vjjmvrnq/s.sock"
+    },
+    {
+      "scenario": "ai-620d15397038",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'modauth' returned ERROR: command 14 (EXEC) got no reply: TimeoutError: Timeout reading from /tmp/vfc-98wrozlu/s.sock"
+    },
+    {
+      "scenario": "ai-6ea769ba46c9",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'modauth' returned ERROR: command 14 (EXEC) got no reply: TimeoutError: Timeout reading from /tmp/vfc-9rpz3uxe/s.sock"
+    },
+    {
+      "scenario": "ai-ef0547a889f1",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during fault.inject: LookupError: no live instance matches 'replica'"
+    }
+  ]
+}

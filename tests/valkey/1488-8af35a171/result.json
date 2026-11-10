@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8af35a1712534de3b3d508788fff2555bb614350",
+  "parent": "6c09eea2bcb996d70aeda9f78f4304c6309cf475",
+  "pr": 1488,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add build folder to gitignore. (#1488)",
+  "date": "2025-01-08",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2004,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds a single line (build/) to .gitignore. It touches no source, build script, or runtime configuration, so no server behaviour, command reply, replication, or persistence path can differ between the two builds; there is nothing for a fuzzer scenario to exercise."
+}

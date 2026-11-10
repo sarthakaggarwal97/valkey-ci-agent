@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.zset-setops-scan-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: ZUNIONSTORE rebuilt on the hashtable (insert-at-position then bulk
+    skiplist build), ZINTER/ZDIFF, NaN aggregation, ZSCAN and GEO store paths compared
+    against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zops
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, zset-max-listpack-entries, '3'], expect: {equals: OK}}
+    - {command: [ZADD, src1, 1, a, 2, b, 3, c, 4, d], expect: {equals: 4}}
+    - {command: [OBJECT, ENCODING, src1], compare: skip, expect: {equals: skiplist}}
+    - {command: [ZADD, src2, 10, b, 20, c], expect: {equals: 2}}
+    - {command: [OBJECT, ENCODING, src2], compare: skip, expect: {equals: listpack}}
+    - {command: [SADD, s1, a, c, e], expect: {equals: 3}}
+    - {command: [ZUNIONSTORE, dst, 3, src1, src2, s1, WEIGHTS, 1, 2, 1, AGGREGATE,
+        SUM], expect: {equals: 5}}
+    - {command: [ZRANGE, dst, 0, -1], expect: {equals: [e, a, d, b, c]}}
+    - {command: [ZRANGE, dst, 0, -1, WITHSCORES]}
+    - {command: [ZUNIONSTORE, dmin, 2, src1, src2, AGGREGATE, MIN], expect: {equals: 4}}
+    - {command: [ZRANGE, dmin, 0, -1], expect: {equals: [a, b, c, d]}}
+    - {command: [ZUNIONSTORE, dmax, 2, src1, src2, AGGREGATE, MAX], expect: {equals: 4}}
+    - {command: [ZRANGE, dmax, 0, -1], expect: {equals: [a, d, b, c]}}
+    - {command: [ZADD, zinf, inf, x], expect: {equals: 1}}
+    - {command: [ZUNIONSTORE, dnan, 2, zinf, zinf, WEIGHTS, 1, -1], expect: {equals: 1}}
+    - {command: [ZSCORE, dnan, x], expect: {in: ['0', 0]}}
+    - {command: [ZUNIONSTORE, ddup, 2, src1, src1], expect: {equals: 4}}
+    - {command: [ZRANGE, ddup, 0, -1, WITHSCORES]}
+    - {command: [ZINTERSTORE, idst, 2, src1, src2], expect: {equals: 2}}
+    - {command: [ZRANGE, idst, 0, -1], expect: {equals: [b, c]}}
+    - {command: [ZDIFFSTORE, ddst, 2, src1, src2], expect: {equals: 2}}
+    - {command: [ZRANGE, ddst, 0, -1], expect: {equals: [a, d]}}
+    - {command: [ZDIFF, 2, src1, src2, WITHSCORES]}
+    - {command: [ZINTERCARD, 2, src1, src2], expect: {equals: 2}}
+    - {command: [ZINTERCARD, 2, src1, src2, LIMIT, 1], expect: {equals: 1}}
+    - {command: [ZADD, zbig, 1, m01, 2, m02, 3, m03, 4, m04, 5, m05, 6, m06, 7, m07,
+        8, m08, 9, m09, 10, m10, 11, m11, 12, m12, 13, m13, 14, m14, 15, m15, 16,
+        m16, 17, m17, 18, m18, 19, m19, 20, m20], expect: {equals: 20}}
+    - {command: [ZADD, zbig, 21, n01, 22, n02, 23, n03, 24, n04, 25, n05, 26, n06,
+        27, n07, 28, n08, 29, n09, 30, n10, 31, n11, 32, n12, 33, n13, 34, n14, 35,
+        n15, 36, n16, 37, n17, 38, n18, 39, n19, 40, n20], expect: {equals: 20}}
+    - {command: [ZSCAN, zbig, 0, COUNT, 1000], compare: skip}
+    - {command: [ZSCAN, zbig, 0, MATCH, 'm*', COUNT, 1000], compare: skip}
+    - {command: [ZUNIONSTORE, dbig, 2, zbig, src1, AGGREGATE, MAX], expect: {equals: 44}}
+    - {command: [ZCARD, dbig], expect: {equals: 44}}
+    - {command: [GEOADD, geo, 13.361389, 38.115556, Palermo, 15.087269, 37.502669,
+        Catania], expect: {equals: 2}}
+    - {command: [GEOSEARCHSTORE, gdst, geo, FROMLONLAT, 15, 37, BYRADIUS, 400, km,
+        ASC], expect: {equals: 2}}
+    - {command: [ZRANGE, gdst, 0, -1], compare: unordered}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [zops.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zops}

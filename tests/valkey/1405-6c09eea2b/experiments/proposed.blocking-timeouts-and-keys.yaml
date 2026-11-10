@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.blocking-timeouts-and-keys
+deployment:
+  modes: [standalone]
+metadata:
+  description: Lazily-created bstate across BLPOP/BZPOPMIN/WAIT/WAITAOF timeouts,
+    duplicate blocked keys, unblock by push, and XREADGROUP unblock-on-nokey
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: blocking
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes", appendfsync: always}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SET, seed, v], expect: {equals: OK}}
+    - {command: [BLPOP, nolist, 0.1], expect: {equals: null}}
+    - {command: [BLPOP, a, b, a, 0.1], expect: {equals: null}}
+    - {command: [BZPOPMIN, zs, 0.1], expect: {equals: null}}
+    - {command: [BRPOPLPUSH, src, dst, 0.1], expect: {equals: null}}
+    - {command: [WAIT, 1, 100], expect: {equals: 0}}
+    - {command: [WAITAOF, 1, 1, 100]}
+    - {raw: "BLPOP mylist 0\r\n", connection: blk}
+    - {command: [LPUSH, mylist, v1], expect: {equals: 1}}
+    - {read: true, connection: blk, expect: {equals: [[mylist, v1]]}}
+    - {raw: "BLPOP w1 w2 w3 0\r\n", connection: blk2}
+    - {command: [RPUSH, w2, mv], expect: {equals: 1}}
+    - {read: true, connection: blk2, expect: {equals: [[w2, mv]]}}
+    - {command: [XADD, st, 1-1, f, v], expect: {equals: 1-1}}
+    - {command: [XGROUP, CREATE, st, g, 0], expect: {equals: OK}}
+    - {raw: "XREADGROUP GROUP g c1 BLOCK 0 STREAMS st >\r\n", connection: xblk}
+    - {raw: "XREADGROUP GROUP g c1 BLOCK 0 STREAMS st >\r\n", connection: xblk}
+    - {command: [DEL, st], expect: {equals: 1}}
+    - {read: true, connection: xblk}
+    - {command: [LRANGE, mylist, 0, -1], expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [blocking.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: blocking}

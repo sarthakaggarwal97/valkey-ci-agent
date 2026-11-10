@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.hello-availability-zone
+deployment:
+  modes: [standalone]
+metadata:
+  description: HELLO gains an availability_zone field when the availability-zone config
+    is non-empty; the advertised map length must match the emitted fields in RESP2
+    and RESP3, at startup, after runtime CONFIG SET, and across protocol switches
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hello
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {availability-zone: zone-a}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [HELLO], expect_difference: true, expect: {contains: availability_zone}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [HELLO, "3"], expect_difference: true, expect: {contains: availability_zone}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [HELLO, "2"], expect_difference: true, expect: {contains: availability_zone}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, availability-zone, us-east-1a], expect: {equals: OK}}
+    - {command: [HELLO], expect_difference: true, expect: {contains: us-east-1a}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, availability-zone, az-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      expect: {equals: OK}}
+    - {command: [HELLO], expect_difference: true, expect: {contains: az-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, availability-zone, !!binary "AGJpbmFyeS16b25lAA=="],
+      expect: {equals: OK}}
+    - {command: [HELLO], expect_difference: true, expect: {contains: binary-zone}}
+    - {command: [CONFIG, GET, availability-zone], expect: {contains: binary-zone}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [HELLO], connection: fresh, expect_difference: true, expect: {contains: binary-zone}}
+    - {command: [CONFIG, SET, availability-zone, ""], expect: {equals: OK}}
+    - {command: [HELLO], compare: skip, expect: {contains: proto}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hello.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hello}

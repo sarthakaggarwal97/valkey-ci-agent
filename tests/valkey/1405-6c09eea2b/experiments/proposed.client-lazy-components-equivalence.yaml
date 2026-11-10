@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.client-lazy-components-equivalence
+deployment:
+  modes: [standalone]
+metadata:
+  description: MULTI/WATCH/EXEC, pub-sub and client-tracking replies must be identical
+    across the lazy-init client-struct refactor
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lazyinit
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, k, v1], expect: {equals: QUEUED}}
+    - {command: [INCR, n], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, 1]}}
+    - {command: [GET, k], expect: {equals: v1}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [LPUSH, mylist, a], expect: {equals: QUEUED}}
+    - {command: [DISCARD], expect: {equals: OK}}
+    - {command: [EXISTS, mylist], expect: {equals: 0}}
+    - {command: [WATCH, k], expect: {equals: OK}}
+    - {command: [SET, k, v2], connection: other, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [APPEND, k, X], expect: {equals: QUEUED}}
+    - {command: [EXEC], compare: skip}
+    - {command: [GET, k], expect: {equals: v2}}
+    - {command: [SUBSCRIBE, chan], connection: sub, compare: skip}
+    - {command: [PUBSUB, CHANNELS], expect: {equals: [chan]}}
+    - {command: [PUBSUB, NUMPAT], expect: {equals: 0}}
+    - {command: [CLIENT, TRACKING, ON], expect: {equals: OK}}
+    - {command: [CLIENT, GETREDIR], expect: {equals: 0}}
+    - {command: [CLIENT, TRACKING, OFF], expect: {equals: OK}}
+    - {command: [CLIENT, GETREDIR], expect: {equals: -1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lazyinit}

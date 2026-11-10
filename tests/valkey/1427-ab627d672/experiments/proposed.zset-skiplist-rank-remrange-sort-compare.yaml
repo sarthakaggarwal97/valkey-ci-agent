@@ -1,0 +1,79 @@
+extends: [valkey.liveness]
+id: proposed.zset-skiplist-rank-remrange-sort-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Skiplist-encoded zset score updates (in-place and reinsert), ZRANK/ZCOUNT/ZLEXCOUNT
+    rank walks, ZREMRANGEBY* deletions, SORT paths and MEMORY USAGE, compared across
+    builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zskip
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, zset-max-listpack-entries, "0"], expect: {equals: OK}}
+    - {command: [ZADD, z, 1, a, 2, b, 3, c, 4, d, 5, e, 6, f, 7, g, 8, h, 9, i, 10,
+        j], expect: {equals: 10}}
+    - {command: [OBJECT, ENCODING, z], compare: skip}
+    - {command: [ZRANK, z, a], expect: {equals: 0}}
+    - {command: [ZRANK, z, j], expect: {equals: 9}}
+    - {command: [ZREVRANK, z, a], expect: {equals: 9}}
+    - {command: [ZREVRANK, z, f], expect: {equals: 4}}
+    - {command: [ZCOUNT, z, "-inf", "+inf"], expect: {equals: 10}}
+    - {command: [ZCOUNT, z, "(1", "(9"], expect: {equals: 7}}
+    - {command: [ZCOUNT, z, 5, 5], expect: {equals: 1}}
+    - {command: [ZADD, z, XX, CH, 5.5, e], expect: {equals: 1}}
+    - {command: [ZRANK, z, e], expect: {equals: 4}}
+    - {command: [ZSCORE, z, e], expect: {in: ["5.5", 5.5]}}
+    - {command: [ZADD, z, 100, b], expect: {equals: 0}}
+    - {command: [ZRANK, z, b], expect: {equals: 9}}
+    - {command: [ZSCORE, z, b], expect: {in: ["100", 100]}}
+    - {command: [ZADD, z, 4, c], expect: {equals: 0}}
+    - {command: [ZRANK, z, c], expect: {equals: 1}}
+    - {command: [ZRANK, z, d], expect: {equals: 2}}
+    - {command: [ZINCRBY, z, -200, j], expect: {in: ["-190", -190]}}
+    - {command: [ZRANK, z, j], expect: {equals: 0}}
+    - {command: [ZRANGE, z, 0, -1], expect: {equals: [j, a, c, d, e, f, g, h, i, b]}}
+    - {command: [ZCOUNT, z, "(4", 100], expect: {equals: 6}}
+    - {command: [ZADD, zl, 0, aa, 0, bb, 0, cc, 0, dd, 0, ee, 0, ff], expect: {equals: 6}}
+    - {command: [ZLEXCOUNT, zl, "-", "+"], expect: {equals: 6}}
+    - {command: [ZLEXCOUNT, zl, "[bb", "(ee"], expect: {equals: 3}}
+    - {command: [SORT, z, ALPHA], expect: {equals: [a, b, c, d, e, f, g, h, i, j]}}
+    - {command: [SORT, z, BY, nosort, DESC, LIMIT, 2, 3], expect: {equals: [h, g,
+          f]}}
+    - {command: [SORT, z, BY, nosort, LIMIT, 1, 3], expect: {equals: [a, c, d]}}
+    - {command: [SORT, z], expect: {error: "double"}}
+    - {command: [MEMORY, USAGE, z, SAMPLES, 0], compare: skip, expect: {min: 500}}
+    - {command: [ZREMRANGEBYRANK, z, 0, 2], expect: {equals: 3}}
+    - {command: [ZRANGE, z, 0, -1], expect: {equals: [d, e, f, g, h, i, b]}}
+    - {command: [ZREMRANGEBYSCORE, z, "(4", "(8"], expect: {equals: 3}}
+    - {command: [ZRANGE, z, 0, -1], expect: {equals: [d, h, i, b]}}
+    - {command: [ZREMRANGEBYLEX, zl, "[bb", "(ee"], expect: {equals: 3}}
+    - {command: [ZRANGE, zl, 0, -1], expect: {equals: [aa, ee, ff]}}
+    - {command: [ZREMRANGEBYSCORE, zl, "-inf", "+inf"], expect: {equals: 3}}
+    - {command: [EXISTS, zl], expect: {equals: 0}}
+    - {command: [ZREMRANGEBYRANK, z, 0, -1], expect: {equals: 4}}
+    - {command: [EXISTS, z], expect: {equals: 0}}
+    - {command: [ZADD, ze, 1, ""], expect: {equals: 1}}
+    - {command: [ZRANK, ze, ""], expect: {equals: 0}}
+    - {command: [ZREMRANGEBYLEX, ze, "-", "+"], expect: {equals: 1}}
+    - {command: [EXISTS, ze], expect: {equals: 0}}
+    - {command: [ZADD, zr, 1, m, 2, m, 3, m], expect: {equals: 1}}
+    - {command: [ZSCORE, zr, m], expect: {in: ["3", 3]}}
+    - {command: [ZADD, zr, GT, CH, 2, m], expect: {equals: 0}}
+    - {command: [ZADD, zr, GT, CH, 10, m], expect: {equals: 1}}
+    - {command: [ZADD, zr, LT, CH, 4, m], expect: {equals: 1}}
+    - {command: [ZSCORE, zr, m], expect: {in: ["4", 4]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [zskip.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zskip}

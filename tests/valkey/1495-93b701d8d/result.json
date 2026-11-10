@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "93b701d8d48eaf87077e707dd77eaaed0e66900f",
+  "parent": "8d764f27b34f9bc346c427e39bb61d5b6d573fea",
+  "pr": 1495,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update Redis legacy keyword and link in utils/whatisdoing.sh (#1495)",
+  "date": "2025-01-03",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2148,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits utils/whatisdoing.sh, a standalone poor-man's-profiler helper script: it updates comments and a documentation URL from Redis to Valkey and changes the ps|grep pattern to match the valkey-server process name. No server code, command behaviour, replication, persistence, or bundled tool (valkey-cli/benchmark/check-rdb/check-aof) is affected, so there is no runtime behaviour for a fuzzer scenario to exercise."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "33b824137e4d86e69e50cd7843695af8bec8dff1",
+  "parent": "b3b4bdcda40380048b302c6dd957396340b88d6c",
+  "pr": 1505,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Explicitly check C_ERR condition to improve readability in clusterSaveConfig (#1505)",
+  "date": "2025-01-04",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2926,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change rewrites `if (retval)` as `if (retval == C_ERR)` in clusterSaveConfig's cleanup path. retval starts as C_ERR (-1, truthy) and becomes C_OK (0, falsy) only when every step succeeded, so the old truthiness test and the new explicit comparison unlink the temporary cluster config file under exactly the same condition. No control flow, return value, file-system effect, or reply changes on any path; it is a readability-only refactor that needs no test."
+}

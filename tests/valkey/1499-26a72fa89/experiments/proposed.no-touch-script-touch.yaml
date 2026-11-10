@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.no-touch-script-touch
+deployment:
+  modes: [standalone]
+metadata:
+  description: With CLIENT NO-TOUCH on, TOUCH called from EVAL or FCALL must still
+    update the key's LRU idletime and LFU counter (lookupKey must check executing_client's
+    proc, not current_client's)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: notouch
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CLIENT, NO-TOUCH, ON], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-lfu], expect: {equals: OK}}
+    - {command: [SET, "lfu:eval", v], expect: {equals: OK}}
+    - {command: [SET, "lfu:fcall", v], expect: {equals: OK}}
+    - {command: [SET, "lfu:direct", v], expect: {equals: OK}}
+    - {command: [SET, "lfu:get", v], expect: {equals: OK}}
+    - {command: [OBJECT, FREQ, "lfu:eval"], expect: {equals: 5}}
+    - command: [EVAL, "redis.call('touch', KEYS[1]); return 1", "1", "lfu:eval"]
+      expect: {equals: 1}
+    - {command: [OBJECT, FREQ, "lfu:eval"], expect_difference: true, expect: {equals: 6}}
+    - command: [FUNCTION, LOAD, "#!lua name=tlib\nredis.register_function('ftouch',\
+          \ function(keys, args) redis.call('touch', keys[1]); return 1 end)"]
+      expect: {equals: tlib}
+    - {command: [FCALL, ftouch, "1", "lfu:fcall"], expect: {equals: 1}}
+    - {command: [OBJECT, FREQ, "lfu:fcall"], expect_difference: true, expect: {equals: 6}}
+    - {command: [TOUCH, "lfu:direct"], expect: {equals: 1}}
+    - {command: [OBJECT, FREQ, "lfu:direct"], expect: {equals: 6}}
+    - command: [EVAL, "return redis.call('get', KEYS[1])", "1", "lfu:get"]
+      expect: {equals: v}
+    - {command: [OBJECT, FREQ, "lfu:get"], expect: {equals: 5}}
+    - {command: [CONFIG, SET, maxmemory-policy, noeviction], expect: {equals: OK}}
+    - {command: [SET, "lru:eval", v], expect: {equals: OK}}
+    - {command: [SET, "lru:direct", v], expect: {equals: OK}}
+    - {command: [OBJECT, IDLETIME, "lru:eval"], wait_s: 15, expect: {min: 3}, compare: skip}
+    - command: [EVAL, "redis.call('touch', KEYS[1]); return 1", "1", "lru:eval"]
+      expect: {equals: 1}
+    - {command: [OBJECT, IDLETIME, "lru:eval"], expect_difference: true, expect: {
+        max: 1}}
+    - {command: [TOUCH, "lru:direct"], expect: {equals: 1}}
+    - {command: [OBJECT, IDLETIME, "lru:direct"], expect: {max: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [notouch.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: notouch}

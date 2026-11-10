@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.lua-gc-finalizer-teardown-sync
+deployment:
+  modes: [standalone]
+metadata:
+  description: SCRIPT FLUSH SYNC tears down a Lua interpreter holding finalizable
+    userdata (newproxy __gc) with the collector stopped; the pre-close full GC the
+    fix adds must keep the server alive (CVE-2024-46981)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flush
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [EVAL, "collectgarbage('stop'); for i=1,3000 do local u = newproxy(true);\
+          \ getmetatable(u).__gc = function() end end; return 1", "0"], expect: {
+        equals: 1}}
+    - {command: [SCRIPT, LOAD, "return 1"], expect: {exists: true}}
+    - {command: [SCRIPT, FLUSH, SYNC], expect_difference: true, expect: {equals: OK}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flush}

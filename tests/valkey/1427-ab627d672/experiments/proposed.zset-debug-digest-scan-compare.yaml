@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.zset-debug-digest-scan-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: DEBUG DIGEST/DIGEST-VALUE/HTSTATS-KEY over skiplist zsets and SSCAN
+    over hashtable sets, replies compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: digest
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      zset-max-listpack-entries: 0
+      set-max-listpack-entries: 0
+      set-max-intset-entries: 0
+      enable-debug-command: "yes"
+    commands:
+    - {command: [ZADD, zkey, 1, a, 2, b, 3, c, inf, plus, "-inf", minus, 0, "", 1.5,
+        "fields"], expect: {equals: 7}}
+    - {command: [EVAL, "for i=1,500 do redis.call('zadd','zbig',i+0.25,'m:'..i) end\
+          \ return redis.call('zcard','zbig')", 0], expect: {equals: 500}}
+    - {command: [EVAL, "for i=1,500 do redis.call('sadd','skey','s:'..i) end return\
+          \ redis.call('scard','skey')", 0], expect: {equals: 500}}
+    - {command: [SADD, skey, "", x], expect: {equals: 2}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [ZADD, otherdb, 7, seven, 8, eight], expect: {equals: 2}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [DEBUG, DIGEST]}
+    - {command: [DEBUG, DIGEST-VALUE, zkey, zbig, skey]}
+    - {command: [DEBUG, HTSTATS-KEY, zkey], compare: skip, expect: {error: false}}
+    - {command: [DEBUG, HTSTATS-KEY, zbig, full], compare: skip, expect: {error: false}}
+    - {command: [ZSCAN, zbig, 0, COUNT, 1000], compare: skip, expect: {error: false}}
+    - {command: [ZSCAN, zbig, 0, MATCH, "m:1*", COUNT, 1000], compare: skip, expect: {
+        error: false}}
+    - {command: [SSCAN, skey, 0, COUNT, 1000], compare: skip, expect: {error: false}}
+    - {command: [SSCAN, skey, 0, MATCH, "s:2*", COUNT, 1000], compare: skip, expect: {
+        error: false}}
+    - {command: [ZSCORE, zkey, plus]}
+    - {command: [ZSCORE, zkey, ""]}
+    - {command: [ZCARD, zbig], expect: {equals: 500}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [digest.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: digest}

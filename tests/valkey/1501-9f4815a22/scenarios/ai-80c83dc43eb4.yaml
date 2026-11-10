@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 418f1d059f95..9f4815a22468.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-80c83dc43eb4
+seed: 150102
+experiment:
+  id: proposed.hashtable-iter-prefetch
+  inputs:
+    resp: 3
+    activerehashing: 'yes'
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7100

@@ -1,0 +1,141 @@
+extends: [valkey.liveness]
+id: proposed.lua-async-flush-gc-race
+deployment:
+  modes: [standalone]
+metadata:
+  description: "SCRIPT FLUSH ASYNC with >64 cached scripts queues the old Lua interpreter\
+    \ to a bio thread while new EVALs run on the fresh interpreter; the parent ran\
+    \ lua_gc on the live global context (a cross-thread GC race), the fixed build\
+    \ gc's the context it closes."
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flush
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [SCRIPT, LOAD, "return 1"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 2"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 3"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 4"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 5"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 6"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 7"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 8"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 9"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 10"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 11"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 12"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 13"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 14"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 15"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 16"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 17"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 18"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 19"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 20"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 21"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 22"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 23"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 24"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 25"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 26"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 27"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 28"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 29"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 30"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 31"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 32"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 33"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 34"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 35"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 36"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 37"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 38"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 39"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 40"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 41"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 42"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 43"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 44"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 45"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 46"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 47"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 48"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 49"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 50"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 51"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 52"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 53"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 54"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 55"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 56"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 57"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 58"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 59"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 60"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 61"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 62"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 63"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 64"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 65"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 66"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 67"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 68"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 69"], expect: {exists: true}}
+    - {command: [SCRIPT, LOAD, "return 70"], expect: {exists: true}}
+    - {command: [SCRIPT, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local t={} for i=1,60000 do t[i]=tostring(i) end return #t",
+        "0"], expect: {equals: 60000}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flush}

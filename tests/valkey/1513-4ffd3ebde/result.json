@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4ffd3ebdeb028d0b9e50cf5986e9f1b6a2e1c031",
+  "parent": "7977c55ac9bea7d1443c32ef5ec020767c086d3a",
+  "pr": 1513,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix LUA garbage collector (CVE-2024-46981) (#1513)",
+  "date": "2025-01-06",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.7288,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dc4628d444cdc871b2e009b8de523451d17c795a",
+  "parent": "d3acd90320d85af102d712745e03dab6509fd458",
+  "pr": 1524,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add `availability_zone` to the HELLO command history (#1524)",
+  "date": "2025-01-08",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2841,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is documentation-only: it adds a history entry for HELLO in src/commands/hello.json and the generated src/commands.def, bumping the history count in the command table to match the new array length. It alters no command behaviour, reply, config handling or server logic \u2014 only the text returned by COMMAND DOCS \u2014 so there is no risky path to exercise and no scenario is needed."
+}

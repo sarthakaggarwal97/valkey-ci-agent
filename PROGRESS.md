@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-10T15:00+00:00.
+Updated 2026-11-10T15:06+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1506 | 1014 | #1541 (2025-01-11) | 296 | 215.1 |
+| valkey-io/valkey | 1531 | 990 | #1489 (2025-01-02) | 321 | 218.7 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 63 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 9.0 |
 | valkey-io/valkey-search | 672 | 0 | f8106e72e984 (2024-11-27) | 3 | 96.0 |
@@ -13,28 +13,28 @@ Updated 2026-11-10T15:00+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-10T11:41:16+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42787464969): 20 merge(s) tested, 14 without a code change.
+[2026-11-10T15:06:05+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42809508889): 20 merge(s) tested, 6 without a code change.
 
-- [valkey-io/valkey#5033](https://github.com/valkey-io/valkey/pull/5033) ([tests](tests/valkey/5033-39f27052b/)): Respect NOFAILOVER during shutdown failover (#5033): 2 of 3 test(s) reached the change, coverage not measured (`make -j4 BUILD_ZSTD=yes gcov OPTIMIZATION=-O0` failed in coverage (exit 2): /usr/bin/x86_64-linux-gnu-ld.bfd: liblua.a(lzio.o): in function `_sub_D_00100_1': lzio.c:(.text.exit+0x5): undefined refere)
-- [valkey-io/valkey#1606](https://github.com/valkey-io/valkey/pull/1606) ([tests](tests/valkey/1606-ad60d6b7b/)): Initialize one variable in struct to avoid risk (#1606): declined: The change only adds `server.cluster->failover_auth_sent = 0` in clusterInit as defensive initialization. On every reachable path the field was already written before being read: the read at cluster_legacy.c:3220 is short-circuited by failover_auth_time (initialized to 0 and set non-zero o
-- [valkey-io/valkey#1604](https://github.com/valkey-io/valkey/pull/1604) ([tests](tests/valkey/1604-e9b8970e7/)): Relaxed RDB version check (#1604): 3 of 6 test(s) reached the change, coverage 72%; [check, introduced by #1604](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/114)
-- [valkey-io/valkey#1626](https://github.com/valkey-io/valkey/pull/1626) ([tests](tests/valkey/1626-7699a3a94/)): Fix use-after-free in hashtableTwoPhasePopDelete (#1626): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1618](https://github.com/valkey-io/valkey/pull/1618) ([tests](tests/valkey/1618-a18fcdb37/)): Deflake hashtable random fairness test (#1618): declined: The change modifies only the unit test file src/unit/test_hashtable.c: it seeds the hashtable hash function in the test harness and relaxes the random-fairness assertion threshold to deflake the test. No runtime Valkey behaviour (commands, replies, replication, persistence, cluster) is alt
-- [valkey-io/valkey#1294](https://github.com/valkey-io/valkey/pull/1294) ([tests](tests/valkey/1294-3f21705a6/)): Feature COMMANDLOG to record slow execution and large request/reply (#1294): 4 of 5 test(s) reached the change, coverage 92%
-- [valkey-io/valkey#1568](https://github.com/valkey-io/valkey/pull/1568) ([tests](tests/valkey/1568-f2510783f/)): Accelerate hash table iterator with value prefetching (#1568): 0 of 16 test(s) reached the change, coverage 92%; check, not reproduced (recorded)
-- [valkey-io/valkey#1586](https://github.com/valkey-io/valkey/pull/1586) ([tests](tests/valkey/1586-3032ccd48/)): Change the shared format for dual channel replication logs (#1586): declined: The change only alters the log-message prefix string in the dualChannelServerLog macro (from "<Dual Channel> " to "Dual channel replication: ") and updates the matching pattern in the dual-channel-replication test. It is a cosmetic log-format change with no effect on replication behaviour,
-- [valkey-io/valkey#1561](https://github.com/valkey-io/valkey/pull/1561) ([tests](tests/valkey/1561-2d0b8e360/)): Update comments and log message in cluster_legacy.c (#1561): declined: The change only rewrites code comments and rewords two serverLog message strings in clusterProcessPacket (cluster_legacy.c). No control flow, data handling, protocol, or reply behaviour changes: the same branches run, the same freeClusterLink/assert calls execute, only log text and comment
-- [valkey-io/valkey#1574](https://github.com/valkey-io/valkey/pull/1574) ([tests](tests/valkey/1574-c9aea6d2d/)): Fix memory leak in forgotten node ping ext code path (#1574): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1563](https://github.com/valkey-io/valkey/pull/1563) ([tests](tests/valkey/1563-87cc3d7a7/)): Fix cluster info sent stats for message with light header (#1563): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1312](https://github.com/valkey-io/valkey/pull/1312) ([tests](tests/valkey/1312-af71619c4/)): Extract the scripting engine code from the functions unit (#1312): 3 of 7 test(s) reached the change, coverage 83%; crash, fixed by #1312 (recorded)
-- [valkey-io/valkey#1517](https://github.com/valkey-io/valkey/pull/1517) ([tests](tests/valkey/1517-921ba19ac/)): Incr expired_keys if the unix-time is already expired for EXPIREAT and other commands(#1517): declined: no proposed test validated
-- [valkey-io/valkey#1401](https://github.com/valkey-io/valkey/pull/1401) ([tests](tests/valkey/1401-6a8f068e3/)): Adding Missing filters to CLIENT LIST and Dedup Parsing (#1401): 11 of 11 test(s) reached the change, coverage 86%
-- [valkey-io/valkey#1519](https://github.com/valkey-io/valkey/pull/1519) ([tests](tests/valkey/1519-c5a158554/)): add paused_actions for INFO Clients (#1519): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1553](https://github.com/valkey-io/valkey/pull/1553) ([tests](tests/valkey/1553-2a1a65b4c/)): Introduce const_sds for const-content sds (#1553): declined: The change only introduces a `const_sds` typedef (`const char *`) and updates read-only sds function signatures from `const sds` to `const_sds` for const-correctness. No function body, data layout, or control flow changes; the server.c hunk merely adapts a callback signature to the new typ
-- [valkey-io/valkey#1502](https://github.com/valkey-io/valkey/pull/1502) ([tests](tests/valkey/1502-d13aad45f/)): Replace dict with new hashtable: hash datatype (#1502): 0 of 22 test(s) reached the change, coverage 87%
-- [valkey-io/valkey#1534](https://github.com/valkey-io/valkey/pull/1534) ([tests](tests/valkey/1534-11cb8ee27/)): Add latency stats around cluster config file operations (#1534): 0 of 3 test(s) reached the change, coverage 84%
-- [valkey-io/valkey#1191](https://github.com/valkey-io/valkey/pull/1191) ([tests](tests/valkey/1191-10357ceda/)): Mark the node as FAIL when the node is marked as NOADDR and broadcast the FAIL (#1191): 2 of 3 test(s) reached the change, coverage 100%; check, not reproduced (recorded); check, introduced and since fixed (recorded)
-- [valkey-io/valkey#1018](https://github.com/valkey-io/valkey/pull/1018) ([tests](tests/valkey/1018-211b250aa/)): Do election in order based on failed primary rank to avoid voting conflicts (#1018): 0 of 4 test(s) reached the change, coverage 95%
+- [valkey-io/valkey#5085](https://github.com/valkey-io/valkey/pull/5085) ([tests](tests/valkey/5085-7ec927fd1/)): Disconnect default user subscribers to revoked channels on ACL LOAD (#5085): 1 of 3 test(s) reached the change, coverage 100%; [check, introduced by #5085](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/115)
+- [valkey-io/valkey#1541](https://github.com/valkey-io/valkey/pull/1541) ([tests](tests/valkey/1541-d6bdd9e7d/)): Fix module LatencyAddSample still work when latency-monitor-threshold is 0 (#1541): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1535](https://github.com/valkey-io/valkey/pull/1535): to retry, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
+- [valkey-io/valkey#1536](https://github.com/valkey-io/valkey/pull/1536) ([tests](tests/valkey/1536-d99457c09/)): Free the passed in lua context instead of the global (#1536): 0 of 3 test(s) reached the change, coverage 100%; crash, fixed by #1536 (recorded)
+- [valkey-io/valkey#1530](https://github.com/valkey-io/valkey/pull/1530) ([tests](tests/valkey/1530-80c35402b/)): Remove legacy SERVER_TEST compiler flag from cmake. (#1530): declined: The change only deletes the obsolete SERVER_TEST=1 compile definition from the unit-test CMakeLists.txt. It is a build-system cleanup affecting only how unit tests are compiled; no server, command, replication, persistence or tool code changes, so the runtime binaries the fuzzer exercises 
+- [valkey-io/valkey#1501](https://github.com/valkey-io/valkey/pull/1501) ([tests](tests/valkey/1501-9f4815a22/)): Accelerate hash table iterator with prefetching (#1501): 0 of 4 test(s) reached the change, coverage 74%
+- [valkey-io/valkey#1456](https://github.com/valkey-io/valkey/pull/1456) ([tests](tests/valkey/1456-418f1d059/)): Improve Typos configuration (#1456): declined: The change edits only .config/typos.toml (the typos spell-check CI tool's configuration) and a comment spelling fix in .cmake-format.yaml. No source, test, or build-output file changes; the Valkey server and tools behave identically before and after. This is a CI/lint configuration change 
+- [valkey-io/valkey#1432](https://github.com/valkey-io/valkey/pull/1432) ([tests](tests/valkey/1432-9e0204941/)): valkey-cli auto-exit from subscribed mode (#1432): 2 of 2 test(s) reached the change, coverage 96%
+- [valkey-io/valkey#1427](https://github.com/valkey-io/valkey/pull/1427) ([tests](tests/valkey/1427-ab627d672/)): Replace dict with new hashtable: sorted set datatype (#1427): 0 of 16 test(s) reached the change, coverage 87%
+- [valkey-io/valkey#1488](https://github.com/valkey-io/valkey/pull/1488) ([tests](tests/valkey/1488-8af35a171/)): Add build folder to gitignore. (#1488): declined: The change adds a single line (build/) to .gitignore. It touches no source, build script, or runtime configuration, so no server behaviour, command reply, replication, or persistence path can differ between the two builds; there is nothing for a fuzzer scenario to exercise.
+- [valkey-io/valkey#1405](https://github.com/valkey-io/valkey/pull/1405) ([tests](tests/valkey/1405-6c09eea2b/)): client struct: lazy init components and optimize struct layout (#1405): 0 of 27 test(s) reached the change, coverage 80%; crash, introduced and since fixed (recorded)
+- [valkey-io/valkey#1524](https://github.com/valkey-io/valkey/pull/1524) ([tests](tests/valkey/1524-dc4628d44/)): Add `availability_zone` to the HELLO command history (#1524): declined: The change is documentation-only: it adds a history entry for HELLO in src/commands/hello.json and the generated src/commands.def, bumping the history count in the command table to match the new array length. It alters no command behaviour, reply, config handling or server logic — only the
+- [valkey-io/valkey#1487](https://github.com/valkey-io/valkey/pull/1487) ([tests](tests/valkey/1487-3b52186b6/)): Add `availability_zone` to the HELLO response (#1487): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1513](https://github.com/valkey-io/valkey/pull/1513) ([tests](tests/valkey/1513-4ffd3ebde/)): Fix LUA garbage collector (CVE-2024-46981) (#1513): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1514](https://github.com/valkey-io/valkey/pull/1514) ([tests](tests/valkey/1514-7977c55ac/)): Fix Read/Write key pattern selector (CVE-2024-51741) (#1514): 4 of 4 test(s) reached the change, coverage 100%; crash, fixed by #1514 (recorded)
+- [valkey-io/valkey#1061](https://github.com/valkey-io/valkey/pull/1061) ([tests](tests/valkey/1061-c0014ef15/)): Check whether to switch to fail when setting the node to pfail in cron (#1061): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1505](https://github.com/valkey-io/valkey/pull/1505) ([tests](tests/valkey/1505-33b824137/)): Explicitly check C_ERR condition to improve readability in clusterSaveConfig (#1505): declined: The change rewrites `if (retval)` as `if (retval == C_ERR)` in clusterSaveConfig's cleanup path. retval starts as C_ERR (-1, truthy) and becomes C_OK (0, falsy) only when every step succeeded, so the old truthiness test and the new explicit comparison unlink the temporary cluster config fi
+- [valkey-io/valkey#1503](https://github.com/valkey-io/valkey/pull/1503) ([tests](tests/valkey/1503-b3b4bdcda/)): CMake: fail on warnings (#1503): declined: The change only adds -Werror -Wall to the CMake build and an unreachable 'return NULL' after assert(0) in valkey-cli's jsonStringOutput to silence the resulting warning. jsonStringOutput is only called with OUTPUT_JSON or OUTPUT_QUOTED_JSON, both of which return earlier, so the new stateme
+- [valkey-io/valkey#1499](https://github.com/valkey-io/valkey/pull/1499) ([tests](tests/valkey/1499-26a72fa89/)): Use the correct command proc for the LOOKUP_NOTOUCH exception in lookupKey (#1499): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1495](https://github.com/valkey-io/valkey/pull/1495) ([tests](tests/valkey/1495-93b701d8d/)): Update Redis legacy keyword and link in utils/whatisdoing.sh (#1495): declined: The change only edits utils/whatisdoing.sh, a standalone poor-man's-profiler helper script: it updates comments and a documentation URL from Redis to Valkey and changes the ps|grep pattern to match the valkey-server process name. No server code, command behaviour, replication, persistence,
 
 ### valkey-io/valkey-bloom
 
@@ -53,11 +53,11 @@ Updated 2026-11-10T15:00+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 744 of 1147 tested (65%)
-- Changed-line coverage: median 100% of 680 merge(s) measured, 55 under 50%
-- Recall: 200 parents flagged of 314 fix merges
-- Claude: $1134.57 in the last 24 hours, $8360.81 in the last 7 days, $8360.81 in all
-- Issues filed: 65
+- Merges whose tests reached the change: 750 of 1159 tested (65%)
+- Changed-line coverage: median 100% of 692 merge(s) measured, 55 under 50%
+- Recall: 202 parents flagged of 317 fix merges
+- Claude: $1217.84 in the last 24 hours, $8444.07 in the last 7 days, $8444.07 in all
+- Issues filed: 66
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/102
@@ -73,6 +73,7 @@ Updated 2026-11-10T15:00+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/112
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/113
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/114
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/115
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -127,3 +128,4 @@ Updated 2026-11-10T15:00+00:00.
 ## Retries
 
 - [valkey-io/valkey#1948](https://github.com/valkey-io/valkey/pull/1948): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
+- [valkey-io/valkey#1535](https://github.com/valkey-io/valkey/pull/1535): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict

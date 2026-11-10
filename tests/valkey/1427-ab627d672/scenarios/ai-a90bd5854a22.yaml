@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8af35a171253..ab627d6721af.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a90bd5854a22
+seed: 104
+experiment:
+  id: proposed.zset-aof-rewrite-restart-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7300

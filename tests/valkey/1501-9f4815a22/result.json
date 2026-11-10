@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9f4815a22468a4155edd99d57fc9ce503dbe2dcd",
+  "parent": "418f1d059f955eb1b8c4ecea848e88da167e66a3",
+  "pr": 1501,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Accelerate hash table iterator with prefetching (#1501)",
+  "date": "2025-01-08",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 47,
+    "executed": 35,
+    "percent": 74,
+    "uncovered": [
+      "src/hashtable.c:781",
+      "src/hashtable.c:803",
+      "src/hashtable.c:806",
+      "src/hashtable.c:1423",
+      "src/hashtable.c:1586",
+      "src/hashtable.c:1587",
+      "src/hashtable.c:1741",
+      "src/hashtable.c:1771",
+      "src/hashtable.c:2039",
+      "src/hashtable.c:2134",
+      "src/hashtable.c:2168",
+      "src/hashtable.c:2189"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 7.2824,
+  "findings": [],
+  "recorded": []
+}

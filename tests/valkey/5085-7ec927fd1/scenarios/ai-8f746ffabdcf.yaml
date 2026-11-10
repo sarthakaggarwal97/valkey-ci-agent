@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 39f27052bf9e..7ec927fd1fa9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8f746ffabdcf
+seed: 50853
+experiment:
+  id: proposed.acl-load-self-subscribed-client
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

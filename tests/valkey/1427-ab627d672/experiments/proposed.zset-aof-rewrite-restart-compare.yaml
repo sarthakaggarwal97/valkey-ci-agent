@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.zset-aof-rewrite-restart-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: AOF rewrite of a skiplist zset in AOF command format (no RDB preamble),
+    then restart and reload, data compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aofrw
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    server_config:
+      appendonly: "yes"
+      appendfsync: always
+      aof-use-rdb-preamble: "no"
+      zset-max-listpack-entries: 0
+      enable-debug-command: "yes"
+    commands:
+    - {command: [EVAL, "for i=1,200 do redis.call('zadd','z',i*0.5,'member:'..i) end\
+          \ return redis.call('zcard','z')", 0], expect: {equals: 200}}
+    - {command: [ZADD, z, inf, plusinf, "-inf", minusinf, 0, "", 1e100, huge], expect: {
+        equals: 4}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {contains: rewriting}}
+    - {command: [INFO, persistence], wait_s: 60, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ZCARD, z], expect: {equals: 204}}
+    - {command: [ZRANGE, z, 0, -1, WITHSCORES]}
+    - {command: [ZSCORE, z, plusinf]}
+    - {command: [ZSCORE, z, minusinf]}
+    - {command: [ZSCORE, z, ""]}
+    - {command: [ZSCORE, z, huge]}
+    - {command: [DEBUG, DIGEST-VALUE, z]}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [aofrw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofrw}

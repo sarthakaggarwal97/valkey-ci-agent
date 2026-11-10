@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.cluster-multi-blocked-setslot
+deployment:
+  modes: [standalone]
+metadata:
+  description: Cluster getNodeByQuery over lazily-created mstate (EXEC, CROSSSLOT,
+    SPUBLISH in MULTI, readonly replica), blocked-client redirect after SETSLOT, and
+    SETSLOT replica-ack over repl_data
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: clusterblk
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 2, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 2, wait_s: 60, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [INFO, replication], node: 0, wait_s: 60, expect: {contains: "state=online"},
+      compare: skip}
+    - {command: [EXEC], expect: {error: "without MULTI"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, foo, v1], expect: {equals: QUEUED}}
+    - {command: [SET, bar, v2], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {error: "CROSSSLOT"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, foo, v1], expect: {equals: QUEUED}}
+    - {command: [GET, foo], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, v1]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SPUBLISH, foo, hello], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [0]}}
+    - {command: [READONLY], node: 2, connection: r2, expect: {equals: OK}}
+    - {command: [GET, foo], node: 2, connection: r2, wait_s: 15, expect: {equals: v1}}
+    - {command: [MULTI], node: 2, connection: r2, expect: {equals: OK}}
+    - {command: [GET, foo], node: 2, connection: r2, expect: {equals: QUEUED}}
+    - {command: [EXEC], node: 2, connection: r2, expect: {equals: [v1]}}
+    - {raw: "BLPOP bar 0\r\n", connection: blk}
+    - {command: [CLUSTER, SETSLOT, 5061, IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 5061, MIGRATING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 5061, NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 5061, NODE, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.5], node: 1, expect: {equals: OK}}
+    - {read: true, connection: blk}
+    - {command: [GET, bar], node: 0, expect: {error: "MOVED"}}
+    - {command: [GET, bar], node: 1, wait_s: 15, expect: {equals: null}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [clusterblk.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: clusterblk}

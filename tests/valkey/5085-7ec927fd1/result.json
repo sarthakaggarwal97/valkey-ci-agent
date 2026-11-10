@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "parent": "39f27052bf9ee985c9d52a0aa908749f12633eb4",
+  "pr": 5085,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Disconnect default user subscribers to revoked channels on ACL LOAD (#5085)",
+  "date": "2026-11-10",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.2654,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 6 (PUBLISH secret m) replies otherwise with resp 2: {\"reply\":1}, not {\"error\":\"NOPERM No permissions to access a channel\"}",
+      "scenario": "ai-8f746ffabdcf",
+      "seed": 50853,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #5085",
+      "fingerprint": "9118e891db1ecfcf3f63",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/115"
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-3e56e98ceea9",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-8adb7abe32e6",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    }
+  ]
+}

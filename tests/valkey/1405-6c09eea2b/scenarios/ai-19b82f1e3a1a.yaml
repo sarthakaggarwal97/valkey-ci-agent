@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey dc4628d444cd..6c09eea2bcb9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-19b82f1e3a1a
+seed: 1001
+experiment:
+  id: proposed.client-trackinginfo-null-pubsub
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

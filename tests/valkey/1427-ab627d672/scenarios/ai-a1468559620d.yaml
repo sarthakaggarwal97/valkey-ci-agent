@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8af35a171253..ab627d6721af.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a1468559620d
+seed: 107
+experiment:
+  id: proposed.zset-aof-rewrite-primary-kill
+  inputs:
+    mutation_rate: 300
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7600
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec
+    aof-use-rdb-preamble: 'no'
+    zset-max-listpack-entries: 0

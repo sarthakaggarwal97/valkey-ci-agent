@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.acl-percent-keypattern
+deployment:
+  modes: [standalone]
+metadata:
+  description: A '%' key-permission selector with no valid permission flag is rejected,
+    not stored as a flags==0 pattern that panics the server on serialization (CVE-2024-51741)
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [ACL, SETUSER, ok1, on, nopass, "%RW~app:*", "+@all"], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, ok2, on, nopass, "%R~r:*", "%W~w:*", "+@all"], expect: {
+        equals: OK}}
+    - {command: [ACL, GETUSER, ok1], expect: {exists: true}}
+    - {command: [ACL, SETUSER, emptyperm, on, nopass, "%~", "+@all"], expect: {error: "Syntax\
+          \ error"}}
+    - {command: [ACL, SETUSER, badroot, on, nopass, "%", "+@all"], expect_difference: true,
+      expect: {error: "Syntax error"}}
+    - {command: [ACL, SETUSER, badsel, on, nopass, "+@all", "(% +get)"], expect_difference: true,
+      expect: {error: "Syntax error"}}
+    - {command: [ACL, LIST], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

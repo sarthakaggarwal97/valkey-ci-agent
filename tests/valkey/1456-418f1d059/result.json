@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "418f1d059f955eb1b8c4ecea848e88da167e66a3",
+  "parent": "9e0204941d4193daba18485e73c87f30ac117c6f",
+  "pr": 1456,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Improve Typos configuration (#1456)",
+  "date": "2025-01-08",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2292,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only .config/typos.toml (the typos spell-check CI tool's configuration) and a comment spelling fix in .cmake-format.yaml. No source, test, or build-output file changes; the Valkey server and tools behave identically before and after. This is a CI/lint configuration change with no runtime behaviour, so no scenario is needed."
+}

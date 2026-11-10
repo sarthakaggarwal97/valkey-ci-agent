@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey dc4628d444cd..6c09eea2bcb9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-73d6c11902b2
+seed: 9103
+experiment:
+  id: proposed.tracking-watch-stream-unblock
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

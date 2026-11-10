@@ -1,0 +1,106 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7977c55ac9bea7d1443c32ef5ec020767c086d3a",
+  "parent": "c0014ef15e2b09ce6aaf2184aacd20a041e19018",
+  "pr": 1514,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix Read/Write key pattern selector (CVE-2024-51741) (#1514)",
+  "date": "2025-01-06",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 7,
+    "executed": 7,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 3.5722,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: Invalid key pattern flag detected #acl.c:354",
+      "scenario": "ai-6bfb0fba5cd8",
+      "seed": 51741,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1514",
+      "fingerprint": "c60fcc982e8755d62201",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: Invalid key pattern flag detected #acl.c:354",
+      "scenario": "ai-d7ec1130c97b",
+      "seed": 51742,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1514",
+      "fingerprint": "c60fcc982e8755d62201",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-6bfb0fba5cd8",
+      "build": "unstable",
+      "seed": 51741,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6bfb0fba5cd8",
+      "build": "unstable",
+      "seed": 51742,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6bfb0fba5cd8",
+      "build": "unstable",
+      "seed": 51743,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d7ec1130c97b",
+      "build": "unstable",
+      "seed": 51742,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d7ec1130c97b",
+      "build": "unstable",
+      "seed": 51743,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d7ec1130c97b",
+      "build": "unstable",
+      "seed": 51744,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8efc2e7ec719",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'acl' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (ACL GETUSER badRWX)"
+    },
+    {
+      "scenario": "ai-8c3e631e082b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'acl' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (ACL GETUSER badRWX)"
+    }
+  ]
+}

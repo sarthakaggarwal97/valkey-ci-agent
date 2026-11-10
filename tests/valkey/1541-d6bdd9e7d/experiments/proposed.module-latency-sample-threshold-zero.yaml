@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.module-latency-sample-threshold-zero
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    VM_LatencyAddSample must record no sample when latency-monitor-threshold is 0
+    (monitoring disabled), and keep recording samples >= a nonzero threshold. The
+    change's basics.so is loaded on BOTH private servers, because the parent's basics.so
+    predates the test.latency command; the API under test (VM_LatencyAddSample) exists
+    on both builds and only its core-side check changed.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: latency
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module.path}]
+    server_config: {latency-monitor-threshold: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, GET, latency-monitor-threshold], expect: {equals: [latency-monitor-threshold,
+          "0"]}}
+    - {command: [test.latency, 0], expect: {equals: OK}}
+    - {command: [test.latency, 1], expect: {equals: OK}}
+    - {command: [test.latency, 9223372036854775807], expect: {equals: OK}}
+    - {command: [LATENCY, LATEST], expect_difference: true, expect: {equals: []}}
+    - {command: [LATENCY, HISTORY, test], expect_difference: true, expect: {equals: []}}
+    - {command: [LATENCY, RESET], expect_difference: true, expect: {equals: 0}}
+    - {command: [CONFIG, SET, latency-monitor-threshold, 1], expect: {equals: OK}}
+    - {command: [test.latency, 0], expect: {equals: OK}}
+    - {command: [LATENCY, HISTORY, test], expect: {equals: []}}
+    - {command: [test.latency, 1], expect: {equals: OK}}
+    - {command: [LATENCY, HISTORY, test], compare: skip, expect: {exists: true}}
+    - {command: [LATENCY, RESET], expect: {equals: 1}}
+    - {command: [CONFIG, SET, latency-monitor-threshold, 0], expect: {equals: OK}}
+    - {command: [test.latency, 5], expect: {equals: OK}}
+    - {command: [LATENCY, HISTORY, test], expect_difference: true, expect: {equals: []}}
+    - {command: [LATENCY, LATEST], expect_difference: true, expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [latency.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: latency}

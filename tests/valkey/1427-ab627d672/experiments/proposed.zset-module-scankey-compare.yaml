@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.zset-module-scankey-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module ScanKey over a skiplist zset drives the new moduleScanKeyHashtableCallback
+    zset branch (member plus score from the skiplist node), compared against the parent
+    build
+components:
+- use: valkey.action.commands
+  id: modscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, zset-max-listpack-entries, '0'], expect: {equals: OK}}
+    - {command: [ZADD, mz, 1.5, alpha, 2.5, beta, 3.5, gamma, -1, delta, 0, ''], expect: {
+        equals: 5}}
+    - {command: [scan.scan_key, mz], compare: unordered, expect: {exists: true}}
+    - {command: [ZADD, mz2, 1, k01, 2, k02, 3, k03, 4, k04, 5, k05, 6, k06, 7, k07,
+        8, k08, 9, k09, 10, k10, 11, k11, 12, k12, 13, k13, 14, k14, 15, k15, 16,
+        k16, 17, k17, 18, k18, 19, k19, 20, k20], expect: {equals: 20}}
+    - {command: [scan.scan_key, mz2], compare: unordered, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modscan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modscan}

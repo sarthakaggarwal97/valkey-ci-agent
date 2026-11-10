@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c0014ef15e2b..7977c55ac9be.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d7ec1130c97b
+seed: 51742
+experiment:
+  id: proposed.acl-percent-keypattern
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

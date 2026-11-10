@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.stream-group-nokey-refcount
+deployment:
+  modes: [standalone]
+metadata:
+  description: Two clients blocked on one stream via XREADGROUP so releasing one walks
+    the unblock_on_nokey refcount branch, CLIENT UNBLOCK hits moduleBlockedClientMayTimeout
+    on a non-module blocked client, and DEL of the stream unblocks on nokey
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 60
+    commands:
+    - {command: [XGROUP, CREATE, s, g, '$', MKSTREAM], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g, c1, BLOCK, '30000', STREAMS, s, '>'], connection: blk1}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: 'blocked_clients:1'},
+      compare: skip}
+    - {command: [XREADGROUP, GROUP, g, c2, BLOCK, '30000', STREAMS, s, '>'], connection: blk2}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: 'blocked_clients:2'},
+      compare: skip}
+    - {command: [XADD, s, '*', f, v], compare: skip}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: 'blocked_clients:1'},
+      compare: skip}
+    - {command: [CLIENT, UNBLOCK, '1'], compare: skip}
+    - {command: [CLIENT, UNBLOCK, '2'], compare: skip}
+    - {command: [CLIENT, UNBLOCK, '3'], compare: skip}
+    - {command: [CLIENT, UNBLOCK, '4'], compare: skip}
+    - {command: [CLIENT, UNBLOCK, '5'], compare: skip}
+    - {command: [CLIENT, UNBLOCK, '6'], compare: skip}
+    - {command: [CLIENT, UNBLOCK, '7'], compare: skip}
+    - {command: [CLIENT, UNBLOCK, '8'], compare: skip}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: 'blocked_clients:0'},
+      compare: skip}
+    - {command: [XREADGROUP, GROUP, g, c2, BLOCK, '30000', STREAMS, s, '>'], connection: blk2}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: 'blocked_clients:1'},
+      compare: skip}
+    - {command: [DEL, s], expect: {equals: 1}}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: 'blocked_clients:0'},
+      compare: skip}
+    - {connection: blk1, read: true, compare: skip}
+    - {connection: blk2, read: true, compare: skip}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8af35a171253..ab627d6721af.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3e0f96556663
+seed: 105
+experiment:
+  id: proposed.zset-active-defrag-compare
+  inputs:
+    max_scan_fields: 1000000
+deployment:
+  mode: standalone
+  base_port: 7400

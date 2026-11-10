@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 93b701d8d48e..26a72fa89c8d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-81c709cb4088
+seed: 149902
+experiment:
+  id: proposed.no-touch-script-touch
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

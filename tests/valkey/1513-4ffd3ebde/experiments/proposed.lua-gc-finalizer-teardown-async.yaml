@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.lua-gc-finalizer-teardown-async
+deployment:
+  modes: [standalone]
+metadata:
+  description: SCRIPT FLUSH ASYNC with a small script set frees the interpreter inline
+    via freeLuaScriptsSync while finalizable userdata is pending with GC stopped;
+    the fix's pre-close full GC must keep the server alive (CVE-2024-46981)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aflush
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [EVAL, "collectgarbage('stop'); local t = {}; for i=1,3000 do local\
+          \ u = newproxy(true); local mt = getmetatable(u); mt.__gc = function() end;\
+          \ t[i] = u end; t = nil; return 1", "0"], expect: {equals: 1}}
+    - {command: [SCRIPT, FLUSH, ASYNC], expect_difference: true, expect: {equals: OK}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aflush}

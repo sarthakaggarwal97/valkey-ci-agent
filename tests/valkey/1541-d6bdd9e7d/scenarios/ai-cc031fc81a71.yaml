@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e60990e5798a..d6bdd9e7d7f9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-cc031fc81a71
+seed: 15412
+experiment:
+  id: proposed.module-latency-sample-threshold-zero
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

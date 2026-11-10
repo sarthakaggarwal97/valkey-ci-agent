@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.tracking-watch-stream-unblock
+deployment:
+  modes: [standalone]
+metadata:
+  description: BCAST tracking prefixes in TRACKINGINFO and at client free, MULTI queue
+    realloc growth, watched-key expiry scan at EXEC, and two clients blocked on one
+    stream key with unblock_on_nokey refcounting
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [HELLO, "3"], connection: tr, compare: skip}
+    - {command: [CLIENT, TRACKING, ON, BCAST, PREFIX, "user:", PREFIX, "sess:"], connection: tr,
+      expect: {equals: OK}}
+    - {command: [CLIENT, TRACKINGINFO], connection: tr}
+    - {command: [SET, "user:1", a], expect: {equals: OK}}
+    - {command: [CLIENT, INFO], connection: tr, compare: skip}
+    - {connection: tr, read: true, compare: skip}
+    - {command: [QUIT], connection: tr, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, m1, "1"], expect: {equals: QUEUED}}
+    - {command: [SET, m2, "2"], expect: {equals: QUEUED}}
+    - {command: [SET, m3, "3"], expect: {equals: QUEUED}}
+    - {command: [SET, m4, "4"], expect: {equals: QUEUED}}
+    - {command: [SET, m5, "5"], expect: {equals: QUEUED}}
+    - {command: [SET, m6, "6"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK, OK, OK, OK, OK]}}
+    - {command: [SET, w2, v], expect: {equals: OK}}
+    - {command: [WATCH, w2, w3], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, w2], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [v]}}
+    - {command: [SET, wk, v, PX, "80"], expect: {equals: OK}}
+    - {command: [WATCH, wk], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, never, "1"], expect: {equals: QUEUED}}
+    - {command: [EXEC]}
+    - {command: [XGROUP, CREATE, s, g, "$", MKSTREAM], expect: {equals: OK}}
+    - {raw: "XREADGROUP GROUP g c1 COUNT 1 BLOCK 30000 STREAMS s >\r\n", connection: c1}
+    - {raw: "XREADGROUP GROUP g c2 COUNT 1 BLOCK 30000 STREAMS s >\r\n", connection: c2}
+    - {command: [DEBUG, SLEEP, "0.2"], expect: {equals: OK}}
+    - {command: [XADD, s, "5-5", f1, v1], expect: {equals: "5-5"}}
+    - {command: [XADD, s, "6-6", f2, v2], expect: {equals: "6-6"}}
+    - {connection: c1, read: true, compare: skip}
+    - {connection: c2, read: true, compare: skip}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

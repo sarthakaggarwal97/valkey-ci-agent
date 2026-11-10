@@ -1,0 +1,50 @@
+extends: [valkey.base]
+id: proposed.zset-aof-rewrite-primary-kill
+deployment:
+  modes: [standalone]
+metadata:
+  description: SIGKILL the primary right after an AOF rewrite that serialized a large
+    skiplist zset in AOF format; on restart the zset must reload intact and no acknowledged
+    write may be lost
+components:
+- use: valkey.action.commands
+  id: seed-zset
+  depends_on: [writes, kill-primary]
+  config:
+    timeout_s: 120
+    commands:
+    - {command: [EVAL, "for i=1,300 do redis.call('zadd','bigzset',i*1.5,'zm:'..i)\
+          \ end return redis.call('zcard','bigzset')", 0], expect: {equals: 300}}
+    - {command: [BGREWRITEAOF], expect: {contains: rewriting}}
+    - {command: [INFO, persistence], wait_s: 60, expect: {contains: "aof_rewrite_in_progress:0"}}
+- use: valkey.fault.process-signal
+  id: kill-primary
+  config:
+    when_event: seed-zset.completed
+    instance: primary
+    signal: SIGKILL
+    restart_mode: immediate
+- use: valkey.action.wait-event
+  id: primary-back
+  depends_on: [seed-zset]
+  config: {event: kill-primary.recovered, timeout_s: 90}
+- use: valkey.action.commands
+  id: verify-zset
+  depends_on: [primary-back]
+  config:
+    timeout_s: 60
+    commands:
+    - {command: [ZCARD, bigzset], wait_s: 30, expect: {equals: 300}}
+    - {command: [ZSCORE, bigzset, "zm:300"], expect: {equals: "450"}}
+    - {command: [ZSCORE, bigzset, "zm:1"], expect: {equals: "1.5"}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [verify-zset]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5, loss_window_faults: [kill-primary]}
+required_events: [seed-zset.completed, kill-primary.recovered]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-primary}
+- {evidence_id: valkey.command.sequence, source: verify-zset}

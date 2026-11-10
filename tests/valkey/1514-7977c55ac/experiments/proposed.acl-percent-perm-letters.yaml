@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.acl-percent-perm-letters
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL SETUSER %-selector rejects invalid and duplicate R/W permission
+    letters without accepting a flagless key pattern
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [ACL, SETUSER, dupR, on, nopass, "%RR~foo", "+@all"], expect: {error: "Syntax\
+          \ error"}}
+    - {command: [ACL, SETUSER, dupW, on, nopass, "%WW~bar", "+@all"], expect: {error: "Syntax\
+          \ error"}}
+    - {command: [ACL, SETUSER, badZ, on, nopass, "%Z~baz", "+@all"], expect: {error: "Syntax\
+          \ error"}}
+    - {command: [ACL, SETUSER, badRWX, on, nopass, "%RWX~qux", "+@all"], expect: {
+        error: "Syntax error"}}
+    - {command: [ACL, SETUSER, bare, on, nopass, "%", "+@all"], expect_difference: true,
+      expect: {error: "Syntax error"}}
+    - {command: [ACL, GETUSER, badRWX], expect: {error: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

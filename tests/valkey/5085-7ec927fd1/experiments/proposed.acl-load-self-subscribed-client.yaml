@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.acl-load-self-subscribed-client
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    A RESP3 client subscribed to a channel the new ACL file revokes issues ACL LOAD
+    itself: the fixed build must flag the current client (freeClientOrCloseLater close-after-command
+    path), answer OK, then close it without crashing; the parent leaves it subscribed.
+components:
+- use: valkey.action.commands
+  id: selfkill
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 3
+    timeout_s: 10
+    files:
+      users.acl: "user default on nopass ~* &* +@all\n"
+    server_config: {aclfile: users.acl}
+    commands:
+    - {command: [ACL, SETUSER, default, resetchannels, "&public"], expect: {equals: OK}}
+    - {command: [ACL, SAVE], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, default, resetchannels, "&*"], expect: {equals: OK}}
+    - {connection: selfsub, command: [SUBSCRIBE, secret]}
+    - {connection: selfsub, command: [ACL, LOAD], expect: {equals: OK}}
+    - {connection: selfsub, command: [PING], expect_difference: true, expect: {exists: false}}
+    - {command: [PUBLISH, secret, m], expect_difference: true, expect: {equals: 0}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [selfkill.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: selfkill}

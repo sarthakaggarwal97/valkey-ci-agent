@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "80c35402bce9e4f7c79bb975d43a119fee9ce951",
+  "parent": "9f4815a22468a4155edd99d57fc9ce503dbe2dcd",
+  "pr": 1530,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove legacy SERVER_TEST compiler flag from cmake. (#1530)",
+  "date": "2025-01-09",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2102,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only deletes the obsolete SERVER_TEST=1 compile definition from the unit-test CMakeLists.txt. It is a build-system cleanup affecting only how unit tests are compiled; no server, command, replication, persistence or tool code changes, so the runtime binaries the fuzzer exercises are identical on both builds and no scenario can reach the change."
+}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7977c55ac9be..4ffd3ebdeb02.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7f293254a409
+seed: 1002
+experiment:
+  id: proposed.lua-gc-finalizer-teardown-sync
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

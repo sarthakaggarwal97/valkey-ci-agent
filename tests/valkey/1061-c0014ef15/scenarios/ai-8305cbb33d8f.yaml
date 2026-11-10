@@ -1,0 +1,22 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 33b824137e4d..c0014ef15e2b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8305cbb33d8f
+seed: 101
+experiment:
+  id: valkey.cluster-chaos
+  inputs:
+    keys_per_slot: 5
+    waves:
+    - - op: kill
+        target: primary
+        signal: SIGKILL
+    - - op: kill
+        target: primary
+        signal: SIGKILL
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7000
+  server_config:
+    cluster-node-timeout: 2000

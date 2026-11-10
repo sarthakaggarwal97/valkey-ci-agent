@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c0014ef15e2b..7977c55ac9be.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8c3e631e082b
+seed: 7002
+experiment:
+  id: proposed.acl-percent-perm-letters
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

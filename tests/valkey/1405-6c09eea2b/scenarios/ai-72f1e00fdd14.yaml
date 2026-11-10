@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey dc4628d444cd..6c09eea2bcb9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-72f1e00fdd14
+seed: 1003
+experiment:
+  id: proposed.client-lazy-components-equivalence
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

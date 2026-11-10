@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d6bdd9e7d7f901c98d86a2f5ec79450130d0f5e7",
+  "parent": "e60990e5798a4a9a943aa444dba24855d59674c0",
+  "pr": 1541,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix module LatencyAddSample still work when latency-monitor-threshold is 0 (#1541)",
+  "date": "2025-01-11",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.5706,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-cc031fc81a71",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'latency' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (CONFIG GET latency-monitor-threshold)"
+    }
+  ]
+}

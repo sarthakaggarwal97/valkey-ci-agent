@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0a89571dccc5..9e0204941d41.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-faabc6783c27
+seed: 4102
+experiment:
+  id: proposed.cli-pubsub-auto-exit
+  inputs:
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

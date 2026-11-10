@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.pubsub-acl-kill-lazy
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL SETUSER channel changes iterate the lazily-created pubsub_data
+    dicts (patterns, channels, shard channels) and kill violating subscribers
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aclkill
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [PSUBSCRIBE, "news.*"], connection: subP}
+    - {command: [SUBSCRIBE, ch1], connection: subC}
+    - {command: [SSUBSCRIBE, sch1], connection: subS}
+    - {command: [ACL, SETUSER, default, allchannels], expect: {equals: OK}}
+    - {command: [PING], connection: subP}
+    - {command: [ACL, SETUSER, default, resetchannels, "&ch1"], expect: {equals: OK}}
+    - {command: [PING], connection: subP, expect: {exists: false}}
+    - {command: [PING], connection: subS, expect: {exists: false}}
+    - {command: [PING], connection: subC}
+    - {command: [UNSUBSCRIBE, ch1], connection: subC}
+    - {command: [ACL, SETUSER, default, allchannels], expect: {equals: OK}}
+    - {command: [SSUBSCRIBE, sch2], connection: subS}
+    - {command: [ACL, SETUSER, default, resetchannels], expect: {equals: OK}}
+    - {command: [PING], connection: subS, expect: {exists: false}}
+    - {command: [ACL, SETUSER, default, allchannels], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [aclkill.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aclkill}

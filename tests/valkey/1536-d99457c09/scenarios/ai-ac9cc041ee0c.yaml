@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b207b421bca5..d99457c09cef.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ac9cc041ee0c
+seed: 20250913
+experiment:
+  id: proposed.lua-async-flush-gc-race
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
