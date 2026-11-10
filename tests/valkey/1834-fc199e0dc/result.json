@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fc199e0dc2d680a122895cf4d29c529ccb456199",
+  "parent": "f8bc378dec04bf086fb097eccaa00396c72e24d0",
+  "pr": 1834,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update CloseKey module API documentation to avoid use-after-free behavior (#1834)",
+  "date": "2025-03-10",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2294,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only a doc comment on VM_CloseKey in src/module.c (clarifying that the key handle is freed and must not be reused). No code path, reply, or behavior changes, so no scenario can distinguish the change from its parent and none is needed."
+}

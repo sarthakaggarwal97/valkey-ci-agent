@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fc199e0dc2d6..bcd2f952dead.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-72417615b693
+seed: 1813
+experiment:
+  id: proposed.bumpepoch-pong-broadcast
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

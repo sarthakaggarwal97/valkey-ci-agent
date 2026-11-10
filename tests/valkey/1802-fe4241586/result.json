@@ -1,0 +1,37 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fe4241586d2aa594110b135a2b66168618c68daa",
+  "parent": "cab500cf6a4a5618a73a0142fa5c82c711d4dd78",
+  "pr": 1802,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use the wrapper from cli_common instead of hiredis (#1802)",
+  "date": "2025-03-04",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 27,
+    "executed": 25,
+    "percent": 92,
+    "uncovered": [
+      "src/valkey-cli.c:2528",
+      "src/valkey-cli.c:7676"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 3.8495,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-c7163c5af0d8",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'cluster-connect' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (valkey-benchmark --cluster -p $port -c 4 -n 200 -t set)"
+    }
+  ]
+}

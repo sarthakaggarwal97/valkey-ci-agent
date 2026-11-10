@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 49663575c0df..b3e5e8a91200.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4f6e81cbef77
+seed: 1686
+experiment:
+  id: proposed.cluster-meet-port-range
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

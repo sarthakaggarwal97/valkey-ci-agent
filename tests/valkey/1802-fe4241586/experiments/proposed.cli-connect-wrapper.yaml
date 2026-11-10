@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.cli-connect-wrapper
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli and valkey-benchmark connect paths (TCP, unix socket, -t
+    timeout, -t 0 boundary, refused connection, nonblocking benchmark clients) compared
+    across the redisConnectWithOptions wrapper change
+components:
+- use: valkey.action.tools
+  id: connect
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, SET, k, v], expect: {exit: {equals: 0},
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-s, $socket, GET, k], expect: {exit: {equals: 0},
+        stdout: {equals: "v\n"}}}
+    - {tool: valkey-cli, args: [-t, 5, -p, $port, PING], expect: {exit: {equals: 0},
+        stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-t, 5, -s, $socket, PING], expect: {exit: {equals: 0},
+        stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-t, 0, -p, $port, PING], expect: {exit: {equals: 0},
+        stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-p, 1, PING], expect: {exit: {equals: 1}, stderr: {
+          contains: "Could not connect"}}}
+    - {tool: valkey-cli, args: [-t, 5, -p, 1, PING], expect: {exit: {equals: 1}, stderr: {
+          contains: "Could not connect"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 4, -n, 200, -t, "set,get"], compare: skip,
+      expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-s, $socket, -c, 4, -n, 200, -t, ping], compare: skip,
+      expect: {exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: connect}

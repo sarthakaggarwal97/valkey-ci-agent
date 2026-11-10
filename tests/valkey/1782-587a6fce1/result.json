@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "587a6fce12dbbb777bd9487af0e454b06ea69651",
+  "parent": "1ad0c4feafb149a6f03627de03f4f810801ab875",
+  "pr": 1782,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "valkey-cli: ensure output ends with a newline if missing when printing reply (#1782)",
+  "date": "2025-02-26",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.4604,
+  "findings": [],
+  "recorded": []
+}

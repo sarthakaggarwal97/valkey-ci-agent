@@ -1,0 +1,77 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6156590fa7272140dcf798a450f8c5f6003abe91",
+  "parent": "e03b3f1fc87911e6a7404cf357df47f9a1b6037c",
+  "pr": 1799,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix hashTypeEntryDefrag returning bad pointer (#1799)",
+  "date": "2025-02-28",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.16,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 14851:M 10 Nov 2026 02:40:35.831 # Terminating server after rdb file reading failure.",
+      "scenario": "ai-c8f64c6f199b",
+      "seed": 1799,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "f4ace3818f636135ae9e",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 14851:M 10 Nov 2026 02:40:35.831 # Terminating server after rdb file reading failure.",
+      "scenario": "ai-c8f64c6f199b",
+      "seed": 1799,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "5f99e7ae11b196426ba3",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-c8f64c6f199b",
+      "seed": 1799,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1799",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-5b1770e2cbb3",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    }
+  ]
+}

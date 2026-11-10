@@ -1,0 +1,40 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8221a155657fa2cee72d9043bd145fde6639f9b4",
+  "parent": "bb944c78602cbce2d452e364709c934c1dfe5531",
+  "pr": 1823,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix bug where invalidation messages were getting sent to closing clients (#1823)",
+  "date": "2025-03-09",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 8.5171,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-5916dd2a15a3",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'redir' returned ERROR: expectations both builds violate alike, so they are not about the change: 10 (CLIENT TRACKINGINFO)"
+    },
+    {
+      "scenario": "ai-1d836b2abdaf",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'redir' returned ERROR: expectations both builds violate alike, so they are not about the change: 10 (CLIENT TRACKINGINFO)"
+    }
+  ]
+}

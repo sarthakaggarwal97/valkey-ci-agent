@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e23a7d6f3643c9857a99d0480fc955c90758672e",
+  "parent": "f7c6d3192fc4920e54b6b5d2a27d3e18c647c618",
+  "pr": 1794,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix clang build error in bitops.c (#1794)",
+  "date": "2025-02-27",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2076,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only defines __MM_MALLOC_H before including immintrin.h in bitops.c to fix a clang compile error; it prevents importing unused aligned-allocation declarations and changes no runtime behaviour, reply, or data path. A build-only fix needs no scenario."
+}

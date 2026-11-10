@@ -1,0 +1,19 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bb944c78602c..8221a155657f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1d836b2abdaf
+seed: 102
+experiment:
+  id: proposed.tracking-redir-closing-client
+  inputs:
+    resp: 2
+    info_expected:
+    - flags
+    - - true
+      - broken_redirect
+    - redirect
+    - 2
+    - prefixes
+    - []
+deployment:
+  mode: standalone
+  base_port: 7100

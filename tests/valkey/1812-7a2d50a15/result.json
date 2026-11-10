@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7a2d50a1544cdb2e6ff027bb9c283e03e3ae0d6d",
+  "parent": "185fcec976d116e704ef507c9d577f4ccf93b4d5",
+  "pr": 1812,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Drop lua object files on clean (#1812)",
+  "date": "2025-03-03",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2096,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits the `clean` target in src/Makefile so that `make clean` also removes lua/*.o and lua/*.d object files. It is a build-system change with no effect on the compiled server, its commands, replication, persistence, or any runtime behaviour, so there is nothing a fuzzer scenario against running servers could exercise."
+}

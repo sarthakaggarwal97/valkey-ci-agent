@@ -1,0 +1,69 @@
+extends: [valkey.base]
+id: proposed.stream-repeated-limit-under-replica-kill
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: XADD/XTRIM with repeated LIMIT options propagate to a replica that
+    is killed or stalled and resyncs under writes; no crash, no acknowledged write
+    lost
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM, SIGSTOP], default: SIGKILL}
+components:
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-replica]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: stream-ops
+  depends_on: [warm-up]
+  config:
+    timeout_s: 10
+    commands:
+    - command: [EVAL, "for i=1,400 do redis.call('XADD','fuzz-stream','*','f','v')\
+          \ end return redis.call('XLEN','fuzz-stream')", 0]
+      expect: {equals: 400}
+    - command: [XADD, fuzz-stream, MAXLEN, "~", 300, LIMIT, 10, LIMIT, 120, "*", f,
+        v]
+      expect: {error: false}
+    - command: [XTRIM, fuzz-stream, MAXLEN, "~", 250, LIMIT, 1, LIMIT, 2, LIMIT, 3,
+        LIMIT, 4, LIMIT, 5, LIMIT, 6, LIMIT, 7, LIMIT, 8, LIMIT, 9, LIMIT, 200]
+      expect: {min: 0}
+    - command: [XADD, fuzz-stream, LIMIT, 7, MAXLEN, "~", 200, LIMIT, 0, NOMKSTREAM,
+        "*", f, v]
+      expect: {error: false}
+    - command: [EVAL, "for i=1,200 do redis.call('XADD','fuzz-stream','*','f','v')\
+          \ end return 0", 0]
+      expect: {error: false}
+    - command: [XTRIM, fuzz-stream, MINID, "~", "99999999999999-0", LIMIT, 5, LIMIT,
+        60]
+      expect: {min: 0}
+    - command: [XADD, fuzz-stream-2, MAXLEN, "~", 5, LIMIT, 1, LIMIT, 2, "*", LIMIT,
+        "7", MAXLEN, "8", limit, "9"]
+      expect: {error: false}
+    - command: [XTRIM, fuzz-stream, MAXLEN, "~", 100, LIMIT, 0, LIMIT, 0]
+      expect: {min: 0}
+    - command: [XADD, fuzz-stream, MAXLEN, "~", 50, LIMIT, 30, LIMIT, 30, LIMIT, 30,
+        LIMIT, 30, "*", f, v]
+      expect: {error: false}
+    - command: [XLEN, fuzz-stream]
+      expect: {min: 1}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [stream-ops]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed, stream-ops.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}
+- {evidence_id: valkey.command.sequence, source: stream-ops}

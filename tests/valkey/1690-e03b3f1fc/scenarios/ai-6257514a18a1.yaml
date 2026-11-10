@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 677d5755ffdc..e03b3f1fc879.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6257514a18a1
+seed: 13
+experiment:
+  id: proposed.cluster-mf-timeout-failover
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

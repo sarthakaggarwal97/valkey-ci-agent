@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bcd2f952dead1da28b61e79184d8bd0bb9042dea",
+  "parent": "fc199e0dc2d680a122895cf4d29c529ccb456199",
+  "pr": 1813,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Save config file and brocast the PONG when configEpoch changed (#1813)",
+  "date": "2025-03-11",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 3,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 1
+  },
+  "cost_usd": 13.3149,
+  "findings": [],
+  "recorded": []
+}

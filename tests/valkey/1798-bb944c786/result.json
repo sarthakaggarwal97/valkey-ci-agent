@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bb944c78602cbce2d452e364709c934c1dfe5531",
+  "parent": "2c9db1a7751418b490bf799de5fb2fbba6884af5",
+  "pr": 1798,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Adds a memory leak check after running a unit test (#1798)",
+  "date": "2025-03-06",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2153,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only modifies src/unit/test_main.c, the standalone unit-test harness (valkey-unit-tests): after each test suite runs, it checks zmalloc_used_memory() and reports the suite as failed if memory was not freed. This code is compiled only into the unit-test binary and never into valkey-server, valkey-cli, or any other shipped tool, so no server behaviour, reply, replication, persistence, or tool output changes. It is a test/CI infrastructure change with nothing a fuzzer scenario against running servers could reach or break."
+}

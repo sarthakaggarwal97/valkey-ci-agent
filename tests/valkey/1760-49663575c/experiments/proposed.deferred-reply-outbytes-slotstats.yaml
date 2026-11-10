@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.deferred-reply-outbytes-slotstats
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER SLOT-STATS network-bytes-out is fed from net_output_bytes_curr_cmd,
+    so a slot-keyed reply with a deferred length header (SINTER) now adds its header
+    bytes. The slot's counter reads 29 on the fixed build and 25 on the parent, read
+    back deterministically through a Lua script that extracts only the network-bytes-out
+    field.
+components:
+- use: valkey.action.commands
+  id: slotstats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: 2
+    timeout_s: 30
+    server_config:
+      cluster-slot-stats-enabled: 'yes'
+    commands:
+    - {command: [SADD, s, a, b, c], expect: {equals: 3}}
+    - {command: [SINTER, s], expect: {exists: true}}
+    - command: [EVAL, 'local s=tostring(server.call("CLUSTER","KEYSLOT",ARGV[1]))
+          local r=server.call("CLUSTER","SLOT-STATS","SLOTSRANGE",s,s) return r[1][2][8]',
+        '0', s]
+      expect_difference: true
+      expect: {equals: 29}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slotstats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotstats}

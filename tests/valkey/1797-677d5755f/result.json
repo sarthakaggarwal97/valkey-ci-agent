@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "677d5755ffdcfac57a68fbae55f743e1195c295f",
+  "parent": "089b830479f4984e77e570560f85e37212879740",
+  "pr": 1797,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix memory leak in test_quicklist.c unit test (#1797)",
+  "date": "2025-02-27",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2063,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a zfree() in the unit test file src/unit/test_quicklist.c to fix a memory leak in the test harness itself. No server source code, command behaviour, replication, persistence or tooling is touched, so no fuzzer scenario can reach or exercise the change; it is covered by running the unit test suite, not by runtime scenarios."
+}

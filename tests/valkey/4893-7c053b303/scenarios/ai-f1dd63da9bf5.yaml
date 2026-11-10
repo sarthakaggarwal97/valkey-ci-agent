@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 116e7f953444..7c053b303029.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f1dd63da9bf5
+seed: 48933
+experiment:
+  id: proposed.stream-repeated-limit-under-replica-kill
+  inputs:
+    signal: SIGKILL
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    stream-node-max-entries: 10

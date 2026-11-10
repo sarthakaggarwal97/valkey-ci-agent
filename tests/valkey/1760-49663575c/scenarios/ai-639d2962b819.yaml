@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 587a6fce12db..49663575c0df.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-639d2962b819
+seed: 303
+experiment:
+  id: proposed.deferred-reply-outbytes-slotstats
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

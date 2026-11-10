@@ -1,0 +1,25 @@
+extends: [valkey.liveness]
+id: proposed.cli-cluster-connect
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli --cluster (clusterManagerNodeConnect with and without -t)
+    and valkey-benchmark --cluster (blocking topology fetch plus nonblocking per-node
+    clients) against a one-node cluster, compared across the wrapper change
+components:
+- use: valkey.action.tools
+  id: cluster-connect
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [--cluster, check, "127.0.0.1:$port"], expect: {exit: {
+          equals: 0}, stdout: {contains: "All 16384 slots covered"}}}
+    - {tool: valkey-cli, args: [-t, 5, --cluster, call, "127.0.0.1:$port", PING],
+      expect: {exit: {equals: 0}, stdout: {contains: PONG}}}
+    - {tool: valkey-benchmark, args: [--cluster, -p, $port, -c, 4, -n, 200, -t, set],
+      compare: skip, expect: {exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cluster-connect}

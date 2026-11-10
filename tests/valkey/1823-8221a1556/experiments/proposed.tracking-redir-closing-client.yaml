@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.tracking-redir-closing-client
+deployment:
+  modes: [standalone]
+metadata:
+  description: An invalidation redirected to a client flagged for closing (close_asap)
+    must flag the source client as broken_redirect instead of being written to the
+    dying client
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 3}
+    info_expected:
+      default: {flags: [on, broken_redirect], redirect: 2, prefixes: []}
+components:
+- use: valkey.action.commands
+  id: redir
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [ACL, SETUSER, u, on, ">pass", "~*", "&*", "+@all"], expect: {equals: OK}}
+    - {command: [AUTH, u, pass], connection: redir, expect: {equals: OK}}
+    - {command: [SUBSCRIBE, "__redis__:invalidate"], connection: redir, expect: null}
+    - {command: [CLIENT, TRACKING, on, REDIRECT, 2], expect: {equals: OK}}
+    - {command: [SET, key1, "1"], expect: {equals: OK}}
+    - {command: [GET, key1], expect: {equals: "1"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [ACL, DELUSER, u], expect: {equals: QUEUED}}
+    - {command: [SET, key1, "2"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [1, OK]}}
+    - {command: [CLIENT, TRACKINGINFO], expect_difference: true, expect: {equals: {
+          $ref: inputs.info_expected}}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: redir}

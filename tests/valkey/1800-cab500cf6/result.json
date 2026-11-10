@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cab500cf6a4a5618a73a0142fa5c82c711d4dd78",
+  "parent": "7a2d50a1544cdb2e6ff027bb9c283e03e3ae0d6d",
+  "pr": 1800,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix incorrect assertion in client list operations (#1800)",
+  "date": "2025-03-04",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 7,
+    "executed": 7,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.9266,
+  "findings": [],
+  "recorded": []
+}

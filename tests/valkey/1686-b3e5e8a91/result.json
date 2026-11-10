@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b3e5e8a912008d41ee4a25d30c34ddf8e6f08ecd",
+  "parent": "49663575c0df441a894578c5c1220ddda83d6b56",
+  "pr": 1686,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add Cluster Bus Port out of range error message for Cluster Meet command (#1686)",
+  "date": "2025-02-27",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.1085,
+  "findings": [],
+  "recorded": []
+}

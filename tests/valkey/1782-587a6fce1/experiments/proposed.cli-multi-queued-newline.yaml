@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.cli-multi-queued-newline
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Inside a MULTI block valkey-cli printed the QUEUED status reply of raw-output
+    commands (INFO, CLUSTER INFO, CLIENT LIST, LOLWUT) verbatim, without a trailing
+    newline, gluing it to the next line; the change forces non-raw formatting while
+    in_multi so QUEUED always ends with a newline. Runs valkey-cli of both builds
+    against a private server each, piping MULTI blocks over stdin, and compares stdout.
+components:
+- use: valkey.action.tools
+  id: cli-multi
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 30
+    runs:
+    - tool: valkey-cli
+      args: [-p, $port]
+      stdin: "multi\ninfo\ncluster info\nclient list\ndiscard\n"
+      expect_difference: true
+      expect:
+        exit: {equals: 0}
+        stdout: {equals: "OK\nQUEUED\nQUEUED\nQUEUED\nOK\n"}
+    - tool: valkey-cli
+      args: [-p, $port, --no-raw]
+      stdin: "multi\ninfo server\ndiscard\n"
+      expect_difference: true
+      expect:
+        exit: {equals: 0}
+        stdout: {equals: "OK\nQUEUED\nOK\n"}
+    - tool: valkey-cli
+      args: [-p, $port, -3]
+      stdin: "multi\nlolwut\ndiscard\n"
+      expect_difference: true
+      expect:
+        exit: {equals: 0}
+        stdout: {equals: "OK\nQUEUED\nOK\n"}
+    - tool: valkey-cli
+      args: [-p, $port]
+      stdin: "multi\ncluster info\nexec\n"
+      expect_difference: true
+      expect:
+        exit: {equals: 0}
+        stdout: {contains: "QUEUED\ncluster_enabled:0"}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-multi}

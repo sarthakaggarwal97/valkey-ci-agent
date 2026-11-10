@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.cluster-mf-timeout-failover
+deployment:
+  modes: [standalone]
+metadata:
+  description: with cluster-manual-failover-timeout 1 a manual failover aborts (replica
+    stays replica, where the parent's fixed 5000 ms completes it), and after raising
+    the timeout to 60000 the failover succeeds and the old primary is demoted and
+    unpaused
+components:
+- use: valkey.action.commands
+  id: mf
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 150
+    commands:
+    - {command: [CLUSTER, REPLICATE, <node.0.id>], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [CONFIG, SET, cluster-manual-failover-timeout, "1"], node: 0, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-manual-failover-timeout, "1"], node: 1, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, FAILOVER], node: 1, expect: {equals: OK}}
+    - {command: [SET, k, v], node: 1, wait_s: 10, expect_difference: true, expect: {
+        error: "MOVED"}}
+    - {command: [CONFIG, SET, cluster-manual-failover-timeout, "60000"], node: 0,
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-manual-failover-timeout, "60000"], node: 1,
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, FAILOVER], node: 1, expect_difference: true, expect: {equals: OK}}
+    - {command: [SET, k2, v2], node: 1, wait_s: 60, expect: {equals: OK}}
+    - {command: [GET, k2], node: 1, expect: {equals: v2}}
+    - {command: [SET, k3, v3], node: 0, wait_s: 30, expect: {error: "MOVED"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [mf.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mf}

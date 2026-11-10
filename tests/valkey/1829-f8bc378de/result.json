@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f8bc378dec04bf086fb097eccaa00396c72e24d0",
+  "parent": "8221a155657fa2cee72d9043bd145fde6639f9b4",
+  "pr": 1829,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "[CMake] Check both arm64 and aarch64 for ARM based system architecture (#1829)",
+  "date": "2025-03-10",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2216,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a build-system-only fix: cmake/Modules/ValkeySetup.cmake now sets BUILDING_ARM64 when CMAKE_SYSTEM_PROCESSOR is 'aarch64' as well as 'arm64'. It modifies no runtime source code, commands, replication, persistence, or protocol behaviour \u2014 it only corrects architecture detection during CMake configuration on Linux ARM hosts. There is no runtime behaviour difference between the change and its parent for a fuzzer scenario to reach, so no scenario is needed."
+}

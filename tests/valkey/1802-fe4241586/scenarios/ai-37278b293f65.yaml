@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey cab500cf6a4a..fe4241586d2a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-37278b293f65
+seed: 101
+experiment:
+  id: proposed.cli-connect-wrapper
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

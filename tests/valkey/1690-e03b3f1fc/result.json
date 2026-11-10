@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e03b3f1fc87911e6a7404cf357df47f9a1b6037c",
+  "parent": "677d5755ffdcfac57a68fbae55f743e1195c295f",
+  "pr": 1690,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add cluster-manual-failover-timeout to configure the timeout for manual failover (#1690)",
+  "date": "2025-02-27",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 1,
+  "hunted": 3,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.1016,
+  "findings": [],
+  "recorded": []
+}

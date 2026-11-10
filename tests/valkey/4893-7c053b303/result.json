@@ -1,0 +1,40 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7c053b3030299312ebaa90ff66ac2ac0b8f33d37",
+  "parent": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "pr": 4893,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Strip every repeated LIMIT when rewriting XADD/XTRIM for propagation (#4893)",
+  "date": "2026-11-09",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 24,
+    "executed": 24,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.147,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-2ee7ce022412",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'strip-limit' returned ERROR: command 1 (SYNC on connection repl) got no reply: TimeoutError: Timeout reading from /tmp/vfc-uzfl986j/s.sock"
+    },
+    {
+      "scenario": "ai-f99ca3b1619e",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'strip-limit' returned ERROR: command 1 (SYNC on connection repl) got no reply: TimeoutError: Timeout reading from /tmp/vfc-rghu7li5/s.sock"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0cc0bf7222d6266bb53feb16c785c67a513cf0d1",
+  "parent": "f31cf189c21a20f428a0b4714a8495885b04a370",
+  "pr": 1756,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "make net_input_bytes_curr_cmd more readable (#1756)",
+  "date": "2025-03-03",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6746,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure readability refactor of how net_input_bytes_curr_cmd is accumulated in processMultibulkBuffer, plus comment updates. The old total (multibulklen_slen+1) + \u03a3 bulklen_slen + (argv_len_sum + argc*5 + 2) and the new total (multibulklen_slen+3) + \u03a3 (bulklen_slen+3) + (argv_len_sum + argc*2) are algebraically identical for every command shape, each accumulation site executes the same number of times as before, and the only consumers (CLUSTER SLOT-STATS network-bytes-in and the large-request commandlog) read the counter only after parsing completes, so no observable behaviour cha"
+}

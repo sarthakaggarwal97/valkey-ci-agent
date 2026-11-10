@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.cluster-meet-port-range
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER MEET with an out-of-range base or bus port answers a dedicated
+    error instead of the generic invalid-address error
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: meet
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, MEET, 127.0.0.1, 0], expect_difference: true, expect: {
+        error: "Port number is out of range"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, -1], expect_difference: true, expect: {
+        error: "Port number is out of range"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 65536], expect_difference: true, expect: {
+        error: "Port number is out of range"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 9223372036854775807], expect_difference: true,
+      expect: {error: "Port number is out of range"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, -9223372036854775808], expect_difference: true,
+      expect: {error: "Port number is out of range"}}
+    - {command: [CLUSTER, MEET, not-an-ip, 70000], expect_difference: true, expect: {
+        error: "Port number is out of range"}}
+    - {command: [CLUSTER, MEET, "::1", 70000], expect_difference: true, expect: {
+        error: "Port number is out of range"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 6379, 0], expect_difference: true, expect: {
+        error: "Cluster bus port number is out of range"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 6379, 65536], expect_difference: true,
+      expect: {error: "Cluster bus port number is out of range"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 6379, -9223372036854775808], expect_difference: true,
+      expect: {error: "Cluster bus port number is out of range"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 60000], expect_difference: true, expect: {
+        error: "Cluster bus port number is out of range"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 65535], expect_difference: true, expect: {
+        error: "Cluster bus port number is out of range"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, "99999999999999999999"], expect: {error: "Invalid\
+          \ base port"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 6379, notaport], expect: {error: "Invalid\
+          \ bus port"}}
+    - {command: [CLUSTER, MEET, not-an-ip, 6379], expect: {error: "Invalid node address"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 1, 2], expect: {error: false}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 65535, 65535], expect: {error: false}}
+    - {command: [CLUSTER, MEET, "<node.0.host>", "<node.0.port>", "<node.0.cluster-port>"],
+      expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [meet.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: meet}

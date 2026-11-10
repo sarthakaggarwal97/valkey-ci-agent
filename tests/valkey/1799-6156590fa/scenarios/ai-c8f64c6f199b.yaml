@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e03b3f1fc879..6156590fa727.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c8f64c6f199b
+seed: 1799
+experiment:
+  id: proposed.hash-defrag-entry-pointer
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

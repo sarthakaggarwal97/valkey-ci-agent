@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "089b830479f4984e77e570560f85e37212879740",
+  "parent": "e23a7d6f3643c9857a99d0480fc955c90758672e",
+  "pr": 1788,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Consistent look and feel of licenses (#1788)",
+  "date": "2025-02-27",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3441,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change (PR #1788, 'Consistent look and feel of licenses') only rewrites license header comments in source files and the COPYING text file: it adds/normalizes SPDX-License-Identifier lines and copyright comment blocks. Every added or removed line in the diff is comment text or whitespace inside comment blocks; no executable code, configuration, protocol, or build logic changes. The compiled binaries are behaviorally identical to the parent, so there is nothing for a scenario to exercise."
+}

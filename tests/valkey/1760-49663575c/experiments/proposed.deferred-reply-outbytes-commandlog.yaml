@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.deferred-reply-outbytes-commandlog
+deployment:
+  modes: [standalone]
+metadata:
+  description: Deferred reply length headers (setDeferredReply) now count into net_output_bytes_curr_cmd.
+    Each phase sets commandlog-reply-larger-than between the parent's undercounted
+    byte total and the true wire size, so COMMANDLOG LARGE-REPLY logs the command
+    only on the fixed build, once for each of the three patched setDeferredReply branches.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: probe
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config:
+      commandlog-execution-slower-than: -1
+      commandlog-request-larger-than: -1
+      commandlog-reply-larger-than: 103
+    commands:
+    - {command: [COMMANDLOG, RESET, LARGE-REPLY], expect: {equals: OK}}
+    - {command: [MSET, a001, v, a002, v, a003, v, a004, v, a005, v, a006, v, a007,
+        v, a008, v, a009, v, a010, v], expect: {equals: OK}}
+    - {command: [KEYS, '*'], compare: unordered, expect: {exists: true}}
+    - {command: [COMMANDLOG, LEN, LARGE-REPLY], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [COMMANDLOG, RESET, LARGE-REPLY], expect: {equals: OK}}
+    - {command: [CONFIG, SET, commandlog-reply-larger-than, '12010'], expect: {equals: OK}}
+    - {command: [EVAL, 'local t={} for i=1,3000 do t[i]=1 end t[3001]={1} return t',
+        '0']}
+    - {command: [COMMANDLOG, LEN, LARGE-REPLY], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [COMMANDLOG, RESET, LARGE-REPLY], expect: {equals: OK}}
+    - {command: [CONFIG, SET, commandlog-reply-larger-than, '70012'], expect: {equals: OK}}
+    - {command: [EVAL, 'return {string.rep("x",70000)}', '0']}
+    - {command: [COMMANDLOG, LEN, LARGE-REPLY], expect_difference: true, expect: {
+        equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [probe.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: probe}

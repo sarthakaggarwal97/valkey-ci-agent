@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.hash-defrag-entry-pointer
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active defrag relocating large hashtable-hash entries must keep the
+    slot pointer valid (hashTypeEntryDefrag offset fix)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: defrag
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config:
+      hash-max-listpack-entries: 0
+      save: ""
+      appendonly: "no"
+      active-defrag-ignore-bytes: 1
+      active-defrag-threshold-lower: 0
+      active-defrag-cycle-min: 50
+      active-defrag-cycle-max: 99
+    commands:
+    - {command: [EVAL, "local v=string.rep('x',256) for i=1,20000 do redis.call('HSET',KEYS[1],'f'..i,v)\
+          \ end for i=1,20000 do if i%4~=0 then redis.call('HDEL',KEYS[1],'f'..i)\
+          \ end end return redis.call('HLEN',KEYS[1])", 1, h], expect: {equals: 5000}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: hashtable}}
+    - {command: [CONFIG, SET, activedefrag, yes], expect: {error: false}}
+    - {command: [BLPOP, __defrag_wait__, 8], expect: null}
+    - {command: [BLPOP, __defrag_wait__, 4], expect: null}
+    - {command: [DEBUG, DIGEST-VALUE, h], expect_difference: true, expect: {exists: true}}
+    - {command: [HGETALL, h], compare: unordered-pairs, expect_difference: true, expect: {
+        exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: defrag}

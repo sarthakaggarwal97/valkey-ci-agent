@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.bumpepoch-pong-broadcast
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CLUSTER BUMPEPOCH now broadcasts a PONG with the new configEpoch (clusterBumpConfigEpochWithoutConsensus).
+    With periodic gossip frozen (random pings disabled, cluster-ping-interval huge),
+    a peer can learn a bumped epoch only through that broadcast: on the fixed build
+    alternating BUMPEPOCH calls keep seeing the other node ahead and answer BUMPED,
+    on the parent each node freezes at max-in-own-view and answers STILL.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    concurrency: {type: integer, minimum: 0, maximum: 16, default: 0}
+components:
+- use: valkey.action.commands
+  id: bumpepoch
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    server_config: {cluster-node-timeout: 120000}
+    timeout_s: 10
+    checks: {concurrency: {$ref: inputs.concurrency}}
+    commands:
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 30, expect: {contains: "cluster_current_epoch:1"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, expect: {contains: "cluster_current_epoch:1"},
+      compare: skip}
+    - {command: [DEBUG, DISABLE-CLUSTER-RANDOM-PING, 1], node: 0, expect: {equals: OK}}
+    - {command: [DEBUG, DISABLE-CLUSTER-RANDOM-PING, 1], node: 1, expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-ping-interval, 3600000], node: 0, expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, cluster-ping-interval, 3600000], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, BUMPEPOCH], node: 0, compare: skip}
+    - {command: [CLUSTER, BUMPEPOCH], node: 1, wait_s: 15, expect: {contains: BUMPED},
+      compare: skip}
+    - {command: [CLUSTER, BUMPEPOCH], node: 0, wait_s: 15, expect: {contains: BUMPED},
+      expect_difference: true}
+    - {command: [CLUSTER, BUMPEPOCH], node: 1, compare: skip}
+    - {command: [CLUSTER, BUMPEPOCH], node: 0, compare: skip}
+    - {command: [CLUSTER, BUMPEPOCH], node: 1, compare: skip}
+    - {command: [CLUSTER, BUMPEPOCH], node: 0, compare: skip}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+required_events: [bumpepoch.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bumpepoch}

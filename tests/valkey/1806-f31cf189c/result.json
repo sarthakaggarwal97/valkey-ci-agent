@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f31cf189c21a20f428a0b4714a8495885b04a370",
+  "parent": "3f6581b6253fc9df665251004813c6bf13a693f7",
+  "pr": 1806,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fixed build error with CMake (#1806)",
+  "date": "2025-03-02",
+  "unstable": "838999bd5258c84a8c4ec4f290afa66a9013cff1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2748,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds an explicit cast ((long double)LLONG_MAX) in getTimeoutFromObjectOrReply to fix a CMake build error. Under C's usual arithmetic conversions the long long operand was already implicitly converted to long double in the comparison, so the generated semantics are identical on both builds. It is a pure build/compiler-warning fix with no behaviour change, so no scenario can observe a difference and none is needed."
+}
