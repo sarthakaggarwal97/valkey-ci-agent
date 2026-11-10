@@ -365,7 +365,10 @@ def build_valkey(src: Path, *, asan: bool = False, coverage: bool = False) -> Pa
     # `make gcov` carries its flags in SERVER_CFLAGS, which the src/modules/lua sub-make does not read, so the
     # Lua engine compiled without .gcno and its merges' changed lines went unmeasured (valkey #5117): the
     # environment carries the flags there too, and the Makefiles' own CFLAGS assignments still win elsewhere.
-    env = {"CFLAGS": "-fprofile-arcs -ftest-coverage"} if coverage else None
+    # LDFLAGS as well: deps/lua links its own binary from the instrumented objects, and without the flags the
+    # link fails on __gcov_init (the walk's #4526 and #5183: `make gcov` failed in coverage, exit 2).
+    gcov_flags = "-fprofile-arcs -ftest-coverage"
+    env = {"CFLAGS": gcov_flags, "LDFLAGS": gcov_flags} if coverage else None
     _sh(f"make -j{nproc} BUILD_ZSTD=yes{flags}", src, src.parent / f"{src.name}-build.log", env)
     # A commit from before the rename builds redis-server.
     server = src / "src" / "valkey-server"

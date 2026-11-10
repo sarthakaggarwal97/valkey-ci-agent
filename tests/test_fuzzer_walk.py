@@ -1274,7 +1274,9 @@ def test_a_coverage_build_that_fails_leaves_the_coverage_unknown_and_the_merge_t
 def test_the_coverage_build_carries_the_gcov_flags_to_sub_makes(monkeypatch, tmp_path):
     # valkey #5117 (src/modules/lua/debug_lua.c): `make gcov` puts its flags in SERVER_CFLAGS, which the
     # modules/lua sub-make does not read, so the Lua engine had no .gcno and its coverage was silently None:
-    # the environment carries them where SERVER_CFLAGS does not reach.
+    # the environment carries them where SERVER_CFLAGS does not reach. LDFLAGS too: deps/lua links its own
+    # binary from the instrumented objects, and without them the link fails on __gcov_init (the walk's #4526
+    # and #5183: `make gcov` failed in coverage, exit 2).
     calls = []
     monkeypatch.setattr(walk, "_sh", lambda command, cwd, log, env=None: calls.append((command, env)))
     (tmp_path / "src" / "valkey-server").parent.mkdir(parents=True)
@@ -1282,7 +1284,8 @@ def test_the_coverage_build_carries_the_gcov_flags_to_sub_makes(monkeypatch, tmp
     walk.build_valkey(tmp_path, coverage=True)
     walk.build_valkey(tmp_path)
     walk.build_valkey(tmp_path, asan=True)
-    assert "gcov" in calls[0][0] and calls[0][1] == {"CFLAGS": "-fprofile-arcs -ftest-coverage"}
+    gcov_flags = "-fprofile-arcs -ftest-coverage"
+    assert "gcov" in calls[0][0] and calls[0][1] == {"CFLAGS": gcov_flags, "LDFLAGS": gcov_flags}
     assert calls[1][1] is None and calls[2][1] is None
 
 
