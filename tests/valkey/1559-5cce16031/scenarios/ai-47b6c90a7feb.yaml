@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e5ce98459eae..5cce160315e5.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-47b6c90a7feb
+seed: 15591
+experiment:
+  id: proposed.lolwut-valkey-branding
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

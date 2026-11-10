@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f1934cba4110818692e692dd9606a68ae94dc248",
+  "parent": "06990c2e6360c90e5e0b1b5aa4e7708b13955851",
+  "pr": 1885,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix crash in VM_GetCurrentUserName when no valid user (#1885)",
+  "date": "2025-03-27",
+  "unstable": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2187,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix adds a defensive NULL guard to VM_GetCurrentUserName so it returns EINVAL instead of dereferencing ctx->client->user->name when the context has no associated client/user. That NULL-user state only arises for module temp-client contexts (timers, event-loop, server-event callbacks), blocked-client thread-safe contexts, or the replication primary-link client. The sole loadable caller of this API, tests/modules/aclcheck.so, invokes it only from direct command handlers where the connected client always carries a valid user (DefaultUser, never NULL even after ACL DELUSER), so neither a compa"
+}

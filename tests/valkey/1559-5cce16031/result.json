@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5cce160315e5e1c7ba605bca6874eef08be4faf0",
+  "parent": "e5ce98459eae52be89428da3ac9cd60beba28f80",
+  "pr": 1559,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "In LOLWUT's reply, change \"Redis ver.\" to \"Valkey ver.\" (#1559)",
+  "date": "2025-04-04",
+  "unstable": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 8,
+    "executed": 8,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 0.8234,
+  "findings": [],
+  "recorded": []
+}

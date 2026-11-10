@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "parent": "d5b4fda740a4d71eb138ff3722442a9f5f546056",
+  "pr": 5134,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Do not adopt the MYSELF flag from a gossip entry (#5134)",
+  "date": "2026-11-10",
+  "unstable": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.1156,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix strips CLUSTER_NODE_MYSELF when creating a node from a gossip entry in clusterProcessGossipSection. That path fires only when a cluster-bus gossip entry about an unknown node carries the MYSELF flag, which a conforming Valkey never emits (clusterSetGossipEntry copies a node's own flags and the send loop skips myself); it is reachable only by injecting a hand-crafted binary packet to the cluster-bus port, as the maintainers' own packet.tcl test does with a raw socket. No installed component speaks the binary cluster-bus protocol or can address the bus port: valkey.action.commands raw by"
+}

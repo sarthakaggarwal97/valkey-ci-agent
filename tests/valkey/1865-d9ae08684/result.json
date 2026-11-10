@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d9ae08684c0ae4e4cb4e459d06612a67d1ec413e",
+  "parent": "aa8845344bac7cf68fb69909550349fb7ba4af60",
+  "pr": 1865,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Minor cleanup remove unnecessary cast since slot is int (#1865)",
+  "date": "2025-03-20",
+  "unstable": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2095,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change deletes a no-op (int) cast on a variable that is already an int in an addReplyErrorFormat call in checkSlotAssignmentsOrReply (src/cluster_legacy.c). The format string, argument value, and resulting error reply are identical on both builds, so there is no behaviour to exercise or compare; this is a pure cosmetic refactor that needs no scenario."
+}

@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d5b4fda740a4d71eb138ff3722442a9f5f546056",
+  "parent": "5ed2d256472818f960406fcc83f0a4dbe3242331",
+  "pr": 5117,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Allow the Lua debugger to start on an empty script (#5117)",
+  "date": "2026-11-10",
+  "unstable": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.8222,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: debug_lua.c:67 'text != NULL && len > 0' is not true",
+      "scenario": "ai-a38c1ce34e1b",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5117",
+      "fingerprint": "6a99c1705f7bc2e54db0",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: debug_lua.c:67 'text != NULL && len > 0' is not true",
+      "scenario": "ai-03d2fe5d4042",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #5117",
+      "fingerprint": "6a99c1705f7bc2e54db0",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

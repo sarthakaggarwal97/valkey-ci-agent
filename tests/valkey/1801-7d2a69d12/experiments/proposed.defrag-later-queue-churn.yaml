@@ -1,0 +1,137 @@
+extends: [valkey.base]
+id: proposed.defrag-later-queue-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active defrag drives large list/set/zset/hash/stream keys through the
+    defrag_later queue while their type and encoding churn; the new dispatcher must
+    reroute changed objects (defrag.c:828-848) and no scanLater serverAssert may fire,
+    with no crash and no acknowledged write lost
+inputs:
+  properties:
+    list_len: {type: integer, minimum: 1000, maximum: 500000, default: 100000}
+    coll_len: {type: integer, minimum: 1000, maximum: 100000, default: 20000}
+    stream_len: {type: integer, minimum: 500, maximum: 50000, default: 5000}
+    max_scan_fields: {type: integer, minimum: 1, maximum: 1000, default: 10}
+    settle_s: {type: number, minimum: 0.5, maximum: 30, default: 3}
+startup_overlays:
+- overlay_id: defrag-aggressive
+  server_config:
+    activedefrag: "yes"
+    active-defrag-ignore-bytes: 1
+    active-defrag-threshold-lower: 0
+    active-defrag-cycle-min: 99
+    active-defrag-cycle-max: 99
+    active-defrag-max-scan-fields: {$ref: inputs.max_scan_fields}
+    list-max-listpack-size: 4
+    set-max-listpack-entries: 0
+    zset-max-listpack-entries: 64
+    hash-max-listpack-entries: 64
+    stream-node-max-entries: 1
+components:
+- use: valkey.capability.build-probe
+  id: defrag-support
+  config:
+    startup_config: {activedefrag: "yes"}
+- use: valkey.action.commands
+  id: seed
+  depends_on: [writes]
+  timeout_s: 180
+  config:
+    instances: primary
+    timeout_s: 60
+    commands:
+    - command: [EVAL, "for i=1,tonumber(ARGV[1]) do redis.call('RPUSH', KEYS[1], 'item'..i)\
+          \ end return redis.call('LLEN', KEYS[1])", 1, biglist, {$ref: inputs.list_len}]
+      expect: {error: false}
+    - command: [EVAL, "for i=1,tonumber(ARGV[1]) do redis.call('SADD', KEYS[1], 'member'..i)\
+          \ end return redis.call('SCARD', KEYS[1])", 1, bigset, {$ref: inputs.coll_len}]
+      expect: {error: false}
+    - command: [EVAL, "for i=1,tonumber(ARGV[1]) do redis.call('ZADD', KEYS[1], i,\
+          \ 'member'..i) end return redis.call('ZCARD', KEYS[1])", 1, bigzset, {$ref: inputs.coll_len}]
+      expect: {error: false}
+    - command: [EVAL, "for i=1,tonumber(ARGV[1]) do redis.call('HSET', KEYS[1], 'field'..i,\
+          \ 'v'..i) end return redis.call('HLEN', KEYS[1])", 1, bighash, {$ref: inputs.coll_len}]
+      expect: {error: false}
+    - command: [EVAL, "for i=1,tonumber(ARGV[1]) do redis.call('XADD', KEYS[1], '*',\
+          \ 'f', i) end return redis.call('XLEN', KEYS[1])", 1, bigstream, {$ref: inputs.stream_len}]
+      expect: {error: false}
+- use: valkey.action.sleep
+  id: let-defrag-schedule
+  depends_on: [seed]
+  config: {seconds: {$ref: inputs.settle_s}}
+- use: valkey.action.commands
+  id: swap1
+  depends_on: [let-defrag-schedule]
+  timeout_s: 180
+  config:
+    instances: primary
+    timeout_s: 60
+    commands:
+    - {command: [DEL, biglist], expect: {equals: 1}}
+    - {command: [RPUSH, biglist, a, b, c], expect: {equals: 3}}
+    - {command: [DEL, bigset], expect: {equals: 1}}
+    - {command: [SADD, bigset, 1, 2, 3], expect: {equals: 3}}
+    - {command: [DEL, bigzset], expect: {equals: 1}}
+    - {command: [ZADD, bigzset, 1, a], expect: {equals: 1}}
+    - {command: [DEL, bighash], expect: {equals: 1}}
+    - {command: [HSET, bighash, f, v], expect: {equals: 1}}
+    - {command: [DEL, bigstream], expect: {equals: 1}}
+    - {command: [SET, bigstream, x], expect: {equals: OK}}
+    - command: [EVAL, "for i=1,tonumber(ARGV[1]) do redis.call('RPUSH', KEYS[1], 'item'..i)\
+          \ end return redis.call('LLEN', KEYS[1])", 1, biglist, {$ref: inputs.list_len}]
+      expect: {error: false}
+    - command: [EVAL, "for i=1,tonumber(ARGV[1]) do redis.call('SADD', KEYS[1], 'member'..i)\
+          \ end return redis.call('SCARD', KEYS[1])", 1, bigset, {$ref: inputs.coll_len}]
+      expect: {error: false}
+    - command: [EVAL, "for i=1,tonumber(ARGV[1]) do redis.call('ZADD', KEYS[1], i,\
+          \ 'member'..i) end return redis.call('ZCARD', KEYS[1])", 1, bigzset, {$ref: inputs.coll_len}]
+      expect: {error: false}
+    - command: [EVAL, "for i=1,tonumber(ARGV[1]) do redis.call('HSET', KEYS[1], 'field'..i,\
+          \ 'v'..i) end return redis.call('HLEN', KEYS[1])", 1, bighash, {$ref: inputs.coll_len}]
+      expect: {error: false}
+    - {command: [DEL, bigstream], expect: {equals: 1}}
+    - command: [EVAL, "for i=1,tonumber(ARGV[1]) do redis.call('XADD', KEYS[1], '*',\
+          \ 'f', i) end return redis.call('XLEN', KEYS[1])", 1, bigstream, {$ref: inputs.stream_len}]
+      expect: {error: false}
+- use: valkey.action.sleep
+  id: let-defrag-reschedule
+  depends_on: [swap1]
+  config: {seconds: {$ref: inputs.settle_s}}
+- use: valkey.action.commands
+  id: swap2
+  depends_on: [let-defrag-reschedule]
+  timeout_s: 120
+  config:
+    instances: primary
+    timeout_s: 60
+    commands:
+    - {command: [DEL, biglist], expect: {equals: 1}}
+    - {command: [RPUSH, biglist, a, b, c], expect: {equals: 3}}
+    - {command: [DEL, bigset], expect: {equals: 1}}
+    - {command: [SADD, bigset, 1, 2, 3], expect: {equals: 3}}
+    - {command: [DEL, bigzset], expect: {equals: 1}}
+    - {command: [ZADD, bigzset, 1, a], expect: {equals: 1}}
+    - {command: [DEL, bighash], expect: {equals: 1}}
+    - {command: [HSET, bighash, f, v], expect: {equals: 1}}
+    - {command: [DEL, bigstream], expect: {equals: 1}}
+    - {command: [SET, bigstream, x], expect: {equals: OK}}
+- use: valkey.action.poll
+  id: defrag-ran
+  depends_on: [swap2]
+  config:
+    instances: primary
+    section: stats
+    field: active_defrag_misses
+    predicate: {min: 1}
+    timeout_s: 60
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [defrag-ran]
+  config: {seconds: {$ref: inputs.settle_s}}
+required_events: [swap1.completed, swap2.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seed}
+- {evidence_id: valkey.command.sequence, source: swap1}
+- {evidence_id: valkey.command.sequence, source: swap2}
+- {evidence_id: valkey.poll.satisfied, source: defrag-ran}

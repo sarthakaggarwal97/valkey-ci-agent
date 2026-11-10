@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.ldb-empty-script
+deployment:
+  modes: [standalone]
+metadata:
+  description: Starting the Lua debugger on an empty/whitespace-only script no longer
+    crashes the server
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dbg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SCRIPT, DEBUG, SYNC], expect: {equals: OK}}
+    - {command: [EVAL, "\r\n", "0"], expect_difference: true, expect: {contains: "Stopped\
+          \ at 1"}}
+    - {command: [step], expect_difference: true, expect: {contains: "endsession"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dbg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbg}

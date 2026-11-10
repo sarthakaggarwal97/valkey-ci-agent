@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey da3244352fb2..09f963017150.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b2345ec34160
+seed: 18891
+experiment:
+  id: proposed.protocol-error-log-redaction
+  inputs:
+    resp: 2
+    hide: 'yes'
+    loglevel: verbose
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
+  server_config:
+    loglevel: verbose
+    hide-user-data-from-log: 'yes'

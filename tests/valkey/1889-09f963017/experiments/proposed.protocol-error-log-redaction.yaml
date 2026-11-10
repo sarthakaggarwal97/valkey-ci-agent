@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.protocol-error-log-redaction
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Malformed requests drive setProtocolError's log formatting with hide-user-data-from-log
+    on and off at verbose/debug loglevel: the redacted branch, the short query-buffer
+    dump, the split head/tail dump for buffers over PROTO_DUMP_LEN, and the isprint
+    scrub loop. Replies must match across builds and neither build may crash while
+    logging.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    hide: {type: string, enum: ["yes", "no"], default: "yes"}
+    loglevel: {type: string, enum: [verbose, debug], default: verbose}
+components:
+- use: valkey.action.commands
+  id: proto
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      loglevel: {$ref: inputs.loglevel}
+      hide-user-data-from-log: {$ref: inputs.hide}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {connection: c1, raw: "*3\r\n$3\r\nSET\r\n$1\r\nx\r\n$blabla\r\n", expect: {
+        error: "invalid bulk length"}}
+    - {connection: c2, raw: "*1\r\n$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\r\
+        \n", expect: {error: "invalid bulk length"}}
+    - {connection: c3, raw: "*2\r\n$3\r\nGET\r\n$\x01\x02\x7F\r\n", expect: {error: "invalid\
+          \ bulk length"}}
+    - {connection: c4, raw: "set k \"unbalanced\r\n", expect: {error: "unbalanced\
+          \ quotes"}}
+    - {command: [CONFIG, SET, hide-user-data-from-log, "no"], expect: {equals: OK}}
+    - {connection: c5, raw: "*3000000000\r\n", expect: {error: "invalid multibulk\
+          \ length"}}
+    - {command: [CONFIG, SET, hide-user-data-from-log, "yes"], expect: {equals: OK}}
+    - {connection: c6, raw: "*1\r\nPING\r\n", expect: {error: "expected '$', got 'P'"}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [proto.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: proto}

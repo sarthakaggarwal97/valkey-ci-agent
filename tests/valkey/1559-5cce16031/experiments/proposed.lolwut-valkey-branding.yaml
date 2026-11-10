@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.lolwut-valkey-branding
+deployment:
+  modes: [standalone]
+metadata:
+  description: LOLWUT replies and the script deny error say Valkey ver., and Redis
+    ver. with the Redis version under extended-redis-compatibility
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lolwut
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [LOLWUT], expect_difference: true, expect: {contains: "Valkey ver.\
+          \ 255.255.255"}}
+    - {command: [LOLWUT, VERSION, "5"], expect_difference: true, expect: {contains: "Valkey\
+          \ ver. 255.255.255"}}
+    - {command: [LOLWUT, VERSION, "6"], expect_difference: true, expect: {contains: "Valkey\
+          \ ver. 255.255.255"}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [EVAL, "return redis.call('WATCH', KEYS[1])", "1", k], expect_difference: true,
+      expect: {error: "This Valkey command is not allowed from script"}}
+    - {command: [CONFIG, SET, extended-redis-compatibility, "yes"], expect: {equals: OK}}
+    - {command: [LOLWUT], expect_difference: true, expect: {contains: "Redis ver.\
+          \ 7.2.4"}}
+    - {command: [LOLWUT, VERSION, "5"], expect_difference: true, expect: {contains: "Redis\
+          \ ver. 7.2.4"}}
+    - {command: [LOLWUT, VERSION, "6"], expect_difference: true, expect: {contains: "Redis\
+          \ ver. 7.2.4"}}
+    - {command: [EVAL, "return redis.call('WATCH', KEYS[1])", "1", k], expect: {error: "This\
+          \ Redis command is not allowed from script"}}
+    - {command: [CONFIG, SET, extended-redis-compatibility, "no"], expect: {equals: OK}}
+    - {command: [LOLWUT], expect_difference: true, expect: {contains: "Valkey ver.\
+          \ 255.255.255"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [lolwut.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lolwut}

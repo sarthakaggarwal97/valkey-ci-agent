@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f1d8d77fa56e8c0645724ff117517bfd2de57f72",
+  "parent": "74b6330f63a577d7c12c6a04c1bf24cd2ae62d9f",
+  "pr": 1908,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Bump CMake to 3.10.0 to fix build error on Ubuntu-24 (#1908)",
+  "date": "2025-04-01",
+  "unstable": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2073,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only raises cmake_minimum_required in deps/hiredis/CMakeLists.txt from 3.0.0 to 3.10.0 to fix a build error on Ubuntu 24. It is a build-system-only change with no effect on server behaviour, commands, replication, persistence, or tools at runtime, so there is nothing for a fuzzer scenario to exercise."
+}

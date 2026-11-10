@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5ed2d256472818f960406fcc83f0a4dbe3242331",
+  "parent": "dfdea17995729a50fd6ee2a5629d84e616500b11",
+  "pr": 5263,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Loop over forkless-policy values directly in rdb tests (#5263)",
+  "date": "2026-11-09",
+  "unstable": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2627,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only refactors Valkey's own TCL test suite (tests/integration/rdb.tcl), replacing expr-based ternaries with direct foreach loops over equivalent forkless-policy values, and rewords a comment in valkey.conf. No server code, command behavior, config semantics, or persistence logic changes, so there is no runtime behavior for a scenario to reach."
+}

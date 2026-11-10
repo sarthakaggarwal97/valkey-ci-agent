@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9abb51846d62ad24869c4aa9cfbec0398d05d45f",
+  "parent": "f1934cba4110818692e692dd9606a68ae94dc248",
+  "pr": 1894,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix merge error introduced in #1186 (#1894)",
+  "date": "2025-03-27",
+  "unstable": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3398,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix only changes the deadline value passed to module data-type late-defrag callbacks during active defrag (monotonic endtime instead of an erroneous wall-clock conversion). Reaching defragLaterItem's OBJ_MODULE branch requires loading a module that registers a data type with a defrag callback, which the fuzzer cannot do: MODULE LOAD/LOADEX are refused in command sequences and no installed component or experiment loads modules. Without a module the branch is unreachable, and even with one the only effect is how long the module defrag callback runs before yielding \u2014 no reply, data, replicati"
+}

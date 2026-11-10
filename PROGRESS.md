@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-10T02:00+00:00.
+Updated 2026-11-10T02:07+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1345 | 1165 | #1918 (2025-04-05) | 290 | 192.1 |
+| valkey-io/valkey | 1369 | 1144 | #1842 (2025-03-13) | 314 | 195.6 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 63 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 9.0 |
 | valkey-io/valkey-search | 671 | 0 | f8106e72e984 (2024-11-27) | 16 | 95.9 |
@@ -13,28 +13,28 @@ Updated 2026-11-10T02:00+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-10T00:42:00+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42720840888): 20 merge(s) tested, 3 without a code change.
+[2026-11-10T02:07:16+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42730296056): 20 merge(s) tested, 4 without a code change.
 
-- [valkey-io/valkey#1819](https://github.com/valkey-io/valkey/pull/1819) ([tests](tests/valkey/1819-57118a475/)): Fix engine crash on module client blocking during keyspace events (#1819): 0 of 4 test(s) reached the change, coverage 15%; crash, introduced and since fixed (recorded)
-- [valkey-io/valkey#1931](https://github.com/valkey-io/valkey/pull/1931) ([tests](tests/valkey/1931-1119765df/)): Fix CLUSTER RESET to use lazyfree-lazy-user-flush to do the lazyfree (#1931): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1952](https://github.com/valkey-io/valkey/pull/1952) ([tests](tests/valkey/1952-c8bfd23d9/)): Fix incorrect lag reported in XINFO GROUPS (#1952): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1904](https://github.com/valkey-io/valkey/pull/1904) ([tests](tests/valkey/1904-5d6e77f1c/)): Add sentinel_total_tilt to sentinel INFO sentinel (#1904): declined: The change is confined to Sentinel mode: sentinel.c adds an int total_tilt counter, increments it when sentinelCheckTiltCondition() enters TILT, and prints it as a new sentinel_total_tilt line in INFO sentinel. That code only runs in a valkey-sentinel process (started with --sentinel or th
-- [valkey-io/valkey#1910](https://github.com/valkey-io/valkey/pull/1910) ([tests](tests/valkey/1910-30dc9a7ae/)): Add node pfail and fail count to cluster info metrics (#1910): 2 of 3 test(s) reached the change, coverage 92%
-- [valkey-io/valkey#1777](https://github.com/valkey-io/valkey/pull/1777) ([tests](tests/valkey/1777-d1053ac31/)): Ignore stale gossip packets that arrive out of order (#1777): 0 of 4 test(s) reached the change, coverage 66%
-- [valkey-io/valkey#1948](https://github.com/valkey-io/valkey/pull/1948): to retry, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
-- [valkey-io/valkey#1950](https://github.com/valkey-io/valkey/pull/1950) ([tests](tests/valkey/1950-5854995f0/)): Fix cluster slot stats assertion during promotion of replica (#1950): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1955](https://github.com/valkey-io/valkey/pull/1955) ([tests](tests/valkey/1955-2399f1077/)): Fix crash during TLS handshake with I/O threads (#1955): declined: The change adds one atomic_thread_fence in ioThreadAccept (io_threads.c), which runs only when a TLS accept is offloaded to an I/O thread: trySendAcceptToIOThreads is called solely from connTLSAccept in tls.c, so on plain-TCP connections the changed code never executes. The fuzzer cannot c
-- [valkey-io/valkey#1811](https://github.com/valkey-io/valkey/pull/1811) ([tests](tests/valkey/1811-4a92db917/)): Introduce MPTCP (#1811): 1 of 9 test(s) reached the change, coverage 66%
-- [valkey-io/valkey#1466](https://github.com/valkey-io/valkey/pull/1466) ([tests](tests/valkey/1466-be60586f1/)): [Client Introspection] Client Commands Extended Filtering (#1466): 8 of 8 test(s) reached the change, coverage 80%; crash, predates #1466, since fixed (recorded)
-- [valkey-io/valkey#1934](https://github.com/valkey-io/valkey/pull/1934) ([tests](tests/valkey/1934-51387ddc9/)): Update function clusterNodeSetSlotBit() return type to void (#1934): declined: The change only alters clusterNodeSetSlotBit()'s return type from int to void. Its sole caller, clusterAddSlot() (cluster_legacy.c:5651), already discarded the return value before the change, and the function's side effects (setting the slot bit, incrementing numslots, setting CLUSTER_NODE
-- [valkey-io/valkey#1945](https://github.com/valkey-io/valkey/pull/1945) ([tests](tests/valkey/1945-e2b28c6a0/)): Rebranding in security warning log (#1945): declined: The change only substitutes the SERVER_TITLE macro ("Valkey") for the hardcoded string "Redis" in the security-warning log message of securityWarningCommand (networking.c). No reply, connection handling, rate limiting, or any other runtime behaviour changes: the client is still aborted the
-- [valkey-io/valkey#1091](https://github.com/valkey-io/valkey/pull/1091) ([tests](tests/valkey/1091-44dafba2c/)): Trigger manual failover on SIGTERM / shutdown to cluster primary (#1091): 2 of 5 test(s) reached the change, coverage 85%
-- [valkey-io/valkey#1825](https://github.com/valkey-io/valkey/pull/1825) ([tests](tests/valkey/1825-f7da0c157/)): fix: add samples to stream object consumer trees (#1825): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1793](https://github.com/valkey-io/valkey/pull/1793) ([tests](tests/valkey/1793-041043617/)): Replaced the use of sdsReplyDictType and hashDictType. (#1793): 0 of 5 test(s) reached the change, coverage 94%
-- [valkey-io/valkey#1926](https://github.com/valkey-io/valkey/pull/1926) ([tests](tests/valkey/1926-772bd8b57/)): Kill RDB child process on CLUSTER RESET command (#1926): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1674](https://github.com/valkey-io/valkey/pull/1674) ([tests](tests/valkey/1674-74075203d/)): Implement: CLUSTER REPLICATE NO ONE (#1674): 4 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1922](https://github.com/valkey-io/valkey/pull/1922) ([tests](tests/valkey/1922-204097dac/)): Fix the build on less common platforms in zmalloc.c (#1922): declined: The change only relocates the declaration of the used_memory_thread pointer into the #if/#else in zmalloc.c so that on non-x86/ARM/PowerPC platforms it is declared _Atomic size_t* to match the _Atomic array, fixing a compile error there. On the platforms the fuzzer runs (linux x86_64/arm) 
-- [valkey-io/valkey#1919](https://github.com/valkey-io/valkey/pull/1919) ([tests](tests/valkey/1919-dfdcbfe91/)): Fix minor comment typo (#1919): declined: The change only rewords a comment above quicklistCompare in src/quicklist.c; no executable code, configuration, or build file changes, so there is no behaviour to exercise and no scenario is needed.
+- [valkey-io/valkey#5263](https://github.com/valkey-io/valkey/pull/5263) ([tests](tests/valkey/5263-5ed2d2564/)): Loop over forkless-policy values directly in rdb tests (#5263): declined: The change only refactors Valkey's own TCL test suite (tests/integration/rdb.tcl), replacing expr-based ternaries with direct foreach loops over equivalent forkless-policy values, and rewords a comment in valkey.conf. No server code, command behavior, config semantics, or persistence logic
+- [valkey-io/valkey#5117](https://github.com/valkey-io/valkey/pull/5117) ([tests](tests/valkey/5117-d5b4fda74/)): Allow the Lua debugger to start on an empty script (#5117): 2 of 2 test(s) reached the change; crash, fixed by #5117 (recorded)
+- [valkey-io/valkey#5134](https://github.com/valkey-io/valkey/pull/5134) ([tests](tests/valkey/5134-116e7f953/)): Do not adopt the MYSELF flag from a gossip entry (#5134): declined: The fix strips CLUSTER_NODE_MYSELF when creating a node from a gossip entry in clusterProcessGossipSection. That path fires only when a cluster-bus gossip entry about an unknown node carries the MYSELF flag, which a conforming Valkey never emits (clusterSetGossipEntry copies a node's own f
+- [valkey-io/valkey#1918](https://github.com/valkey-io/valkey/pull/1918) ([tests](tests/valkey/1918-cc31c20a4/)): Add human node name to log statement with node name (#1918): declined: The change only adds the already-always-initialized human_nodename field (an sds set to sdsempty() at node creation, never NULL) to two existing LL_DEBUG log format strings in cluster_legacy.c, matching the pattern used by dozens of other log lines in the file. It alters no command replies
+- [valkey-io/valkey#1915](https://github.com/valkey-io/valkey/pull/1915) ([tests](tests/valkey/1915-add716b7d/)): Fix valkey-cli port parse logic for invalid string (#1915): 1 of 1 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1559](https://github.com/valkey-io/valkey/pull/1559) ([tests](tests/valkey/1559-5cce16031/)): In LOLWUT's reply, change "Redis ver." to "Valkey ver." (#1559): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1911](https://github.com/valkey-io/valkey/pull/1911) ([tests](tests/valkey/1911-e5ce98459/)): Initialize child process pipe file descriptor to -1 (#1911): declined: The change initializes two local file descriptors in rdbSaveToReplicasSockets (src/rdb.c) to -1 instead of 0. Both variables are used only inside !dual_channel-guarded blocks, and on every !dual_channel path (including both anetPipe error paths) they are assigned real pipe fds before any c
+- [valkey-io/valkey#1908](https://github.com/valkey-io/valkey/pull/1908) ([tests](tests/valkey/1908-f1d8d77fa/)): Bump CMake to 3.10.0 to fix build error on Ubuntu-24 (#1908): declined: The change only raises cmake_minimum_required in deps/hiredis/CMakeLists.txt from 3.0.0 to 3.10.0 to fix a build error on Ubuntu 24. It is a build-system-only change with no effect on server behaviour, commands, replication, persistence, or tools at runtime, so there is nothing for a fuzze
+- [valkey-io/valkey#1899](https://github.com/valkey-io/valkey/pull/1899) ([tests](tests/valkey/1899-74b6330f6/)): Update ACL SETUSER command help message (#1899): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#1839](https://github.com/valkey-io/valkey/pull/1839) ([tests](tests/valkey/1839-0af8a120d/)): Add --sequential to valkey-benchmark (for populating entire keyspace) (#1839): 3 of 3 test(s) reached the change, coverage 90%
+- [valkey-io/valkey#1889](https://github.com/valkey-io/valkey/pull/1889) ([tests](tests/valkey/1889-09f963017/)): Redact protocol error log when hide-user-data-from-log enabled (#1889): 0 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1891](https://github.com/valkey-io/valkey/pull/1891) ([tests](tests/valkey/1891-da3244352/)): Remove TLSCONN_DEBUG dead code in tls.c (#1891): declined: The change only removes the TLSCONN_DEBUG macro definition and its lone invocation in tls.c. The macro expands to nothing unless TLS_DEBUGGING is defined at compile time, which no supported build enables (the removed call even references an undeclared variable, so it could not compile with
+- [valkey-io/valkey#1894](https://github.com/valkey-io/valkey/pull/1894) ([tests](tests/valkey/1894-9abb51846/)): Fix merge error introduced in #1186 (#1894): declined: The fix only changes the deadline value passed to module data-type late-defrag callbacks during active defrag (monotonic endtime instead of an erroneous wall-clock conversion). Reaching defragLaterItem's OBJ_MODULE branch requires loading a module that registers a data type with a defrag c
+- [valkey-io/valkey#1885](https://github.com/valkey-io/valkey/pull/1885) ([tests](tests/valkey/1885-f1934cba4/)): Fix crash in VM_GetCurrentUserName when no valid user (#1885): declined: The fix adds a defensive NULL guard to VM_GetCurrentUserName so it returns EINVAL instead of dereferencing ctx->client->user->name when the context has no associated client/user. That NULL-user state only arises for module temp-client contexts (timers, event-loop, server-event callbacks), 
+- [valkey-io/valkey#1843](https://github.com/valkey-io/valkey/pull/1843) ([tests](tests/valkey/1843-06990c2e6/)): Update COPY and MOVE command description clearer in JSON file (#1843): declined: The change only rewords two human-readable 'description' strings in the reply_schema sections of copy.json and move.json. Reply schemas are documentation metadata: they are not compiled into normal server builds (only into special reply-schema-validation builds) and never affect command pa
+- [valkey-io/valkey#1869](https://github.com/valkey-io/valkey/pull/1869) ([tests](tests/valkey/1869-d56a1f79b/)): [cluster] Add node id to log statement for closing link on first message as lightweight (#1869): declined: The change only adds the sender node id to an existing LL_NOTICE log message when closing a cluster link whose first message was lightweight; the link-closing behaviour, packet handling, and all observable replies/state are unchanged, and hdr->sender is part of the fixed message header alr
+- [valkey-io/valkey#1865](https://github.com/valkey-io/valkey/pull/1865) ([tests](tests/valkey/1865-d9ae08684/)): Minor cleanup remove unnecessary cast since slot is int (#1865): declined: The change deletes a no-op (int) cast on a variable that is already an int in an addReplyErrorFormat call in checkSlotAssignmentsOrReply (src/cluster_legacy.c). The format string, argument value, and resulting error reply are identical on both builds, so there is no behaviour to exercise o
+- [valkey-io/valkey#1850](https://github.com/valkey-io/valkey/pull/1850) ([tests](tests/valkey/1850-aa8845344/)): Fix RANDOMKEY infinite loop during CLIENT PAUSE (#1850): 0 of 2 test(s) reached the change, coverage 0%
+- [valkey-io/valkey#1845](https://github.com/valkey-io/valkey/pull/1845) ([tests](tests/valkey/1845-89b1f8fb1/)): Update valkey-benchmark parseURI function name and comment (#1845): declined: The change renames parseRedisUri to parseUri and updates a comment; the URI parsing logic is byte-for-byte unchanged and all four schemes (valkey://, valkeys://, redis://, rediss://) were already accepted before the change. The only observable difference is the tool_name string in valkey-b
+- [valkey-io/valkey#1801](https://github.com/valkey-io/valkey/pull/1801) ([tests](tests/valkey/1801-7d2a69d12/)): Fix defrag when type/encoding changes during scan (#1801): 0 of 6 test(s) reached the change, coverage 100%
 
 ### valkey-io/valkey-bloom
 
@@ -53,10 +53,10 @@ Updated 2026-11-10T02:00+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 705 of 1076 tested (66%)
-- Changed-line coverage: median 100% of 620 merge(s) measured, 52 under 50%
-- Recall: 194 parents flagged of 296 fix merges
-- Claude: $1266.94 in the last 24 hours, $7911.35 in the last 7 days, $7911.35 in all
+- Merges whose tests reached the change: 710 of 1084 tested (65%)
+- Changed-line coverage: median 100% of 626 merge(s) measured, 53 under 50%
+- Recall: 195 parents flagged of 299 fix merges
+- Claude: $1291.07 in the last 24 hours, $7935.48 in the last 7 days, $7935.48 in all
 - Issues filed: 64
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

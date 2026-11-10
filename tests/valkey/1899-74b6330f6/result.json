@@ -1,0 +1,64 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "74b6330f63a577d7c12c6a04c1bf24cd2ae62d9f",
+  "parent": "0af8a120d6eeed4836b6f0dc1ad970fa078412d1",
+  "pr": 1899,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update ACL SETUSER command help message (#1899)",
+  "date": "2025-04-01",
+  "unstable": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 0.8537,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-c0bd3bd17bfb",
+      "build": "unstable",
+      "seed": 11091,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c0bd3bd17bfb",
+      "build": "unstable",
+      "seed": 11092,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c0bd3bd17bfb",
+      "build": "unstable",
+      "seed": 11093,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-22489bde9e09",
+      "build": "unstable",
+      "seed": 11092,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-22489bde9e09",
+      "build": "unstable",
+      "seed": 11093,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-22489bde9e09",
+      "build": "unstable",
+      "seed": 11094,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

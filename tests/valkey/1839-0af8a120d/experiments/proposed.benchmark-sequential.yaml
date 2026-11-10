@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-sequential
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark --sequential populates the entire keyspace exactly
+    once per pass (DBSIZE == keyspace, each counter incremented exactly n/keyspace
+    times), the parent rejects the option, and the refactored -r random path still
+    generates identical keys under a fixed --seed
+inputs:
+  properties:
+    keyspace: {type: integer, default: 100}
+    keyspace_reply: {type: string, default: "100\n"}
+    incr_requests: {type: integer, default: 300}
+    counter_last: {type: string, default: "counter:000000000099"}
+    clients: {type: integer, default: 1}
+    pipeline: {type: integer, default: 1}
+    threads: {type: integer, default: 0}
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 120
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, --seed, 7, -t, set, -n, 200, -r,
+        50, -c, 1, -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, KEYS, "*"], compare: unordered, expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, FLUSHALL], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --sequential, -t, set, -n, {$ref: inputs.keyspace},
+        -r, {$ref: inputs.keyspace}, -c, {$ref: inputs.clients}, -P, {$ref: inputs.pipeline},
+        --threads, {$ref: inputs.threads}, -q], expect_difference: true, expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect_difference: true, expect: {
+        stdout: {equals: {$ref: inputs.keyspace_reply}}}}
+    - {tool: valkey-cli, args: [-p, $port, FLUSHALL], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --sequential, -t, incr, -n, {$ref: inputs.incr_requests},
+        -r, {$ref: inputs.keyspace}, -c, {$ref: inputs.clients}, -P, {$ref: inputs.pipeline},
+        --threads, {$ref: inputs.threads}, -q], expect_difference: true, expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, "counter:000000000000"], expect_difference: true,
+      expect: {stdout: {equals: "3\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, {$ref: inputs.counter_last}], expect_difference: true,
+      expect: {stdout: {equals: "3\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect_difference: true, expect: {
+        stdout: {equals: {$ref: inputs.keyspace_reply}}}}
+    - {tool: valkey-cli, args: [-p, $port, FLUSHALL], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --sequential, -t, set, -n, 50, -r,
+        1, -c, 1, -q], expect_difference: true, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect_difference: true, expect: {
+        stdout: {equals: "1\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --sequential, -t, ping, -n, 10, -c,
+        1, -q], expect_difference: true, expect: {exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

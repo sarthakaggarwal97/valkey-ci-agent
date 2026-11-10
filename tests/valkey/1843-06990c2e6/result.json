@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "06990c2e6360c90e5e0b1b5aa4e7708b13955851",
+  "parent": "d56a1f79b451d89904b421dcc94a519b271c16f4",
+  "pr": 1843,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update COPY and MOVE command description clearer in JSON file (#1843)",
+  "date": "2025-03-26",
+  "unstable": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2159,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewords two human-readable 'description' strings in the reply_schema sections of copy.json and move.json. Reply schemas are documentation metadata: they are not compiled into normal server builds (only into special reply-schema-validation builds) and never affect command parsing, execution, replication, or the replies COPY and MOVE send. No server behaviour, reply bytes, or tool output changes, so there is no risky path for a scenario to reach."
+}

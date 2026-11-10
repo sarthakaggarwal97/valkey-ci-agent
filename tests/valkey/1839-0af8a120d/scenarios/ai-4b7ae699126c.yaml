@@ -1,0 +1,20 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 09f963017150..0af8a120d6ee.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4b7ae699126c
+seed: 1101
+experiment:
+  id: proposed.benchmark-sequential
+  inputs:
+    keyspace: 100
+    keyspace_reply: '100
+
+      '
+    incr_requests: 300
+    counter_last: counter:000000000099
+    clients: 1
+    pipeline: 1
+    threads: 0
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

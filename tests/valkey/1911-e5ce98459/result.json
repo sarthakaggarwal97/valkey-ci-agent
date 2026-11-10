@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e5ce98459eae52be89428da3ac9cd60beba28f80",
+  "parent": "f1d8d77fa56e8c0645724ff117517bfd2de57f72",
+  "pr": 1911,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Initialize child process pipe file descriptor to -1 (#1911)",
+  "date": "2025-04-03",
+  "unstable": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5063,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change initializes two local file descriptors in rdbSaveToReplicasSockets (src/rdb.c) to -1 instead of 0. Both variables are used only inside !dual_channel-guarded blocks, and on every !dual_channel path (including both anetPipe error paths) they are assigned real pipe fds before any close/read/use; on the dual_channel path they are never used at all. The old 0 initializer was therefore never closed or read on any reachable path, so this is purely defensive hardening with no observable behaviour change \u2014 no scenario can distinguish the two builds."
+}

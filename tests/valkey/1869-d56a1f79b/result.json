@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d56a1f79b451d89904b421dcc94a519b271c16f4",
+  "parent": "d9ae08684c0ae4e4cb4e459d06612a67d1ec413e",
+  "pr": 1869,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "[cluster] Add node id to log statement for closing link on first message as lightweight (#1869)",
+  "date": "2025-03-21",
+  "unstable": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.209,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds the sender node id to an existing LL_NOTICE log message when closing a cluster link whose first message was lightweight; the link-closing behaviour, packet handling, and all observable replies/state are unchanged, and hdr->sender is part of the fixed message header already validated before this point. A log-text-only change has no behaviour for a scenario to exercise."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "89b1f8fb11267572d7a3a97a6c21c9d58c96435d",
+  "parent": "7d2a69d128926bafe9600ea41f2d54cd10600063",
+  "pr": 1845,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update valkey-benchmark parseURI function name and comment (#1845)",
+  "date": "2025-03-17",
+  "unstable": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6392,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change renames parseRedisUri to parseUri and updates a comment; the URI parsing logic is byte-for-byte unchanged and all four schemes (valkey://, valkeys://, redis://, rediss://) were already accepted before the change. The only observable difference is the tool_name string in valkey-benchmark's error message ('redis-benchmark' -> 'valkey-benchmark'), which is printed only when a TLS URI is passed to a binary compiled without OpenSSL and is UNUSED dead data on TLS-enabled builds. A compared tools run asserting that message would fail as unreached on any OpenSSL build, and the delta itself "
+}

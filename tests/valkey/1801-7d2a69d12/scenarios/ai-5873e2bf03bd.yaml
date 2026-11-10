@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1a975faf79c3..7d2a69d12892.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5873e2bf03bd
+seed: 303
+experiment:
+  id: proposed.defrag-later-queue-churn
+  inputs:
+    max_scan_fields: 100
+    list_len: 300000
+    coll_len: 20000
+    stream_len: 20000
+    settle_s: 1
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

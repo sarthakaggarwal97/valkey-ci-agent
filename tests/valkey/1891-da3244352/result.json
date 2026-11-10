@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "da3244352fb20fe3a84d080fe62e9d499faf2231",
+  "parent": "ea2e48a807e1d4a1a5a684a2a699eda1934a0c6f",
+  "pr": 1891,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove TLSCONN_DEBUG dead code in tls.c (#1891)",
+  "date": "2025-03-29",
+  "unstable": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2189,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only removes the TLSCONN_DEBUG macro definition and its lone invocation in tls.c. The macro expands to nothing unless TLS_DEBUGGING is defined at compile time, which no supported build enables (the removed call even references an undeclared variable, so it could not compile with the flag set). The default binary's behavior is unchanged \u2014 this is dead-code removal with no runtime effect, so no scenario can reach a behavioral difference."
+}

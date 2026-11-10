@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.acl-help-setuser-wording
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL HELP describes SETUSER arguments as rules, not attributes, and
+    ACL SETUSER itself is unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aclhelp
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [ACL, HELP], expect_difference: true, expect: {contains: "SETUSER\
+          \ <username> <rule> [<rule> ...]"}}
+    - {command: [ACL, SETUSER, u1, on, ">pw", "~k*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, GETUSER, u1], compare: skip}
+    - {command: [ACL, LIST], compare: unordered}
+    - {command: [ACL, WHOAMI], expect: {equals: default}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aclhelp.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aclhelp}

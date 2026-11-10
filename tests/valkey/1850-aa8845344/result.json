@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "aa8845344bac7cf68fb69909550349fb7ba4af60",
+  "parent": "5abaf33b176e6149cf0bd1090eb381a30738aa27",
+  "pr": 1850,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix RANDOMKEY infinite loop during CLIENT PAUSE (#1850)",
+  "date": "2025-03-18",
+  "unstable": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/db.c:448"
+    ],
+    "rounds": 1
+  },
+  "cost_usd": 3.7587,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-70cf1ac95447",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'randomkey' returned ERROR: the parent did not answer command 3 (RANDOMKEY): TimeoutError: Timeout reading from /tmp/vfc-hgo8kij0/s.sock"
+    },
+    {
+      "scenario": "ai-c4033e0e3878",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'randomkey' returned ERROR: the parent did not answer command 3 (RANDOMKEY): TimeoutError: Timeout reading from /tmp/vfc-h0mpyd_7/s.sock"
+    }
+  ]
+}

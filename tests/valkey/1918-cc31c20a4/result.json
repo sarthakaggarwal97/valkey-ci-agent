@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cc31c20a409c738a058e685c5adb41e9761d8332",
+  "parent": "add716b7ddce48d4e13ebffe65401c7d0e26b91a",
+  "pr": 1918,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add human node name to log statement with node name (#1918)",
+  "date": "2025-04-05",
+  "unstable": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2839,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds the already-always-initialized human_nodename field (an sds set to sdsempty() at node creation, never NULL) to two existing LL_DEBUG log format strings in cluster_legacy.c, matching the pattern used by dozens of other log lines in the file. It alters no command replies, protocol, replication, failover, or persistence behaviour \u2014 it is a pure observability/log-text change with nothing a fuzzer oracle could observe, so no scenario is needed."
+}

@@ -1,0 +1,27 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1a975faf79c3..7d2a69d12892.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-dceb0290c8f9
+seed: 1801001
+experiment:
+  id: proposed.defrag-type-encoding-churn
+  inputs:
+    keys: 16
+    rate: 6000
+    run_s: 25
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
+  server_config:
+    activedefrag: 'yes'
+    active-defrag-ignore-bytes: 1mb
+    active-defrag-threshold-lower: 1
+    active-defrag-cycle-max: 75
+    active-defrag-max-scan-fields: 8
+    list-max-listpack-size: 8
+    hash-max-listpack-entries: 8
+    hash-max-listpack-value: 8
+    set-max-listpack-entries: 8
+    set-max-intset-entries: 8
+    zset-max-listpack-entries: 8
+    zset-max-listpack-value: 8

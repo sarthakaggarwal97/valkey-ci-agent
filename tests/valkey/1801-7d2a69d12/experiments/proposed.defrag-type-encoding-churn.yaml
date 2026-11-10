@@ -1,0 +1,26 @@
+extends: [valkey.liveness]
+id: proposed.defrag-type-encoding-churn
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Active defrag of large collections while a workload changes their type
+    and encoding mid-scan, watched by the liveness oracle for asserts, sanitizer reports
+    or a stuck defrag loop
+inputs:
+  properties:
+    rate: {type: number, default: 6000}
+    run_s: {type: number, default: 25}
+    keys: {type: integer, default: 16}
+components:
+- use: valkey.workload.command-table
+  id: churn
+  config:
+    keys: {$ref: inputs.keys}
+    rate: {$ref: inputs.rate}
+- use: valkey.action.sleep
+  id: run
+  depends_on: [churn]
+  config: {seconds: {$ref: inputs.run_s}}
+required_events: [run.completed]
+required_evidence:
+- {evidence_id: valkey.workload.command-table, source: churn}

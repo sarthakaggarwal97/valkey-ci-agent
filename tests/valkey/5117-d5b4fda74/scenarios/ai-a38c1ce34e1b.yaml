@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5ed2d2564728..d5b4fda740a4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a38c1ce34e1b
+seed: 1
+experiment:
+  id: proposed.ldb-empty-script
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

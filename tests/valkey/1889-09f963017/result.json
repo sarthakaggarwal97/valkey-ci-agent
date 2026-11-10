@@ -1,0 +1,27 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "09f9630171501d1d62536045984220cad73588ba",
+  "parent": "da3244352fb20fe3a84d080fe62e9d499faf2231",
+  "pr": 1889,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Redact protocol error log when hide-user-data-from-log enabled (#1889)",
+  "date": "2025-03-31",
+  "unstable": "116e7f9534440b7b8d4370a6d3038eb760acbcee",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 13,
+    "executed": 13,
+    "percent": 100,
+    "uncovered": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.8707,
+  "findings": [],
+  "recorded": []
+}
