@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.set-scan-dict-path
+deployment:
+  modes: [standalone]
+metadata:
+  description: SCAN/HSCAN/ZSCAN dict path, DEBUG htstats-key and MEMORY USAGE across
+    set, hash and zset encodings now that sets left dict
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    server_config:
+      hash-max-listpack-entries: 4
+      zset-max-listpack-entries: 4
+      set-max-listpack-entries: 4
+      set-max-intset-entries: 4
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3, f4, v4, f5, v5, f6, v6], expect: {
+        equals: 6}}
+    - {command: [OBJECT, ENCODING, h], compare: skip}
+    - {command: [HSCAN, h, 0, COUNT, 100], compare: skip}
+    - {command: [ZADD, z, 1, a, 2, b, 3, c, 4, d, 5, e, 6, f], expect: {equals: 6}}
+    - {command: [OBJECT, ENCODING, z], compare: skip}
+    - {command: [ZSCAN, z, 0, COUNT, 100], compare: skip}
+    - {command: [SADD, s, m1, m2, m3, m4, m5, m6], expect: {equals: 6}}
+    - {command: [OBJECT, ENCODING, s], compare: skip}
+    - {command: [SMEMBERS, s], compare: unordered}
+    - {command: [MEMORY, USAGE, s], compare: skip}
+    - {command: [SCAN, 0, COUNT, 100], compare: skip}
+    - {command: [DEBUG, HTSTATS-KEY, z], compare: skip}
+    - {command: [DEBUG, HTSTATS-KEY, h], compare: skip}
+    - {command: [SET, str, hello], expect: {equals: OK}}
+    - {command: [DEBUG, HTSTATS-KEY, str], expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

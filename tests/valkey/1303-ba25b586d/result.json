@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ba25b586d5744e315864790e6920a26830a54c09",
+  "parent": "7892bf808b6f748684af7defa0c0a8611cc4be50",
+  "pr": 1303,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Introduce FORCE_DEFRAG compilation option to allow activedefrag run when allocator is not jemalloc (#1303)",
+  "date": "2024-12-17",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5113,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change introduces a DEBUG_FORCE_DEFRAG compile-time option: all new runtime code (the defrag allocator stubs, HAVE_DEFRAG definition, and the activedefrag default of 1) is compiled only when that flag is passed at build time, which the fuzzer's standard builds of both commits never do. On the builds under test the only code difference is moving getAllocatorFragmentation() unchanged from defrag.c to allocator_defrag.c (a refactor) and replacing the literal 0 default of activedefrag with a macro that still evaluates to 0. The rest is Makefile/CMake, CI workflow, and TCL test-harness changes."
+}

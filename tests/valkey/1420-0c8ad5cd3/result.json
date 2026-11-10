@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0c8ad5cd34129bacf5a3dda30b37b156e7cdfb98",
+  "parent": "1acf7f71c0324747de6b0ed9118f065dde0a5a92",
+  "pr": 1420,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "defrag: allow defrag to start during AOF loading (#1420)",
+  "date": "2024-12-11",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.6348,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-4ebdf1db9e12",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'links-up' returned ERROR: cannot read replication.master_link_status on valkey-1 before timeout"
+    }
+  ]
+}

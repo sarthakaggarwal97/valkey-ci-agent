@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.set-persistence-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: Sets of every encoding saved with BGSAVE and SAVE and reloaded across
+    a restart, on both builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config: {set-max-listpack-entries: 4, set-max-intset-entries: 4}
+    commands:
+    - {command: [SADD, is, 1, 2, 3], expect: {equals: 3}}
+    - {command: [SADD, lp, a, b, c], expect: {equals: 3}}
+    - {command: [EVAL, "for i=1,5000 do server.call('SADD', KEYS[1], 'm:'..i) end\
+          \ return server.call('SCARD', KEYS[1])", 1, big], expect: {equals: 5000}}
+    - {command: [SADD, mixed, "", 9223372036854775807, -9223372036854775808, x, 4294967296],
+      expect: {equals: 5}}
+    - {command: [EVAL, "local v = string.rep('x', 8192) for i=1,64 do server.call('SADD',\
+          \ KEYS[1], v..i) end return server.call('SCARD', KEYS[1])", 1, fat], expect: {
+        equals: 64}}
+    - {command: [BGSAVE], expect: {contains: "Background saving started"}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "rdb_bgsave_in_progress:0"}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [SCARD, big], expect: {equals: 5000}}
+    - {command: [SISMEMBER, big, "m:1"], expect: {equals: 1}}
+    - {command: [SISMEMBER, big, "m:5000"], expect: {equals: 1}}
+    - {command: [SISMEMBER, big, "m:5001"], expect: {equals: 0}}
+    - {command: [SORT, lp, ALPHA], expect: {equals: [a, b, c]}}
+    - {command: [SORT, is, ALPHA], expect: {equals: ["1", "2", "3"]}}
+    - {command: [OBJECT, ENCODING, is], compare: skip, expect: {equals: intset}}
+    - {command: [OBJECT, ENCODING, big], compare: skip, expect: {equals: hashtable}}
+    - {command: [SMEMBERS, mixed], compare: unordered}
+    - {command: [SCARD, fat], expect: {equals: 64}}
+    - {command: [DEBUG, HTSTATS-KEY, big], expect_difference: true, expect: {contains: "number\
+          \ of entries"}}
+    - {command: [SADD, big, extra], expect: {equals: 1}}
+    - {command: [SREM, big, "m:1"], expect: {equals: 1}}
+    - {command: [SCARD, big], expect: {equals: 5000}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

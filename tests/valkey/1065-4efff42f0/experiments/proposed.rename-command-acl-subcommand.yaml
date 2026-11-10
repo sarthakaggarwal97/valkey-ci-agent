@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.rename-command-acl-subcommand
+deployment:
+  modes: [standalone]
+metadata:
+  description: rename-command of a container command must leave ACL subcommand rules
+    naming the original working
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {rename-command: "OBJECT renamedobject"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [ACL, SETUSER, u2, on, nopass, "~*", "+object|encoding"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [ACL, GETUSER, u2], compare: skip, expect: {exists: true}}
+    - {command: [renamedobject, encoding, probe-missing-key], expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

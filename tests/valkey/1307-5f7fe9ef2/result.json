@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5f7fe9ef21f1feae42257ac93ab33d8f8c06e97f",
+  "parent": "0c8ad5cd34129bacf5a3dda30b37b156e7cdfb98",
+  "pr": 1307,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Send MEET packet to node if there is no inbound link to fix inconsistency when handshake timedout (#1307)",
+  "date": "2024-12-11",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 32,
+    "executed": 29,
+    "percent": 90,
+    "uncovered": [
+      "src/cluster_legacy.c:3254",
+      "src/cluster_legacy.c:3255",
+      "src/cluster_legacy.c:3257"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.9507,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: cluster_legacy.c:1365 '!link->node' is not true",
+      "scenario": "ai-2a51e3daa78a",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "c3b06bdf551a8232e70c",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

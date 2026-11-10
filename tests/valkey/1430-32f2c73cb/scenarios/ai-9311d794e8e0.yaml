@@ -1,0 +1,19 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3a1043a4f0fa..32f2c73cb5c9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9311d794e8e0
+seed: 101
+experiment:
+  id: proposed.defrag-kvstore-flush-race
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
+  server_config:
+    activedefrag: 'yes'
+    active-defrag-ignore-bytes: '1048576'
+    active-defrag-threshold-lower: '1'
+    active-defrag-cycle-min: '5'
+    active-defrag-cycle-max: '75'
+    active-defrag-cycle-us: '500'

@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.set-store-ops-hashtable
+deployment:
+  modes: [standalone]
+metadata:
+  description: SINTERSTORE/SUNIONSTORE/SDIFFSTORE and COPY over hashtable-encoded
+    sets, exercising both SDIFF algorithms and the only-integers path; replies compared
+    across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, set-max-listpack-entries, 3], expect: {equals: OK}}
+    - {command: [CONFIG, SET, set-max-intset-entries, 3], expect: {equals: OK}}
+    - {command: [SADD, a, 1, 2, 3], expect: {equals: 3}}
+    - {command: [SADD, a, foo], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, a], compare: skip, expect: {equals: hashtable}}
+    - {command: [SADD, b, 2, 3, 4], expect: {equals: 3}}
+    - {command: [SADD, b, bar], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, b], compare: skip, expect: {equals: hashtable}}
+    - {command: [SINTERSTORE, dst, a, b], expect: {equals: 2}}
+    - {command: [SMEMBERS, dst], compare: unordered, expect: {equals: ["2", "3"]}}
+    - {command: [SUNIONSTORE, u, a, b], expect: {equals: 6}}
+    - {command: [SMEMBERS, u], compare: unordered, expect: {equals: ["1", "2", "3",
+          "4", foo, bar]}}
+    - {command: [SDIFFSTORE, d1, a, b], expect: {equals: 2}}
+    - {command: [SMEMBERS, d1], compare: unordered, expect: {equals: ["1", foo]}}
+    - {command: [SADD, big, x0, x1, x2, x3, x4, x5, x6, x7, x8, x9], expect: {equals: 10}}
+    - {command: [OBJECT, ENCODING, big], compare: skip, expect: {equals: hashtable}}
+    - {command: [SADD, s_one, p], expect: {equals: 1}}
+    - {command: [SADD, s_two, q], expect: {equals: 1}}
+    - {command: [SDIFFSTORE, d2, big, s_one, s_two], expect: {equals: 10}}
+    - {command: [SCARD, d2], expect: {equals: 10}}
+    - {command: [COPY, big, bigcopy], expect: {equals: 1}}
+    - {command: [SCARD, bigcopy], expect: {equals: 10}}
+    - {command: [SMEMBERS, bigcopy], compare: unordered, expect: {equals: [x0, x1,
+          x2, x3, x4, x5, x6, x7, x8, x9]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

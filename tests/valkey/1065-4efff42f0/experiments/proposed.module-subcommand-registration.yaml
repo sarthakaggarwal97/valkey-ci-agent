@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.module-subcommand-registration
+deployment:
+  modes: [standalone]
+metadata:
+  description: loading subcommands.so drives hashtableAdd into server.commands and
+    orig_commands, lookupSubcommand duplicate checks and commandAddSubcommand; then
+    ACL container and subcommand rules, COMMAND introspection and LATENCY HISTOGRAM
+    run over the module's subcommands_ht
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: modsub
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [subcommands.bitarray, set, k], expect: {equals: OK}}
+    - {command: [subcommands.bitarray, get, k], expect: {equals: OK}}
+    - {command: [subcommands.bitarray, get, k, a, b], expect: {error: 'wrong number'}}
+    - {command: [subcommands.bitarray], expect: {error: true}}
+    - {command: [subcommands.bitarray, nosuchsub], expect: {error: true}}
+    - {command: [subcommands.sub, get_fullname], expect: {equals: 'subcommands.sub|get_fullname'}}
+    - {command: [subcommands.parent_get_fullname], expect: {equals: subcommands.parent_get_fullname}}
+    - {command: [COMMAND, COUNT], expect: {min: 100}}
+    - {command: [COMMAND, INFO, subcommands.bitarray], expect: {exists: true}}
+    - {command: [COMMAND, DOCS, subcommands.bitarray], compare: skip, expect: {exists: true}}
+    - {command: [COMMAND, LIST, FILTERBY, MODULE, subcommands], compare: unordered,
+      expect: {exists: true}}
+    - {command: [COMMAND, GETKEYS, subcommands.bitarray, set, k1]}
+    - {command: [MODULE, LIST], compare: skip, expect: {exists: true}}
+    - {command: [ACL, SETUSER, mall, on, '>pw', '~*', '-@all', '+subcommands.bitarray'],
+      expect: {equals: OK}}
+    - {command: [ACL, SETUSER, mset, on, '>pw', '~*', '-@all', '+subcommands.bitarray|set'],
+      expect: {equals: OK}}
+    - {command: [ACL, GETUSER, mall], expect: {exists: true}}
+    - {command: [AUTH, mall, pw], connection: c1, expect: {equals: OK}}
+    - {command: [subcommands.bitarray, get, k], connection: c1, expect: {equals: OK}}
+    - {command: [subcommands.sub, get_fullname], connection: c1, expect: {error: true}}
+    - {command: [AUTH, mset, pw], connection: c2, expect: {equals: OK}}
+    - {command: [subcommands.bitarray, set, k], connection: c2, expect: {equals: OK}}
+    - {command: [subcommands.bitarray, get, k], connection: c2, expect: {error: true}}
+    - {command: [LATENCY, HISTOGRAM, subcommands.bitarray], compare: skip, expect: {
+        exists: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modsub.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modsub}

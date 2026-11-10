@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2dfe25b40839..7e564887b93e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6ef8cbb5ecfc
+seed: 1409
+experiment:
+  id: proposed.events-per-io-thread-hidden
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
+  server_config:
+    events-per-io-thread: 3

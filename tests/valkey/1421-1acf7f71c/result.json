@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1acf7f71c0324747de6b0ed9118f065dde0a5a92",
+  "parent": "3eb8314be6af0777e69f852b65f933dd9186d30b",
+  "pr": 1421,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix memory leak in the new hashtable unittest (#1421)",
+  "date": "2024-12-11",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2145,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a one-line fix in src/unit/test_hashtable.c, adding free(e) to plug a memory leak in the hashtable unit test's own test code. It modifies only the unittest binary, not the server: no command, reply, replication, cluster, persistence or tool behaviour changes, so no fuzzer scenario can reach or exercise it."
+}

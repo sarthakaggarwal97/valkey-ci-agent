@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0e96bb311e35..88942c8e61b8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8a675c68bcf9
+seed: 51002
+experiment:
+  id: proposed.set-scan-dict-path
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

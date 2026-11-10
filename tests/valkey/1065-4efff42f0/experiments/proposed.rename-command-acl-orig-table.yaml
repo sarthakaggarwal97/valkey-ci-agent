@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.rename-command-acl-orig-table
+deployment:
+  modes: [standalone]
+metadata:
+  description: rename-command must leave ACL rules that name the original command
+    working (orig_commands table)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {rename-command: "GET renamedget"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [ACL, SETUSER, u1, on, nopass, "~*", +get], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [ACL, CAT, read], compare: unordered, expect_difference: true, expect: {
+        contains: get}}
+    - {command: [renamedget, probe-missing-key], expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

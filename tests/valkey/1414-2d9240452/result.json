@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2d924045223a9f2396b6a08a939b66e2fe5c5d65",
+  "parent": "5f7fe9ef21f1feae42257ac93ab33d8f8c06e97f",
+  "pr": 1414,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Avoid defragging scripts during EVAL command execution (#1414)",
+  "date": "2024-12-12",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.944,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

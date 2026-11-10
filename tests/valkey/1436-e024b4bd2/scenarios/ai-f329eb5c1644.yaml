@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ad2422068190..e024b4bd2764.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f329eb5c1644
+seed: 7101
+experiment:
+  id: proposed.meet-during-handshake
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    node_timeout: 3000
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

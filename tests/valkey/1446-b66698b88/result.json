@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b66698b8870771eadc46fae8d9ef7027aec50dfb",
+  "parent": "ba25b586d5744e315864790e6920a26830a54c09",
+  "pr": 1446,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Discover and fix new typos (#1446)",
+  "date": "2024-12-17",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3669,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only fixes typos: comments in geohash_helper.c and zmalloc.c, a CI tool version bump, Tcl test-suite variable/proc renames, and a C identifier rename (shared.special_asterick -> special_asterisk) whose object is created with the same value \"*\" and used in the same call site, so the REPLCONF GETACK wire bytes are unchanged. No runtime behaviour, reply, or file format differs between the parent and the change, so there is nothing a scenario could observe."
+}

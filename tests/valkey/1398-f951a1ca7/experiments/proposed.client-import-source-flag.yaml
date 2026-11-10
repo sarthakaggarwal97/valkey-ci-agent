@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.client-import-source-flag
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CLIENT IMPORT-SOURCE OFF succeeds even when import-mode is off, and CLIENT LIST
+    / CLIENT INFO render the new I flag for import-source clients.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: import-source
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, GET, import-mode]}
+    - {command: [CLIENT, IMPORT-SOURCE, ON], expect: {error: "not in import mode"}}
+    - {command: [CLIENT, IMPORT-SOURCE, onn], expect: {error: "not in import mode"}}
+    - {command: [CLIENT, IMPORT-SOURCE, OFF], expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, SET, import-mode, yes], expect: {equals: OK}}
+    - {command: [CLIENT, IMPORT-SOURCE, ON], expect: {equals: OK}}
+    - {command: [CLIENT, INFO], expect_difference: true, expect: {contains: "flags=I"}}
+    - {command: [CLIENT, LIST], expect_difference: true, expect: {contains: "flags=I"}}
+    - {command: [CONFIG, SET, import-mode, no], expect: {equals: OK}}
+    - {command: [CLIENT, IMPORT-SOURCE, oFf], expect_difference: true, expect: {equals: OK}}
+    - {command: [CLIENT, INFO], compare: skip, expect: {contains: "flags=N"}}
+    - {command: [CONFIG, SET, import-mode, yes], expect: {equals: OK}}
+    - {command: [CLIENT, IMPORT-SOURCE, maybe], expect: {error: "syntax"}}
+    - {command: [CLIENT, IMPORT-SOURCE, on], expect: {equals: OK}}
+    - {command: [CLIENT, INFO], connection: other, compare: skip, expect: {contains: "flags=N"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [import-source.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: import-source}

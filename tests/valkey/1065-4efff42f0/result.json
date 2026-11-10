@@ -1,0 +1,186 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4efff42f041733d786a73f1cdfa65f6e04c3c4b8",
+  "parent": "c8ee5c2c46c52bcb2b48e190a8f5131fdbcf355e",
+  "pr": 1065,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replace dict with hashtable in command tables (#1065)",
+  "date": "2024-12-10",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 13,
+  "proven": 0,
+  "hunted": 12,
+  "dropped": 3,
+  "recall": false,
+  "coverage": {
+    "lines": 151,
+    "executed": 127,
+    "percent": 84,
+    "uncovered": [
+      "src/acl.c:737",
+      "src/acl.c:743",
+      "src/acl.c:745",
+      "src/acl.c:746",
+      "src/acl.c:753",
+      "src/acl.c:754",
+      "src/acl.c:757",
+      "src/config.c:550",
+      "src/config.c:554",
+      "src/config.c:555",
+      "src/config.c:556",
+      "src/module.c:12083",
+      "src/module.c:12086",
+      "src/module.c:12087",
+      "src/module.c:12088",
+      "src/module.c:12091",
+      "src/module.c:12096",
+      "src/module.c:12097",
+      "src/module.c:12109",
+      "src/module.c:12110",
+      "src/module.c:12111",
+      "src/module.c:12114",
+      "src/module.c:12115",
+      "src/module.c:12120"
+    ],
+    "unnoted": [],
+    "rounds": 2
+  },
+  "cost_usd": 19.9153,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-c0917ef60144",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'acl' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (renamedget probe-missing-key)"
+    },
+    {
+      "scenario": "ai-4c59ee02728f",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'acl' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (renamedget probe-missing-key)"
+    },
+    {
+      "scenario": "ai-8d94612c4876",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'rename' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (GET k), 2 (GETNEW k), 5 (ACL SETUSER u1 on >pw ~* -@all +get), 7 (GETNEW k)"
+    },
+    {
+      "scenario": "ai-ac8a53dff349",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'rename' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (GET k), 2 (GETNEW k), 5 (ACL SETUSER u1 on >pw ~* -@all +get), 7 (GETNEW k)"
+    },
+    {
+      "scenario": "ai-a10897ebf3f2",
+      "build": "unstable",
+      "seed": 201,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a10897ebf3f2",
+      "build": "unstable",
+      "seed": 202,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-a10897ebf3f2",
+      "build": "unstable",
+      "seed": 203,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-7c0c207e6d68",
+      "build": "unstable",
+      "seed": 202,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-7c0c207e6d68",
+      "build": "unstable",
+      "seed": 203,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-7c0c207e6d68",
+      "build": "unstable",
+      "seed": 204,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e6f559093e44",
+      "build": "unstable",
+      "seed": 301,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e6f559093e44",
+      "build": "unstable",
+      "seed": 302,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e6f559093e44",
+      "build": "unstable",
+      "seed": 303,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3164236ecab2",
+      "build": "unstable",
+      "seed": 302,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3164236ecab2",
+      "build": "unstable",
+      "seed": 303,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3164236ecab2",
+      "build": "unstable",
+      "seed": 304,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c92c83e346a7",
+      "build": "unstable",
+      "seed": 401,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c92c83e346a7",
+      "build": "unstable",
+      "seed": 402,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c92c83e346a7",
+      "build": "unstable",
+      "seed": 403,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e030e379effd",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-63fdae3c2209",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'enum' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (OBJECT ENCODING s)"
+    },
+    {
+      "scenario": "ai-6a8c6c90a77b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'enum' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (OBJECT ENCODING s)"
+    }
+  ]
+}

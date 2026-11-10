@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c8ee5c2c46c5..4efff42f0417.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8d94612c4876
+seed: 101
+experiment:
+  id: proposed.rename-command-hashtable-rekey
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

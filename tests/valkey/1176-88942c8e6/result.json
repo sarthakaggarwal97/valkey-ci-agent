@@ -1,0 +1,103 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "88942c8e61b8180c6093010f9260c379e9762790",
+  "parent": "0e96bb311e35b07b1f85932752cad9b777037441",
+  "pr": 1176,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replace dict with new hashtable for sets datatype (#1176)",
+  "date": "2024-12-14",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 17,
+  "proven": 5,
+  "hunted": 16,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 222,
+    "executed": 185,
+    "percent": 83,
+    "uncovered": [
+      "src/db.c:1014",
+      "src/defrag.c:383",
+      "src/defrag.c:385",
+      "src/defrag.c:386",
+      "src/defrag.c:387",
+      "src/defrag.c:388",
+      "src/defrag.c:390",
+      "src/defrag.c:391",
+      "src/defrag.c:393",
+      "src/defrag.c:394",
+      "src/defrag.c:395",
+      "src/defrag.c:515",
+      "src/defrag.c:516",
+      "src/defrag.c:517",
+      "src/defrag.c:576",
+      "src/defrag.c:577",
+      "src/defrag.c:578",
+      "src/defrag.c:581",
+      "src/defrag.c:584",
+      "src/defrag.c:585",
+      "src/defrag.c:783",
+      "src/module.c:11033",
+      "src/object.c:632",
+      "src/object.c:634",
+      "src/object.c:635",
+      "src/object.c:636",
+      "src/object.c:638",
+      "src/rdb.c:893",
+      "src/rdb.c:1913",
+      "src/rdb.c:1953",
+      "src/rdb.c:1973",
+      "src/rdb.c:1974",
+      "src/t_set.c:151",
+      "src/t_set.c:503",
+      "src/t_set.c:897",
+      "src/t_set.c:898",
+      "src/t_set.c:1135"
+    ],
+    "unnoted": [],
+    "rounds": 2
+  },
+  "cost_usd": 16.0516,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-46c042727bef",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'sets' returned ERROR: expectations both builds violate alike, so they are not about the change: 30 (SDIFFSTORE dd 2 s1 is)"
+    },
+    {
+      "scenario": "ai-1c0c888daf45",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'sets' returned ERROR: expectations both builds violate alike, so they are not about the change: 30 (SDIFFSTORE dd 2 s1 is)"
+    },
+    {
+      "scenario": "ai-aeef5467b710",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'replica-back' returned ERROR: kill-replica.recovered observed 0/1 times before timeout"
+    },
+    {
+      "scenario": "ai-e58bce7306fb",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 11 (SMEMBERS u), 22 (SMEMBERS bigcopy)"
+    },
+    {
+      "scenario": "ai-a7b62fb3e644",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 11 (SMEMBERS u), 22 (SMEMBERS bigcopy)"
+    },
+    {
+      "scenario": "ai-1a521c5a0e89",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (ZSCORE out a), 7 (ZSCORE out b), 8 (ZSCORE out x), 10 (ZSCORE out2 a)"
+    }
+  ]
+}

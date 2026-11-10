@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0e96bb311e35..88942c8e61b8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-681d5e2721e7
+seed: 10183
+experiment:
+  id: proposed.set-replica-resync
+  inputs:
+    signal: SIGKILL
+    members: 300
+    member_size: 8192
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7700

@@ -1,0 +1,36 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7e564887b93ea3d1008cd2ea2d2bb82c4a4b0a04",
+  "parent": "2dfe25b40839bb7e904d83622b09b999b25fb160",
+  "pr": 1408,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Set HIDDEN_CONFIG flag on events-per-io-thread (#1408)",
+  "date": "2024-12-11",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.7351,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-6ef8cbb5ecfc",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hidden-config' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (CONFIG GET events-per-io-thread), 4 (CONFIG GET events-per-io-thread events-per*), 6 (CONFIG GET events-per-io-thread), 9 (CONFI"
+    }
+  ],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

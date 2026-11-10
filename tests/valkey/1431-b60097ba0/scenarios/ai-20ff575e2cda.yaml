@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 32f2c73cb5c9..b60097ba0731.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-20ff575e2cda
+seed: 1432
+experiment:
+  id: proposed.stringmatchlen-oob
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

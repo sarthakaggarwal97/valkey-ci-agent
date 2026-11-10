@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.defrag-kvstore-flush-race
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active defrag running incrementally while SWAPDB/FLUSHDB/FLUSHALL swap
+    or recreate a db's keys and expires kvstores must not assert or use freed memory
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.workload.key-value
+  id: churn
+  config:
+    stable_keys: 20000
+    mutable_keys: 20000
+    value_size: 256
+    rate: 8000
+    mix: {set: 0.5, del: 0.3, get: 0.2}
+    op_timeout_s: 5
+- use: valkey.action.commands
+  id: flushchaos
+  depends_on: [churn]
+  config:
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [SELECT, "1"], expect: {equals: OK}}
+    - {command: [SET, "vf:v:1", a, EX, "10000"], expect: {equals: OK}}
+    - {command: [SET, "vf:v:2", b, EX, "10000"], expect: {equals: OK}}
+    - {command: [SET, "vf:v:3", c, EX, "10000"], expect: {equals: OK}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [SET, "vf:v:4", d, EX, "10000"], expect: {equals: OK}}
+    - {command: [SET, "vf:v:5", e, EX, "10000"], expect: {equals: OK}}
+    - {command: [SET, "vf:v:6", f, EX, "10000"], expect: {equals: OK}}
+    - {command: [SWAPDB, "0", "1"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.2"], expect: {equals: OK}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: OK}}
+    - {command: [SET, "vf:r:1", x, EX, "10000"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [SWAPDB, "0", "1"], expect: {equals: OK}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [SET, "vf:r:2", y, EX, "10000"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.2"], expect: {equals: OK}}
+    - {command: [SWAPDB, "0", "1"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.2"], expect: {equals: OK}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: OK}}
+    - {command: [SET, "vf:r:3", x, EX, "10000"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [SWAPDB, "0", "1"], expect: {equals: OK}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [SET, "vf:r:4", y, EX, "10000"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.2"], expect: {equals: OK}}
+    - {command: [SWAPDB, "0", "1"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.2"], expect: {equals: OK}}
+    - {command: [FLUSHDB, ASYNC], expect: {equals: OK}}
+    - {command: [SET, "vf:r:5", x, EX, "10000"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.1"], expect: {equals: OK}}
+    - {command: [SWAPDB, "0", "1"], expect: {equals: OK}}
+    - {command: [FLUSHALL, SYNC], expect: {equals: OK}}
+    - {command: [SET, "vf:r:6", y, EX, "10000"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.2"], expect: {equals: OK}}
+    - {command: [SWAPDB, "0", "1"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.2"], expect: {equals: OK}}
+    - {command: [FLUSHDB, SYNC], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.2"], expect: {equals: OK}}
+required_events: [flushchaos.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flushchaos}

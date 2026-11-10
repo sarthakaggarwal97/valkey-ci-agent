@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.cluster-meet-no-inbound
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    A node that keeps an outbound link to a peer but receives no inbound link back
+    (the peer forgot it) must send a MEET after the handshake timeout and heal the
+    one-sided cluster view; on the parent build the split view never heals. CLUSTER
+    FORGET on node 0 severs its view of nodes 1 and 2 while they still hold outbound
+    links to node 0, reproducing the inconsistency the change fixes.
+inputs:
+  properties:
+    node_timeout: {type: integer, minimum: 1000, maximum: 10000, default: 1000}
+components:
+- use: valkey.action.commands
+  id: meet-heal
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    server_config:
+      cluster-node-timeout: {$ref: inputs.node_timeout}
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, INFO], node: 0, compare: skip, wait_s: 30, expect: {contains: "cluster_known_nodes:3"}}
+    - {command: [CLUSTER, INFO], node: 1, compare: skip, wait_s: 30, expect: {contains: "cluster_state:ok"}}
+    - {command: [SET, k, v], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, FORGET, <node.1.id>], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, FORGET, <node.2.id>], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 0, compare: skip, expect: {contains: "cluster_known_nodes:1"}}
+    - {command: [CLUSTER, INFO], node: 0, compare: skip, wait_s: 30, expect_difference: true,
+      expect: {contains: "cluster_known_nodes:3"}}
+    - {command: [CLUSTER, INFO], node: 1, compare: skip, wait_s: 30, expect: {contains: "cluster_state:ok"}}
+    - {command: [GET, k], node: 0, expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [meet-heal.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: meet-heal}

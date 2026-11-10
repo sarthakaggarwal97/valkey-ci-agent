@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3cd176dc3908e89b3178d9d031f58339c242325e",
+  "parent": "7d72fada2c349eb5b91c7e33099adc167abb0e99",
+  "pr": 1442,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Avoid importing memory aligned malloc (#1442)",
+  "date": "2024-12-14",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2316,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only defines __MM_MALLOC_H before including immintrin.h in hyperloglog.c to suppress the declaration of the unused _mm_malloc/_mm_free aligned-allocation functions. It is a compile-time/header-hygiene change with no modification to any executed code path: the AVX2 HyperLogLog implementations and all command behaviour, replies, persistence and replication are unchanged. If the build compiles (which the runner's build of this checkout proves), there is no behaviour to differentiate, so no scenario can reach anything the change altered."
+}

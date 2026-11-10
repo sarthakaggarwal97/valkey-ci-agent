@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.zset-set-operand-hashtable
+deployment:
+  modes: [standalone]
+metadata:
+  description: ZUNIONSTORE/ZINTERSTORE with a hashtable-encoded set operand, driving
+    the SET+HASHTABLE branch of the zset operand iterator; replies compared across
+    builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, set-max-listpack-entries, 3], expect: {equals: OK}}
+    - {command: [SADD, hs, a, b, c, d], expect: {equals: 4}}
+    - {command: [OBJECT, ENCODING, hs], compare: skip, expect: {equals: hashtable}}
+    - {command: [ZADD, z1, 1, a, 2, x], expect: {equals: 2}}
+    - {command: [ZUNIONSTORE, out, 2, hs, z1], expect: {equals: 5}}
+    - {command: [ZCARD, out], expect: {equals: 5}}
+    - {command: [ZSCORE, out, a], expect: {equals: "2"}}
+    - {command: [ZSCORE, out, b], expect: {equals: "1"}}
+    - {command: [ZSCORE, out, x], expect: {equals: "2"}}
+    - {command: [ZINTERSTORE, out2, 2, hs, z1], expect: {equals: 1}}
+    - {command: [ZSCORE, out2, a], expect: {equals: "2"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

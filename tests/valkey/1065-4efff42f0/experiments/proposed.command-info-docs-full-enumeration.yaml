@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.command-info-docs-full-enumeration
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND INFO and COMMAND DOCS with no arguments iterate the whole command
+    hashtable; run them against a table mutated by a startup rename-command delete
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: enum
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {rename-command: 'object ""'}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, s, hello], expect: {equals: OK}}
+    - {command: [COMMAND, COUNT]}
+    - {command: [OBJECT, ENCODING, s], expect: {error: "unknown command"}}
+    - {command: [COMMAND, INFO], compare: skip}
+    - {command: [COMMAND, DOCS], compare: skip}
+    - {command: [COMMAND, LIST], compare: unordered}
+    - {command: [COMMAND, INFO, get, object, nosuchcmd], expect: {exists: true}}
+    - {command: [COMMAND, DOCS, get, set], expect: {exists: true}}
+    - {command: [COMMAND, INFO], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [enum.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: enum}

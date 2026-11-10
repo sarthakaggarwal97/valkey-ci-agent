@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0e96bb311e35..88942c8e61b8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-45ea28d50be9
+seed: 1005
+experiment:
+  id: proposed.zset-set-operand-hashtable
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

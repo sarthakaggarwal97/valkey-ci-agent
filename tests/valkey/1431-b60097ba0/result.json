@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b60097ba073139ca62fdb59d15cc09737d114add",
+  "parent": "32f2c73cb5c93516ac5abc5259023caf75326b6a",
+  "pr": 1431,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Check length before reading in `stringmatchlen` (#1431)",
+  "date": "2024-12-13",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 5,
+    "executed": 4,
+    "percent": 80,
+    "uncovered": [
+      "src/util.c:123"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.0505,
+  "findings": [],
+  "recorded": []
+}

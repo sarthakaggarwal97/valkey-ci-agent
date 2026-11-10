@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3a1043a4f0fa97daa31f4bd2b3714a07736ac1b6",
+  "parent": "ab69a8a55dee8738dc0bf005c4cb37a259b12053",
+  "pr": 1429,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix Valkey binary build workflow, version support changes. (#1429)",
+  "date": "2024-12-12",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2257,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only CI/build infrastructure: .github/workflows/call-build-linux-x86-packages.yml changes the GitHub Actions runner label, and utils/releasetools/build-config.json updates the Ubuntu distro package build matrix. No server, replication, persistence, command, or tool code is touched, so there is no runtime behaviour a fuzzer scenario could reach or test."
+}

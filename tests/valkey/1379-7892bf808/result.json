@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7892bf808b6f748684af7defa0c0a8611cc4be50",
+  "parent": "980a80115908d19c97b241bb9d62ec4f4fb18b2d",
+  "pr": 1379,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix test_reclaimFilePageCache to avoid tmpfs (#1379)",
+  "date": "2024-12-17",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2537,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only src/unit/test_util.c, adding a statfs check so the unit test test_reclaimFilePageCache skips itself based on whether /tmp is tmpfs (where posix_fadvise page-cache reclaim can't be observed). It is a test-infrastructure/CI fix with no change to any server, command, replication, persistence, or tool behaviour, so no fuzzer scenario can exercise it and none is needed."
+}

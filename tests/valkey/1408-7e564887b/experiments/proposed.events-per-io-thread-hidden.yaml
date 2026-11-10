@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.events-per-io-thread-hidden
+deployment:
+  modes: [standalone]
+metadata:
+  description: events-per-io-thread is hidden from glob-pattern CONFIG GET but still
+    readable by exact name, settable at startup and at runtime, and persisted by CONFIG
+    REWRITE across a restart
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hidden-config
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {events-per-io-thread: 3}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, events-per-io-thread], expect: {equals: [events-per-io-thread,
+          "3"]}}
+    - {command: [CONFIG, GET, "events-per*"], expect_difference: true, expect: {exists: true}}
+    - {command: [CONFIG, GET, "events-per-io-threa?"], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [CONFIG, GET, "events-per-io-thread[a-z]*"], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CONFIG, GET, events-per-io-thread, "events-per*"], expect: {equals: [
+          events-per-io-thread, "3"]}}
+    - {command: [CONFIG, SET, events-per-io-thread, 7], expect: {equals: OK}}
+    - {command: [CONFIG, GET, events-per-io-thread], expect: {equals: [events-per-io-thread,
+          "7"]}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, events-per-io-thread], expect: {equals: [events-per-io-thread,
+          "7"]}}
+    - {command: [CONFIG, GET, "events-per-io-*"], expect_difference: true, expect: {
+        exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hidden-config.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hidden-config}

@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e024b4bd27645a33c5f317792051c5ae3a97fa56",
+  "parent": "ad242206819059937244eb519fa612936aee4143",
+  "pr": 1436,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Drop the MEET packet if the link node is in handshake state (#1436)",
+  "date": "2024-12-16",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 5,
+    "executed": 2,
+    "percent": 40,
+    "uncovered": [
+      "src/cluster_legacy.c:3098",
+      "src/cluster_legacy.c:3140",
+      "src/cluster_legacy.c:3142"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 12.6289,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e203ca35b7f8c162ac9ff5bb55b76bdfc98d244d",
+  "parent": "b66698b8870771eadc46fae8d9ef7027aec50dfb",
+  "pr": 1451,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix undefined behavior defined by ASAN (#1451)",
+  "date": "2024-12-17",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5998,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure undefined-behavior cleanup: every hunk replaces a function-pointer cast (calling e.g. sdsfree or streamFreeCG through an incompatible void(*)(void*) cast) with a trivially equivalent void*-typed wrapper that calls the same free function on the same object. I verified each substitution in the source: sdsfreeVoid wraps sdsfree, listReleaseVoid wraps listRelease, ACLFreeUserVoid wraps ACLFreeUser, streamFreeCGVoid wraps streamFreeCG, streamFreeConsumerVoid wraps streamFreeConsumer, engineLibraryDispose wraps engineLibraryFree, lpFreeVoid calls the same lp_free as lpFree, and "
+}

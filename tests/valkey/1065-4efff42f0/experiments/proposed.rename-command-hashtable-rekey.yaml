@@ -1,0 +1,73 @@
+extends: [valkey.liveness]
+id: proposed.rename-command-hashtable-rekey
+deployment:
+  modes: [standalone]
+metadata:
+  description: rename-command in the config file deletes and re-adds entries of the
+    new command hashtable and mutates cmd->fullname, which is also the orig_commands
+    key; probes the renamed name, the removed name, and ACL resolution through orig_commands
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rename
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {rename-command: 'get getnew'}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k, v1], expect: {equals: OK}}
+    - {command: [GET, k], expect: {error: 'unknown command'}}
+    - {command: [GETNEW, k], expect: {equals: v1}}
+    - {command: [COMMAND, INFO, getnew], expect: {exists: true}}
+    - {command: [COMMAND, COUNT], expect: {min: 100}}
+    - {command: [ACL, SETUSER, u1, on, '>pw', '~*', '-@all', '+get'], expect_difference: true,
+      expect: {error: true}}
+    - {command: [SET, k, v2], expect: {equals: OK}}
+    - {command: [GETNEW, k], expect: {equals: v2}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+- use: valkey.action.commands
+  id: renameempty
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {rename-command: 'get ""'}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [GET, k], expect: {error: 'unknown command'}}
+    - {command: [SET, k, v1], expect: {equals: OK}}
+    - {command: [EXISTS, k], expect: {equals: 1}}
+    - {command: [ACL, SETUSER, u3, on, '>pw', '~*', '-@all', '+get'], expect: {equals: OK}}
+    - {command: [TYPE, k], expect: {equals: string}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+- use: valkey.action.commands
+  id: renamecontainer
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {rename-command: 'object objx'}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k, v1], expect: {equals: OK}}
+    - {command: [OBJX, HELP], expect: {exists: true}}
+    - {command: [OBJX, ENCODING, k], compare: skip, expect: {exists: true}}
+    - {command: [OBJECT, ENCODING, k], expect: {error: 'unknown command'}}
+    - {command: [ACL, SETUSER, uo, on, '>pw', '~*', '-@all', '+object|encoding'],
+      expect_difference: true, expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [rename.completed, renameempty.completed, renamecontainer.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rename}
+- {evidence_id: valkey.command.sequence, source: renameempty}
+- {evidence_id: valkey.command.sequence, source: renamecontainer}

@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.stringmatchlen-oob
+deployment:
+  modes: [standalone]
+metadata:
+  description: Malformed glob patterns in KEYS/SCAN that make stringmatchlen read
+    past the end of the pattern buffer
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: glob
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SET, foo, "1"], expect: {equals: OK}}
+    - {command: [SET, fop, "2"], expect: {equals: OK}}
+    - {command: [SET, f, "3"], expect: {equals: OK}}
+    - {command: [KEYS, foo], compare: unordered, expect: {contains: foo}}
+    - {command: [KEYS, "["], compare: skip}
+    - {command: [KEYS, "[^"], compare: skip}
+    - {command: [KEYS, "[\\"], compare: skip}
+    - {command: [KEYS, "[a-"], compare: skip}
+    - {command: [KEYS, "[!"], compare: skip}
+    - {command: [KEYS, "*["], compare: skip}
+    - {command: [KEYS, "f[o"], compare: skip}
+    - {command: [SCAN, "0", MATCH, "[", COUNT, "100"], compare: skip}
+    - {command: [SCAN, "0", MATCH, "[^abc", COUNT, "100"], compare: skip}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [glob.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: glob}

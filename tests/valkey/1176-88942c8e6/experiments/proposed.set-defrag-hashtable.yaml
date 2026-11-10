@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.set-defrag-hashtable
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active-defrag hashtable-encoded sets, exercising both the immediate
+    activeDefragSdsHashtable path and the defragLater/scanLaterSet path
+components:
+- use: valkey.action.commands
+  id: defrag
+  config:
+    timeout_s: 30
+    server_config:
+      set-max-listpack-entries: 8
+      set-max-intset-entries: 8
+      activedefrag: "yes"
+      active-defrag-ignore-bytes: 1
+      active-defrag-threshold-lower: 0
+      active-defrag-threshold-upper: 100
+      active-defrag-cycle-min: 50
+      active-defrag-cycle-max: 75
+      active-defrag-max-scan-fields: 16
+    commands:
+    - {command: [SADD, bigset, g0, g1, g2, g3, g4, g5, g6, g7, g8, g9, g10, g11, g12,
+        g13, g14, g15, g16, g17, g18, g19], expect: {equals: 20}}
+    - {command: [OBJECT, ENCODING, bigset], expect: {equals: hashtable}}
+    - {command: [SADD, s1, a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11], expect: {
+        equals: 12}}
+    - {command: [OBJECT, ENCODING, s1], expect: {equals: hashtable}}
+    - {command: [SADD, s2, b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11], expect: {
+        equals: 12}}
+    - {command: [SADD, s3, c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11], expect: {
+        equals: 12}}
+    - {command: [SADD, filler, x0, x1, x2, x3, x4, x5, x6, x7, x8, x9, x10, x11],
+      expect: {equals: 12}}
+    - {command: [DEL, filler], expect: {equals: 1}}
+    - {command: [SREM, bigset, g0, g1, g2, g3], expect: {equals: 4}}
+    - {command: [SADD, bigset, g0, g1, g2, g3], expect: {equals: 4}}
+    - {command: [SREM, s1, a0, a1], expect: {equals: 2}}
+    - {command: [SADD, s1, a0, a1], expect: {equals: 2}}
+    - {command: [SCARD, bigset], wait_s: 6, expect: {equals: 20}}
+    - {command: [SCARD, s1], expect: {equals: 12}}
+required_events: [defrag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: defrag}

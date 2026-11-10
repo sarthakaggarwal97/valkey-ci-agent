@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.acl-category-container-bits
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL category rules iterate the whole command hashtable recursively
+    into subcommands_ht, and whole-container rules like +config and -client iterate
+    a command's subcommands_ht; verified via GETUSER descriptions and by authenticating
+    as the users
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aclcat
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k, v1], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, reader, on, '>pw', '~*', '-@all', '+@read'], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, oper, on, '>pw', '~*', '+@all', '-@admin'], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, confonly, on, '>pw', '~*', '-@all', '+config'], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, noclient, on, '>pw', '~*', '+@all', '-client'], expect: {
+        equals: OK}}
+    - {command: [ACL, SETUSER, mixed, on, '>pw', '~*', '+@read', '-@fast', '+@string',
+        '-get', '+client|id'], expect: {equals: OK}}
+    - {command: [ACL, GETUSER, confonly], expect: {exists: true}}
+    - {command: [ACL, GETUSER, oper], expect: {exists: true}}
+    - {command: [ACL, GETUSER, mixed], expect: {exists: true}}
+    - {command: [ACL, LIST], compare: unordered, expect: {exists: true}}
+    - {command: [ACL, CAT], compare: unordered, expect: {exists: true}}
+    - {command: [ACL, CAT, admin], compare: unordered, expect: {exists: true}}
+    - {command: [AUTH, reader, pw], connection: c1, expect: {equals: OK}}
+    - {command: [GET, k], connection: c1, expect: {equals: v1}}
+    - {command: [SET, k, v2], connection: c1, expect: {error: true}}
+    - {command: [CONFIG, GET, maxmemory], connection: c1, expect: {error: true}}
+    - {command: [AUTH, confonly, pw], connection: c2, expect: {equals: OK}}
+    - {command: [CONFIG, GET, maxmemory], connection: c2, expect: {exists: true}}
+    - {command: [CONFIG, SET, maxmemory, 100mb], connection: c2, expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, '0'], connection: c2, expect: {equals: OK}}
+    - {command: [GET, k], connection: c2, expect: {error: true}}
+    - {command: [AUTH, oper, pw], connection: c3, expect: {equals: OK}}
+    - {command: [CONFIG, GET, maxmemory], connection: c3, expect: {error: true}}
+    - {command: [SET, k2, v2], connection: c3, expect: {equals: OK}}
+    - {command: [AUTH, noclient, pw], connection: c4, expect: {equals: OK}}
+    - {command: [CLIENT, GETNAME], connection: c4, expect: {error: true}}
+    - {command: [CLIENT, ID], connection: c4, expect: {error: true}}
+    - {command: [GET, k], connection: c4, expect: {equals: v1}}
+    - {command: [ACL, DELUSER, reader, oper], expect: {equals: 2}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [aclcat.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aclcat}

@@ -1,0 +1,81 @@
+extends: [valkey.liveness]
+id: proposed.set-hashtable-commands
+deployment:
+  modes: [standalone]
+metadata:
+  description: Set command surface across the dict-to-hashtable conversion, replies
+    compared with the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sets
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, set-max-listpack-entries, 3], expect: {equals: OK}}
+    - {command: [CONFIG, SET, set-max-intset-entries, 3], expect: {equals: OK}}
+    - {command: [SADD, s1, 1, 2, 3], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, s1], compare: skip, expect: {equals: intset}}
+    - {command: [SADD, s1, 4, 5], expect: {equals: 2}}
+    - {command: [OBJECT, ENCODING, s1], compare: skip, expect: {equals: hashtable}}
+    - {command: [SADD, s1, 3], expect: {equals: 0}}
+    - {command: [SISMEMBER, s1, 3], expect: {equals: 1}}
+    - {command: [SMISMEMBER, s1, 1, 6], expect: {equals: [1, 0]}}
+    - {command: [SADD, s1, 9223372036854775807, -9223372036854775808, 2147483648,
+        4294967296], expect: {equals: 4}}
+    - {command: [SCARD, s1], expect: {equals: 9}}
+    - {command: [SORT, s1, ALPHA], expect: {equals: ["-9223372036854775808", "1",
+          "2", "2147483648", "3", "4", "4294967296", "5", "9223372036854775807"]}}
+    - {command: [SMEMBERS, s1], compare: unordered}
+    - {command: [SSCAN, s1, 0, COUNT, 1000], compare: skip, expect: {error: false}}
+    - {command: [SSCAN, s1, 0, MATCH, "[0-9]*", COUNT, 1000], compare: skip, expect: {
+        error: false}}
+    - {command: [DEBUG, HTSTATS-KEY, s1], expect_difference: true, expect: {contains: "number\
+          \ of entries"}}
+    - {command: [SADD, s2, a, b, c], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, s2], compare: skip, expect: {equals: listpack}}
+    - {command: [SADD, s2, d], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, s2], compare: skip, expect: {equals: hashtable}}
+    - {command: [SADD, s2, ""], expect: {equals: 1}}
+    - {command: [SISMEMBER, s2, ""], expect: {equals: 1}}
+    - {command: [SREM, s2, ""], expect: {equals: 1}}
+    - {command: [SADD, s2, dup, dup, dup, dup], expect: {equals: 1}}
+    - {command: [SADD, fields, fields, LIMIT], expect: {equals: 2}}
+    - {command: [SADD, is, 1, 2], expect: {equals: 2}}
+    - {command: [SINTERCARD, 2, s1, is], expect: {equals: 2}}
+    - {command: [SINTERCARD, 2, s1, is, LIMIT, 1], expect: {equals: 1}}
+    - {command: [SUNIONSTORE, du, 2, s1, s2], expect: {equals: 14}}
+    - {command: [SORT, du, ALPHA], expect: {equals: ["-9223372036854775808", "1",
+          "2", "2147483648", "3", "4", "4294967296", "5", "9223372036854775807", "a",
+          "b", "c", "d", "dup"]}}
+    - {command: [SDIFFSTORE, dd, 2, s1, is], expect: {equals: 7}}
+    - {command: [SINTERSTORE, di, 2, s1, s2], expect: {equals: 0}}
+    - {command: [EXISTS, di], expect: {equals: 0}}
+    - {command: [SMOVE, s1, s2, 5], expect: {equals: 1}}
+    - {command: [SISMEMBER, s2, 5], expect: {equals: 1}}
+    - {command: [SCARD, s1], expect: {equals: 8}}
+    - {command: [EVAL, "for i=1,2000 do server.call('SADD', KEYS[1], 'm:'..i) end\
+          \ return server.call('SCARD', KEYS[1])", 1, big], expect: {equals: 2000}}
+    - {command: [EVAL, "for i=101,2000 do server.call('SREM', KEYS[1], 'm:'..i) end\
+          \ return server.call('SCARD', KEYS[1])", 1, big], expect: {equals: 100}}
+    - {command: [SISMEMBER, big, "m:100"], expect: {equals: 1}}
+    - {command: [SISMEMBER, big, "m:101"], expect: {equals: 0}}
+    - {command: [SRANDMEMBER, big, 60], compare: skip, expect: {error: false}}
+    - {command: [SRANDMEMBER, big, 5], compare: skip, expect: {error: false}}
+    - {command: [SRANDMEMBER, big, -20], compare: skip, expect: {error: false}}
+    - {command: [SPOP, big], compare: skip, expect: {error: false}}
+    - {command: [SCARD, big], expect: {equals: 99}}
+    - {command: [SADD, sp, p1, p2, p3, p4, p5], expect: {equals: 5}}
+    - {command: [SPOP, sp, 100], compare: unordered}
+    - {command: [EXISTS, sp], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [sets.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sets}

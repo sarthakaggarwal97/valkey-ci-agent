@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0e96bb311e35..88942c8e61b8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-27ed28ef2a3b
+seed: 10180
+experiment:
+  id: proposed.set-module-scan
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7400

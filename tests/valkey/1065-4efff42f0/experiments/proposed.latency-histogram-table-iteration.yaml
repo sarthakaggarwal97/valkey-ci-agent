@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.latency-histogram-table-iteration
+deployment:
+  modes: [standalone]
+metadata:
+  description: LATENCY HISTOGRAM with no args and with container-command args iterates
+    the command hashtable and subcommands_ht; COMMAND, COMMAND LIST/INFO/DOCS and
+    CONFIG RESETSTAT iterate it too
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: latency
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {latency-tracking: 'yes'}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k, v1], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v1}}
+    - {command: [DEL, k], expect: {equals: 1}}
+    - {command: [CONFIG, GET, maxmemory], expect: {exists: true}}
+    - {command: [CLIENT, SETNAME, c0], expect: {equals: OK}}
+    - {command: [CLIENT, GETNAME], expect: {equals: c0}}
+    - {command: [XADD, s, 1-1, f, v], expect: {equals: 1-1}}
+    - {command: [XLEN, s], expect: {equals: 1}}
+    - {command: [XINFO, STREAM, s], compare: skip, expect: {exists: true}}
+    - {command: [LATENCY, HISTOGRAM], compare: skip, expect: {exists: true}}
+    - {command: [LATENCY, HISTOGRAM, get, config, client, xinfo, nosuchcommand], compare: skip,
+      expect: {exists: true}}
+    - {command: [LATENCY, HISTOGRAM, xgroup], expect: {exists: true}}
+    - {command: [COMMAND, COUNT], expect: {min: 100}}
+    - {command: [COMMAND, LIST], compare: unordered, expect: {exists: true}}
+    - {command: [COMMAND], compare: skip, expect: {exists: true}}
+    - {command: [COMMAND, INFO, get, set, 'config|get'], expect: {exists: true}}
+    - {command: [COMMAND, DOCS, config], compare: skip, expect: {exists: true}}
+    - {command: [COMMAND, GETKEYS, SET, k, v], expect: {equals: [k]}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [INFO, commandstats], compare: skip, expect: {exists: true}}
+    - {command: [INFO, latencystats], compare: skip, expect: {exists: true}}
+    - {command: [LATENCY, HISTOGRAM], compare: skip, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [latency.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: latency}

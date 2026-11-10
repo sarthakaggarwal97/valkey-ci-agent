@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c8ee5c2c46c5..4efff42f0417.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e6f559093e44
+seed: 301
+experiment:
+  id: proposed.latency-histogram-table-iteration
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

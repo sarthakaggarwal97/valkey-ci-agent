@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.set-encoding-conversions
+deployment:
+  modes: [standalone]
+metadata:
+  description: SADD-driven set encoding conversions force intset/listpack sets into
+    the new hashtable encoding; replies compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, set-max-listpack-entries, 3], expect: {equals: OK}}
+    - {command: [CONFIG, SET, set-max-intset-entries, 3], expect: {equals: OK}}
+    - {command: [SADD, s1, 1, 2, 3], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, s1], compare: skip, expect: {equals: intset}}
+    - {command: [SADD, s1, hello], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, s1], compare: skip, expect: {equals: hashtable}}
+    - {command: [SADD, s1, hello], expect: {equals: 0}}
+    - {command: [SADD, s1, world], expect: {equals: 1}}
+    - {command: [SCARD, s1], expect: {equals: 5}}
+    - {command: [SISMEMBER, s1, world], expect: {equals: 1}}
+    - {command: [SREM, s1, hello], expect: {equals: 1}}
+    - {command: [SMEMBERS, s1], compare: unordered, expect: {equals: ["1", "2", "3",
+          world]}}
+    - {command: [SADD, s2, a, b, c], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, s2], compare: skip, expect: {equals: listpack}}
+    - {command: [SADD, s2, d], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, s2], compare: skip, expect: {equals: hashtable}}
+    - {command: [SCARD, s2], expect: {equals: 4}}
+    - {command: [SMEMBERS, s2], compare: unordered, expect: {equals: [a, b, c, d]}}
+    - {command: [SADD, s3, a, b, c, d], expect: {equals: 4}}
+    - {command: [OBJECT, ENCODING, s3], compare: skip, expect: {equals: hashtable}}
+    - {command: [SADD, s4, 1, 2], expect: {equals: 2}}
+    - {command: [OBJECT, ENCODING, s4], compare: skip, expect: {equals: intset}}
+    - {command: [SADD, s4, 3, 4, 5, 6], expect: {equals: 4}}
+    - {command: [OBJECT, ENCODING, s4], compare: skip, expect: {equals: hashtable}}
+    - {command: [SCARD, s4], expect: {equals: 6}}
+    - {command: [SADD, s5, 10], expect: {equals: 1}}
+    - {command: [SADD, s5, 11], expect: {equals: 1}}
+    - {command: [SADD, s5, 12], expect: {equals: 1}}
+    - {command: [SADD, s5, 13], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, s5], compare: skip, expect: {equals: hashtable}}
+    - {command: [SCARD, s5], expect: {equals: 4}}
+    - {command: [SMEMBERS, s5], compare: unordered, expect: {equals: ["10", "11",
+          "12", "13"]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

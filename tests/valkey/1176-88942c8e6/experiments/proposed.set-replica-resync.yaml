@@ -1,0 +1,55 @@
+extends: [valkey.base]
+id: proposed.set-replica-resync
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Seed a large hashtable-encoded set, kill or stall a replica under writes,
+    and require the set to survive the resync intact
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGSTOP], default: SIGKILL}
+    members: {type: integer, minimum: 1, maximum: 100000, default: 20000}
+    member_size: {type: integer, minimum: 1, maximum: 16384, default: 16}
+components:
+- use: valkey.action.commands
+  id: seed-sets
+  depends_on: [writes]
+  config:
+    instances: primaries
+    timeout_s: 60
+    commands:
+    - {command: [EVAL, "local n = tonumber(ARGV[1]) local v = string.rep('x', tonumber(ARGV[2]))\
+          \ for i=1,n do server.call('SADD', KEYS[1], v..':'..i) end return server.call('SCARD',\
+          \ KEYS[1])", 1, bigset, {$ref: inputs.members}, {$ref: inputs.member_size}],
+      expect: {equals: {$ref: inputs.members}}}
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: seed-sets.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.wait-event
+  id: replica-back
+  depends_on: [seed-sets, kill-replica]
+  config: {event: kill-replica.recovered, only_after: kill-replica.injected, timeout_s: 120}
+- use: valkey.action.commands
+  id: verify-replica
+  depends_on: [replica-back]
+  config:
+    instances: replicas
+    timeout_s: 90
+    commands:
+    - {command: [SCARD, bigset], wait_s: 60, expect: {equals: {$ref: inputs.members}}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [verify-replica]
+  config: {seconds: 2}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [seed-sets.completed, kill-replica.recovered]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: verify-replica}
+- {evidence_id: valkey.fault.injected, source: kill-replica}

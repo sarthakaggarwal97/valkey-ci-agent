@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c8ee5c2c46c52bcb2b48e190a8f5131fdbcf355e",
+  "parent": "b4c2a1804a20211a0cca634393d689e5bc96ddf7",
+  "pr": null,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Hashtable implementation including unit tests",
+  "date": "2024-12-10",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3422,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a new, not-yet-used data structure: src/hashtable.c/.h are added and linked into the build, but no server code includes or calls the new hashtable at this commit (only hashtable.c itself and src/unit/test_hashtable.c reference it). No command, reply, replication, persistence or config behaviour changes, so no scenario run against real servers can exercise the new code; it is covered by the unit tests the change itself adds."
+}
