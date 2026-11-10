@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.search-aggregate-nan-sort-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE SORTBY puts NaN sort keys (from APPLY sqrt of a negative)
+    last in both directions, on both the stable_sort path (MAX >= rows) and the heap
+    path (MAX < rows)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, agg, ON, HASH, PREFIX, "1", "a:", SCHEMA, n, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [HSET, "a:n16", n, "-16"], expect: {equals: 1}}
+    - {command: [HSET, "a:n9", n, "-9"], expect: {equals: 1}}
+    - {command: [HSET, "a:n4", n, "-4"], expect: {equals: 1}}
+    - {command: [HSET, "a:n1", n, "-1"], expect: {equals: 1}}
+    - {command: [HSET, "a:p1", n, "1"], expect: {equals: 1}}
+    - {command: [HSET, "a:p4", n, "4"], expect: {equals: 1}}
+    - {command: [HSET, "a:p9", n, "9"], expect: {equals: 1}}
+    - {command: [HSET, "a:p16", n, "16"], expect: {equals: 1}}
+    - {command: [HSET, "a:p25", n, "25"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, agg, "@n:[-100 100]", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [9]}}
+    - {command: [FT.AGGREGATE, agg, "@n:[-100 100]", LOAD, "1", "@n", APPLY, "sqrt(@n)",
+        AS, x, SORTBY, "2", "@x", ASC, MAX, "9", LIMIT, "0", "9"], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [FT.AGGREGATE, agg, "@n:[-100 100]", LOAD, "1", "@n", APPLY, "sqrt(@n)",
+        AS, x, SORTBY, "2", "@x", DESC, MAX, "9", LIMIT, "0", "9"], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [FT.AGGREGATE, agg, "@n:[-100 100]", LOAD, "1", "@n", APPLY, "sqrt(@n)",
+        AS, x, SORTBY, "2", "@x", ASC, MAX, "5", LIMIT, "0", "5"], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [FT.AGGREGATE, agg, "@n:[-100 100]", LOAD, "1", "@n", APPLY, "sqrt(@n)",
+        AS, x, SORTBY, "2", "@x", DESC, MAX, "5", LIMIT, "0", "5"], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [FT.AGGREGATE, agg, "@n:[1 100]", LOAD, "1", "@n", APPLY, "sqrt(@n)",
+        AS, x, SORTBY, "2", "@x", ASC, MAX, "5", LIMIT, "0", "5"], expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

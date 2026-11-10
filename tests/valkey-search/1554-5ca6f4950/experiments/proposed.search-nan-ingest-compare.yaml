@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.search-nan-ingest-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Every NaN spelling in a NUMERIC field is invalid data that drops the
+    key from all indexes; infinities stay valid; DEL of a NaN-holding key leaves no
+    stale B-tree entry
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ingest
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "d:", SCHEMA, n, NUMERIC,
+        t, TAG], expect: {equals: OK}}
+    - {command: [HSET, "d:1", n, "1", t, good], expect: {equals: 2}}
+    - {command: [HSET, "d:2", n, "2", t, good], expect: {equals: 2}}
+    - {command: [HSET, "d:3", n, "3", t, good], expect: {equals: 2}}
+    - {command: [HSET, "d:4", n, "4", t, good], expect: {equals: 2}}
+    - {command: [HSET, "d:5", n, "5", t, good], expect: {equals: 2}}
+    - {command: [HSET, "d:i1", n, "inf", t, good], expect: {equals: 2}}
+    - {command: [HSET, "d:i2", n, "-inf", t, good], expect: {equals: 2}}
+    - {command: [HSET, "d:i3", n, "1e309", t, good], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@n:[-inf +inf]", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [8]}}
+    - {command: [FT.SEARCH, idx, "@n:[0 2]", LIMIT, "0", "0"], expect: {equals: [
+          2]}}
+    - {command: [HSET, "d:o", n, "5", t, over], expect: {equals: 2}}
+    - {command: [HSET, "d:o", n, "-nan"], expect: {equals: 0}}
+    - {command: [HSET, "d:b1", n, "-nan", t, bad], expect: {equals: 2}}
+    - {command: [HSET, "d:b2", n, "+nan", t, bad], expect: {equals: 2}}
+    - {command: [HSET, "d:b3", n, "nan(1)", t, bad], expect: {equals: 2}}
+    - {command: [HSET, "d:b4", n, " nan", t, bad], expect: {equals: 2}}
+    - {command: [HSET, "d:b5", n, "nan ", t, bad], expect: {equals: 2}}
+    - {command: [HSET, "d:b6", n, "nan", t, bad], expect: {equals: 2}}
+    - {command: [HSET, "d:b7", n, "NaN", t, bad], expect: {equals: 2}}
+    - {command: [HSET, "d:z", n, "999", t, marker], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@t:{marker}", LIMIT, "0", "0"], wait_s: 30, expect: {
+        equals: [1]}}
+    - {command: [FT.SEARCH, idx, "@t:{bad}", LIMIT, "0", "0"], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [FT.SEARCH, idx, "@t:{over}", LIMIT, "0", "0"], expect_difference: true,
+      expect: {equals: [0]}}
+    - {command: [DEL, "d:b1"], expect: {equals: 1}}
+    - {command: [DEL, "d:o"], expect: {equals: 1}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ingest.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ingest}

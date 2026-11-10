@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.search-sortby-nan-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.SEARCH SORTBY on a NUMERIC field sorts an unparsable (NaN) stored
+    value last in both directions instead of as 0.0, under search.emulate-release
+    1.2.0 where the key stays in the TAG index
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sortby
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [CONFIG, SET, search.emulate-release, "1.2.0"], expect: {equals: OK}}
+    - {command: [FT.CREATE, s, ON, HASH, PREFIX, "1", "s:", SCHEMA, n, NUMERIC, t,
+        TAG], expect: {equals: OK}}
+    - {command: [HSET, "s:a", n, "-7", t, x], expect: {equals: 2}}
+    - {command: [HSET, "s:b", n, "-3", t, x], expect: {equals: 2}}
+    - {command: [HSET, "s:c", n, "2", t, x], expect: {equals: 2}}
+    - {command: [HSET, "s:d", n, "6", t, x], expect: {equals: 2}}
+    - {command: [HSET, "s:e", n, "11", t, x], expect: {equals: 2}}
+    - {command: [HSET, "s:bad", n, "nan", t, x], expect: {equals: 2}}
+    - {command: [FT.SEARCH, s, "@t:{x}", LIMIT, "0", "0"], wait_s: 30, expect: {equals: [
+          6]}}
+    - {command: [FT.SEARCH, s, "@n:[-inf +inf]", LIMIT, "0", "0"], expect: {equals: [
+          5]}}
+    - {command: [FT.SEARCH, s, "@t:{x}", NOCONTENT, SORTBY, n, ASC, LIMIT, "0", "10"],
+      expect_difference: true, expect: {equals: [6, "s:a", "s:b", "s:c", "s:d", "s:e",
+          "s:bad"]}}
+    - {command: [FT.SEARCH, s, "@t:{x}", NOCONTENT, SORTBY, n, DESC, LIMIT, "0", "10"],
+      expect_difference: true, expect: {equals: [6, "s:e", "s:d", "s:c", "s:b", "s:a",
+          "s:bad"]}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [sortby.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sortby}

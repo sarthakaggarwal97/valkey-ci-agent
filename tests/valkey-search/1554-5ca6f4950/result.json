@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "5ca6f4950a1f560921f374f28b2074cdab009b5e",
+  "parent": "d08f29e1e36d3eca830344acc0641890bc2dcfac",
+  "pr": 1554,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Reject every NaN spelling in numeric parsing and sort NaN last in SORTBY (#1554)",
+  "date": "2026-11-09",
+  "unstable": "5ed2d256472818f960406fcc83f0a4dbe3242331",
+  "module_head": "5ca6f4950a1f560921f374f28b2074cdab009b5e",
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 4,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 5.231,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-7395bd1baf39",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ingest' returned ERROR: expectations both builds violate alike, so they are not about the change: 22 (FT.SEARCH idx @t:{bad} LIMIT 0 0), 23 (FT.SEARCH idx @t:{over} LIMIT 0 0)"
+    },
+    {
+      "scenario": "ai-fb5b4597f83b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ingest' returned ERROR: expectations both builds violate alike, so they are not about the change: 22 (FT.SEARCH idx @t:{bad} LIMIT 0 0), 23 (FT.SEARCH idx @t:{over} LIMIT 0 0)"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}
