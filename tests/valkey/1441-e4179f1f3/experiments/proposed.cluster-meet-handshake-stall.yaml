@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.cluster-meet-handshake-stall
+deployment:
+  modes: [standalone]
+metadata:
+  description: Re-sent MEETs landing on a link already bound to a handshake node take
+    the new no-op branch instead of the removed drop-guard, handshake nodes expire
+    and are re-created, and the mesh heals once PINGs go through
+components:
+- use: valkey.action.commands
+  id: stall
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    timeout_s: 15
+    server_config:
+      cluster-node-timeout: 3000
+      cluster-ping-interval: 100
+      cluster-require-full-coverage: "no"
+      enable-debug-assert: "yes"
+    commands:
+    - {command: [DEBUG, DROP-CLUSTER-PACKET-FILTER, 0], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, FORGET, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [EVAL, 'local i = redis.call("CLUSTER","INFO"); return tonumber(string.match(i,
+          "cluster_stats_messages_meet_received:(%d+)") or "-1")', 0], node: 1, wait_s: 30,
+      expect: {min: 1}, compare: skip}
+    - {command: [DEBUG, SLEEP, 6], node: 2, expect: {equals: OK}}
+    - {command: [EVAL, 'local i = redis.call("CLUSTER","INFO"); return tonumber(string.match(i,
+          "cluster_stats_messages_meet_received:(%d+)") or "-1")', 0], node: 1, expect_difference: true,
+      expect: {max: 6}}
+    - {command: [EVAL, 'local i = redis.call("CLUSTER","INFO"); return tonumber(string.match(i,
+          "cluster_stats_messages_meet_sent:(%d+)") or "-1")', 0], node: 0, expect_difference: true,
+      expect: {max: 8}}
+    - {command: [DEBUG, DROP-CLUSTER-PACKET-FILTER, -1], node: 0, expect: {equals: OK}}
+    - {command: [EVAL, 'local n = redis.call("CLUSTER","NODES"); local s, c = string.gsub(n,
+          "\n", ""); return c', 0], node: 1, wait_s: 30, expect: {equals: 3}}
+    - {command: [EVAL, 'return #redis.call("CLUSTER","LINKS")', 0], node: 0, wait_s: 30,
+      expect: {equals: 4}}
+    - {command: [EVAL, 'return #redis.call("CLUSTER","LINKS")', 0], node: 1, wait_s: 30,
+      expect: {equals: 4}}
+    - {command: [SET, probe, ok], node: 0, expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [stall.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: stall}

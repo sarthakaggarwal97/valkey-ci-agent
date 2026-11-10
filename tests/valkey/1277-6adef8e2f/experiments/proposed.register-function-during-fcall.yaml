@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.register-function-during-fcall
+deployment:
+  modes: [standalone]
+metadata:
+  description: server.register_function captured during FUNCTION LOAD and invoked
+    during FCALL hits the no-load-context branch, freeing the newly allocated compiledFunction
+    and returning an error
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: regfunc
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - command: [FUNCTION, LOAD, "#!lua name=mylib\nlocal rf = server.register_function\n\
+          local function cb(keys, args) return rf('f2', function() return 1 end) end\n\
+          server.register_function('f1', cb)"]
+      expect: {equals: mylib}
+    - command: [FCALL, f1, "0"]
+      expect: {error: "can only be called on FUNCTION LOAD command"}
+    - command: [FUNCTION, LIST]
+      expect: {exists: true}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [regfunc.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: regfunc}

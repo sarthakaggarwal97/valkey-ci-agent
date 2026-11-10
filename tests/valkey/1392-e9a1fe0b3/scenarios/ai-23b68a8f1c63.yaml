@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 97029953a094..e9a1fe0b320c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-23b68a8f1c63
+seed: 404
+experiment:
+  id: proposed.benchmark-rfr-slot-refetch
+  inputs:
+    requests: 2000
+    clients: 16
+    threads: 4
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

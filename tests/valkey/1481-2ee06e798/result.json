@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2ee06e79837df46389ae2e23348b4c51ab25315f",
+  "parent": "d00c856448e918feb6bff47cf3fbd62dc0f861f5",
+  "pr": 1481,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove readability refactor for failover auth to fix clang warning (#1481)",
+  "date": "2024-12-24",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4134,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff only inlines the trivial static helper getMessageFromSendBlock (which returns &msgblock->data[0].msg) back into clusterRequestFailoverAuth as a direct msgblock->data[0].msg.mflags[0] access, to fix a clang warning. The two expressions access the identical union member, so the FORCEACK bit is set on exactly the same byte and the failover-auth message on the wire is unchanged. This is a build-warning refactor with no behaviour change, so no scenario is needed."
+}

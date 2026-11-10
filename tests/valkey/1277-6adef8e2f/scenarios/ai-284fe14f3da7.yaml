@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1c97317518e4..6adef8e2f97c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-284fe14f3da7
+seed: 1278
+experiment:
+  id: proposed.function-load-engine-refactor
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

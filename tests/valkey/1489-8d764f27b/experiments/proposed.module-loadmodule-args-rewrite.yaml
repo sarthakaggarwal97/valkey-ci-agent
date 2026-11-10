@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.module-loadmodule-args-rewrite
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module arguments installed with VM_UpdateRuntimeArgs survive CONFIG
+    REWRITE (moduleLoadQueueEntryToLoadmoduleOptionStr argv loop) and a restart that
+    re-parses the rewritten loadmodule directive with arguments (moduleEnqueueLoadModule
+    argv loop), compared across the change and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    appendonly: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: modargs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {appendonly: {$ref: inputs.appendonly}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [testmoduleparameter.update.parameter, firstarg, secondarg, "9223372036854775807"],
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [testmoduleparameter.update.parameter, onearg], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [testmoduleparameter.update.parameter, rep, rep, rep, rep, rep, rep,
+        rep, rep, rep, rep, rep, rep, rep, rep, rep, rep], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [testmoduleparameter.update.parameter, done], expect: {equals: OK}}
+    - {command: [MODULE, LIST], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modargs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modargs}

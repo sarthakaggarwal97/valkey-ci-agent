@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.io-threads-accept-stat
+deployment:
+  modes: [standalone]
+metadata:
+  description: New io_threaded_accept_processed INFO stat exists and stays coherent
+    across CONFIG RESETSTAT, with I/O threads active so the modified processIOThreadsReadDone
+    path handles every offloaded read
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: accept-stat
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {io-threads: 4, events-per-io-thread: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    checks: {concurrency: 8}
+    commands:
+    - command: [EVAL, "local s = redis.call('INFO','stats') return string.match(s,\
+          \ 'io_threaded_accept_processed:%d+') or 'absent'", 0]
+      expect_difference: true
+      expect: {equals: "io_threaded_accept_processed:0"}
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [SETRANGE, big, 65536, x], expect: {equals: 65537}}
+    - {command: [STRLEN, big], expect: {equals: 65537}}
+    - {command: [GET, big]}
+    - {command: [PING], connection: c2, expect: {equals: PONG}}
+    - {command: [SET, k2, v2], connection: c3, expect: {equals: OK}}
+    - {command: [GET, k1], connection: c2, expect: {equals: v1}}
+    - {command: [GET, k2], expect: {equals: v2}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [INCR, ctr], expect: {equals: QUEUED}}
+    - {command: [INCR, ctr], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [1, 2]}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - command: [EVAL, "local s = redis.call('INFO','stats') return string.match(s,\
+          \ 'io_threaded_accept_processed:%d+') or 'absent'", 0]
+      expect_difference: true
+      expect: {equals: "io_threaded_accept_processed:0"}
+required_events: [accept-stat.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: accept-stat}

@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.function-load-engine-refactor
+deployment:
+  modes: [standalone]
+metadata:
+  description: Lua FUNCTION LOAD/FCALL across the scripting-engine module refactor
+    - error-message change, multi-function libraries, and the partial-free failure
+    path
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: funcs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nserver.register_function('f1',\
+          \ function(keys, args) return 1 end)\nserver.register_function('f2', function(keys,\
+          \ args) return 2 end)"], expect: {equals: mylib}}
+    - {command: [FCALL, f1, "0"], expect: {equals: 1}}
+    - {command: [FCALL, f2, "0"], expect: {equals: 2}}
+    - {command: [FUNCTION, LOAD, "#!lua name=libdesc\nserver.register_function{function_name='withdesc',\
+          \ callback=function(keys, args) return 5 end, description='a description'}"],
+      expect: {equals: libdesc}}
+    - {command: [FCALL, withdesc, "0"], expect: {equals: 5}}
+    - {command: [FUNCTION, LOAD, "#!lua name=libmany\nfor i=1,12 do server.register_function('fn'..i,\
+          \ function(keys, args) return 0 end) end"], expect: {equals: libmany}}
+    - {command: [FUNCTION, LOAD, "#!lua name=libbad\nserver.register_function('bad-name',\
+          \ function(keys, args) return 1 end)"], expect_difference: true, expect: {
+        error: "Function names can only contain"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=libempty_name\nserver.register_function('',\
+          \ function(keys, args) return 1 end)"], expect_difference: true, expect: {
+        error: "Function names can only contain"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=libpartial\nserver.register_function('ok1',\
+          \ function(keys, args) return 1 end)\nserver.register_function('bad-2',\
+          \ function(keys, args) return 2 end)"], expect_difference: true, expect: {
+        error: "Function names can only contain"}}
+    - {command: [FCALL, ok1, "0"], expect: {error: "Function not found"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=libdup\nserver.register_function('dup',\
+          \ function(keys, args) return 1 end)\nserver.register_function('dup', function(keys,\
+          \ args) return 2 end)"], expect: {error: "Function already exists in the\
+          \ library"}}
+    - {command: [FCALL, dup, "0"], expect: {error: "Function not found"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=libnofunc\n"], expect: {error: "No functions\
+          \ registered"}}
+    - {command: [FCALL, f1, "0"], expect: {equals: 1}}
+    - {command: [FCALL, withdesc, "0"], expect: {equals: 5}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [funcs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: funcs}

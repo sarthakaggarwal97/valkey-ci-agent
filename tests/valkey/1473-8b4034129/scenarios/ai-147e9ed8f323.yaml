@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bb325bde3550..8b40341295ea.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-147e9ed8f323
+seed: 14732
+experiment:
+  id: proposed.set-ifeq-command-docs
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-rfr-readonly-prefix
+deployment:
+  modes: [standalone]
+metadata:
+  description: "valkey-benchmark --rfr on a one-node private cluster: READONLY prefix,\
+    \ role report text, replica-only zero-node exit, multi-range CLUSTER SLOTS parsing,\
+    \ missing-argument usage"
+inputs:
+  properties:
+    requests: {type: integer, minimum: 1, maximum: 100000, default: 200}
+    clients: {type: integer, minimum: 1, maximum: 64, default: 5}
+    pipeline: {type: integer, minimum: 1, maximum: 64, default: 1}
+    keyspace: {type: integer, minimum: 1, maximum: 1000000, default: 1}
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 120
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, cluster-require-full-coverage,
+        "no"], expect: {exit: {equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, DELSLOTS, 100], expect: {exit: {
+          equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, -n, {$ref: inputs.requests},
+        -c, {$ref: inputs.clients}, -P, {$ref: inputs.pipeline}, -r, {$ref: inputs.keyspace},
+        -t, "get,set"], expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: "cluster mode: yes (1 primary)"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, --rfr, all, -n, {$ref: inputs.requests},
+        -c, {$ref: inputs.clients}, -P, {$ref: inputs.pipeline}, -r, {$ref: inputs.keyspace},
+        -t, get], expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: "cluster\
+            \ mode: yes (1 cluster)"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, --rfr, "no", -n, {$ref: inputs.requests},
+        -c, {$ref: inputs.clients}, -t, get], expect_difference: true, expect: {exit: {
+          equals: 0}, stdout: {contains: "cluster mode: yes (1 primary)"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, --rfr, "yes", -n, 10,
+        -t, get], expect_difference: true, expect: {exit: {equals: 1}, stderr: {contains: "Failed\
+            \ to fetch cluster configuration"}}}
+    - {tool: valkey-benchmark, args: [--rfr], expect_difference: true, expect: {exit: {
+          equals: 1}, stdout: {contains: "--rfr <mode>"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

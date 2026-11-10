@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "97029953a094a2ed27382bd9fed3d55c784834d0",
+  "parent": "079f4edf2d7aabd98bd37ffaac608b54dea62b6a",
+  "pr": 1341,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Minor log fixes when failover auth denied due to slot epoch (#1341)",
+  "date": "2024-12-19",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2322,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits two log message strings in cluster_legacy.c: it renames a variable label in the failover-auth-denied warning and appends the node's config epoch to the election-start notice. The logic (vote denial condition, election start, epoch handling) is unchanged; nodeEpoch(myself) is a pure read used only for formatting. No command reply, replication, failover, or persistence behaviour changes, and log wording is not observable by any oracle, so no scenario is needed."
+}

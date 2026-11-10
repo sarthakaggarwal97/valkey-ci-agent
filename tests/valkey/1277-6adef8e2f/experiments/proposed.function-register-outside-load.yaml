@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.function-register-outside-load
+deployment:
+  modes: [standalone]
+metadata:
+  description: server.register_function during FCALL errors and frees the heap compiledFunction;
+    INFO memory walks each engine's memory info
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nredis.register_function('myfunc',\
+          \ function(keys, args) return redis.register_function('other', function()\
+          \ return 1 end) end)"], expect: {equals: mylib}}
+    - {command: [FCALL, myfunc, "0"], expect: {error: "can only be called on FUNCTION\
+          \ LOAD"}}
+    - {command: [INFO, memory], compare: skip, expect: {exists: true}}
+    - {command: [MEMORY, DOCTOR], compare: skip, expect: {exists: true}}
+    - {command: [FUNCTION, LIST], expect: {exists: true}}
+    - {command: [FUNCTION, STATS], compare: skip, expect: {exists: true}}
+    - {command: [INFO, memory], compare: skip, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reg}

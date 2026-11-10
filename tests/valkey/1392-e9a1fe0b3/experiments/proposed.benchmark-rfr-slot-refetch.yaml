@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-rfr-slot-refetch
+deployment:
+  modes: [standalone]
+metadata:
+  description: "valkey-benchmark slot refetch on MOVED errors under --rfr (fetchClusterSlotsConfiguration\
+    \ role branches), and the startup CLUSTER SLOTS error path via ACL"
+inputs:
+  properties:
+    requests: {type: integer, minimum: 1, maximum: 100000, default: 300}
+    clients: {type: integer, minimum: 1, maximum: 64, default: 4}
+    threads: {type: integer, minimum: 1, maximum: 16, default: 1}
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 180
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, cluster-require-full-coverage,
+        "no"], expect: {exit: {equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, DELSLOTS, 100], expect: {exit: {
+          equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, --rfr, all, --threads,
+        {$ref: inputs.threads}, -n, {$ref: inputs.requests}, -c, {$ref: inputs.clients},
+        EVAL, "return redis.error_reply('MOVED 101 127.0.0.1:1')", 1, "key:{tag}"],
+      expect_difference: true, expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, --threads, {$ref: inputs.threads},
+        -n, 100, -c, 4, EVAL, "return redis.error_reply('MOVED 101 127.0.0.1:1')",
+        1, "key:{tag}"], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, ACL, SETUSER, bench, on, ">benchpw", allkeys,
+        "+@all", "-cluster|slots"], expect: {exit: {equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --user, bench, -a, benchpw, --cluster,
+        -n, 10, -t, get], expect_difference: true, expect: {exit: {equals: 1}, stderr: {
+          contains: "CLUSTER SLOTS ERROR"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

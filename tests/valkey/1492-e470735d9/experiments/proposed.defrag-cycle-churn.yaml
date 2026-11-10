@@ -1,0 +1,76 @@
+extends: [valkey.base]
+id: proposed.defrag-cycle-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: Back-to-back active-defrag cycles under write churn, with activedefrag
+    toggled off and on while cycles run, so cycles terminate abnormally and restart
+    immediately
+inputs:
+  properties:
+    cycle_us: {type: integer, minimum: 100, maximum: 100000, default: 500}
+    cpu_min: {type: integer, minimum: 1, maximum: 99, default: 25}
+    cpu_max: {type: integer, minimum: 1, maximum: 99, default: 90}
+    toggle_pause_s: {type: number, minimum: 0.1, maximum: 10, default: 1.5}
+startup_overlays:
+- overlay_id: defrag-aggressive
+  server_config:
+    activedefrag: "yes"
+    active-defrag-threshold-lower: 0
+    active-defrag-ignore-bytes: 1
+    active-defrag-cycle-us: {$ref: inputs.cycle_us}
+    active-defrag-cycle-min: {$ref: inputs.cpu_min}
+    active-defrag-cycle-max: {$ref: inputs.cpu_max}
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: defrag-off-1
+  depends_on: [warm-up]
+  config:
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, activedefrag, no], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: pause-1
+  depends_on: [defrag-off-1]
+  config: {seconds: {$ref: inputs.toggle_pause_s}}
+- use: valkey.action.commands
+  id: defrag-on-1
+  depends_on: [pause-1]
+  config:
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, activedefrag, yes], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: run-1
+  depends_on: [defrag-on-1]
+  config: {seconds: {$ref: inputs.toggle_pause_s}}
+- use: valkey.action.commands
+  id: defrag-off-2
+  depends_on: [run-1]
+  config:
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, activedefrag, no], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: pause-2
+  depends_on: [defrag-off-2]
+  config: {seconds: {$ref: inputs.toggle_pause_s}}
+- use: valkey.action.commands
+  id: defrag-on-2
+  depends_on: [pause-2]
+  config:
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, activedefrag, yes], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [defrag-on-2]
+  config: {seconds: 3}
+required_events: [defrag-on-2.completed, settle.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: defrag-on-1}
+- {evidence_id: valkey.command.sequence, source: defrag-on-2}

@@ -1,0 +1,23 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8b40341295ea..e470735d911e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-587383d11cb6
+seed: 202
+experiment:
+  id: valkey.replication-full-resync
+  inputs:
+    mutation_rate: 2000
+    mutable_keys: 500
+    stable_keys: 500
+    value_size: 16384
+    pause_s: 4
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7100
+  server_config:
+    activedefrag: 'yes'
+    active-defrag-threshold-lower: 0
+    active-defrag-ignore-bytes: 1
+    active-defrag-cycle-us: 500
+    active-defrag-cycle-min: 25
+    active-defrag-cycle-max: 90

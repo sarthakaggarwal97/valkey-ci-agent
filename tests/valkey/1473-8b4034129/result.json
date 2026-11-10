@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8b40341295eaed356adae3de811deae1a9ab4b29",
+  "parent": "bb325bde355040a91b6d1237fe6965dd4650b2ec",
+  "pr": 1473,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix JSON description of SET command (#1473)",
+  "date": "2024-12-27",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.156,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

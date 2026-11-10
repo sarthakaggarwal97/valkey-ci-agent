@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a136ad9a504b7e07de829db5e1f368c3f2ed05b4",
+  "parent": "e4179f1f3b6b8d8490077860bd438303d302f2b9",
+  "pr": 1159,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make global configs as static (#1159)",
+  "date": "2024-12-30",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2184,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff only changes linkage: `dict *configs` and `configEnumGetValue` in src/config.c become `static`. No runtime behaviour, reply, config semantics, or data path is altered; any misuse would be a link-time error caught by the build, not something a fuzzer scenario could exercise."
+}

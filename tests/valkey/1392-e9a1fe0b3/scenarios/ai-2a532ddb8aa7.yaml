@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 97029953a094..e9a1fe0b320c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2a532ddb8aa7
+seed: 97005
+experiment:
+  id: proposed.benchmark-rfr-live-replicas
+  inputs:
+    port: 7400
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7400

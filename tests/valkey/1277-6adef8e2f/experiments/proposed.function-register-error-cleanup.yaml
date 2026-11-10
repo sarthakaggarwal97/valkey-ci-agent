@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.function-register-error-cleanup
+deployment:
+  modes: [standalone]
+metadata:
+  description: FUNCTION LOAD error paths after the scripting-engine refactor free
+    every compiled function and report the moved validation errors
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: funcload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [SET, x, v1], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib1\nserver.register_function('f1',\
+          \ function(keys, args) return 1 end)\nserver.register_function{function_name='f2',\
+          \ callback=function(keys, args) return server.call('GET', keys[1]) end,\
+          \ description='reads one key', flags={'no-writes'}}"], expect: {equals: lib1}}
+    - {command: [FCALL, f1, 0], expect: {equals: 1}}
+    - {command: [FCALL_RO, f2, 1, x], expect: {equals: v1}}
+    - {command: [FUNCTION, LOAD, "#!lua name=badsyntax\nthis is not lua at all ((("],
+      expect: {error: "Error compiling function"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib2\nserver.register_function{function_name='g1',\
+          \ callback=function() return 1 end, description='gd'}\nserver.register_function('g2',\
+          \ function() return 2 end)\nerror('boom')"], expect: {error: "Error registering\
+          \ functions"}}
+    - {command: [FUNCTION, LIST, LIBRARYNAME, lib2], expect: {equals: []}}
+    - {command: [FUNCTION, LOAD, "#!lua name=libto\nserver.register_function('t1',\
+          \ function() return 1 end)\nwhile true do end"], expect: {error: "timeout"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib4\nserver.register_function('ok1',\
+          \ function() return 1 end)\nserver.register_function('foo-bar', function()\
+          \ return 2 end)"], expect_difference: true, expect: {error: "Function names\
+          \ can only contain"}}
+    - {command: [FUNCTION, LIST, LIBRARYNAME, lib4], expect: {equals: []}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib5\nserver.register_function('dup',\
+          \ function() return 1 end)\nserver.register_function('dup', function() return\
+          \ 2 end)"], expect_difference: true, expect: {error: "Function already exists\
+          \ in the library"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib6\nserver.register_function{function_name='h',\
+          \ description='hd'}"], expect: {error: "must get a callback argument"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib6\nserver.register_function('h2',\
+          \ 'notafunc')"], expect: {error: "must be a function"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib6\nserver.register_function()"], expect: {
+        error: "wrong number of arguments"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib6\nserver.register_function{function_name='h3',\
+          \ callback=function() return 1 end, wrongkey='x'}"], expect: {error: "unknown\
+          \ argument given"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib6\nserver.register_function{function_name='h4',\
+          \ description='x', callback=function() return 1 end, flags={'bogusflag'}}"],
+      expect: {error: "unknown flag"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib7\nserver.register_function('evil',\
+          \ function() return server.register_function('nested', function() return\
+          \ 1 end) end)"], expect: {equals: lib7}}
+    - {command: [FCALL, evil, 0], expect: {error: "can only be called on FUNCTION\
+          \ LOAD"}}
+    - {command: [FCALL, f1, 0], expect: {equals: 1}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [funcload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: funcload}

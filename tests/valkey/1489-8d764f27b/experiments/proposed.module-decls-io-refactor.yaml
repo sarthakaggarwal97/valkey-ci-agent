@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.module-decls-io-refactor
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module data type RDB save/load, AOF rewrite, DEBUG DIGEST, COPY/DEL
+    and the rewritten loadmodule config line compared across the module.h refactor,
+    including a restart that reloads the module value through moduleInitIOContext
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    appendonly: {type: string, enum: ["no", "yes"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: modio
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    server_config:
+      enable-debug-command: "yes"
+      appendonly: {$ref: inputs.appendonly}
+      aof-use-rdb-preamble: "no"
+    timeout_s: 60
+    commands:
+    - {command: [mem.alloc, k1, 3], expect: {equals: 3}}
+    - {command: [mem.write, k1, 0, hello], expect: {equals: 5}}
+    - {command: [mem.write, k1, 1, world], expect: {equals: 5}}
+    - {command: [mem.read, k1, 0], expect: {equals: hello}}
+    - {command: [COPY, k1, k2], expect: {equals: 1}}
+    - {command: [mem.read, k2, 1], expect: {equals: world}}
+    - {command: [mem.alloc, big, 64], expect: {equals: 64}}
+    - {command: [mem.write, big, 63, edge], expect: {equals: 4}}
+    - {command: [DEL, k2], expect: {equals: 1}}
+    - {command: [DEBUG, DIGEST-VALUE, k1], expect: {exists: true}}
+    - {command: [DEBUG, DIGEST], expect: {exists: true}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {error: false}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [mem.read, k1, 0], expect: {equals: hello}}
+    - {command: [mem.read, big, 63], expect: {equals: edge}}
+    - {command: [mem.usage, 0], expect: {exists: true}}
+    - {command: [DEBUG, DIGEST-VALUE, k1], expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modio.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modio}

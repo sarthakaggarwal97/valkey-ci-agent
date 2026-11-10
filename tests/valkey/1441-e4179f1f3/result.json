@@ -1,0 +1,62 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e4179f1f3b6b8d8490077860bd438303d302f2b9",
+  "parent": "e470735d911ea5b1ee550a7a7c68beb63c6c812d",
+  "pr": 1441,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Only (re-)send MEET packet once every handshake timeout period (#1441)",
+  "date": "2024-12-30",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 37,
+    "executed": 32,
+    "percent": 86,
+    "uncovered": [
+      "src/cluster_legacy.c:3257",
+      "src/cluster_legacy.c:3259",
+      "src/cluster_legacy.c:3260",
+      "src/cluster_legacy.c:3261",
+      "src/cluster_legacy.c:3297"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 13.2409,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 8 (EVAL return #redis.call(\"CLUSTER\",\"LINKS\") 0) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":4}, not {\"reply\":2}",
+      "scenario": "ai-399cdc643d20",
+      "seed": 1102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "b66f631e329561ce7652",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-67f882e57a20",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'meet' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (EVAL return #redis.call(\"CLUSTER\",\"LINKS\") 0)"
+    },
+    {
+      "scenario": "ai-399cdc643d20",
+      "build": "unstable",
+      "seed": 1102,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

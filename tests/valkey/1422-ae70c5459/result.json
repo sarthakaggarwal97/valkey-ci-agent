@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ae70c5459b13d426e8e48d85e7f48120d69eeebb",
+  "parent": "8aff2357212e2bec0d729f835bd278890aff0e4b",
+  "pr": 1422,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "replication: fix io-threads possible race by moving waitForClientIO (#1422)",
+  "date": "2025-01-02",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.9278,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "35abb68b798b25333e94186583996efed9667958",
+  "parent": "ae70c5459b13d426e8e48d85e7f48120d69eeebb",
+  "pr": 1449,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Offload reading the replication stream to IO threads (#1449)",
+  "date": "2025-01-02",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 16,
+    "executed": 16,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.4526,
+  "findings": [],
+  "recorded": []
+}

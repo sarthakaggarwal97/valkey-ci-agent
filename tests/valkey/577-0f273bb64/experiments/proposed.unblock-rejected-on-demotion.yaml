@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.unblock-rejected-on-demotion
+deployment:
+  modes: [standalone]
+metadata:
+  description: BLPOP/BZPOPMIN/WAIT clients force-unblocked by a primary->replica demotion
+    count rejected_calls, not failed_calls
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: demote
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    server_config: {enable-debug-assert: "yes"}
+    timeout_s: 15
+    commands:
+    - {raw: "BLPOP waitkey 0\r\n", connection: blocker, node: 0, expect: {exists: false}}
+    - {raw: "BZPOPMIN waitzset 0\r\n", connection: zblocker, node: 0, expect: {exists: false}}
+    - {raw: "WAIT 1 0\r\n", connection: waiter, node: 0, expect: {exists: false}}
+    - {command: [REPLICAOF, "<node.1.host>", "<node.1.port>"], node: 0, expect: {
+        equals: OK}}
+    - {read: true, connection: blocker, node: 0}
+    - {read: true, connection: zblocker, node: 0}
+    - {read: true, connection: waiter, node: 0}
+    - command: [EVAL_RO, "local info = redis.call('INFO','commandstats') local out\
+          \ = {} for _, n in ipairs({'blpop','bzpopmin','wait'}) do local c, r, f\
+          \ = string.match(info, 'cmdstat_' .. n .. ':calls=(%d+),usec=%d+,usec_per_call=[%d%.]+,rejected_calls=(%d+),failed_calls=(%d+)')\
+          \ out[#out+1] = n .. ':calls=' .. tostring(c) .. ',rejected=' .. tostring(r)\
+          \ .. ',failed=' .. tostring(f) end return out", 0]
+      node: 0
+      wait_s: 10
+      expect_difference: true
+      expect: {equals: ["blpop:calls=1,rejected=1,failed=0", "bzpopmin:calls=1,rejected=1,failed=0",
+          "wait:calls=1,rejected=1,failed=0"]}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [demote.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: demote}

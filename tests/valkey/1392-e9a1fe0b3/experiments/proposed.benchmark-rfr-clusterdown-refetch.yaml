@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-rfr-clusterdown-refetch
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CLUSTER DELSLOTS 1 splits the one-node cluster's slot range, so CLUSTER SLOTS
+    returns a single-slot range and the cluster goes CLUSTERDOWN; every benchmark
+    command then forces fetchClusterSlotsConfiguration, with --rfr all and with the
+    default primary-only mode.
+inputs:
+  properties:
+    pipeline: {type: integer, minimum: 1, maximum: 16, default: 1}
+    requests: {type: integer, minimum: 4, maximum: 48, default: 20}
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 180
+    runs:
+    - tool: valkey-cli
+      args: [-p, $port, CLUSTER, DELSLOTS, 1]
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}
+    - tool: valkey-benchmark
+      args: [-p, $port, --cluster, --rfr, "all", -t, set, -n, {$ref: inputs.requests},
+        -c, 1, -P, {$ref: inputs.pipeline}]
+      expect_difference: true
+      expect: {exit: {equals: 0}, stderr: {contains: "Cluster slots configuration\
+            \ changed"}}
+    - tool: valkey-benchmark
+      args: [-p, $port, --cluster, -t, set, -n, {$ref: inputs.requests}, -c, 1, -P,
+        {$ref: inputs.pipeline}]
+      expect_difference: true
+      expect: {exit: {equals: 0}, stderr: {contains: "Cluster slots configuration\
+            \ changed"}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

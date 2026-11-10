@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.function-rdb-restart-replace
+deployment:
+  modes: [standalone]
+metadata:
+  description: Function libraries survive an RDB restart and a failed FUNCTION LOAD
+    REPLACE rolls back to the old library through the refactored partial-free path
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: funcrestart
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, x, v1], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib1\nserver.register_function('f1',\
+          \ function(keys, args) return 1 end)\nserver.register_function{function_name='f2',\
+          \ callback=function(keys, args) return server.call('GET', keys[1]) end,\
+          \ description='reads one key', flags={'no-writes'}}"], expect: {equals: lib1}}
+    - {command: [FCALL, f1, 0], expect: {equals: 1}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FCALL, f1, 0], expect: {equals: 1}}
+    - {command: [FCALL_RO, f2, 1, x], expect: {equals: v1}}
+    - {command: [FUNCTION, LOAD, REPLACE, "#!lua name=lib1\nserver.register_function('f1',\
+          \ function(keys, args) return 2 end)"], expect: {equals: lib1}}
+    - {command: [FCALL, f1, 0], expect: {equals: 2}}
+    - {command: [FCALL, f2, 1, x], expect: {error: "Function not found"}}
+    - {command: [FUNCTION, LOAD, REPLACE, "#!lua name=lib1\nserver.register_function('f1',\
+          \ function(keys, args) return 3 end)\nerror('fail')"], expect: {error: "Error\
+          \ registering functions"}}
+    - {command: [FCALL, f1, 0], expect: {equals: 2}}
+    - {command: [FUNCTION, LOAD, REPLACE, "#!lua name=lib1\nserver.register_function('ok',\
+          \ function(keys, args) return 4 end)\nserver.register_function('bad-name',\
+          \ function(keys, args) return 5 end)"], expect_difference: true, expect: {
+        error: "Function names can only contain"}}
+    - {command: [FCALL, f1, 0], expect: {equals: 2}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FCALL, f1, 0], expect: {equals: 2}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [funcrestart.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: funcrestart}

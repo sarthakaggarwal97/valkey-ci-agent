@@ -1,0 +1,31 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1c97317518e40efb4c271ae3b0656cc6e43f0110",
+  "parent": "b56f4f70d2cae11988f2f330b8060e21d78b163b",
+  "pr": 1463,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Resolve bounds checks on cluster_legacy.c (#1463)",
+  "date": "2024-12-20",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 17,
+    "executed": 15,
+    "percent": 88,
+    "uncovered": [
+      "src/cluster_legacy.c:4211",
+      "src/cluster_legacy.c:4272"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 6.677,
+  "findings": [],
+  "recorded": []
+}

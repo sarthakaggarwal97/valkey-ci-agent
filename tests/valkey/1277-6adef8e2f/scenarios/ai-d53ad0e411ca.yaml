@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1c97317518e4..6adef8e2f97c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d53ad0e411ca
+seed: 1101
+experiment:
+  id: proposed.function-register-error-cleanup
+  inputs:
+    resp: 2
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

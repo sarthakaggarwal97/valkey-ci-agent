@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.set-ifeq-command-docs
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS SET reflects the fixed IFEQ argument structure (comparison-value
+    as a string with token IFEQ, no nested arguments), while SET IFEQ execution is
+    unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: setdocs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, DOCS, SET], expect_difference: true, expect: {contains: comparison-value}}
+    - {command: [COMMAND, INFO, SET]}
+    - {command: [COMMAND, GETKEYS, SET, k, v, IFEQ, old], expect: {equals: [k]}}
+    - {command: [SET, k, v1], expect: {equals: OK}}
+    - {command: [SET, k, v2, IFEQ, v1], expect: {equals: OK}}
+    - {command: [SET, k, v3, IFEQ, wrong], expect: {exists: false}}
+    - {command: [GET, k], expect: {equals: v2}}
+    - {command: [SET, k, v4, IFEQ, v2, GET], expect: {equals: v2}}
+    - {command: [SET, k, "", IFEQ, v4], expect: {equals: OK}}
+    - {command: [SET, k, x, IFEQ, ""], expect: {equals: OK}}
+    - {command: [SET, k, y, IFEQ, x, NX], expect: {error: true}}
+    - {command: [SET, missing, v, IFEQ, anything], expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [setdocs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: setdocs}

@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-rfr-live-replicas
+deployment:
+  modes: [cluster]
+metadata:
+  description: >-
+    valkey-benchmark --rfr against the deployment's own cluster, the only topology
+    with real replicas: --rfr yes builds a replica-only node set and sends READONLY
+    on every connection, SETs to replicas draw MOVED and force the replica-only slot
+    refetch, and --rfr all benchmarks the full mixed node set.
+inputs:
+  required: [port]
+  properties:
+    port: {type: integer, minimum: 1024, maximum: 65535, description: "The deployment's\
+        \ base_port, the first instance's port"}
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 120
+    runs:
+    - tool: valkey-benchmark
+      args: [-h, 127.0.0.1, -p, {$ref: inputs.port}, --cluster, --rfr, "yes", -t,
+        get, -n, 1000, -c, 6]
+      expect_difference: true
+      expect: {exit: {equals: 0}, stdout: {contains: "cluster mode: yes (3 replica)"}}
+    - tool: valkey-benchmark
+      args: [-h, 127.0.0.1, -p, {$ref: inputs.port}, --cluster, --rfr, "yes", -t,
+        set, -n, 300, -c, 6]
+      expect_difference: true
+      expect: {exit: {equals: 0}, stderr: {contains: "Cluster slots configuration\
+            \ changed"}}
+    - tool: valkey-benchmark
+      args: [-h, 127.0.0.1, -p, {$ref: inputs.port}, --cluster, --rfr, "all", -t,
+        get, -n, 1000, -c, 6]
+      expect_difference: true
+      expect: {exit: {equals: 0}, stdout: {contains: "cluster mode: yes (6 cluster)"}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

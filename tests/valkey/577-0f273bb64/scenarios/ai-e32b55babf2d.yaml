@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a136ad9a504b..0f273bb648bf.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e32b55babf2d
+seed: 101
+experiment:
+  id: proposed.unblock-rejected-on-demotion
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

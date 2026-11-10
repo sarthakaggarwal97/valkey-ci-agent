@@ -1,0 +1,31 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ca0b0c662a991f84d8e11a0d433e06fdeae6980b",
+  "parent": "e48317eb347fd1202aa4f65cb533d6727092f8ef",
+  "pr": 1184,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Clear outdated failure reports more accurately (#1184)",
+  "date": "2024-12-20",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 8,
+    "executed": 6,
+    "percent": 75,
+    "uncovered": [
+      "src/cluster_legacy.c:1573",
+      "src/cluster_legacy.c:1575"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 11.0982,
+  "findings": [],
+  "recorded": []
+}

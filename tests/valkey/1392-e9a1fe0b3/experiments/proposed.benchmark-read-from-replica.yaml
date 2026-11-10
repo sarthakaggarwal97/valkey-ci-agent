@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-read-from-replica
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: valkey-benchmark --rfr parsing, CLUSTER SLOTS fetch, READONLY prefix
+    and renamed cluster output, compared against the parent build
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-benchmark, args: [--help], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "--rfr"}}}
+    - {tool: valkey-benchmark, args: [--cluster, --rfr, bogus], expect_difference: true,
+      expect: {exit: {min: 1}, stdout: {contains: 'Invalid option "bogus"'}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, -n, 100, -t, get], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "Node 0(Primary)"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, --rfr, all, -n, 100, -t,
+        get], expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: "1\
+            \ cluster nodes"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, --rfr, 'yes', -n, 100,
+        -t, get], expect_difference: true, expect: {exit: {min: 1}, stderr: {contains: "Failed\
+            \ to fetch cluster configuration"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

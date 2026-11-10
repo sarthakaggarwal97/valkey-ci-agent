@@ -1,0 +1,61 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8d764f27b34f9bc346c427e39bb61d5b6d573fea",
+  "parent": "ede4adde7ac10d6a02bdf73c33ff762d59b7aca7",
+  "pr": 1489,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Refactor: move all valkey modules related declarations to `module.h` (#1489)",
+  "date": "2025-01-02",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 0,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 27,
+    "executed": 20,
+    "percent": 74,
+    "uncovered": [
+      "src/module.c:663",
+      "src/module.c:676",
+      "src/module.c:677",
+      "src/module.c:7440",
+      "src/module.c:7472",
+      "src/rdb.c:1246",
+      "src/rdb.c:3225"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 14.009,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-745e088d93e3",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'modio' returned ERROR: expectations both builds violate alike, so they are not about the change: 16 (mem.read k1 0), 17 (mem.read big 63)"
+    },
+    {
+      "scenario": "ai-b8e7a57dc992",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'modargs' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (testmoduleparameter.update.parameter firstarg secondarg 9223372036854775807), 3 (testmoduleparameter.update.parameter onearg), 6 (test"
+    },
+    {
+      "scenario": "ai-18b6015cf311",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'modargs' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (testmoduleparameter.update.parameter firstarg secondarg 9223372036854775807), 3 (testmoduleparameter.update.parameter onearg), 6 (test"
+    },
+    {
+      "scenario": "ai-5ff7be5cf4ca",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'modargs' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (testmoduleparameter.update.parameter firstarg secondarg 9223372036854775807), 3 (testmoduleparameter.update.parameter onearg), 6 (test"
+    }
+  ]
+}

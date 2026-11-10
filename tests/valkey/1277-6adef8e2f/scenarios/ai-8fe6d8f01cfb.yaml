@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1c97317518e4..6adef8e2f97c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8fe6d8f01cfb
+seed: 1277
+experiment:
+  id: proposed.register-function-during-fcall
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

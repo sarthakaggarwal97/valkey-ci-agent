@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "da92c1d6c8f3dd58f3b03da3c468a5fab162fd8f",
+  "parent": "9f4503ca500fe2b668decb6fb94c377fbce5d0a0",
+  "pr": 1474,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Document all command flags near serverCommand (#1474)",
+  "date": "2024-12-25",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2177,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds comments to src/server.h documenting existing command flags (CMD_MODULE, CMD_PROTECTED, CMD_MODULE_GETKEYS, etc.). No code, data structures, or behaviour is modified\u2014compiled output is identical\u2014so there is nothing to test."
+}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ede4adde7ac1..8d764f27b34f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b8e7a57dc992
+seed: 1
+experiment:
+  id: proposed.module-loadmodule-args-rewrite
+  inputs:
+    resp: 2
+    appendonly: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

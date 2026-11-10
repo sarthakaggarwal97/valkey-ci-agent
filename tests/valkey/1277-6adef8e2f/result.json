@@ -1,0 +1,177 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6adef8e2f97c3cd2dd4620fb9d5af8d426f1b548",
+  "parent": "1c97317518e40efb4c271ae3b0656cc6e43f0110",
+  "pr": 1277,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Adds support for scripting engines as Valkey modules (#1277)",
+  "date": "2024-12-21",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 11,
+  "proven": 7,
+  "hunted": 11,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 223,
+    "executed": 178,
+    "percent": 79,
+    "uncovered": [
+      "src/functions.c:123",
+      "src/functions.c:124",
+      "src/functions.c:130",
+      "src/functions.c:131",
+      "src/functions.c:518",
+      "src/functions.c:519",
+      "src/functions.c:520",
+      "src/functions.c:521",
+      "src/functions.c:522",
+      "src/functions.c:523",
+      "src/functions.c:524",
+      "src/functions.c:527",
+      "src/functions.c:529",
+      "src/functions.c:530",
+      "src/functions.c:531",
+      "src/functions.c:532",
+      "src/functions.c:533",
+      "src/functions.c:534",
+      "src/functions.c:537",
+      "src/functions.c:539",
+      "src/functions.c:540",
+      "src/functions.c:541",
+      "src/functions.c:542",
+      "src/functions.c:543",
+      "src/functions.c:544",
+      "src/functions.c:546",
+      "src/functions.c:548",
+      "src/module.c:888",
+      "src/module.c:889",
+      "src/module.c:937",
+      "src/module.c:940",
+      "src/module.c:941",
+      "src/module.c:942",
+      "src/module.c:13113",
+      "src/module.c:13117",
+      "src/module.c:13119",
+      "src/module.c:13120",
+      "src/module.c:13125",
+      "src/module.c:13128",
+      "src/module.c:13129",
+      "src/module.c:13132",
+      "src/module.c:13135",
+      "src/module.c:13145",
+      "src/module.c:13147",
+      "src/module.c:13148"
+    ],
+    "unnoted": [],
+    "rounds": 3
+  },
+  "cost_usd": 11.6277,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-32492b59aa34",
+      "build": "unstable",
+      "seed": 1277,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-32492b59aa34",
+      "build": "unstable",
+      "seed": 1278,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-32492b59aa34",
+      "build": "unstable",
+      "seed": 1279,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-284fe14f3da7",
+      "build": "unstable",
+      "seed": 1278,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-284fe14f3da7",
+      "build": "unstable",
+      "seed": 1279,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-284fe14f3da7",
+      "build": "unstable",
+      "seed": 1280,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d53ad0e411ca",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'funcload' returned ERROR: expectations both builds violate alike, so they are not about the change: 17 (FCALL evil 0)"
+    },
+    {
+      "scenario": "ai-3773dfbfe9f4",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'funcload' returned ERROR: expectations both builds violate alike, so they are not about the change: 17 (FCALL evil 0)"
+    },
+    {
+      "scenario": "ai-75210d11a9f4",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'funcload' returned ERROR: expectations both builds violate alike, so they are not about the change: 17 (FCALL evil 0)"
+    },
+    {
+      "scenario": "ai-5d3b32969e0f",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'reg' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (FCALL myfunc 0)"
+    },
+    {
+      "scenario": "ai-e832634b52b5",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'reg' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (FCALL myfunc 0)"
+    },
+    {
+      "scenario": "ai-8fe6d8f01cfb",
+      "build": "unstable",
+      "seed": 1277,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8fe6d8f01cfb",
+      "build": "unstable",
+      "seed": 1278,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8fe6d8f01cfb",
+      "build": "unstable",
+      "seed": 1279,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3b0a8ecaab9f",
+      "build": "unstable",
+      "seed": 6277,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3b0a8ecaab9f",
+      "build": "unstable",
+      "seed": 6278,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-3b0a8ecaab9f",
+      "build": "unstable",
+      "seed": 6279,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

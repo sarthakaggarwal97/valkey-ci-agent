@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.cluster-light-publish
+deployment:
+  modes: [standalone]
+metadata:
+  description: Cluster pub/sub light and normal publish send blocks after the flexible-array-member
+    refactor, bus delivery compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: pubsub
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 2, wait_s: 30, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 2, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [SUBSCRIBE, bus-ch], node: 1, connection: sub1, expect: {exists: true}}
+    - {command: [SSUBSCRIBE, sch], node: 2, connection: ssub2, expect: {exists: true}}
+    - {command: [SUBSCRIBE, relay-ch], node: 0, connection: sub0, expect: {exists: true}}
+    - {command: [PUBLISH, bus-ch, ""], node: 0, expect: {equals: 0}}
+    - {command: [PUBLISH, bus-ch, !!binary "AAECA/8AqrvM"], node: 0, expect: {equals: 0}}
+    - {command: [PUBLISH, "", empty-channel-payload], node: 0, expect: {equals: 0}}
+    - {command: [PUBLISH, bus-ch, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"],
+      node: 0, expect: {equals: 0}}
+    - {command: [SPUBLISH, sch, shard-payload], node: 0, expect: {equals: 0}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, compare: skip, expect: {contains: "cluster_stats_messages_publish_received:4"}}
+    - {command: [CLUSTER, INFO], node: 2, wait_s: 30, compare: skip, expect: {contains: "cluster_stats_messages_publishshard_received:1"}}
+    - {connection: sub1, node: 1, read: true}
+    - {connection: ssub2, node: 2, read: true}
+    - {restart: true, node: 1, expect: {equals: OK}}
+    - {command: [PUBLISH, void-ch, right-after-restart], node: 1, expect: {equals: 0}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 60, compare: skip, expect: {contains: "cluster_state:ok"}}
+    - {command: [PUBLISH, relay-ch, after-restart], node: 1, expect: {equals: 0}}
+    - {command: [DEBUG, SLEEP, "0.5"], node: 2, expect: {equals: OK}}
+    - {connection: sub0, node: 0, read: true}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [pubsub.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pubsub}

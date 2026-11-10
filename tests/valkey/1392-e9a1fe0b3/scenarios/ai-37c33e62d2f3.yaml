@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 97029953a094..e9a1fe0b320c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-37c33e62d2f3
+seed: 97001
+experiment:
+  id: proposed.benchmark-rfr-readonly-report
+  inputs:
+    pipeline: 1
+    clients: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

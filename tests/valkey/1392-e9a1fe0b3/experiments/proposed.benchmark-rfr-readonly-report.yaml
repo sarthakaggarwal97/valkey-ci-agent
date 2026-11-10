@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-rfr-readonly-report
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    valkey-benchmark --cluster on a one-node cluster: --rfr all sends and discards
+    the READONLY prefix, the latency report labels node roles (cluster/primary), --rfr
+    yes with no replicas exits cleanly, and bad or missing --rfr arguments are rejected.
+inputs:
+  properties:
+    pipeline: {type: integer, minimum: 1, maximum: 64, default: 1}
+    clients: {type: integer, minimum: 1, maximum: 50, default: 2}
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 120
+    runs:
+    - tool: valkey-benchmark
+      args: [-p, $port, --cluster, --rfr, "all", -t, set, -n, 500, -d, 16, -c, {$ref: inputs.clients},
+        -P, {$ref: inputs.pipeline}]
+      expect_difference: true
+      expect: {exit: {equals: 0}, stdout: {contains: "cluster mode: yes (1 cluster)"}}
+    - tool: valkey-benchmark
+      args: [-p, $port, --cluster, -t, get, -n, 500, -c, {$ref: inputs.clients}, -P,
+        {$ref: inputs.pipeline}]
+      expect_difference: true
+      expect: {exit: {equals: 0}, stdout: {contains: "cluster mode: yes (1 primary)"}}
+    - tool: valkey-benchmark
+      args: [-p, $port, --cluster, --rfr, "yes", -t, get, -n, 100]
+      expect_difference: true
+      expect: {exit: {equals: 1}, stderr: {contains: "Invalid cluster: 0 node(s)"}}
+    - tool: valkey-benchmark
+      args: [--rfr, bogus]
+      expect_difference: true
+      expect: {exit: {equals: 1}, stdout: {contains: "Invalid option"}}
+    - tool: valkey-benchmark
+      args: [--rfr]
+      expect_difference: true
+      expect: {exit: {equals: 1}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

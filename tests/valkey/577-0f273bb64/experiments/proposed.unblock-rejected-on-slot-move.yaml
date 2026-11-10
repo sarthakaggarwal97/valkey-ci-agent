@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.unblock-rejected-on-slot-move
+deployment:
+  modes: [standalone]
+metadata:
+  description: A BLPOP client redirected by the cluster cron after its slot moved
+    counts rejected_calls, not failed_calls
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slotmove
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    server_config: {enable-debug-assert: "yes"}
+    timeout_s: 15
+    commands:
+    - {raw: "BLPOP foo 0\r\n", connection: blocker, node: 0, expect: {exists: false}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - command: [EVAL_RO, "local info = redis.call('INFO','commandstats') local c,\
+          \ r, f = string.match(info, 'cmdstat_blpop:calls=(%d+),usec=%d+,usec_per_call=[%d%.]+,rejected_calls=(%d+),failed_calls=(%d+)')\
+          \ return 'blpop:calls=' .. tostring(c) .. ',rejected=' .. tostring(r) ..\
+          \ ',failed=' .. tostring(f)", 0]
+      node: 0
+      wait_s: 20
+      expect_difference: true
+      expect: {equals: "blpop:calls=1,rejected=1,failed=0"}
+    - {read: true, connection: blocker, node: 0}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slotmove.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotmove}

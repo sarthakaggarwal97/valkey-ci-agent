@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ede4adde7ac10d6a02bdf73c33ff762d59b7aca7",
+  "parent": "35abb68b798b25333e94186583996efed9667958",
+  "pr": 1496,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove releasetools folder (#1496)",
+  "date": "2025-01-02",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.237,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only removes the utils/releasetools directory: release-engineering shell scripts (tarball creation/upload, release sanity test, hash publishing) and a changelog.tcl generator. No source, build, test, or tool code that ships in a Valkey build is modified, so there is no runtime behaviour to exercise and no scenario can reach the change."
+}

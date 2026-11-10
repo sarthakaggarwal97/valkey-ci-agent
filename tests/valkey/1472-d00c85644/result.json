@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d00c856448e918feb6bff47cf3fbd62dc0f861f5",
+  "parent": "6adef8e2f97c3cd2dd4620fb9d5af8d426f1b548",
+  "pr": 1472,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix switch case compilation error in the new helloscripting (#1472)",
+  "date": "2024-12-22",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.258,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff only wraps two switch-case bodies in braces inside tests/modules/helloscripting.c to fix a compilation error (declarations after a case label need a scope block). It is a build fix in a test-only module with no behaviour change: the executed instructions (ARGS, RETURN) do exactly what they did before, and no server code, command reply, replication, or persistence path is touched. No scenario can distinguish the two builds."
+}

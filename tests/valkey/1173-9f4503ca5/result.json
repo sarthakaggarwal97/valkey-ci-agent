@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9f4503ca500fe2b668decb6fb94c377fbce5d0a0",
+  "parent": "f1b7f3072ce0378a181a26f3dfa5e4526b5d813b",
+  "pr": 1173,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add scoped RDB loading context and immediate abort flag (#1173)",
+  "date": "2024-12-24",
+  "unstable": "7ec927fd1fa9a22b7d90b9c46123716103783bad",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 13,
+    "executed": 13,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.1984,
+  "findings": [],
+  "recorded": []
+}
