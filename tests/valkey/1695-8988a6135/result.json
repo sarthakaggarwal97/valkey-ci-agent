@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8988a6135d8568c9834b490096492de5b1c153bf",
+  "parent": "3828936fe54d4c77030c5db98ce4521ad6aaaf7b",
+  "pr": 1695,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update availability-zone conf comment to mention hello command (#1695)",
+  "date": "2025-02-10",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2015,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only a comment in valkey.conf, rewording the documentation of the availability-zone option to mention the HELLO command. No code path, config semantics, or server behaviour is altered, so no scenario can exercise it."
+}

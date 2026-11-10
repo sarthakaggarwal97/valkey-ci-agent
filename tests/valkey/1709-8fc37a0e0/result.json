@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8fc37a0e0b32974450592303b612df09bb64821e",
+  "parent": "86469ab167f337b18a22a4e0110bb135146d5575",
+  "pr": 1709,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix undefined behavior warning in UBSAN (#1709)",
+  "date": "2025-02-11",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2625,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only replaces casts of sdsfree to void(*)(void*) with the equivalent sdsfreeVoid wrapper in evalInit and ldbInit, to silence a UBSAN incompatible-function-pointer-type warning. The wrapper simply calls sdsfree, so the list free behavior is byte-for-byte identical; no command reply, data handling, replication, or persistence behavior changes, and no observable difference exists between the builds to test."
+}

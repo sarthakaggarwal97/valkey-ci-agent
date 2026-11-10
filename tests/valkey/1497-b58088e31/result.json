@@ -1,0 +1,100 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b58088e31b1941fa62d7d59dc773994fd44f47f7",
+  "parent": "83abb13a1ce371e37826bcbfaa1a4198a12457e2",
+  "pr": 1497,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Adds support for running `EVAL` with different scripting engines (#1497)",
+  "date": "2025-02-10",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 15,
+  "proven": 15,
+  "hunted": 15,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 284,
+    "executed": 262,
+    "percent": 92,
+    "uncovered": [
+      "src/eval.c:691",
+      "src/eval.c:696",
+      "src/functions.c:367",
+      "src/functions.c:368",
+      "src/functions.c:369",
+      "src/functions.c:371",
+      "src/functions.c:645",
+      "src/module.c:13207",
+      "src/module.c:13209",
+      "src/module.c:13210",
+      "src/module.c:13211",
+      "src/scripting_engine.c:144",
+      "src/scripting_engine.c:150",
+      "src/server.c:1420",
+      "src/server.c:1421",
+      "src/server.c:1422",
+      "src/server.c:1423",
+      "src/server.c:1424",
+      "src/server.c:1451",
+      "src/server.c:1452",
+      "src/server.c:1453",
+      "src/server.c:2955"
+    ],
+    "unnoted": [],
+    "rounds": 2
+  },
+  "cost_usd": 23.2241,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-b3ace71f7bd8",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b3ace71f7bd8",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b3ace71f7bd8",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ac525caddb27",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ac525caddb27",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ac525caddb27",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-50fdcd2c4542",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'evalerr' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (SCRIPT LOAD return 1), 1 (EVALSHA e0e1f9fabfc9d4800c877a703b823ac0578ff831 0), 11 (SCRIPT EXISTS e0e1f9fabfc9d4800c877a703b823ac0578ff"
+    },
+    {
+      "scenario": "ai-a4a44b976ed9",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'evalerr' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (SCRIPT LOAD return 1), 1 (EVALSHA e0e1f9fabfc9d4800c877a703b823ac0578ff831 0), 11 (SCRIPT EXISTS e0e1f9fabfc9d4800c877a703b823ac0578ff"
+    }
+  ]
+}

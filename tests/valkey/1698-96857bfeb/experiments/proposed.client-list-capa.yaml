@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.client-list-capa
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLIENT INFO and CLIENT LIST show the new capa= field between flags=
+    and db=, empty by default, 'r' after CLIENT CAPA redirect (also with repeated/unknown
+    capa tokens), on every client's CLIENT LIST line, and persisting across RESET
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: capa
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CLIENT, INFO], expect_difference: true, expect: {contains: "capa=\
+          \ db="}}
+    - {command: [CLIENT, LIST], expect_difference: true, expect: {contains: "capa=\
+          \ db="}}
+    - {command: [CLIENT, CAPA, redirect], expect: {equals: OK}}
+    - {command: [CLIENT, INFO], expect_difference: true, expect: {contains: "capa=r\
+          \ db="}}
+    - {command: [CLIENT, CAPA, redirect, REDIRECT, bogus-capability, redirect, redirect],
+      expect: {equals: OK}}
+    - {command: [CLIENT, INFO], expect_difference: true, expect: {contains: "capa=r\
+          \ db="}}
+    - {command: [CLIENT, LIST, TYPE, normal], expect_difference: true, expect: {contains: "capa=r\
+          \ db="}}
+    - {command: [RESET], expect: {equals: RESET}}
+    - {command: [CLIENT, INFO], expect_difference: true, expect: {contains: "capa=r\
+          \ db="}}
+    - {command: [CLIENT, CAPA, redirect], connection: sub, expect: {equals: OK}}
+    - {command: [CLIENT, SETNAME, subconn], connection: sub, expect: {equals: OK}}
+    - {command: [CLIENT, LIST], expect_difference: true, expect: {contains: "name=subconn"}}
+    - {command: [CLIENT, INFO], connection: sub, expect_difference: true, expect: {
+        contains: "capa=r db="}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [capa.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: capa}

@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "99e2dc9e746ff1d733af922694ca0212769351de",
+  "parent": "96857bfeb196ea5fdb1afa00bdbd8ae85889232c",
+  "pr": 1582,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add support for MustObeyClient Module API (#1582)",
+  "date": "2025-02-10",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.3598,
+  "findings": [],
+  "recorded": []
+}

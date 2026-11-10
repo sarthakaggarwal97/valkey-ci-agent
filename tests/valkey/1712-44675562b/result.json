@@ -1,0 +1,54 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "44675562b536e2b235a4c0f92e256561506d1f71",
+  "parent": "4e0149a381ac5e030537712f046c235110168b60",
+  "pr": 1712,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Correctly detect address sanitizer with Clang (#1712)",
+  "date": "2025-02-11",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.1027,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-0e7071d9eb77",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'modload' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (datatype.swap k k2), 6 (datatype.get k)"
+    },
+    {
+      "scenario": "ai-0e7071d9eb77",
+      "build": "unstable",
+      "seed": 1712002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0e7071d9eb77",
+      "build": "unstable",
+      "seed": 1712003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0e7071d9eb77",
+      "build": "unstable",
+      "seed": 1712004,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-fcall-auth
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    valkey-benchmark -t fcall now opens its FUNCTION LOAD connection through getRedisContext,
+    which authenticates (AUTH pass and AUTH user pass) and handles TLS errors without
+    asserting. On the parent the ad-hoc connection never sends AUTH, so with requirepass
+    the FUNCTION LOAD gets NOAUTH, the function is never registered, and the FCALL
+    benchmark exits 1 with 'Function not found'; the fixed build exits 0.
+components:
+- use: valkey.action.tools
+  id: bench-fcall
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, -t, fcall, -n, 10, -c, 1, -q], compare: skip,
+      expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, FUNCTION, FLUSH], expect: {exit: {equals: 0},
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, requirepass, benchpass], expect: {
+        exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -a, benchpass, -t, fcall, -n, 10,
+        -c, 1, -q], expect_difference: true, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, -a, benchpass, FUNCTION, FLUSH], expect: {
+        exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --user, default, -a, benchpass, -t,
+        fcall, -n, 10, -c, 1, -q], expect_difference: true, expect: {exit: {equals: 0}}}
+required_events: [bench-fcall.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench-fcall}

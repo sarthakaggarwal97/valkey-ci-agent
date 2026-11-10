@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.function-compiled-registration
+deployment:
+  modes: [standalone]
+metadata:
+  description: FUNCTION LOAD, REPLACE, DELETE, FLUSH, LIST and FCALL through the new
+    compiledFunction registration path, including name validation and in-library and
+    cross-library collisions
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fnreg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nserver.register_function('myfunc',\
+          \ function(keys, args) return server.call('SET', keys[1], args[1]) end)\n\
+          server.register_function{function_name='readfn', callback=function(keys,\
+          \ args) return 42 end, flags={'no-writes'}, description='a reader'}"], expect: {
+        equals: mylib}}
+    - {command: [FCALL, myfunc, 1, k1, v1], expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [FCALL_RO, readfn, 0], expect: {equals: 42}}
+    - {command: [FCALL, readfn, 0], expect: {equals: 42}}
+    - {command: [FCALL, nosuchfn, 0], expect: {error: "Function not found"}}
+    - {command: [FUNCTION, LIST, WITHCODE], compare: skip}
+    - {command: [FUNCTION, STATS], compare: skip}
+    - {command: [FUNCTION, DUMP], compare: skip}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nserver.register_function('myfunc',\
+          \ function(keys, args) return 7 end)"], expect: {error: "already exists"}}
+    - {command: [FUNCTION, LOAD, REPLACE, "#!lua name=mylib\nserver.register_function('myfunc',\
+          \ function(keys, args) return 7 end)"], expect: {equals: mylib}}
+    - {command: [FCALL, readfn, 0], expect: {error: "Function not found"}}
+    - {command: [FCALL, myfunc, 0], expect: {equals: 7}}
+    - {command: [FUNCTION, LOAD, "#!lua name=badlib\nserver.register_function('bad-name',\
+          \ function() return 1 end)"], expect: {error: "Function names can only contain\
+          \ letters"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=duplib\nserver.register_function('samefn',\
+          \ function() return 1 end)\nserver.register_function('samefn', function()\
+          \ return 2 end)"], expect: {error: true}}
+    - {command: [FUNCTION, LOAD, "#!lua name=otherlib\nserver.register_function('myfunc',\
+          \ function() return 9 end)"], expect: {error: "already exists"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=emptylib\nlocal x = 1"], expect: {error: "No\
+          \ functions registered"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=brokenlib\nreturn ("], expect: {error: true}}
+    - {command: [FUNCTION, LOAD, "#!nosuchengine name=jslib\nwhatever"], expect: {
+        error: "not found"}}
+    - {command: [FUNCTION, LIST, LIBRARYNAME, mylib, WITHCODE], compare: skip}
+    - {command: [INFO, memory], compare: skip}
+    - {command: [EVAL, "#!nosuchengine\nreturn 1", 0], expect_difference: true, expect: {
+        error: "Could not find scripting engine"}}
+    - {command: [FUNCTION, DELETE, mylib], expect: {equals: OK}}
+    - {command: [FCALL, myfunc, 0], expect: {error: "Function not found"}}
+    - {command: [FUNCTION, FLUSH], expect: {equals: OK}}
+    - {command: [FUNCTION, LIST], expect: {equals: []}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [fnreg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fnreg}

@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.module-load-dlopen-flags
+deployment:
+  modes: [standalone]
+metadata:
+  description: Load a test module on the change's build and the parent's (dlopen with
+    the changed RTLD_DEEPBIND condition) and compare module command replies
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: modload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 10
+    commands:
+    - {command: [MODULE, LIST], compare: skip, expect: {exists: true}}
+    - {command: [datatype.set, k, 1, one], expect: {equals: OK}}
+    - {command: [datatype.get, k], expect: {equals: [1, one]}}
+    - {command: [TYPE, k], expect: {equals: test___dt}}
+    - {command: [datatype.set, k2, 2, two], expect: {equals: OK}}
+    - {command: [datatype.swap, k, k2], expect: {equals: OK}}
+    - {command: [datatype.get, k], expect: {equals: [2, two]}}
+    - {command: [datatype.dump, k]}
+    - {command: [datatype.get, missing]}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modload}

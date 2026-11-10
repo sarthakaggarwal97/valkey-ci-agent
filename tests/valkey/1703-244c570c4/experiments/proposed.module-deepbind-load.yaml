@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.module-deepbind-load
+deployment:
+  modes: [standalone]
+metadata:
+  description: A module loaded with RTLD_DEEPBIND behaves exactly as under the parent's
+    plain dlopen, through load, command dispatch, copy, type serialization and an
+    RDB reload across a restart
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: deepbind
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [datatype.set, k, 1, one], expect: {equals: OK}}
+    - {command: [datatype.get, k], expect: {equals: [1, one]}}
+    - {command: [TYPE, k], expect: {equals: test___dt}}
+    - {command: [COPY, k, kcopy], expect: {equals: 1}}
+    - {command: [datatype.get, kcopy], expect: {equals: [1, "one/k/kcopy"]}}
+    - {command: [datatype.set, k42, 42, answer], expect: {equals: OK}}
+    - {command: [COPY, k42, k42copy], expect: {equals: 0}}
+    - {command: [datatype.swap, k, k42], expect: {equals: OK}}
+    - {command: [datatype.get, k], expect: {equals: [42, answer]}}
+    - {command: [datatype.get, k42], expect: {equals: [1, one]}}
+    - {command: [datatype.dump, k42], expect: {exists: true}}
+    - {command: [datatype.set, big, 9223372036854775807, ""], expect: {equals: OK}}
+    - {command: [datatype.get, big], expect: {equals: [9223372036854775807, ""]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [datatype.get, k], expect: {equals: [42, answer]}}
+    - {command: [datatype.get, kcopy], expect: {equals: [1, "one/k/kcopy"]}}
+    - {command: [datatype.get, big], expect: {equals: [9223372036854775807, ""]}}
+    - {command: [TYPE, k], expect: {equals: test___dt}}
+    - {command: [datatype.get, missing], expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [deepbind.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: deepbind}

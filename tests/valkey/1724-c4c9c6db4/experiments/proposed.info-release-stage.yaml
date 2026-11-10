@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.info-release-stage
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO server reports valkey_release_stage and no longer reports valkey_version_full
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: info-stage
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - command: [INFO, server]
+      expect_difference: true
+      expect: {contains: "valkey_release_stage:dev"}
+    - command:
+      - EVAL
+      - |
+        local info = redis.call('INFO', 'server')
+        local stage = string.match(info, 'valkey_release_stage:([%w%.%-]+)') or 'absent'
+        local full = string.match(info, 'valkey_version_full') and 'present' or 'absent'
+        return {stage, full}
+      - "0"
+      expect_difference: true
+      expect: {equals: [dev, absent]}
+    - command:
+      - EVAL
+      - |
+        local info = redis.call('INFO', 'server')
+        local v = string.match(info, 'valkey_version:([%d%.]+)') or 'absent'
+        local rv = string.match(info, 'redis_version:([%d%.]+)') or 'absent'
+        return {v, rv}
+      - "0"
+      expect: {equals: ["255.255.255", "7.2.4"]}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [info-stage.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: info-stage}

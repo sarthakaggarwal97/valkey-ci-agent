@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "83abb13a1ce371e37826bcbfaa1a4198a12457e2",
+  "parent": "61a854dbbd14c80e0584bbdfa71f3b5b25d66153",
+  "pr": 1697,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix memory error in networking unittest (#1697)",
+  "date": "2025-02-10",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2176,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only src/unit/test_networking.c, adding `c->repl_data->ref_repl_buf_node = NULL;` to two unit tests' cleanup so the test harness does not reference freed replication-buffer blocks. It is a fix to the unit test code itself, compiled only into the unittest binary; no server, command, replication, or tool behaviour changes, so no fuzzer scenario can reach or exercise it."
+}

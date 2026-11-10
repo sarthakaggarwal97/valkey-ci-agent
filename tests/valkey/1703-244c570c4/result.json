@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "244c570c415af60e5bd5a48702f006eff897704c",
+  "parent": "99e2dc9e746ff1d733af922694ca0212769351de",
+  "pr": 1703,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use `DEEPBIND` flag when loading external modules using `dlopen` (#1703)",
+  "date": "2025-02-10",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.673,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-c61fd9009c73",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'deepbind' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (COPY k42 k42copy), 17 (datatype.get big), 19 (datatype.get missing)"
+    },
+    {
+      "scenario": "ai-627c783f0783",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'deepbind' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (COPY k42 k42copy), 17 (datatype.get big), 19 (datatype.get missing)"
+    }
+  ]
+}

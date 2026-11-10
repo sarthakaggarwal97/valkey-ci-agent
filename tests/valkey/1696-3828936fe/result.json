@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3828936fe54d4c77030c5db98ce4521ad6aaaf7b",
+  "parent": "f61b81e7d56cf772cafed918bcac0d69b2e40c11",
+  "pr": 1696,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix outdated slot info comments in clusterGenNodesSlotsInfo (#1696)",
+  "date": "2025-02-10",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2057,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only a code comment above clusterGenNodesSlotsInfo in src/cluster_legacy.c, correcting outdated documentation wording (slots_info struct -> slot_info_pairs array). No executable code, command behaviour, replies, replication, or configuration is modified, so there is no behaviour to test and no scenario is needed."
+}

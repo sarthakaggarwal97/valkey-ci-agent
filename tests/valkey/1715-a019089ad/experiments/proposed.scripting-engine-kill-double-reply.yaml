@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.scripting-engine-kill-double-reply
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    A HELLO scripting-engine function killed by FUNCTION KILL or SCRIPT KILL must
+    send exactly one reply (the kill error). The parent module also sends the function
+    result after the error, leaving a stale reply queued on the killed client's connection
+    and desyncing it.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: kill
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {busy-reply-threshold: 100}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [FUNCTION, LOAD, "#!hello name=mylib\nFUNCTION wait ARGS 0 SLEEP CONSTI\
+          \ 5 RETURN"], expect: {equals: mylib}}
+    - {connection: fn, raw: "FCALL wait 0 100\r\n"}
+    - {command: [FUNCTION, KILL], wait_s: 30, expect: {equals: OK}}
+    - {command: [PING], wait_s: 30, expect: {equals: PONG}}
+    - {connection: fn, read: true, expect_difference: true, expect: {exists: true}}
+    - {connection: fn, command: [PING], expect: {equals: PONG}}
+    - {connection: ev, raw: "*4\r\n$4\r\nEVAL\r\n$47\r\n#!hello\nFUNCTION e ARGS 0\
+        \ SLEEP CONSTI 7 RETURN\r\n$1\r\n0\r\n$2\r\n99\r\n"}
+    - {command: [SCRIPT, KILL], wait_s: 30, expect: {equals: OK}}
+    - {command: [PING], wait_s: 30, expect: {equals: PONG}}
+    - {connection: ev, read: true, expect_difference: true, expect: {exists: true}}
+    - {connection: ev, command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      variants: true
+required_events: [kill.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: kill}

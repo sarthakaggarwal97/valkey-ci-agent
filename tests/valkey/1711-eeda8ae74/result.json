@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "eeda8ae748622f96abf68e13b576cdfcb0cc8ef8",
+  "parent": "a019089ad8bd42cfdea6b2c9bb27c17d7e985ab5",
+  "pr": 1711,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reset failover auth time when myself won the failover (#1711)",
+  "date": "2025-02-12",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.7178,
+  "findings": [],
+  "recorded": []
+}

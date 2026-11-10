@@ -1,0 +1,91 @@
+extends: [valkey.liveness]
+id: proposed.cli-db-reselect-after-reconnect
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Interactive valkey-cli sessions whose connection the server kills mid-session:
+    after the automatic reconnect the previously SELECTed database must be re-selected.
+    On the parent build the reconnect with context==NULL skips the dbnum reset, cliSelect()
+    sees input_dbnum==dbnum and sends no SELECT, so reads return nil and writes land
+    in db 0.
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    ignore: ['^Error: .*\n']
+    timeout_s: 60
+    runs:
+    - tool: valkey-cli
+      args: [-p, $port]
+      stdin: |
+        flushall
+        select 5
+        set runa:key in-db-5
+        client kill type normal
+        ping
+        get runa:key
+        set runa:marker after-reconnect
+        select 0
+        get runa:marker
+      expect_difference: true
+      expect:
+        exit: {equals: 0}
+        stdout: {contains: in-db-5}
+    - tool: valkey-cli
+      args: [-p, $port, -3]
+      stdin: |
+        flushall
+        select 9
+        set runb:key in-db-9
+        client kill type normal
+        ping
+        get runb:key
+      expect_difference: true
+      expect:
+        exit: {equals: 0}
+        stdout: {contains: in-db-9}
+    - tool: valkey-cli
+      args: [-p, $port, -n, 7]
+      stdin: |
+        flushall
+        set runc:key in-db-7
+        client kill type normal
+        ping
+        get runc:key
+      expect_difference: true
+      expect:
+        exit: {equals: 0}
+        stdout: {contains: in-db-7}
+    - tool: valkey-cli
+      args: [-p, $port]
+      stdin: |
+        flushall
+        select 2
+        set rund:pre multi-db2
+        multi
+        client kill type normal
+        exec
+        ping
+        get rund:pre
+      expect_difference: true
+      expect:
+        exit: {equals: 0}
+        stdout: {contains: multi-db2}
+    - tool: valkey-cli
+      args: [-s, $socket]
+      stdin: |
+        flushall
+        select 11
+        set rune:key in-db-11
+        client kill type normal
+        ping
+        get rune:key
+      expect_difference: true
+      expect:
+        exit: {equals: 0}
+        stdout: {contains: in-db-11}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

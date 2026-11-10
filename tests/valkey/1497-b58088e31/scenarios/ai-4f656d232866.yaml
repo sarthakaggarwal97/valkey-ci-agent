@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 83abb13a1ce3..b58088e31b19.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4f656d232866
+seed: 103
+experiment:
+  id: proposed.eval-script-cache-lifecycle
+  inputs:
+    resp: 2
+    extra_config:
+      activedefrag: 'yes'
+      active-defrag-ignore-bytes: '1'
+      active-defrag-threshold-lower: '1'
+      active-defrag-cycle-min: '25'
+      active-defrag-cycle-max: '75'
+deployment:
+  mode: standalone
+  base_port: 7200

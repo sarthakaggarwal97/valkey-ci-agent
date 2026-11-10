@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.module-must-obey-aof
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_MustObeyClient returns 1 for the AOF client when module commands
+    are replayed from the AOF at restart, 0 for the normal client that wrote them
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aofobey
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {appendonly: "yes", appendfsync: always}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [propagate-test.obeyed], expect_difference: true, expect: {equals: 0}}
+    - {command: [propagate-test.incr, k1], expect: {equals: 1}}
+    - {command: [propagate-test.incr, k1], expect: {equals: 2}}
+    - {command: [propagate-test.incr, k2], expect: {equals: 1}}
+    - {command: [propagate-test.obeyed], expect_difference: true, expect: {equals: 0}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: "2"}}
+    - {command: [GET, k2], expect: {equals: "1"}}
+    - {command: [propagate-test.obeyed], expect_difference: true, expect: {equals: 3}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [aofobey.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofobey}

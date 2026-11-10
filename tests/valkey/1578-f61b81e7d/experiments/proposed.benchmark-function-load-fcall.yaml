@@ -1,0 +1,28 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-function-load-fcall
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark function_load and fcall tests and their options, candidate
+    against parent
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 90
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, -t, function_load, -n, 100, -c, 2,
+        -q], expect_difference: true, expect: {exit: {equals: 0}, stdout: {contains: FUNCTION
+            LOAD}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, fcall, -n, 100, -c, 2, -q], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: FCALL}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, function_load, --num-functions,
+        25, -n, 100, -c, 2, -q], expect_difference: true, expect: {exit: {equals: 0},
+        stdout: {contains: FUNCTION LOAD}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -t, fcall, --num-keys-in-fcall, 4,
+        -n, 100, -c, 2, -q], expect_difference: true, expect: {exit: {equals: 0},
+        stdout: {contains: FCALL}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

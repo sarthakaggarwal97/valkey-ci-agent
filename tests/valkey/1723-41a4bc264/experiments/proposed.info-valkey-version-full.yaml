@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.info-valkey-version-full
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO server gains valkey_version_full, the version with its release-stage
+    suffix; valkey_version itself stays unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: info-full
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [INFO, server], compare: skip}
+    - command:
+      - EVAL
+      - 'local i = redis.call("INFO","server") local m = string.match(i, "valkey_version_full:([^\r\n]+)")
+        if m then return m end return "missing"'
+      - "0"
+      expect_difference: true
+      expect: {equals: 255.255.255-dev}
+    - command:
+      - EVAL
+      - 'local i = redis.call("INFO") local m = string.match(i, "valkey_version_full:([^\r\n]+)")
+        if m then return m end return "missing"'
+      - "0"
+      expect_difference: true
+      expect: {equals: 255.255.255-dev}
+    - command:
+      - EVAL
+      - 'local i = redis.call("INFO","everything") local m = string.match(i, "valkey_version_full:([^\r\n]+)")
+        if m then return m end return "missing"'
+      - "0"
+      expect_difference: true
+      expect: {equals: 255.255.255-dev}
+    - command:
+      - EVAL
+      - 'local i = redis.call("INFO","server") local m = string.match(i, "valkey_version:([^\r\n]+)")
+        if m then return m end return "missing"'
+      - "0"
+      expect: {equals: 255.255.255}
+    - command:
+      - EVAL
+      - 'local i = redis.call("INFO","replication") local m = string.match(i, "valkey_version_full:([^\r\n]+)")
+        if m then return m end return "missing"'
+      - "0"
+      expect: {equals: missing}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [info-full.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: info-full}

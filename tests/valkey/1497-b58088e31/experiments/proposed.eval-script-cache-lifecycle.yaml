@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.eval-script-cache-lifecycle
+deployment:
+  modes: [standalone]
+metadata:
+  description: EVAL cache lifecycle after the multi-engine rewrite - cached script
+    flags, uppercase EVALSHA, engine-not-found shebang errors, SCRIPT FLUSH SYNC/ASYNC/default
+    resets
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    extra_config: {type: object, default: {}}
+components:
+- use: valkey.action.commands
+  id: cache
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {$ref: inputs.extra_config}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [EVAL, "return 1", 0], expect: {equals: 1}}
+    - {command: [EVAL, "return 1", 0], expect: {equals: 1}}
+    - {command: [SCRIPT, LOAD, "return 'loaded'"], expect: {equals: b534286061d4b9e4026607613b95c06c06015ae8}}
+    - {command: [EVALSHA, B534286061D4B9E4026607613B95C06C06015AE8, 0], expect: {
+        equals: loaded}}
+    - {command: [SCRIPT, SHOW, b534286061d4b9e4026607613b95c06c06015ae8], expect: {
+        equals: "return 'loaded'"}}
+    - {command: [SCRIPT, LOAD, "return 1"], expect: {error: false}}
+    - {command: [EVAL, "#!lua flags=no-writes\nreturn redis.call('set',KEYS[1],'v')",
+        1, k], expect: {error: true}}
+    - {command: [EVAL, "#!lua flags=no-writes\nreturn redis.call('set',KEYS[1],'v')",
+        1, k], expect: {error: true}}
+    - {command: [EVAL, "#!notanengine\nreturn 1", 0], expect_difference: true, expect: {
+        error: "Could not find scripting engine"}}
+    - {command: [SCRIPT, LOAD, "#!notanengine\nreturn 1"], expect_difference: true,
+      expect: {error: "Could not find scripting engine"}}
+    - {command: [EVAL, "#!\nreturn 1", 0], expect_difference: true, expect: {error: "Could\
+          \ not find scripting engine"}}
+    - {command: [EVAL, "#!lua", 0], expect: {error: "Invalid script shebang"}}
+    - {command: [SET, gate, 1, EX, 2], expect: {equals: OK}}
+    - {command: [EXISTS, gate], wait_s: 15, expect: {equals: 0}}
+    - {command: [EVALSHA, b534286061d4b9e4026607613b95c06c06015ae8, 0], expect: {
+        equals: loaded}}
+    - {command: [SCRIPT, FLUSH, SYNC], expect: {equals: OK}}
+    - {command: [SCRIPT, EXISTS, b534286061d4b9e4026607613b95c06c06015ae8], expect: {
+        equals: [0]}}
+    - {command: [EVALSHA, b534286061d4b9e4026607613b95c06c06015ae8, 0], expect: {
+        error: NOSCRIPT}}
+    - {command: [EVAL, "return 2", 0], expect: {equals: 2}}
+    - {command: [SCRIPT, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [EVAL, "return 3", 0], expect: {equals: 3}}
+    - {command: [SCRIPT, FLUSH], expect: {equals: OK}}
+    - {command: [EVAL, "return 4", 0], expect: {equals: 4}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [cache.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cache}

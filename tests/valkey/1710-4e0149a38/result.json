@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4e0149a381ac5e030537712f046c235110168b60",
+  "parent": "8fc37a0e0b32974450592303b612df09bb64821e",
+  "pr": 1710,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix new benchmark test under the TLS (#1710)",
+  "date": "2025-02-11",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.8689,
+  "findings": [],
+  "recorded": [],
+  "reason": "The only behavioural change is in valkey-benchmark's fcall test path under --tls: the ad-hoc FUNCTION LOAD connection now performs the TLS handshake (cliSecureConnection) instead of sending plaintext to a TLS port and asserting. Reaching it requires a TLS-enabled server (tls-port plus certificates) and tools built with BUILD_TLS=yes, none of which the fuzzer provides: tls-port is a provider-rejected config option, valkey.action.tools' private server takes no server config, and no TLS build or certificate assets exist in the harness. Without --tls the patched code is behaviourally identical to "
+}

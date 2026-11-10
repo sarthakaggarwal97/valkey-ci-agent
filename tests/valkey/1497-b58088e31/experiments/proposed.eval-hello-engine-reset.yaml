@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.eval-hello-engine-reset
+deployment:
+  modes: [standalone]
+metadata:
+  description: EVAL through the module-registered HELLO engine - cached reuse, case-insensitive
+    engine lookup, and SCRIPT FLUSH SYNC/ASYNC resetting a module engine's eval environment
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hello
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [EVAL, "#!hello\nFUNCTION foo\nARGS 0\nRETURN", 0, 145], expect_difference: true,
+      expect: {equals: 145}}
+    - {command: [EVAL, "#!hello\nFUNCTION foo\nARGS 0\nRETURN", 0, 145], expect_difference: true,
+      expect: {equals: 145}}
+    - {command: [SCRIPT, LOAD, "#!hello\nFUNCTION bar\nCONSTI 432\nRETURN"], expect_difference: true,
+      expect: {error: false}}
+    - {command: [EVAL, "#!hello\nFUNCTION bar\nCONSTI 432\nRETURN", 0], expect_difference: true,
+      expect: {equals: 432}}
+    - {command: [EVAL, "#!HELLO\nFUNCTION baz\nARGS 0\nRETURN", 0, 7], expect_difference: true,
+      expect: {equals: 7}}
+    - {command: [SCRIPT, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [EVAL, "#!hello\nFUNCTION foo\nARGS 0\nRETURN", 0, 200], expect_difference: true,
+      expect: {equals: 200}}
+    - {command: [SCRIPT, FLUSH, SYNC], expect: {equals: OK}}
+    - {command: [EVAL, "#!hello\nFUNCTION foo\nARGS 0\nRETURN", 0, 300], expect_difference: true,
+      expect: {equals: 300}}
+    - {command: [EVAL, "return 10", 0], expect: {equals: 10}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [hello.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hello}

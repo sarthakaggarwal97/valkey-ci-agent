@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "96857bfeb196ea5fdb1afa00bdbd8ae85889232c",
+  "parent": "0e66aaa60e832078ab78c852a76319f91b560d99",
+  "pr": 1698,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "show capa in CLIENT LIST (#1698)",
+  "date": "2025-02-11",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.2641,
+  "findings": [],
+  "recorded": []
+}

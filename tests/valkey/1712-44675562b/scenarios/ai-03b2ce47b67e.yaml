@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4e0149a381ac..44675562b536.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-03b2ce47b67e
+seed: 1712001
+experiment:
+  id: proposed.module-load-dlopen-flags
+  inputs:
+    resp: 2
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

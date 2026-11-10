@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 63243e45f8e6..a019089ad8bd.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e24d9e1db3d2
+seed: 17151
+experiment:
+  id: proposed.scripting-engine-kill-double-reply
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

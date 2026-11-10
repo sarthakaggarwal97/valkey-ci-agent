@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 44675562b536..63243e45f8e6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-11aec6cd0e6a
+seed: 1714
+experiment:
+  id: proposed.benchmark-fcall-auth
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

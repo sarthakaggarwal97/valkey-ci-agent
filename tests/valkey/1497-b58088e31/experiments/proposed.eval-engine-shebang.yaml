@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.eval-engine-shebang
+deployment:
+  modes: [standalone]
+metadata:
+  description: EVAL/SCRIPT shebang engine name is now resolved case-insensitively
+    through the engine manager, and an unknown engine gets a new error
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: shebang
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: ["EVAL", "#!lua\nreturn 2", 0], expect: {equals: 2}}
+    - {command: ["EVAL", "#!LUA\nreturn 1", 0], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: ["EVAL", "#!Lua flags=no-writes\nreturn 7", 0], expect_difference: true,
+      expect: {equals: 7}}
+    - {command: ["EVAL", "#!mylang\nreturn 1", 0], expect_difference: true, expect: {
+        error: "Could not find scripting engine"}}
+    - {command: ["EVAL", "#!\nreturn 1", 0], expect_difference: true, expect: {error: "Could\
+          \ not find scripting engine"}}
+    - {command: ["SCRIPT", "LOAD", "#!LUA\nreturn 42"], expect_difference: true, expect: {
+        error: false}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [shebang.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shebang}

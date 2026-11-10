@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b8c471edd85cc212234bfdf5852dcbb171fa96cb",
+  "parent": "1470ee8a639fea32ae3cfcb8b12e398f69eb1f83",
+  "pr": 1694,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "valkey-cli: re-select previously selected database after reconnect (#1694)",
+  "date": "2025-02-10",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 7,
+    "executed": 6,
+    "percent": 85,
+    "uncovered": [
+      "src/valkey-cli.c:1628"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.5401,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.eval-module-engine
+deployment:
+  modes: [standalone]
+metadata:
+  description: A module-registered scripting engine (helloscripting) can now serve
+    EVAL and SCRIPT LOAD via the shebang, which the parent build rejects
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: helloeval
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: ["EVAL", "#!hello\nFUNCTION foo\nARGS 0\nRETURN", 0, 145], expect_difference: true,
+      expect: {equals: 145}}
+    - {command: ["EVAL", "#!HELLO\nFUNCTION foo\nARGS 0\nRETURN", 0, 42], expect_difference: true,
+      expect: {equals: 42}}
+    - {command: ["SCRIPT", "LOAD", "#!hello\nFUNCTION foo\nARGS 0\nRETURN"], expect_difference: true,
+      expect: {error: false}}
+    - {command: ["EVAL", "#!lua\nreturn 9", 0], expect: {equals: 9}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [helloeval.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: helloeval}

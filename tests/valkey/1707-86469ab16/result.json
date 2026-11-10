@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "86469ab167f337b18a22a4e0110bb135146d5575",
+  "parent": "b8c471edd85cc212234bfdf5852dcbb171fa96cb",
+  "pr": 1707,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix: Exclude RTLD_DEEPBIND for Alpine Linux (musl-based systems) (#1707)",
+  "date": "2025-02-11",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2785,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds `defined(__GLIBC__) && __has_include(<dlfcn.h>)` to the preprocessor condition that enables RTLD_DEEPBIND in moduleLoad's dlopen flags. On the glibc Linux machines the fuzzer runs on, both conditions are true, so the compiled code \u2014 and module-loading behaviour \u2014 is byte-for-byte identical between the parent and the change; any compared sequence or module-load scenario would see no difference and could not reach the change. The only platform where behaviour differs is musl (Alpine), where the parent build fails to compile at all, so there is no parent binary to compare aga"
+}

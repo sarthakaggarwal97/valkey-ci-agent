@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 96857bfeb196..99e2dc9e746f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-aaca043ad572
+seed: 1103
+experiment:
+  id: proposed.module-must-obey-aof
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c4c9c6db48c318c3d9c102eb172af4eacbefa29b",
+  "parent": "41a4bc264906b8f0119938e5f92a773c575456e2",
+  "pr": 1724,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Introduce Valkey release stage indication (#1724)",
+  "date": "2025-02-13",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.1507,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

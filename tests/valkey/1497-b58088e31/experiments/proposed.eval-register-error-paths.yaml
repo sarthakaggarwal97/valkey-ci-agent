@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.eval-register-error-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: SCRIPT LOAD and EVAL error paths in evalRegisterNewScript (bad shebang
+    flags, shebang without newline, unknown or empty engine, Lua compile error) reply
+    errors, leave no stale sha, and INFO memory walks the engine memory accounting
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: evalerr
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SCRIPT, LOAD, "return 1"], expect: {equals: e0e1f9fabfc9d4800c877a703b823ac0578ff831}}
+    - {command: [EVALSHA, e0e1f9fabfc9d4800c877a703b823ac0578ff831, 0], expect: {
+        equals: 1}}
+    - {command: [SCRIPT, LOAD, "#!lua flags=nosuchflag\nreturn 1"], expect: {error: "Unexpected\
+          \ flag in script shebang"}}
+    - {command: [EVAL, "#!lua flags=nosuchflag\nreturn 1", 0], expect: {error: "Unexpected\
+          \ flag in script shebang"}}
+    - {command: [SCRIPT, LOAD, "#!lua"], expect: {error: "Invalid script shebang"}}
+    - {command: [SCRIPT, LOAD, "#!lua name=mylib\nreturn 1"], expect: {error: "Unknown\
+          \ lua shebang option"}}
+    - {command: [SCRIPT, LOAD, "#!\nreturn 1"], expect_difference: true, expect: {
+        error: "Could not find scripting engine"}}
+    - {command: [SCRIPT, LOAD, "#!nosuchengine\nreturn 1"], expect_difference: true,
+      expect: {error: "Could not find scripting engine"}}
+    - {command: [EVAL, "#!nosuchengine\nreturn 1", 0], expect_difference: true, expect: {
+        error: "Could not find scripting engine"}}
+    - {command: [SCRIPT, LOAD, "return ("], expect: {error: "Error compiling script"}}
+    - {command: [EVAL, "do end end", 0], expect: {error: "Error compiling script"}}
+    - {command: [SCRIPT, EXISTS, e0e1f9fabfc9d4800c877a703b823ac0578ff831], expect: {
+        equals: [1]}}
+    - {command: [SCRIPT, LOAD, ""], expect: {equals: da39a3ee5e6b4b0d3255bfef95601890afd80709}}
+    - {command: [EVAL, "", 0], expect: {exists: false}}
+    - {command: [EVAL, "return 2", 0], expect: {equals: 2}}
+    - {command: [INFO, memory], compare: skip}
+    - {command: [MEMORY, STATS], compare: skip}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [evalerr.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evalerr}

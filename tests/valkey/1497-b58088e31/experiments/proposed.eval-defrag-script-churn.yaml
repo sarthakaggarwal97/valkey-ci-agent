@@ -1,0 +1,87 @@
+extends: [valkey.liveness]
+id: proposed.eval-defrag-script-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: Many cached EVAL scripts under aggressive active defragmentation and
+    key churn, with idle windows for defrag cycles to move script allocations, then
+    memory introspection
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: defragscripts
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    server_config:
+      activedefrag: "yes"
+      active-defrag-ignore-bytes: 102400
+      active-defrag-threshold-lower: 1
+      active-defrag-cycle-min: 25
+      active-defrag-cycle-max: 75
+    commands:
+    - {command: [SCRIPT, LOAD, "return 'base'"], expect: {error: false}}
+    - {command: [EVAL, "local s='PADPADPADPADPADPADPADPADPADPADPADPAD1' return 1",
+        0], expect: {equals: 1}}
+    - {command: [EVAL, "local s='PADPADPADPADPADPADPADPADPADPADPADPAD2' return 2",
+        0], expect: {equals: 2}}
+    - {command: [EVAL, "local s='PADPADPADPADPADPADPADPADPADPADPADPAD3' return 3",
+        0], expect: {equals: 3}}
+    - {command: [EVAL, "local s='PADPADPADPADPADPADPADPADPADPADPADPAD4' return 4",
+        0], expect: {equals: 4}}
+    - {command: [EVAL, "local s='PADPADPADPADPADPADPADPADPADPADPADPAD5' return 5",
+        0], expect: {equals: 5}}
+    - {command: [EVAL, "local s='PADPADPADPADPADPADPADPADPADPADPADPAD6' return 6",
+        0], expect: {equals: 6}}
+    - {command: [MSET, a1, VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV, a2, VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV,
+        a3, VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV, a4, VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV,
+        a5, VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV, a6, VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV,
+        a7, VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV, a8, VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV],
+      expect: {equals: OK}}
+    - {command: [DEL, a1, a3, a5, a7], expect: {equals: 4}}
+    - {command: [EVAL, "local s='PADPADPADPADPADPADPADPADPADPADPADPAD7' return 7",
+        0], expect: {equals: 7}}
+    - {command: [EVAL, "local s='PADPADPADPADPADPADPADPADPADPADPADPAD8' return 8",
+        0], expect: {equals: 8}}
+    - {command: [EVAL, "local s='PADPADPADPADPADPADPADPADPADPADPADPAD9' return 9",
+        0], expect: {equals: 9}}
+    - {command: [BLPOP, idlekey, 2], compare: skip}
+    - {command: [MSET, b1, WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW, b2, WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW,
+        b3, WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW, b4, WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW,
+        b5, WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW, b6, WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW,
+        b7, WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW, b8, WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW],
+      expect: {equals: OK}}
+    - {command: [DEL, a2, a4, b1, b3, b5, b7], expect: {equals: 6}}
+    - {command: [EVAL, "local s='PADPADPADPADPADPADPADPADPADPADPADPADa' return 10",
+        0], expect: {equals: 10}}
+    - {command: [EVAL, "local s='PADPADPADPADPADPADPADPADPADPADPADPADb' return 11",
+        0], expect: {equals: 11}}
+    - {command: [EVAL, "local s='PADPADPADPADPADPADPADPADPADPADPADPADc' return 12",
+        0], expect: {equals: 12}}
+    - {command: [EVAL, "local s='PADPADPADPADPADPADPADPADPADPADPADPADd' return 13",
+        0], expect: {equals: 13}}
+    - {command: [BLPOP, idlekey, 2], compare: skip}
+    - {command: [DEL, a6, a8, b2, b4, b6, b8], expect: {equals: 6}}
+    - {command: [EVAL, "local s='PADPADPADPADPADPADPADPADPADPADPADPADe' return 14",
+        0], expect: {equals: 14}}
+    - {command: [EVAL, "local s='PADPADPADPADPADPADPADPADPADPADPADPADf' return 15",
+        0], expect: {equals: 15}}
+    - {command: [EVAL, "local s='PADPADPADPADPADPADPADPADPADPADPADPADg' return 16",
+        0], expect: {equals: 16}}
+    - {command: [BLPOP, idlekey, 3], compare: skip}
+    - {command: [EVAL, "#!nosuchengine\nreturn 1", 0], expect_difference: true, expect: {
+        error: "Could not find scripting engine"}}
+    - {command: [INFO, memory], compare: skip}
+    - {command: [INFO, stats], compare: skip}
+    - {command: [EVAL, "return 99", 0], expect: {equals: 99}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [defragscripts.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: defragscripts}

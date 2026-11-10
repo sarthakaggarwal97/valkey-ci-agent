@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1470ee8a639fea32ae3cfcb8b12e398f69eb1f83",
+  "parent": "244c570c415af60e5bd5a48702f006eff897704c",
+  "pr": 1704,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix macro redefinition problem in `fmacros.h` (#1704)",
+  "date": "2025-02-10",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2209,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only guards `#define _DEFAULT_SOURCE` with `#ifndef _DEFAULT_SOURCE` in src/fmacros.h to suppress a macro-redefinition compiler warning on Linux. _DEFAULT_SOURCE is defined in both builds either way, so the preprocessor environment and compiled behavior are identical; it is a build/warning fix with no runtime behavior change, so no scenario can distinguish the builds."
+}

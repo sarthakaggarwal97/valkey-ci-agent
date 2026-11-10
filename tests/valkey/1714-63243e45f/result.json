@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "63243e45f8e6db91621a56058b61430a5ea754ca",
+  "parent": "44675562b536e2b235a4c0f92e256561506d1f71",
+  "pr": 1714,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix valkey-benchmark FCALL failure with TLS (#1714)",
+  "date": "2025-02-11",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 5,
+    "percent": 83,
+    "uncovered": [
+      "src/valkey-benchmark.c:2025"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.1754,
+  "findings": [],
+  "recorded": []
+}

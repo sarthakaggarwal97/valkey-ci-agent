@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 83abb13a1ce3..b58088e31b19.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ac525caddb27
+seed: 102
+experiment:
+  id: proposed.eval-script-cache-lifecycle
+  inputs:
+    resp: 3
+    extra_config:
+      lazyfree-lazy-user-flush: 'yes'
+deployment:
+  mode: standalone
+  base_port: 7100

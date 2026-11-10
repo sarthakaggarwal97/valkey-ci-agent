@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "41a4bc264906b8f0119938e5f92a773c575456e2",
+  "parent": "2f2b8d155aac575ebf598cedf1700c98a8710400",
+  "pr": 1723,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Introduce valkey_version_full info field which includes the release stage (#1723)",
+  "date": "2025-02-13",
+  "unstable": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 0.8542,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

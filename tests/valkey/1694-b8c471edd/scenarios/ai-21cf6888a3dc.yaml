@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1470ee8a639f..b8c471edd85c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-21cf6888a3dc
+seed: 1694
+experiment:
+  id: proposed.cli-db-reselect-after-reconnect
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

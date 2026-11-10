@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b58088e31b19..f61b81e7d56c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b5727b24170d
+seed: 7000
+experiment:
+  id: proposed.benchmark-function-load-fcall
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

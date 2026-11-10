@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-10T07:16+00:00.
+Updated 2026-11-10T07:17+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1421 | 1095 | #1730 (2025-02-13) | 337 | 203.0 |
+| valkey-io/valkey | 1443 | 1073 | #1684 (2025-02-10) | 359 | 206.1 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 63 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 9.0 |
 | valkey-io/valkey-search | 672 | 0 | f8106e72e984 (2024-11-27) | 3 | 96.0 |
@@ -13,28 +13,28 @@ Updated 2026-11-10T07:16+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-10T04:49:52+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42748918829): 20 merge(s) tested, 5 without a code change.
+[2026-11-10T07:17:09+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42758316003): 20 merge(s) tested, 2 without a code change.
 
-- [valkey-io/valkey#5045](https://github.com/valkey-io/valkey/pull/5045) ([tests](tests/valkey/5045-2d84f93bb/)): fbtree: count leaves exactly and validate the leaf chain (#5045): 10 of 15 test(s) reached the change, coverage 46%
-- [valkey-io/valkey#1785](https://github.com/valkey-io/valkey/pull/1785) ([tests](tests/valkey/1785-1ad0c4fea/)): Remove unicode optimization in Lua cjson library (#1785): 0 of 2 test(s) reached the change
-- [valkey-io/valkey#1786](https://github.com/valkey-io/valkey/pull/1786) ([tests](tests/valkey/1786-7db01d88c/)): Fix undefined behaviour in bitops unit test (#1786): declined: The change modifies only the unit test file src/unit/test_bitops.c, replacing a zero-length VLA (undefined behaviour in the test harness itself) with a minimum size of 1. No server code, command behaviour, replies, replication, or persistence paths change, so no runtime scenario can exerci
-- [valkey-io/valkey#1741](https://github.com/valkey-io/valkey/pull/1741) ([tests](tests/valkey/1741-79d504742/)): Optimize bitcount command by SIMD (#1741): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1721](https://github.com/valkey-io/valkey/pull/1721) ([tests](tests/valkey/1721-b360f96a7/)): Fix temp file leak druing replication error handling (#1721): 0 of 4 test(s) reached the change, coverage 87%
-- [valkey-io/valkey#1779](https://github.com/valkey-io/valkey/pull/1779) ([tests](tests/valkey/1779-221ff441d/)): defrag: remove assert on defrag_later (#1779): 0 of 1 test(s) reached the change
-- [valkey-io/valkey#1763](https://github.com/valkey-io/valkey/pull/1763) ([tests](tests/valkey/1763-aea3eadab/)): Enable TCP_NODELAY by default in incoming and outgoing connections (#1763): 0 of 12 test(s) reached the change, coverage 66%
-- [valkey-io/valkey#1579](https://github.com/valkey-io/valkey/pull/1579) ([tests](tests/valkey/1579-421b2a40e/)): Embed hash value in hash type entry (#1579): 3 of 5 test(s) reached the change, coverage 87%
-- [valkey-io/valkey#1773](https://github.com/valkey-io/valkey/pull/1773) ([tests](tests/valkey/1773-ee8465ce3/)): Fixed active-expire-effort description in conf file (#1773): declined: The change only edits a descriptive comment in valkey.conf (fixing the wording of the active-expire-effort description). Comments in the conf file are ignored by the config parser, so no server behaviour, replies, persistence, or replication paths are affected; there is nothing a scenario 
-- [valkey-io/valkey#1748](https://github.com/valkey-io/valkey/pull/1748) ([tests](tests/valkey/1748-be9d9487b/)): Fix murmur32 on large strings (#1748): declined: The change fixes a 32-bit int overflow in murmur32 (deps/lua/src/lstring.c), the hash used only by Lua's internal string-interning table (luaS_newlstr is its sole caller). The overflow only triggers for strings larger than ~8.59 GB, and even then it merely yields a wrong hash with no out-o
-- [valkey-io/valkey#1737](https://github.com/valkey-io/valkey/pull/1737) ([tests](tests/valkey/1737-3a64260e4/)): Fix error "SSL routines::bad length" when connTLSWrite is called second time with smaller buffer (#1737): declined: The change is confined to src/tls.c (connTLSWrite/connTLSWritev): it only executes on a TLS connection, which requires a BUILD_TLS build, a tls-port with certificates, and a TLS client or TLS replication link. The fuzzer cannot produce any of these: tls-port is on the provider's rejected c
-- [valkey-io/valkey#1706](https://github.com/valkey-io/valkey/pull/1706) ([tests](tests/valkey/1706-b7116d4a7/)): Move TCP/TLS specific options from generic client to connection type (#1706): 0 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1357](https://github.com/valkey-io/valkey/pull/1357) ([tests](tests/valkey/1357-54c4bbcec/)): Add new module API flag to bypass command validation (#1357): 0 of 6 test(s) reached the change, coverage 30%
-- [valkey-io/valkey#1751](https://github.com/valkey-io/valkey/pull/1751) ([tests](tests/valkey/1751-f3361cc03/)): Allow to specify the random number generator seed in unit tests (#1751): declined: The change only adds a --seed flag to the standalone unit-test binary (src/unit/test_main.c) and refactors src/util.c's getRandomBytes to expose its seed via new setRandomSeedCString/getRandomSeedCString helpers used exclusively by the test harness. The refactored getRandomBytes is behavio
-- [valkey-io/valkey#1708](https://github.com/valkey-io/valkey/pull/1708) ([tests](tests/valkey/1708-206f7f60e/)): Pass null-terminated node ID for `VM_RegisterClusterMessageReceiver` and add test coverage (#1708): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1750](https://github.com/valkey-io/valkey/pull/1750) ([tests](tests/valkey/1750-cf19deb61/)): Fix hashtable memory leak and kvstore `overhead_hashtable_lut` assert (#1750): 0 of 5 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1745](https://github.com/valkey-io/valkey/pull/1745) ([tests](tests/valkey/1745-f85c93301/)): Comment out assert in kvstore for overhead lut (#1745): declined: The change only comments out a debug consistency assert in kvstoreRelease(); no code path, reply, data structure, or persistence/replication behaviour changes. The only state in which the two builds would differ is one where the overhead_hashtable_lut accounting is nonzero at release time,
-- [valkey-io/valkey#1722](https://github.com/valkey-io/valkey/pull/1722) ([tests](tests/valkey/1722-d588bb3be/)): Fix raxRemove crash at memcpy() due to key size exceeds max Rax size (#1722): declined: The fix adds a size-limit guard (comprsize + h->size > RAX_NODE_MAX_SIZE, ~512MB) to the recompression populate-loop in raxRemove(), preventing a heap-overflow memcpy that crashes only when a single rax key spans a compressible chain exceeding RAX_NODE_MAX_SIZE. All command-reachable rax t
-- [valkey-io/valkey#1733](https://github.com/valkey-io/valkey/pull/1733) ([tests](tests/valkey/1733-462cba580/)): Modify parameter of clientMatchesFilter function. (#1733): declined: The change converts clientMatchesFilter's clientFilter parameter from pass-by-value to pass-by-pointer and updates its two call sites (getAllFilteredClientsInfoString and clientKillCommand) accordingly. The function only reads the filter's fields and never mutates them, and the callers pas
-- [valkey-io/valkey#994](https://github.com/valkey-io/valkey/pull/994) ([tests](tests/valkey/994-99ec47a78/)): Simplify isNodeAvailable function and add comments (#994): declined: Pure refactor with no behavior change: isNodeAvailable previously computed node->repl_offset via clusterNodeReplOffset and replaced it with getNodeReplicationOffset(node) only for the myself node; getNodeReplicationOffset already performs exactly that branching internally (live offset for 
+- [valkey-io/valkey#1730](https://github.com/valkey-io/valkey/pull/1730) ([tests](tests/valkey/1730-c5ae37f22/)): Add spellchecker ignore section (#1730): declined: The change only adds an ignore entry ('Parth') to .config/typos.toml, the CI spellchecker configuration. It modifies no source code, command behaviour, replication, persistence, or tooling — no server behaviour can differ between the parent and the change, so no scenario is needed.
+- [valkey-io/valkey#1724](https://github.com/valkey-io/valkey/pull/1724) ([tests](tests/valkey/1724-c4c9c6db4/)): Introduce Valkey release stage indication (#1724): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#1723](https://github.com/valkey-io/valkey/pull/1723) ([tests](tests/valkey/1723-41a4bc264/)): Introduce valkey_version_full info field which includes the release stage (#1723): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#1711](https://github.com/valkey-io/valkey/pull/1711) ([tests](tests/valkey/1711-eeda8ae74/)): Reset failover auth time when myself won the failover (#1711): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1715](https://github.com/valkey-io/valkey/pull/1715) ([tests](tests/valkey/1715-a019089ad/)): Prevent double writing out of responses and fix reply schema CI (#1715): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#1714](https://github.com/valkey-io/valkey/pull/1714) ([tests](tests/valkey/1714-63243e45f/)): Fix valkey-benchmark FCALL failure with TLS (#1714): 1 of 1 test(s) reached the change, coverage 83%
+- [valkey-io/valkey#1712](https://github.com/valkey-io/valkey/pull/1712) ([tests](tests/valkey/1712-44675562b/)): Correctly detect address sanitizer with Clang (#1712): 0 of 2 test(s) reached the change
+- [valkey-io/valkey#1710](https://github.com/valkey-io/valkey/pull/1710) ([tests](tests/valkey/1710-4e0149a38/)): Fix new benchmark test under the TLS (#1710): declined: The only behavioural change is in valkey-benchmark's fcall test path under --tls: the ad-hoc FUNCTION LOAD connection now performs the TLS handshake (cliSecureConnection) instead of sending plaintext to a TLS port and asserting. Reaching it requires a TLS-enabled server (tls-port plus cert
+- [valkey-io/valkey#1709](https://github.com/valkey-io/valkey/pull/1709) ([tests](tests/valkey/1709-8fc37a0e0/)): Fix undefined behavior warning in UBSAN (#1709): declined: The change only replaces casts of sdsfree to void(*)(void*) with the equivalent sdsfreeVoid wrapper in evalInit and ldbInit, to silence a UBSAN incompatible-function-pointer-type warning. The wrapper simply calls sdsfree, so the list free behavior is byte-for-byte identical; no command rep
+- [valkey-io/valkey#1707](https://github.com/valkey-io/valkey/pull/1707) ([tests](tests/valkey/1707-86469ab16/)): Fix: Exclude RTLD_DEEPBIND for Alpine Linux (musl-based systems) (#1707): declined: The change only adds `defined(__GLIBC__) && __has_include(<dlfcn.h>)` to the preprocessor condition that enables RTLD_DEEPBIND in moduleLoad's dlopen flags. On the glibc Linux machines the fuzzer runs on, both conditions are true, so the compiled code — and module-loading behaviour — is by
+- [valkey-io/valkey#1694](https://github.com/valkey-io/valkey/pull/1694) ([tests](tests/valkey/1694-b8c471edd/)): valkey-cli: re-select previously selected database after reconnect (#1694): 0 of 1 test(s) reached the change, coverage 85%
+- [valkey-io/valkey#1704](https://github.com/valkey-io/valkey/pull/1704) ([tests](tests/valkey/1704-1470ee8a6/)): Fix macro redefinition problem in `fmacros.h` (#1704): declined: The change only guards `#define _DEFAULT_SOURCE` with `#ifndef _DEFAULT_SOURCE` in src/fmacros.h to suppress a macro-redefinition compiler warning on Linux. _DEFAULT_SOURCE is defined in both builds either way, so the preprocessor environment and compiled behavior are identical; it is a bu
+- [valkey-io/valkey#1703](https://github.com/valkey-io/valkey/pull/1703) ([tests](tests/valkey/1703-244c570c4/)): Use `DEEPBIND` flag when loading external modules using `dlopen` (#1703): 0 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1582](https://github.com/valkey-io/valkey/pull/1582) ([tests](tests/valkey/1582-99e2dc9e7/)): Add support for MustObeyClient Module API (#1582): 3 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1698](https://github.com/valkey-io/valkey/pull/1698) ([tests](tests/valkey/1698-96857bfeb/)): show capa in CLIENT LIST (#1698): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1695](https://github.com/valkey-io/valkey/pull/1695) ([tests](tests/valkey/1695-8988a6135/)): Update availability-zone conf comment to mention hello command (#1695): declined: The change edits only a comment in valkey.conf, rewording the documentation of the availability-zone option to mention the HELLO command. No code path, config semantics, or server behaviour is altered, so no scenario can exercise it.
+- [valkey-io/valkey#1696](https://github.com/valkey-io/valkey/pull/1696) ([tests](tests/valkey/1696-3828936fe/)): Fix outdated slot info comments in clusterGenNodesSlotsInfo (#1696): declined: The change edits only a code comment above clusterGenNodesSlotsInfo in src/cluster_legacy.c, correcting outdated documentation wording (slots_info struct -> slot_info_pairs array). No executable code, command behaviour, replies, replication, or configuration is modified, so there is no beh
+- [valkey-io/valkey#1578](https://github.com/valkey-io/valkey/pull/1578) ([tests](tests/valkey/1578-f61b81e7d/)): Add `FUNCTION LOAD` and `FCALL` benchmark (#1578): 1 of 1 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1497](https://github.com/valkey-io/valkey/pull/1497) ([tests](tests/valkey/1497-b58088e31/)): Adds support for running `EVAL` with different scripting engines (#1497): 15 of 15 test(s) reached the change, coverage 92%
+- [valkey-io/valkey#1697](https://github.com/valkey-io/valkey/pull/1697) ([tests](tests/valkey/1697-83abb13a1/)): Fix memory error in networking unittest (#1697): declined: The change edits only src/unit/test_networking.c, adding `c->repl_data->ref_repl_buf_node = NULL;` to two unit tests' cleanup so the test harness does not reference freed replication-buffer blocks. It is a fix to the unit test code itself, compiled only into the unittest binary; no server,
 
 ### valkey-io/valkey-bloom
 
@@ -53,10 +53,10 @@ Updated 2026-11-10T07:16+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 719 of 1106 tested (65%)
-- Changed-line coverage: median 100% of 646 merge(s) measured, 55 under 50%
-- Recall: 197 parents flagged of 305 fix merges
-- Claude: $1264.91 in the last 24 hours, $8079.80 in the last 7 days, $8079.80 in all
+- Merges whose tests reached the change: 727 of 1118 tested (65%)
+- Changed-line coverage: median 100% of 654 merge(s) measured, 55 under 50%
+- Recall: 199 parents flagged of 307 fix merges
+- Claude: $1318.45 in the last 24 hours, $8133.35 in the last 7 days, $8133.35 in all
 - Issues filed: 64
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
