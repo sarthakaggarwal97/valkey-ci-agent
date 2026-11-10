@@ -1,0 +1,105 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f2510783f9ed70172bd1a2ab9faa40afc99d54d5",
+  "parent": "99ed308817286fd980a987f877ffa4df197f03a4",
+  "pr": 1568,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Accelerate hash table iterator with value prefetching (#1568)",
+  "date": "2025-01-23",
+  "unstable": "39f27052bf9ee985c9d52a0aa908749f12633eb4",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 16,
+  "proven": 0,
+  "hunted": 16,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 80,
+    "executed": 74,
+    "percent": 92,
+    "uncovered": [
+      "src/acl.c:744",
+      "src/latency.c:568",
+      "src/module.c:12165",
+      "src/module.c:12188",
+      "src/object.c:633",
+      "src/object.c:685"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 16.5995,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 10 (DBSIZE) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"error\":\"LOADING Valkey is loading the dataset in memory\"}, not {\"reply\":5005}",
+      "scenario": "ai-1728019bf4dd",
+      "seed": 1570,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "2566481768c818c21710",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-0f8b2297ceaf",
+      "build": "unstable",
+      "seed": 1568,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0f8b2297ceaf",
+      "build": "unstable",
+      "seed": 1569,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0f8b2297ceaf",
+      "build": "unstable",
+      "seed": 1570,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-4a92b30339e9",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-4a92b30339e9",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-4a92b30339e9",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ae5ab1f70d8a",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ae5ab1f70d8a",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ae5ab1f70d8a",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

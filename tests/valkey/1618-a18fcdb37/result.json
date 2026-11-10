@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a18fcdb371db351b25332ddc0269589e4c5d56c1",
+  "parent": "66577573f207313b8998f4e0e81e32740adf5d6b",
+  "pr": 1618,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Deflake hashtable random fairness test (#1618)",
+  "date": "2025-01-27",
+  "unstable": "39f27052bf9ee985c9d52a0aa908749f12633eb4",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2319,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only the unit test file src/unit/test_hashtable.c: it seeds the hashtable hash function in the test harness and relaxes the random-fairness assertion threshold to deflake the test. No runtime Valkey behaviour (commands, replies, replication, persistence, cluster) is altered, so there is nothing for a fuzzer scenario to exercise."
+}

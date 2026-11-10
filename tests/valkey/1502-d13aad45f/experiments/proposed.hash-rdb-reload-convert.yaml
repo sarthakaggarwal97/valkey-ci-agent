@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.hash-rdb-reload-convert
+deployment:
+  modes: [standalone]
+metadata:
+  description: Save hashtable-encoded hashes to RDB and reload them across a restart,
+    driving the count-triggered and value-triggered load conversions
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config: {hash-max-listpack-entries: 8, hash-max-listpack-value: 8}
+    commands:
+    - {command: [HSET, big, f0, v0, f1, v1, f2, v2, f3, v3, f4, v4, f5, v5, f6, v6,
+        f7, v7, f8, v8, f9, v9, fa, va, fb, vb, fc, vc, fd, vd, fe, ve, ff, vf, fg,
+        vg, fh, vh, fi, vi, fj, vj], expect: {equals: 20}}
+    - {command: [OBJECT, ENCODING, big], expect: {equals: hashtable}}
+    - {command: [HSET, wide, a, s, b, s, c, "this-value-is-longer-than-eight"], expect: {
+        equals: 3}}
+    - {command: [OBJECT, ENCODING, wide], expect: {equals: hashtable}}
+    - {command: [HSET, small, k1, v1, k2, v2], expect: {equals: 2}}
+    - {command: [OBJECT, ENCODING, small], expect: {equals: listpack}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, big], expect: {equals: hashtable}}
+    - {command: [HLEN, big], expect: {equals: 20}}
+    - {command: [HGETALL, big], compare: unordered-pairs}
+    - {command: [OBJECT, ENCODING, wide], expect: {equals: hashtable}}
+    - {command: [HGET, wide, c], expect: {equals: "this-value-is-longer-than-eight"}}
+    - {command: [HGETALL, wide], compare: unordered-pairs}
+    - {command: [OBJECT, ENCODING, small], expect: {equals: listpack}}
+    - {command: [HGETALL, small], compare: unordered-pairs}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

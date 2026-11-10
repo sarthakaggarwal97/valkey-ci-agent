@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.iterator-prefetch-aof-rewrite
+deployment:
+  modes: [standalone]
+metadata:
+  description: BGREWRITEAOF over a mixed-encoding dataset with the RDB preamble on
+    or off, then a restart that reloads the rewritten AOF; replies compared across
+    builds
+inputs:
+  properties:
+    preamble: {type: string, enum: ["yes", "no"], default: "yes"}
+components:
+- use: valkey.action.commands
+  id: aofrw
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 90
+    server_config:
+      appendonly: "yes"
+      appendfsync: everysec
+      aof-use-rdb-preamble: {$ref: inputs.preamble}
+      enable-debug-command: "yes"
+      hash-max-listpack-entries: 3
+      set-max-listpack-entries: 3
+      set-max-intset-entries: 3
+      zset-max-listpack-entries: 3
+    commands:
+    - {command: [DEBUG, POPULATE, 5000], expect: {equals: OK}}
+    - {command: [HSET, h1, f1, v1, f2, v2, f3, v3, f4, ""], expect: {equals: 4}}
+    - {command: [SADD, s1, m1, m2, m3, m4], expect: {equals: 4}}
+    - {command: [ZADD, z1, 1, a, 2, b, 3, c, 4, d], expect: {equals: 4}}
+    - {command: [SET, "s:big", "a-raw-string-well-over-forty-four-characters-long-0123456789-abcdef"],
+      expect: {equals: OK}}
+    - {command: [BGREWRITEAOF], expect: {contains: rewriting}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_last_bgrewrite_status:ok"}}
+    - {command: [SET, "post:1", after-rewrite], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 5005}}
+    - {command: [GET, "post:1"], expect: {equals: after-rewrite}}
+    - {command: [GET, "s:big"], expect: {equals: "a-raw-string-well-over-forty-four-characters-long-0123456789-abcdef"}}
+    - {command: [HGETALL, h1], compare: unordered-pairs}
+    - {command: [SMEMBERS, s1], compare: unordered}
+    - {command: [ZRANGE, z1, 0, -1, WITHSCORES], expect: {equals: [a, "1", b, "2",
+          c, "3", d, "4"]}}
+    - {command: [DEBUG, DIGEST], expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aofrw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofrw}

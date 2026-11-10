@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 99ed30881728..f2510783f9ed.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1728019bf4dd
+seed: 1570
+experiment:
+  id: proposed.iterator-prefetch-aof-rewrite
+  inputs:
+    preamble: 'no'
+deployment:
+  mode: standalone
+  base_port: 7200

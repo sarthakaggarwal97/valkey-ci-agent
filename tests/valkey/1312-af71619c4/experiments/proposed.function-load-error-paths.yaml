@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.function-load-error-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: FUNCTION LOAD error paths (Lua compile error, registration error, unknown
+    engine, invalid and duplicate function names triggering the partial compiled-functions
+    free), plus FUNCTION STATS and FUNCTION LIST, compared across the scripting-engine
+    extraction refactor
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fnerr
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FUNCTION, STATS]}
+    - {command: [FUNCTION, LOAD, "#!lua name=badsyntax\nthis is not lua ("], expect: {
+        error: "Error compiling function"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=errlib\nerror('boom at load')"], expect: {
+        error: "Error registering functions"}}
+    - {command: [FUNCTION, LOAD, "#!wasm name=nolib\nwhatever"], expect: {error: "not\
+          \ found"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=emptylib\nlocal x = 1"], expect: {error: "No\
+          \ functions registered"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=partial\nserver.register_function('good1',\
+          \ function(keys, args) return 1 end)\nserver.register_function('bad-name',\
+          \ function(keys, args) return 2 end)"], expect: {error: "can only contain"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=dup\nserver.register_function('a1', function(keys,\
+          \ args) return 1 end)\nserver.register_function('b2', function(keys, args)\
+          \ return 2 end)\nserver.register_function('a1', function(keys, args) return\
+          \ 3 end)"], expect: {error: "already exists"}}
+    - {command: [FUNCTION, LIST], expect: {equals: []}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nserver.register_function('myfunc',\
+          \ function(keys, args) return 42 end)"], expect: {equals: mylib}}
+    - {command: [FCALL, myfunc, 0], expect: {equals: 42}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib2\nserver.register_function{function_name='ro1',\
+          \ callback=function(keys, args) return 'ro' end, flags={'no-writes'}}"],
+      expect: {equals: lib2}}
+    - {command: [FCALL_RO, ro1, 0], expect: {equals: ro}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib3\nserver.register_function('myfunc',\
+          \ function(keys, args) return 9 end)"], expect: {error: "already exists"}}
+    - {command: [FUNCTION, STATS]}
+    - {command: [FUNCTION, LIST, LIBRARYNAME, mylib]}
+    - {command: [FUNCTION, LIST, LIBRARYNAME, lib2, WITHCODE]}
+    - {command: [FUNCTION, DELETE, mylib], expect: {equals: OK}}
+    - {command: [FUNCTION, STATS]}
+    - {command: [FUNCTION, FLUSH], expect: {equals: OK}}
+    - {command: [FUNCTION, STATS]}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [fnerr.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fnerr}

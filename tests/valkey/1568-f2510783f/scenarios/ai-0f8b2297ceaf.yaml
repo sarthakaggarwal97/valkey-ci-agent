@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 99ed30881728..f2510783f9ed.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0f8b2297ceaf
+seed: 1568
+experiment:
+  id: proposed.iterator-prefetch-rdb-digest
+deployment:
+  mode: standalone
+  base_port: 7000

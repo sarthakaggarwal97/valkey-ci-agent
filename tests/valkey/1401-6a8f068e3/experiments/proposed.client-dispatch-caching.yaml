@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.client-dispatch-caching
+deployment:
+  modes: [standalone]
+metadata:
+  description: Every CLIENT subcommand through its new dedicated proc, the tracking_caching
+    preservation across CLIENT subcommands after the resetClient change, and a new
+    LIST filter as the anchor
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 3}
+components:
+- use: valkey.action.commands
+  id: dispatch
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CLIENT, SETNAME, myconn], expect: {equals: OK}}
+    - {command: [CLIENT, GETNAME], expect: {equals: myconn}}
+    - {command: [CLIENT, ID], compare: skip, expect: {min: 1}}
+    - {command: [CLIENT, INFO], compare: skip, expect: {contains: "cmd=client|info"}}
+    - {command: [CLIENT, CAPA, REDIRECT], expect: {equals: OK}}
+    - {command: [CLIENT, NO-EVICT, ON], expect: {equals: OK}}
+    - {command: [CLIENT, NO-TOUCH, ON], expect: {equals: OK}}
+    - {command: [CLIENT, UNBLOCK, 999999], expect: {equals: 0}}
+    - {command: [CLIENT, GETREDIR], expect: {equals: -1}}
+    - {command: [CLIENT, FOOBAR], expect: {error: true}}
+    - {command: [CLIENT, TRACKING, ON, OPTIN], expect: {equals: OK}}
+    - {command: [CLIENT, CACHING, YES], expect: {equals: OK}}
+    - {command: [CLIENT, TRACKINGINFO], expect: null}
+    - {command: [CLIENT, GETNAME], expect: {equals: myconn}}
+    - {command: [CLIENT, TRACKINGINFO], expect: null}
+    - {command: [GET, trackedkey], expect: {equals: null}}
+    - {command: [CLIENT, TRACKINGINFO], expect: null}
+    - {command: [CLIENT, CACHING, NO], expect: {error: true}}
+    - {command: [CLIENT, TRACKING, OFF], expect: {equals: OK}}
+    - {command: [CLIENT, LIST, SKIPME, no], expect_difference: true, expect: {contains: "name=myconn"}}
+    - {command: [SUBSCRIBE, chan1], connection: subber, expect: null}
+    - {command: [CLIENT, LIST, TYPE, pubsub], compare: skip, expect: {contains: "cmd=subscribe"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dispatch.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dispatch}

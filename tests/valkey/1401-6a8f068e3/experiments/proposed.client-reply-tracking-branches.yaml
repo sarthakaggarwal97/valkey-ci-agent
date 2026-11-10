@@ -1,0 +1,73 @@
+extends: [valkey.liveness]
+id: proposed.client-reply-tracking-branches
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLIENT REPLY ON/OFF/SKIP and every CLIENT TRACKING option-parsing branch
+    of the dedup refactor, replies compared with the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: replytrack
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 5
+    commands:
+    - {command: [CLIENT, LIST, MAXAGE, 1000000], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CLIENT, REPLY, ON], expect: {equals: OK}}
+    - {command: [CLIENT, REPLY, BOGUS], expect: {error: "syntax"}}
+    - {raw: "CLIENT REPLY OFF\r\nPING\r\nCLIENT REPLY ON\r\n", connection: quiet,
+      expect: {equals: OK}}
+    - {raw: "CLIENT REPLY SKIP\r\nPING\r\nPING\r\n", connection: quiet, expect: {
+        equals: PONG}}
+    - {raw: "CLIENT REPLY OFF\r\nCLIENT REPLY SKIP\r\nPING\r\nCLIENT REPLY ON\r\n",
+      connection: quiet, expect: {equals: OK}}
+    - {command: [PING], connection: quiet, expect: {equals: PONG}}
+    - {command: [CLIENT, TRACKING, ON, REDIRECT, 9999999], expect: {error: "does not\
+          \ exist"}}
+    - {command: [CLIENT, TRACKING, ON, REDIRECT, notanumber], expect: {error: "not\
+          \ an integer"}}
+    - {command: [CLIENT, TRACKING, ON, PREFIX, "user:"], expect: {error: "BCAST"}}
+    - {command: [CLIENT, TRACKING, ON, BCAST, OPTIN], expect: {error: "not compatible"}}
+    - {command: [CLIENT, TRACKING, ON, BCAST, OPTOUT], expect: {error: "not compatible"}}
+    - {command: [CLIENT, TRACKING, ON, NOLOOP, NOSUCHOPT], expect: {error: "syntax"}}
+    - {command: [CLIENT, TRACKING, ON, PREFIX], expect: {error: "syntax"}}
+    - {command: [CLIENT, TRACKING, ON, BCAST, PREFIX, "user:", PREFIX, "obj:", NOLOOP],
+      connection: trk, expect: {equals: OK}}
+    - {command: [CLIENT, TRACKING, ON], connection: trk, expect: {error: "BCAST mode"}}
+    - {command: [CLIENT, TRACKING, OFF], connection: trk, expect: {equals: OK}}
+    - {command: [CLIENT, TRACKING, ON, OPTOUT, NOLOOP], connection: trk, expect: {
+        equals: OK}}
+    - {command: [CLIENT, TRACKING, ON, OPTIN], connection: trk, expect: {error: "OPTIN/OPTOUT"}}
+    - {command: [CLIENT, TRACKINGINFO], connection: trk, expect: {error: false}, compare: skip}
+    - {command: [CLIENT, TRACKING, ON, REDIRECT, 1, REDIRECT, 1], connection: redir,
+      compare: skip, expect: {error: true}}
+    - {command: [CLIENT, TRACKING, ON, REDIRECT, 2, REDIRECT, 2], connection: redir,
+      compare: skip, expect: {error: true}}
+    - {command: [CLIENT, TRACKING, ON, REDIRECT, 3, REDIRECT, 3], connection: redir,
+      compare: skip, expect: {error: true}}
+    - {command: [CLIENT, TRACKING, ON, REDIRECT, 4, REDIRECT, 4], connection: redir,
+      compare: skip, expect: {error: true}}
+    - {command: [CLIENT, TRACKING, ON, REDIRECT, 5, REDIRECT, 5], connection: redir,
+      compare: skip, expect: {error: true}}
+    - {command: [CLIENT, TRACKING, ON, REDIRECT, 6, REDIRECT, 6], connection: redir,
+      compare: skip, expect: {error: true}}
+    - {command: [CLIENT, TRACKING, ON, REDIRECT, 7, REDIRECT, 7], connection: redir,
+      compare: skip, expect: {error: true}}
+    - {command: [CLIENT, TRACKING, ON, REDIRECT, 8, REDIRECT, 8], connection: redir,
+      compare: skip, expect: {error: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [replytrack.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: replytrack}

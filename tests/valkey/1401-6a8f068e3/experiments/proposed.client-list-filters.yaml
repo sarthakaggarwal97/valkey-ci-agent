@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.client-list-filters
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLIENT LIST new USER/ADDR/LADDR/SKIPME/MAXAGE filters and reworked
+    ID parsing, compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: list-filters
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CLIENT, SETNAME, main-conn], expect: {equals: OK}}
+    - {command: [CLIENT, LIST], compare: skip, expect: {contains: "cmd=client|list"}}
+    - {command: [CLIENT, LIST, TYPE, normal], compare: skip, expect: {contains: "name=main-conn"}}
+    - {command: [CLIENT, LIST, USER, default], expect_difference: true, expect: {
+        contains: "user=default"}}
+    - {command: [CLIENT, LIST, ADDR, "1.2.3.4:5678"], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CLIENT, LIST, LADDR, "1.2.3.4:5678"], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CLIENT, LIST, SKIPME, no], expect_difference: true, expect: {contains: "cmd=client|list"}}
+    - {command: [CLIENT, LIST, SKIPME, yes], expect_difference: true, expect: {error: false}}
+    - {command: [CLIENT, LIST, SKIPME, maybe], expect: {error: "syntax error"}}
+    - {command: [CLIENT, LIST, MAXAGE, 0], expect_difference: true, expect: {error: "greater\
+          \ than 0"}}
+    - {command: [CLIENT, LIST, MAXAGE, -1], expect_difference: true, expect: {error: "greater\
+          \ than 0"}}
+    - {command: [CLIENT, LIST, MAXAGE, 1000000], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CLIENT, LIST, MAXAGE, 9999999999999999999], expect_difference: true,
+      expect: {error: "not an integer or out of range"}}
+    - {command: [CLIENT, LIST, ID, 0], expect_difference: true, expect: {error: "greater\
+          \ than 0"}}
+    - {command: [CLIENT, LIST, ID, -1], expect_difference: true, expect: {error: "greater\
+          \ than 0"}}
+    - {command: [CLIENT, LIST, ID, 9223372036854775807], expect: {error: false}}
+    - {command: [CLIENT, LIST, ID, 9223372036854775808], expect_difference: true,
+      expect: {error: "syntax error"}}
+    - {command: [CLIENT, LIST, ID, notanumber], expect_difference: true, expect: {
+        error: "syntax error"}}
+    - {command: [CLIENT, LIST, ID, 10, wrong_arg], expect_difference: true, expect: {
+        error: "syntax error"}}
+    - {command: [CLIENT, LIST, ID, 987654321, TYPE, normal], expect_difference: true,
+      expect: {error: false}}
+    - {command: [CLIENT, LIST, ID, TYPE, normal], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CLIENT, LIST, TYPE, normal, TYPE, pubsub], expect_difference: true,
+      expect: {error: false}}
+    - {command: [CLIENT, LIST, USER, nosuchuser], expect_difference: true, expect: {
+        error: "No such user"}}
+    - {command: [CLIENT, LIST, TYPE, wrongtype], expect: {error: "Unknown client type"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [list-filters.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: list-filters}

@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.hash-module-scankey
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module ScanKey over a hashtable-encoded hash returns the same field-value
+    pairs on both builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: mscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {hash-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [HSET, h, f1, v1], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: hashtable}}
+    - {command: [scan.scan_key, h], expect: {equals: [[f1, v1]]}}
+    - {command: [HSET, h, f2, v2, f3, v3], expect: {equals: 2}}
+    - {command: [scan.scan_key, h], compare: skip}
+    - {command: [HLEN, h], expect: {equals: 3}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mscan}

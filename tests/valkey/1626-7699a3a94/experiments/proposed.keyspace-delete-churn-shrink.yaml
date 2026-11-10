@@ -1,0 +1,32 @@
+extends: [valkey.writes]
+id: proposed.keyspace-delete-churn-shrink
+deployment:
+  modes: [standalone]
+metadata:
+  description: Heavy keyspace deletion drives hashtableTwoPhasePopDelete through hashtableShrinkIfNeeded
+    while bucket chains are compacted; the parent's shrink-before-compaction frees
+    the bucket under fillBucketHole (use-after-free). Judged by the sanitizer/liveness
+    oracle, no build comparison.
+inputs:
+  properties:
+    mutation_rate: {type: number, minimum: 1, maximum: 100000, default: 20000}
+    mutable_keys: {type: integer, minimum: 1, maximum: 1000000, default: 200000}
+    churn_s: {type: number, minimum: 1, maximum: 120, default: 20}
+components:
+- use: valkey.workload.key-value
+  id: writes
+  config:
+    stable_keys: 0
+    mutable_keys: {$ref: inputs.mutable_keys}
+    preload_mutable: true
+    rate: {$ref: inputs.mutation_rate}
+    value_size: 8
+    op_timeout_s: 2.0
+    mix: {set: 0.35, del: 0.6, get: 0.05}
+- use: valkey.action.sleep
+  id: churn
+  depends_on: [writes]
+  config: {seconds: {$ref: inputs.churn_s}}
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.data.ledger-verified, source: data}

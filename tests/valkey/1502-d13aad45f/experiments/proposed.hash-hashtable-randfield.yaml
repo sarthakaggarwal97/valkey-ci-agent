@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.hash-hashtable-randfield
+deployment:
+  modes: [standalone]
+metadata:
+  description: HRANDFIELD over a hashtable-encoded hash gives identical replies on
+    both builds and never crashes
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: randfield
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 4}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [EVAL, "for i=1,100 do redis.call('hset', KEYS[1], 'f'..i, 'v'..i)\
+          \ end return redis.call('hlen', KEYS[1])", 1, h], expect: {equals: 100}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: hashtable}, compare: skip}
+    - {command: [HRANDFIELD, h], expect: {exists: true}, compare: skip}
+    - {command: [HRANDFIELD, h, "1"], expect: {exists: true}, compare: skip}
+    - {command: [HRANDFIELD, h, "1", WITHVALUES], expect: {exists: true}, compare: skip}
+    - {command: [HRANDFIELD, h, "-7"], expect: {exists: true}, compare: skip}
+    - {command: [HRANDFIELD, h, "-7", WITHVALUES], expect: {exists: true}, compare: skip}
+    - {command: [HRANDFIELD, h, "10"], expect: {exists: true}, compare: skip}
+    - {command: [HRANDFIELD, h, "10", WITHVALUES], expect: {exists: true}, compare: skip}
+    - {command: [HRANDFIELD, h, "150"], compare: unordered, expect: {contains: "f1"}}
+    - {command: [HLEN, h], expect: {equals: 100}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: randfield}

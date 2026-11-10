@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.hash-hashtable-introspection
+deployment:
+  modes: [standalone]
+metadata:
+  description: SCAN callback, DEBUG DIGEST-VALUE, DEBUG HTSTATS-KEY and MEMORY USAGE
+    on hashtable-encoded hash, set and skiplist zset
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: introspect
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    server_config: {hash-max-listpack-entries: 8, set-max-listpack-entries: 8, zset-max-listpack-entries: 8}
+    commands:
+    - {command: [HSET, h, f0, v0, f1, v1, f2, v2, f3, v3, f4, v4, f5, v5, f6, v6,
+        f7, v7, f8, v8, f9, v9, fa, va, fb, vb], expect: {equals: 12}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: hashtable}}
+    - {command: [DEBUG, DIGEST-VALUE, h], expect: {exists: true}}
+    - {command: [DEBUG, HTSTATS-KEY, h], compare: skip}
+    - {command: [DEBUG, HTSTATS-KEY, h, full], compare: skip}
+    - {command: [MEMORY, USAGE, h], compare: skip}
+    - {command: [HSCAN, h, 0, COUNT, 100], compare: skip}
+    - {command: [SADD, s, m0, m1, m2, m3, m4, m5, m6, m7, m8, m9], expect: {equals: 10}}
+    - {command: [OBJECT, ENCODING, s], expect: {equals: hashtable}}
+    - {command: [SSCAN, s, 0, COUNT, 100], compare: skip}
+    - {command: [DEBUG, DIGEST-VALUE, s], expect: {exists: true}}
+    - {command: [ZADD, z, 1, e0, 2, e1, 3, e2, 4, e3, 5, e4, 6, e5, 7, e6, 8, e7,
+        9, e8, 10, e9], expect: {equals: 10}}
+    - {command: [OBJECT, ENCODING, z], expect: {equals: skiplist}}
+    - {command: [ZSCAN, z, 0, COUNT, 100], compare: skip}
+    - {command: [DEBUG, DIGEST-VALUE, z], expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [introspect.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: introspect}

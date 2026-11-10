@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.forgotten-node-ext-blacklist
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Drives the FORGOTTEN_NODE ping-extension path where the node ID is already in
+    the receiver's blacklist while the node is known again, the dictAddOrFind find-branch
+    whose sds id the fix frees. CLUSTER FORGET on one node gossips the extension to
+    the others; CLUSTER MEET then re-adds the forgotten node, so the next extension-carrying
+    ping hits the existing blacklist entry. The cycle runs on three nodes whose entries
+    were created by different paths (extension add, extension add, the FORGET command's
+    own add). Replies are identical on both builds by design; the test's value is
+    reaching the fixed free deterministically and letting the liveness and sanitizer
+    oracles catch a wrong free, which would be a use-after-free the next time the
+    blacklist is gossiped, cleaned up, or probed, which the final FORGETs and PINGs
+    do.
+inputs:
+  properties:
+    node_timeout_ms: {type: integer, minimum: 1000, maximum: 60000, default: 15000}
+    ping_interval_ms: {type: integer, minimum: 100, maximum: 10000, default: 3000}
+components:
+- use: valkey.action.commands
+  id: forget-ext
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 4
+    resp: 2
+    timeout_s: 60
+    server_config:
+      cluster-node-timeout: {$ref: inputs.node_timeout_ms}
+      cluster-ping-interval: {$ref: inputs.ping_interval_ms}
+    commands:
+    - {command: [CLUSTER, FORGET, "<node.3.id>"], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 90, expect: {contains: "cluster_known_nodes:3"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 2, wait_s: 90, expect: {contains: "cluster_known_nodes:3"},
+      compare: skip}
+    - {command: [CLUSTER, MEET, "<node.3.host>", "<node.3.port>", "<node.3.cluster-port>"],
+      node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 90, expect: {contains: "cluster_known_nodes:4"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 90, expect: {contains: "cluster_known_nodes:3"},
+      compare: skip}
+    - {command: [CLUSTER, MEET, "<node.3.host>", "<node.3.port>", "<node.3.cluster-port>"],
+      node: 2, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 2, wait_s: 90, expect: {contains: "cluster_known_nodes:4"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 2, wait_s: 90, expect: {contains: "cluster_known_nodes:3"},
+      compare: skip}
+    - {command: [CLUSTER, MEET, "<node.3.host>", "<node.3.port>", "<node.3.cluster-port>"],
+      node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 90, expect: {contains: "cluster_known_nodes:4"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 90, expect: {contains: "cluster_known_nodes:3"},
+      compare: skip}
+    - {command: [CLUSTER, FORGET, "<node.3.id>"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, FORGET, "<node.3.id>"], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, FORGET, "<node.3.id>"], node: 2, expect: {equals: OK}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [PING], node: 2, expect: {equals: PONG}}
+    - {command: [PING], node: 3, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [forget-ext.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: forget-ext}

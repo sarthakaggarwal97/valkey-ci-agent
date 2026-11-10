@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c9aea6d2d31538d99d35ee8a88b26695fbaef611",
+  "parent": "87cc3d7a716f28af33a9c7ab017b81831016ab87",
+  "pr": 1574,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix memory leak in forgotten node ping ext code path (#1574)",
+  "date": "2025-01-16",
+  "unstable": "39f27052bf9ee985c9d52a0aa908749f12633eb4",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.5003,
+  "findings": [],
+  "recorded": []
+}

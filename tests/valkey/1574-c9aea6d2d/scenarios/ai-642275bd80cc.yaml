@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 87cc3d7a716f..c9aea6d2d315.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-642275bd80cc
+seed: 574302
+experiment:
+  id: proposed.forgotten-node-ext-blacklist
+  inputs:
+    node_timeout_ms: 6000
+    ping_interval_ms: 1000
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

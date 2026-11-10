@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.restore-future-rdb-version
+deployment:
+  modes: [standalone]
+metadata:
+  description: RESTORE of a future RDB-version DUMP payload is accepted only under
+    rdb-version-check relaxed and only outside the reserved foreign range
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: restore
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, rdb-version-check, relaxed], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [RESTORE, foo, 0, !!binary "AANiYXLeAA9ZVXph0+zg", REPLACE], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [GET, foo], expect_difference: true, expect: {equals: bar}}
+    - {command: [RESTORE, baz, 0, !!binary "AANiYXIMAA9ZVXph0+zg", REPLACE], expect: {
+        error: "DUMP payload version or checksum are wrong"}}
+    - {command: [CONFIG, SET, rdb-version-check, strict], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [RESTORE, foo2, 0, !!binary "AANiYXLeAA9ZVXph0+zg", REPLACE], expect: {
+        error: "DUMP payload version or checksum are wrong"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore}

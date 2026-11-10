@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.hash-copy-hincrby-convert
+deployment:
+  modes: [standalone]
+metadata:
+  description: COPY duplicates a hashtable-encoded hash (hashTypeDup hashtable branch)
+    and HINCRBY with an over-long field converts a listpack hash in place (hashTypeSet
+    conversion)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hash
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 2, hash-max-listpack-value: 8}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [HSET, h, f1, a, f2, b, f3, c], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, h], compare: skip}
+    - {command: [COPY, h, h2], expect: {equals: 1}}
+    - {command: [HLEN, h2], expect: {equals: 3}}
+    - {command: [HGET, h2, f2], expect: {equals: b}}
+    - {command: [HGETALL, h2], compare: unordered-pairs}
+    - {command: [HDEL, h2, f1], expect: {equals: 1}}
+    - {command: [HGET, h, f1], expect: {equals: a}}
+    - {command: [HSET, hi, c, "0"], expect: {equals: 1}}
+    - {command: [HINCRBY, hi, averylongfieldname, 5], expect: {equals: 5}}
+    - {command: [HGET, hi, averylongfieldname], expect: {equals: "5"}}
+    - {command: [HSET, hi, "", ""], expect: {equals: 1}}
+    - {command: [HGET, hi, ""], expect: {equals: ""}}
+    - {command: [HLEN, hi], expect: {equals: 3}}
+    - {command: [HSCAN, hi, 0, COUNT, 100], compare: skip}
+    - {command: [SCAN, 0, COUNT, 100], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [hash.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hash}

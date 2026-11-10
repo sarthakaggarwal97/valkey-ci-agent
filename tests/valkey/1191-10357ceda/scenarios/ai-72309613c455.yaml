@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 211b250aad1d..10357ceda5dc.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-72309613c455
+seed: 7002
+experiment:
+  id: proposed.noaddr-replica-failover
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7100

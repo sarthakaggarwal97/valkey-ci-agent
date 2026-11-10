@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.shutdown-failover-skips-nofailover
+deployment:
+  modes: [standalone]
+metadata:
+  description: Shutdown auto-failover must skip a fully synced NOFAILOVER replica;
+    the parent promotes it
+components:
+- use: valkey.action.commands
+  id: shutdown-failover
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 5
+    timeout_s: 20
+    server_config:
+      cluster-allow-replica-migration: "no"
+      cluster-node-timeout: 60000
+    commands:
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 60, expect: {contains: "cluster_known_nodes:5"},
+      compare: skip}
+    - {command: [CONFIG, SET, cluster-replica-no-failover, "yes"], node: 4, expect: {
+        equals: OK}}
+    - {command: [SET, bar, v1], node: 0, expect: {equals: OK}}
+    - {command: [SET, c, v2], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, MIGRATESLOTS, SLOTSRANGE, 0, 5461, NODE, "<node.1.id>",
+        SLOTSRANGE, 5462, 10922, NODE, "<node.2.id>"], node: 0, expect: {equals: OK}}
+    - {command: [GET, bar], node: 1, wait_s: 60, expect: {equals: v1}}
+    - {command: [GET, c], node: 2, wait_s: 60, expect: {equals: v2}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 3, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 3, wait_s: 60, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 4, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 4, wait_s: 60, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [CLUSTER, NODES], node: 0, wait_s: 60, expect: {contains: nofailover},
+      compare: skip}
+    - {command: [CONFIG, SET, shutdown-on-sigterm, failover], node: 0, expect: {equals: OK}}
+    - {restart: true, node: 0, expect: {equals: OK}}
+    - {command: [SET, a, after-failover], node: 3, wait_s: 90, expect: {equals: OK},
+      expect_difference: true}
+    - {command: [SET, foo, probe], node: 4, expect: {error: MOVED}, expect_difference: true}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [shutdown-failover.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shutdown-failover}

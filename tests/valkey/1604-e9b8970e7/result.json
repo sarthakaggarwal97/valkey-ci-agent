@@ -1,0 +1,61 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e9b8970e72754461d92b8bf22055a58540878d59",
+  "parent": "7699a3a94a5d3b2d5f2713893192ba87042fa030",
+  "pr": 1604,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Relaxed RDB version check (#1604)",
+  "date": "2025-01-27",
+  "unstable": "39f27052bf9ee985c9d52a0aa908749f12633eb4",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 3,
+  "hunted": 6,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 11,
+    "executed": 8,
+    "percent": 72,
+    "uncovered": [
+      "src/rdb.c:3036",
+      "src/rdb.c:3037",
+      "src/rdb.c:3045"
+    ],
+    "unnoted": [],
+    "rounds": 2
+  },
+  "cost_usd": 12.3406,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"d2ab4820c1be0580ea28efbfe8bfa1dc05bb802a\"},\"offset\":\"147\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"147\"}, link up",
+      "scenario": "ai-f1f5e98c8eb9",
+      "seed": 1604,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #1604",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/114"
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"d2ab4820c1be0580ea28efbfe8bfa1dc05bb802a\"},\"offset\":\"147\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"147\"}, link up",
+      "scenario": "ai-14fd27c2d4d5",
+      "seed": 1605,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #1604",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/114"
+    }
+  ],
+  "recorded": []
+}

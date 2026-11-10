@@ -1,0 +1,57 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "10357ceda5dce8baf42a4a585b913d490f11e56f",
+  "parent": "211b250aad1db6e7a9480fd3c896786d25210fb2",
+  "pr": 1191,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Mark the node as FAIL when the node is marked as NOADDR and broadcast the FAIL (#1191)",
+  "date": "2025-01-11",
+  "unstable": "39f27052bf9ee985c9d52a0aa908749f12633eb4",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 8,
+    "executed": 8,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 9.5175,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 14 (CLUSTER NODES) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":\"<node.0.id> 127.0.0.1:<node.0.port>@<node.0.cluster-port> myse",
+      "scenario": "ai-72309613c455",
+      "seed": 7002,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "0ea76264ffe37cabc2d7",
+      "issue": null
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 14 (CLUSTER NODES) replies otherwise with resp 3: {\"reply\":\"<node.3.id> 127.0.0.1:<node.3.port>@<node.3.cluster-port> master - <gossip> connected 1\\n<node.1.id> :0@0 master,fail,noaddr - <gossip> disconnected 0\\n<node.2.id> 127.0.0.1:<node.2.port>@<node.2.cluster-port> slav",
+      "scenario": "ai-72309613c455",
+      "seed": 7002,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "aeb39a9ee04c745943ac",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

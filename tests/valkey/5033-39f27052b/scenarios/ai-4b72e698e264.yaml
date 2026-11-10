@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6187f98a6b99..39f27052bf9e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4b72e698e264
+seed: 500332
+experiment:
+  id: proposed.shutdown-failover-all-nofailover
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

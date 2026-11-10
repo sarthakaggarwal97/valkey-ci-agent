@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.iterator-prefetch-command-table
+deployment:
+  modes: [standalone]
+metadata:
+  description: Command-table, latency-histogram, kvstore-stats and pubsub-channel
+    iterators compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: introspect
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    server_config: {enable-debug-command: "yes", latency-tracking: "yes"}
+    timeout_s: 60
+    commands:
+    - {command: [MSET, k1, v1, k2, v2, k3, v3, k4, v4], expect: {equals: OK}}
+    - {command: [SET, ek, v, EX, 1000], expect: {equals: OK}}
+    - {command: [CONFIG, GET, maxmemory]}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [COMMAND, COUNT], expect: {min: 100}}
+    - {command: [COMMAND, LIST], compare: unordered}
+    - {command: [COMMAND, LIST, FILTERBY, PATTERN, "get*"], compare: unordered}
+    - {command: [COMMAND, LIST, FILTERBY, ACLCAT, read], compare: unordered}
+    - {command: [COMMAND, INFO], compare: skip, expect: {exists: true}}
+    - {command: [INFO, commandstats], compare: skip, expect: {contains: "cmdstat_get"}}
+    - {command: [INFO, latencystats], compare: skip, expect: {contains: "Latencystats"}}
+    - {command: [LATENCY, HISTOGRAM], compare: skip, expect: {exists: true}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [INFO, commandstats], compare: skip, expect: {exists: true}}
+    - {command: [LATENCY, HISTOGRAM], compare: skip, expect: {exists: true}}
+    - {command: [DEBUG, HTSTATS, 0], compare: skip, expect: {contains: "Dictionary\
+          \ HT"}}
+    - {command: [DEBUG, HTSTATS, 0, full], compare: skip, expect: {exists: true}}
+    - {command: [SUBSCRIBE, ch1], connection: sub, compare: skip}
+    - {command: [PUBSUB, CHANNELS], wait_s: 10, expect: {equals: [ch1]}}
+    - {command: [PUBSUB, CHANNELS, "ch*"], expect: {equals: [ch1]}}
+    - {command: [DBSIZE], expect: {equals: 5}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [introspect.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: introspect}

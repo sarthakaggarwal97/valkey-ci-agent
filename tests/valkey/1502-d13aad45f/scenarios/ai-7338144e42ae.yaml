@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey dc9ca1b98da6..d13aad45f470.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7338144e42ae
+seed: 1744003
+experiment:
+  id: proposed.hash-active-defrag
+  inputs:
+    max_scan_fields: '1000'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

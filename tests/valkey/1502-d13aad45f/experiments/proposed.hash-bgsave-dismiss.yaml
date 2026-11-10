@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.hash-bgsave-dismiss
+deployment:
+  modes: [standalone]
+metadata:
+  description: BGSAVE of a hashtable hash with page-size values drives the fork child's
+    per-entry dismiss (dismissHashObject iteration, dismissHashTypeEntry) and the
+    hashtable RDB save iterator
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dismiss
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "return redis.call('HSET', KEYS[1], 'f1', string.rep('a', 9000),\
+          \ 'f2', string.rep('b', 9000), 'f3', string.rep('c', 9000))", 1, big], expect: {
+        equals: 3}}
+    - {command: [OBJECT, ENCODING, big], compare: skip}
+    - {command: [BGSAVE], expect: {contains: Background}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 20, expect: {contains: "rdb_bgsave_in_progress:0"}}
+    - {command: [HLEN, big], expect: {equals: 3}}
+    - {command: [EVAL, "return string.len(redis.call('HGET', KEYS[1], 'f1'))", 1,
+        big], expect: {equals: 9000}}
+    - {command: [HDEL, big, f2], expect: {equals: 1}}
+    - {command: [HLEN, big], expect: {equals: 2}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [dismiss.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dismiss}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 921ba19acbeb..af71619c451e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-cce1787001cc
+seed: 101
+experiment:
+  id: proposed.function-load-error-paths
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

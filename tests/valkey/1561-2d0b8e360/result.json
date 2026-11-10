@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2d0b8e360847146fa43a8463773dde8125187fa7",
+  "parent": "c9aea6d2d31538d99d35ee8a88b26695fbaef611",
+  "pr": 1561,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update comments and log message in cluster_legacy.c (#1561)",
+  "date": "2025-01-17",
+  "unstable": "39f27052bf9ee985c9d52a0aa908749f12633eb4",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.225,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewrites code comments and rewords two serverLog message strings in clusterProcessPacket (cluster_legacy.c). No control flow, data handling, protocol, or reply behaviour changes: the same branches run, the same freeClusterLink/assert calls execute, only log text and comment formatting differ. Log wording is not an oracle-observable behaviour, so no scenario can meaningfully test it."
+}

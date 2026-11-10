@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.scripting-engine-module
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Scripting-engine module API - a bad instruction returns an error instead
+    of aborting the server, and freed functions are not read during memory accounting
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: hello
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 20
+    commands:
+    - {command: [FUNCTION, LOAD, "#!hello name=lib_a\nFUNCTION foo\nARGS 0\nRETURN\n\
+          FUNCTION bar\nCONSTI 432\nRETURN"], expect: {equals: lib_a}}
+    - {command: [FCALL, foo, 0, 134], expect: {equals: 134}}
+    - {command: [FCALL, bar, 0], expect: {equals: 432}}
+    - {command: [FUNCTION, LOAD, REPLACE, "#!hello name=lib_a\nFUNCTION foo\nCONSTI\
+          \ 500\nRETURN"], expect: {equals: lib_a}}
+    - {command: [FCALL, foo, 0], expect: {equals: 500}}
+    - {command: [FUNCTION, FLUSH], expect: {equals: OK}}
+    - {command: [INFO, memory], compare: skip}
+    - {command: [FUNCTION, LOAD, REPLACE, "#!hello name=lib_x\nFUNCTION baz\nARGS\
+          \ 0\nSEND"], expect_difference: true, expect: {error: "Failed to parse instruction"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hello}

@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.hash-persist-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: A hashtable-encoded hash survives a save and restart round-trip identically
+    on both builds
+inputs:
+  properties:
+    appendonly: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: persist
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 2, appendonly: {$ref: inputs.appendonly},
+      aof-use-rdb-preamble: "no"}
+    timeout_s: 40
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3, f4, v4, f5, v5], expect: {equals: 5}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: hashtable}}
+    - {command: [HSET, h, "", empty, fields, kw], expect: {equals: 2}}
+    - {command: [BGREWRITEAOF], expect: {contains: "started"}}
+    - {command: [INFO, persistence], wait_s: 20, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HLEN, h], expect: {equals: 7}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: hashtable}}
+    - {command: [HGETALL, h], compare: unordered-pairs, expect: {contains: v5}}
+    - {command: [HGET, h, ""], expect: {equals: empty}}
+    - {command: [HGET, h, fields], expect: {equals: kw}}
+    - {command: [HGET, h, f3], expect: {equals: v3}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: persist}

@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.hash-rdb-threshold-reload
+deployment:
+  modes: [standalone]
+metadata:
+  description: A listpack hash saved to RDB converts to hashtable at load time (rdb.c
+    hashTypeConvert on reload) after the entries threshold is lowered across a restart
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [HSET, h, f1, a, f2, b, f3, c, f4, d, f5, e], expect: {equals: 5}}
+    - {command: [OBJECT, ENCODING, h], compare: skip}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [CONFIG, SET, hash-max-listpack-entries, "3"], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HLEN, h], expect: {equals: 5}}
+    - {command: [OBJECT, ENCODING, h], compare: skip}
+    - {command: [HGET, h, f3], expect: {equals: c}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HDEL, h, f1, f2], expect: {equals: 2}}
+    - {command: [HLEN, h], expect: {equals: 3}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

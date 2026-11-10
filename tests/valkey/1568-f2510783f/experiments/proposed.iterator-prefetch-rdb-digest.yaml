@@ -1,0 +1,74 @@
+extends: [valkey.liveness]
+id: proposed.iterator-prefetch-rdb-digest
+deployment:
+  modes: [standalone]
+metadata:
+  description: SAVE, restart reload, DEBUG DIGEST, KEYS, SORT, ZUNIONSTORE and ACL
+    over a mixed-encoding dataset; replies compared across builds to catch crashes
+    or corruption from the value-prefetching iterator
+components:
+- use: valkey.action.commands
+  id: persist
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 60
+    server_config:
+      enable-debug-command: "yes"
+      hash-max-listpack-entries: 3
+      set-max-listpack-entries: 3
+      set-max-intset-entries: 3
+      zset-max-listpack-entries: 3
+    commands:
+    - {command: [DEBUG, POPULATE, 10000], expect: {equals: OK}}
+    - {command: [SET, "s:int", 12345], expect: {equals: OK}}
+    - {command: [SET, "s:embstr", hello], expect: {equals: OK}}
+    - {command: [SET, "s:raw", "this-is-a-long-raw-string-stored-outside-the-object-header-0123456789"],
+      expect: {equals: OK}}
+    - {command: [SET, "s:empty", ""], expect: {equals: OK}}
+    - {command: [PEXPIREAT, "s:raw", 9999999999999], expect: {equals: 1}}
+    - {command: [HSET, "h:big", f1, v1, f2, v2, f3, v3, f4, v4, f5, ""], expect: {
+        equals: 5}}
+    - {command: [SADD, "set:big", m1, m2, m3, m4, m5], expect: {equals: 5}}
+    - {command: [SADD, "set:int", 1, 2, 3, 4, 5], expect: {equals: 5}}
+    - {command: [ZADD, z1, 1, a, 2, b, 3, c, 4, d], expect: {equals: 4}}
+    - {command: [ZADD, z2, 9, c, 10, d, 11, e, 12, f], expect: {equals: 4}}
+    - {command: [RPUSH, biglist, x, y, z], expect: {equals: 3}}
+    - {command: [ZUNIONSTORE, zdest, 2, z1, z2], expect: {equals: 6}}
+    - {command: [ZUNIONSTORE, zdest2, 2, "set:big", z1], expect: {equals: 9}}
+    - {command: [SORT, zdest, ALPHA], expect: {equals: [a, b, c, d, e, f]}}
+    - {command: [SORT, "set:big", ALPHA], expect: {equals: [m1, m2, m3, m4, m5]}}
+    - {command: [MEMORY, USAGE, "h:big"], compare: skip}
+    - {command: [MEMORY, USAGE, "set:big"], compare: skip}
+    - {command: [MEMORY, USAGE, zdest], compare: skip}
+    - {command: [ACL, SETUSER, u1, on, ">pw", "~*", "+@read", "+config"], expect: {
+        equals: OK}}
+    - {command: [ACL, CAT, read], compare: unordered}
+    - {command: [ACL, DELUSER, u1], expect: {equals: 1}}
+    - {command: [COMMAND, COUNT]}
+    - {command: [KEYS, "key:999*"], compare: unordered}
+    - {command: [DEBUG, DIGEST], expect: {exists: true}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 10012}}
+    - {command: [GET, "s:int"], expect: {equals: "12345"}}
+    - {command: [GET, "s:raw"], expect: {equals: "this-is-a-long-raw-string-stored-outside-the-object-header-0123456789"}}
+    - {command: [GET, "s:empty"], expect: {equals: ""}}
+    - {command: [PTTL, "s:raw"], compare: skip, expect: {min: 1}}
+    - {command: [HGETALL, "h:big"], compare: unordered-pairs}
+    - {command: [SMEMBERS, "set:big"], compare: unordered}
+    - {command: [SMEMBERS, "set:int"], compare: unordered}
+    - {command: [ZRANGE, z1, 0, -1, WITHSCORES], expect: {equals: [a, "1", b, "2",
+          c, "3", d, "4"]}}
+    - {command: [ZRANGE, zdest, 0, -1], expect: {equals: [a, b, e, c, f, d]}}
+    - {command: [LRANGE, biglist, 0, -1], expect: {equals: [x, y, z]}}
+    - {command: [DEBUG, DIGEST], expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [persist.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: persist}

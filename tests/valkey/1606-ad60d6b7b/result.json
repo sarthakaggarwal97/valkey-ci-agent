@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ad60d6b7b36e0599dba8f817c6fcd9bb69c30f37",
+  "parent": "f695c52acb82519d8b1362d456b2ec64ae401fd4",
+  "pr": 1606,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Initialize one variable in struct to avoid risk (#1606)",
+  "date": "2025-01-28",
+  "unstable": "39f27052bf9ee985c9d52a0aa908749f12633eb4",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6067,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds `server.cluster->failover_auth_sent = 0` in clusterInit as defensive initialization. On every reachable path the field was already written before being read: the read at cluster_legacy.c:3220 is short-circuited by failover_auth_time (initialized to 0 and set non-zero only in the election-reset block that also zeroes failover_auth_sent), and the reads at lines 4824/4857 are only reached after that reset block has run, since on the first call failover_auth_time is 0 and auth_age therefore always exceeds auth_retry_time. No observable behavior \u2014 election timing, votes, failov"
+}

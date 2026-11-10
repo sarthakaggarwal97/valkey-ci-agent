@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.iterator-prefetch-datatype-iter
+deployment:
+  modes: [standalone]
+metadata:
+  description: SRANDMEMBER aux-hashtable reply, ZDIFF algorithm-2 max-element scan,
+    and fork-child dismiss of huge set/hash members, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dtypes
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    server_config: {set-max-listpack-entries: 4, set-max-intset-entries: 4, zset-max-listpack-entries: 4}
+    timeout_s: 90
+    commands:
+    - {command: [EVAL, "for i=1,30 do redis.call('SADD', KEYS[1], 'member:' .. i)\
+          \ end return redis.call('SCARD', KEYS[1])", 1, s30], expect: {equals: 30}}
+    - {command: [OBJECT, ENCODING, s30], compare: skip}
+    - {command: [SRANDMEMBER, s30, 5], compare: skip, expect: {exists: true}}
+    - {command: [SRANDMEMBER, s30, 25], compare: skip, expect: {exists: true}}
+    - {command: [EVAL, "for i=1,100 do redis.call('ZADD', KEYS[1], i, 'm' .. i) end\
+          \ return redis.call('ZCARD', KEYS[1])", 1, z0], expect: {equals: 100}}
+    - {command: [ZADD, z1, 1, m1], expect: {equals: 1}}
+    - {command: [ZADD, z2, 2, m2], expect: {equals: 1}}
+    - {command: [ZADD, z3, 3, m3], expect: {equals: 1}}
+    - {command: [ZADD, z4, 4, m4], expect: {equals: 1}}
+    - {command: [ZADD, z5, 5, m5], expect: {equals: 1}}
+    - {command: [ZADD, z6, 6, m6], expect: {equals: 1}}
+    - {command: [ZADD, z7, 7, m7], expect: {equals: 1}}
+    - {command: [ZADD, z8, 8, m8], expect: {equals: 1}}
+    - {command: [ZADD, z9, 9, m9], expect: {equals: 1}}
+    - {command: [ZDIFFSTORE, zdest, 10, z0, z1, z2, z3, z4, z5, z6, z7, z8, z9], expect: {
+        equals: 91}}
+    - {command: [ZRANGE, zdest, 0, 4], expect: {equals: [m10, m11, m12, m13, m14]}}
+    - {command: [EVAL, "local v = string.rep('x', 8192) for i=1,8 do redis.call('SADD',\
+          \ KEYS[1], v .. i) end for i=1,8 do redis.call('HSET', KEYS[2], 'f' .. i,\
+          \ v) end return 1", 2, bigset, bighash], expect: {equals: 1}}
+    - {command: [BGSAVE], expect: {equals: "Background saving started"}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "rdb_bgsave_in_progress:0"}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {contains: "started"}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [SCARD, bigset], expect: {equals: 8}}
+    - {command: [HLEN, bighash], expect: {equals: 8}}
+    - {command: [DBSIZE], expect: {equals: 14}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dtypes.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dtypes}

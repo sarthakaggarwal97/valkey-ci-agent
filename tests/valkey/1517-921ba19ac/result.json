@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "921ba19acbebed63bf49b12b8123a72887e53128",
+  "parent": "cda9eee8c9161a418be8dbd399909aa64d3fb487",
+  "pr": 1517,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Incr expired_keys if the unix-time is already expired for EXPIREAT and other commands(#1517)",
+  "date": "2025-01-16",
+  "unstable": "39f27052bf9ee985c9d52a0aa908749f12633eb4",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2535,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c5a158554744ee5f98e5ad3f7b3986ecebc089ed",
+  "parent": "2a1a65b4c73cd238f37283759a292ac6477f169e",
+  "pr": 1519,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "add paused_actions for INFO Clients (#1519)",
+  "date": "2025-01-14",
+  "unstable": "39f27052bf9ee985c9d52a0aa908749f12633eb4",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 15,
+    "executed": 15,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.8019,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-069b85377786",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'pauseinfo' returned ERROR: expectations both builds violate alike, so they are not about the change: 14 (CLIENT PAUSE 9223372036854775807 WRITE)"
+    },
+    {
+      "scenario": "ai-d24f41810e62",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'pauseinfo' returned ERROR: expectations both builds violate alike, so they are not about the change: 14 (CLIENT PAUSE 9223372036854775807 WRITE)"
+    }
+  ]
+}

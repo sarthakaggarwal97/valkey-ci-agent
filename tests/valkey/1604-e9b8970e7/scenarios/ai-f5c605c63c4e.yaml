@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7699a3a94a5d..e9b8970e7275.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f5c605c63c4e
+seed: 1001
+experiment:
+  id: proposed.rdb-reload-config-check
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

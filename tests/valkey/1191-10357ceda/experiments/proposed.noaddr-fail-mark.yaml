@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.noaddr-fail-mark
+deployment:
+  modes: [standalone]
+metadata:
+  description: A peer that did CLUSTER RESET HARD is marked NOADDR and now also FAIL,
+    turning an invalid MOVED into CLUSTERDOWN and cluster_state into fail, and the
+    FAIL survives a nodes.conf reload
+components:
+- use: valkey.action.commands
+  id: noaddr
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 30
+    server_config: {cluster-node-timeout: 3000}
+    commands:
+    - {command: [CLUSTER, SETSLOT, "0", NODE, "<node.1.id>"], node: 0, wait_s: 30,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, RESET, HARD], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, NODES], node: 0, wait_s: 60, expect: {contains: noaddr},
+      compare: skip}
+    - {command: [CLUSTER, NODES], node: 0, expect_difference: true, expect: {contains: "fail,noaddr"}}
+    - {command: [CLUSTER, INFO], node: 0, expect_difference: true, expect: {contains: "cluster_state:fail"}}
+    - {command: [SET, key_977613, bar], node: 0, expect_difference: true, expect: {
+        error: CLUSTERDOWN}}
+    - {command: [CLUSTER, SAVECONFIG], node: 0, expect: {equals: OK}}
+    - {restart: true, node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, NODES], node: 0, expect_difference: true, expect: {contains: "fail,noaddr"}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [noaddr.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: noaddr}

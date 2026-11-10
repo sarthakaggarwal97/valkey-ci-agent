@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.client-misc-subcommands
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLIENT HELP, LIST syntax/new-filter branches, NO-EVICT, PAUSE/UNPAUSE,
+    GETNAME null and KILL self-kill, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: misc
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CLIENT, HELP], expect_difference: true, expect: {contains: "Exclude\
+          \ the current client from the list (default: no)."}}
+    - {command: [CLIENT, GETNAME]}
+    - {command: [CLIENT, LIST, FOO], expect: {error: "syntax"}}
+    - {command: [CLIENT, LIST, ADDR, "1.2.3.4:1"], expect_difference: true, expect: {
+        equals: ""}}
+    - {command: [CLIENT, LIST, LADDR, "1.2.3.4:1"], expect_difference: true, expect: {
+        equals: ""}}
+    - {command: [CLIENT, LIST, USER, default, MAXAGE, 1000000], expect_difference: true,
+      expect: {equals: ""}}
+    - {command: [CLIENT, LIST, USER, nosuchuser], expect_difference: true, expect: {
+        error: "No such user"}}
+    - {command: [CLIENT, LIST, ID, 0], expect_difference: true, expect: {error: "greater\
+          \ than 0"}}
+    - {command: [CLIENT, LIST, ID, 5, notanumber], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [CLIENT, LIST, SKIPME, maybe], expect: {error: "syntax"}}
+    - {command: [CLIENT, NO-EVICT, ON], expect: {equals: OK}}
+    - {command: [CLIENT, NO-EVICT, OFF], expect: {equals: OK}}
+    - {command: [CLIENT, NO-EVICT, MAYBE], expect: {error: "syntax"}}
+    - {command: [CLIENT, PAUSE, 100], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, 100, WRITE], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, 100, ALL], expect: {equals: OK}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, 100, NEITHER], expect: {error: "WRITE or ALL"}}
+    - {command: [CLIENT, PAUSE, notanumber], expect: {error: "not an integer"}}
+    - {command: [CLIENT, KILL, "1.2.3.4:5"], expect: {error: "No such client"}}
+    - {command: [SUBSCRIBE, ch1], connection: sub}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CLIENT, KILL, TYPE, pubsub], expect: {equals: 1}}
+    - {command: [CLIENT, KILL, TYPE, normal, SKIPME, no], expect: {min: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [misc.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: misc}

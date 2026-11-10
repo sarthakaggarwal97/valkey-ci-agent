@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.hash-active-defrag
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active defragmentation scans hashtable-encoded hashes and sets without
+    crashing or corrupting data
+inputs:
+  properties:
+    max_scan_fields: {type: string, enum: ["1", "1000"], default: "1000"}
+components:
+- use: valkey.action.commands
+  id: build
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "for i=1,200 do for j=1,20 do redis.call('hset','h'..i,'f'..j,\
+          \ string.rep('v',80)) end end return 1", 0], expect: {equals: 1}}
+    - {command: [EVAL, "for i=1,100 do for j=1,20 do redis.call('sadd','s'..i, 'm'..j..string.rep('x',70))\
+          \ end end return 1", 0], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, h2], expect: {equals: hashtable}}
+    - {command: [OBJECT, ENCODING, s2], expect: {equals: hashtable}}
+    - {command: [EVAL, "for i=1,200,2 do redis.call('del','h'..i) end for i=1,100,2\
+          \ do redis.call('del','s'..i) end return 1", 0], expect: {equals: 1}}
+    - {command: [CONFIG, SET, active-defrag-ignore-bytes, "1"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, active-defrag-threshold-lower, "0"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, active-defrag-cycle-max, "75"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, active-defrag-max-scan-fields, {$ref: inputs.max_scan_fields}],
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, activedefrag, "yes"], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [build]
+  config: {seconds: 8}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: build}

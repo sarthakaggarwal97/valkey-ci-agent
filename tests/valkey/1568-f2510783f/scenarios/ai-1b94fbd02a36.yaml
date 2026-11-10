@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 99ed30881728..f2510783f9ed.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1b94fbd02a36
+seed: 1571
+experiment:
+  id: proposed.iterator-prefetch-cluster-slots
+deployment:
+  mode: standalone
+  base_port: 7300

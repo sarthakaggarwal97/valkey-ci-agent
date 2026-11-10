@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.commandlog-blocked-script
+deployment:
+  modes: [standalone]
+metadata:
+  description: Commandlog on the unblock path (updateStatsOnUnblock), EXEC skip flag,
+    and script-called commands, compared with the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: blocked
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, slowlog-log-slower-than, 100000], expect: {equals: OK}}
+    - {raw: "BLPOP mylist 0\r\n", connection: blk, expect: {exists: false}}
+    - {command: [DEBUG, SLEEP, 0.3], expect: {equals: OK}}
+    - {command: [LPUSH, mylist, v], expect: {equals: 1}}
+    - {read: true, connection: blk, expect: null}
+    - {command: [SLOWLOG, LEN], expect: {equals: 2}}
+    - {command: [COMMANDLOG, LEN, slow], expect_difference: true, expect: {equals: 2}}
+    - {command: [SLOWLOG, RESET], expect: {equals: OK}}
+    - {command: [COMMANDLOG, RESET, slow], expect_difference: true, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.2], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK]}}
+    - {command: [SLOWLOG, LEN], expect: {equals: 1}}
+    - {command: [COMMANDLOG, LEN, slow], expect_difference: true, expect: {equals: 1}}
+    - {command: [CONFIG, SET, slowlog-log-slower-than, 0], expect: {equals: OK}}
+    - {command: [SLOWLOG, RESET], expect: {equals: OK}}
+    - {command: [EVAL, "server.call('ping')", 0], expect: {exists: false}}
+    - {command: [SLOWLOG, LEN], expect: {equals: 3}}
+    - {command: [COMMANDLOG, LEN, slow], expect_difference: true, expect: {equals: 4}}
+    - {command: [COMMANDLOG, GET, -1, slow], expect_difference: true, expect: {error: false}}
+    - {command: [CONFIG, SET, slowlog-log-slower-than, -1], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [blocked.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: blocked}

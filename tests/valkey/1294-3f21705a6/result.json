@@ -1,0 +1,39 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3f21705a6c51d7f412f80dd7aabd83dac45b2493",
+  "parent": "f2510783f9ed70172bd1a2ab9faa40afc99d54d5",
+  "pr": 1294,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Feature COMMANDLOG to record slow execution and large request/reply (#1294)",
+  "date": "2025-01-24",
+  "unstable": "39f27052bf9ee985c9d52a0aa908749f12633eb4",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 4,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 126,
+    "executed": 116,
+    "percent": 92,
+    "uncovered": [
+      "src/commandlog.c:53",
+      "src/commandlog.c:168",
+      "src/commandlog.c:180",
+      "src/commandlog.c:193",
+      "src/commandlog.c:204",
+      "src/commandlog.c:263",
+      "src/latency.c:269",
+      "src/latency.c:272",
+      "src/module.c:1224",
+      "src/module.c:1225"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 10.3145,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c5a158554744..6a8f068e36ba.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-262ab7383fae
+seed: 1105
+experiment:
+  id: proposed.client-dispatch-caching
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

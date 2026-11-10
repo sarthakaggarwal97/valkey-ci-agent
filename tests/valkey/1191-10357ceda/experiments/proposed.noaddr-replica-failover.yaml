@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.noaddr-replica-failover
+deployment:
+  modes: [standalone]
+metadata:
+  description: After a primary does CLUSTER RESET HARD, the broadcast FAIL lets its
+    replica win a failover; on the parent the old node stays only NOADDR and the replica
+    never promotes
+components:
+- use: valkey.action.commands
+  id: failover
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 4
+    timeout_s: 90
+    server_config:
+      cluster-node-timeout: 3000
+      cluster-replica-validity-factor: 0
+    commands:
+    - {command: [CLUSTER, SETSLOT, "0", NODE, "<node.1.id>"], node: 0, wait_s: 30,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "1", NODE, "<node.3.id>"], node: 0, wait_s: 30,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, BUMPEPOCH], node: 1, expect: {error: false}, compare: skip}
+    - {command: [CLUSTER, SETSLOT, "0", NODE, "<node.1.id>"], node: 1, wait_s: 30,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, BUMPEPOCH], node: 3, expect: {error: false}, compare: skip}
+    - {command: [CLUSTER, SETSLOT, "1", NODE, "<node.3.id>"], node: 3, wait_s: 30,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.1.id>"], node: 2, wait_s: 30, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 2, wait_s: 60, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 60, expect: {contains: "cluster_state:ok"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 2, wait_s: 60, expect: {contains: "cluster_state:ok"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 3, wait_s: 60, expect: {contains: "cluster_state:ok"},
+      compare: skip}
+    - {command: [CLUSTER, RESET, HARD], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, NODES], node: 0, wait_s: 60, expect: {contains: noaddr},
+      compare: skip}
+    - {command: [CLUSTER, NODES], node: 3, wait_s: 60, expect: {contains: noaddr},
+      compare: skip}
+    - {command: [CLUSTER, NODES], node: 0, expect_difference: true, expect: {contains: "fail,noaddr"}}
+    - {command: [INFO, replication], node: 2, wait_s: 45, expect_difference: true,
+      expect: {contains: "role:master"}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [PING], node: 3, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [failover.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: failover}

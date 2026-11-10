@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3032ccd48a17f9da78799dea0f8f976ee4312531",
+  "parent": "b2e4155f54d335d7a6b0764ef963eaf5ef863f8f",
+  "pr": 1586,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Change the shared format for dual channel replication logs (#1586)",
+  "date": "2025-01-20",
+  "unstable": "39f27052bf9ee985c9d52a0aa908749f12633eb4",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2203,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters the log-message prefix string in the dualChannelServerLog macro (from \"<Dual Channel> \" to \"Dual channel replication: \") and updates the matching pattern in the dual-channel-replication test. It is a cosmetic log-format change with no effect on replication behaviour, replies, data, or control flow, so there is no risky path for a fuzzer scenario to exercise."
+}

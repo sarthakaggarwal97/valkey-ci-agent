@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey dc9ca1b98da6..d13aad45f470.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-efda5a34ebc1
+seed: 1744001
+experiment:
+  id: proposed.hash-hashtable-randfield
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

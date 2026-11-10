@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "39f27052bf9ee985c9d52a0aa908749f12633eb4",
+  "parent": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "pr": 5033,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Respect NOFAILOVER during shutdown failover (#5033)",
+  "date": "2026-11-10",
+  "unstable": "39f27052bf9ee985c9d52a0aa908749f12633eb4",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 8.1698,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "`make -j4 BUILD_ZSTD=yes gcov OPTIMIZATION=-O0` failed in coverage (exit 2): /usr/bin/x86_64-linux-gnu-ld.bfd: liblua.a(lzio.o): in function `_sub_D_00100_1': lzio.c:(.text.exit+0x5): undefined reference to `__gcov_exit' /usr/bin/x86_64-linux-gnu-ld.bfd: liblua.a(lzio.o):(.data.rel+0x20): undefined reference to `__gcov_merge_add' /usr/bin/x86_64-linux-gnu-ld.bfd: liblua.a(lauxlib.o): in function `_sub_I_00100_0': lauxlib.c:(.text.startup+0xc): undefined reference to `__gcov_init' /usr/bin/x86_64"
+}

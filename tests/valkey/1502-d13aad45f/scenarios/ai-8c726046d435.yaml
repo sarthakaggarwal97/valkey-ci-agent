@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey dc9ca1b98da6..d13aad45f470.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8c726046d435
+seed: 7301
+experiment:
+  id: proposed.hash-persist-restart
+  inputs:
+    appendonly: 'yes'
+deployment:
+  mode: standalone
+  base_port: 7300

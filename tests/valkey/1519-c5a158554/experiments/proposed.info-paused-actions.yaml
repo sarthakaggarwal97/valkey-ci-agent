@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.info-paused-actions
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO Clients reports paused_actions and paused_timeout_milliseconds
+    across CLIENT PAUSE WRITE, CLIENT PAUSE ALL inside MULTI/EXEC, pause upgrade/downgrade
+    precedence, and CLIENT UNPAUSE
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: pauseinfo
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "paused_actions:none\r\
+          \npaused_timeout_milliseconds:0"}}
+    - {command: [CLIENT, PAUSE, "0", WRITE], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "paused_actions:none\r\
+          \npaused_timeout_milliseconds:0"}}
+    - {command: [CLIENT, PAUSE, "30000", WRITE], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "paused_actions:write"}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "paused_actions:none\r\
+          \npaused_timeout_milliseconds:0"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, "60000", ALL]}
+    - {command: [INFO, clients]}
+    - {command: [CLIENT, PAUSE, "30000", WRITE]}
+    - {command: [INFO, clients]}
+    - {command: [CLIENT, UNPAUSE]}
+    - {command: [EXEC], expect_difference: true, expect: {contains: "paused_actions:all"}}
+    - {command: [CLIENT, PAUSE, "9223372036854775807", WRITE]}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "paused_actions:none\r\
+          \npaused_timeout_milliseconds:0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [pauseinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pauseinfo}

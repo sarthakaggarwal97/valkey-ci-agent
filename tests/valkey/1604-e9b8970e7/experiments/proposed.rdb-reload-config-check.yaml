@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.rdb-reload-config-check
+deployment:
+  modes: [standalone]
+metadata:
+  description: rdb-version-check config exists and an RDB file reload round-trips
+    across a restart
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    compare_with: {$ref: inputs.parent}
+    timeout_s: 20
+    commands:
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [RPUSH, mylist, a, b, c], expect: {equals: 3}}
+    - {command: [HSET, h, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [CONFIG, GET, rdb-version-check], expect_difference: true, expect: {
+        equals: [rdb-version-check, strict]}}
+    - {command: [CONFIG, SET, rdb-version-check, relaxed], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, rdb-version-check], expect_difference: true, expect: {
+        equals: [rdb-version-check, relaxed]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, foo], expect: {equals: bar}}
+    - {command: [LRANGE, mylist, 0, -1], expect: {equals: [a, b, c]}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

@@ -1,0 +1,92 @@
+extends: [valkey.liveness]
+id: proposed.commandlog-core
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMANDLOG command surface, config aliases, slow/large-request/large-reply
+    thresholds and trimming, compared with the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cmdlog
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [COMMANDLOG, HELP], expect_difference: true, expect: {error: false}}
+    - {command: [COMMANDLOG, FOO], expect_difference: true, expect: {error: true}}
+    - {command: [COMMANDLOG, LEN], expect_difference: true, expect: {error: true}}
+    - {command: [COMMANDLOG, GET, slow], expect_difference: true, expect: {error: true}}
+    - {command: [COMMANDLOG, LEN, slow], expect_difference: true, expect: {equals: 0}}
+    - {command: [COMMANDLOG, LEN, large-request], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [COMMANDLOG, LEN, large-reply], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [COMMANDLOG, LEN, bogus], expect_difference: true, expect: {error: "type\
+          \ should be one of"}}
+    - {command: [COMMANDLOG, GET, -2, slow], expect_difference: true, expect: {error: "count\
+          \ should be greater than or equal to -1"}}
+    - {command: [COMMANDLOG, GET, 0, slow], expect_difference: true, expect: {equals: []}}
+    - {command: [COMMANDLOG, GET, "9223372036854775807", slow], expect_difference: true,
+      expect: {equals: []}}
+    - {command: [COMMANDLOG, GET, "9223372036854775808", slow], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, slowlog-log-slower-than, 100000], expect: {equals: OK}}
+    - {command: [CONFIG, GET, slowlog-log-slower-than], expect: {equals: [slowlog-log-slower-than,
+          "100000"]}}
+    - {command: [CONFIG, GET, commandlog-execution-slower-than], expect_difference: true,
+      expect: {equals: [commandlog-execution-slower-than, "100000"]}}
+    - {command: [DEBUG, SLEEP, 0.2], expect: {equals: OK}}
+    - {command: [SLOWLOG, LEN], expect: {equals: 1}}
+    - {command: [COMMANDLOG, LEN, slow], expect_difference: true, expect: {equals: 1}}
+    - {command: [SLOWLOG, GET], compare: skip, expect: {error: false}}
+    - {command: [COMMANDLOG, GET, -1, slow], expect_difference: true, expect: {error: false}}
+    - {command: [COMMANDLOG, RESET, slow], expect_difference: true, expect: {equals: OK}}
+    - {command: [COMMANDLOG, LEN, slow], expect_difference: true, expect: {equals: 0}}
+    - {command: [SLOWLOG, RESET], expect: {equals: OK}}
+    - {command: [SLOWLOG, LEN], expect: {equals: 0}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, 1024], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, commandlog-reply-larger-than, 1024], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SET, bigkey, &id001 "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"],
+      expect: {equals: OK}}
+    - {command: [COMMANDLOG, LEN, large-request], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [GET, bigkey], expect: null}
+    - {command: [COMMANDLOG, LEN, large-reply], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [COMMANDLOG, GET, -1, large-request], expect_difference: true, expect: {
+        error: false}}
+    - {command: [COMMANDLOG, GET, -1, large-reply], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CONFIG, SET, commandlog-large-request-max-len, 2], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SET, bigkey, *id001], expect: {equals: OK}}
+    - {command: [SET, bigkey, *id001], expect: {equals: OK}}
+    - {command: [COMMANDLOG, LEN, large-request], expect_difference: true, expect: {
+        equals: 2}}
+    - {command: [CONFIG, SET, commandlog-large-reply-max-len, 0], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [GET, bigkey], expect: null}
+    - {command: [COMMANDLOG, LEN, large-reply], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [CONFIG, SET, slowlog-log-slower-than, 0], expect: {equals: OK}}
+    - {command: [SADD, s, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+        18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, *id001],
+      expect: {equals: 35}}
+    - {command: [SLOWLOG, GET, -1], compare: skip, expect: {error: false}}
+    - {command: [COMMANDLOG, GET, -1, slow], expect_difference: true, expect: {error: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cmdlog.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cmdlog}

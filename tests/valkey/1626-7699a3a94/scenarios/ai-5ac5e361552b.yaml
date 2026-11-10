@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 88a68303c034..7699a3a94a5d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5ac5e361552b
+seed: 1626
+experiment:
+  id: proposed.keyspace-delete-churn-shrink
+  inputs:
+    mutable_keys: 300000
+    mutation_rate: 30000
+    churn_s: 25
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

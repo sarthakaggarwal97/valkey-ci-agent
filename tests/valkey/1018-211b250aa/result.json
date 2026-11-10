@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "211b250aad1db6e7a9480fd3c896786d25210fb2",
+  "parent": "d6bdd9e7d7f901c98d86a2f5ec79450130d0f5e7",
+  "pr": 1018,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Do election in order based on failed primary rank to avoid voting conflicts (#1018)",
+  "date": "2025-01-11",
+  "unstable": "39f27052bf9ee985c9d52a0aa908749f12633eb4",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 24,
+    "executed": 23,
+    "percent": 95,
+    "uncovered": [
+      "src/cluster_legacy.c:4547"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.5486,
+  "findings": [],
+  "recorded": []
+}

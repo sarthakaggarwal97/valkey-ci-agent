@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.client-kill-multi-id
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLIENT KILL with multiple deduplicated IDs and the shared filter parser,
+    compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: kill-multi
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [ACL, SETUSER, killme, on, '>pw1', '~*', '&*', '+@all'], expect: {
+        equals: OK}}
+    - {command: [AUTH, killme, pw1], connection: victim, expect: {equals: OK}}
+    - {command: [CLIENT, KILL, USER, killme], expect: {equals: 1}}
+    - {command: [SUBSCRIBE, ch1], connection: subber, expect: null}
+    - {command: [CLIENT, KILL, TYPE, pubsub], expect: {equals: 1}}
+    - {command: [CLIENT, KILL, ID, 1001, 1002], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [CLIENT, KILL, ID, 1001, 1001, 1001, 1002, 1003, 1004, 1005, 1006,
+        1007, 1008, 1009, 1010, TYPE, normal, SKIPME, no], expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [CLIENT, KILL, ID, notanum], expect_difference: true, expect: {error: "syntax\
+          \ error"}}
+    - {command: [CLIENT, KILL, ID, 9999999999999999999], expect_difference: true,
+      expect: {error: "syntax error"}}
+    - {command: [CLIENT, KILL, ID, 0], expect: {error: "greater than 0"}}
+    - {command: [CLIENT, KILL, ID, -1], expect: {error: "greater than 0"}}
+    - {command: [CLIENT, KILL, ID, TYPE, normal], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [CLIENT, KILL, MAXAGE, 100000], expect: {equals: 0}}
+    - {command: [CLIENT, KILL, "1.2.3.4:5"], expect: {error: "No such client"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [kill-multi.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: kill-multi}

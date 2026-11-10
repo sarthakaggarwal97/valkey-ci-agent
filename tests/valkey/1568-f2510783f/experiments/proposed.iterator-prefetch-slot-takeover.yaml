@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.iterator-prefetch-slot-takeover
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Another node claims a populated slot with a higher epoch; the old owner's
+    delKeysInSlot and shard-channel removal iterators run, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: takeover
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [SET, "{foo}k1", v1], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{foo}k2", v2], node: 0, expect: {equals: OK}}
+    - {command: [RPUSH, "{foo}l", a, b, c], node: 0, expect: {equals: 3}}
+    - {command: [SSUBSCRIBE, "{foo}c"], node: 0, connection: sub, compare: skip}
+    - {command: [PUBSUB, SHARDCHANNELS], node: 0, wait_s: 10, expect: {equals: ["{foo}c"]}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 0, expect: {equals: 3}}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 0, wait_s: 60, expect: {
+        equals: 0}}
+    - {command: [PUBSUB, SHARDCHANNELS], node: 0, wait_s: 60, expect: {equals: []}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [takeover.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: takeover}

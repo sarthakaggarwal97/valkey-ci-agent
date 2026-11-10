@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.commandlog-config-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: Legacy slowlog config aliases at startup, CONFIG REWRITE of old and
+    new commandlog options, and readback after a restart, compared with the parent
+    build
+components:
+- use: valkey.action.commands
+  id: cfg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {slowlog-log-slower-than: 50000, slowlog-max-len: 64}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, GET, slowlog-log-slower-than], expect: {equals: [slowlog-log-slower-than,
+          "50000"]}}
+    - {command: [CONFIG, GET, slowlog-max-len], expect: {equals: [slowlog-max-len,
+          "64"]}}
+    - {command: [CONFIG, GET, commandlog-slow-execution-max-len], expect_difference: true,
+      expect: {equals: [commandlog-slow-execution-max-len, "64"]}}
+    - {command: [CONFIG, SET, slowlog-max-len, 77], expect: {equals: OK}}
+    - {command: [CONFIG, SET, commandlog-request-larger-than, 2048], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, commandlog-large-reply-max-len, 5], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, slowlog-max-len], expect: {equals: [slowlog-max-len,
+          "77"]}}
+    - {command: [CONFIG, GET, commandlog-slow-execution-max-len], expect_difference: true,
+      expect: {equals: [commandlog-slow-execution-max-len, "77"]}}
+    - {command: [CONFIG, GET, commandlog-request-larger-than], expect_difference: true,
+      expect: {equals: [commandlog-request-larger-than, "2048"]}}
+    - {command: [CONFIG, GET, commandlog-large-reply-max-len], expect_difference: true,
+      expect: {equals: [commandlog-large-reply-max-len, "5"]}}
+    - {command: [CONFIG, GET, slowlog-log-slower-than], expect: {equals: [slowlog-log-slower-than,
+          "50000"]}}
+    - {command: [DEBUG, SLEEP, 0.1], expect: {equals: OK}}
+    - {command: [SLOWLOG, LEN], expect: {equals: 1}}
+    - {command: [COMMANDLOG, LEN, slow], expect_difference: true, expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cfg}

@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f2510783f9ed..3f21705a6c51.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-dfcf209c63d4
+seed: 37
+experiment:
+  id: proposed.commandlog-config-restart
+deployment:
+  mode: standalone
+  base_port: 7300

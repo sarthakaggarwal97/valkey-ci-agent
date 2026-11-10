@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.hash-bgsave-dismiss-bigvalue
+deployment:
+  modes: [standalone]
+metadata:
+  description: BGSAVE of a hashtable hash with large values dismisses value memory
+    in the fork child with no corruption
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dismiss
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {rdbcompression: "no", save: ""}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "redis.call('hset', KEYS[1], 'f1', string.rep('x', 4300));\
+          \ redis.call('hset', KEYS[1], 'f2', string.rep('y', 4300)); return redis.call('hlen',\
+          \ KEYS[1])", 1, h], expect: {equals: 2}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: hashtable}, compare: skip}
+    - {command: [BGSAVE], expect: {error: false}, compare: skip}
+    - {command: [INFO, persistence], wait_s: 15, expect: {contains: "rdb_bgsave_in_progress:0"},
+      compare: skip}
+    - {command: [INFO, persistence], expect: {contains: "rdb_last_bgsave_status:ok"},
+      compare: skip}
+    - {command: [EVAL, "return string.len(redis.call('hget', KEYS[1], 'f1'))", 1,
+        h], expect: {equals: 4300}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dismiss}

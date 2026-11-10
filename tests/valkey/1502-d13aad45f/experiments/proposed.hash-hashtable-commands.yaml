@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.hash-hashtable-commands
+deployment:
+  modes: [standalone]
+metadata:
+  description: Hash commands on a hashtable-encoded hash, replies compared across
+    builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hashops
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 2, hash-max-listpack-value: 64}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [HSET, h, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, h], expect: {equals: hashtable}}
+    - {command: [HLEN, h], expect: {equals: 3}}
+    - {command: [HGET, h, f2], expect: {equals: v2}}
+    - {command: [HMGET, h, f3, nope, f1], expect: {equals: [v3, null, v1]}}
+    - {command: [HEXISTS, h, f1], expect: {equals: 1}}
+    - {command: [HEXISTS, h, nope], expect: {equals: 0}}
+    - {command: [HSTRLEN, h, f1], expect: {equals: 2}}
+    - {command: [HSETNX, h, f1, X], expect: {equals: 0}}
+    - {command: [HSETNX, h, f4, v4], expect: {equals: 1}}
+    - {command: [HSET, h, f1, V1new], expect: {equals: 0}}
+    - {command: [HGET, h, f1], expect: {equals: V1new}}
+    - {command: [HGETALL, h], compare: unordered-pairs, expect: {contains: f4}}
+    - {command: [HKEYS, h], compare: unordered, expect: {contains: f4}}
+    - {command: [HVALS, h], compare: unordered, expect: {contains: v4}}
+    - {command: [HDEL, h, f2, f3, nope], expect: {equals: 2}}
+    - {command: [HLEN, h], expect: {equals: 2}}
+    - {command: [HSET, h, "", emptyfield], expect: {equals: 1}}
+    - {command: [HGET, h, ""], expect: {equals: emptyfield}}
+    - {command: [HSET, h, fields, 1], expect: {equals: 1}}
+    - {command: [HINCRBY, h, fields, 9223372036854775806], expect: {equals: 9223372036854775807}}
+    - {command: [HINCRBY, h, fields, 1], expect: {error: "overflow"}}
+    - {command: [HINCRBYFLOAT, h, cnt, "3.0e3"], expect: {equals: "3000"}}
+    - {command: [HSCAN, h, 0, COUNT, 100], compare: skip}
+    - {command: [HSCAN, h, 0, COUNT, 100, NOVALUES], compare: skip}
+    - {command: [DEL, h], expect: {equals: 1}}
+    - {command: [EXISTS, h], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hashops}

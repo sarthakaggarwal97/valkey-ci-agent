@@ -1,0 +1,84 @@
+extends: [valkey.liveness]
+id: proposed.client-unblock-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLIENT UNBLOCK reason parsing and the real TIMEOUT and ERROR unblock
+    of a BLPOP-blocked client, replies compared with the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: unblock
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 5
+    commands:
+    - {command: [CLIENT, LIST, SKIPME, yes, MAXAGE, 1000000], expect_difference: true,
+      expect: {error: false}}
+    - {command: [CLIENT, UNBLOCK, 99999999, NOREASON], expect: {error: "TIMEOUT or\
+          \ ERROR"}}
+    - {command: [CLIENT, UNBLOCK, notanint, TIMEOUT], expect: {error: "not an integer"}}
+    - {command: [CLIENT, UNBLOCK, 99999999, TIMEOUT], expect: {equals: 0}}
+    - {command: [CLIENT, UNBLOCK, 99999999, ERROR], expect: {equals: 0}}
+    - {command: [CLIENT, ID], connection: berr, compare: skip}
+    - {raw: "BLPOP noexist-err 0\r\n", connection: berr}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: "blocked_clients:1"},
+      compare: skip}
+    - {command: [CLIENT, UNBLOCK, 1, ERROR], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 2, ERROR], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 3, ERROR], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 4, ERROR], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 5, ERROR], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 6, ERROR], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 7, ERROR], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 8, ERROR], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 9, ERROR], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 10, ERROR], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 11, ERROR], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 12, ERROR], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 13, ERROR], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 14, ERROR], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 15, ERROR], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 16, ERROR], compare: skip, expect: {in: [0, 1]}}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: "blocked_clients:0"},
+      compare: skip}
+    - {read: true, connection: berr, compare: skip, expect: {exists: true}}
+    - {command: [CLIENT, ID], connection: btmo, compare: skip}
+    - {raw: "BLPOP noexist-tmo 0\r\n", connection: btmo}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: "blocked_clients:1"},
+      compare: skip}
+    - {command: [CLIENT, UNBLOCK, 1, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 2, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 3, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 4, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 5, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 6, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 7, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 8, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 9, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 10, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 11, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 12, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 13, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 14, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 15, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 16, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 17, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [CLIENT, UNBLOCK, 18, TIMEOUT], compare: skip, expect: {in: [0, 1]}}
+    - {command: [INFO, clients], wait_s: 10, expect: {contains: "blocked_clients:0"},
+      compare: skip}
+    - {read: true, connection: btmo, compare: skip, expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [unblock.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: unblock}

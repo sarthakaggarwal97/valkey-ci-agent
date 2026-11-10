@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.cluster-publish-sent-stats
+deployment:
+  modes: [standalone]
+metadata:
+  description: cluster_stats_messages_publish_sent and publishshard_sent count PUBLISH/SPUBLISH
+    sent with the light cluster header
+components:
+- use: valkey.action.commands
+  id: publish-stats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 30, expect: {contains: "cluster_state:ok"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 30, expect: {contains: "cluster_known_nodes:3"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, expect: {contains: "cluster_state:ok"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 2, wait_s: 30, expect: {contains: "cluster_state:ok"},
+      compare: skip}
+    - {command: [PUBLISH, hello, world], node: 0, expect: {equals: 0}}
+    - {command: [CLUSTER, INFO], node: 0, expect_difference: true, expect: {contains: "cluster_stats_messages_publish_sent:2"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, expect: {contains: "cluster_stats_messages_publish_received:1"},
+      compare: skip}
+    - {command: [CLUSTER, INFO], node: 2, wait_s: 30, expect: {contains: "cluster_stats_messages_publish_received:1"},
+      compare: skip}
+    - {command: [PUBLISH, "", ""], node: 0, expect: {equals: 0}}
+    - {command: [CLUSTER, INFO], node: 0, expect_difference: true, expect: {contains: "cluster_stats_messages_publish_sent:4"},
+      compare: skip}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [SPUBLISH, shard-chan, msg], node: 0, expect: {equals: 0}}
+    - {command: [CLUSTER, INFO], node: 0, expect_difference: true, expect: {contains: "cluster_stats_messages_publishshard_sent:1"},
+      compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [publish-stats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: publish-stats}

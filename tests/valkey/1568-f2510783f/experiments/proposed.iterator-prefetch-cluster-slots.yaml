@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.iterator-prefetch-cluster-slots
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Per-slot iterators (CLUSTER GETKEYSINSLOT, slot-restricted KEYS) and
+    a full-keyspace SAVE, digest and restart reload on a one-node cluster; replies
+    compared across builds
+components:
+- use: valkey.action.commands
+  id: slots
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    timeout_s: 60
+    server_config: {enable-debug-command: "yes"}
+    commands:
+    - {command: [MSET, "{foo}1", a, "{foo}2", b, "{foo}3", c], expect: {equals: OK}}
+    - {command: [CLUSTER, KEYSLOT, "{foo}1"], expect: {equals: 12182}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect: {equals: 3}}
+    - {command: [CLUSTER, GETKEYSINSLOT, 12182, 10], compare: unordered, expect: {
+        exists: true}}
+    - {command: [CLUSTER, GETKEYSINSLOT, 12182, 2], compare: skip, expect: {exists: true}}
+    - {command: [DEBUG, POPULATE, 2000], expect: {equals: OK}}
+    - {command: [KEYS, "{foo}*"], compare: unordered, expect: {exists: true}}
+    - {command: [KEYS, "key:19*"], compare: unordered}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182]}
+    - {command: [DEBUG, DIGEST], expect: {exists: true}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 2003}}
+    - {command: [GET, "{foo}1"], expect: {equals: a}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182]}
+    - {command: [DEBUG, DIGEST], expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slots.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slots}

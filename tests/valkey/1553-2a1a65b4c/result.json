@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2a1a65b4c73cd238f37283759a292ac6477f169e",
+  "parent": "6be1c77b1eb54141041198ded92894e93ac575e2",
+  "pr": 1553,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Introduce const_sds for const-content sds (#1553)",
+  "date": "2025-01-14",
+  "unstable": "39f27052bf9ee985c9d52a0aa908749f12633eb4",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2822,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only introduces a `const_sds` typedef (`const char *`) and updates read-only sds function signatures from `const sds` to `const_sds` for const-correctness. No function body, data layout, or control flow changes; the server.c hunk merely adapts a callback signature to the new typedef. This is a compile-time-only type refactor with no observable behavior difference between the builds, so there is nothing for a scenario to exercise."
+}

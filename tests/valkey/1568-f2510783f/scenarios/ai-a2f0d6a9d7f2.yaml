@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 99ed30881728..f2510783f9ed.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a2f0d6a9d7f2
+seed: 103
+experiment:
+  id: proposed.iterator-prefetch-datatype-iter
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

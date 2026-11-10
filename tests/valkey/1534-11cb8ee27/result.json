@@ -1,0 +1,33 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "11cb8ee27cf0ef7a1ebce524cfe5afac3b92fc84",
+  "parent": "10357ceda5dce8baf42a4a585b913d490f11e56f",
+  "pr": 1534,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add latency stats around cluster config file operations (#1534)",
+  "date": "2025-01-11",
+  "unstable": "39f27052bf9ee985c9d52a0aa908749f12633eb4",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 25,
+    "executed": 21,
+    "percent": 84,
+    "uncovered": [
+      "src/cluster_legacy.c:894",
+      "src/cluster_legacy.c:895",
+      "src/cluster_legacy.c:896",
+      "src/cluster_legacy.c:897"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.5166,
+  "findings": [],
+  "recorded": []
+}

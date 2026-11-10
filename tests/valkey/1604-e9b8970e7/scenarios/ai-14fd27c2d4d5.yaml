@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7699a3a94a5d..e9b8970e7275.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-14fd27c2d4d5
+seed: 1605
+experiment:
+  id: proposed.restore-future-rdb-version
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100
