@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.json-slice-step-overflow
+deployment:
+  modes: [standalone]
+metadata:
+  description: JSON.GET array-slice steps at the int32/int64/uint64 boundaries parse
+    and iterate without overflow
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slice
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [JSON.SET, k, '.', '[0,1,2,3,4,5,6,7,8,9]'], expect: {equals: OK}}
+    - {command: [JSON.GET, k, '$[2:8:2]'], compare: json, expect: {equals: '[2,4,6]'}}
+    - {command: [JSON.GET, k, '$[0:2:4294967297]'], compare: json, expect_difference: true,
+      expect: {equals: '[0]'}}
+    - {command: [JSON.GET, k, '$[0:9:4294967299]'], compare: json, expect_difference: true,
+      expect: {equals: '[0]'}}
+    - {command: [JSON.GET, k, '$[2:0:-4294967297]'], compare: json, expect_difference: true,
+      expect: {equals: '[2]'}}
+    - {command: [JSON.GET, k, '$[0:2:9223372036854775808]'], expect_difference: true,
+      expect: {error: 'Invalid number'}}
+    - {command: [JSON.GET, k, '$[2:0:-9223372036854775809]'], expect_difference: true,
+      expect: {error: 'Invalid number'}}
+    - {command: [JSON.GET, k, '$[0:2:18446744073709551616]'], expect_difference: true,
+      expect: {error: 'Invalid number'}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slice}

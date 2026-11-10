@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-json 1d9062ada728..0ef7c8adb135.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6c0462c2bd2f
+seed: 7002
+experiment:
+  id: proposed.json-slice-step-overflow
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
