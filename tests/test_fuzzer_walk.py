@@ -1249,6 +1249,21 @@ def test_a_coverage_build_that_fails_leaves_the_coverage_unknown_and_the_merge_t
     assert result["coverage"] is None and result["coverage_reason"] == "`make gcov` failed in coverage (exit 2)"
 
 
+def test_the_coverage_build_carries_the_gcov_flags_to_sub_makes(monkeypatch, tmp_path):
+    # valkey #5117 (src/modules/lua/debug_lua.c): `make gcov` puts its flags in SERVER_CFLAGS, which the
+    # modules/lua sub-make does not read, so the Lua engine had no .gcno and its coverage was silently None:
+    # the environment carries them where SERVER_CFLAGS does not reach.
+    calls = []
+    monkeypatch.setattr(walk, "_sh", lambda command, cwd, log, env=None: calls.append((command, env)))
+    (tmp_path / "src" / "valkey-server").parent.mkdir(parents=True)
+    (tmp_path / "src" / "valkey-server").touch()
+    walk.build_valkey(tmp_path, coverage=True)
+    walk.build_valkey(tmp_path)
+    walk.build_valkey(tmp_path, asan=True)
+    assert "gcov" in calls[0][0] and calls[0][1] == {"CFLAGS": "-fprofile-arcs -ftest-coverage"}
+    assert calls[1][1] is None and calls[2][1] is None
+
+
 def test_a_failed_walks_error_keeps_the_head_and_the_tail(monkeypatch, tmp_path):
     # The valkey-search builds of 2026-11-08: _sh raises with the build log's last 30 lines, over 1000
     # characters of ninja progress, and a plain [:1000] cut off the compiler's error at the end.

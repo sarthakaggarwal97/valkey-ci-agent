@@ -359,7 +359,11 @@ def build_valkey(src: Path, *, asan: bool = False, coverage: bool = False) -> Pa
     so each line keeps its code); the server it built."""
     nproc = os.cpu_count() or 2
     flags = " CC=clang OPT=-O3 SANITIZER=address" if asan else " gcov OPTIMIZATION=-O0" if coverage else ""
-    _sh(f"make -j{nproc} BUILD_ZSTD=yes{flags}", src, src.parent / f"{src.name}-build.log")
+    # `make gcov` carries its flags in SERVER_CFLAGS, which the src/modules/lua sub-make does not read, so the
+    # Lua engine compiled without .gcno and its merges' changed lines went unmeasured (valkey #5117): the
+    # environment carries the flags there too, and the Makefiles' own CFLAGS assignments still win elsewhere.
+    env = {"CFLAGS": "-fprofile-arcs -ftest-coverage"} if coverage else None
+    _sh(f"make -j{nproc} BUILD_ZSTD=yes{flags}", src, src.parent / f"{src.name}-build.log", env)
     # A commit from before the rename builds redis-server.
     server = src / "src" / "valkey-server"
     return server if server.exists() else src / "src" / "redis-server"
