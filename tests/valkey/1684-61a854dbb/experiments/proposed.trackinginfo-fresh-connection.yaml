@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.trackinginfo-fresh-connection
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLIENT TRACKINGINFO as the first command on a fresh connection (tracking
+    off, pubsub_data still NULL) must not crash the server
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: trackinginfo
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CLIENT, TRACKINGINFO], expect_difference: true, expect: {error: false}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: trackinginfo}

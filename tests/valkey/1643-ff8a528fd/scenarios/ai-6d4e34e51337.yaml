@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4b8f3ed9acf3..ff8a528fd635.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6d4e34e51337
+seed: 20260001
+experiment:
+  id: proposed.cluster-forget-linked-node-uaf
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

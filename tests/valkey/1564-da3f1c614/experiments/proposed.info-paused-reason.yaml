@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.info-paused-reason
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO CLIENTS reports paused_reason across CLIENT PAUSE WRITE, escalation
+    to ALL, unpause, and pause expiry
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: paused-reason
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "paused_reason:none"}}
+    - {command: [CLIENT, PAUSE, 60000, WRITE], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "paused_reason:client_pause"}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "paused_actions:write"}}
+    - {command: [CLIENT, PAUSE, 60000, ALL], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "paused_reason:client_pause"}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "paused_actions:all"}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "paused_reason:none"}}
+    - {command: [CLIENT, PAUSE, 300, WRITE], expect: {equals: OK}}
+    - {command: [INFO, clients], wait_s: 10, expect_difference: true, expect: {contains: "paused_reason:none"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [paused-reason.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: paused-reason}

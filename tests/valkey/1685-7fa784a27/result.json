@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7fa784a27562940d2995fc6e3d6938940d81e4b6",
+  "parent": "e9ed53c862af5b38e99c15670b9f0e382196b213",
+  "pr": 1685,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Disable mem usage test case for non-jemalloc allocators (#1685)",
+  "date": "2025-02-08",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.1338,
+  "findings": [],
+  "recorded": []
+}

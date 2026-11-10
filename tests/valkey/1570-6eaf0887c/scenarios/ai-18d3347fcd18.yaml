@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey aced268c2650..6eaf0887cc91.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-18d3347fcd18
+seed: 1571
+experiment:
+  id: proposed.latency-latest-sum-cnt
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

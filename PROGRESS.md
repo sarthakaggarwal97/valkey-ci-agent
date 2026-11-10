@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-10T08:49+00:00.
+Updated 2026-11-10T09:03+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1443 | 1073 | #1684 (2025-02-10) | 330 | 206.1 |
+| valkey-io/valkey | 1472 | 1047 | #1606 (2025-01-28) | 334 | 210.3 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 63 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 9.0 |
 | valkey-io/valkey-search | 672 | 0 | f8106e72e984 (2024-11-27) | 3 | 96.0 |
@@ -13,28 +13,28 @@ Updated 2026-11-10T08:49+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-10T07:17:09+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42758316003): 20 merge(s) tested, 2 without a code change.
+[2026-11-10T09:03:08+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42774225967): 20 merge(s) tested, 9 without a code change.
 
-- [valkey-io/valkey#1730](https://github.com/valkey-io/valkey/pull/1730) ([tests](tests/valkey/1730-c5ae37f22/)): Add spellchecker ignore section (#1730): declined: The change only adds an ignore entry ('Parth') to .config/typos.toml, the CI spellchecker configuration. It modifies no source code, command behaviour, replication, persistence, or tooling — no server behaviour can differ between the parent and the change, so no scenario is needed.
-- [valkey-io/valkey#1724](https://github.com/valkey-io/valkey/pull/1724) ([tests](tests/valkey/1724-c4c9c6db4/)): Introduce Valkey release stage indication (#1724): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#1723](https://github.com/valkey-io/valkey/pull/1723) ([tests](tests/valkey/1723-41a4bc264/)): Introduce valkey_version_full info field which includes the release stage (#1723): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#1711](https://github.com/valkey-io/valkey/pull/1711) ([tests](tests/valkey/1711-eeda8ae74/)): Reset failover auth time when myself won the failover (#1711): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1715](https://github.com/valkey-io/valkey/pull/1715) ([tests](tests/valkey/1715-a019089ad/)): Prevent double writing out of responses and fix reply schema CI (#1715): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#1714](https://github.com/valkey-io/valkey/pull/1714) ([tests](tests/valkey/1714-63243e45f/)): Fix valkey-benchmark FCALL failure with TLS (#1714): 1 of 1 test(s) reached the change, coverage 83%
-- [valkey-io/valkey#1712](https://github.com/valkey-io/valkey/pull/1712) ([tests](tests/valkey/1712-44675562b/)): Correctly detect address sanitizer with Clang (#1712): 0 of 2 test(s) reached the change
-- [valkey-io/valkey#1710](https://github.com/valkey-io/valkey/pull/1710) ([tests](tests/valkey/1710-4e0149a38/)): Fix new benchmark test under the TLS (#1710): declined: The only behavioural change is in valkey-benchmark's fcall test path under --tls: the ad-hoc FUNCTION LOAD connection now performs the TLS handshake (cliSecureConnection) instead of sending plaintext to a TLS port and asserting. Reaching it requires a TLS-enabled server (tls-port plus cert
-- [valkey-io/valkey#1709](https://github.com/valkey-io/valkey/pull/1709) ([tests](tests/valkey/1709-8fc37a0e0/)): Fix undefined behavior warning in UBSAN (#1709): declined: The change only replaces casts of sdsfree to void(*)(void*) with the equivalent sdsfreeVoid wrapper in evalInit and ldbInit, to silence a UBSAN incompatible-function-pointer-type warning. The wrapper simply calls sdsfree, so the list free behavior is byte-for-byte identical; no command rep
-- [valkey-io/valkey#1707](https://github.com/valkey-io/valkey/pull/1707) ([tests](tests/valkey/1707-86469ab16/)): Fix: Exclude RTLD_DEEPBIND for Alpine Linux (musl-based systems) (#1707): declined: The change only adds `defined(__GLIBC__) && __has_include(<dlfcn.h>)` to the preprocessor condition that enables RTLD_DEEPBIND in moduleLoad's dlopen flags. On the glibc Linux machines the fuzzer runs on, both conditions are true, so the compiled code — and module-loading behaviour — is by
-- [valkey-io/valkey#1694](https://github.com/valkey-io/valkey/pull/1694) ([tests](tests/valkey/1694-b8c471edd/)): valkey-cli: re-select previously selected database after reconnect (#1694): 0 of 1 test(s) reached the change, coverage 85%
-- [valkey-io/valkey#1704](https://github.com/valkey-io/valkey/pull/1704) ([tests](tests/valkey/1704-1470ee8a6/)): Fix macro redefinition problem in `fmacros.h` (#1704): declined: The change only guards `#define _DEFAULT_SOURCE` with `#ifndef _DEFAULT_SOURCE` in src/fmacros.h to suppress a macro-redefinition compiler warning on Linux. _DEFAULT_SOURCE is defined in both builds either way, so the preprocessor environment and compiled behavior are identical; it is a bu
-- [valkey-io/valkey#1703](https://github.com/valkey-io/valkey/pull/1703) ([tests](tests/valkey/1703-244c570c4/)): Use `DEEPBIND` flag when loading external modules using `dlopen` (#1703): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1582](https://github.com/valkey-io/valkey/pull/1582) ([tests](tests/valkey/1582-99e2dc9e7/)): Add support for MustObeyClient Module API (#1582): 3 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1698](https://github.com/valkey-io/valkey/pull/1698) ([tests](tests/valkey/1698-96857bfeb/)): show capa in CLIENT LIST (#1698): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1695](https://github.com/valkey-io/valkey/pull/1695) ([tests](tests/valkey/1695-8988a6135/)): Update availability-zone conf comment to mention hello command (#1695): declined: The change edits only a comment in valkey.conf, rewording the documentation of the availability-zone option to mention the HELLO command. No code path, config semantics, or server behaviour is altered, so no scenario can exercise it.
-- [valkey-io/valkey#1696](https://github.com/valkey-io/valkey/pull/1696) ([tests](tests/valkey/1696-3828936fe/)): Fix outdated slot info comments in clusterGenNodesSlotsInfo (#1696): declined: The change edits only a code comment above clusterGenNodesSlotsInfo in src/cluster_legacy.c, correcting outdated documentation wording (slots_info struct -> slot_info_pairs array). No executable code, command behaviour, replies, replication, or configuration is modified, so there is no beh
-- [valkey-io/valkey#1578](https://github.com/valkey-io/valkey/pull/1578) ([tests](tests/valkey/1578-f61b81e7d/)): Add `FUNCTION LOAD` and `FCALL` benchmark (#1578): 1 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1497](https://github.com/valkey-io/valkey/pull/1497) ([tests](tests/valkey/1497-b58088e31/)): Adds support for running `EVAL` with different scripting engines (#1497): 15 of 15 test(s) reached the change, coverage 92%
-- [valkey-io/valkey#1697](https://github.com/valkey-io/valkey/pull/1697) ([tests](tests/valkey/1697-83abb13a1/)): Fix memory error in networking unittest (#1697): declined: The change edits only src/unit/test_networking.c, adding `c->repl_data->ref_repl_buf_node = NULL;` to two unit tests' cleanup so the test harness does not reference freed replication-buffer blocks. It is a fix to the unit test code itself, compiled only into the unittest binary; no server,
+- [valkey-io/valkey#4526](https://github.com/valkey-io/valkey/pull/4526) ([tests](tests/valkey/4526-35373fa80/)): Compact sparse B+tree leaves inline on the sorted set delete path (#4526): 3 of 6 test(s) reached the change, coverage not measured (`make -j4 BUILD_ZSTD=yes gcov OPTIMIZATION=-O0` failed in coverage (exit 2): /usr/bin/x86_64-linux-gnu-ld.bfd: liblua.a(lzio.o): in function `_sub_D_00100_1': lzio.c:(.text.exit+0x5): undefined refere)
+- [valkey-io/valkey#5183](https://github.com/valkey-io/valkey/pull/5183) ([tests](tests/valkey/5183-6187f98a6/)): Make BCAST tracking cost proportional to the prefixes a key matches (#5183): 0 of 3 test(s) reached the change, coverage not measured (`make -j4 BUILD_ZSTD=yes gcov OPTIMIZATION=-O0` failed in coverage (exit 2): /usr/bin/x86_64-linux-gnu-ld.bfd: liblua.a(lauxlib.o): in function `_sub_I_00100_0': lauxlib.c:(.text.startup+0xc): undefin)
+- [valkey-io/valkey#1684](https://github.com/valkey-io/valkey/pull/1684) ([tests](tests/valkey/1684-61a854dbb/)): Fix client trackinginfo crash when tracking off by default (#1684): 2 of 2 test(s) reached the change, coverage 100%; crash, fixed by #1684 (recorded)
+- [valkey-io/valkey#1691](https://github.com/valkey-io/valkey/pull/1691) ([tests](tests/valkey/1691-e8ae5b185/)): Fix log message "DB 9: 100 keys (0 volatile) in 16 slots HT" (#1691): declined: The change only corrects the slot count printed in a verbosity-debug serverCron log message ("DB %d: ... in %lld slots HT") by multiplying kvstoreBuckets by a new constant accessor hashtableEntriesPerBucket(). No command reply, data path, replication, persistence, or config behaviour is af
+- [valkey-io/valkey#1485](https://github.com/valkey-io/valkey/pull/1485) ([tests](tests/valkey/1485-de3672a7f/)): Offload replication writes to IO threads (#1485): 0 of 7 test(s) reached the change, coverage 96%
+- [valkey-io/valkey#1685](https://github.com/valkey-io/valkey/pull/1685) ([tests](tests/valkey/1685-7fa784a27/)): Disable mem usage test case for non-jemalloc allocators (#1685): 1 of 1 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1564](https://github.com/valkey-io/valkey/pull/1564) ([tests](tests/valkey/1564-da3f1c614/)): Add paused_reason to INFO CLIENTS (#1564): 6 of 7 test(s) reached the change, coverage 90%
+- [valkey-io/valkey#1678](https://github.com/valkey-io/valkey/pull/1678) ([tests](tests/valkey/1678-0579103ae/)): Add reply schema for LATENCY-LATESTS new fields (#1678): declined: The diff only edits the reply_schema metadata in src/commands/latency-latest.json to document the sum and count fields LATENCY LATEST already returns; the reply-producing code in src/latency.c is unchanged and already emits six elements on both the parent and the change. Reply schemas are 
+- [valkey-io/valkey#1676](https://github.com/valkey-io/valkey/pull/1676) ([tests](tests/valkey/1676-a3c9f6766/)): Fix kvstore overhead_hashtable_lut (#1676): declined: The fix only changes kvstoreCreate for kvstores created without KVSTORE_ALLOCATE_HASHTABLES_ON_DEMAND (the eager hashtable-creation loop previously ran before overhead_hashtable_lut was zeroed, discarding its accounting). Every kvstore the server creates (per-db keys/expires in server.c, p
+- [valkey-io/valkey#1613](https://github.com/valkey-io/valkey/pull/1613) ([tests](tests/valkey/1613-8d8ce19da/)): Embed keys and hash fields as SDS type 5 (#1613): 4 of 6 test(s) reached the change, coverage 96%
+- [valkey-io/valkey#1667](https://github.com/valkey-io/valkey/pull/1667) ([tests](tests/valkey/1667-f875fceea/)): Fix client querybuf resize test by skipping the clientsCron (#1667): 0 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1387](https://github.com/valkey-io/valkey/pull/1387) ([tests](tests/valkey/1387-c75e86617/)): move clientCron onto a separate timer (#1387): 5 of 8 test(s) reached the change, coverage 93%
+- [valkey-io/valkey#1479](https://github.com/valkey-io/valkey/pull/1479) ([tests](tests/valkey/1479-2eac2ccd2/)): skip CRC checksumming during diskless full sync with TLS enabled. (#1479): 2 of 11 test(s) reached the change, coverage 78%
+- [valkey-io/valkey#1570](https://github.com/valkey-io/valkey/pull/1570) ([tests](tests/valkey/1570-6eaf0887c/)): Extend LATENCY LATEST to add sum / cnt stats (#1570): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1651](https://github.com/valkey-io/valkey/pull/1651) ([tests](tests/valkey/1651-aced268c2/)): Fix ACL regression with renamed commands (#1651): 0 of 6 test(s) reached the change, coverage 87%
+- [valkey-io/valkey#1572](https://github.com/valkey-io/valkey/pull/1572) ([tests](tests/valkey/1572-e7dbce3a1/)): Enable module API SendClusterMessage to use light message header type (#1572): 3 of 5 test(s) reached the change, coverage 68%
+- [valkey-io/valkey#1557](https://github.com/valkey-io/valkey/pull/1557) ([tests](tests/valkey/1557-26c6f1af9/)): Loop optimization: move maxlen check outside to reduce unnecessary checks (#1557): declined: The change is a pure loop micro-optimization in hashtableLongestBucketChain() in src/hashtable.c, whose only caller is the unit test src/unit/test_hashtable.c; it is unreachable from any server command, replication, or persistence path. The rewrite is semantics-preserving (chainlen is mono
+- [valkey-io/valkey#1643](https://github.com/valkey-io/valkey/pull/1643) ([tests](tests/valkey/1643-ff8a528fd/)): Fix a heap-use-after-free bug in cluster bus (#1643): 0 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1614](https://github.com/valkey-io/valkey/pull/1614) ([tests](tests/valkey/1614-4b8f3ed9a/)): Do command existence and arity checks when loading AOF to avoid crash (#1614): 3 of 3 test(s) reached the change, coverage 83%; crash, fixed by #1614 (recorded); crash, fixed by #1614 (recorded); crash, fixed by #1614 (recorded)
+- [valkey-io/valkey#1602](https://github.com/valkey-io/valkey/pull/1602) ([tests](tests/valkey/1602-d72a97edf/)): RDMA: Protect RDMA memory regions (#1602): declined: The change only touches src/rdma.c, which is compiled only with BUILD_RDMA and whose changed functions (rdmaMemoryAlloc/rdmaMemoryFree, called from rdmaSetupIoBuf, rdmaAdjustSendbuf and rdmaDestroyIoBuf) execute only when an RDMA client establishes a connection. That requires RDMA hardware
 
 ### valkey-io/valkey-bloom
 
@@ -53,10 +53,10 @@ Updated 2026-11-10T08:49+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 727 of 1118 tested (65%)
-- Changed-line coverage: median 100% of 654 merge(s) measured, 55 under 50%
-- Recall: 199 parents flagged of 307 fix merges
-- Claude: $1231.22 in the last 24 hours, $8133.35 in the last 7 days, $8133.35 in all
+- Merges whose tests reached the change: 737 of 1133 tested (65%)
+- Changed-line coverage: median 100% of 667 merge(s) measured, 55 under 50%
+- Recall: 200 parents flagged of 311 fix merges
+- Claude: $1281.82 in the last 24 hours, $8236.64 in the last 7 days, $8236.64 in all
 - Issues filed: 64
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0579103aefcfc4797ef9ead4cdbea67bfc57a58a",
+  "parent": "a3c9f6766547ea8664b32a7b2e7a6f27dc8fbbf8",
+  "pr": 1678,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add reply schema for LATENCY-LATESTS new fields (#1678)",
+  "date": "2025-02-06",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3305,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff only edits the reply_schema metadata in src/commands/latency-latest.json to document the sum and count fields LATENCY LATEST already returns; the reply-producing code in src/latency.c is unchanged and already emits six elements on both the parent and the change. Reply schemas are not compiled into a regular server build, so there is no observable behavior difference between the two builds for any command sequence, fault, or tool run to detect."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d72a97edf6eb6c68b0aba99a7669dd521bb0784d",
+  "parent": "ad60d6b7b36e0599dba8f817c6fcd9bb69c30f37",
+  "pr": 1602,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "RDMA: Protect RDMA memory regions (#1602)",
+  "date": "2025-01-28",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3958,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only touches src/rdma.c, which is compiled only with BUILD_RDMA and whose changed functions (rdmaMemoryAlloc/rdmaMemoryFree, called from rdmaSetupIoBuf, rdmaAdjustSendbuf and rdmaDestroyIoBuf) execute only when an RDMA client establishes a connection. That requires RDMA hardware or soft-RoCE with root, neither of which the fuzzer's throwaway local servers have, and no installed component or experiment can open an RDMA connection \u2014 all workloads and command sequences use TCP/unix sockets. Any scenario would run entirely on code paths the diff does not touch, so no meaningful test is "
+}

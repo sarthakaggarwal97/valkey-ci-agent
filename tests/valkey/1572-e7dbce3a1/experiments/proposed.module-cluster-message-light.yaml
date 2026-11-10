@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.module-cluster-message-light
+deployment:
+  modes: [standalone]
+metadata:
+  description: SendClusterMessage broadcast delivered over the light cluster bus header
+    to every node of a 3-node cluster, with a cross-node PUBLISH on the light pubsub
+    path, compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: modmsg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: true
+    nodes: 3
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:3"}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:3"}}
+    - {command: [CLUSTER, INFO], node: 2, wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:3"}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, compare: skip, expect: {contains: "cluster_state:ok"}}
+    - {command: [CLUSTER, INFO], node: 2, wait_s: 30, compare: skip, expect: {contains: "cluster_state:ok"}}
+    - {command: [SUBSCRIBE, ch1], node: 1, connection: sub}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [PUBLISH, ch1, hello], node: 0, expect: {equals: 0}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 10, compare: skip, expect: {contains: "cluster_stats_messages_module_received:1"}}
+    - {command: [CLUSTER, INFO], node: 2, wait_s: 10, compare: skip, expect: {contains: "cluster_stats_messages_module_received:1"}}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 10, compare: skip, expect: {contains: "cluster_stats_messages_module_sent:2"}}
+    - {command: [test.pingall], node: 1, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 2, expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 10, compare: skip, expect: {contains: "cluster_stats_messages_module_received:2"}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 10, compare: skip, expect: {contains: "cluster_stats_messages_module_received:12"}}
+    - {command: [CLUSTER, INFO], node: 2, wait_s: 10, compare: skip, expect: {contains: "cluster_stats_messages_module_received:12"}}
+    - {read: true, connection: sub, node: 1, expect: {equals: [[message, ch1, hello]]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modmsg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modmsg}

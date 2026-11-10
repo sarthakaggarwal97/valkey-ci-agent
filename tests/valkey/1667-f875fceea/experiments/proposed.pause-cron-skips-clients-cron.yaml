@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.pause-cron-skips-clients-cron
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    DEBUG PAUSE-CRON 1 now also skips clientsCron, so an idle client that exceeds
+    the `timeout` config survives while cron is paused on the fixed build but is still
+    reaped on the parent, and is reaped again on both once DEBUG PAUSE-CRON 0 resumes
+    cron.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: pausecron
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes", hz: 10}
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    commands:
+    - {command: [CONFIG, SET, timeout, "3"], expect: {equals: OK}}
+    - {command: [PING], connection: idle0, expect: {equals: PONG}}
+    - {command: [SET, waiter0, v, EX, "5"], expect: {equals: OK}}
+    - {command: [TTL, waiter0], compare: skip, wait_s: 25, expect: {max: -1}}
+    - {command: [PING], connection: idle0, expect: {exists: false}}
+    - {command: [DEBUG, PAUSE-CRON, "1"], expect: {equals: OK}}
+    - {command: [PING], connection: idle1, expect: {equals: PONG}}
+    - {command: [SET, waiter1, v, EX, "5"], expect: {equals: OK}}
+    - {command: [TTL, waiter1], compare: skip, wait_s: 25, expect: {max: -1}}
+    - {command: [PING], connection: idle1, expect_difference: true, expect: {equals: PONG}}
+    - {command: [DEBUG, PAUSE-CRON, "0"], expect: {equals: OK}}
+    - {command: [PING], connection: idle2, expect: {equals: PONG}}
+    - {command: [SET, waiter2, v, EX, "5"], expect: {equals: OK}}
+    - {command: [TTL, waiter2], compare: skip, wait_s: 25, expect: {max: -1}}
+    - {command: [PING], connection: idle2, expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [pausecron.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pausecron}

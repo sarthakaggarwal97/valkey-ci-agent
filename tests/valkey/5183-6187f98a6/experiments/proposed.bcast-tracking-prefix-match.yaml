@@ -1,0 +1,129 @@
+extends: [valkey.liveness]
+id: proposed.bcast-tracking-prefix-match
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    BCAST invalidation delivery (overlapping prefixes across clients, empty prefix,
+    NOLOOP, per-cycle batching in MULTI/EXEC) and prefix-table churn (prefix removed
+    or removed-and-re-added in the same event loop cycle as a matching write, FLUSHALL
+    in the same cycle as a tracked write), compared against the parent after the PrefixesToBroadcast
+    rewrite in tracking.c.
+inputs:
+  properties:
+    cluster: {type: boolean, default: false}
+    io_threads: {type: integer, enum: [1, 4], default: 1}
+components:
+- use: valkey.action.commands
+  id: delivery
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: {$ref: inputs.cluster}
+    server_config: {io-threads: {$ref: inputs.io_threads}}
+    resp: 3
+    timeout_s: 10
+    commands:
+    - {command: [CLIENT, TRACKING, on, BCAST, PREFIX, "foo:"], connection: t1, expect: {
+        equals: OK}}
+    - {command: [CLIENT, TRACKING, on, BCAST], connection: t2, expect: {equals: OK}}
+    - {command: [CLIENT, TRACKING, on, BCAST, PREFIX, foo, NOLOOP], connection: t3,
+      expect: {equals: OK}}
+    - {command: [CLIENT, TRACKING, on, BCAST, PREFIX, "bar:", PREFIX, "qux:"], connection: t4,
+      expect: {equals: OK}}
+    - {command: [CLIENT, TRACKING, on, BCAST, PREFIX, "foo:1x"], connection: t5, expect: {
+        equals: OK}}
+    - {command: [SET, "foo:1", v1], expect: {equals: OK}}
+    - {read: true, connection: t1, expect: {equals: [[invalidate, ["foo:1"]]]}}
+    - {read: true, connection: t2, expect: {equals: [[invalidate, ["foo:1"]]]}}
+    - {read: true, connection: t3, expect: {equals: [[invalidate, ["foo:1"]]]}}
+    - {read: true, connection: t5, expect: {equals: []}}
+    - {command: [SET, foo, v2], expect: {equals: OK}}
+    - {read: true, connection: t1, expect: {equals: []}}
+    - {read: true, connection: t2, expect: {equals: [[invalidate, [foo]]]}}
+    - {read: true, connection: t3, expect: {equals: [[invalidate, [foo]]]}}
+    - {command: [SET, "foo:2", nl], connection: t3, expect: {equals: OK}}
+    - {read: true, connection: t3, expect: {equals: []}}
+    - {read: true, connection: t1, expect: {equals: [[invalidate, ["foo:2"]]]}}
+    - {read: true, connection: t2, expect: {equals: [[invalidate, ["foo:2"]]]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "bar:1", b], expect: {equals: QUEUED}}
+    - {command: [SET, "qux:1", q], expect: {equals: QUEUED}}
+    - {command: [SET, "foo:3", f], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK, OK]}}
+    - {read: true, connection: t4, expect: {equals: [[invalidate, ["bar:1"]], [invalidate,
+            ["qux:1"]]]}}
+    - {read: true, connection: t1, expect: {equals: [[invalidate, ["foo:3"]]]}}
+    - {read: true, connection: t2, expect: {equals: [[invalidate, ["bar:1", "foo:3",
+              "qux:1"]]]}}
+    - {read: true, connection: t3, expect: {equals: [[invalidate, ["foo:3"]]]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "foo:4", a1], expect: {equals: QUEUED}}
+    - {command: [SET, "foo:4", a2], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK]}}
+    - {read: true, connection: t1, expect: {equals: [[invalidate, ["foo:4"]]]}}
+    - {read: true, connection: t2, expect: {equals: [[invalidate, ["foo:4"]]]}}
+    - {read: true, connection: t3, expect: {equals: [[invalidate, ["foo:4"]]]}}
+    - {command: [DEL, "foo:1"], expect: {equals: 1}}
+    - {read: true, connection: t1, expect: {equals: [[invalidate, ["foo:1"]]]}}
+    - {read: true, connection: t2, expect: {equals: [[invalidate, ["foo:1"]]]}}
+    - {read: true, connection: t3, expect: {equals: [[invalidate, ["foo:1"]]]}}
+    - {command: [CLIENT, TRACKING, off], connection: t3, expect: {equals: OK}}
+    - {command: [SET, "foo:5", z], expect: {equals: OK}}
+    - {read: true, connection: t3, expect: {equals: []}}
+    - {read: true, connection: t1, expect: {equals: [[invalidate, ["foo:5"]]]}}
+    - {read: true, connection: t2, expect: {equals: [[invalidate, ["foo:5"]]]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: churn
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: {$ref: inputs.cluster}
+    server_config: {io-threads: {$ref: inputs.io_threads}}
+    resp: 3
+    timeout_s: 10
+    commands:
+    - {command: [CLIENT, TRACKING, on, BCAST, PREFIX, "gone:"], connection: tr, expect: {
+        equals: OK}}
+    - {command: [MULTI], connection: tr, expect: {equals: OK}}
+    - {command: [SET, "gone:key", 1], connection: tr, expect: {equals: QUEUED}}
+    - {command: [CLIENT, TRACKING, off], connection: tr, expect: {equals: QUEUED}}
+    - {command: [CLIENT, TRACKING, on], connection: tr, expect: {equals: QUEUED}}
+    - {command: [EXEC], connection: tr, expect: {equals: [OK, OK, OK]}}
+    - {command: [PING], connection: tr, expect: {equals: PONG}}
+    - {command: [CLIENT, TRACKING, off], connection: tr, expect: {equals: OK}}
+    - {command: [CLIENT, TRACKING, on, BCAST, PREFIX, "p:"], connection: tr, expect: {
+        equals: OK}}
+    - {command: [MULTI], connection: tr, expect: {equals: OK}}
+    - {command: [SET, "p:k", 1], connection: tr, expect: {equals: QUEUED}}
+    - {command: [CLIENT, TRACKING, off], connection: tr, expect: {equals: QUEUED}}
+    - {command: [CLIENT, TRACKING, on, BCAST, PREFIX, "p:"], connection: tr, expect: {
+        equals: QUEUED}}
+    - {command: [EXEC], connection: tr, expect: {equals: [OK, OK, OK]}}
+    - {read: true, connection: tr, expect: {equals: []}}
+    - {command: [SET, "p:k", 2], expect: {equals: OK}}
+    - {read: true, connection: tr, expect: {equals: [[invalidate, ["p:k"]]]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "p:x", 1], expect: {equals: QUEUED}}
+    - {command: [FLUSHALL], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK]}}
+    - {read: true, connection: tr}
+    - {command: [PING], connection: tr, expect: {equals: PONG}}
+    - {command: [SET, "p:z", 1], expect: {equals: OK}}
+    - {read: true, connection: tr, expect: {equals: [[invalidate, ["p:z"]]]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [delivery.completed, churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: delivery}
+- {evidence_id: valkey.command.sequence, source: churn}

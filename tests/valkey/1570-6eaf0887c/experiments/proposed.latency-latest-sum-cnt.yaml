@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.latency-latest-sum-cnt
+deployment:
+  modes: [standalone]
+metadata:
+  description: LATENCY LATEST entries grow from 4 to 6 fields, adding per-event sum
+    and cnt; RESET recreates a series with the new fields zeroed
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: latency
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, latency-monitor-threshold, 100], expect: {equals: OK}}
+    - {command: [LATENCY, LATEST], expect: {equals: []}}
+    - {command: [DEBUG, SLEEP, 0.3], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.4], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.5], expect: {equals: OK}}
+    - {command: [LATENCY, LATEST], expect_difference: true, expect: {exists: true}}
+    - {command: [LATENCY, HISTORY, command], compare: skip}
+    - {command: [LATENCY, RESET, command], expect: {equals: 1}}
+    - {command: [LATENCY, LATEST], expect: {equals: []}}
+    - {command: [DEBUG, SLEEP, 0.15], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.15], expect: {equals: OK}}
+    - {command: [LATENCY, LATEST], expect_difference: true, expect: {exists: true}}
+    - {command: [LATENCY, RESET], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [latency.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: latency}

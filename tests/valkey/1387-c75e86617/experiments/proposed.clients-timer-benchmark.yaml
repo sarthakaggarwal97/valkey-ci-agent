@@ -1,0 +1,29 @@
+extends: [valkey.liveness]
+id: proposed.clients-timer-benchmark
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark holds 250 busy clients against a hz-1 server so clientsTimeProc
+    throttles at MAX_CLIENTS_PER_CYCLE under real traffic; valkey-cli INFO reads getExpensiveClientsInfo
+    and the new clients_hz field, and CONFIG GET dynamic-hz shows the config is gone
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 180
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, hz, 1], expect: {exit: {equals: 0},
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, GET, dynamic-hz], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: ""}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 250, -n, 500000, -t, ping], compare: skip,
+      expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, INFO, clients], compare: skip, expect: {
+        exit: {equals: 0}, stdout: {contains: "client_recent_max_input_buffer"}}}
+    - {tool: valkey-cli, args: [-p, $port, INFO, server], compare: skip, expect: {
+        exit: {equals: 0}, stdout: {contains: "clients_hz:"}}}
+required_events: [bench.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.acl-renamed-commands
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL rules written against original command names still apply to commands
+    renamed with rename-command; on the parent the rename overwrote cmd->fullname,
+    so ACLLookupCommand misses the original name and ACL SETUSER rejects it
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: renamed
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    server_config:
+      rename-command: ["PING VPING", "INCR VINCR", "SET VSET"]
+    commands:
+    - {command: [ACL, SETUSER, nu, on, nopass, "~*", "&*", "+acl", "+incr", "-ping"],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [AUTH, nu, x], expect_difference: true, expect: {equals: OK}}
+    - {command: [VPING], expect_difference: true, expect: {error: NOPERM}}
+    - {command: [ACL, WHOAMI], expect_difference: true, expect: {equals: nu}}
+    - {command: [ACL, GETUSER, nu], expect_difference: true, expect: {exists: true}}
+    - {command: [AUTH, default, x], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, nu2, on, nopass, "~*", "&*", "-@all", "+@string", "+acl"],
+      expect: {equals: OK}}
+    - {command: [AUTH, nu2, x], expect: {equals: OK}}
+    - {command: [VSET, k1, v], expect: {equals: OK}}
+    - {command: [VINCR, ctr], expect: {equals: 1}}
+    - {command: [GET, k1], expect: {equals: v}}
+    - {command: [ACL, SETUSER, d3, "-vping"], expect: {error: true}}
+    - {command: [PING], expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [renamed.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: renamed}

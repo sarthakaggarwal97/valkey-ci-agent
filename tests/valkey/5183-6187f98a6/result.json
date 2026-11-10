@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "parent": "734bca3977ef191bc5a4117aa999a7e528edf9ee",
+  "pr": 5183,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make BCAST tracking cost proportional to the prefixes a key matches (#5183)",
+  "date": "2026-11-10",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 5.5069,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-30f2e3ed5fcc",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'delivery' returned ERROR: expectations both builds violate alike, so they are not about the change: 22 (EXEC), 23 (read on connection t4), 24 (read on connection t1), 25 (read on connection t2), 26 (read on connection t3)"
+    }
+  ],
+  "coverage_reason": "`make -j4 BUILD_ZSTD=yes gcov OPTIMIZATION=-O0` failed in coverage (exit 2): /usr/bin/x86_64-linux-gnu-ld.bfd: liblua.a(lauxlib.o): in function `_sub_I_00100_0': lauxlib.c:(.text.startup+0xc): undefined reference to `__gcov_init' /usr/bin/x86_64-linux-gnu-ld.bfd: liblua.a(lauxlib.o): in function `_sub_D_00100_1': lauxlib.c:(.text.exit+0x5): undefined reference to `__gcov_exit' /usr/bin/x86_64-linux-gnu-ld.bfd: liblua.a(lauxlib.o):(.data.rel+0x20): undefined reference to `__gcov_merge_add' /usr/b"
+}

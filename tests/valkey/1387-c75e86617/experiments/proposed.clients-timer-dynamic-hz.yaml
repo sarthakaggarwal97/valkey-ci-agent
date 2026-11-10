@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.clients-timer-dynamic-hz
+deployment:
+  modes: [standalone]
+metadata:
+  description: dynamic-hz removal, hz capping on the new server.hz storage, the new
+    clients_hz INFO field, and idle-client disconnection by the separate clientsTimeProc
+    timer
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hz-timer
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, dynamic-hz, no], expect_difference: true, expect: {
+        error: "Unknown option"}}
+    - {command: [CONFIG, SET, dynamic-hz, yes], expect_difference: true, expect: {
+        error: "Unknown option"}}
+    - {command: [CONFIG, SET, hz, 0], expect: {equals: OK}}
+    - {command: [INFO, server], compare: skip, expect: {contains: "\r\nhz:1\r"}}
+    - {command: [CONFIG, SET, hz, 2147483647], expect: {equals: OK}}
+    - {command: [INFO, server], compare: skip, expect: {contains: "\r\nhz:500\r"}}
+    - {command: [INFO, server], expect_difference: true, expect: {contains: "clients_hz:"}}
+    - {command: [CONFIG, SET, hz, 10], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxidletime, 1], expect: {equals: OK}}
+    - {connection: idle, command: [PING], expect: {equals: PONG}}
+    - {command: [SET, gate, x, PX, 2500], expect: {equals: OK}}
+    - {command: [EXISTS, gate], wait_s: 30, expect: {equals: 0}}
+    - {command: [SET, gate2, x, PX, 1000], expect: {equals: OK}}
+    - {command: [EXISTS, gate2], wait_s: 30, expect: {equals: 0}}
+    - {connection: idle, command: [PING], expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hz-timer.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hz-timer}

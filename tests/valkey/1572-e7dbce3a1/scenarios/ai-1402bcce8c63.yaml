@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 26c6f1af9b29..e7dbce3a11c0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1402bcce8c63
+seed: 103
+experiment:
+  id: proposed.module-cluster-message-light-fanout
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7200

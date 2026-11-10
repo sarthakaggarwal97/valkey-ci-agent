@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6eaf0887cc91d43b37b9bc3e9349ea639134a1ed",
+  "parent": "aced268c265044b6cbd2a05e1623d6a96b9fd5d6",
+  "pr": 1570,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Extend LATENCY LATEST to add sum / cnt stats (#1570)",
+  "date": "2025-02-04",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 7,
+    "executed": 7,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.7513,
+  "findings": [],
+  "recorded": []
+}

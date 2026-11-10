@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6eaf0887cc91..2eac2ccd2f89.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e24e3c3a0835
+seed: 4701
+experiment:
+  id: proposed.replconf-skip-rdb-checksum-capa
+  inputs:
+    capa_token: skip-rdb-checksum
+deployment:
+  mode: standalone
+  base_port: 7000

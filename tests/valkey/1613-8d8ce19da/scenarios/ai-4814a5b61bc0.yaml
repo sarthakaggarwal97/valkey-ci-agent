@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f875fceea781..8d8ce19da80e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4814a5b61bc0
+seed: 101
+experiment:
+  id: proposed.embkey-sds5-strings
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

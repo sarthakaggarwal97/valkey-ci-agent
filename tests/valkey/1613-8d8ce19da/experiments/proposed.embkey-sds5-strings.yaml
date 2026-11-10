@@ -1,0 +1,85 @@
+extends: [valkey.liveness]
+id: proposed.embkey-sds5-strings
+deployment:
+  modes: [standalone]
+metadata:
+  description: String keys and values at the SDS type-5/8 and embstr boundaries, embedded-key
+    layout exercised through expire re-embedding, rename, append and an RDB save/restart,
+    replies compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: embkeys
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [SET, "", v-empty], expect: {equals: OK}}
+    - {command: [GET, ""], expect: {equals: v-empty}}
+    - {command: [EXPIRE, "", 10000], expect: {equals: 1}}
+    - {command: [PERSIST, ""], expect: {equals: 1}}
+    - {command: [GET, ""], expect: {equals: v-empty}}
+    - {command: [SET, a123456789b123456789c123456789d, v31], expect: {equals: OK}}
+    - {command: [SET, a123456789b123456789c123456789de, v32, EX, 10000], expect: {
+        equals: OK}}
+    - {command: [GET, a123456789b123456789c123456789d], expect: {equals: v31}}
+    - {command: [GET, a123456789b123456789c123456789de], expect: {equals: v32}}
+    - {command: [SET, squux, xyzzy], expect: {equals: OK}}
+    - {command: [DEBUG, SDSLEN, squux], expect_difference: true, expect: {contains: "val_alloc:0"}}
+    - {command: [APPEND, squux, "-andmore"], expect: {equals: 13}}
+    - {command: [GET, squux], expect: {equals: xyzzy-andmore}}
+    - {command: [EXPIRE, squux, 10000], expect: {equals: 1}}
+    - {command: [GET, squux], expect: {equals: xyzzy-andmore}}
+    - {command: [DEBUG, SDSLEN, squux], expect_difference: true, expect: {contains: "obj_alloc:"}}
+    - {command: [SET, rawk, r123456789r123456789r123456789r123456789r123456789r123456789r123456789r123456789r123456789r123456789],
+      expect: {equals: OK}}
+    - {command: [DEBUG, SDSLEN, rawk], expect_difference: true, expect: {contains: "obj_alloc:"}}
+    - {command: [SET, vb44, v123456789v123456789v123456789v123456789vabc], expect: {
+        equals: OK}}
+    - {command: [GET, vb44], expect: {equals: v123456789v123456789v123456789v123456789vabc}}
+    - {command: [SET, vb45, v123456789v123456789v123456789v123456789vabcd], expect: {
+        equals: OK}}
+    - {command: [GET, vb45], expect: {equals: v123456789v123456789v123456789v123456789vabcd}}
+    - {command: [RENAME, a123456789b123456789c123456789d, e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789f1234567],
+      expect: {equals: OK}}
+    - {command: [GET, e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789f1234567],
+      expect: {equals: v31}}
+    - {command: [EXPIRE, e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789f1234567,
+        10000], expect: {equals: 1}}
+    - {command: [PERSIST, e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789f1234567],
+      expect: {equals: 1}}
+    - {command: [RPUSH, a123456789b123456789c123456789d, a, b, c], expect: {equals: 3}}
+    - {command: [EXPIRE, a123456789b123456789c123456789d, 10000], expect: {equals: 1}}
+    - {command: [PERSIST, a123456789b123456789c123456789d], expect: {equals: 1}}
+    - {command: [LRANGE, a123456789b123456789c123456789d, 0, -1], expect: {equals: [
+          a, b, c]}}
+    - {command: [SADD, sk, x, y, z, ""], expect: {equals: 4}}
+    - {command: [SMEMBERS, sk], compare: unordered}
+    - {command: [MEMORY, USAGE, squux], compare: skip}
+    - {command: [KEYS, "*"], compare: unordered}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, ""], expect: {equals: v-empty}}
+    - {command: [GET, e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789e123456789f1234567],
+      expect: {equals: v31}}
+    - {command: [EXISTS, a123456789b123456789c123456789de], expect: {equals: 1}}
+    - {command: [GET, squux], expect: {equals: xyzzy-andmore}}
+    - {command: [LRANGE, a123456789b123456789c123456789d, 0, -1], expect: {equals: [
+          a, b, c]}}
+    - {command: [SMEMBERS, sk], compare: unordered}
+    - {command: [KEYS, "*"], compare: unordered}
+    - {command: [DEBUG, SDSLEN, squux], expect_difference: true, expect: {contains: "obj_alloc:"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [embkeys.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: embkeys}

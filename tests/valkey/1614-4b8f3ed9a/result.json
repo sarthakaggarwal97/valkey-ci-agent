@@ -1,0 +1,73 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4b8f3ed9acf3103349b6368407fc48bef55b3327",
+  "parent": "d72a97edf6eb6c68b0aba99a7669dd521bb0784d",
+  "pr": 1614,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Do command existence and arity checks when loading AOF to avoid crash (#1614)",
+  "date": "2025-01-30",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 5,
+    "percent": 83,
+    "uncovered": [
+      "src/server.c:3914"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.2785,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in lookupKey",
+      "scenario": "ai-3a65694cd34a",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1614",
+      "fingerprint": "80d4c5882ea4107d2ffa",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in tryObjectEncodingEx",
+      "scenario": "ai-78173f120adf",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1614",
+      "fingerprint": "29e5ae761452523e6979",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-0d5bdbfa221a",
+      "seed": 3,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1614",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

@@ -1,0 +1,105 @@
+extends: [valkey.liveness]
+id: proposed.zset-btree-leaf-compaction-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Every sorted-set delete path (ZREM, ZREMRANGEBYRANK/SCORE/LEX, ZPOPMIN/MAX,
+    score-update churn) over B+tree zsets, replies compared against the parent; MEMORY
+    USAGE shows the compacted tree only on the new build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zdel
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 0, save: ""}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - command: [EVAL, "for i=1,12000 do server.call('ZADD',KEYS[1],i,string.format('m%06d',i))\
+          \ end return server.call('ZCARD',KEYS[1])", 1, z]
+      expect: {equals: 12000}
+    - command: [OBJECT, ENCODING, z]
+      compare: skip
+      expect: {equals: btree}
+    - command: [EVAL, "local n=0 for i=1,12000 do if i%3==1 then n=n+server.call('ZREM',KEYS[1],string.format('m%06d',i))\
+          \ end end return n", 1, z]
+      expect: {equals: 4000}
+    - command: [EVAL, "local n=0 for i=1,12000 do if i%3==2 then n=n+server.call('ZREM',KEYS[1],string.format('m%06d',i))\
+          \ end end return n", 1, z]
+      expect: {equals: 4000}
+    - command: [ZCARD, z]
+      expect: {equals: 4000}
+    - command: [MEMORY, USAGE, z, SAMPLES, 0]
+      expect_difference: true
+      expect: {min: 1024}
+    - command: [ZRANGE, z, 0, 4]
+      expect: {equals: [m000003, m000006, m000009, m000012, m000015]}
+    - command: [ZRANGE, z, -3, -1]
+      expect: {equals: [m011994, m011997, m012000]}
+    - command: [ZRANK, z, m006000]
+      expect: {equals: 1999}
+    - command: [ZCOUNT, z, 0, 6000]
+      expect: {equals: 2000}
+    - command: [ZRANGEBYSCORE, z, 2998, 3010]
+      expect: {equals: [m003000, m003003, m003006, m003009]}
+    - command: [ZREMRANGEBYSCORE, z, 9000.5, 10500.5]
+      expect: {equals: 500}
+    - command: [ZREMRANGEBYRANK, z, 100, 699]
+      expect: {equals: 600}
+    - command: [ZCARD, z]
+      expect: {equals: 2900}
+    - command: [EVAL, "local n=0 for j=1,600 do local a=server.call('ZPOPMIN',KEYS[1])\
+          \ local b=server.call('ZPOPMAX',KEYS[1]) if a[1] then n=n+1 end if b[1]\
+          \ then n=n+1 end end return n", 1, z]
+      expect: {equals: 1200}
+    - command: [ZCARD, z]
+      expect: {equals: 1700}
+    - command: [ZRANGE, z, 0, 0]
+    - command: [EVAL, "while server.call('ZCARD',KEYS[1])>0 do server.call('ZPOPMAX',KEYS[1])\
+          \ end return server.call('EXISTS',KEYS[1])", 1, z]
+      expect: {equals: 0}
+    - command: [EVAL, "for i=1,4000 do server.call('ZADD',KEYS[1],0,string.format('p%07d',i))\
+          \ end return server.call('ZCARD',KEYS[1])", 1, zs]
+      expect: {equals: 4000}
+    - command: [EVAL, "local n=0 for i=1,4000 do if i%4~=0 then n=n+server.call('ZREM',KEYS[1],string.format('p%07d',i))\
+          \ end end return n", 1, zs]
+      expect: {equals: 3000}
+    - command: [ZRANGEBYLEX, zs, "[p0000004", "[p0000040"]
+      expect: {equals: [p0000004, p0000008, p0000012, p0000016, p0000020, p0000024,
+          p0000028, p0000032, p0000036, p0000040]}
+    - command: [ZREMRANGEBYLEX, zs, "[p0000100", "[p0002000"]
+      expect: {equals: 476}
+    - command: [ZLEXCOUNT, zs, "-", "+"]
+      expect: {equals: 524}
+    - command: [MEMORY, USAGE, zs, SAMPLES, 0]
+      expect_difference: true
+      expect: {min: 1024}
+    - command: [EVAL, "for i=1,3000 do server.call('ZADD',KEYS[1],i,string.format('c%06d',i))\
+          \ end return server.call('ZCARD',KEYS[1])", 1, zc]
+      expect: {equals: 3000}
+    - command: [EVAL, "for u=0,29999 do local i=(u*7919)%3000+1 local s=(u*104729)%100000\
+          \ server.call('ZADD',KEYS[1],s,string.format('c%06d',i)) end return server.call('ZCARD',KEYS[1])",
+        1, zc]
+      expect: {equals: 3000}
+    - command: [ZRANGE, zc, 0, 9, WITHSCORES]
+    - command: [EVAL, "local n=0 for i=1,3000 do if i%3~=0 then n=n+server.call('ZREM',KEYS[1],string.format('c%06d',i))\
+          \ end end return n", 1, zc]
+      expect: {equals: 2000}
+    - command: [ZCARD, zc]
+      expect: {equals: 1000}
+    - command: [MEMORY, USAGE, zc, SAMPLES, 0]
+      expect_difference: true
+      expect: {min: 1024}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [zdel.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zdel}

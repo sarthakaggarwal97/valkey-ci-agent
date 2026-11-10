@@ -1,0 +1,250 @@
+extends: [valkey.liveness]
+id: proposed.clients-timer-overload-info
+deployment:
+  modes: [standalone]
+metadata:
+  description: 211 connected clients at hz 1 push clientsTimeProc past MAX_CLIENTS_PER_CYCLE
+    so it reschedules at the required rate; INFO server/clients read clients_hz and
+    getExpensiveClientsInfo, and the idle-client timeout proves clientsCron still
+    reaps clients on the new timer
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: overload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hz: 1}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, dynamic-hz, no], expect_difference: true, expect: {
+        error: "Unknown option"}}
+    - {command: [PING], connection: n1}
+    - {command: [PING], connection: n2}
+    - {command: [PING], connection: n3}
+    - {command: [PING], connection: n4}
+    - {command: [PING], connection: n5}
+    - {command: [PING], connection: n6}
+    - {command: [PING], connection: n7}
+    - {command: [PING], connection: n8}
+    - {command: [PING], connection: n9}
+    - {command: [PING], connection: n10}
+    - {command: [PING], connection: n11}
+    - {command: [PING], connection: n12}
+    - {command: [PING], connection: n13}
+    - {command: [PING], connection: n14}
+    - {command: [PING], connection: n15}
+    - {command: [PING], connection: n16}
+    - {command: [PING], connection: n17}
+    - {command: [PING], connection: n18}
+    - {command: [PING], connection: n19}
+    - {command: [PING], connection: n20}
+    - {command: [PING], connection: n21}
+    - {command: [PING], connection: n22}
+    - {command: [PING], connection: n23}
+    - {command: [PING], connection: n24}
+    - {command: [PING], connection: n25}
+    - {command: [PING], connection: n26}
+    - {command: [PING], connection: n27}
+    - {command: [PING], connection: n28}
+    - {command: [PING], connection: n29}
+    - {command: [PING], connection: n30}
+    - {command: [PING], connection: n31}
+    - {command: [PING], connection: n32}
+    - {command: [PING], connection: n33}
+    - {command: [PING], connection: n34}
+    - {command: [PING], connection: n35}
+    - {command: [PING], connection: n36}
+    - {command: [PING], connection: n37}
+    - {command: [PING], connection: n38}
+    - {command: [PING], connection: n39}
+    - {command: [PING], connection: n40}
+    - {command: [PING], connection: n41}
+    - {command: [PING], connection: n42}
+    - {command: [PING], connection: n43}
+    - {command: [PING], connection: n44}
+    - {command: [PING], connection: n45}
+    - {command: [PING], connection: n46}
+    - {command: [PING], connection: n47}
+    - {command: [PING], connection: n48}
+    - {command: [PING], connection: n49}
+    - {command: [PING], connection: n50}
+    - {command: [PING], connection: n51}
+    - {command: [PING], connection: n52}
+    - {command: [PING], connection: n53}
+    - {command: [PING], connection: n54}
+    - {command: [PING], connection: n55}
+    - {command: [PING], connection: n56}
+    - {command: [PING], connection: n57}
+    - {command: [PING], connection: n58}
+    - {command: [PING], connection: n59}
+    - {command: [PING], connection: n60}
+    - {command: [PING], connection: n61}
+    - {command: [PING], connection: n62}
+    - {command: [PING], connection: n63}
+    - {command: [PING], connection: n64}
+    - {command: [PING], connection: n65}
+    - {command: [PING], connection: n66}
+    - {command: [PING], connection: n67}
+    - {command: [PING], connection: n68}
+    - {command: [PING], connection: n69}
+    - {command: [PING], connection: n70}
+    - {command: [PING], connection: n71}
+    - {command: [PING], connection: n72}
+    - {command: [PING], connection: n73}
+    - {command: [PING], connection: n74}
+    - {command: [PING], connection: n75}
+    - {command: [PING], connection: n76}
+    - {command: [PING], connection: n77}
+    - {command: [PING], connection: n78}
+    - {command: [PING], connection: n79}
+    - {command: [PING], connection: n80}
+    - {command: [PING], connection: n81}
+    - {command: [PING], connection: n82}
+    - {command: [PING], connection: n83}
+    - {command: [PING], connection: n84}
+    - {command: [PING], connection: n85}
+    - {command: [PING], connection: n86}
+    - {command: [PING], connection: n87}
+    - {command: [PING], connection: n88}
+    - {command: [PING], connection: n89}
+    - {command: [PING], connection: n90}
+    - {command: [PING], connection: n91}
+    - {command: [PING], connection: n92}
+    - {command: [PING], connection: n93}
+    - {command: [PING], connection: n94}
+    - {command: [PING], connection: n95}
+    - {command: [PING], connection: n96}
+    - {command: [PING], connection: n97}
+    - {command: [PING], connection: n98}
+    - {command: [PING], connection: n99}
+    - {command: [PING], connection: n100}
+    - {command: [PING], connection: n101}
+    - {command: [PING], connection: n102}
+    - {command: [PING], connection: n103}
+    - {command: [PING], connection: n104}
+    - {command: [PING], connection: n105}
+    - {command: [PING], connection: n106}
+    - {command: [PING], connection: n107}
+    - {command: [PING], connection: n108}
+    - {command: [PING], connection: n109}
+    - {command: [PING], connection: n110}
+    - {command: [PING], connection: n111}
+    - {command: [PING], connection: n112}
+    - {command: [PING], connection: n113}
+    - {command: [PING], connection: n114}
+    - {command: [PING], connection: n115}
+    - {command: [PING], connection: n116}
+    - {command: [PING], connection: n117}
+    - {command: [PING], connection: n118}
+    - {command: [PING], connection: n119}
+    - {command: [PING], connection: n120}
+    - {command: [PING], connection: n121}
+    - {command: [PING], connection: n122}
+    - {command: [PING], connection: n123}
+    - {command: [PING], connection: n124}
+    - {command: [PING], connection: n125}
+    - {command: [PING], connection: n126}
+    - {command: [PING], connection: n127}
+    - {command: [PING], connection: n128}
+    - {command: [PING], connection: n129}
+    - {command: [PING], connection: n130}
+    - {command: [PING], connection: n131}
+    - {command: [PING], connection: n132}
+    - {command: [PING], connection: n133}
+    - {command: [PING], connection: n134}
+    - {command: [PING], connection: n135}
+    - {command: [PING], connection: n136}
+    - {command: [PING], connection: n137}
+    - {command: [PING], connection: n138}
+    - {command: [PING], connection: n139}
+    - {command: [PING], connection: n140}
+    - {command: [PING], connection: n141}
+    - {command: [PING], connection: n142}
+    - {command: [PING], connection: n143}
+    - {command: [PING], connection: n144}
+    - {command: [PING], connection: n145}
+    - {command: [PING], connection: n146}
+    - {command: [PING], connection: n147}
+    - {command: [PING], connection: n148}
+    - {command: [PING], connection: n149}
+    - {command: [PING], connection: n150}
+    - {command: [PING], connection: n151}
+    - {command: [PING], connection: n152}
+    - {command: [PING], connection: n153}
+    - {command: [PING], connection: n154}
+    - {command: [PING], connection: n155}
+    - {command: [PING], connection: n156}
+    - {command: [PING], connection: n157}
+    - {command: [PING], connection: n158}
+    - {command: [PING], connection: n159}
+    - {command: [PING], connection: n160}
+    - {command: [PING], connection: n161}
+    - {command: [PING], connection: n162}
+    - {command: [PING], connection: n163}
+    - {command: [PING], connection: n164}
+    - {command: [PING], connection: n165}
+    - {command: [PING], connection: n166}
+    - {command: [PING], connection: n167}
+    - {command: [PING], connection: n168}
+    - {command: [PING], connection: n169}
+    - {command: [PING], connection: n170}
+    - {command: [PING], connection: n171}
+    - {command: [PING], connection: n172}
+    - {command: [PING], connection: n173}
+    - {command: [PING], connection: n174}
+    - {command: [PING], connection: n175}
+    - {command: [PING], connection: n176}
+    - {command: [PING], connection: n177}
+    - {command: [PING], connection: n178}
+    - {command: [PING], connection: n179}
+    - {command: [PING], connection: n180}
+    - {command: [PING], connection: n181}
+    - {command: [PING], connection: n182}
+    - {command: [PING], connection: n183}
+    - {command: [PING], connection: n184}
+    - {command: [PING], connection: n185}
+    - {command: [PING], connection: n186}
+    - {command: [PING], connection: n187}
+    - {command: [PING], connection: n188}
+    - {command: [PING], connection: n189}
+    - {command: [PING], connection: n190}
+    - {command: [PING], connection: n191}
+    - {command: [PING], connection: n192}
+    - {command: [PING], connection: n193}
+    - {command: [PING], connection: n194}
+    - {command: [PING], connection: n195}
+    - {command: [PING], connection: n196}
+    - {command: [PING], connection: n197}
+    - {command: [PING], connection: n198}
+    - {command: [PING], connection: n199}
+    - {command: [PING], connection: n200}
+    - {command: [PING], connection: n201}
+    - {command: [PING], connection: n202}
+    - {command: [PING], connection: n203}
+    - {command: [PING], connection: n204}
+    - {command: [PING], connection: n205}
+    - {command: [PING], connection: n206}
+    - {command: [PING], connection: n207}
+    - {command: [PING], connection: n208}
+    - {command: [PING], connection: n209}
+    - {command: [PING], connection: n210}
+    - {command: [DEBUG, SLEEP, 2]}
+    - {command: [INFO, server], compare: skip, expect: {contains: "clients_hz:"}}
+    - {command: [INFO, clients], compare: skip, expect: {contains: "client_recent_max_input_buffer"}}
+    - {command: [CONFIG, SET, timeout, 3], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 2]}
+    - {command: [DEBUG, SLEEP, 2]}
+    - {command: [PING], connection: n1, expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [overload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: overload}

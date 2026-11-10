@@ -1,0 +1,57 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "61a854dbbd14c80e0584bbdfa71f3b5b25d66153",
+  "parent": "e8ae5b1852474ff89cfe23d4485a88dc59b5c0a3",
+  "pr": 1684,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix client trackinginfo crash when tracking off by default (#1684)",
+  "date": "2025-02-10",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.0994,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in clientTrackingInfoCommand",
+      "scenario": "ai-618d5cb6e1db",
+      "seed": 1684,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1684",
+      "fingerprint": "11ba994f5f45b47bfd30",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in clientTrackingInfoCommand",
+      "scenario": "ai-9ff9ce93218e",
+      "seed": 1685,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1684",
+      "fingerprint": "11ba994f5f45b47bfd30",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

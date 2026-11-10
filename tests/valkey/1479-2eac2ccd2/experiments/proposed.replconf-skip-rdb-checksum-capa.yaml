@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.replconf-skip-rdb-checksum-capa
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The primary must record the new REPLCONF capa skip-rdb-checksum bit (replication.c:1391-1392).
+    Observable without TLS: a second PSYNC replica without the bit fails the capability-subset
+    check and cannot attach to the disk BGSAVE started for the capable replica, while
+    the parent, which ignores the unknown capa, attaches it and replies +FULLRESYNC
+    at once.
+inputs:
+  properties:
+    capa_token:
+      type: string
+      enum: [skip-rdb-checksum, SKIP-RDB-CHECKSUM]
+      default: skip-rdb-checksum
+components:
+- use: valkey.action.commands
+  id: capa
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      appendonly: "no"
+      save: ""
+      repl-diskless-sync: "no"
+      rdb-key-save-delay: 2000
+    resp: 2
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, POPULATE, 5000], expect: {equals: OK}}
+    - {command: [REPLCONF, capa, {$ref: inputs.capa_token}], connection: r1, expect: {
+        equals: OK}}
+    - {raw: "PSYNC ? -1\r\n", connection: r1, compare: skip, expect: {contains: FULLRESYNC}}
+    - {command: [REPLCONF, capa, eof, capa, psync2], connection: r2, expect: {equals: OK}}
+    - {raw: "PSYNC ? -1\r\n", connection: r2, expect_difference: true, expect: {exists: false}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [capa.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: capa}

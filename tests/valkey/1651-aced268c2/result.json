@@ -1,0 +1,62 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "aced268c265044b6cbd2a05e1623d6a96b9fd5d6",
+  "parent": "9f89c48adf0d0e76eb8140458fa70fe6ebc74bfa",
+  "pr": 1651,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix ACL regression with renamed commands (#1651)",
+  "date": "2025-02-03",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 65,
+    "executed": 57,
+    "percent": 87,
+    "uncovered": [
+      "src/acl.c:279",
+      "src/acl.c:286",
+      "src/acl.c:318",
+      "src/acl.c:1845",
+      "src/acl.c:1902",
+      "src/config.c:545",
+      "src/config.c:546",
+      "src/config.c:548"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.4106,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-659e2cf6cc57",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'renamed' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (VPING), 8 (VSET k1 v), 9 (VINCR ctr), 10 (GET k1)"
+    },
+    {
+      "scenario": "ai-ea40a2995a2f",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'acl' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (ACL SETUSER u1 on >pass1 ~key:* &chan:* +get +set -del +@hash -@admin), 25 (AUTH u1 pass1 on connection sub), 28 (PING on connection sub),"
+    },
+    {
+      "scenario": "ai-60942a5b8099",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'acl' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (ACL SETUSER u1 on >pass1 ~key:* &chan:* +get +set -del +@hash -@admin), 25 (AUTH u1 pass1 on connection sub), 28 (PING on connection sub),"
+    },
+    {
+      "scenario": "ai-7563925da8f4",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'acl' returned ERROR: expectations both builds violate alike, so they are not about the change: 26 (SUBSCRIBE chan:1 on connection sub), 28 (PING on connection sub)"
+    }
+  ]
+}

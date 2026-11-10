@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.aof-command-check
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: A malformed AOF record (wrong arity or a bare container command) fails
+    DEBUG LOADAOF cleanly on the change but crashes the parent mid-replay
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    aof_incr:
+      type: string
+      description: Bytes of the single-record incr AOF file, in RESP
+    cluster:
+      type: boolean
+      default: false
+components:
+- use: valkey.action.commands
+  id: loadaof
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: {$ref: inputs.cluster}
+    server_config: {enable-debug-command: yes}
+    timeout_s: 20
+    files:
+      "appendonlydir/appendonly.aof.manifest": "file appendonly.aof.1.incr.aof seq\
+        \ 1 type i\n"
+      "appendonlydir/appendonly.aof.1.incr.aof": {$ref: inputs.aof_incr}
+    commands:
+    - {command: [DEBUG, LOADAOF], expect_difference: true, expect: {error: "Error\
+          \ trying to load the AOF files"}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: loadaof}

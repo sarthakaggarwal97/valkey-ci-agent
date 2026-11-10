@@ -1,0 +1,49 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2eac2ccd2f89e9e15f3e794e1d05e7ffb043f599",
+  "parent": "6eaf0887cc91d43b37b9bc3e9349ea639134a1ed",
+  "pr": 1479,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "skip CRC checksumming during diskless full sync with TLS enabled. (#1479)",
+  "date": "2025-02-04",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 11,
+  "proven": 2,
+  "hunted": 9,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 33,
+    "executed": 26,
+    "percent": 78,
+    "uncovered": [
+      "src/rdb.c:3381",
+      "src/replication.c:3607",
+      "src/replication.c:3608",
+      "src/replication.c:3609",
+      "src/replication.c:3610",
+      "src/replication.c:3611",
+      "src/replication.c:3612"
+    ],
+    "unnoted": [],
+    "rounds": 2
+  },
+  "cost_usd": 14.7833,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-76aeece4caeb",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during fault.inject: LookupError: no live instance matches 'replica'"
+    },
+    {
+      "scenario": "ai-17f633c2e6d2",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during fault.inject: LookupError: no live instance matches 'replica'"
+    }
+  ]
+}

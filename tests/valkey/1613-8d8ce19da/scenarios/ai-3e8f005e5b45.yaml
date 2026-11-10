@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f875fceea781..8d8ce19da80e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3e8f005e5b45
+seed: 104
+experiment:
+  id: proposed.hashfield-sds5-compare
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7300

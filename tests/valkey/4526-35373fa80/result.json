@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "35373fa80b3f3429f5fe311123a7758632747dca",
+  "parent": "2d84f93bbf1dcb3fdc656e671c191867cb318e14",
+  "pr": 4526,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Compact sparse B+tree leaves inline on the sorted set delete path (#4526)",
+  "date": "2026-11-09",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 3,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 7.8504,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-8f95ecc92201",
+      "build": "unstable",
+      "seed": 4528,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8f95ecc92201",
+      "build": "unstable",
+      "seed": 4529,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8f95ecc92201",
+      "build": "unstable",
+      "seed": 4530,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "`make -j4 BUILD_ZSTD=yes gcov OPTIMIZATION=-O0` failed in coverage (exit 2): /usr/bin/x86_64-linux-gnu-ld.bfd: liblua.a(lzio.o): in function `_sub_D_00100_1': lzio.c:(.text.exit+0x5): undefined reference to `__gcov_exit' /usr/bin/x86_64-linux-gnu-ld.bfd: liblua.a(lzio.o):(.data.rel+0x20): undefined reference to `__gcov_merge_add' /usr/bin/x86_64-linux-gnu-ld.bfd: liblua.a(lauxlib.o): in function `_sub_I_00100_0': lauxlib.c:(.text.startup+0xc): undefined reference to `__gcov_init' /usr/bin/x86_64"
+}

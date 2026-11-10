@@ -1,0 +1,77 @@
+extends: [valkey.liveness]
+id: proposed.acl-rules-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: ACL rule parsing, selectors, GETUSER descriptions, pubsub client killing,
+    and ACL file save/load across a restart, compared between the fix and its parent
+    (the patch rewrote most of acl.c)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    pubsub_default: {type: string, enum: [allchannels, resetchannels], default: allchannels}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    server_config:
+      aclfile: users.acl
+      acl-pubsub-default: {$ref: inputs.pubsub_default}
+    files: {users.acl: "user default on nopass ~* &* +@all\n"}
+    commands:
+    - {command: [ACL, SETUSER, u1, on, ">pass1", "~key:*", "&chan:*", "+get", "+set",
+        "-del", "+@hash", "-@admin"], expect: {equals: OK}}
+    - {command: [ACL, GETUSER, u1]}
+    - {command: [ACL, SETUSER, adv, "-@all", "+@hash", "+@slow", "+@set", "+@set",
+        "+@slow", "+@hash"], expect: {equals: OK}}
+    - {command: [ACL, GETUSER, adv]}
+    - {command: [ACL, SETUSER, adv, "-@all", "+HGET", "+hget", "+hGeT"], expect: {
+        equals: OK}}
+    - {command: [ACL, GETUSER, adv]}
+    - {command: [ACL, SETUSER, adv, "-@all", "+client|list", "+client|list", "+config|get",
+        "+config", "+acl|list", "-acl"], expect: {equals: OK}}
+    - {command: [ACL, GETUSER, adv]}
+    - {command: [ACL, SETUSER, sel, on, nopass, "(+get ~k1)", "(+set ~k2)"], expect: {
+        equals: OK}}
+    - {command: [ACL, GETUSER, sel]}
+    - {command: [ACL, SETUSER, bad, "(+get bogus:op)"], expect: {error: true}}
+    - {command: [ACL, SETUSER, fa, on, nopass, "~*", "&*", "+@all", "-select", "+select|0"],
+      expect: {equals: OK}}
+    - {command: [AUTH, fa, x], expect: {equals: OK}}
+    - {command: [SELECT, "0"], expect: {equals: OK}}
+    - {command: [SELECT, "1"], expect: {error: NOPERM}}
+    - {command: [AUTH, default, x], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, scmd, on, nopass, "~*", "&*", "-@all", "+config|get",
+        "+acl"], expect: {equals: OK}}
+    - {command: [AUTH, scmd, x], expect: {equals: OK}}
+    - {command: [ACL, WHOAMI], expect: {equals: scmd}}
+    - {command: [CONFIG, GET, maxmemory]}
+    - {command: [CONFIG, SET, maxmemory-policy, noeviction], expect: {error: NOPERM}}
+    - {command: [GET, nokey], expect: {error: NOPERM}}
+    - {command: [AUTH, default, x], expect: {equals: OK}}
+    - {command: [ACL, LOG], compare: skip}
+    - {command: [ACL, LOG, RESET], expect: {equals: OK}}
+    - {connection: sub, command: [AUTH, u1, pass1], expect: {equals: OK}}
+    - {connection: sub, command: [SUBSCRIBE, "chan:1"]}
+    - {command: [ACL, SETUSER, u1, resetchannels], expect: {equals: OK}}
+    - {connection: sub, command: [PING], expect: {exists: false}}
+    - {command: [ACL, CAT], compare: unordered}
+    - {command: [ACL, CAT, hash], compare: unordered}
+    - {command: [ACL, LIST]}
+    - {command: [ACL, SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [ACL, LIST]}
+    - {command: [AUTH, u1, pass1], expect: {equals: OK}}
+    - {command: [SET, "key:2", v], expect: {equals: OK}}
+    - {command: [GET, "key:2"], expect: {equals: v}}
+    - {command: [GET, other], expect: {error: NOPERM}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [acl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

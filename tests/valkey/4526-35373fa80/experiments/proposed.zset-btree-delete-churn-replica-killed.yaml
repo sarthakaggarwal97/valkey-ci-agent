@@ -1,0 +1,116 @@
+extends: [valkey.base]
+id: proposed.zset-btree-delete-churn-replica-killed
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Heavy sorted-set delete churn (ZREM, ZREMRANGEBYRANK, ZPOPMIN/MAX)
+    drives inline leaf compaction on primary and replica while a replica is killed
+    and resyncs (the full-sync fork toggles the compaction gate); oracles check no
+    crash and no acknowledged write lost
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM, SIGSTOP], default: SIGKILL}
+components:
+- use: valkey.action.commands
+  id: zset-churn
+  config:
+    timeout_s: 180
+    commands:
+    - command: [EVAL, "for i=1,20000 do server.call('ZADD','zbig',i,string.format('m%06d',i))\
+          \ end return server.call('ZCARD','zbig')", 0]
+      expect: {equals: 20000}
+    - command: [EVAL, "local n=0 for i=1,20000 do if i%3==1 then n=n+server.call('ZREM','zbig',string.format('m%06d',i))\
+          \ end end return n", 0]
+      expect: {equals: 6667}
+    - command: [EVAL, "for i=1,20000 do if i%3==1 then server.call('ZADD','zbig',i,string.format('m%06d',i))\
+          \ end end local x=server.call('ZREMRANGEBYRANK','zbig',5000,7999) for i=5001,8000\
+          \ do server.call('ZADD','zbig',i,string.format('m%06d',i)) end for j=1,1200\
+          \ do server.call('ZPOPMIN','zbig') server.call('ZPOPMAX','zbig') end for\
+          \ i=1,1200 do server.call('ZADD','zbig',i,string.format('m%06d',i)) end\
+          \ for i=18801,20000 do server.call('ZADD','zbig',i,string.format('m%06d',i))\
+          \ end return x+server.call('ZCARD','zbig')", 0]
+      expect: {equals: 23000}
+    - command: [EVAL, "local n=0 for i=1,20000 do if i%3==2 then n=n+server.call('ZREM','zbig',string.format('m%06d',i))\
+          \ end end return n", 0]
+      expect: {equals: 6667}
+    - command: [EVAL, "for i=1,20000 do if i%3==2 then server.call('ZADD','zbig',i,string.format('m%06d',i))\
+          \ end end local x=server.call('ZREMRANGEBYRANK','zbig',5000,7999) for i=5001,8000\
+          \ do server.call('ZADD','zbig',i,string.format('m%06d',i)) end for j=1,1200\
+          \ do server.call('ZPOPMIN','zbig') server.call('ZPOPMAX','zbig') end for\
+          \ i=1,1200 do server.call('ZADD','zbig',i,string.format('m%06d',i)) end\
+          \ for i=18801,20000 do server.call('ZADD','zbig',i,string.format('m%06d',i))\
+          \ end return x+server.call('ZCARD','zbig')", 0]
+      expect: {equals: 23000}
+    - command: [EVAL, "local n=0 for i=1,20000 do if i%3==0 then n=n+server.call('ZREM','zbig',string.format('m%06d',i))\
+          \ end end return n", 0]
+      expect: {equals: 6666}
+    - command: [EVAL, "for i=1,20000 do if i%3==0 then server.call('ZADD','zbig',i,string.format('m%06d',i))\
+          \ end end local x=server.call('ZREMRANGEBYRANK','zbig',5000,7999) for i=5001,8000\
+          \ do server.call('ZADD','zbig',i,string.format('m%06d',i)) end for j=1,1200\
+          \ do server.call('ZPOPMIN','zbig') server.call('ZPOPMAX','zbig') end for\
+          \ i=1,1200 do server.call('ZADD','zbig',i,string.format('m%06d',i)) end\
+          \ for i=18801,20000 do server.call('ZADD','zbig',i,string.format('m%06d',i))\
+          \ end return x+server.call('ZCARD','zbig')", 0]
+      expect: {equals: 23000}
+    - command: [EVAL, "local n=0 for i=1,20000 do if i%3==1 then n=n+server.call('ZREM','zbig',string.format('m%06d',i))\
+          \ end end return n", 0]
+      expect: {equals: 6667}
+    - command: [EVAL, "for i=1,20000 do if i%3==1 then server.call('ZADD','zbig',i,string.format('m%06d',i))\
+          \ end end local x=server.call('ZREMRANGEBYRANK','zbig',5000,7999) for i=5001,8000\
+          \ do server.call('ZADD','zbig',i,string.format('m%06d',i)) end for j=1,1200\
+          \ do server.call('ZPOPMIN','zbig') server.call('ZPOPMAX','zbig') end for\
+          \ i=1,1200 do server.call('ZADD','zbig',i,string.format('m%06d',i)) end\
+          \ for i=18801,20000 do server.call('ZADD','zbig',i,string.format('m%06d',i))\
+          \ end return x+server.call('ZCARD','zbig')", 0]
+      expect: {equals: 23000}
+    - command: [EVAL, "local n=0 for i=1,20000 do if i%3==2 then n=n+server.call('ZREM','zbig',string.format('m%06d',i))\
+          \ end end return n", 0]
+      expect: {equals: 6667}
+    - command: [EVAL, "for i=1,20000 do if i%3==2 then server.call('ZADD','zbig',i,string.format('m%06d',i))\
+          \ end end local x=server.call('ZREMRANGEBYRANK','zbig',5000,7999) for i=5001,8000\
+          \ do server.call('ZADD','zbig',i,string.format('m%06d',i)) end for j=1,1200\
+          \ do server.call('ZPOPMIN','zbig') server.call('ZPOPMAX','zbig') end for\
+          \ i=1,1200 do server.call('ZADD','zbig',i,string.format('m%06d',i)) end\
+          \ for i=18801,20000 do server.call('ZADD','zbig',i,string.format('m%06d',i))\
+          \ end return x+server.call('ZCARD','zbig')", 0]
+      expect: {equals: 23000}
+    - command: [EVAL, "local n=0 for i=1,20000 do if i%3==0 then n=n+server.call('ZREM','zbig',string.format('m%06d',i))\
+          \ end end return n", 0]
+      expect: {equals: 6666}
+    - command: [EVAL, "for i=1,20000 do if i%3==0 then server.call('ZADD','zbig',i,string.format('m%06d',i))\
+          \ end end local x=server.call('ZREMRANGEBYRANK','zbig',5000,7999) for i=5001,8000\
+          \ do server.call('ZADD','zbig',i,string.format('m%06d',i)) end for j=1,1200\
+          \ do server.call('ZPOPMIN','zbig') server.call('ZPOPMAX','zbig') end for\
+          \ i=1,1200 do server.call('ZADD','zbig',i,string.format('m%06d',i)) end\
+          \ for i=18801,20000 do server.call('ZADD','zbig',i,string.format('m%06d',i))\
+          \ end return x+server.call('ZCARD','zbig')", 0]
+      expect: {equals: 23000}
+    - command: [ZCARD, zbig]
+      expect: {equals: 20000}
+    - command: [ZRANK, zbig, m010000]
+      expect: {equals: 9999}
+    - command: [ZRANGE, zbig, 0, 2]
+      expect: {equals: [m000001, m000002, m000003]}
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-replica]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 5}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed, zset-churn.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}
+- {evidence_id: valkey.data.ledger-verified, source: data}

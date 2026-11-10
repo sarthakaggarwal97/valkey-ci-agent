@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9f89c48adf0d..aced268c2650.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ea40a2995a2f
+seed: 102
+experiment:
+  id: proposed.acl-rules-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7100

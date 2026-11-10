@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.cluster-forget-linked-node-uaf
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTER FORGET of a peer that still holds a cluster-bus link must not
+    read freed node memory in freeClusterLink
+components:
+- use: valkey.action.commands
+  id: forget
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, NODES], node: 0, wait_s: 30, compare: skip, expect: {contains: "<node.1.id>"}}
+    - {command: [CLUSTER, FORGET, "<node.1.id>"], node: 0, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [CLUSTER, NODES], node: 1, compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: forget}

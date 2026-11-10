@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.embstr-sds-avail
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    DEBUG SDSLEN reports the embedded string value's SDS available space. The change
+    sets the embedded value's SDS alloc field to the real allocator slack instead
+    of exactly the value length, so val_sds_avail is nonzero on the change and zero
+    on the parent whenever the allocator over-allocates.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sdslen
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SET, k5, abcde], expect: {equals: OK}}
+    - {command: [DEBUG, SDSLEN, k5], expect_difference: true, expect: {contains: "val_sds_len:5"}}
+    - {command: [SET, k9, abcdefghi], expect: {equals: OK}}
+    - {command: [DEBUG, SDSLEN, k9], expect_difference: true, expect: {contains: "val_sds_len:9"}}
+    - {command: [SET, ke, wxyz, EX, 10000], expect: {equals: OK}}
+    - {command: [DEBUG, SDSLEN, ke], expect_difference: true, expect: {contains: "val_sds_len:4"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sdslen}

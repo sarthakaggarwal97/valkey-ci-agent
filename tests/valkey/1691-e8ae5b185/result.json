@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e8ae5b1852474ff89cfe23d4485a88dc59b5c0a3",
+  "parent": "de3672a7ffba8773871bebda0553f370906a7ae3",
+  "pr": 1691,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix log message \"DB 9: 100 keys (0 volatile) in 16 slots HT\" (#1691)",
+  "date": "2025-02-09",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2361,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only corrects the slot count printed in a verbosity-debug serverCron log message (\"DB %d: ... in %lld slots HT\") by multiplying kvstoreBuckets by a new constant accessor hashtableEntriesPerBucket(). No command reply, data path, replication, persistence, or config behaviour is affected, and log text is not observable by any fuzzer oracle or compared sequence, so no scenario can reach or validate it."
+}

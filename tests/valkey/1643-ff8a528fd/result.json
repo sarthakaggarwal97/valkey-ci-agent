@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ff8a528fd6353310b2d09206f543485f691b8c7d",
+  "parent": "4b8f3ed9acf3103349b6368407fc48bef55b3327",
+  "pr": 1643,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix a heap-use-after-free bug in cluster bus (#1643)",
+  "date": "2025-01-29",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.7339,
+  "findings": [],
+  "recorded": []
+}

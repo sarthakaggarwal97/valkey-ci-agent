@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2eac2ccd2f89..c75e8661762d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d8a419674f51
+seed: 101
+experiment:
+  id: proposed.clients-timer-dynamic-hz
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,73 @@
+extends: [valkey.liveness]
+id: proposed.hashfield-sds5-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Hashtable-encoded hash fields at the SDS type-5/8/16 boundaries, including
+    an empty field, repeated arguments, listpack conversion, value replacement and
+    an RDB save/restart, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hashfields
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes", hash-max-listpack-entries: 2, hash-max-listpack-value: 64}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [HSET, fields, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [HGET, fields, f1], expect: {equals: v1}}
+    - {command: [HSET, fields, "", vempty], expect: {equals: 1}}
+    - {command: [HGET, fields, ""], expect: {equals: vempty}}
+    - {command: [HSET, fields, b123456789b123456789b123456789b, w31, b123456789b123456789b123456789bc,
+        w32], expect: {equals: 2}}
+    - {command: [HGET, fields, b123456789b123456789b123456789b], expect: {equals: w31}}
+    - {command: [HGET, fields, b123456789b123456789b123456789bc], expect: {equals: w32}}
+    - {command: [HSET, fields, "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789xy",
+        w252, "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789xyz",
+        w253], expect: {equals: 2}}
+    - {command: [HGET, fields, "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789xyz"],
+      expect: {equals: w253}}
+    - {command: [HSTRLEN, fields, "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789xy"],
+      expect: {equals: 4}}
+    - {command: [HSET, fields, f1, v1b], expect: {equals: 0}}
+    - {command: [HGET, fields, f1], expect: {equals: v1b}}
+    - {command: [HDEL, fields, ""], expect: {equals: 1}}
+    - {command: [HDEL, fields, ""], expect: {equals: 0}}
+    - {command: [HEXISTS, fields, b123456789b123456789b123456789b], expect: {equals: 1}}
+    - {command: [HLEN, fields], expect: {equals: 7}}
+    - {command: [HSET, dup, fx, vx, fx, vx, fx, vx, fx, vy], expect: {equals: 1}}
+    - {command: [HGET, dup, fx], expect: {equals: vy}}
+    - {command: [HGETALL, fields], compare: unordered-pairs}
+    - {command: [HSET, lp, a, 1, b, 2], expect: {equals: 2}}
+    - {command: [HSET, lp, c, 3], expect: {equals: 1}}
+    - {command: [HGET, lp, a], expect: {equals: 1}}
+    - {command: [HGETALL, lp], compare: unordered-pairs}
+    - {command: [HSET, lv, f, r123456789r123456789r123456789r123456789r123456789r123456789r123456789r123456789r123456789r123456789],
+      expect: {equals: 1}}
+    - {command: [HGET, lv, f], expect: {equals: r123456789r123456789r123456789r123456789r123456789r123456789r123456789r123456789r123456789r123456789}}
+    - {command: [MEMORY, USAGE, fields], compare: skip}
+    - {command: [SET, probe, xyzzy], expect: {equals: OK}}
+    - {command: [DEBUG, SDSLEN, probe], expect_difference: true, expect: {contains: "val_alloc:0"}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [HGETALL, fields], compare: unordered-pairs}
+    - {command: [HGET, fields, "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789xyz"],
+      expect: {equals: w253}}
+    - {command: [HGET, fields, b123456789b123456789b123456789b], expect: {equals: w31}}
+    - {command: [HLEN, fields], expect: {equals: 7}}
+    - {command: [HGETALL, lp], compare: unordered-pairs}
+    - {command: [DEBUG, SDSLEN, probe], expect_difference: true, expect: {contains: "val_alloc:0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hashfields.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hashfields}

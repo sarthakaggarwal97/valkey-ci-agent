@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2d84f93bbf1d..35373fa80b3f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2d1ae350d0f2
+seed: 4530
+experiment:
+  id: proposed.zset-btree-delete-churn-replica-killed
+  inputs:
+    signal: SIGKILL
+    mutation_rate: 300
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7400
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec

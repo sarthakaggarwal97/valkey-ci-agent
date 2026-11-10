@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2d84f93bbf1d..35373fa80b3f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8f95ecc92201
+seed: 4528
+experiment:
+  id: proposed.zset-btree-compaction-fork-gate
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.module-cluster-message-light-fanout
+deployment:
+  modes: [standalone]
+metadata:
+  description: SendClusterMessage broadcast to 5 peers of a 6-node cluster with a
+    20-message burst, stressing the shared light-header msgblock refcounting in clusterSendModule,
+    compared against the parent build
+components:
+- use: valkey.action.commands
+  id: fanout
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: true
+    nodes: 6
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:6"}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:6"}}
+    - {command: [CLUSTER, INFO], node: 2, wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:6"}}
+    - {command: [CLUSTER, INFO], node: 3, wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:6"}}
+    - {command: [CLUSTER, INFO], node: 4, wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:6"}}
+    - {command: [CLUSTER, INFO], node: 5, wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:6"}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 10, compare: skip, expect: {contains: "cluster_stats_messages_module_received:1"}}
+    - {command: [CLUSTER, INFO], node: 2, wait_s: 10, compare: skip, expect: {contains: "cluster_stats_messages_module_received:1"}}
+    - {command: [CLUSTER, INFO], node: 3, wait_s: 10, compare: skip, expect: {contains: "cluster_stats_messages_module_received:1"}}
+    - {command: [CLUSTER, INFO], node: 4, wait_s: 10, compare: skip, expect: {contains: "cluster_stats_messages_module_received:1"}}
+    - {command: [CLUSTER, INFO], node: 5, wait_s: 10, compare: skip, expect: {contains: "cluster_stats_messages_module_received:1"}}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 10, compare: skip, expect: {contains: "cluster_stats_messages_module_sent:5"}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [test.pingall], node: 0, expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 10, compare: skip, expect: {contains: "cluster_stats_messages_module_received:21"}}
+    - {command: [CLUSTER, INFO], node: 5, wait_s: 10, compare: skip, expect: {contains: "cluster_stats_messages_module_received:21"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [fanout.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fanout}

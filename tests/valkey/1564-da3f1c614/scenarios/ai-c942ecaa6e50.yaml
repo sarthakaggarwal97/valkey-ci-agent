@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0579103aefcf..da3f1c6144cf.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c942ecaa6e50
+seed: 102
+experiment:
+  id: proposed.info-paused-reason-all-expired
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7100

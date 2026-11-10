@@ -1,0 +1,44 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c75e8661762d106ead32312fa760b5fbb8446a7a",
+  "parent": "2eac2ccd2f89e9e15f3e794e1d05e7ffb043f599",
+  "pr": 1387,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "move clientCron onto a separate timer (#1387)",
+  "date": "2025-02-04",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 5,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 32,
+    "executed": 30,
+    "percent": 93,
+    "uncovered": [
+      "src/server.c:2904",
+      "src/server.c:2910"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 10.9023,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-d8a419674f51",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hz-timer' returned ERROR: expectations both builds violate alike, so they are not about the change: 8 (CONFIG SET maxidletime 1), 14 (PING on connection idle)"
+    },
+    {
+      "scenario": "ai-ad4eb8d5032a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'hz-timer' returned ERROR: expectations both builds violate alike, so they are not about the change: 8 (CONFIG SET maxidletime 1), 14 (PING on connection idle)"
+    }
+  ]
+}

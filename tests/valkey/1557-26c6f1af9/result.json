@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "26c6f1af9b29d525831c7fa9840ab3e47ed7b700",
+  "parent": "78bcc0a2cfb33ec940bfb14cb12ea10efa3af93a",
+  "pr": 1557,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Loop optimization: move maxlen check outside to reduce unnecessary checks (#1557)",
+  "date": "2025-02-01",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2597,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure loop micro-optimization in hashtableLongestBucketChain() in src/hashtable.c, whose only caller is the unit test src/unit/test_hashtable.c; it is unreachable from any server command, replication, or persistence path. The rewrite is semantics-preserving (chainlen is monotonically increasing within the loop, so hoisting the maxlen comparison out of the loop computes the same maximum), so no behaviour differs between the builds and no scenario can exercise or distinguish it. Valkey's existing unit test already covers the function."
+}

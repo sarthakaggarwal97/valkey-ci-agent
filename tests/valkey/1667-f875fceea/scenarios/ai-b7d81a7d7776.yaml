@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c75e8661762d..f875fceea781.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b7d81a7d7776
+seed: 701667
+experiment:
+  id: proposed.pause-cron-skips-clients-cron
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

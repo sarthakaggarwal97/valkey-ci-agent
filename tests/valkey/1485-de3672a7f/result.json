@@ -1,0 +1,45 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "de3672a7ffba8773871bebda0553f370906a7ae3",
+  "parent": "7fa784a27562940d2995fc6e3d6938940d81e4b6",
+  "pr": 1485,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Offload replication writes to IO threads (#1485)",
+  "date": "2025-02-09",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 87,
+    "executed": 84,
+    "percent": 96,
+    "uncovered": [
+      "src/networking.c:1980",
+      "src/networking.c:1982",
+      "src/networking.c:1996"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.9708,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-f5b2eb668567",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    },
+    {
+      "scenario": "ai-599b0c4831dc",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: IndexError: list index out of range"
+    }
+  ]
+}

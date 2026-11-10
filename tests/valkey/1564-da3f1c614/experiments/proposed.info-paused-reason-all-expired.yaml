@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.info-paused-reason-all-expired
+deployment:
+  modes: [standalone]
+metadata:
+  description: INFO CLIENTS paused_reason under CLIENT PAUSE ALL inside MULTI/EXEC,
+    and right after a WRITE pause deadline passes but before cron clears the stale
+    paused_actions
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: pauseinfo
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hz: 1, enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "paused_reason:none"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, 300, ALL]}
+    - {command: [INFO, clients]}
+    - {command: [EXEC], expect_difference: true, expect: {contains: "paused_reason:client_pause"}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "paused_reason:none"}}
+    - {command: [CLIENT, PAUSE, 100, WRITE], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.15], expect: {equals: OK}}
+    - {command: [INFO, clients], compare: skip}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, 100, WRITE], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.15], expect: {equals: OK}}
+    - {command: [INFO, clients], compare: skip}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, 100, WRITE], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.15], expect: {equals: OK}}
+    - {command: [INFO, clients], compare: skip}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, 100, WRITE], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.15], expect: {equals: OK}}
+    - {command: [INFO, clients], compare: skip}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [INFO, clients], expect_difference: true, expect: {contains: "paused_reason:none"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [pauseinfo.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: pauseinfo}

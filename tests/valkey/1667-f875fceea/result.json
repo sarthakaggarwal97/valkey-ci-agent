@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f875fceea7812af9c554cb1f742d4987017b9168",
+  "parent": "c75e8661762d106ead32312fa760b5fbb8446a7a",
+  "pr": 1667,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix client querybuf resize test by skipping the clientsCron (#1667)",
+  "date": "2025-02-05",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.1487,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-b7d81a7d7776",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'pausecron' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (DEBUG PAUSE-CRON 1), 9 (PING on connection idle1), 10 (DEBUG PAUSE-CRON 0)"
+    },
+    {
+      "scenario": "ai-a4b2881581ef",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'pausecron' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (DEBUG PAUSE-CRON 1), 9 (PING on connection idle1), 10 (DEBUG PAUSE-CRON 0)"
+    }
+  ]
+}

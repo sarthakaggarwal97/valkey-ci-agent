@@ -1,0 +1,50 @@
+extends: [valkey.base]
+id: proposed.info-paused-shutdown
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: SIGTERM the primary while its only replica is stalled, so shutdown
+    waits for replica acks and pauses writes with PAUSE_DURING_SHUTDOWN; INFO CLIENTS
+    must report paused_reason shutdown_in_progress during the wait
+components:
+- use: valkey.fault.process-signal
+  id: stall
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: SIGSTOP
+    pause_s: 15
+- use: valkey.fault.process-signal
+  id: term
+  config:
+    when_event: stall.injected
+    delay_s: 1
+    instance: primary
+    signal: SIGTERM
+    restart_mode: immediate
+    ready_timeout_s: 60
+- use: valkey.observer.info
+  id: pause-info
+  config:
+    instances: primary
+    sections: [clients]
+    interval_s: 0.05
+    expectations:
+    - {evidence_id: proposed.pause.shutdown-reason, field: paused_reason, equals: shutdown_in_progress,
+      when: during, required: true}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, stall, term]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 30}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed, term.injected]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: term}
+- {evidence_id: proposed.pause.shutdown-reason, source: pause-info}

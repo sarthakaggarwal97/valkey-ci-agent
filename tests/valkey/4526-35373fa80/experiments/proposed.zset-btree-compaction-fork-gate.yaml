@@ -1,0 +1,65 @@
+extends: [valkey.liveness]
+id: proposed.zset-btree-compaction-fork-gate
+deployment:
+  modes: [standalone]
+metadata:
+  description: Scattered ZREMs while a slowed BGSAVE child is alive must leave leaves
+    un-packed (fork gate, same MEMORY USAGE as the parent); the first deletes after
+    the child exits re-pack them, visible against the parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fork-gate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 0, save: ""}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - command: [EVAL, "for i=1,20 do server.call('SET','f'..i,'x') end return 1",
+        0]
+      expect: {equals: 1}
+    - command: [EVAL, "for i=1,12000 do server.call('ZADD','z',i,string.format('m%06d',i))\
+          \ end return server.call('ZCARD','z')", 0]
+      expect: {equals: 12000}
+    - command: [CONFIG, SET, rdb-key-save-delay, 200000]
+      expect: {equals: OK}
+    - command: [BGSAVE]
+      expect: {contains: "started"}
+    - command: [EVAL, "local n=0 for i=1,12000 do if i%3==1 then n=n+server.call('ZREM','z',string.format('m%06d',i))\
+          \ end end return n", 0]
+      expect: {equals: 4000}
+    - command: [EVAL, "local n=0 for i=1,12000 do if i%3==2 then n=n+server.call('ZREM','z',string.format('m%06d',i))\
+          \ end end return n", 0]
+      expect: {equals: 4000}
+    - command: [MEMORY, USAGE, z, SAMPLES, 0]
+    - command: [INFO, persistence]
+      compare: skip
+      wait_s: 60
+      expect: {contains: "rdb_bgsave_in_progress:0"}
+    - command: [CONFIG, SET, rdb-key-save-delay, 0]
+      expect: {equals: OK}
+    - command: [EVAL, "local n=0 for i=1,12000 do if i%6==3 then n=n+server.call('ZREM','z',string.format('m%06d',i))\
+          \ end end return n", 0]
+      expect: {equals: 2000}
+    - command: [ZCARD, z]
+      expect: {equals: 2000}
+    - command: [ZRANK, z, m006000]
+      expect: {equals: 999}
+    - command: [ZRANGE, z, 0, 2]
+      expect: {equals: [m000006, m000012, m000018]}
+    - command: [MEMORY, USAGE, z, SAMPLES, 0]
+      expect_difference: true
+      expect: {min: 1024}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [fork-gate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fork-gate}

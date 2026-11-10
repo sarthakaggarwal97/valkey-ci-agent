@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d72a97edf6eb..4b8f3ed9acf3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0d5bdbfa221a
+seed: 3
+experiment:
+  id: proposed.aof-command-check
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    aof_incr: "*1\r\n$7\r\nCLUSTER\r\n"
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

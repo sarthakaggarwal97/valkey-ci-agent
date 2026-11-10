@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a3c9f6766547ea8664b32a7b2e7a6f27dc8fbbf8",
+  "parent": "110dd55632af55f11bf840a9b68ba946dc6e6bbc",
+  "pr": 1676,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix kvstore overhead_hashtable_lut (#1676)",
+  "date": "2025-02-06",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.899,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix only changes kvstoreCreate for kvstores created without KVSTORE_ALLOCATE_HASHTABLES_ON_DEMAND (the eager hashtable-creation loop previously ran before overhead_hashtable_lut was zeroed, discarding its accounting). Every kvstore the server creates (per-db keys/expires in server.c, pubsub channels, emptyDbAsync in lazyfree.c, SWAPDB temp DBs in db.c) always passes KVSTORE_ALLOCATE_HASHTABLES_ON_DEMAND, so the eager loop never runs and the reorder is a no-op for valkey-server: no command reply, MEMORY STATS value, or crash behavior differs between the builds. The buggy path is reachable o"
+}

@@ -1,0 +1,31 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "da3f1c6144cf3e748545adc13fe607bcdf96609f",
+  "parent": "0579103aefcfc4797ef9ead4cdbea67bfc57a58a",
+  "pr": 1564,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add paused_reason to INFO CLIENTS (#1564)",
+  "date": "2025-02-06",
+  "unstable": "6187f98a6b999f46f2c22962022f7369c9655687",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 6,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 21,
+    "executed": 19,
+    "percent": 90,
+    "uncovered": [
+      "src/networking.c:4654",
+      "src/networking.c:4655"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 18.3212,
+  "findings": [],
+  "recorded": []
+}

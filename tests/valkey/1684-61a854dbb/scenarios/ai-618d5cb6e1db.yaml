@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e8ae5b185247..61a854dbbd14.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-618d5cb6e1db
+seed: 1684
+experiment:
+  id: proposed.trackinginfo-fresh-connection
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000
