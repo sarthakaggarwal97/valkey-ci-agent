@@ -1,0 +1,48 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "247a8f23c54242dbc029107cf3c0c1f449a6dd79",
+  "parent": "dc05a327f962d94319d4ae4b93ad10c7661700f1",
+  "pr": 1171,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix FUNCTION KILL error message being displayed as SCRIPT KILL (#1171)",
+  "date": "2024-10-15",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 4,
+  "recall": false,
+  "coverage": {
+    "lines": 6,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/script_lua.c:1612",
+      "src/script_lua.c:1613",
+      "src/script_lua.c:1614",
+      "src/script_lua.c:1616",
+      "src/script_lua.c:1618",
+      "src/script_lua.c:1627"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 2.4867,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-246fa48de04a",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'kill' returned ERROR: command 1 (FCALL loop 0 on connection fn) got no reply: TimeoutError: Timeout reading from /tmp/vfc-1n8y2cjm/s.sock"
+    },
+    {
+      "scenario": "ai-6c1b88f7853d",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'kill' returned ERROR: command 1 (FCALL loop 0 on connection fn) got no reply: TimeoutError: Timeout reading from /tmp/vfc-ghifoaa1/s.sock"
+    }
+  ]
+}

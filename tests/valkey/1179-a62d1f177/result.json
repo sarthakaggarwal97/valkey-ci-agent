@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a62d1f177b7888ec88035a0a1ce600fbc2280ce7",
+  "parent": "701ab724291a26da358ca828768388f278508ac2",
+  "pr": 1179,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix false sharing issue between main thread and io-threads when access `used_memory_thread`. (#1179)",
+  "date": "2024-10-17",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2815,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only pads and cache-line-aligns the static used_memory_thread array in zmalloc.c to avoid false sharing between the main thread's counter and the io-threads' counters. It is a performance optimization with no behaviour change: the per-thread memory accounting values, zmalloc_used_memory's sum, and all externally observable output (INFO memory, maxmemory enforcement, command replies, replication, persistence) are computed exactly as before; only the array's memory layout differs. Every fuzzer workload already exercises zmalloc identically on both builds, so no scenario can distinguis"
+}

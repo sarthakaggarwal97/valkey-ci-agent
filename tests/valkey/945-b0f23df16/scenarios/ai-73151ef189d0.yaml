@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 247a8f23c542..b0f23df16522.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-73151ef189d0
+seed: 101
+experiment:
+  id: proposed.dual-channel-user-auth-handshake
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

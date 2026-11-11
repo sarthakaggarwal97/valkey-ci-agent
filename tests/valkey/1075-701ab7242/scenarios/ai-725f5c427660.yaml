@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 136d0fd212dc..701ab724291a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-725f5c427660
+seed: 1075002
+experiment:
+  id: proposed.cli-cluster-create-prompt-declined
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

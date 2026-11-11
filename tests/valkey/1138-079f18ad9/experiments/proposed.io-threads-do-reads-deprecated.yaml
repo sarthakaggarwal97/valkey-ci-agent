@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.io-threads-do-reads-deprecated
+deployment:
+  modes: [standalone]
+metadata:
+  description: io-threads-do-reads is deprecated - dropped from CONFIG GET/SET, silently
+    ignored in the config file, survives CONFIG REWRITE plus restart, and reads are
+    offloaded to IO threads regardless of it
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: deprecated-config
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      io-threads: 4
+      events-per-io-thread: 0
+      io-threads-do-reads: "no"
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, GET, io-threads-do-reads], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CONFIG, SET, io-threads-do-reads, "yes"], expect_difference: true,
+      expect: {error: "Unknown option"}}
+    - {command: [CONFIG, SET, io-threads-do-reads, not-a-bool], expect_difference: true,
+      expect: {error: "Unknown option"}}
+    - {command: [CONFIG, GET, io-threads], expect: {error: false}}
+    - {command: [SET, empty, ""], expect: {equals: OK}}
+    - {command: [GET, empty], expect: {equals: ""}}
+    - {command: [SETRANGE, big, 65535, x], expect: {equals: 65536}}
+    - {command: [GET, big], expect: {error: false}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, k1, v1], expect: {equals: QUEUED}}
+    - {command: [GET, k1], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, v1]}}
+    - {connection: c2, command: [SET, side, "1"], expect: {equals: OK}}
+    - {connection: c2, command: [INCR, side], expect: {equals: 2}}
+    - {connection: inline, raw: "PING\r\n", expect: {equals: PONG}}
+    - {connection: inline, raw: "SET ikey ival\r\n", expect: {equals: OK}}
+    - {command: [GET, ikey], expect: {equals: ival}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, GET, io-threads-do-reads], expect_difference: true, expect: {
+        error: false}}
+    - {command: [CONFIG, SET, io-threads-do-reads, "no"], expect_difference: true,
+      expect: {error: "Unknown option"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [deprecated-config.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: deprecated-config}

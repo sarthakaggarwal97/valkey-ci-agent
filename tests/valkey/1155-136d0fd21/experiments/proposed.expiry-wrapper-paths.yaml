@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.expiry-wrapper-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: Drive the refactored expiry wrappers (getExpire, keyIsExpired, deleteExpiredKeyAndPropagate)
+    via TTL/EXPIRE/RENAME/COPY, KEYS and WATCH on a logically expired key, active-cycle
+    physical deletion, and dbAddRDBLoad across a SAVE and restart, compared with the
+    parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: expiry
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [SET, "{a}k1", v1], expect: {equals: OK}}
+    - {command: [SETEX, "{a}vol", 100, vv], expect: {equals: OK}}
+    - {command: [TTL, "{a}vol"], compare: skip, expect: {min: 1}}
+    - {command: [PTTL, "{a}vol"], compare: skip, expect: {min: 1}}
+    - {command: [EXPIRE, "{a}vol", 200, XX], expect: {equals: 1}}
+    - {command: [PERSIST, "{a}vol"], expect: {equals: 1}}
+    - {command: [SETEX, "{a}r1", 100, rv], expect: {equals: OK}}
+    - {command: [RENAME, "{a}r1", "{a}r2"], expect: {equals: OK}}
+    - {command: [COPY, "{a}k1", "{a}k1copy"], expect: {equals: 1}}
+    - {command: [SET, "{a}gone", tmp, PX, 80], expect: {equals: OK}}
+    - {command: [KEYS, "{a}gone"], wait_s: 10, expect: {equals: []}}
+    - {command: [WATCH, "{a}gone"], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, "{a}gone"], expect: {equals: QUEUED}}
+    - {command: [EXEC]}
+    - {command: [DBSIZE], wait_s: 20, expect: {equals: 4}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, "{a}k1"], expect: {equals: v1}}
+    - {command: [TTL, "{a}r2"], compare: skip, expect: {min: 1}}
+    - {command: [DBSIZE], expect: {equals: 4}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [expiry.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: expiry}

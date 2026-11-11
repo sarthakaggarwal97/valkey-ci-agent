@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1892f8a7315f272e36afdabb8dc0e806ed104633",
+  "parent": "cba8eaf4c9d61bd374847d71964d26478e4c755b",
+  "pr": 1084,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add server log when module load fails with busy name (#1084)",
+  "date": "2024-10-09",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3836,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewords a server log message in moduleLoad(): when OnLoad fails with ctx.module == NULL (busy module name), the log now says 'Module name is busy' instead of the generic text. The error reply to MODULE LOAD, the cleanup path (moduleFreeContext, dlclose, C_ERR), and all client-visible behaviour are unchanged on both builds, so no reply comparison, ledger, deployment-state or liveness oracle can distinguish the builds. The path is also unreachable from a compared sequence since MODULE LOAD/LOADEX/UNLOAD are refused commands. A log-text-only change needs no scenario."
+}

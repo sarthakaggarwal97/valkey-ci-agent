@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 06cfe2c254b9..136d0fd212dc.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d696f7741694
+seed: 1004
+experiment:
+  id: proposed.randomkey-multi-expired-delete
+  inputs:
+    resp: 2
+    lazy_expire: 'yes'
+deployment:
+  mode: standalone
+  base_port: 7300

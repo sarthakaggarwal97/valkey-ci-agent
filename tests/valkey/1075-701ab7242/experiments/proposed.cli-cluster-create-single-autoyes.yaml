@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.cli-cluster-create-single-autoyes
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli --cluster-yes --cluster create with one primary (below the
+    old 3-primary floor) now succeeds on the change and still errors on the parent
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: inputs.parent}
+    server: true
+    cluster: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, FLUSHSLOTS], expect: {stdout: {
+          equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [--cluster-yes, --cluster, create, "127.0.0.1:$port"],
+      expect_difference: true, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, INFO], expect_difference: true,
+      expect: {stdout: {contains: "cluster_state:ok"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

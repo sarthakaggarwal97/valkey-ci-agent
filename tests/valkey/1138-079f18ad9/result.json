@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "079f18ad9738694f46498a9ec0b24de14777943e",
+  "parent": "9b8a06137c20c6fa112e0ce5830bec51edf39999",
+  "pr": 1138,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add io-threads-do-reads config to deprecated config table to have no effect. (#1138)",
+  "date": "2024-10-10",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 2,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.6816,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

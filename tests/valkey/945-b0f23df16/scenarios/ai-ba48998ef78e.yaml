@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 247a8f23c542..b0f23df16522.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ba48998ef78e
+seed: 9452
+experiment:
+  id: valkey.replication-full-resync
+  inputs:
+    pause_s: 3
+    mutation_rate: 300
+    value_size: 4096
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7100
+  server_config:
+    dual-channel-replication-enabled: 'yes'
+    repl-diskless-sync: 'yes'
+    repl-diskless-sync-delay: '5'

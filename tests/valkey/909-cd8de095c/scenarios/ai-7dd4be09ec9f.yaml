@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1892f8a7315f..cd8de095c4dc.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7dd4be09ec9f
+seed: 101
+experiment:
+  id: proposed.repl-diskless-load-flush-before-load
+  inputs:
+    dual_channel: 'no'
+deployment:
+  mode: standalone
+  base_port: 7000

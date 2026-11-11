@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e617bf2ddc2106c2a94c3130f3bfb70500e190b8",
+  "parent": "b5eb7930797023f46331d68b964b3871625da79d",
+  "pr": 1132,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Removing incorrect comment about a warning (#1132)",
+  "date": "2024-10-07",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2091,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only restructures dead code in clusterNodeIterNext (src/cluster_legacy.c): an unreachable serverPanic is moved from a default case to after the switch statement and its comment removed. Both before and after, every reachable iterator type returns before the panic, so no command reply, replication, cluster, or persistence behaviour changes. This is a comment/refactor change with no testable behaviour difference."
+}

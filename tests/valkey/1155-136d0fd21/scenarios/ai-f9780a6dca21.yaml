@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 06cfe2c254b9..136d0fd212dc.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f9780a6dca21
+seed: 1001
+experiment:
+  id: proposed.randomkey-multi-wrong-slot
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

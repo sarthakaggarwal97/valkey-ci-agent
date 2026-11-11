@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 06cfe2c254b9..136d0fd212dc.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7d6201542558
+seed: 13
+experiment:
+  id: proposed.expiry-wrapper-paths
+  inputs:
+    resp: 3
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

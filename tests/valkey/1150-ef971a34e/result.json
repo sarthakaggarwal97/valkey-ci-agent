@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ef971a34eb10ec20c006819997b9186a0ed0e9e0",
+  "parent": "014219879d4c4f355d335a20d578672c99e0c56e",
+  "pr": 1150,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Correct the note details for deprecated config 'io-threads-do-reads' (#1150)",
+  "date": "2024-10-11",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2328,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only a comment in valkey.conf, rewording the deprecation note for 'io-threads-do-reads'. No source code, config parsing, or runtime behaviour is modified, so there is nothing a fuzzer scenario could exercise or regress."
+}

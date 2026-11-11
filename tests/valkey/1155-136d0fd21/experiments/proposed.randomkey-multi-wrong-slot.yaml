@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.randomkey-multi-wrong-slot
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: RANDOMKEY inside MULTI/EXEC after DEL of a different-slot key must
+    read the picked key's own per-slot dict, not the cached client slot
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: randomkey
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    server_config: {enable-debug-assert: "yes"}
+    timeout_s: 15
+    commands:
+    - {command: [SETEX, FOO, 10000, BAR], expect: {equals: OK}}
+    - {command: [SETEX, FIZZ, 10000, BUZZ], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [DEL, FOO], expect: {equals: QUEUED}}
+    - {command: [RANDOMKEY], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [1, FIZZ]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: randomkey}

@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "06cfe2c254b987daab5a555b55531c4a39a0edcf",
+  "parent": "b927fb09d455be4967e275cd84d8233a2e09a2c4",
+  "pr": 1168,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Improved hashing algorithm in luaS_newlstr (#1168)",
+  "date": "2024-10-15",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.5411,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-81c6b5f95758",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'luahash' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (EVAL return {KEYS[1], #ARGV[1], ARGV[1]} 1 somekey <binary>)"
+    },
+    {
+      "scenario": "ai-e05f21367961",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'luahash' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (EVAL return {KEYS[1], #ARGV[1], ARGV[1]} 1 somekey <binary>)"
+    }
+  ],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

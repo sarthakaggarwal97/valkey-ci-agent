@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.randomkey-multi-expired-delete
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: RANDOMKEY inside MULTI/EXEC lazily expires a logically-expired different-slot
+    key via that key's own per-slot dict
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    lazy_expire: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: randomkey
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    server_config: {enable-debug-assert: "yes", lazyfree-lazy-expire: {$ref: inputs.lazy_expire}}
+    timeout_s: 15
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [SET, FOO, BAR], expect: {equals: OK}}
+    - {command: [SET, FIZZ, BUZZ, PX, 100], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.3], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [DEL, FOO], expect: {equals: QUEUED}}
+    - {command: [RANDOMKEY], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: true}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: randomkey}

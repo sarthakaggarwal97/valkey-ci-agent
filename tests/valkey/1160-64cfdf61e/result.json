@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "64cfdf61eb8352e93f128db2065dc6528895e7de",
+  "parent": "a62d1f177b7888ec88035a0a1ce600fbc2280ce7",
+  "pr": 1160,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Introduce connection context for Unix socket (#1160)",
+  "date": "2024-10-18",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.6296,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure refactor with no behaviour change: it moves the existing unixsocketperm/unixsocketgroup configs into a new serverUnixContextConfig struct and merges connListener's priv1/priv2 into one priv pointer, updating the two users (unix.c listen, rdma.c). Config names, types, flags, defaults and the value passed to anetUnixServer are identical, and the priv pointer is set under exactly the same condition (unixsocket configured) that makes connUnixListen reachable, so no reply, startup, replication or persistence behaviour differs between the builds. There is nothing a compared sequence could mark "
+}

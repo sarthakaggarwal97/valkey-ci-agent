@@ -1,0 +1,85 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "136d0fd212dc5fbc1f9ef48123d1fab723ec117b",
+  "parent": "06cfe2c254b987daab5a555b55531c4a39a0edcf",
+  "pr": 1155,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add 'WithDictIndex' expiry API and update RANDOMKEY command (#1155)",
+  "date": "2024-10-16",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 4,
+  "hunted": 7,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 39,
+    "executed": 39,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 9.9558,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:245 '(int)keyHashSlot(key, (int)sdslen(key)) == server.current_client->slot' is not true",
+      "scenario": "ai-f9780a6dca21",
+      "seed": 1001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1155",
+      "fingerprint": "57098609d05b16b40205",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:245 '(int)keyHashSlot(key, (int)sdslen(key)) == server.current_client->slot' is not true",
+      "scenario": "ai-6c68c6a912fa",
+      "seed": 1002,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1155",
+      "fingerprint": "57098609d05b16b40205",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:245 '(int)keyHashSlot(key, (int)sdslen(key)) == server.current_client->slot' is not true",
+      "scenario": "ai-47bbe4a99870",
+      "seed": 1003,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1155",
+      "fingerprint": "57098609d05b16b40205",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:245 '(int)keyHashSlot(key, (int)sdslen(key)) == server.current_client->slot' is not true",
+      "scenario": "ai-d696f7741694",
+      "seed": 1004,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1155",
+      "fingerprint": "57098609d05b16b40205",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

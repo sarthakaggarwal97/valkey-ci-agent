@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9b8a06137c20c6fa112e0ce5830bec51edf39999",
+  "parent": "cd8de095c4dc6687dabaa194a0fff4473c52299f",
+  "pr": 1140,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix empty response for ACL CAT category subcommand for module defined categories (#1140)",
+  "date": "2024-10-09",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 16.5749,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

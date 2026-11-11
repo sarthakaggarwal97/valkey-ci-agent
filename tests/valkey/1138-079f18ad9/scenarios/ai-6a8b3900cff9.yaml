@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9b8a06137c20..079f18ad9738.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6a8b3900cff9
+seed: 11382
+experiment:
+  id: proposed.io-threads-do-reads-deprecated
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

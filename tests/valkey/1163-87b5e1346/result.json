@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "87b5e13465752d5e42b97a910d23426565ded4d9",
+  "parent": "9c20c84251571fcf2212543866f1d5ac094ba978",
+  "pr": 1163,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use listLast to replace listIndex -1 (#1163)",
+  "date": "2024-10-15",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2934,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change swaps listIndex(list, -1) for listLast(list) in getLastIncrAofName. listIndex(-1) returns list->tail (walking zero steps from the tail) and listLast is the macro ((l)->tail); both return NULL on an empty list, and the caller guarantees non-empty anyway. This is a semantics-preserving micro-refactor with no observable behavior change in AOF handling or anywhere else, so no scenario can distinguish the builds."
+}

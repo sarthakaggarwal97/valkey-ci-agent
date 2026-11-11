@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "014219879d4c4f355d335a20d578672c99e0c56e",
+  "parent": "079f18ad9738694f46498a9ec0b24de14777943e",
+  "pr": 1142,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix typo last_procssed -> last_processed (#1142)",
+  "date": "2024-10-11",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2061,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames a local variable (last_procssed -> last_processed) inside beforeSleep in src/server.c. The logic, control flow, and all observable behaviour are identical; it is a pure refactor/typo fix with no testable behaviour change, so no scenario is needed."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e30ae762a8ec7f531005fab90edd275dfa98f72f",
+  "parent": "416defdc0ecd7134ceaeeb07d0a729540c4934c3",
+  "pr": 1169,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename z{malloc,calloc,realloc,free} into valkey_{malloc,calloc,realloc,free} (#1169)",
+  "date": "2024-10-15",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2671,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the z{malloc,calloc,realloc,free} linker symbols to valkey_{malloc,calloc,realloc,free} via #define in src/zmalloc.h and updates matching prototypes in the hdr_histogram shim, to avoid symbol collisions with zlib under static linking. All call sites are unchanged and the allocator's behavior is identical; this is a build/link-level refactor with no runtime behavior change, and any error in it would surface as a compile or link failure rather than anything a runtime scenario could detect."
+}

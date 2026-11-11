@@ -1,0 +1,88 @@
+extends: [valkey.liveness]
+id: proposed.hgetall-write-prepared
+deployment:
+  modes: [standalone]
+metadata:
+  description: HGETALL/HKEYS/HVALS and HRANDFIELD replies unchanged after the write-prepared
+    reply refactor, across encodings, every HRANDFIELD case, RESP versions and the
+    reply-off early-return path
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hgetall
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 5}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [HSET, small, f1, v1, "", "", "42", "1234", WITHVALUES, fields], expect: {
+        equals: 4}}
+    - {command: [HSET, one, onlyfield, onlyvalue], expect: {equals: 1}}
+    - {command: [HSET, oneht, f0, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
+      expect: {equals: 1}}
+    - {command: [HSET, big, f1, v1, f2, v2, f3, v3, f4, v4, f5, v5, f6, v6, f7, v7,
+        f8, v8, f9, v9, f10, v10], expect: {equals: 10}}
+    - {command: [HSET, lp5, a, "1", b, "2", c, "3", d, "4", e, "5"], expect: {equals: 5}}
+    - {command: [SET, str, notahash], expect: {equals: OK}}
+    - {command: [EVAL, "return redis.call('HSET', KEYS[1], 'huge', string.rep('x',\
+          \ 100000))", "1", hugeh], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, small], compare: skip, expect: {equals: listpack}}
+    - {command: [OBJECT, ENCODING, big], compare: skip, expect: {equals: hashtable}}
+    - {command: [OBJECT, ENCODING, oneht], compare: skip, expect: {equals: hashtable}}
+    - {command: [HGETALL, small], expect: {exists: true}}
+    - {command: [HKEYS, small], expect: {equals: [f1, "", "42", WITHVALUES]}}
+    - {command: [HVALS, small], expect: {equals: [v1, "", "1234", fields]}}
+    - {command: [HGETALL, big], compare: unordered-pairs, expect: {exists: true}}
+    - {command: [HKEYS, big], compare: unordered, expect: {contains: f10}}
+    - {command: [HVALS, big], compare: unordered, expect: {contains: v10}}
+    - {command: [HGETALL, missing], expect: {exists: true}}
+    - {command: [HKEYS, missing], expect: {equals: []}}
+    - {command: [HGETALL, str], expect: {error: WRONGTYPE}}
+    - {command: [HGETALL, hugeh], expect: {exists: true}}
+    - {command: [HSTRLEN, hugeh, huge], expect: {equals: 100000}}
+    - {command: [HRANDFIELD, small, "0"], expect: {equals: []}}
+    - {command: [HRANDFIELD, one, "1"], expect: {equals: [onlyfield]}}
+    - {command: [HRANDFIELD, one, "-3"], expect: {equals: [onlyfield, onlyfield, onlyfield]}}
+    - {command: [HRANDFIELD, one, "-3", WITHVALUES], expect: {exists: true}}
+    - {command: [HRANDFIELD, oneht, "-3"], expect: {equals: [f0, f0, f0]}}
+    - {command: [HRANDFIELD, oneht, "-2", WITHVALUES], expect: {exists: true}}
+    - {command: [HRANDFIELD, small, "-10", WITHVALUES], compare: skip, expect: {exists: true}}
+    - {command: [HRANDFIELD, small, "10"], expect: {equals: [f1, "", "42", WITHVALUES]}}
+    - {command: [HRANDFIELD, small, "10", WITHVALUES], expect: {exists: true}}
+    - {command: [HRANDFIELD, lp5, "10"], expect: {equals: [a, b, c, d, e]}}
+    - {command: [HRANDFIELD, lp5, "9223372036854775807"], expect: {equals: [a, b,
+          c, d, e]}}
+    - {command: [HRANDFIELD, lp5, "10", WITHVALUES], expect: {exists: true}}
+    - {command: [HRANDFIELD, lp5, "3"], compare: skip, expect: {exists: true}}
+    - {command: [HRANDFIELD, big, "100"], compare: unordered, expect: {contains: f7}}
+    - {command: [HRANDFIELD, big, "100", WITHVALUES], compare: skip, expect: {exists: true}}
+    - {command: [HRANDFIELD, big, "6"], compare: skip, expect: {exists: true}}
+    - {command: [HRANDFIELD, big, "6", WITHVALUES], compare: skip, expect: {exists: true}}
+    - {command: [HRANDFIELD, big, "2", WITHVALUES], compare: skip, expect: {exists: true}}
+    - {command: [HGETALL, big], compare: unordered-pairs, expect: {exists: true}}
+    - {command: [HRANDFIELD, big, "-9223372036854775808"], expect: {error: true}}
+    - {command: [HRANDFIELD, missing, "5"], expect: {equals: []}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HGETALL, small], expect: {equals: QUEUED}}
+    - {command: [HRANDFIELD, one, "-2"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: true}}
+    - {command: [EVAL, "return redis.call('HGETALL', KEYS[1])", "1", small], expect: {
+        exists: true}}
+    - {command: [EVAL, "return redis.call('HRANDFIELD', KEYS[1], -2)", "1", one],
+      expect: {equals: [onlyfield, onlyfield]}}
+    - {raw: "CLIENT REPLY OFF\r\nHGETALL big\r\nHKEYS big\r\nHRANDFIELD big 6\r\n\
+        CLIENT REPLY ON\r\n", connection: quiet, expect: {exists: true}}
+    - {command: [HGET, big, f1], connection: quiet, expect: {equals: v1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hgetall.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hgetall}

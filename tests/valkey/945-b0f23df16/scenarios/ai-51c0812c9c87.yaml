@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 247a8f23c542..b0f23df16522.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-51c0812c9c87
+seed: 9455
+experiment:
+  id: proposed.dual-channel-auth-fullsync
+  inputs:
+    diskless_delay: '5'
+deployment:
+  mode: standalone
+  base_port: 7400
