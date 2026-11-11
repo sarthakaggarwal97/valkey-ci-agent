@@ -1303,6 +1303,10 @@ def test_the_prompts_render():
     assert "compare_with: {$ref: artifacts.parent.binary}" in prompt
     assert "may hold is\n  {$ref: artifacts.parent.binary}, the build of the change's parent commit" in prompt
     assert "expect_difference: true, expect: {equals: [a, b, c]}" in prompt
+    # Non-deterministic set-order replies and transient replication state must be told to the model,
+    # or it compares them across builds and files a false positive (walk fuzzer#126 SUNION, #125 ROLE).
+    assert "flat reply (SMEMBERS, SUNION, SINTER, SDIFF, HKEYS, KEYS)" in prompt
+    assert "INFO, ROLE (a replica still in handshake" in prompt
     assert "valkey-io/valkey#4604" in prompt and "RESP 2 and 3" in prompt
     assert "`<node.1.id>`, `<node.1.host>`, `<node.1.port>`" in prompt and "`wait_s: 30`" in prompt
     assert '`raw: "SET k v\\0 EX 100\\r\\n"`' in prompt and "`read: true`" in prompt

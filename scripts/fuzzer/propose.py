@@ -845,9 +845,11 @@ For a compared sequence:
 - An unmarked command whose replies differ is an unexplained difference,
   recorded for triage, not a failure: mark it or leave it out.
 - Replies that are not deterministic need `compare`: `unordered` sorts a
-  flat reply (SMEMBERS, HKEYS, KEYS), `unordered-pairs` sorts a RESP2
+  flat reply (SMEMBERS, SUNION, SINTER, SDIFF, HKEYS, KEYS),
+  `unordered-pairs` sorts a RESP2
   field/value reply by pairs (HGETALL), `skip` records a reply and never
-  compares it (TIME, TTL and PTTL, INFO, CLIENT ID, SCAN cursors, OBJECT
+  compares it (TIME, TTL and PTTL, INFO, ROLE (a replica still in handshake
+  reports a different state and offset -1), CLIENT ID, SCAN cursors, OBJECT
   ENCODING, MEMORY USAGE, DEBUG OBJECT), and so does anything computed from
   them: an EVAL that returns a delta of INFO memory's used_memory_scripts_eval
   varies by tens of bytes from run to run. Avoid SPOP, SRANDMEMBER, HRANDFIELD
