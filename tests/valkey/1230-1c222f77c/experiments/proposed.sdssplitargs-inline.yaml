@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.sdssplitargs-inline
+deployment:
+  modes: [standalone]
+metadata:
+  description: Inline-protocol quoting and escape parsing by sdssplitargs, compared
+    across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: inline
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {connection: a, raw: "ECHO \"\\x68\\x69\"\n", expect: {equals: hi}}
+    - {connection: a, raw: "ECHO \"\\n\\r\\t\\b\\a\\z\"\n", expect: {equals: !!binary "Cg0JCAd6"}}
+    - {connection: a, raw: "ECHO 'a\\'b'\n", expect: {equals: !!binary "YSdi"}}
+    - {connection: a, raw: "ECHO 'hello world'\n", expect: {equals: "hello world"}}
+    - {connection: b, raw: "ECHO \"foo\n", expect: {error: "unbalanced quotes"}}
+    - {connection: c, raw: "ECHO 'foo'bar\n", expect: {error: "unbalanced quotes"}}
+    - {connection: d, raw: "ECHO 'foo\n", expect: {error: "unbalanced quotes"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: inline}

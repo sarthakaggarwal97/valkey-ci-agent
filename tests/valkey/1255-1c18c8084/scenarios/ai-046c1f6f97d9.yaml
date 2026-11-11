@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 22bc49c4a628..1c18c8084451.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-046c1f6f97d9
+seed: 1255
+experiment:
+  id: proposed.function-restore-empty-append-cache-memory
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000
+  replicas_per_primary: 0

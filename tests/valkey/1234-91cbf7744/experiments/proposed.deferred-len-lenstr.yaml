@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.deferred-len-lenstr
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Deferred aggregate headers with length >= 32 skip the shared-header fast path
+    and take the new ll2string code in setDeferredAggregateLen. Compare deferred array
+    ('*'), set ('~'/'*') and map ('%'/'*') headers across the two builds, at the 31/32
+    shared-header boundary and at a 4-digit length, in RESP2 and RESP3.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [RPUSH, l32, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a, a,
+        a, a, a, a, a, a, a, a, a, a, a, a, a, a], expect: {equals: 32}}
+    - {command: [LPOS, l32, a, COUNT, 0], expect: {equals: [0, 1, 2, 3, 4, 5, 6, 7,
+          8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
+          27, 28, 29, 30, 31]}}
+    - {command: [RPUSH, l31, b, b, b, b, b, b, b, b, b, b, b, b, b, b, b, b, b, b,
+        b, b, b, b, b, b, b, b, b, b, b, b, b], expect: {equals: 31}}
+    - {command: [LPOS, l31, b, COUNT, 0], expect: {equals: [0, 1, 2, 3, 4, 5, 6, 7,
+          8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
+          27, 28, 29, 30]}}
+    - {command: [SADD, s40, m00, m01, m02, m03, m04, m05, m06, m07, m08, m09, m10,
+        m11, m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23, m24, m25,
+        m26, m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39], expect: {
+        equals: 40}}
+    - {command: [SMEMBERS, s40], compare: unordered}
+    - {command: [SINTER, s40, s40], compare: unordered}
+    - {command: [COMMAND, DOCS, get, set, del, expire, ttl, incr, decr, append, strlen,
+        lpush, rpush, lpop, rpop, llen, lrange, sadd, srem, scard, sismember, hset,
+        hget, hdel, hlen, zadd, zrem, zscore, zcard, exists, type, persist, rename,
+        copy, dump]}
+    - {command: [DEBUG, POPULATE, 1000], expect: {equals: OK}}
+    - {command: [KEYS, "key:*"], compare: unordered}
+    - {command: [DBSIZE], expect: {equals: 1003}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a102852d5ed5..3c32ee1bdadd.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3ff4a8a39295
+seed: 7201
+experiment:
+  id: proposed.cluster-drop-all-packets
+  inputs:
+    target: primary
+    close_link: 1
+    hold_s: 6
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    enable-debug-command: true
+    cluster-node-timeout: 15000

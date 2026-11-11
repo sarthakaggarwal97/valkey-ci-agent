@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0b5b2c7484e6d401ce7818571bde09b49f88180e",
+  "parent": "45d596e1216472e49b9f950a4b9a040b6e87add6",
+  "pr": 1282,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Log as primary role (M) instead of child process (C) during startup (#1282)",
+  "date": "2024-11-11",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.1741,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only moves the server.pid = getpid() assignment from initServer() to main() so that startup log lines show the primary role character 'M' instead of the child character 'C'. In a foreground (non-daemonized) server, which is the only way the fuzzer can run instances, server.pid receives the identical value as before, just earlier, so no command reply, replication, persistence or failover behaviour changes; the only readers of server.pid are the log role selector in serverLogRaw() and the module persistence subevent choice in startSaving(), and neither log text nor module events are o"
+}

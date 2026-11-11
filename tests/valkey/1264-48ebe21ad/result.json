@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "48ebe21ad1a30eee60c22fe8235118f4c6b1aed3",
+  "parent": "3c32ee1bdaddcd5fbe699aa6c8b320e86702d1b6",
+  "pr": 1264,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "fix: clean up refactoring leftovers (#1264)",
+  "date": "2024-11-05",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4543,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only deletes three redundant server.repl_state assignments inside the dual-channel handshake helpers in replication.c. The caller, dualChannelSetupMainConnForPsync, already sets the identical state value after each helper returns C_OK (unchanged context lines in the same diff hunks), the helpers only assigned state immediately before returning C_OK, and nothing reads repl_state between the helper's return and the caller's assignment. The replication state machine is therefore behaviourally identical on both builds: this is a pure refactoring cleanup with no observable behaviour chan"
+}

@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9300a7ebc856356f1d55df16ddfb845773b5daca",
+  "parent": "0b5b2c7484e6d401ce7818571bde09b49f88180e",
+  "pr": 1279,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Set fields to NULL after free in freeClient() (#1279)",
+  "date": "2024-11-11",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 7,
+    "executed": 7,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.4893,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-532da6faecb9",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'teardown' returned ERROR: expectations both builds violate alike, so they are not about the change: 16 (raw \"*1\\r\\n$-2\\r\\n\" on connection bad)"
+    },
+    {
+      "scenario": "ai-dad37d101b5f",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'teardown' returned ERROR: expectations both builds violate alike, so they are not about the change: 16 (raw \"*1\\r\\n$-2\\r\\n\" on connection bad)"
+    }
+  ]
+}

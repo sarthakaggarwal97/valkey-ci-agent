@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.function-restore-empty-replace-cache-memory
+deployment:
+  modes: [standalone]
+metadata:
+  description: FUNCTION RESTORE REPLACE of an empty payload must not reset the live
+    library ctx cache_memory
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: funcmem
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [DEBUG, set-skip-checksum-validation, 1], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=memlib\nserver.register_function('memcaches',\
+          \ function(keys, args)\n local s = server.call('MEMORY', 'STATS')\n for\
+          \ i=1,#s,2 do\n  if s[i] == 'functions.caches' then return s[i+1] end\n\
+          \ end\n return -1\nend)"], expect: {equals: memlib}}
+    - {command: [FCALL, memcaches, 0], expect: {min: 1}}
+    - {command: [FUNCTION, RESTORE, !!binary "CwAAAAAAAAAAAA==", "REPLACE"], expect: {
+        equals: OK}}
+    - {command: [FCALL, memcaches, 0], expect_difference: true, expect: {min: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: funcmem}

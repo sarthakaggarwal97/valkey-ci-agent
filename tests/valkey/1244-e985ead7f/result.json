@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e985ead7f9377e4d61d2e47c0b964f917d8054b4",
+  "parent": "1c222f77cecc100719bbc87c7a2ecd13402fe6db",
+  "pr": 1244,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "RDMA: Prevent IO for child process (#1244)",
+  "date": "2024-11-01",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3518,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to src/rdma.c, the RDMA transport, adding a guard that stops forked child processes (BGSAVE/AOF-rewrite children) from issuing RDMA IO on memory regions that are invalid in the child. This code is unreachable in the fuzzer's environment: RDMA is not compiled by default (BUILD_RDMA=no; it exists only as a loadable module needing librdmacm/libibverbs), loading it at runtime requires RDMA hardware or soft-RoCE which needs root, and every installed fuzzer component connects over TCP or unix sockets with no RDMA capability. No scenario built from the installed components can "
+}

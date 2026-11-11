@@ -1,0 +1,57 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ee9a305b5bc7b0cc4495d3ee8d212269e91675a0",
+  "parent": "5854995f01a79b1bf3a13cccec62ebe681caca68",
+  "pr": 1948,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix panic in primary when blocking shutdown after previous block with timeout (#1948)",
+  "date": "2025-04-15",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.4615,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 0",
+      "scenario": "ai-ad991b7a0f4b",
+      "seed": 1948,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #1948",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/122"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: Unknown btype in replyToBlockedClientTimedOut(). #blocked.c:279",
+      "scenario": "ai-ad991b7a0f4b",
+      "seed": 1948,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1948",
+      "fingerprint": "7c7eb143c715965547c3",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

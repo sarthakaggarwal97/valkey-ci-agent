@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 22bc49c4a628..1c18c8084451.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c4db7b6b20cc
+seed: 101
+experiment:
+  id: proposed.function-restore-append-accounting
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3c32ee1bdaddcd5fbe699aa6c8b320e86702d1b6",
+  "parent": "a102852d5ed5316063d680362f910e725070b9ee",
+  "pr": 1252,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add a filter option to drop all cluster packets (#1252)",
+  "date": "2024-11-04",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.6705,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-d5812612ef67",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "the run could not start: runner execution failed during deployment.provision: LocalDeploymentError: Instance valkey-0 failed to start within 60s (process output from /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/runs/ai-d5812612ef67-merge-7101/artifacts/data/logs/7101-dae728eb-valkey-0.stdio.log:  | *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** | Reading the configuration file, at line 19 | >>> 'value-size \"16384\"' | Bad directive or wrong number of arguments)"
+    }
+  ]
+}

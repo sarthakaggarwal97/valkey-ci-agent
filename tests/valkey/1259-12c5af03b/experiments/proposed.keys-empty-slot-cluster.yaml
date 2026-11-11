@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.keys-empty-slot-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: KEYS with single-slot patterns against unallocated, freed and empty
+    slot dicts in cluster mode, replies compared across the change and its parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: keys
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [KEYS, "*"], expect: {equals: []}}
+    - {command: [KEYS, foo], expect: {equals: []}}
+    - {command: ["KEYS", "{}"], expect: {equals: []}}
+    - {command: [KEYS, ""], expect: {equals: []}}
+    - {command: [KEYS, "*"], node: 1, expect: {equals: []}}
+    - {command: [KEYS, foo], node: 1, expect: {equals: []}}
+    - {command: [SET, "{a}k1", v], expect: {equals: OK}}
+    - {command: [MSET, "{a}k2", v, "{a}k3", v, "{a}k4", v, "{a}k5", v, "{a}k6", v,
+        "{a}k7", v, "{a}k8", v, "{a}k9", v, "{a}k10", v, "{a}k11", v, "{a}k12", v,
+        "{a}k13", v, "{a}k14", v, "{a}k15", v, "{a}k16", v, "{a}k17", v, "{a}k18",
+        v, "{a}k19", v, "{a}k20", v, "{a}k21", v, "{a}k22", v, "{a}k23", v, "{a}k24",
+        v, "{a}k25", v], expect: {equals: OK}}
+    - {command: [KEYS, "{a}*"], compare: unordered}
+    - {command: [KEYS, "{a}k1"], expect: {equals: ["{a}k1"]}}
+    - {command: [DEL, "{a}k1", "{a}k2", "{a}k3", "{a}k4", "{a}k5", "{a}k6", "{a}k7",
+        "{a}k8", "{a}k9", "{a}k10", "{a}k11", "{a}k12", "{a}k13", "{a}k14", "{a}k15",
+        "{a}k16", "{a}k17", "{a}k18", "{a}k19", "{a}k20", "{a}k21", "{a}k22", "{a}k23",
+        "{a}k24", "{a}k25"], expect: {equals: 25}}
+    - {command: [KEYS, "{a}k1"], expect: {equals: []}}
+    - {command: [KEYS, "{a}*"], expect: {equals: []}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, "0"], expect: {equals: OK}}
+    - {command: [SET, "{b}gone", v, PX, "1"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.05"], expect: {equals: OK}}
+    - {command: [KEYS, "{b}gone"], expect: {equals: []}}
+    - {command: [KEYS, "{b}*"], expect: {equals: []}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [KEYS, foo], expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [keys.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: keys}

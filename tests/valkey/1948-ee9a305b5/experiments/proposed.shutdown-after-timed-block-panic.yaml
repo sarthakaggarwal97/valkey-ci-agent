@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.shutdown-after-timed-block-panic
+deployment:
+  modes: [standalone]
+metadata:
+  description: Blocking SHUTDOWN on a connection that previously timed out on a blocking
+    command must not panic the primary
+components:
+- use: valkey.action.commands
+  id: shutdown-panic
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      shutdown-timeout: 300
+      repl-diskless-sync: "yes"
+      repl-diskless-sync-delay: "5"
+      save: ""
+    timeout_s: 15
+    commands:
+    - {raw: "REPLCONF listening-port 12345\r\n", connection: repl, compare: skip}
+    - {raw: "PSYNC ? -1\r\n", connection: repl, compare: skip}
+    - {command: [BLPOP, nolist, 0.1], connection: main, expect: {exists: false}}
+    - {command: [SET, k, v], connection: main, expect: {equals: OK}}
+    - {raw: "SHUTDOWN\r\n", connection: main, expect_difference: true, expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: shutdown-panic}

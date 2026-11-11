@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5854995f01a7..ee9a305b5bc7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ad991b7a0f4b
+seed: 1948
+experiment:
+  id: proposed.shutdown-after-timed-block-panic
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,95 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1c18c8084451153c468e3224f31da43ff6fbd615",
+  "parent": "22bc49c4a62894694f7977bb9047e1da27599c25",
+  "pr": 1255,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix incorrect cache_memory reset in functionsLibCtxClear (#1255)",
+  "date": "2024-11-07",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 3,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 2.8072,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-c4db7b6b20cc",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (FUNCTION RESTORE <binary> APPEND), 2 (FCALL f 0)"
+    },
+    {
+      "scenario": "ai-d9e82a364c16",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (FUNCTION RESTORE <binary> REPLACE), 4 (FCALL f 0)"
+    },
+    {
+      "scenario": "ai-046c1f6f97d9",
+      "build": "unstable",
+      "seed": 1255,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-046c1f6f97d9",
+      "build": "unstable",
+      "seed": 1256,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-046c1f6f97d9",
+      "build": "unstable",
+      "seed": 1257,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-31e5deb15970",
+      "build": "unstable",
+      "seed": 1256,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-31e5deb15970",
+      "build": "unstable",
+      "seed": 1257,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-31e5deb15970",
+      "build": "unstable",
+      "seed": 1258,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-696545282afd",
+      "build": "unstable",
+      "seed": 1257,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-696545282afd",
+      "build": "unstable",
+      "seed": 1258,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-696545282afd",
+      "build": "unstable",
+      "seed": 1259,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

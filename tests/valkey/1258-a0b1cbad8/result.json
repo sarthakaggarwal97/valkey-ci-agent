@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a0b1cbad83012b93f1e04f77cb3a067a9f37dd97",
+  "parent": "12c5af03b8b2d868fd35f4c1142162695f8dd41c",
+  "pr": 1258,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Change errno from EEXIST to EALREADY in serverFork if child process exists (#1258)",
+  "date": "2024-11-07",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.1771,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only swaps errno from EEXIST to EALREADY in the serverFork branch that refuses a mutually-exclusive fork while a child is active. All in-tree command paths (BGSAVE, BGREWRITEAOF, replica full-sync) check hasActiveChildProcess() and bail out before calling serverFork, and the server is single-threaded, so that branch is unreachable from any command; none of their replies format the errno. The only live caller is ValkeyModule_Fork, where the effect is a changed log string and an errno value visible to module code, testable only by loading a test module that forks while another child r"
+}

@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.function-restore-replace-accounting
+deployment:
+  modes: [standalone]
+metadata:
+  description: FUNCTION RESTORE REPLACE over an existing library must keep functions.caches
+    accounting intact
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, "1"], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=a\nserver.register_function('f', function()\
+          \ return 2 end)"], expect: {equals: a}}
+    - {command: [FCALL, f, "0"], expect: {equals: 2}}
+    - {command: [FUNCTION, RESTORE, !!binary "9UBCIyFsdWEgbmFtZT1hCnNlcnZlci5yZWdpc3Rlcl9mdW5jdGlvbignZicsZnVuY3Rpb24oKSByZXR1cm4gMSBlbmQpCwAAAAAAAAAA==",
+        REPLACE], expect: {equals: OK}}
+    - {command: [FCALL, f, "0"], expect: {equals: 1}}
+    - {command: [EVAL, "local s=redis.call('MEMORY','STATS'); for i=1,#s,2 do if s[i]=='functions.caches'\
+          \ then return tonumber(s[i+1]) end end; return -1", "0"], expect_difference: true,
+      expect: {min: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

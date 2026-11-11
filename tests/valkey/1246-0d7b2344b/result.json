@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0d7b2344b2c0df0269a8e018efc87438a8ec510e",
+  "parent": "e985ead7f9377e4d61d2e47c0b964f917d8054b4",
+  "pr": 1246,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "correct type internal to kvstore (minor) (#1246)",
+  "date": "2024-11-01",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3122,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only narrows two private struct fields in src/kvstore.c (num_dicts, num_dicts_bits) from long long to int. Their values are capped by assert(num_dicts_bits <= 16) in kvstoreCreate, so num_dicts <= 65536 always fits an int, and the public accessor kvstoreNumDicts already returned int. No command reply, data layout, replication, or persistence behavior can change; it is a pure refactor with no observable effect, so no scenario is warranted."
+}

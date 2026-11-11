@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "789a73b0d0fc9e2b754adbb39ed3ca92e9c30669",
+  "parent": "13f5f665f259f229d707116432f8ef2969cae0c7",
+  "pr": 1235,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Minor fix to debug logging in replicationFeedStreamFromPrimaryStream (#1235)",
+  "date": "2024-10-30",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2171,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change flips a condition inside an `if (0)` block in replicationFeedStreamFromPrimaryStream \u2014 developer-only debug printf code that is statically dead and never executes in any build. There is no observable behaviour change (no command replies, replication stream, logging, or persistence effect), so no scenario can reach or distinguish it."
+}

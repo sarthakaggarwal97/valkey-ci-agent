@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.sdssplitargs-cli
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli paths through the rewritten sdssplitargs - piped interactive
+    line splitting, --quoted-input unquoting, and hint-suite file parsing - compared
+    across builds
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 30
+    files:
+      hints.txt: |
+        "GET " "key"
+        'SET ' 'key value'
+        "BAD
+    runs:
+    - {tool: valkey-cli, args: [-p, $port], stdin: "SET k1 \"a b\\tc\"\nGET k1\nECHO\
+        \ 'a\\'b'\nECHO \"\\x41\\x42\"\nSET bad \"oops\n   \t \n\"\"\n3 PING\nECHO\
+        \ \"\"\n", expect: {exit: {equals: 0}, stdout: {contains: "Invalid argument(s)"}}}
+    - {tool: valkey-cli, args: [-p, $port, --quoted-input, SET, "\"q k\"", "\"v\\\
+          x41l\\tz\""], expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, --quoted-input, GET, "\"q k\""], expect: {
+        exit: {equals: 0}, stdout: {equals: "vAl\tz\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --quoted-input, ECHO, "\"unbalanced"],
+      expect: {exit: {not_equals: 0}}}
+    - {tool: valkey-cli, args: [--test_hint_file, hints.txt]}
+required_events: [cli.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

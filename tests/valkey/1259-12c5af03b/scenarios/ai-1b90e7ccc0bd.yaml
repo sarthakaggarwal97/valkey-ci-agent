@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 48ebe21ad1a3..12c5af03b8b2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1b90e7ccc0bd
+seed: 112601
+experiment:
+  id: proposed.keys-empty-slot-cluster
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

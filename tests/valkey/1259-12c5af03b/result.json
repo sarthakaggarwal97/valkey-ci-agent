@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "12c5af03b8b2d868fd35f4c1142162695f8dd41c",
+  "parent": "48ebe21ad1a30eee60c22fe8235118f4c6b1aed3",
+  "pr": 1259,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove empty DB check branch in KEYS command (#1259)",
+  "date": "2024-11-06",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.0015,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

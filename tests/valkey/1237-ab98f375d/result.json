@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ab98f375db51c83f3c56beac9440097f81af2048",
+  "parent": "789a73b0d0fc9e2b754adbb39ed3ca92e9c30669",
+  "pr": 1237,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "RDMA: Delete keepalive timer on closing (#1237)",
+  "date": "2024-10-30",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3092,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to src/rdma.c, which is only compiled when BUILD_RDMA=module (the default is BUILD_RDMA=no) and ships as a loadable module that requires librdmacm/libibverbs and an RDMA-capable network device (hardware or root-configured soft-RoCE). The fuzzer's servers communicate over TCP/unix sockets on local hosts without RDMA devices or root, no installed component drives RDMA connections, and MODULE LOAD is refused in compared sequences, so no scenario can reach the changed keepalive-timer teardown path. No non-RDMA behaviour changes."
+}

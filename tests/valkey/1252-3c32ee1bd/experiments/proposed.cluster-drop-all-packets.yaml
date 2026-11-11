@@ -1,0 +1,53 @@
+extends: [valkey.base]
+id: proposed.cluster-drop-all-packets
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: >-
+    One cluster node is told to drop all cluster-bus packets (DEBUG DROP-CLUSTER-PACKET-FILTER
+    -2), optionally freeing its cluster link on every dropped packet (CLOSE-CLUSTER-LINK-ON-PACKET-DROP),
+    while the key/value workload writes; the drop is then cleared. The node must be
+    detected on the bus, recover to its planned role, and the server must not crash,
+    leak, split-brain, or lose an acknowledged write.
+inputs:
+  properties:
+    target: {type: string, enum: [primary, replica], default: replica}
+    close_link: {type: integer, enum: [0, 1], default: 1}
+    hold_s: {type: number, default: 6, minimum: 1, maximum: 60}
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 3}
+- use: valkey.action.commands
+  id: isolate
+  depends_on: [warm-up]
+  config:
+    instances: {$ref: inputs.target}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, CLOSE-CLUSTER-LINK-ON-PACKET-DROP, {$ref: inputs.close_link}],
+      expect: {equals: OK}}
+    - {command: [DEBUG, DROP-CLUSTER-PACKET-FILTER, -2], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: hold
+  depends_on: [isolate]
+  config: {seconds: {$ref: inputs.hold_s}}
+- use: valkey.action.commands
+  id: heal
+  depends_on: [hold]
+  config:
+    instances: all
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, DROP-CLUSTER-PACKET-FILTER, -1], expect: {equals: OK}}
+    - {command: [DEBUG, CLOSE-CLUSTER-LINK-ON-PACKET-DROP, 0], expect: {equals: OK}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [heal]
+  config: {seconds: 10}
+required_events: [isolate.completed, heal.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: isolate}
+- {evidence_id: valkey.command.sequence, source: heal}

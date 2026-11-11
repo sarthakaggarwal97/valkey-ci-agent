@@ -1,0 +1,77 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "91cbf7744256b365651d4bc039c2913ecde9dfe6",
+  "parent": "ab98f375db51c83f3c56beac9440097f81af2048",
+  "pr": 1234,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Eliminate snprintf usage at setDeferredAggregateLen (#1234)",
+  "date": "2024-10-31",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 5.1156,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-9a28d80f698c",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-99c7e1b7baa9",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-34b3e6fe8491",
+      "build": "unstable",
+      "seed": 20261111,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-34b3e6fe8491",
+      "build": "unstable",
+      "seed": 20261112,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-34b3e6fe8491",
+      "build": "unstable",
+      "seed": 20261113,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8922ae054425",
+      "build": "unstable",
+      "seed": 20261112,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8922ae054425",
+      "build": "unstable",
+      "seed": 20261113,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8922ae054425",
+      "build": "unstable",
+      "seed": 20261114,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "45d596e1216472e49b9f950a4b9a040b6e87add6",
+  "parent": "e972d564609d50e97e19672b19f7590c09b4c086",
+  "pr": 1250,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "RDMA: Use conn ref counter to prevent double close (#1250)",
+  "date": "2024-11-08",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3342,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to src/rdma.c, the RDMA connection type's close/handler path. RDMA is not compiled into the runner's builds (BUILD_RDMA defaults to no and is module-only), loading it would need MODULE LOAD (refused) plus librdmacm, and exercising it needs RDMA hardware or a root-configured soft-RoCE device, which these runs lack. All fuzzer components connect over TCP, so no installed or writable experiment can reach connRdmaClose or rdmaProcessPendingData; the change is untestable in this environment and gets no scenario."
+}

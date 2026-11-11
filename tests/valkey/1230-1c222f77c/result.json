@@ -1,0 +1,65 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1c222f77cecc100719bbc87c7a2ecd13402fe6db",
+  "parent": "91cbf7744256b365651d4bc039c2913ecde9dfe6",
+  "pr": 1230,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Improve performance of sdssplitargs (#1230)",
+  "date": "2024-10-31",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 64,
+    "executed": 64,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 9.3318,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-3562ef3dc10a",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'split' returned ERROR: the parent build (/home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/parent/src/valkey-server) does not start with {'sanitize-dump-payload': 'yes', 'enable-debug-command': 'yes', 'aclfile': 'users.acl'}: "
+    },
+    {
+      "scenario": "ai-ef3e5c87ac44",
+      "build": "unstable",
+      "seed": 202,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ef3e5c87ac44",
+      "build": "unstable",
+      "seed": 203,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-ef3e5c87ac44",
+      "build": "unstable",
+      "seed": 204,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-93d6840f2b3a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'inline' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (raw \"ECHO \\\"\\\\n\\\\r\\\\t\\\\b\\\\a\\\\z\\\"\\n\" on connection a), 2 (raw \"ECHO 'a\\\\'b'\\n\" on connection a)"
+    },
+    {
+      "scenario": "ai-a7b40c109282",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'inline' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (raw \"ECHO \\\"\\\\n\\\\r\\\\t\\\\b\\\\a\\\\z\\\"\\n\" on connection a), 2 (raw \"ECHO 'a\\\\'b'\\n\" on connection a)"
+    }
+  ]
+}
