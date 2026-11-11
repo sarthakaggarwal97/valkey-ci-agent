@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-11T16:39+00:00.
+Updated 2026-11-11T16:54+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1832 | 692 | #881 (2024-08-16) | 301 | 261.7 |
+| valkey-io/valkey | 1832 | 692 | #881 (2024-08-16) | 274 | 261.7 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 64 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 9.1 |
 | valkey-io/valkey-search | 672 | 0 | f8106e72e984 (2024-11-27) | 0 | 96.0 |
@@ -13,9 +13,8 @@ Updated 2026-11-11T16:39+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-11T16:34:29+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43055458422): 20 merge(s) tested, 0 without a code change.
+[2026-11-11T16:54:02+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43059682486): 20 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey#5209](https://github.com/valkey-io/valkey/pull/5209): to retry, the job left no result
 - [valkey-io/valkey#1535](https://github.com/valkey-io/valkey/pull/1535): to retry, the job left no result
 - [valkey-io/valkey#951](https://github.com/valkey-io/valkey/pull/951): to retry, the job left no result
 - [valkey-io/valkey#792](https://github.com/valkey-io/valkey/pull/792): to retry, the job left no result
@@ -35,6 +34,7 @@ Updated 2026-11-11T16:39+00:00.
 - [valkey-io/valkey#925](https://github.com/valkey-io/valkey/pull/925): to retry, the job left no result
 - [valkey-io/valkey#919](https://github.com/valkey-io/valkey/pull/919): to retry, the job left no result
 - [valkey-io/valkey#787](https://github.com/valkey-io/valkey/pull/787): to retry, the job left no result
+- [valkey-io/valkey#789](https://github.com/valkey-io/valkey/pull/789): to retry, the job left no result
 
 ### valkey-io/valkey-bloom
 
@@ -56,7 +56,7 @@ Updated 2026-11-11T16:39+00:00.
 - Merges whose tests reached the change: 813 of 1293 tested (63%)
 - Changed-line coverage: median 100% of 809 merge(s) measured, 65 under 50%
 - Recall: 218 parents flagged of 344 fix merges
-- Claude: $966.03 in the last 24 hours, $9410.11 in the last 7 days, $9410.11 in all
+- Claude: $842.41 in the last 24 hours, $9410.11 in the last 7 days, $9410.11 in all
 - Issues filed: 71
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
