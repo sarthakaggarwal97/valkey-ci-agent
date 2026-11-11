@@ -483,6 +483,8 @@ def test_the_job_setup_and_dependencies_run_before_any_credential_and_the_agent_
         assert names.index(before) < names.index("CI fix: configure AWS credentials"), job_id
         if job_id != "fix-local":
             assert names.index("CI fix: stage the isolated checkout") < names.index(before)
+        else:
+            assert names.index("CI fix: check out the agent") < names.index(before)
     script = Path("scripts/ci_fix/job.sh").read_text(encoding="utf-8")
     assert script.index("CI_FIX_AGENT_USER=") < script.index("python -m scripts.ci_fix.run fix")
     assert "TOKEN" not in script

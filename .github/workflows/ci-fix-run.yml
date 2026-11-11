@@ -324,12 +324,6 @@ jobs:
         with:
           name: ci-fix-plan-${{ inputs.key }}
           path: ${{ runner.temp }}/ci-fix-plan
-      - name: Install Valkey build and test dependencies
-        shell: bash
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends \
-            build-essential pkg-config libssl-dev tcl8.6 tclx tcl-tls valgrind
       # The CI-fix steps every fix job ends with.
       - name: 'CI fix: check out the agent'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -338,6 +332,13 @@ jobs:
           ref: ${{ github.sha }}
           path: .ci-fix-agent
           persist-credentials: false
+      # Keep the result writer available even when package installation fails.
+      - name: Install Valkey build and test dependencies
+        shell: bash
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            build-essential pkg-config libssl-dev tcl8.6 tclx tcl-tls valgrind
       - name: 'CI fix: set up the agent'
         uses: ./.ci-fix-agent/.github/actions/setup-agent
         with:
