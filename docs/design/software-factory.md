@@ -97,10 +97,14 @@ Each step is switched on by a repository variable, and each one has to
 earn the next.
 
 ```mermaid
-flowchart LR
-    S0["Step 0: replay past bugs, write nothing to Valkey"] -->|"TSC go or no-go"| S1["Step 1: comments on issues, no PRs"]
-    S1 -->|"10 comments in 90 days, half marked useful"| S2["Step 2: draft PRs, kept green"]
-    S2 -->|"success numbers over the first 10 PRs"| S3["Step 3: the review loop"]
+flowchart TD
+    S0["Step 0: replay past bugs<br/>nothing written to Valkey"]
+    S1["Step 1: comments on issues<br/>no PRs"]
+    S2["Step 2: draft PRs, kept green"]
+    S3["Step 3: the review loop"]
+    S0 -->|"the TSC says go"| S1
+    S1 -->|"10 comments in 90 days, half marked useful"| S2
+    S2 -->|"success numbers over the first 10 PRs"| S3
 ```
 
 **Step 0, the replay.** The recipe runs against past bugs, and nothing is
@@ -251,18 +255,18 @@ where Claude works, has no GitHub token at all.
 ```mermaid
 sequenceDiagram
     participant GH as GitHub
-    participant P as Plan job
-    participant F as Fix job
+    participant P as Plan
+    participant F as Fix
     participant C as Claude
-    participant U as Publish job
-    P->>GH: read the issue, the labeller's role, the unstable commit (read token)
-    P->>F: the pinned plan
+    participant U as Publish
+    P->>GH: read issue and roles (read token)
+    P->>F: pinned plan
     Note over F: no GitHub token
-    F->>C: issue text, guidelines, history
-    C->>F: a test, then a fix (edits only, no shell)
-    F->>F: build and run everything as a separate account
-    F->>U: the verified result
-    U->>GH: check the destination again, then comment or push (write token)
+    F->>C: issue, guidelines, history
+    C->>F: test, then fix (edits only)
+    F->>F: build and test as another account
+    F->>U: verified result
+    U->>GH: recheck, then comment or push (write token)
 ```
 
 **Plan** pins down the issue as it was read, the owner, and the commit of
@@ -299,16 +303,20 @@ with no network other than loopback.
 
 ```mermaid
 flowchart TD
-    A["Claude writes a test and names it"] --> B{"Only test files changed, the test is declared, and it doesn't kill servers itself?"}
-    B -->|"no"| R["Back to Claude"]
-    B -->|"yes"| C["Build the pinned commit, run the named test three times"]
-    C --> D{"Fails all three times, on its own assertion?"}
-    D -->|"no"| R
-    D -->|"yes"| P2["On to phase 2"]
-    C --> E{"Did the server crash?"}
-    E -->|"expected: a CRASH report, or labelled again after a crash stop"| P2
-    E -->|"unexpected"| S["Stop. Post that the run stopped, point to SECURITY.md"]
-    R -->|"up to five attempts"| A
+    A["Claude writes a test and names it"]
+    B["Code checks the change:<br/>test files only, test declared,<br/>no killing servers"]
+    C["Build the pinned commit<br/>run the test three times"]
+    R["Output goes back to Claude<br/>five attempts in all"]
+    P2(["Phase 2"])
+    S(["Stop: post that the run stopped<br/>and point to SECURITY.md"])
+    A --> B
+    B -->|"fails a check"| R
+    B -->|"passes"| C
+    C -->|"fails 3 of 3 on its own assertion"| P2
+    C -->|"does not fail the right way"| R
+    C -->|"crash the owner expected"| P2
+    C -->|"crash nobody expected"| S
+    R --> A
 ```
 
 Claude writes a test. It may add helpers, fixtures or test modules
@@ -456,13 +464,13 @@ guide or Valkey's `AGENTS.md`. The replay runs the recipe before that
 change ships, so a correction made once doesn't have to be made again.
 
 ```mermaid
-flowchart LR
+flowchart TD
     G["Valkey's guidelines"] --> R["The recipe"]
     E["Recent fixes and their reviews"] --> R
     R --> PR["Bot PRs"]
     PR --> RV["Committers review"]
-    RV -->|"a comment that keeps coming up"| CH["Change the lint, checklist, guide or AGENTS.md"]
-    CH -->|"replayed first"| R
+    RV -->|"a comment that keeps coming up"| CH["Change the lint, the checklist,<br/>the bot's guide or AGENTS.md"]
+    CH -->|"replayed before it ships"| R
 ```
 
 ### Modules
@@ -522,6 +530,7 @@ commits carry neither line.
 
 ```mermaid
 stateDiagram-v2
+    state "Hands off" as HandsOff
     [*] --> Draft: a run passes
     Draft --> Draft: red CI, the bot fixes it (at most twice)
     Draft --> Ready: every workflow green
@@ -590,25 +599,19 @@ well try to steer Claude. The design assumes that will sometimes work, and
 limits what can follow from it.
 
 ```mermaid
-flowchart LR
-    subgraph Untrusted
-        I["Issue text"]
+flowchart TD
+    I["Issue text: anyone can write it"]
+    subgraph Contained["Fix job, with no GitHub token"]
+        C["Claude: edits files, no shell"]
+        T["Tests: another account,<br/>loopback only, read-only build"]
     end
-    subgraph Contained["Fix job: no GitHub token"]
-        C["Claude: edits only, no shell"]
-        T["Tests: separate account, loopback only, read-only build"]
-    end
-    subgraph Gated["Publish job"]
-        Fl["Filter and secret scan"]
-    end
-    subgraph People
-        O["Owner"]
-        A["Second committer"]
-    end
-    I -->|"chosen by a committer, frozen once read, links never fetched"| C
+    Fl["Publish job: filter and secret scan"]
+    O["Owner reads it as their own"]
+    A["Second committer approves"]
+    I -->|"chosen by a committer, frozen once read,<br/>links never fetched"| C
     C --> T
     T -->|"only what passed every check"| Fl
-    Fl -->|"PR from a fork: CI gets no secrets"| O
+    Fl -->|"PR from a fork, CI without secrets"| O
     O --> A
 ```
 
@@ -879,12 +882,15 @@ push, so the hands-off rule doesn't stop them. Auto-merge does.
 
 ```mermaid
 flowchart TD
-    A["A committer comments: @valkeyrie-ops address"] --> B["Collect the new review comments from committers"]
-    B --> C["Apply suggestion blocks exactly as written"]
-    C --> D["Claude handles the rest: change, answer, decline, or flag a conflict"]
-    D --> E["Rerun the phase 2 checks, and the failing-test check if the test changed"]
-    E -->|"passes"| F["One commit, then a reply on each thread"]
-    E -->|"fails"| G["Reply saying what failed, push nothing"]
+    A["A committer comments<br/>@valkeyrie-ops address"]
+    B["Collect new review comments from committers<br/>apply suggestion blocks as written"]
+    D["Claude answers each one:<br/>changed, answered, declined, or a conflict"]
+    E["Rerun the phase 2 checks<br/>and the failing-test check if the test changed"]
+    F(["One commit, a reply on each thread"])
+    G(["Say what failed, push nothing"])
+    A --> B --> D --> E
+    E -->|"passes"| F
+    E -->|"fails"| G
 ```
 
 **`@valkeyrie-ops address`** applies review comments. The batch is every
