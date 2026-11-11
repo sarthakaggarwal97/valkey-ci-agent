@@ -515,3 +515,49 @@ cases:
     base_branch: '7.2'
     pr: 5072
     backport: true
+
+  # --- The same backport failures, fixed where their refusals say the fix belongs: on the
+  # default branch. The log is the release branch's; the checkout is the default branch's head.
+
+  - id: up-restore-ttl
+    about: The 9.0 hash field TTL failure, fixed on the default branch.
+    repo: valkey-io/valkey
+    run_id: 43004906063
+    job_id: 130469839662
+    job: test-ubuntu-libc-malloc
+    sha: 9abbfd2557a492e325a164a93122f9626abc0b1d
+    base_branch: unstable
+    test:
+      name: RESTORE Preserves Field TTLs
+      file: tests/unit/hashexpire.tcl
+
+  - id: up-diskless-drop
+    about: The 7.2 diskless replication failure, fixed on the default branch.
+    repo: valkey-io/valkey
+    run_id: 42999431411
+    job_id: 130451584119
+    job: test-alpine-libc-malloc
+    sha: 9abbfd2557a492e325a164a93122f9626abc0b1d
+    base_branch: unstable
+    test:
+      name: diskless all replicas drop during rdb pipe
+      file: tests/integration/replication.tcl
+
+  - id: up-valgrind-sigusr1
+    about: The 8.0 valgrind report about a child killed before its signal handler was installed, fixed on the default branch.
+    repo: valkey-io/valkey
+    run_id: 42993097593
+    job_id: 130430467777
+    job: test-valgrind-no-malloc-usable-size-misc
+    sha: 9abbfd2557a492e325a164a93122f9626abc0b1d
+    base_branch: unstable
+
+  - id: up-codecov-exit
+    about: The 8.1 coverage job's hang in a replication test, fixed on the default branch.
+    repo: valkey-io/valkey
+    run_id: 42993376810
+    job_id: 130431382953
+    job: code-coverage
+    workflow: codecov
+    sha: 9abbfd2557a492e325a164a93122f9626abc0b1d
+    base_branch: unstable
