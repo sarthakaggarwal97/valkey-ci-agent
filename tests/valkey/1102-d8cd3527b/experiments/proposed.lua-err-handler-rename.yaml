@@ -1,0 +1,77 @@
+extends: [valkey.liveness]
+id: proposed.lua-err-handler-rename
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    EVAL's pcall error handler was renamed from __redis__err__handler to __server__err__handler
+    with a backwards-compatible alias; compare the handler globals, script error reports,
+    re-registration after SCRIPT FLUSH, math.random, Lua reply conversion and the
+    Functions engine across the two builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: lua
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 15
+    commands:
+    - {command: [EVAL, "return type(__server__err__handler)", 0], expect_difference: true,
+      expect: {equals: function}}
+    - {command: [EVAL, "return type(__redis__err__handler)", 0], expect: {equals: function}}
+    - {command: [EVAL, "return tostring(rawequal(__server__err__handler, __redis__err__handler))",
+        0], expect_difference: true, expect: {equals: "true"}}
+    - {command: [EVAL, "local t = nil return t.boom", 0], expect: {error: "attempt\
+          \ to index"}}
+    - {command: [EVAL, "error('plainboom')", 0], expect: {error: "plainboom"}}
+    - {command: [EVAL, "error({err='custom table err'})", 0], expect: {error: "custom\
+          \ table err"}}
+    - {command: [EVAL, "return server.call('RENAME', KEYS[1])", 1, k1], expect: {
+        error: true}}
+    - {command: [EVAL, "local ok, e = pcall(function() error('boom') end) return {tostring(ok),\
+          \ type(e)}", 0], expect: {exists: true}}
+    - {command: [SCRIPT, FLUSH, SYNC], expect: {equals: OK}}
+    - {command: [EVAL, "return type(__server__err__handler)", 0], expect_difference: true,
+      expect: {equals: function}}
+    - {command: [EVAL, "return type(__redis__err__handler)", 0], expect: {equals: function}}
+    - {command: [EVAL, "return nosuchvar", 0], expect: {error: "nosuchvar"}}
+    - {command: [EVAL, "math.randomseed(12345) return {tostring(math.random()), tostring(math.random(1,\
+          \ 2147483647)), tostring(math.random(2147483647))}", 0], expect: {exists: true}}
+    - {command: [EVAL, "local b = server.breakpoint() server.debug('msg', 1) local\
+          \ rb = redis.breakpoint() return {tostring(b), tostring(rb)}", 0], expect: {
+        equals: ["false", "false"]}}
+    - {command: [EVAL, "return {1, 'two', {3, {err='inner err'}, {ok='inner status'}},\
+          \ 'tail'}", 0], expect: {exists: true}}
+    - {command: [EVAL, "return {map={f1='v1'}}", 0], expect: {exists: true}}
+    - {command: [EVAL, "return {set={m1=true}}", 0], expect: {exists: true}}
+    - {command: [EVAL, "return {double=3.75}", 0], expect: {exists: true}}
+    - {command: [HSET, h1, f1, v1], expect: {equals: 1}}
+    - {command: [EVAL, "server.setresp(3) local r = server.call('HGETALL', KEYS[1])\
+          \ if r.map then return {'map', tostring(r.map.f1)} else return {'flat',\
+          \ tostring(r[2])} end", 1, h1], expect: {equals: [map, v1]}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nserver.register_function('setval',\
+          \ function(keys, args) return server.call('SET', keys[1], args[1]) end)\n\
+          server.register_function('boom', function(keys, args) local t = nil return\
+          \ t.x end)"], expect: {equals: mylib}}
+    - {command: [FCALL, setval, 1, fk1, fv1], expect: {equals: OK}}
+    - {command: [GET, fk1], expect: {equals: fv1}}
+    - {command: [FCALL, boom, 0], expect: {error: true}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib2\nredis.register_function('setval2',\
+          \ function(keys, args) return redis.call('SET', keys[1], args[1]) end)"],
+      expect: {equals: mylib2}}
+    - {command: [FCALL, setval2, 1, fk2, fv2], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [lua.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lua}

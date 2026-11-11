@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6e0216471d5365882a042cd8f7531f5a277243e6",
+  "parent": "af811748e7819a5ac31a6df4b21622aa58c64ae4",
+  "pr": 1067,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Trigger the election as soon as possible when doing a forced manual failover (#1067)",
+  "date": "2024-09-25",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.6497,
+  "findings": [],
+  "recorded": []
+}

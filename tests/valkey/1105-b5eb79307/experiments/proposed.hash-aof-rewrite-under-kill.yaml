@@ -1,0 +1,37 @@
+extends: [valkey.base, valkey.command-table]
+id: proposed.hash-aof-rewrite-under-kill
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    While the key-value workload writes and the command-table workload creates and
+    reads hashes, automatic AOF rewrites (aof-use-rdb-preamble no, low auto-aof-rewrite
+    thresholds from the scenario) run rewriteHashObject's stack iterator; the primary
+    is killed mid-run and restarted, so it must replay the rewritten AOF with no acknowledged
+    write lost beyond the fsync window, no crash and links back up.
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+components:
+- use: valkey.fault.process-signal
+  id: kill-primary
+  config:
+    when_event: warm-up.completed
+    instance: primary
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, commands, kill-primary]
+  config: {seconds: 12}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 10}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-primary}
+- {evidence_id: valkey.workload.command-table, source: commands}

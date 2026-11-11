@@ -1,0 +1,77 @@
+extends: [valkey.liveness]
+id: proposed.lua-table-prealloc
+deployment:
+  modes: [standalone]
+metadata:
+  description: Lua table preallocation in script reply conversion (arrays, RESP3 maps
+    and sets, KEYS/ARGV) leaves every script reply byte-identical to the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: luaprealloc
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - command: [RPUSH, mylist, a, b, c, "", d]
+      expect: {equals: 5}
+    - command: [HSET, myhash, f1, v1, f2, "", f3, v3]
+      expect: {equals: 3}
+    - command: [SADD, myset, x, y, z, ""]
+      expect: {equals: 4}
+    - command: [XADD, st, "1-1", f, v]
+      expect: {equals: "1-1"}
+    - command: [EVAL, "return server.call('LRANGE', KEYS[1], 0, -1)", "1", mylist]
+      expect: {equals: [a, b, c, "", d]}
+    - command: [EVAL, "return server.call('LRANGE', 'nokey', 0, -1)", "0"]
+      expect: {equals: []}
+    - command: [EVAL, "return server.call('XRANGE', KEYS[1], '-', '+')", "1", st]
+      expect: {exists: true}
+    - command: [EVAL, "server.setresp(3) local m = server.call('HGETALL', KEYS[1])\
+          \ local out = {} for k, v in pairs(m.map) do table.insert(out, k .. '='\
+          \ .. v) end table.sort(out) return out", "1", myhash]
+      expect: {equals: ["f1=v1", "f2=", "f3=v3"]}
+    - command: [EVAL, "server.setresp(3) return server.call('HGETALL', KEYS[1])",
+        "1", myhash]
+      compare: unordered-pairs
+      expect: {exists: true}
+    - command: [EVAL, "server.setresp(3) return server.call('HGETALL', 'nokey')",
+        "0"]
+      expect: {exists: true}
+    - command: [EVAL, "server.setresp(3) local s = server.call('SMEMBERS', KEYS[1])\
+          \ local n = 0 for _ in pairs(s.set) do n = n + 1 end return n", "1", myset]
+      expect: {equals: 4}
+    - command: [EVAL, "server.setresp(3) return server.call('SMEMBERS', KEYS[1])",
+        "1", myset]
+      compare: unordered
+      expect: {exists: true}
+    - command: [EVAL, "for i = 1, 5000 do server.call('RPUSH', KEYS[1], i) end return\
+          \ server.call('LLEN', KEYS[1])", "1", big]
+      expect: {equals: 5000}
+    - command: [EVAL, "local t = server.call('LRANGE', KEYS[1], 0, -1) return {#t,\
+          \ t[1], t[5000]}", "1", big]
+      expect: {equals: [5000, "1", "5000"]}
+    - command: [EVAL, "for i = 1, 500 do server.call('HSET', 'bigh', 'f' .. i, i)\
+          \ end server.setresp(3) local m = server.call('HGETALL', 'bigh') local n\
+          \ = 0 for _ in pairs(m.map) do n = n + 1 end return n", "0"]
+      expect: {equals: 500}
+    - command: [EVAL, "return {#KEYS, #ARGV, KEYS[2], ARGV[3]}", "2", k1, k2, a1,
+        a2, a3]
+      expect: {equals: [2, 3, k2, a3]}
+    - command: [EVAL, "return #KEYS + #ARGV", "0"]
+      expect: {equals: 0}
+    - command: [EVAL, "return ARGV", "0", "", "", x, "", x, x, "", x]
+      expect: {equals: ["", "", x, "", x, x, "", x]}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [luaprealloc.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: luaprealloc}

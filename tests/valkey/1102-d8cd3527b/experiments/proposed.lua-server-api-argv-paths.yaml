@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.lua-server-api-argv-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: server.pcall, server.acl_check_cmd and bad-argument argv cleanup paths
+    (luaServerGenericCommand, luaArgsToServerArgv, freeLuaServerArgv) compared across
+    builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: luaapi
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "return type(__redis__err__handler)", "0"], expect: {equals: function}}
+    - {command: [EVAL, "return type(__server__err__handler)", "0"], expect_difference: true,
+      expect: {equals: function}}
+    - {command: [EVAL, "local t = server.pcall('rpush', KEYS[1], 'a', 'b'); return\
+          \ t", "1", plist], expect: {equals: 2}}
+    - {command: [EVAL, "local t = server.pcall('incr', KEYS[1]); return t.err", "1",
+        plist], expect: {contains: WRONGTYPE}}
+    - {command: [EVAL, "local t = server.pcall('set', KEYS[1], {1,2,3}); return t.err",
+        "1", k1], expect: {contains: "must be strings or integers"}}
+    - {command: [EVAL, "return server.call('set', KEYS[1], true)", "1", k1], expect: {
+        error: "strings or integers"}}
+    - {command: [EVAL, "local t = server.pcall('rpush', KEYS[1], '', 'a', 'a', 'a',\
+          \ 'a', 'a', 'a', 'a', 'a', 'a', 'a', ''); return t", "1", plist2], expect: {
+        equals: 12}}
+    - {command: [EVAL, "if server.acl_check_cmd('set', KEYS[1], 'v', 'EX', '100')\
+          \ then return 1 else return 0 end", "1", k1], expect: {equals: 1}}
+    - {command: [EVAL, "return server.acl_check_cmd('no_such_command_xyz')", "0"],
+      expect: {error: "Invalid command passed"}}
+    - {command: [EVAL, "return server.acl_check_cmd('set', KEYS[1], {})", "1", k1],
+      expect: {error: "strings or integers"}}
+    - {command: [ACL, SETUSER, scripter, on, ">pw1", "~k*", "+eval", "+set"], expect: {
+        equals: OK}}
+    - {connection: u, command: [AUTH, scripter, pw1], expect: {equals: OK}}
+    - {connection: u, command: [EVAL, "if server.acl_check_cmd('get', KEYS[1]) then\
+          \ return 1 else return 0 end", "1", k1], expect: {equals: 0}}
+    - {connection: u, command: [EVAL, "if server.acl_check_cmd('set', KEYS[1], 'v')\
+          \ then return 1 else return 0 end", "1", k1], expect: {equals: 1}}
+    - {command: [LLEN, plist], expect: {equals: 2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [luaapi.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: luaapi}

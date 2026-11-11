@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a1cc7c263abde54a85bd5b58168e1a4069d9671c",
+  "parent": "00c97979d96929619d94acd7f5edd083fa337ab6",
+  "pr": 1101,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reuse `obey_client` variable in `processCommand()` function (#1101)",
+  "date": "2024-10-06",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3476,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only caches the result of mustObeyClient(c) in a const local and reuses it at the two later call sites in processCommand(). mustObeyClient() depends only on c->id and c->flag.primary, and nothing between the computation and the former call sites (auth check, CMD_NO_MULTI check, ACL check \u2014 all of which only reject and return) can mutate those fields, so the cached value is always identical to a fresh call. This is a pure refactor with no behaviour change, so no scenario is needed."
+}

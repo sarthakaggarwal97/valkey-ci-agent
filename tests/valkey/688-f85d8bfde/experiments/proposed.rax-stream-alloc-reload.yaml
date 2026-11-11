@@ -1,0 +1,71 @@
+extends: [valkey.liveness]
+id: proposed.rax-stream-alloc-reload
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Rax alloc_size tracking (#688) across an RDB reload: a stream with a group, consumer
+    PELs and deleted entries is SAVEd and the server restarted, so the rax and both
+    PELs are rebuilt through rdb.c's raxInsert calls; MEMORY USAGE before and after
+    the reload, and after post-reload XACK/XCLAIM/XDEL/XTRIM removals, must differ
+    from the parent's estimate and stay inside sane bounds (the max bound catches
+    a size_t underflow).
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    node_max_entries: {type: integer, enum: [1, 3, 100], default: 1}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {stream-node-max-entries: {$ref: inputs.node_max_entries}, appendonly: "no"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    commands:
+    - {command: [XADD, s, 1-1, f, v], expect: {equals: "1-1"}}
+    - {command: [XADD, s, 1-2, f, v], expect: {equals: "1-2"}}
+    - {command: [XADD, s, 1-3, f, v], expect: {equals: "1-3"}}
+    - {command: [XADD, s, 2-0, f, v], expect: {equals: "2-0"}}
+    - {command: [XADD, s, 255-0, f, v], expect: {equals: "255-0"}}
+    - {command: [XADD, s, 256-0, f, v], expect: {equals: "256-0"}}
+    - {command: [XADD, s, 4294967295-0, f, v], expect: {equals: "4294967295-0"}}
+    - {command: [XADD, s, 4294967296-0, f, v], expect: {equals: "4294967296-0"}}
+    - {command: [XADD, s, 99999999999-0, f, v], expect: {equals: "99999999999-0"}}
+    - {command: [XADD, s, 18446744073709551614-0, f, v], expect: {equals: "18446744073709551614-0"}}
+    - {command: [XADD, s, 18446744073709551614-1, f, v], expect: {equals: "18446744073709551614-1"}}
+    - {command: [XGROUP, CREATE, s, g1, 0], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g1, alice, COUNT, 6, STREAMS, s, ">"], expect: {
+        exists: true}}
+    - {command: [XREADGROUP, GROUP, g1, bob, COUNT, 6, STREAMS, s, ">"], expect: {
+        exists: true}}
+    - {command: [XDEL, s, 2-0, 255-0], expect: {equals: 2}}
+    - {command: [MEMORY, USAGE, s, SAMPLES, 0], expect_difference: true, expect: {
+        min: 100, max: 100000000}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [XLEN, s], expect: {equals: 9}}
+    - {command: [XINFO, STREAM, s], expect: {exists: true}}
+    - {command: [XPENDING, s, g1], expect: {exists: true}}
+    - {command: [MEMORY, USAGE, s, SAMPLES, 0], expect_difference: true, expect: {
+        min: 100, max: 100000000}}
+    - {command: [XACK, s, g1, 1-1, 1-2], expect: {equals: 2}}
+    - {command: [XCLAIM, s, g1, bob, 0, 1-3], expect: {exists: true}}
+    - {command: [XAUTOCLAIM, s, g1, carol, 0, 0, COUNT, 20], expect: {exists: true}}
+    - {command: [XADD, s, 18446744073709551615-0, f, v], expect: {equals: "18446744073709551615-0"}}
+    - {command: [XDEL, s, 4294967295-0, 4294967296-0], expect: {equals: 2}}
+    - {command: [MEMORY, USAGE, s, SAMPLES, 0], expect_difference: true, expect: {
+        min: 100, max: 100000000}}
+    - {command: [XTRIM, s, MAXLEN, 2], expect: {equals: 6}}
+    - {command: [MEMORY, USAGE, s, SAMPLES, 0], expect_difference: true, expect: {
+        min: 100, max: 100000000}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [reload.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

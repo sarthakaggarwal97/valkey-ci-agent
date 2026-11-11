@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.module-cluster-slots-fake-client
+deployment:
+  modes: [standalone]
+metadata:
+  description: VM_Call of CLUSTER SLOTS/SHARDS from a module on a cluster node does
+    not crash the fake temp client
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: module
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [usercall.call_without_user, CLUSTER, SLOTS], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [usercall.call_without_user, CLUSTER, SHARDS], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: module}

@@ -1,0 +1,33 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b5eb7930797023f46331d68b964b3871625da79d",
+  "parent": "a1cc7c263abde54a85bd5b58168e1a4069d9671c",
+  "pr": 1105,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Eliminate hashTypeIterator memory allocation by assigning it on stack (#1105)",
+  "date": "2024-10-06",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 9,
+  "proven": 0,
+  "hunted": 9,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 43,
+    "executed": 39,
+    "percent": 90,
+    "uncovered": [
+      "src/aof.c:1960",
+      "src/aof.c:1966",
+      "src/t_hash.c:466",
+      "src/t_hash.c:467"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 7.0732,
+  "findings": [],
+  "recorded": []
+}

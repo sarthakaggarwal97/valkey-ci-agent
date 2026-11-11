@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6e0216471d53..80fcbd3fece6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-18ffee6e8a8b
+seed: 4
+experiment:
+  id: proposed.function-cluster-slots-fake-client
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

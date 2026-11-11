@@ -1,0 +1,155 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d8cd3527bf4ad6a8622655d4075e3373307acce9",
+  "parent": "1c22680fa79d6f0145cd0596d84c53c376ca1a66",
+  "pr": 1102,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Removing Redis from internal lua function names and comments (#1102)",
+  "date": "2024-10-04",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 7,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 33,
+    "executed": 33,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.8279,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-feeb808e5f4d",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-feeb808e5f4d",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-feeb808e5f4d",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e48b0ba0faab",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e48b0ba0faab",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-e48b0ba0faab",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-977b28a7ad0c",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-977b28a7ad0c",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-977b28a7ad0c",
+      "build": "unstable",
+      "seed": 105,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-7ed2e921e8dc",
+      "build": "unstable",
+      "seed": 110201,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-7ed2e921e8dc",
+      "build": "unstable",
+      "seed": 110202,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-7ed2e921e8dc",
+      "build": "unstable",
+      "seed": 110203,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b1b06d41a149",
+      "build": "unstable",
+      "seed": 110202,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b1b06d41a149",
+      "build": "unstable",
+      "seed": 110203,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-b1b06d41a149",
+      "build": "unstable",
+      "seed": 110204,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-9b7d9e79c2b4",
+      "build": "unstable",
+      "seed": 110203,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-9b7d9e79c2b4",
+      "build": "unstable",
+      "seed": 110204,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-9b7d9e79c2b4",
+      "build": "unstable",
+      "seed": 110205,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c63fec0f4b7b",
+      "build": "unstable",
+      "seed": 110204,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c63fec0f4b7b",
+      "build": "unstable",
+      "seed": 110205,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c63fec0f4b7b",
+      "build": "unstable",
+      "seed": 110206,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

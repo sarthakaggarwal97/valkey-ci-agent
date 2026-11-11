@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a1cc7c263abd..b5eb79307970.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-88cc8cc94ff8
+seed: 102
+experiment:
+  id: proposed.hash-iterator-stack
+  inputs:
+    resp: 3
+    listpack_entries: 128
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

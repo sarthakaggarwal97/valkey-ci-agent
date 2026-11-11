@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dcac3e14993047845b85ad503cfa371d529256da",
+  "parent": "150c197bdd5f5474671cc7705b62be799c6f6e4c",
+  "pr": 1122,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix undefined-santitizer warning in rax test (#1122)",
+  "date": "2024-10-03",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2074,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a (uint32_t) cast in src/unit/test_rax.c, a unit-test helper, to fix a UB-sanitizer warning in the test binary. No server, command, replication, or persistence code changes; no runtime behaviour differs between the builds, so there is nothing a fuzzer scenario could exercise or compare."
+}

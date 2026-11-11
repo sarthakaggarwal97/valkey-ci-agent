@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9827eef4d0c8..f85d8bfde931.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8420dd457ce0
+seed: 106
+experiment:
+  id: proposed.rax-stream-alloc-reload
+  inputs:
+    resp: 3
+    node_max_entries: 3
+deployment:
+  mode: standalone
+  base_port: 7500

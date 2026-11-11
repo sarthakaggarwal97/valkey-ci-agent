@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.hash-iterator-stack
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Drive every user of the stack-allocated hashTypeIterator (HGETALL, HKEYS, HVALS,
+    HRANDFIELD with count, COPY, DEBUG DIGEST, listpack-to-hashtable conversion, and
+    the AOF rewrite of hashes followed by a restart) on the change's build and its
+    parent, comparing every reply: the refactor means no reply to change, so the candidate
+    must not crash, abort a sanitizer, or answer differently.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    listpack_entries: {type: integer, minimum: 0, maximum: 1024, default: 128}
+components:
+- use: valkey.action.commands
+  id: hashiter
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config:
+      hash-max-listpack-entries: {$ref: inputs.listpack_entries}
+      appendonly: "yes"
+      aof-use-rdb-preamble: "no"
+    checks: {variants: true, replica: true, concurrency: 4, faults: true}
+    commands:
+    - {command: [HSET, small, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [HSET, small, "", ""], expect: {equals: 1}}
+    - {command: [HGETALL, small], compare: unordered-pairs}
+    - {command: [HKEYS, small], compare: unordered}
+    - {command: [HVALS, small], compare: unordered}
+    - {command: [HGETALL, nosuch]}
+    - {command: [EVAL, "for i=1,300 do redis.call('HSET', KEYS[1], 'f'..i, 'v'..i)\
+          \ end return redis.call('HLEN', KEYS[1])", 1, bigh], expect: {equals: 300}}
+    - {command: [OBJECT, ENCODING, bigh], compare: skip}
+    - {command: [HGETALL, bigh], compare: unordered-pairs}
+    - {command: [HKEYS, bigh], compare: unordered}
+    - {command: [HVALS, bigh], compare: unordered}
+    - {command: [HRANDFIELD, bigh, 400], compare: unordered}
+    - {command: [HRANDFIELD, bigh, 400, WITHVALUES], compare: skip}
+    - {command: [HRANDFIELD, bigh, 50], compare: skip}
+    - {command: [COPY, bigh, bigh2], expect: {equals: 1}}
+    - {command: [HGETALL, bigh2], compare: unordered-pairs}
+    - {command: [COPY, small, small2], expect: {equals: 1}}
+    - {command: [HGETALL, small2], compare: unordered-pairs}
+    - {command: [DEBUG, DIGEST-VALUE, bigh], expect: {exists: true}}
+    - {command: [DEBUG, DIGEST], expect: {exists: true}}
+    - {command: [BGREWRITEAOF], expect: {error: false}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {restart: true}
+    - {command: [HLEN, bigh], expect: {equals: 300}}
+    - {command: [HGETALL, bigh], compare: unordered-pairs}
+    - {command: [HLEN, bigh2], expect: {equals: 300}}
+    - {command: [HGETALL, small], compare: unordered-pairs}
+    - {command: [DEBUG, DIGEST], expect: {exists: true}}
+required_events: [hashiter.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hashiter}

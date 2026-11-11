@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6b3a90e40e237c7bc90481c605809ebf9de8336d",
+  "parent": "80fcbd3fece6decb6195dc1a4289ebb675b5d45d",
+  "pr": 1073,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Added new reformat commit to .git-blame-ignore-revs (#1073)",
+  "date": "2024-09-25",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2093,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only appends a reformat commit hash to .git-blame-ignore-revs, a git tooling metadata file used by `git blame`. No source code, configuration, protocol, or build behavior changes, so no runtime path exists for a scenario to exercise."
+}

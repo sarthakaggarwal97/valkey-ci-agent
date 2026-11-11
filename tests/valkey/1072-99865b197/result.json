@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "99865b197cc5bcf0f9335e5dd2e6bfd5096b7c26",
+  "parent": "6b3a90e40e237c7bc90481c605809ebf9de8336d",
+  "pr": 1072,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix bug for CLUSTER SLOTS from EVAL over TLS (#1072)",
+  "date": "2024-09-25",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.2518,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix changes clusterCommandSlots' conn_type selection only for a caller with no real connection on the executing client: CLUSTER SLOTS via EVAL/module from a TLS client, or a module call with tls-cluster set. Over plain TCP or a unix socket the old code (fake client's conn==NULL -> not TLS) and the new code (connIsTLS of the real client's TCP connection -> not TLS) compute identical conn_type and byte-identical replies, so any sequence this harness can send is behaviourally identical on both builds and a compared scenario would correctly report unreached-change. Reaching the change requires"
+}

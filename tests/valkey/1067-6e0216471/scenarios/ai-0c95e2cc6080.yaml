@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey af811748e781..6e0216471d53.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0c95e2cc6080
+seed: 10670
+experiment:
+  id: proposed.forced-failover-asap-election
+  inputs:
+    shard: 0
+    candidates: all
+    attempts: 5
+    settle_s: 2
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 2
+  base_port: 7000

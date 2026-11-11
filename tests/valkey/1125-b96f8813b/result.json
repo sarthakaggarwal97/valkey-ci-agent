@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b96f8813b7b68a47e71c14acf4d3ed9c5a95de14",
+  "parent": "23ae21244eccb1a14573db0900ac21883bccfd98",
+  "pr": 1125,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add tags into .gitignore (#1125)",
+  "date": "2024-10-05",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2024,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds a single line ('tags') to .gitignore so that ctags index files are ignored by git. It touches no source code, build script, or configuration; no Valkey binary or runtime behaviour changes, so no scenario can reach it and none is needed."
+}

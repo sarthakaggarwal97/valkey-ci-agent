@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c873287d16eabb9e0470f5e21259a0e7f2cbf223",
+  "parent": "a7cbca406619eef635b9bb6ca21d15c7e33a79ee",
+  "pr": 1097,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "avoid double close on replica main channel (#1097)",
+  "date": "2024-09-30",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/replication.c:2741",
+      "src/replication.c:2742",
+      "src/replication.c:2743"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 4.5261,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-de93a4c8d4d0",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during fault.inject: LookupError: no live instance matches 'replica'"
+    }
+  ],
+  "recall_round": {
+    "tests": 3,
+    "recall": false
+  }
+}

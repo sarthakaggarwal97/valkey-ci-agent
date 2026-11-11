@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a7cbca406619eef635b9bb6ca21d15c7e33a79ee",
+  "parent": "bb57dfe6303ae53259cf7806c696cf56c637b4e7",
+  "pr": 1089,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "RDMA: Support .is_local method (#1089)",
+  "date": "2024-09-30",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3231,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds an .is_local implementation to the RDMA connection type in src/rdma.c. That code is compiled only with BUILD_RDMA=module (not in the default build the fuzzer uses), is loaded via MODULE LOAD (refused in sequences), and runs only on a live RDMA connection, which needs RDMA hardware or root-configured soft-RoCE that these unprivileged local runs do not have. No installed or writable experiment can open an RDMA connection, so connRdmaIsLocal is unreachable and no scenario can test it."
+}

@@ -1,0 +1,37 @@
+extends: [valkey.base]
+id: proposed.forced-failover-asap-election
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Concurrent CLUSTER FAILOVER FORCE on every candidate; the election
+    now starts in beforeSleep, not the next cron tick
+inputs:
+  properties:
+    shard: {type: integer, default: 0}
+    candidates: {type: string, enum: [all, one], default: all}
+    attempts: {type: integer, minimum: 1, maximum: 20, default: 5}
+    settle_s: {type: number, minimum: 0, maximum: 60, default: 2}
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 2}
+- use: valkey.action.cluster-election
+  id: election
+  depends_on: [warm-up]
+  config:
+    shard: {$ref: inputs.shard}
+    trigger: force_failover
+    candidates: {$ref: inputs.candidates}
+    attempts: {$ref: inputs.attempts}
+    timeout_s: 30
+    settle_s: {$ref: inputs.settle_s}
+    wait_synced: true
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [election]
+  config: {seconds: 3}
+required_events: [election.election-completed]
+required_evidence:
+- {evidence_id: valkey.cluster.election.result, source: election}

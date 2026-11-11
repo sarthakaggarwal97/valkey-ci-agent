@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6a8540cefe490f61aaf5985be4909a7092e9002f",
+  "parent": "dcac3e14993047845b85ad503cfa371d529256da",
+  "pr": 1126,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix some unitialized fields in `client` struct (#1126)",
+  "date": "2024-10-04",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.0538,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only initializes client->io_last_reply_block and client->io_last_bufpos in createClient. Every read of these fields happens exclusively in the I/O-thread write path (ioThreadWriteToClient -> _writeToClient/writevToClient), which can only run after trySendWriteToIOThreads has unconditionally assigned both fields (src/io_threads.c:399-404) and set io_write_state to CLIENT_PENDING_IO; postWriteToClient only resets them. The previously uninitialized values were therefore never read on any code path, so the fix has no observable behavior change \u2014 no reply, replication, persistence, or cr"
+}

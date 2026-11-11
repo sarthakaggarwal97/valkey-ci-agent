@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.function-cluster-slots-fake-client
+deployment:
+  modes: [standalone]
+metadata:
+  description: FCALL of a function calling CLUSTER SLOTS/SHARDS on a cluster node
+    does not crash the fake engine client
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fcall
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [FUNCTION, LOAD, "#!lua name=libcs\nredis.register_function('fcs',\
+          \ function(keys, args) return redis.call('CLUSTER', 'SLOTS') end)\nredis.register_function('fsh',\
+          \ function(keys, args) return redis.call('CLUSTER', 'SHARDS') end)"], expect: {
+        equals: libcs}}
+    - {command: [FCALL, fcs, "0"], expect_difference: true, expect: {exists: true}}
+    - {command: [FCALL, fsh, "0"], expect_difference: true, expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fcall}

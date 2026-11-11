@@ -1,0 +1,116 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "80fcbd3fece6decb6195dc1a4289ebb675b5d45d",
+  "parent": "6e0216471d5365882a042cd8f7531f5a277243e6",
+  "pr": 1063,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix module / script call CLUSTER SLOTS / SHARDS fake client check crash (#1063)",
+  "date": "2024-09-25",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 6,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 8,
+    "executed": 6,
+    "percent": 75,
+    "uncovered": [
+      "src/aof.c:1374",
+      "src/module.c:896"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 10.7143,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in clusterCommandSlots",
+      "scenario": "ai-5cb9700ebdea",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1063",
+      "fingerprint": "4460370c1faf37540d75",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in clusterCommandSlots",
+      "scenario": "ai-b32596316744",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1063",
+      "fingerprint": "4460370c1faf37540d75",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in clusterCommandSlots",
+      "scenario": "ai-ae388ded2695",
+      "seed": 3,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1063",
+      "fingerprint": "4460370c1faf37540d75",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in clusterCommandSlots",
+      "scenario": "ai-18ffee6e8a8b",
+      "seed": 4,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1063",
+      "fingerprint": "4460370c1faf37540d75",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in clusterCommandSlots",
+      "scenario": "ai-e2e7483a5771",
+      "seed": 5,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1063",
+      "fingerprint": "4460370c1faf37540d75",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in clusterCommandSlots",
+      "scenario": "ai-552a705586a4",
+      "seed": 6,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1063",
+      "fingerprint": "4460370c1faf37540d75",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

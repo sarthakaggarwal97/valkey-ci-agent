@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a1cc7c263abd..b5eb79307970.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3a371f35173f
+seed: 303
+experiment:
+  id: proposed.hrandfield-ht-subtract
+  inputs:
+    resp: 2
+    count: 7
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

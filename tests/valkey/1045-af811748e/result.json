@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "af811748e7819a5ac31a6df4b21622aa58c64ae4",
+  "parent": "6ce75cdea8ca7dc0d70c9ee7131b9d82778d1973",
+  "pr": 1045,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "clang-format: set ColumnLimit to 0 and reformat (#1045)",
+  "date": "2024-09-25",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.448,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure clang-format reformat: .clang-format's ColumnLimit is set to 0 and ~60 source files are mechanically rewrapped (whitespace after commas, macro line-continuation realignment, removal of clang-format off/on guards, re-indented string arrays with identical string contents). No tokens, literals, control flow, configs, or replies change, so there is no behavioral path for a scenario to exercise."
+}

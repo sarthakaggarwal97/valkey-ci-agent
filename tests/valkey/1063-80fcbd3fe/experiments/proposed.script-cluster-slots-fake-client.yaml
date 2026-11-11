@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.script-cluster-slots-fake-client
+deployment:
+  modes: [standalone]
+metadata:
+  description: redis.call CLUSTER SLOTS/SHARDS from a Lua script on a cluster node
+    does not crash the fake script client
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: script
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [EVAL, "return redis.call('CLUSTER', 'SLOTS')", "0"], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [EVAL, "return redis.call('CLUSTER', 'SHARDS')", "0"], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: script}

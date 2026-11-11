@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "983bb5110db0449568d6ac9836a06cc427d43168",
+  "parent": "99865b197cc5bcf0f9335e5dd2e6bfd5096b7c26",
+  "pr": 1074,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix RDMA build dependence (#1074)",
+  "date": "2024-09-25",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2198,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a one-line Makefile fix: the valkey-rdma.so target's prerequisite is corrected from the stale $(REDIS_SERVER_NAME) variable to $(SERVER_NAME). It only affects build dependency ordering for the optional RDMA module and changes no runtime behaviour, command replies, replication, or persistence; there is nothing a running-server scenario could exercise."
+}

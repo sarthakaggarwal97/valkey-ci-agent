@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a37dee4b3ae9aea2c060363d91426aaeee1a5ae3",
+  "parent": "bf8183d065f07b40d465cca818a51689036b7488",
+  "pr": 1057,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Change return value of aeTimeProc callback function to long long. (#1057)",
+  "date": "2024-09-27",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.74,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only widens the aeTimeProc return type from int to long long, removing a 32-bit truncation of the reschedule interval in processTimeEvents (src/ae.c:366-375). Of all callbacks, only moduleTimerHandler (src/module.c:9116-9161) can return a value above INT_MAX, and only when the nearest pending module timer is >~24.8 days out. Even then the module timer's firing time is fixed at creation (src/module.c:9182) and is unaffected by the return value; truncation on the parent only makes the main event-loop timer re-fire too soon (a CPU busy-spin), while all module-timer callbacks still fire"
+}

@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.lua-debugger-session
+deployment:
+  modes: [standalone]
+metadata:
+  description: Synchronous Lua debugger session exercising ldbServer command forwarding
+    and ldbLogRespReply under the renamed server globals
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ldbseq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {connection: dbg, command: [SCRIPT, DEBUG, SYNC], expect: {equals: OK}}
+    - {connection: dbg, command: [EVAL, "local a = server.call('set', KEYS[1], 'v1')\n\
+          local b = server.call('get', KEYS[1])\nreturn b", "1", dk]}
+    - {connection: dbg, command: [valkey, SET, aux, hello]}
+    - {connection: dbg, command: [redis, RPUSH, auxl, e1, e2, e3, e4, e5, e6, e7,
+        e8, e9, e10, e11, e12]}
+    - {connection: dbg, command: [valkey, INCR, aux]}
+    - {connection: dbg, command: [eval, return, "type(__server__err__handler)"], expect_difference: true,
+      expect: {exists: true}}
+    - {connection: dbg, command: [step]}
+    - {connection: dbg, command: [continue]}
+    - {connection: dbg, read: true}
+    - {command: [GET, dk], expect: {equals: v1}}
+    - {command: [GET, aux], expect: {equals: hello}}
+    - {command: [LLEN, auxl], expect: {equals: 12}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ldbseq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ldbseq}
