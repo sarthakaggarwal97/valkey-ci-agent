@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+import requests
 from github.GithubException import GithubException
 
 from scripts.common.github_client import retry_github_call
@@ -24,6 +25,30 @@ def test_retry_github_call_retries_retryable_errors(monkeypatch) -> None:
 
     assert result == "ok"
     assert calls["count"] == 3
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        requests.exceptions.ConnectionError("connection reset"),
+        requests.exceptions.Timeout("timed out"),
+        requests.exceptions.ChunkedEncodingError("response ended prematurely"),
+    ],
+)
+def test_retry_github_call_retries_transport_errors(monkeypatch, error: Exception) -> None:
+    calls = {"count": 0}
+
+    def operation() -> str:
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise error
+        return "ok"
+
+    monkeypatch.setattr("scripts.common.github_client.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr("scripts.common.github_client.random.uniform", lambda _a, _b: 0.0)
+
+    assert retry_github_call(operation, retries=2, description="test call") == "ok"
+    assert calls["count"] == 2
 
 
 @pytest.mark.parametrize("status", [401, 404])

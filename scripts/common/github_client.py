@@ -8,6 +8,7 @@ import time
 from collections.abc import Callable
 from typing import TypeVar
 
+import requests
 from github.GithubException import GithubException
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,15 @@ _RATE_LIMIT_403_INDICATORS = (
 
 
 def _is_retryable_error(exc: Exception) -> bool:
+    if isinstance(
+        exc,
+        (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.Timeout,
+            requests.exceptions.ChunkedEncodingError,
+        ),
+    ):
+        return True
     if not isinstance(exc, GithubException):
         return False
     if exc.status in RETRYABLE_HTTP_STATUS:
