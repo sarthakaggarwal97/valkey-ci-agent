@@ -84,6 +84,8 @@ class Case:
     issue: int = 0
     # A scheduled Daily run, whose tests run with --accurate.
     scheduled: bool = False
+    # The workflow file the job is in, without ``.yml``: a pull request also runs ``ci`` and ``codecov``.
+    workflow: str = Source.DAILY.value
     # A fix for a backport branch: an upstream change, ported.
     backport: bool = False
     test_name: str = ""
@@ -126,6 +128,7 @@ def load_cases(path: Path = CASES_FILE) -> dict[str, Case]:
             sha=str(item.get("sha") or ""), base_branch=str(item.get("base_branch") or ""),
             pr=int(item.get("pr") or 0), issue=int(item.get("issue") or 0),
             scheduled=bool(item.get("scheduled")), backport=bool(item.get("backport")),
+            workflow=str(item.get("workflow") or Source.DAILY.value),
             test_name=str(test.get("name") or ""), test_file=str(test.get("file") or ""),
             expect_port=str(expect.get("port") or ""), expect_pull=int(expect.get("pull") or 0),
             expect_refusal=bool(expect.get("refuse")),
@@ -170,7 +173,7 @@ def plan_case(case: Case, job_log: str) -> FixPlan:
         issue_number=case.issue,
         failed_tests=(FailedTest.from_report(case.test_name, case.test_file),) if case.test_file else (),
         source=Source.DAILY if case.scheduled else None,
-        workflow=Source.DAILY.value,
+        workflow=case.workflow,
     )
     if case.backport:
         target = FixTarget(

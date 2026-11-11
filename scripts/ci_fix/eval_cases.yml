@@ -338,3 +338,180 @@ cases:
     base_branch: unstable
     expect:
       refuse: true
+
+  # --- What is failing on the open backport pull requests' heads today (2026-11-11): the
+  # failures the backport follow-up would be asked to fix. No fix is known for most.
+
+  - id: bp80-sentinel-leak
+    about: The sentinel valkey-cli hint leak on the 8.0 backport PR's current head.
+    repo: valkey-io/valkey
+    run_id: 42993097593
+    job_id: 130430467879
+    job: test-sanitizer-address (clang)
+    sha: 423a091189c9e3eafb015b07ba3dd1ea2158c762
+    base_branch: '8.0'
+    pr: 5077
+    backport: true
+    expect:
+      port: c86f6ee511e1a36488feb3b8e62093e69195d332
+
+  - id: bp80-valgrind-misc
+    about: Valgrind errors that name no test, on the 8.0 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42993097593
+    job_id: 130430467777
+    job: test-valgrind-no-malloc-usable-size-misc
+    sha: 423a091189c9e3eafb015b07ba3dd1ea2158c762
+    base_branch: '8.0'
+    pr: 5077
+    backport: true
+
+  - id: bp80-alpine-moved
+    about: A MOVED exception between tests in an Alpine container, on the 8.0 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42993097593
+    job_id: 130430467384
+    job: test-alpine-libc-malloc
+    sha: 423a091189c9e3eafb015b07ba3dd1ea2158c762
+    base_branch: '8.0'
+    pr: 5077
+    backport: true
+
+  - id: bp80-manual-takeover
+    about: A cluster manual takeover test on the 8.0 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42993097593
+    job_id: 130430467151
+    job: test-ubuntu-jemalloc-fortify
+    sha: 423a091189c9e3eafb015b07ba3dd1ea2158c762
+    base_branch: '8.0'
+    pr: 5077
+    backport: true
+    test:
+      name: 'Instance #0, #1, #2 gets converted into a slaves'
+      file: tests/unit/cluster/manual-takeover.tcl
+
+  - id: bp81-fedora-moved
+    about: A MOVED exception between tests in a Fedora container, on the 8.1 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42993376767
+    job_id: 130431384708
+    job: test-fedoralatest-tls-module-no-tls
+    sha: 18692ae972c71acba4225bbcc5d9c3ab73204e06
+    base_branch: '8.1'
+    pr: 5075
+    backport: true
+
+  - id: bp81-asan-gcc
+    about: An address sanitizer job that names no failing test, on the 8.1 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42993376767
+    job_id: 130431384557
+    job: test-sanitizer-address (gcc)
+    sha: 18692ae972c71acba4225bbcc5d9c3ab73204e06
+    base_branch: '8.1'
+    pr: 5075
+    backport: true
+
+  - id: bp81-force-defrag
+    about: The force-defrag sanitizer job, naming no failing test, on the 8.1 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42993376767
+    job_id: 130431384479
+    job: test-sanitizer-force-defrag
+    sha: 18692ae972c71acba4225bbcc5d9c3ab73204e06
+    base_branch: '8.1'
+    pr: 5075
+    backport: true
+
+  - id: bp81-codecov-build
+    about: The code-coverage job's build breaks on the 8.1 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42993376810
+    job_id: 130431382953
+    job: code-coverage
+    sha: 18692ae972c71acba4225bbcc5d9c3ab73204e06
+    base_branch: '8.1'
+    pr: 5075
+    backport: true
+    workflow: codecov
+
+  - id: bp91-migrateslots
+    about: A slot migration test with TLS on the 9.1 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42993396425
+    job_id: 130431449429
+    job: test-ubuntu-tls
+    sha: 0ae68b1f5b7af93b4a4e8c01a1d94e07f0bfec4a
+    base_branch: '9.1'
+    pr: 5074
+    backport: true
+    test:
+      name: Restart source primary during migration (without save) causes failure
+      file: tests/unit/cluster/cluster-migrateslots.tcl
+
+  - id: bp90-restore-ttl
+    about: A hash field TTL test with libc malloc on the 9.0 backport PR.
+    repo: valkey-io/valkey
+    run_id: 43004906063
+    job_id: 130469839662
+    job: test-ubuntu-libc-malloc
+    sha: 3b553049c47b4b82bfb75e5617c1d94cd3c66d0c
+    base_branch: '9.0'
+    pr: 5073
+    backport: true
+    test:
+      name: RESTORE Preserves Field TTLs
+      file: tests/unit/hashexpire.tcl
+
+  - id: bp90-compat-defrag
+    about: An active defrag test in the compatibility job against 7.2.11, on the 9.0 backport PR.
+    repo: valkey-io/valkey
+    run_id: 43004905995
+    job_id: 130469838858
+    job: test-ubuntu-latest-compatibility (7.2.11, valkey-7.2.11-noble-x86_64.tar.gz)
+    sha: 3b553049c47b4b82bfb75e5617c1d94cd3c66d0c
+    base_branch: '9.0'
+    pr: 5073
+    backport: true
+    workflow: ci
+    test:
+      name: 'Active Defrag stream: cluster'
+      file: tests/unit/memefficiency.tcl
+
+  - id: bp90-asan
+    about: CI's address sanitizer job, naming no failing test, on the 9.0 backport PR.
+    repo: valkey-io/valkey
+    run_id: 43004905995
+    job_id: 130469838820
+    job: test-sanitizer-address
+    sha: 3b553049c47b4b82bfb75e5617c1d94cd3c66d0c
+    base_branch: '9.0'
+    pr: 5073
+    backport: true
+    workflow: ci
+
+  - id: bp72-diskless-drop
+    about: A diskless replication test in an Alpine container, on the 7.2 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42999431411
+    job_id: 130451584119
+    job: test-alpine-libc-malloc
+    sha: ba661105a2d9940cdc896a5f2ceda288298e4b1e
+    base_branch: '7.2'
+    pr: 5072
+    backport: true
+    test:
+      name: diskless all replicas drop during rdb pipe
+      file: tests/integration/replication.tcl
+
+  - id: bp72-valgrind-misc
+    about: Valgrind errors that name no test, on the 7.2 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42999431411
+    job_id: 130451583689
+    job: test-valgrind-misc
+    sha: ba661105a2d9940cdc896a5f2ceda288298e4b1e
+    base_branch: '7.2'
+    pr: 5072
+    backport: true
