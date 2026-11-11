@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4fe83207116b..744b13e30255.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-be5e8a65212f
+seed: 846
+experiment:
+  id: proposed.hll-patlen-compare
+  inputs:
+    resp: 2
+    sparse_max_bytes: 3000
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

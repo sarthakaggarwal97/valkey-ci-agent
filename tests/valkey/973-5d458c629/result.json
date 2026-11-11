@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5d458c62925f4c5d6eba1788447a1bf6d9d6380f",
+  "parent": "fea49bce2c5018efbd564c627e6ceedbbe136cc5",
+  "pr": 973,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Delete unused parts of zipmap (#973)",
+  "date": "2024-08-31",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4917,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only deletes zipmap functions that nothing in the server references (zipmapNew/Set/Del/Get/Exists/Len/BlobLen and their static helpers) and rewrites the unit tests to use hand-built byte literals instead of the deleted writers. The sole runtime user of zipmap is rdb.c's loading of legacy zipmap-encoded hashes (RDB_TYPE_HASH_ZIPMAP), which calls only zipmapValidateIntegrity, zipmapRewind and zipmapNext \u2014 all left byte-for-byte unchanged (zipmapGetEncodedLengthSize was merely relocated). This is a pure dead-code removal with no reachable behaviour change, so no scenario can distinguis"
+}

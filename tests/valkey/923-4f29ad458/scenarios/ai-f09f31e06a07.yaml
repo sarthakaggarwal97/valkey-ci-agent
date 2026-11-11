@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1ff2a3b6aeca..4f29ad4583db.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f09f31e06a07
+seed: 102
+experiment:
+  id: proposed.sds-alloc-size-accounting
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

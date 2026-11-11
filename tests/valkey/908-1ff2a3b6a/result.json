@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1ff2a3b6aeca0645d3dd38aa8ae3b5087adc8d4a",
+  "parent": "54c0f743dd6971bf8636c13600a6d4e2ef10106f",
+  "pr": 908,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove `dual-channel-replication` Feature Flag's Protection (#908)",
+  "date": "2024-08-27",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.449,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

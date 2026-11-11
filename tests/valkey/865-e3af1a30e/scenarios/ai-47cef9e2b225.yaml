@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5d458c62925f..e3af1a30e410.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-47cef9e2b225
+seed: 104
+experiment:
+  id: proposed.set-expired-del-propagation-under-kill
+  inputs:
+    instance: primary
+    signal: SIGKILL
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7300
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec

@@ -1,0 +1,23 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 089048d36485..70624ea63d47.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e73fb9c4dc41
+seed: 9132
+experiment:
+  id: valkey.replication-full-resync
+  inputs:
+    stable_keys: 2000
+    mutable_keys: 300
+    mutation_rate: 1500
+    value_size: 16384
+    pause_s: 4
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7100
+  server_config:
+    lazyfree-lazy-eviction: 'yes'
+    lazyfree-lazy-expire: 'yes'
+    lazyfree-lazy-server-del: 'yes'
+    lazyfree-lazy-user-del: 'yes'
+    lazyfree-lazy-user-flush: 'yes'
+    replica-lazy-flush: 'yes'

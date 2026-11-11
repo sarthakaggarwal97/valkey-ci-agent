@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 25dd943087d0..75b824052d72.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3a5df353478f
+seed: 96401
+experiment:
+  id: proposed.keys-exact-pattern-revert
+  inputs:
+    resp: 2
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

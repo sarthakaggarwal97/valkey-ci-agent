@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 089048d36485..70624ea63d47.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c036d1640eed
+seed: 9131
+experiment:
+  id: proposed.lazyfree-defaults
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

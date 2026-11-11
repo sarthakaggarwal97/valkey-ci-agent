@@ -1,0 +1,71 @@
+extends: [valkey.liveness]
+id: proposed.lazyfree-defaults
+deployment:
+  modes: [standalone]
+metadata:
+  description: All six lazyfree configs default to yes, and DEL, lazy expire, RENAME-over,
+    SCRIPT FLUSH and FLUSHALL stay correct under lazy freeing
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lazyfree
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, lazyfree-lazy-eviction], expect_difference: true, expect: {
+        equals: [lazyfree-lazy-eviction, "yes"]}}
+    - {command: [CONFIG, GET, lazyfree-lazy-expire], expect_difference: true, expect: {
+        equals: [lazyfree-lazy-expire, "yes"]}}
+    - {command: [CONFIG, GET, lazyfree-lazy-server-del], expect_difference: true,
+      expect: {equals: [lazyfree-lazy-server-del, "yes"]}}
+    - {command: [CONFIG, GET, lazyfree-lazy-user-del], expect_difference: true, expect: {
+        equals: [lazyfree-lazy-user-del, "yes"]}}
+    - {command: [CONFIG, GET, lazyfree-lazy-user-flush], expect_difference: true,
+      expect: {equals: [lazyfree-lazy-user-flush, "yes"]}}
+    - {command: [CONFIG, GET, replica-lazy-flush], expect_difference: true, expect: {
+        equals: [replica-lazy-flush, "yes"]}}
+    - {command: [DEBUG, POPULATE, 50000], expect: {equals: OK}}
+    - {command: [RPUSH, biglist, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x,
+        x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x,
+        x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x,
+        x, x, x, x, x], expect: {equals: 72}}
+    - {command: [DEL, biglist], expect: {equals: 1}}
+    - {command: [EXISTS, biglist], expect: {equals: 0}}
+    - {command: [DEL, nosuch, nosuch], expect: {equals: 0}}
+    - {command: [RPUSH, biglist2, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x,
+        x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x,
+        x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x,
+        x, x, x, x, x, x], expect: {equals: 72}}
+    - {command: [SET, src, srcval], expect: {equals: OK}}
+    - {command: [RENAME, src, biglist2], expect: {equals: OK}}
+    - {command: [GET, biglist2], expect: {equals: srcval}}
+    - {command: [TYPE, biglist2], expect: {equals: string}}
+    - {command: [SET, exp, payload, PXAT, 1], expect: {equals: OK}}
+    - {command: [EXISTS, exp], expect: {equals: 0}}
+    - {command: [TTL, exp], expect: {equals: -2}}
+    - {command: [SCRIPT, LOAD, "return 1"]}
+    - {command: [SCRIPT, FLUSH], expect: {equals: OK}}
+    - {command: [EVAL, "return 1", 0], expect: {equals: 1}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [DEBUG, POPULATE, 50000], expect: {equals: OK}}
+    - {command: [FLUSHDB], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [GET, k2], expect: {equals: v2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [lazyfree.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lazyfree}

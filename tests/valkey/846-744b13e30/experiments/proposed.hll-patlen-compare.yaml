@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.hll-patlen-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    hllPatLen was rewritten to use a ctzll intrinsic. HLL hashing uses a fixed seed,
+    so PFADD/PFCOUNT/PFMERGE replies and the PFDEBUG GETREG register dump are deterministic:
+    compare them across the change and its parent over sparse and dense encodings,
+    adversarial elements, and PFSELFTEST (which pushes 10M elements through the changed
+    counting path internally).
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    sparse_max_bytes: {type: integer, default: 3000}
+components:
+- use: valkey.action.commands
+  id: hll
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      hll-sparse-max-bytes: {$ref: inputs.sparse_max_bytes}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [PFADD, 'hll:sparse'], expect: {equals: 1}}
+    - {command: [PFADD, 'hll:sparse', ""], expect: {equals: 1}}
+    - {command: [PFADD, 'hll:sparse', ""], expect: {equals: 0}}
+    - {command: [PFADD, 'hll:sparse', a, b, c, d, e, a, a, a], expect: {equals: 1}}
+    - {command: [PFADD, 'hll:sparse', !!binary "AAECAwQ=", !!binary "/////w==", !!binary "AAAAAAAAAAA="],
+      expect: {equals: 1}}
+    - {command: [PFCOUNT, 'hll:sparse'], expect: {min: 1, max: 20}}
+    - {command: [PFDEBUG, DECODE, 'hll:sparse']}
+    - {command: [EVAL, "for i=1,10000 do redis.call('PFADD', KEYS[1], 'element:' ..\
+          \ i) end return redis.call('PFCOUNT', KEYS[1])", "1", 'hll:dense'], expect: {
+        min: 9300, max: 10700}}
+    - {command: [PFDEBUG, ENCODING, 'hll:dense']}
+    - {command: [PFDEBUG, GETREG, 'hll:dense']}
+    - {command: [PFCOUNT, 'hll:sparse', 'hll:dense'], expect: {min: 1}}
+    - {command: [PFMERGE, 'hll:merged', 'hll:sparse', 'hll:dense'], expect: {equals: OK}}
+    - {command: [PFCOUNT, 'hll:merged'], expect: {min: 1}}
+    - {command: [PFDEBUG, GETREG, 'hll:merged']}
+    - {command: [PFDEBUG, TODENSE, 'hll:sparse']}
+    - {command: [PFDEBUG, GETREG, 'hll:sparse']}
+    - {command: [PFADD, count, "9223372036854775807", "-9223372036854775808", "4294967296",
+        "2147483648", "2147483647"], expect: {equals: 1}}
+    - {command: [PFCOUNT, count], expect: {min: 1, max: 10}}
+    - {command: [PFSELFTEST], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hll.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hll}

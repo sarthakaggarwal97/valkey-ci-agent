@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "75b824052d72eec8611a5af5e92ef428877cec1e",
+  "parent": "25dd943087d0f2bdbea76edd059cf5805d4db7e2",
+  "pr": 964,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Revert make KEYS to be an exact match if there is no pattern (#964)",
+  "date": "2024-08-29",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.8993,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-3a5df353478f",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'keyscmp' returned ERROR: expectations both builds violate alike, so they are not about the change: 22 (KEYS <binary>)"
+    },
+    {
+      "scenario": "ai-8aa5746e03fe",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'keyscmp' returned ERROR: expectations both builds violate alike, so they are not about the change: 22 (KEYS <binary>)"
+    },
+    {
+      "scenario": "ai-75fc4377fa23",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'keyscmp' returned ERROR: expectations both builds violate alike, so they are not about the change: 22 (KEYS <binary>)"
+    }
+  ],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

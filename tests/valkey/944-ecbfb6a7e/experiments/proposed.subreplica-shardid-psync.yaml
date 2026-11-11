@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.subreplica-shardid-psync
+deployment:
+  modes: [standalone]
+metadata:
+  description: Sub-replica whose primary lost its last slot to another shard must
+    full-sync, not psync with its old shard's history
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: fold
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SET, key_991803, base], expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 0, IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 0, MIGRATING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 0, NODE, "<node.1.id>"], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 0, NODE, "<node.1.id>"], node: 0, expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-allow-replica-migration, no], node: 2, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.1.id>"], node: 2, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 2, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [SET, key_977613, shard1-data], node: 1, expect: {equals: OK}}
+    - {command: [READONLY], node: 2, expect: {equals: OK}}
+    - {command: [GET, key_977613], node: 2, wait_s: 30, expect: {equals: shard1-data}}
+    - {command: [DEL, key_977613], node: 1, expect: {equals: 1}}
+    - {command: [CLUSTER, SETSLOT, 0, NODE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 0, wait_s: 90, expect: {contains: "connected_slaves:2"},
+      compare: skip}
+    - {command: [INFO, stats], node: 0, expect_difference: true, expect: {contains: "sync_partial_err:0"}}
+    - {command: [GET, key_991803], node: 2, wait_s: 30, expect: {equals: base}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [fold.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fold}

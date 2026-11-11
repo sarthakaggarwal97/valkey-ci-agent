@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "076bf6605fbf2b4b95637bdd4b14a9571139c2fc",
+  "parent": "6a84e06b05dd08c61942cdb254997775ed9b5e00",
+  "pr": 860,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Move prepareClientToWrite out of loop for lrange command to reduce the redundant call. (#860)",
+  "date": "2024-08-27",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 27,
+    "executed": 26,
+    "percent": 96,
+    "uncovered": [
+      "src/networking.c:920"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.9522,
+  "findings": [],
+  "recorded": []
+}

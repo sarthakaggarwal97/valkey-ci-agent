@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 54c0f743dd69..1ff2a3b6aeca.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ee618abcae0f
+seed: 9081
+experiment:
+  id: proposed.dual-channel-toggle-unprotected
+  inputs:
+    initial: 'no'
+    toggled: 'yes'
+deployment:
+  mode: standalone
+  base_port: 7000

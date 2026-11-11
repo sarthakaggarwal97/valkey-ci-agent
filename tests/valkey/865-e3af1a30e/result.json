@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e3af1a30e41087364091f5fe6d9c71f61526fe3f",
+  "parent": "5d458c62925f4c5d6eba1788447a1bf6d9d6380f",
+  "pr": 865,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fast path in SET if the expiration time is expired (#865)",
+  "date": "2024-08-31",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 15,
+    "executed": 15,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 9.4342,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "927c2a8cd137431d4a6226f0a51ed24c348b2cef",
+  "parent": "6172907094b132e48f5004cf6db3a4d47aa8725c",
+  "pr": 958,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Delete files MANIFESTO, BUGS and INSTALL (#958)",
+  "date": "2024-08-28",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.218,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change deletes three plain-text documentation files (MANIFESTO, BUGS, INSTALL) from the repository root. No source code, build system, configuration, command, or protocol behaviour changes, so no server or tool behaviour can differ and there is nothing to test."
+}

@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-11T14:55+00:00.
+Updated 2026-11-11T14:56+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1799 | 724 | #877 (2024-09-02) | 293 | 257.0 |
+| valkey-io/valkey | 1825 | 698 | #951 (2024-08-27) | 319 | 260.7 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 64 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 9.1 |
 | valkey-io/valkey-search | 672 | 0 | f8106e72e984 (2024-11-27) | 0 | 96.0 |
@@ -13,28 +13,28 @@ Updated 2026-11-11T14:55+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-11T13:33:08+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43010363615): 20 merge(s) tested, 0 without a code change.
+[2026-11-11T14:56:03+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43030160751): 20 merge(s) tested, 6 without a code change.
 
-- [valkey-io/valkey#5349](https://github.com/valkey-io/valkey/pull/5349) ([tests](tests/valkey/5349-d5bf376a3/)): Treat a torn annotation at the end of an AOF file as a short read (#5349): 1 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1115](https://github.com/valkey-io/valkey/pull/1115) ([tests](tests/valkey/1115-150c197bd/)): Apply CVE patches for CVE-2024-31449, CVE-2024-31227, CVE-2024-31228 (#1115): 2 of 3 test(s) reached the change, coverage 100%; crash, fixed by #1115 (recorded)
-- [valkey-io/valkey#1001](https://github.com/valkey-io/valkey/pull/1001) ([tests](tests/valkey/1001-4033c99ef/)): Fix module RdbLoad wrongly disable the AOF (#1001): 1 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#989](https://github.com/valkey-io/valkey/pull/989) ([tests](tests/valkey/989-1b2416845/)): Dual Channel Replication - Verify Replica Local Buffer Limit Configuration (#989): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#996](https://github.com/valkey-io/valkey/pull/996) ([tests](tests/valkey/996-58fe9c013/)): Use hashtable as the default type of temp set object during sunion/sdiff (#996): 2 of 2 test(s) reached the change, coverage 100%; [regressed-fix, the fix of #996 regressed](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/126)
-- [valkey-io/valkey#1011](https://github.com/valkey-io/valkey/pull/1011) ([tests](tests/valkey/1011-9f0c80187/)): Fix crash in async IO threads with TLS (#1011): 0 of 6 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#778](https://github.com/valkey-io/valkey/pull/778) ([tests](tests/valkey/778-affbea5dc/)): For MEETs, save the extensions support flag immediately during MEET processing (#778): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1002](https://github.com/valkey-io/valkey/pull/1002) ([tests](tests/valkey/1002-50c1fe59f/)): Add missing moduleapi getchannels test and fix tests (#1002): declined: The change modifies only test infrastructure: it registers the existing getchannels moduleapi test in the runtest-moduleapi runner script and updates the expected ACL DRYRUN error-message strings in tests/unit/moduleapi/getchannels.tcl to match the server's current message format ('User <n
-- [valkey-io/valkey#1004](https://github.com/valkey-io/valkey/pull/1004) ([tests](tests/valkey/1004-f504cf233/)): add assertion for kvstore's dictType (#1004): declined: The change only adds assertions in kvstoreCreate that the dictType's rehashingStarted, rehashingCompleted and dictMetadataBytes callbacks are the kvstore-specific ones. Every existing caller (kvstoreKeysDictType, kvstoreExpiresDictType, kvstoreChannelDictType in server.c) already sets exac
-- [valkey-io/valkey#946](https://github.com/valkey-io/valkey/pull/946) ([tests](tests/valkey/946-20d583f77/)): Migrate dict.c unit tests to new framework (#946): declined: The change only migrates dict.c's unit tests from the legacy SERVER_TEST in-binary test runner to the new standalone unit-test framework (new src/unit/test_dict.c, removal of the #ifdef SERVER_TEST block in dict.c, its prototype in dict.h, and the 'dict' entry in server.c's serverTests tab
-- [valkey-io/valkey#949](https://github.com/valkey-io/valkey/pull/949) ([tests](tests/valkey/949-14016d2df/)): Migrate listpack.c unit tests to new framework  (#949): declined: The change only migrates listpack unit tests to the new test framework: it deletes the #ifdef SERVER_TEST test block from listpack.c (compiled only into test builds, never the shipped server), removes the test declaration from listpack.h and the test-dispatch entry from server.c's serverTe
-- [valkey-io/valkey#875](https://github.com/valkey-io/valkey/pull/875) ([tests](tests/valkey/875-c642cf013/)): Add client info to SHUTDOWN / CLUSTER FAILOVER logs (#875): 0 of 8 test(s) reached the change, coverage 94%; [crash, predates #875](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/127)
-- [valkey-io/valkey#886](https://github.com/valkey-io/valkey/pull/886) ([tests](tests/valkey/886-647852659/)): Fix aof base suffix when modifying aof-use-rdb-preamble during rewrite (#886): 1 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#965](https://github.com/valkey-io/valkey/pull/965) ([tests](tests/valkey/965-9b51949ab/)): Fix missing replication link re-connection when primary's IP/port is updated in `clusterProcessGossipSection` (#965): 0 of 3 test(s) reached the change, coverage 0%
-- [valkey-io/valkey#993](https://github.com/valkey-io/valkey/pull/993) ([tests](tests/valkey/993-9033734b6/)): Add newline to argv in crash report when doing redact (#993): declined: The change only fixes log formatting in the crash report: it removes a trailing space and adds a missing newline to the serverLog lines printed for redacted argv entries in _serverAssertPrintClientInfo and logCurrentClient (src/debug.c). These functions run only inside the assertion/crash 
-- [valkey-io/valkey#988](https://github.com/valkey-io/valkey/pull/988) ([tests](tests/valkey/988-2d1eca577/)): Add SLOT-STATS under CLUSTER HELP string. (#988): 0 of 2 test(s) reached the change
-- [valkey-io/valkey#983](https://github.com/valkey-io/valkey/pull/983) ([tests](tests/valkey/983-ea58fbf40/)): Rewrite lazyfree docs in valkey.conf to reflect that lazy is now default (#983): declined: The change edits only comment text in valkey.conf: it rewrites the LAZY FREEING section's documentation to say lazy freeing is the default since Valkey 8.0. Every configuration directive in the section keeps its existing name and value (all remain 'yes'), and no C source, parsing code, or 
-- [valkey-io/valkey#979](https://github.com/valkey-io/valkey/pull/979) ([tests](tests/valkey/979-f143ffd2a/)): Fix typo in valkey-cli.c (#979): declined: The change only corrects a typo in a log message string ("replicsa" -> "replicas") printed by valkey-cli's clusterManagerOptimizeAntiAffinity warning. No control flow, command behavior, reply, exit status, or data path changes; it is a cosmetic text fix with no behavior to regress, so no s
-- [valkey-io/valkey#749](https://github.com/valkey-io/valkey/pull/749) ([tests](tests/valkey/749-981f977ab/)): Improve type safety and refactor dict entry handling (#749): 0 of 9 test(s) reached the change, coverage 81%
-- [valkey-io/valkey#982](https://github.com/valkey-io/valkey/pull/982) ([tests](tests/valkey/982-3e14516d8/)): Initialize all the fields for the test kvstore (#982): declined: The change modifies only src/unit/test_kvstore.c, a unit-test fixture: it initializes the kvstore rehashing and metadata-size callbacks in the test-only dictType so the kvstore unit tests exercise the real callback paths. No shipped server code, command behaviour, replication, persistence,
+- [valkey-io/valkey#877](https://github.com/valkey-io/valkey/pull/877) ([tests](tests/valkey/877-5fdb47c2e/)): Add configuration hide-user-data-from-log to hide user data from server logs (#877): 2 of 11 test(s) reached the change, coverage 33%
+- [valkey-io/valkey#966](https://github.com/valkey-io/valkey/pull/966) ([tests](tests/valkey/966-32116d09b/)): Use metadata to handle the reference relationship between kvstore and dict (#966): 0 of 3 test(s) reached the change, coverage 94%
+- [valkey-io/valkey#913](https://github.com/valkey-io/valkey/pull/913) ([tests](tests/valkey/913-70624ea63/)): Change all the lazyfree configurations to yes by default (#913): 1 of 4 test(s) reached the change
+- [valkey-io/valkey#975](https://github.com/valkey-io/valkey/pull/975) ([tests](tests/valkey/975-089048d36/)): Fix zipmap test null pointer (#975): declined: The change edits only the unit test src/unit/test_zipmap.c, replacing a NULL expected value with an empty string to avoid a null-pointer dereference inside the test itself. It changes no server, command, replication, persistence or tool behavior, so no runtime scenario can reach or observe
+- [valkey-io/valkey#865](https://github.com/valkey-io/valkey/pull/865) ([tests](tests/valkey/865-e3af1a30e/)): Fast path in SET if the expiration time is expired (#865): 2 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#973](https://github.com/valkey-io/valkey/pull/973) ([tests](tests/valkey/973-5d458c629/)): Delete unused parts of zipmap (#973): declined: The change only deletes zipmap functions that nothing in the server references (zipmapNew/Set/Del/Get/Exists/Len/BlobLen and their static helpers) and rewrites the unit tests to use hand-built byte literals instead of the deleted writers. The sole runtime user of zipmap is rdb.c's loading 
+- [valkey-io/valkey#895](https://github.com/valkey-io/valkey/pull/895) ([tests](tests/valkey/895-743f5ac2a/)): standalone -REDIRECT handles special case of MULTI context (#895): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#474](https://github.com/valkey-io/valkey/pull/474) ([tests](tests/valkey/474-2b76c8fbe/)): Migrate zipmap unit test to new framework (#474): declined: The change is a pure test-infrastructure migration: it removes the zipmap entry from the legacy serverTests[] table in server.c and adds an equivalent standalone unit test file (src/unit/test_zipmap.c) registered in test_files.h. No server runtime behaviour, command, reply, data structure,
+- [valkey-io/valkey#944](https://github.com/valkey-io/valkey/pull/944) ([tests](tests/valkey/944-ecbfb6a7e/)): Fix reconfiguring sub-replica causing data loss when myself change shard_id (#944): 2 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#961](https://github.com/valkey-io/valkey/pull/961) ([tests](tests/valkey/961-4a9b4f667/)): free client's multi state when it becomes dirty (#961): 3 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#963](https://github.com/valkey-io/valkey/pull/963) ([tests](tests/valkey/963-ad0ede302/)): Exclude '.' and ':' from `isValidAuxChar`'s banned charset (#963): 0 of 3 test(s) reached the change, coverage 100%; crash, fixed by #963 (recorded)
+- [valkey-io/valkey#964](https://github.com/valkey-io/valkey/pull/964) ([tests](tests/valkey/964-75b824052/)): Revert make KEYS to be an exact match if there is no pattern (#964): 0 of 3 test(s) reached the change
+- [valkey-io/valkey#958](https://github.com/valkey-io/valkey/pull/958) ([tests](tests/valkey/958-927c2a8cd/)): Delete files MANIFESTO, BUGS and INSTALL (#958): declined: The change deletes three plain-text documentation files (MANIFESTO, BUGS, INSTALL) from the repository root. No source code, build system, configuration, command, or protocol behaviour changes, so no server or tool behaviour can differ and there is nothing to test.
+- [valkey-io/valkey#956](https://github.com/valkey-io/valkey/pull/956) ([tests](tests/valkey/956-2b71a7824/)): Add comment explaining log file reopening for rotation support (#956): declined: The change adds a three-line comment above the fopen in serverLogRaw explaining that the log file is reopened on every call to support rotation. No code path, reply, config, or behaviour changes — it is a comment-only change, so there is nothing a scenario could exercise or distinguish fro
+- [valkey-io/valkey#846](https://github.com/valkey-io/valkey/pull/846) ([tests](tests/valkey/846-744b13e30/)): Using intrinsics to optimize counting HyperLogLog trailing bits (#846): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#860](https://github.com/valkey-io/valkey/pull/860) ([tests](tests/valkey/860-076bf6605/)): Move prepareClientToWrite out of loop for lrange command to reduce the redundant call. (#860): 0 of 3 test(s) reached the change, coverage 96%
+- [valkey-io/valkey#923](https://github.com/valkey-io/valkey/pull/923) ([tests](tests/valkey/923-4f29ad458/)): Use sdsAllocSize instead of sdsZmallocSize (#923): 2 of 5 test(s) reached the change, coverage 90%
+- [valkey-io/valkey#908](https://github.com/valkey-io/valkey/pull/908) ([tests](tests/valkey/908-1ff2a3b6a/)): Remove `dual-channel-replication` Feature Flag's Protection (#908): 2 of 4 test(s) reached the change
+- [valkey-io/valkey#953](https://github.com/valkey-io/valkey/pull/953) ([tests](tests/valkey/953-54c0f743d/)): Connection minor fixes (#953): 0 of 3 test(s) reached the change
+- [valkey-io/valkey#861](https://github.com/valkey-io/valkey/pull/861) ([tests](tests/valkey/861-04d76d8b0/)): Improve multithreaded performance with memory prefetching (#861): 3 of 8 test(s) reached the change, coverage 97%
 
 ### valkey-io/valkey-bloom
 
@@ -53,10 +53,10 @@ Updated 2026-11-11T14:55+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 804 of 1278 tested (63%)
-- Changed-line coverage: median 100% of 798 merge(s) measured, 64 under 50%
-- Recall: 217 parents flagged of 342 fix merges
-- Claude: $950.56 in the last 24 hours, $9311.36 in the last 7 days, $9311.36 in all
+- Merges whose tests reached the change: 813 of 1293 tested (63%)
+- Changed-line coverage: median 100% of 809 merge(s) measured, 65 under 50%
+- Recall: 218 parents flagged of 344 fix merges
+- Claude: $1049.30 in the last 24 hours, $9410.11 in the last 7 days, $9410.11 in all
 - Issues filed: 71
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

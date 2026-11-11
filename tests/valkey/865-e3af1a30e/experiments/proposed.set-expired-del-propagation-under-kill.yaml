@@ -1,0 +1,63 @@
+extends: [valkey.base]
+id: proposed.set-expired-del-propagation-under-kill
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: A burst of SETs with already-expired EXAT/PXAT (propagated as DEL/UNLINK)
+    runs under writes, then a node is killed and restarted; the DELs must replay cleanly
+    from the AOF or across resync, with no acknowledged write lost and no crash
+inputs:
+  properties:
+    instance: {type: string, enum: [primary, replica], default: replica}
+    signal: {type: string, enum: [SIGKILL, SIGTERM, SIGSTOP], default: SIGKILL}
+components:
+- use: valkey.fault.process-signal
+  id: kill
+  config:
+    when_event: setburst.completed
+    instance: {$ref: inputs.instance}
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: setburst
+  depends_on: [warm-up]
+  config:
+    instances: primaries
+    timeout_s: 10
+    commands:
+    - {command: [SET, "fx:a1", v], expect: {equals: OK}}
+    - {command: [SET, "fx:a1", w, EXAT, 1], expect: {equals: OK}}
+    - {command: [SET, "fx:a2", v], expect: {equals: OK}}
+    - {command: [SET, "fx:a2", w, PXAT, 1], expect: {equals: OK}}
+    - {command: [SET, "fx:a3", v], expect: {equals: OK}}
+    - {command: [SET, "fx:a3", w, XX, EXAT, 1], expect: {equals: OK}}
+    - {command: [SET, "fx:a4", v], expect: {equals: OK}}
+    - {command: [SET, "fx:a4", w, GET, EXAT, 1], expect: {equals: v}}
+    - {command: [SET, "fx:b1", v, PXAT, 1], expect: {equals: OK}}
+    - {command: [SET, "fx:b2", v, EXAT, 1], expect: {equals: OK}}
+    - {command: [SET, "fx:b3", v, NX, PXAT, 1], expect: {equals: OK}}
+    - {command: [SET, "fx:a5", v], expect: {equals: OK}}
+    - {command: [SET, "fx:a5", w, EXAT, 1], expect: {equals: OK}}
+    - {command: [SET, "fx:a6", v], expect: {equals: OK}}
+    - {command: [SET, "fx:a6", w, PXAT, 1], expect: {equals: OK}}
+    - {command: [SET, "fx:c1", v], expect: {equals: OK}}
+    - {command: [EXPIREAT, "fx:c1", 1], expect: {equals: 1}}
+    - {command: [SET, "fx:d1", v], expect: {equals: OK}}
+    - {command: [GETEX, "fx:d1", EXAT, 1], expect: {equals: v}}
+    - {command: [EXISTS, "fx:a1", "fx:b1", "fx:c1", "fx:d1"], expect: {equals: 0}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [setburst]
+  config: {seconds: 6}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [setburst.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill}
+- {evidence_id: valkey.command.sequence, source: setburst}

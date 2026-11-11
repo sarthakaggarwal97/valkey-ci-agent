@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.multi-dirty-state-reset-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: Cluster redirects while queueing (MOVED on a slotless node, CROSSSLOT
+    inside MULTI) hit flagTransaction, which now frees the queued commands; CLIENT
+    LIST shows multi=0 on the fixed build versus the queued count on the parent, and
+    the nodes keep serving transactions afterwards
+components:
+- use: valkey.action.commands
+  id: cdirty
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 30
+    commands:
+    - {command: [MULTI], node: 1, expect: {equals: OK}}
+    - {command: [PING], node: 1, expect: {equals: QUEUED}}
+    - {command: [PING], node: 1, expect: {equals: QUEUED}}
+    - {command: [SET, foo, bar], node: 1, expect: {error: MOVED}}
+    - {command: [CLIENT, LIST], node: 1, connection: obs1, expect_difference: true,
+      expect: {contains: "multi=0"}}
+    - {command: [EXEC], node: 1, expect: {error: EXECABORT}}
+    - {command: [MULTI], node: 0, expect: {equals: OK}}
+    - {command: [SET, '{a}k', v1], node: 0, expect: {equals: QUEUED}}
+    - {command: [SET, '{b}k', v2], node: 0, expect: {error: CROSSSLOT}}
+    - {command: [CLIENT, LIST], node: 0, connection: obs0, expect_difference: true,
+      expect: {contains: "multi=0"}}
+    - {command: [EXEC], node: 0, expect: {error: EXECABORT}}
+    - {command: [SET, '{w}k', v0], node: 0, expect: {equals: OK}}
+    - {command: [WATCH, '{w}k'], node: 0, expect: {equals: OK}}
+    - {command: [MULTI], node: 0, expect: {equals: OK}}
+    - {command: [GET, '{w}k'], node: 0, expect: {equals: QUEUED}}
+    - {command: [SET, '{w}pad', xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx],
+      node: 0, expect: {equals: QUEUED}}
+    - {command: [SET, '{w}k', v1], node: 0, connection: obs0, expect: {equals: OK}}
+    - {command: [CLIENT, LIST], node: 0, connection: obs0, expect_difference: true,
+      expect: {contains: "multi=0"}}
+    - {command: [EXEC], node: 0}
+    - {command: [MULTI], node: 0, expect: {equals: OK}}
+    - {command: [SET, '{w}k', v2], node: 0, expect: {equals: QUEUED}}
+    - {command: [EXEC], node: 0, expect: {equals: [OK]}}
+    - {command: [GET, '{w}k'], node: 0, expect: {equals: v2}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cdirty.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cdirty}

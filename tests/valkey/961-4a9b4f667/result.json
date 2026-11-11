@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4a9b4f667cdf4caf53e5ef3a032801819b2dc9a4",
+  "parent": "ad0ede302cc1363985e677d008f23ef2031536bc",
+  "pr": 961,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "free client's multi state when it becomes dirty (#961)",
+  "date": "2024-08-29",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 11,
+    "executed": 11,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.6071,
+  "findings": [],
+  "recorded": []
+}

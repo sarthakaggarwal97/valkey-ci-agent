@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "089048d36485bf0d0d202221a7497aec0563bcdd",
+  "parent": "e3af1a30e41087364091f5fe6d9c71f61526fe3f",
+  "pr": 975,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix zipmap test null pointer (#975)",
+  "date": "2024-09-01",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2173,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only the unit test src/unit/test_zipmap.c, replacing a NULL expected value with an empty string to avoid a null-pointer dereference inside the test itself. It changes no server, command, replication, persistence or tool behavior, so no runtime scenario can reach or observe it; it needs no scenario."
+}

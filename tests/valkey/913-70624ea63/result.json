@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "70624ea63d472ec05b2697dbdba6bd579d3322b5",
+  "parent": "089048d36485bf0d0d202221a7497aec0563bcdd",
+  "pr": 913,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Change all the lazyfree configurations to yes by default (#913)",
+  "date": "2024-09-02",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 1,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.6627,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

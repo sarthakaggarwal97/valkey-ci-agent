@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "743f5ac2ae18080658a862e483d8247c3b2967df",
+  "parent": "2b76c8fbe2ccadaee2149e4b9b7c7df7ff0d07b6",
+  "pr": 895,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "standalone -REDIRECT handles special case of MULTI context (#895)",
+  "date": "2024-08-30",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.3191,
+  "findings": [],
+  "recorded": []
+}

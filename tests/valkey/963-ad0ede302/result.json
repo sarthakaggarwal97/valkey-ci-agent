@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ad0ede302cc1363985e677d008f23ef2031536bc",
+  "parent": "75b824052d72eec8611a5af5e92ef428877cec1e",
+  "pr": 963,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Exclude '.' and ':' from `isValidAuxChar`'s banned charset (#963)",
+  "date": "2024-08-28",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 5,
+  "recall": true,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 17.5079,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: Unrecoverable error: corrupted cluster config file \"7bb0bdc95ff85cafc635a757f478e909b6d2d4b4 127.0.0.1:7203@17203,,client-ipv6=::1,client-ipv4=127.0.0.1,tls-port=0,shard-id=b71533a2995fcc41faf9cbe012af9a2205796452 slave a19d94c1661d2d88889b19ee1271837e694d32c0 0 1794408819543 2 connected",
+      "scenario": "ai-a8ebc9ea4cd5",
+      "seed": 9633,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #963",
+      "fingerprint": "8fb81b8c307f2ffa6343",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-647d7efcc6a0",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during workload.start: RunnerError: workload 'writes' returned ERROR: preload failed: Valkey Cluster cannot be connected. Please provide at least one reachable node: Timeout connecting to server"
+    },
+    {
+      "scenario": "ai-124f5cf13fa1",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during workload.start: RunnerError: workload 'writes' returned ERROR: preload failed: Valkey Cluster cannot be connected. Please provide at least one reachable node: Timeout connecting to server"
+    }
+  ]
+}

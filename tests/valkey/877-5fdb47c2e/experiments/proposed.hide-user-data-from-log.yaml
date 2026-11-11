@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.hide-user-data-from-log
+deployment:
+  modes: [standalone]
+metadata:
+  description: hide-user-data-from-log config visibility and persistence, CLIENT INFO/LIST
+    and ACL LOG stay unredacted, and the redacted logging call sites (protocol error,
+    output-buffer-limit close, REPLICAOF) run without crashing
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hidelog
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, GET, hide-user-data-from-log], expect_difference: true, expect: {
+        contains: hide-user-data-from-log}}
+    - {command: [CONFIG, SET, hide-user-data-from-log, no], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, hide-user-data-from-log, yes], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLIENT, SETNAME, secret-name-7f], expect: {equals: OK}}
+    - {command: [CLIENT, INFO], compare: skip, expect: {contains: name=secret-name-7f}}
+    - {command: [CLIENT, LIST], compare: skip, expect: {contains: user=default}}
+    - {command: [ACL, SETUSER, limited, on, ">pw1", "~allowed:*", +get], expect: {
+        equals: OK}}
+    - {command: [AUTH, limited, pw1], connection: acl, expect: {equals: OK}}
+    - {command: [GET, "denied:key"], connection: acl, expect: {error: NOPERM}}
+    - {command: [ACL, LOG], compare: skip, expect: {contains: user=limited}}
+    - {command: [REPLICAOF, 127.0.0.1, 1], expect: {equals: OK}}
+    - {command: [REPLICAOF, NO, ONE], expect: {equals: OK}}
+    - {command: [CONFIG, SET, loglevel, debug], expect: {equals: OK}}
+    - {raw: "\"unbalanced\n", connection: proto1, expect: {error: unbalanced}}
+    - {raw: "*1\r\n$-2\r\n", connection: proto2, expect: {error: true}}
+    - {command: [SETRANGE, big, 99999, x], expect: {equals: 100000}}
+    - {command: [CONFIG, SET, client-output-buffer-limit, "normal 16384 16384 0"],
+      expect: {equals: OK}}
+    - {command: [GET, big], connection: cob, compare: skip}
+    - {command: [PING], connection: cob, compare: skip}
+    - {command: [CONFIG, SET, client-output-buffer-limit, "normal 0 0 0"], expect: {
+        equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, hide-user-data-from-log, no], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, hide-user-data-from-log], expect_difference: true, expect: {
+        contains: "no"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hidelog.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hidelog}

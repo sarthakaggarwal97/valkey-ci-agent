@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 75b824052d72..ad0ede302cc1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a8ebc9ea4cd5
+seed: 9633
+experiment:
+  id: proposed.aux-reload-under-writes
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    cluster-announce-client-ipv4: 127.0.0.1
+    cluster-announce-client-ipv6: ::1

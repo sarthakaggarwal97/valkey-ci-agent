@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 694246cfab97..04d76d8b022c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d5afc964c2d8
+seed: 103
+experiment:
+  id: proposed.prefetch-commands-compare
+  inputs:
+    resp: 2
+    cluster: true
+deployment:
+  mode: standalone
+  base_port: 7200

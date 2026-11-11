@@ -1,0 +1,88 @@
+extends: [valkey.liveness]
+id: proposed.sds-alloc-size-accounting
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    After the sdsZmallocSize->sdsAllocSize switch, embstr strings record the real
+    usable allocation in their sds header (nonzero avail) and DEBUG SDSLEN derives
+    key/val sizes from the header copied into the embedded db-dict entry instead of
+    zmalloc_size on an interior pointer. Compare those replies against the parent
+    build and exercise every changed accounting call site (objectComputeSize, script
+    cache, functions, large raw strings) plus the new overflow assert in createEmbeddedStringObject
+    at the embstr boundaries.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sdslen
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    server_config:
+      enable-debug-command: "yes"
+      hash-max-listpack-entries: 0
+      set-max-listpack-entries: 0
+      set-max-intset-entries: 0
+      zset-max-listpack-entries: 0
+    commands:
+    - {command: [SET, k1, hello], expect: {equals: OK}}
+    - {command: [DEBUG, SDSLEN, k1], expect_difference: true, expect: {contains: "val_sds_len:5,"}}
+    - {command: [OBJECT, ENCODING, k1], compare: skip, expect: {equals: embstr}}
+    - {command: [SET, k1, world], expect: {equals: OK}}
+    - {command: [DEBUG, SDSLEN, k1], expect_difference: true, expect: {contains: "val_sds_len:5,"}}
+    - {command: [SET, e1, ""], expect: {equals: OK}}
+    - {command: [DEBUG, SDSLEN, e1], expect_difference: true, expect: {contains: "val_sds_len:0,"}}
+    - {command: [SET, b1, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx], expect: {
+        equals: OK}}
+    - {command: [OBJECT, ENCODING, b1], compare: skip, expect: {equals: embstr}}
+    - {command: [DEBUG, SDSLEN, b1], expect_difference: true, expect: {contains: "val_sds_len:44,"}}
+    - {command: [SET, b2, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx], expect: {
+        equals: OK}}
+    - {command: [OBJECT, ENCODING, b2], compare: skip, expect: {equals: raw}}
+    - {command: [DEBUG, SDSLEN, b2], expect_difference: true, expect: {contains: "val_sds_len:45,"}}
+    - {command: [SET, kkkkkkkkkkkk, v], expect: {equals: OK}}
+    - {command: [DEBUG, SDSLEN, kkkkkkkkkkkk], expect_difference: true, expect: {
+        contains: "val_sds_len:1,"}}
+    - {command: [SET, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, v], expect: {
+        equals: OK}}
+    - {command: [DEBUG, SDSLEN, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx], expect_difference: true,
+      expect: {contains: "val_sds_len:1,"}}
+    - {command: [SET, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx, v], expect: {
+        equals: OK}}
+    - {command: [DEBUG, SDSLEN, xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx], expect_difference: true,
+      expect: {contains: "val_sds_len:1,"}}
+    - {command: [SET, k2, abc], expect: {equals: OK}}
+    - {command: [APPEND, k2, defg], expect: {equals: 7}}
+    - {command: [DEBUG, SDSLEN, k2], expect_difference: true, expect: {contains: "val_sds_len:7,"}}
+    - {command: [INCR, n1], expect: {equals: 1}}
+    - {command: [DEBUG, SDSLEN, n1], expect: {error: "Not an sds encoded string"}}
+    - {command: [SETRANGE, pad, 33000, x], expect: {equals: 33001}}
+    - {command: [DEBUG, SDSLEN, pad], expect_difference: true, expect: {contains: "val_sds_len:33001,"}}
+    - {command: [HSET, fields, fields, fields, f2, v2], expect: {equals: 2}}
+    - {command: [MEMORY, USAGE, fields], compare: skip, expect: {min: 1}}
+    - {command: [SADD, s1, a, b, c, ""], expect: {equals: 4}}
+    - {command: [MEMORY, USAGE, s1], compare: skip, expect: {min: 1}}
+    - {command: [ZADD, z1, 1, a, 2, bb], expect: {equals: 2}}
+    - {command: [MEMORY, USAGE, z1], compare: skip, expect: {min: 1}}
+    - {command: [MEMORY, USAGE, k1], compare: skip, expect: {min: 1}}
+    - {command: [MEMORY, USAGE, pad], compare: skip, expect: {min: 1}}
+    - {command: [EVAL, "return 1", 0], expect: {equals: 1}}
+    - {command: [EVAL, "return redis.call('GET', KEYS[1])", 1, k1], expect: {equals: world}}
+    - {command: [SCRIPT, FLUSH, SYNC], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nredis.register_function('myfunc',\
+          \ function() return 1 end)"], expect: {equals: mylib}}
+    - {command: [FCALL, myfunc, 0], expect: {equals: 1}}
+    - {command: [FUNCTION, FLUSH], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [sdslen.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sdslen}

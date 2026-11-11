@@ -1,0 +1,28 @@
+extends: [valkey.base]
+id: proposed.aux-reload-under-writes
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Bounce a cluster replica under writes while every node announces client
+    IPs and a dotted nodename, so the restart reloads nodes.conf aux fields holding
+    '.' and ':'
+components:
+- use: valkey.fault.process-signal
+  id: bounce-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: SIGTERM
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, bounce-replica]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: bounce-replica}

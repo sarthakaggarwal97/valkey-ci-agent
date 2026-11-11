@@ -1,0 +1,79 @@
+extends: [valkey.liveness]
+id: proposed.multi-dirty-state-reset
+deployment:
+  modes: [standalone]
+metadata:
+  description: Queued MULTI commands are freed the moment the transaction goes dirty
+    (flagTransaction, touchWatchedKey, touchAllWatchedKeysInDb via FLUSHALL and SWAPDB);
+    CLIENT LIST from a second connection shows multi=0 on the fixed build versus the
+    queued count on the parent, and the client still EXECs, DISCARDs, queues after
+    the reset and runs a fresh transaction safely
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dirty
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CLIENT, SETNAME, txn], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, k1, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      expect: {equals: QUEUED}}
+    - {command: [RPUSH, l1, a, b, c, d, e, f, g, h], expect: {equals: QUEUED}}
+    - {command: [SET, k2, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb],
+      expect: {equals: QUEUED}}
+    - {command: [NOSUCHCMD, x, y], expect: {error: "unknown command"}}
+    - {command: [CLIENT, LIST], connection: obs, expect_difference: true, expect: {
+        contains: "multi=0"}}
+    - {command: [EXEC], expect: {error: EXECABORT}}
+    - {command: [SET, wk, v0], expect: {equals: OK}}
+    - {command: [WATCH, wk], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, wk], expect: {equals: QUEUED}}
+    - {command: [SET, big1, cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc],
+      expect: {equals: QUEUED}}
+    - {command: [SET, empty, ''], expect: {equals: QUEUED}}
+    - {command: [SET, big2, dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd],
+      expect: {equals: QUEUED}}
+    - {command: [SET, wk, v1], connection: obs, expect: {equals: OK}}
+    - {command: [SET, late, x], expect: {equals: QUEUED}}
+    - {command: [CLIENT, LIST], connection: obs, expect_difference: true, expect: {
+        contains: "multi=0"}}
+    - {command: [EXEC]}
+    - {command: [SET, fk, v0], expect: {equals: OK}}
+    - {command: [WATCH, fk], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [INCR, ctr], expect: {equals: QUEUED}}
+    - {command: [SET, big3, eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee],
+      expect: {equals: QUEUED}}
+    - {command: [FLUSHALL], connection: obs, expect: {equals: OK}}
+    - {command: [CLIENT, LIST], connection: obs, expect_difference: true, expect: {
+        contains: "multi=0"}}
+    - {command: [DISCARD], expect: {equals: OK}}
+    - {command: [SET, sk, v0], expect: {equals: OK}}
+    - {command: [WATCH, sk], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, sk], expect: {equals: QUEUED}}
+    - {command: [SWAPDB, '0', '1'], connection: obs, expect: {equals: OK}}
+    - {command: [CLIENT, LIST], connection: obs, expect_difference: true, expect: {
+        contains: "multi=0"}}
+    - {command: [EXEC]}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, final, done], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK]}}
+    - {command: [GET, final], expect: {equals: done}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dirty.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dirty}

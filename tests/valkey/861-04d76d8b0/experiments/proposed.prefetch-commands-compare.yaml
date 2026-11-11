@@ -1,0 +1,93 @@
+extends: [valkey.liveness]
+id: proposed.prefetch-commands-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Multi-key commands, expires, MULTI/EXEC and mixed encodings return identical replies
+    with and without the memory-prefetch batch (io-threads reads), across prefetch-batch-max-size
+    1, 0 and 128 set at runtime.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      io-threads: 4
+      io-threads-do-reads: 'yes'
+      events-per-io-thread: 0
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - {command: [SET, '{t}:int', '12345'], expect: {equals: OK}}
+    - {command: [SET, '{t}:emb', shortval], expect: {equals: OK}}
+    - {command: [SET, '{t}:raw', 'this-value-is-long-enough-to-be-stored-as-a-raw-string-object-0123456789'],
+      expect: {equals: OK}}
+    - {command: [SET, '', empty-key-value], expect: {equals: OK}}
+    - {command: [SET, '{t}:empty', ''], expect: {equals: OK}}
+    - {command: [MSET, '{t}:k0', v0, '{t}:k1', v1, '{t}:k2', v2, '{t}:k3', v3, '{t}:k4',
+        v4, '{t}:k5', v5, '{t}:k6', v6, '{t}:k7', v7, '{t}:k8', v8, '{t}:k9', v9,
+        '{t}:k10', v10, '{t}:k11', v11, '{t}:k12', v12, '{t}:k13', v13, '{t}:k14',
+        v14, '{t}:k15', v15], expect: {equals: OK}}
+    - {command: [HSET, '{t}:fields', f1, a, f2, b], expect: {equals: 2}}
+    - {command: [SADD, '{t}:set', a, b, c], expect: {equals: 3}}
+    - {command: [EXPIRE, '{t}:k0', '100'], expect: {equals: 1}}
+    - {command: [PEXPIREAT, '{t}:k1', '33177117600000'], expect: {equals: 1}}
+    - {command: [EXPIRE, '{t}:k2', '2147483648'], expect: {equals: 1}}
+    - {command: [TTL, '{t}:k0'], compare: skip}
+    - {command: [GET, ''], expect: {equals: empty-key-value}}
+    - {command: [MGET, '{t}:k0', '{t}:k1', '{t}:missing', '{t}:int', '{t}:raw', '{t}:k2',
+        '{t}:k2', '{t}:k2', '{t}:fields', '{t}:emb', '{t}:k15', '{t}:missing'], expect: {
+        equals: [v0, v1, null, '12345', 'this-value-is-long-enough-to-be-stored-as-a-raw-string-object-0123456789',
+          v2, v2, v2, null, shortval, v15, null]}}
+    - {command: [EXISTS, '{t}:k0', '{t}:k0', '{t}:missing', '{t}:set', '{t}:fields',
+        '{t}:k1'], expect: {equals: 5}}
+    - {command: [TOUCH, '{t}:k0', '{t}:k1', '{t}:k2', '{t}:missing'], expect: {equals: 3}}
+    - {command: [PERSIST, '{t}:k2'], expect: {equals: 1}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, '{t}:tx', t1], expect: {equals: QUEUED}}
+    - {command: [MGET, '{t}:tx', '{t}:k3'], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, [t1, v3]]}}
+    - {command: [EXEC], expect: {error: 'without MULTI'}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, '1'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [MGET, '{t}:k0', '{t}:k1', '{t}:k2', '{t}:int', '{t}:raw', '{t}:emb',
+        '{t}:fields', '{t}:missing'], expect: {equals: [v0, v1, v2, '12345', 'this-value-is-long-enough-to-be-stored-as-a-raw-string-object-0123456789',
+          shortval, null, null]}}
+    - {command: [DEL, '{t}:k3', '{t}:k4', '{t}:missing', '{t}:k5'], expect: {equals: 3}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, '0'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [MGET, '{t}:k3', '{t}:k4', '{t}:k5', '{t}:k0'], expect: {equals: [
+          null, null, null, v0]}}
+    - {command: [MSETNX, '{t}:n1', a, '{t}:n2', b], expect: {equals: 1}}
+    - {command: [CONFIG, SET, prefetch-batch-max-size, '128'], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [MSET, '{t}:g0', gv0, '{t}:g1', gv1, '{t}:g2', gv2, '{t}:g3', gv3,
+        '{t}:g4', gv4, '{t}:g5', gv5, '{t}:g6', gv6, '{t}:g7', gv7, '{t}:g8', gv8,
+        '{t}:g9', gv9, '{t}:g10', gv10, '{t}:g11', gv11, '{t}:g12', gv12, '{t}:g13',
+        gv13, '{t}:g14', gv14, '{t}:g15', gv15], expect: {equals: OK}}
+    - {command: [MGET, '{t}:g0', '{t}:g1', '{t}:g2', '{t}:g3', '{t}:g4', '{t}:g5',
+        '{t}:g6', '{t}:g7', '{t}:g8', '{t}:g9', '{t}:k0', '{t}:missing', '{t}:int'],
+      expect: {equals: [gv0, gv1, gv2, gv3, gv4, gv5, gv6, gv7, gv8, gv9, v0, null,
+          '12345']}}
+    - {command: [DEL, '{t}:g0', '{t}:g1', '{t}:g2', '{t}:g3', '{t}:g4', '{t}:g5',
+        '{t}:g6', '{t}:g7', '{t}:g8', '{t}:g9', '{t}:g10', '{t}:g11', '{t}:g12', '{t}:g13',
+        '{t}:g14', '{t}:g15'], expect: {equals: 16}}
+    - {command: [UNLINK, '{t}:n1', '{t}:n2', '{t}:set'], expect: {equals: 3}}
+    - {command: [DBSIZE], expect: {min: 1}}
+    - {command: [INFO, stats], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

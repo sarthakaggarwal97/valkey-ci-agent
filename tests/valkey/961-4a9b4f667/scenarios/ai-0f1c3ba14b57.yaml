@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ad0ede302cc1..4a9b4f667cdf.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0f1c3ba14b57
+seed: 2
+experiment:
+  id: proposed.multi-dirty-state-reset
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

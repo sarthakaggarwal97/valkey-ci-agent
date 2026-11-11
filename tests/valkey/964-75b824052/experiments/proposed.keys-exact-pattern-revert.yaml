@@ -1,0 +1,66 @@
+extends: [valkey.liveness]
+id: proposed.keys-exact-pattern-revert
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    After the revert of the KEYS exact-match fast path, KEYS with literal (wildcard-free)
+    patterns must reply identically to the parent build that still has the fast path:
+    empty patterns, hashtags and brace edge cases, backslash escapes, binary key names,
+    keyword-named keys, lazily-expired keys and misses in empty slots.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: keyscmp
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, "0"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "100"], expect: {equals: OK}}
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [SET, foobar, v], expect: {equals: OK}}
+    - {command: [SET, keys, v], expect: {equals: OK}}
+    - {command: [SET, "foo{t}", v], expect: {equals: OK}}
+    - {command: [SET, "a}b", v], expect: {equals: OK}}
+    - {command: [SET, "{a}x", v], expect: {equals: OK}}
+    - {command: [SET, "{a}y", v], expect: {equals: OK}}
+    - {command: [SET, "foo\\", v], expect: {equals: OK}}
+    - {command: [SET, "", emptykey], expect: {equals: OK}}
+    - {command: [SET, !!binary "a2V5AGJpbg==", v], expect: {equals: OK}}
+    - {command: [SET, gone, v, PX, "80"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [KEYS, gone], expect: {equals: []}}
+    - {command: [KEYS, foo], expect: {equals: [foo]}}
+    - {command: [KEYS, foobar], expect: {equals: [foobar]}}
+    - {command: [KEYS, keys], expect: {equals: [keys]}}
+    - {command: [KEYS, "foo{t}"], expect: {equals: ["foo{t}"]}}
+    - {command: [KEYS, "a}b"], expect: {equals: ["a}b"]}}
+    - {command: [KEYS, "foo\\"], expect: {equals: ["foo\\"]}}
+    - {command: [KEYS, ""], expect: {equals: [""]}}
+    - {command: [KEYS, !!binary "a2V5AGJpbg=="], expect: {equals: [!!binary "a2V5AGJpbg=="]}}
+    - {command: [KEYS, "key:50"], expect: {equals: ["key:50"]}}
+    - {command: [KEYS, absent-key], expect: {equals: []}}
+    - {command: [KEYS, "{zz}no-such-key"], expect: {equals: []}}
+    - {command: [KEYS, "*foo"], expect: {equals: [foo]}}
+    - {command: [KEYS, "{a}*"], compare: unordered, expect: {contains: "{a}x"}}
+    - {command: [KEYS, "key:[12]"], compare: unordered, expect: {contains: "key:1"}}
+    - {command: [KEYS, "key:1?"], compare: unordered, expect: {contains: "key:10"}}
+    - {command: [KEYS, "key:["], expect: {equals: []}}
+    - {command: [KEYS, "*"], compare: unordered, expect: {contains: foo}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [keyscmp.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: keyscmp}

@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.lrange-write-prepared-reply
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    LRANGE, LPOP/RPOP COUNT and LMPOP replies stay byte-identical after the prepareClientForFutureWrites
+    refactor of the list range reply loops, across listpack and quicklist encodings,
+    string and integer elements, reverse iteration, index extremes and MULTI/EXEC.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, enum: [1, 4], default: 1}
+components:
+- use: valkey.action.commands
+  id: lrange
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    server_config: {io-threads: {$ref: inputs.io_threads}}
+    timeout_s: 30
+    commands:
+    - {command: [RPUSH, lp, a, "", "12345", "-9223372036854775808", "9223372036854775807",
+        b], expect: {equals: 6}}
+    - {command: [OBJECT, ENCODING, lp], compare: skip, expect: {equals: listpack}}
+    - {command: [LRANGE, lp, "0", "-1"], expect: {equals: [a, "", "12345", "-9223372036854775808",
+          "9223372036854775807", b]}}
+    - {command: [LRANGE, lp, "1", "1"], expect: {equals: [""]}}
+    - {command: [LRANGE, lp, "-3", "-1"], expect: {equals: ["-9223372036854775808",
+          "9223372036854775807", b]}}
+    - {command: [LRANGE, lp, "2", "1"], expect: {equals: []}}
+    - {command: [LRANGE, lp, "-100", "100"], expect: {equals: [a, "", "12345", "-9223372036854775808",
+          "9223372036854775807", b]}}
+    - {command: [LRANGE, lp, "9223372036854775807", "9223372036854775807"], expect: {
+        equals: []}}
+    - {command: [LRANGE, lp, "-9223372036854775808", "-1"], expect: {equals: [a, "",
+          "12345", "-9223372036854775808", "9223372036854775807", b]}}
+    - {command: [CONFIG, SET, list-max-listpack-size, "4"], expect: {equals: OK}}
+    - {command: [RPUSH, ql, "0", "1", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "3", "", "-42", seven, "8", "99999999999999999", ten], expect: {equals: 10}}
+    - {command: [OBJECT, ENCODING, ql], compare: skip, expect: {equals: quicklist}}
+    - {command: [LRANGE, ql, "0", "-1"]}
+    - {command: [LRANGE, ql, "3", "7"], expect: {equals: ["3", "", "-42", seven, "8"]}}
+    - {command: [LRANGE, ql, "-1", "-1"], expect: {equals: [ten]}}
+    - {command: [LPOP, ql, "3"]}
+    - {command: [RPOP, ql, "2"], expect: {equals: [ten, "99999999999999999"]}}
+    - {command: [LMPOP, "2", nosuchkey, ql, LEFT, COUNT, "3"], expect: {equals: [
+          ql, ["3", "", "-42"]]}}
+    - {command: [LMPOP, "1", ql, RIGHT, COUNT, "99"], expect: {equals: [ql, ["8",
+            seven]]}}
+    - {command: [EXISTS, ql], expect: {equals: 0}}
+    - {command: [RPUSH, big, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v,
+        v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v], expect: {
+        equals: 40}}
+    - {command: [LRANGE, big, "0", "-1"]}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [LRANGE, lp, "0", "2"], expect: {equals: QUEUED}}
+    - {command: [LPOP, lp, "2"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [[a, "", "12345"], [a, ""]]}}
+    - {command: [LRANGE, lp, "0", "-1"], expect: {equals: ["12345", "-9223372036854775808",
+          "9223372036854775807", b]}}
+    - {command: [LPOP, lp, "0"], expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [lrange.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lrange}

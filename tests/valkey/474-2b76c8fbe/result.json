@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2b76c8fbe2ccadaee2149e4b9b7c7df7ff0d07b6",
+  "parent": "ecbfb6a7ec3b6b0619ede8653effb04055ce7b18",
+  "pr": 474,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Migrate zipmap unit test to new framework (#474)",
+  "date": "2024-08-29",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2723,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure test-infrastructure migration: it removes the zipmap entry from the legacy serverTests[] table in server.c and adds an equivalent standalone unit test file (src/unit/test_zipmap.c) registered in test_files.h. No server runtime behaviour, command, reply, data structure, replication or persistence code is modified, so there is no reachable behaviour change for a fuzzer scenario to exercise."
+}

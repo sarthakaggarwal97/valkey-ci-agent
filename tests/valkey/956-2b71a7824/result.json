@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2b71a782410ea81b4ad8c86e3a57ef3884e7c7fb",
+  "parent": "744b13e302559fc6da30749df266810882b5df99",
+  "pr": 956,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add comment explaining log file reopening for rotation support (#956)",
+  "date": "2024-08-27",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.202,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds a three-line comment above the fopen in serverLogRaw explaining that the log file is reopened on every call to support rotation. No code path, reply, config, or behaviour changes \u2014 it is a comment-only change, so there is nothing a scenario could exercise or distinguish from the parent build."
+}
