@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b56eed247919..c4be326c3225.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2b62ed3b6c2c
+seed: 1102
+experiment:
+  id: proposed.manual-failover-force-election-reset
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

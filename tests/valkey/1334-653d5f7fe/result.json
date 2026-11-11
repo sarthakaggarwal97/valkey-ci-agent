@@ -1,0 +1,66 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "653d5f7fe3d44adfb2a2e10c9110a3efacd3f0da",
+  "parent": "33f42d7fb597ce28040f184ee57ed86d6f6ffbd8",
+  "pr": 1334,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Support empty callback on function and free temp function in async way (#1334)",
+  "date": "2024-11-25",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 20,
+    "executed": 19,
+    "percent": 95,
+    "uncovered": [
+      "src/functions.c:383"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.0352,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: function_lua.c:122 'lua_isfunction(lua, -1)' is not true",
+      "scenario": "ai-4c8dc6dd114b",
+      "seed": 12,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1334",
+      "fingerprint": "b1dbcabd0214d5324957",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-8c7d09217695",
+      "seed": 13,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-8c7d09217695",
+      "build": "unstable",
+      "seed": 14,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

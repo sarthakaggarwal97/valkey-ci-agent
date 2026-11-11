@@ -1,0 +1,29 @@
+extends: [valkey.liveness]
+id: proposed.strtod-cli-timeout
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli -t now resets errno and rejects ERANGE/EINVAL timeouts;
+    the parent accepted overflowing and underflowing values such as 1e400 and 1e-400
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    runs:
+    - {tool: valkey-cli, args: ["-t", "1e400", "--version"], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "Invalid connection timeout"}}}
+    - {tool: valkey-cli, args: ["-t", "1e-400", "--version"], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "Invalid connection timeout"}}}
+    - {tool: valkey-cli, args: ["-t", "nan", "--version"], expect: {exit: {equals: 1},
+        stderr: {contains: "Invalid connection timeout"}}}
+    - {tool: valkey-cli, args: ["-t", "abc", "--version"], expect: {exit: {equals: 1},
+        stderr: {contains: "Invalid connection timeout"}}}
+    - {tool: valkey-cli, args: ["-t", "-1", "--version"], expect: {exit: {equals: 1},
+        stderr: {contains: "Invalid connection timeout"}}}
+    - {tool: valkey-cli, args: ["-p", $port, "-t", "2", PING], expect: {exit: {equals: 0},
+        stdout: {contains: PONG}}}
+required_events: [cli.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

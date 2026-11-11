@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-11T00:02+00:00.
+Updated 2026-11-11T00:09+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1610 | 912 | #1209 (2024-11-29) | 287 | 230.0 |
+| valkey-io/valkey | 1633 | 889 | #1298 (2024-11-21) | 310 | 233.3 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 64 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 9.1 |
 | valkey-io/valkey-search | 672 | 0 | f8106e72e984 (2024-11-27) | 2 | 96.0 |
@@ -13,28 +13,28 @@ Updated 2026-11-11T00:02+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-10T22:39:05+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42889123124): 20 merge(s) tested, 6 without a code change.
+[2026-11-11T00:09:59+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42916522777): 20 merge(s) tested, 3 without a code change.
 
-- [valkey-io/valkey#5338](https://github.com/valkey-io/valkey/pull/5338) ([tests](tests/valkey/5338-9abbfd255/)): Use the effective replica output buffer limit for the steady-state throttle target (#5338): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey@3eb8314be6af](https://github.com/valkey-io/valkey/commit/3eb8314be6af0777e69f852b65f933dd9186d30b) ([tests](tests/valkey/3eb8314be/)): Replace dict with hashtable for keys, expires and pubsub channels: 6 of 23 test(s) reached the change, coverage 80%
-- [valkey-io/valkey#1324](https://github.com/valkey-io/valkey/pull/1324) ([tests](tests/valkey/1324-9cfe1b3d8/)): Set Command with IFEQ Support (#1324): 3 of 3 test(s) reached the change, coverage 87%
-- [valkey-io/valkey#1410](https://github.com/valkey-io/valkey/pull/1410) ([tests](tests/valkey/1410-1ba85d002/)): Use binary representation in assert crash log, cleanup in crash log (#1410): declined: The change is a cleanup/refactor of crash-log formatting in src/debug.c (_serverAssertPrintClientInfo and logCurrentClient), which only executes while the server is already aborting. It changes no command reply, data, replication, or persistence behavior; its only effect is the textual for
-- [valkey-io/valkey#1389](https://github.com/valkey-io/valkey/pull/1389) ([tests](tests/valkey/1389-5be4ce6d2/)): Optimize ZRANK to avoid path comparisons (#1389): 0 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1339](https://github.com/valkey-io/valkey/pull/1339) ([tests](tests/valkey/1339-924729eb1/)): Fix the election was reset wrongly before failover epoch was obtained (#1339): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1317](https://github.com/valkey-io/valkey/pull/1317) ([tests](tests/valkey/1317-e8078b731/)): Allow MEMORY MALLOC-STATS and MEMORY PURGE during loading phase (#1317): 3 of 3 test(s) reached the change; [check, introduced by #1317](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/117)
-- [valkey-io/valkey#887](https://github.com/valkey-io/valkey/pull/887) ([tests](tests/valkey/887-176fafcaf/)): Add a note to conf about the dangers of modifying dir at runtime (#887): declined: The change touches only valkey.conf comments (a note about modifying 'dir' at runtime) and adds a TCL test that starting the server with --dir given twice works. No source code changes: no command, reply, config handling, persistence or replication behaviour differs between the change and 
-- [valkey-io/valkey#1402](https://github.com/valkey-io/valkey/pull/1402) ([tests](tests/valkey/1402-f20d629db/)): Fix sanitizer builds with clang (#1402): declined: The change only moves the #include <stdatomic.h> line in src/unit/test_networking.c (a unit-test source file) so the file compiles under clang sanitizer builds. It is a build fix for test code with no change to server behaviour, commands, replication, persistence or tools, so no fuzzer sce
-- [valkey-io/valkey#1395](https://github.com/valkey-io/valkey/pull/1395) ([tests](tests/valkey/1395-6df376d68/)): Fix coredump when use hellodict example module (#1395): declined: The change only edits src/modules/hellodict.c, an example module that is not compiled into valkey-server and is only reachable via an explicit MODULE LOAD of a separately built hellodict.so. The fuzzer's experiments cannot load modules (MODULE LOAD/LOADEX are refused in command sequences, 
-- [valkey-io/valkey#1386](https://github.com/valkey-io/valkey/pull/1386) ([tests](tests/valkey/1386-6b3e1228c/)): RDMA: Fix dead loop when transfer large data (20KB) (#1386): declined: The change is confined to src/rdma.c: it implements the already-existing postpone_update_state/update_state connection hooks for the RDMA transport to fix a dead loop on large (~20KB) transfers. That code is compiled only with BUILD_RDMA and executes only for clients connected over an RDMA
-- [valkey-io/valkey#1041](https://github.com/valkey-io/valkey/pull/1041) ([tests](tests/valkey/1041-71560a2a4/)): Add API UpdateRuntimeArgs for updating the module arguments during runtime (#1041): declined: The change is a purely additive module API (ValkeyModule_UpdateRuntimeArgs) plus a new test module that is its only caller. No core command, reply, replication, persistence, or cluster path changes: MODULE LIST's arg display and CONFIG REWRITE's loadmodule rewriting are both unchanged and 
-- [valkey-io/valkey#1388](https://github.com/valkey-io/valkey/pull/1388) ([tests](tests/valkey/1388-349bc7547/)): defrag: use monotime in module interface (#1388): declined: The change is an internally consistent clock refactor with no behavior the fuzzer can observe. Both the producer (defragLaterItem in defrag.c, which previously converted the monotonic deadline to wall-clock) and the consumer (VM_DefragShouldStop and the ValkeyModuleDefragCtx.endtime field 
-- [valkey-io/valkey#1360](https://github.com/valkey-io/valkey/pull/1360) ([tests](tests/valkey/1360-9f8b174c2/)): Optimize IO thread offload for modified argv (#1360): 0 of 6 test(s) reached the change, coverage 95%
-- [valkey-io/valkey#1242](https://github.com/valkey-io/valkey/pull/1242) ([tests](tests/valkey/1242-397201c48/)): Refactor of ActiveDefrag to reduce latencies (#1242): 3 of 6 test(s) reached the change, coverage 92%
-- [valkey-io/valkey#1293](https://github.com/valkey-io/valkey/pull/1293) ([tests](tests/valkey/1293-3df609ef0/)): Optimize PFCOUNT, PFMERGE command by SIMD acceleration (#1293): 5 of 5 test(s) reached the change, coverage 93%
-- [valkey-io/valkey#1188](https://github.com/valkey-io/valkey/pull/1188) ([tests](tests/valkey/1188-fbbfe5d3d/)): Print logs when the cluster state changes to fail or the fail reason changes (#1188): 0 of 7 test(s) reached the change, coverage 91%
-- [valkey-io/valkey#905](https://github.com/valkey-io/valkey/pull/905) ([tests](tests/valkey/905-90475af59/)): Free strings during BGSAVE/BGAOFRW to reduce copy-on-write (#905): 0 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1149](https://github.com/valkey-io/valkey/pull/1149) ([tests](tests/valkey/1149-9c48f5679/)): Reset repl_down_since to zero only on state change (#1149): 0 of 6 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1376](https://github.com/valkey-io/valkey/pull/1376) ([tests](tests/valkey/1376-c8ceb2ee2/)): Use zfree_with_size for client buffer (#1376): 0 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1209](https://github.com/valkey-io/valkey/pull/1209) ([tests](tests/valkey/1209-4695d118d/)): RDMA builtin support (#1209): 2 of 4 test(s) reached the change, coverage 33%
+- [valkey-io/valkey#1368](https://github.com/valkey-io/valkey/pull/1368) ([tests](tests/valkey/1368-a939cb88e/)): Handle keyIsExpiredWithDictIndex to make it check for import mode (#1368): 3 of 5 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1326](https://github.com/valkey-io/valkey/pull/1326) ([tests](tests/valkey/1326-db7b7396f/)): Make KEYS can visit expired key in import-source state (#1326): 3 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1198](https://github.com/valkey-io/valkey/pull/1198) ([tests](tests/valkey/1198-5d08149e7/)): Use fake client flag to replace not conn check (#1198): 2 of 6 test(s) reached the change, coverage 100%; crash, fixed by #1198 (recorded)
+- [valkey-io/valkey#999](https://github.com/valkey-io/valkey/pull/999) ([tests](tests/valkey/999-9305b4914/)): Add tag for dual-channel logs (#999): declined: The change only adds a '<Dual Channel> ' prefix to dual-channel replication log messages via a new dualChannelServerLog macro (compile-time string concatenation of the format literal) and rewords one log line, updating the matching Tcl test. No command reply, replication protocol byte, sta
+- [valkey-io/valkey#1349](https://github.com/valkey-io/valkey/pull/1349) ([tests](tests/valkey/1349-469d41fb3/)): Avoid double close on repl_transfer_fd (#1349): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1347](https://github.com/valkey-io/valkey/pull/1347) ([tests](tests/valkey/1347-2d48a39c2/)): Save open's errno when opening temp rdb fails to prevent it from being modified (#1347): declined: The change only saves errno across a sleep() in the replica's temp-RDB open retry loop so the warning log prints the correct strerror on platforms (macOS) where sleep clobbers errno. Control flow, replies, replication behavior and data handling are unchanged; the only observable difference
+- [valkey-io/valkey#1342](https://github.com/valkey-io/valkey/pull/1342) ([tests](tests/valkey/1342-cf1a1e093/)): Optimize sdscatrepr by batch processing printable characters (#1342): 1 of 2 test(s) reached the change, coverage 68%
+- [valkey-io/valkey#1260](https://github.com/valkey-io/valkey/pull/1260) ([tests](tests/valkey/1260-c4920bca4/)): Integrating fast_float to optionally replace strtod (#1260): 1 of 10 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1334](https://github.com/valkey-io/valkey/pull/1334) ([tests](tests/valkey/1334-653d5f7fe/)): Support empty callback on function and free temp function in async way (#1334): 0 of 6 test(s) reached the change, coverage 95%; crash, fixed by #1334 (recorded); crash, introduced and since fixed (recorded)
+- [valkey-io/valkey#1276](https://github.com/valkey-io/valkey/pull/1276) ([tests](tests/valkey/1276-33f42d7fb/)): CMake fixes + README update (#1276): declined: The change modifies only CMake build scripts (CMakeLists.txt, cmake/Modules/*, deps/*/CMakeLists.txt) and the README. It alters how the binaries are compiled and linked (sanitizer flag plumbing, tcmalloc linkage via pkg-config, jemalloc build error handling, Lua mkstemp detection) and docu
+- [valkey-io/valkey#1249](https://github.com/valkey-io/valkey/pull/1249) ([tests](tests/valkey/1249-9851006d6/)): Add short client info log to CLUSTER MEET / FORGET / RESET commands (#1249): 0 of 6 test(s) reached the change, coverage 94%
+- [valkey-io/valkey#1295](https://github.com/valkey-io/valkey/pull/1295) ([tests](tests/valkey/1295-b9d224097/)): Brocast a PONG to all node in cluster when role changed (#1295): 1 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1340](https://github.com/valkey-io/valkey/pull/1340) ([tests](tests/valkey/1340-979f4c1ce/)): Add cmake-build-debug and cmake-build-release to gitignore (#1340): declined: The change only adds cmake-build-debug/ and cmake-build-release/ to .gitignore. It is a repository housekeeping/build-tooling change with no effect on any Valkey binary, command, reply, replication, persistence, or tool behavior, so there is nothing a runtime scenario could exercise.
+- [valkey-io/valkey#971](https://github.com/valkey-io/valkey/pull/971) ([tests](tests/valkey/971-377ed22c9/)): [feat] add Ubuntu 24.04 Noble package support (#971): declined: The change edits only utils/releasetools/build-config.json, adding Ubuntu 24.04 (noble) x86_64 and arm64 deb targets to the release packaging matrix. It is a build/CI packaging configuration change with no effect on server behaviour, commands, replication, persistence, or any tool the fuzz
+- [valkey-io/valkey#1205](https://github.com/valkey-io/valkey/pull/1205) ([tests](tests/valkey/1205-18d1eb5a8/)): Remove redundant dict_index calculations (#1205): declined: This is a pure performance refactor with no behavioral change. In both lookupKey and keysCommand the change only removes redundant recomputations of a key's dict index (hash slot). getKVStoreIndexForKey is a deterministic function of the key, so computing it once and reusing it yields the 
+- [valkey-io/valkey#1253](https://github.com/valkey-io/valkey/pull/1253) ([tests](tests/valkey/1253-43b502616/)): Fix argument types of formatting functions (#1253): declined: The change only corrects the argument types passed to sdscatfmt in representSlotInfo (slot ranges in CLUSTER NODES, values always 0-16383) and in valkey-cli's clusterManagerNodeInfo (a small non-negative int replica count). In both cases the values fit in the low 32 bits that were already 
+- [valkey-io/valkey#1327](https://github.com/valkey-io/valkey/pull/1327) ([tests](tests/valkey/1327-50aae13b0/)): Skip reclaim file page cache test in valgrind (#1327): declined: The change is confined to the unit-test harness (src/unit/test_main.c, test_help.h, test_util.c, README): it adds a --valgrind flag and uses it to skip the reclaimFilePageCache unit test under valgrind. No server runtime, command, replication, persistence or tool behaviour changes, so no f
+- [valkey-io/valkey#1274](https://github.com/valkey-io/valkey/pull/1274) ([tests](tests/valkey/1274-c4be326c3/)): Make manual failover reset the on-going election to promote failover (#1274): 2 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1266](https://github.com/valkey-io/valkey/pull/1266) ([tests](tests/valkey/1266-b56eed247/)): Remove valkey specific changes in jemalloc source code (#1266): 0 of 7 test(s) reached the change, coverage 100%
 
 ### valkey-io/valkey-bloom
 
@@ -53,10 +53,10 @@ Updated 2026-11-11T00:02+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 765 of 1197 tested (64%)
-- Changed-line coverage: median 100% of 725 merge(s) measured, 57 under 50%
+- Merges whose tests reached the change: 773 of 1209 tested (64%)
+- Changed-line coverage: median 100% of 737 merge(s) measured, 58 under 50%
 - Recall: 204 parents flagged of 324 fix merges
-- Claude: $926.21 in the last 24 hours, $8723.60 in the last 7 days, $8723.60 in all
+- Claude: $1018.48 in the last 24 hours, $8815.87 in the last 7 days, $8815.87 in all
 - Issues filed: 67
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

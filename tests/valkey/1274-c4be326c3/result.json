@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c4be326c3225ca4323ad7c21ccafee7197d0d539",
+  "parent": "b56eed2479191dfd1f644768b7144c35a75ef52c",
+  "pr": 1274,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make manual failover reset the on-going election to promote failover (#1274)",
+  "date": "2024-11-22",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 9,
+    "executed": 9,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.9076,
+  "findings": [],
+  "recorded": []
+}

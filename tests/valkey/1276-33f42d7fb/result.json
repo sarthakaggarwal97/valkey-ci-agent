@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "33f42d7fb597ce28040f184ee57ed86d6f6ffbd8",
+  "parent": "9851006d6d7af570d7f38025f4b1de68f12c7731",
+  "pr": 1276,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "CMake fixes + README update (#1276)",
+  "date": "2024-11-22",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3037,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only CMake build scripts (CMakeLists.txt, cmake/Modules/*, deps/*/CMakeLists.txt) and the README. It alters how the binaries are compiled and linked (sanitizer flag plumbing, tcmalloc linkage via pkg-config, jemalloc build error handling, Lua mkstemp detection) and documentation, but no Valkey runtime source code: no command, reply, replication, persistence, or cluster behavior changes between the parent and the change. Any build problems would surface when the runner compiles the builds, not in a runtime scenario, so there is nothing for the fuzzer's experiments or oracles"
+}

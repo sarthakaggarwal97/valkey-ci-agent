@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.import-source-expired-watch
+deployment:
+  modes: [standalone]
+metadata:
+  description: WATCH/EXEC over logically-expired keys for import-source clients on
+    an import-mode primary; keyIsExpired now honours the import-source flag, flipping
+    EXEC abort decisions versus the parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: watchseq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: {$ref: inputs.cluster}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, import-mode, yes], expect: {equals: OK}}
+    - {command: [CLIENT, IMPORT-SOURCE, ON], expect: {equals: OK}}
+    - {command: [SET, wk1, v1, PX, 300], expect: {equals: OK}}
+    - {command: [WATCH, wk1], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.5], expect: {equals: OK}}
+    - {command: [TTL, wk1], compare: skip}
+    - {command: [GET, wk1], expect: {equals: v1}}
+    - {command: [KEYS, '*'], compare: unordered}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, wk1], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [v1]}}
+    - {command: [SET, wk2, v2, PX, 100], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.4], expect: {equals: OK}}
+    - {command: [WATCH, wk2], expect: {equals: OK}}
+    - {command: [CLIENT, IMPORT-SOURCE, OFF], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {exists: false}}
+    - {command: [SET, wk3, v3, PX, 100], expect: {equals: OK}}
+    - {command: [WATCH, wk3], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.4], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: false}}
+    - {command: [CONFIG, SET, import-mode, no], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [watchseq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: watchseq}

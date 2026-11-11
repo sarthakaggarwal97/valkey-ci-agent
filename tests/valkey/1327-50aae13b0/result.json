@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "50aae13b0a7fffc6591ee2842d1ef4f2e59096dd",
+  "parent": "c4be326c3225ca4323ad7c21ccafee7197d0d539",
+  "pr": 1327,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Skip reclaim file page cache test in valgrind (#1327)",
+  "date": "2024-11-22",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2229,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to the unit-test harness (src/unit/test_main.c, test_help.h, test_util.c, README): it adds a --valgrind flag and uses it to skip the reclaimFilePageCache unit test under valgrind. No server runtime, command, replication, persistence or tool behaviour changes, so no fuzzer scenario can reach it and none is needed."
+}

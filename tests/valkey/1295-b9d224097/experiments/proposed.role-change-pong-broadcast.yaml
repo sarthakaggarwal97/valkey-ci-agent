@@ -1,0 +1,76 @@
+extends: [valkey.liveness]
+id: proposed.role-change-pong-broadcast
+deployment:
+  modes: [standalone]
+metadata:
+  description: Manual failover, failback and slot-import finalization on 3-node clusters
+    with periodic pings disabled on the fixed build, so convergence depends on the
+    new role-change PONG broadcasts
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rolechange
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    server_config:
+      enable-debug-command: "yes"
+      cluster-ping-interval: 300000000
+      cluster-node-timeout: 60000
+    commands:
+    - {command: [DEBUG, DISABLE-CLUSTER-RANDOM-PING, 1], node: 0, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DEBUG, DISABLE-CLUSTER-RANDOM-PING, 1], node: 1, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DEBUG, DISABLE-CLUSTER-RANDOM-PING, 1], node: 2, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, <node.0.id>], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 60, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [CLUSTER, NODES], node: 2, wait_s: 60, expect: {contains: "slave <node.0.id>"},
+      compare: skip}
+    - {command: [CLUSTER, FAILOVER], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 60, expect: {contains: "role:master"},
+      compare: skip}
+    - {command: [INFO, replication], node: 0, wait_s: 60, expect: {contains: "role:slave"},
+      compare: skip}
+    - {command: [INFO, replication], node: 0, wait_s: 60, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [CLUSTER, NODES], node: 2, wait_s: 60, expect: {contains: "slave <node.1.id>"},
+      compare: skip}
+    - {command: [CLUSTER, FAILOVER], node: 0, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 0, wait_s: 60, expect: {contains: "role:master"},
+      compare: skip}
+    - {command: [INFO, replication], node: 1, wait_s: 60, expect: {contains: "role:slave"},
+      compare: skip}
+    - {command: [INFO, replication], node: 1, wait_s: 60, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [CLUSTER, NODES], node: 2, wait_s: 60, expect: {contains: "slave <node.0.id>"},
+      compare: skip}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, <node.0.id>], node: 2, wait_s: 30,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, MIGRATING, <node.2.id>], node: 0, wait_s: 30,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, <node.2.id>], node: 2, wait_s: 30,
+      expect: {equals: OK}}
+    - {command: [GET, foo], node: 0, wait_s: 60, expect: {error: "MOVED 12182"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rolechange.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rolechange}

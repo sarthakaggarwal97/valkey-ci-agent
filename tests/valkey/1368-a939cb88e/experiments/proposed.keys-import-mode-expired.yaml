@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.keys-import-mode-expired
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    KEYS issued by the import-source client of a primary in import mode must list
+    logically-expired keys (keyIsExpiredWithDictIndex now applies the import-mode
+    exemption, valkey-io/valkey#1368). Other clients must still see them as expired,
+    and import mode must keep the key from being deleted on both builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: keysimport
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, import-mode, "yes"], expect: {equals: OK}}
+    - {command: [CLIENT, IMPORT-SOURCE, ON], expect: {equals: OK}}
+    - {command: [SET, "{imp}normal", v], expect: {equals: OK}}
+    - {command: [SET, "{imp}expired", v, PXAT, 1], expect: {equals: OK}}
+    - {command: [GET, "{imp}expired"], expect: {equals: v}}
+    - {command: [DBSIZE], expect: {equals: 2}}
+    - {command: [KEYS, "{imp}*"], expect_difference: true, compare: unordered, expect: {
+        contains: "{imp}expired"}}
+    - {command: [KEYS, "*"], expect_difference: true, compare: unordered, expect: {
+        contains: "{imp}expired"}}
+    - {command: [KEYS, "*"], connection: other, compare: unordered, expect: {equals: [
+          "{imp}normal"]}}
+    - {command: [GET, "{imp}expired"], connection: other}
+    - {command: [CLIENT, IMPORT-SOURCE, OFF], expect: {equals: OK}}
+    - {command: [KEYS, "{imp}*"], compare: unordered, expect: {equals: ["{imp}normal"]}}
+    - {command: [DBSIZE], expect: {equals: 2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [keysimport.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: keysimport}

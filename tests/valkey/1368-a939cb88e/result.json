@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a939cb88ee0c0512c003106be483b7c6968b3e7f",
+  "parent": "db7b7396ff1cc98832396a57e8d3e76e0eebd5fa",
+  "pr": 1368,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Handle keyIsExpiredWithDictIndex to make it check for import mode (#1368)",
+  "date": "2024-11-28",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 3,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 7,
+    "executed": 7,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 3.255,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-ccbf0d386439",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'watchseq' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (KEYS *), 13 (EXEC)"
+    },
+    {
+      "scenario": "ai-68228964835b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'watchseq' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (KEYS *), 13 (EXEC)"
+    }
+  ]
+}

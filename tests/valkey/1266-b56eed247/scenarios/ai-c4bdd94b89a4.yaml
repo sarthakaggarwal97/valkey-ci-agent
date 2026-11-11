@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b486a4150096..b56eed247919.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c4bdd94b89a4
+seed: 2101
+experiment:
+  id: proposed.jemalloc-defrag-churn
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

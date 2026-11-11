@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b9d224097a46dbe62ec0857cb91e7c67505a200e",
+  "parent": "979f4c1ceba9eecc0f984101775b101ab87b58fc",
+  "pr": 1295,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Brocast a PONG to all node in cluster when role changed (#1295)",
+  "date": "2024-11-23",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 1,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 11,
+    "executed": 11,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.8075,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-37ecbcf34fc6",
+      "build": "unstable",
+      "seed": 12951,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-37ecbcf34fc6",
+      "build": "unstable",
+      "seed": 12952,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-37ecbcf34fc6",
+      "build": "unstable",
+      "seed": 12953,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fd58f8d0585a..4695d118dd61.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-700fe5a589cf
+seed: 11209
+experiment:
+  id: proposed.rdma-config-surface
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

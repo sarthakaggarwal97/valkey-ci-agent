@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "18d1eb5a8554474cfc34c89f859b664e65d9b48a",
+  "parent": "43b50261620fe813015a8f88717b46876c7e3f83",
+  "pr": 1205,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove redundant dict_index calculations (#1205)",
+  "date": "2024-11-21",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.4989,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a pure performance refactor with no behavioral change. In both lookupKey and keysCommand the change only removes redundant recomputations of a key's dict index (hash slot). getKVStoreIndexForKey is a deterministic function of the key, so computing it once and reusing it yields the same value the repeated calls produced. In keysCommand the iterator's current dict index (kvstoreIteratorGetCurrentDictIndex / pslot) provably equals keyHashSlot(key) for every yielded key, since a key is stored in the dict matching its slot and the expires kvstore is indexed identically, so the expiry filter"
+}

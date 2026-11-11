@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fd58f8d0585a..4695d118dd61.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ba9aa9e40421
+seed: 72001
+experiment:
+  id: proposed.rdma-bind-rewrite-deploy
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200
+  server_config:
+    rdma-bind: 127.0.0.1

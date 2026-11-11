@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 979f4c1ceba9..b9d224097a46.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-37ecbcf34fc6
+seed: 12951
+experiment:
+  id: proposed.role-change-pong-broadcast
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

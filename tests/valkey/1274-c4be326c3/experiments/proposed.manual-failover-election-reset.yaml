@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.manual-failover-election-reset
+deployment:
+  modes: [standalone]
+metadata:
+  description: A second CLUSTER FAILOVER after a timed-out manual failover election
+    resets the stale election and promotes the replica (offset-match path of manualFailoverCanStart)
+components:
+- use: valkey.action.commands
+  id: mf
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    timeout_s: 120
+    server_config:
+      cluster-node-timeout: 15000
+      cluster-ping-interval: 1000
+      enable-debug-command: "yes"
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [DEBUG, DROP-CLUSTER-PACKET-FILTER, "5"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, FAILOVER], node: 1, expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "6.5"], node: 2, expect: {equals: OK}}
+    - {command: [DEBUG, DROP-CLUSTER-PACKET-FILTER, "-1"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, FAILOVER], node: 1, expect: {equals: OK}}
+    - {command: [SET, probe, x], node: 1, wait_s: 25, expect_difference: true, expect: {
+        error: false}}
+    - {command: [SET, probe2, x], node: 0, wait_s: 10, expect_difference: true, expect: {
+        error: true}}
+    - {command: [PING], node: 2, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [mf.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mf}

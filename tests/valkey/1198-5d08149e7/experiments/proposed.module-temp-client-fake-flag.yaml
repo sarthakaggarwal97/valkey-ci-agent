@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.module-temp-client-fake-flag
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Recycle module temp clients through moduleReleaseTempClient (VM_Call, blocked
+    clients, thread-safe contexts) under a nonzero maxmemory-clients, so clientEvictionAllowed
+    and prepareClientToWrite take the new fake-flag paths and their serverAssert(c->conn)
+    checks.
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "blockedclient.so built at the change, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "blockedclient.so built at the parent, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+    maxmemory_clients: {type: string, default: "16mb"}
+components:
+- use: valkey.action.commands
+  id: temp-clients
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    server_config: {maxmemory-clients: {$ref: inputs.maxmemory_clients}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [do_rm_call, SET, k1, v1], expect: {equals: OK}}
+    - {command: [do_rm_call, GET, k1], expect: {equals: v1}}
+    - {command: [do_rm_call, RPUSH, l, a, b, c], expect: {equals: 3}}
+    - {command: [do_rm_call, LRANGE, l, 0, -1], expect: {equals: [a, b, c]}}
+    - {command: [do_bg_rm_call, SET, k2, v2], expect: {equals: OK}}
+    - {command: [do_bg_rm_call, GET, k2], expect: {equals: v2}}
+    - {command: [do_rm_call_async, GET, k2], expect: {equals: v2}}
+    - {command: [do_rm_call_fire_and_forget, SET, k3, v3], expect: {equals: OK}}
+    - {command: [do_rm_call, GET, k3], expect: {equals: v3}}
+    - {command: [do_fake_bg_true]}
+    - {command: [unblock_by_timer, 10, 1000], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [do_bg_rm_call, GET, k1]}
+    - {command: [EXEC]}
+    - {command: [SUBSCRIBE, ch1], connection: sub}
+    - {command: [do_rm_call, PUBLISH, ch1, hello], expect: {equals: 1}}
+    - {connection: sub, read: true}
+    - {command: [do_rm_call, GET, k1], expect: {equals: v1}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [temp-clients.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: temp-clients}

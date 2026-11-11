@@ -1,0 +1,29 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b9d224097a46..9851006d6d7a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-94d7f2caee86
+seed: 106
+experiment:
+  id: valkey.replication-chaos
+  inputs:
+    waves:
+    - - op: promote
+        target: replica
+        mode: graceful
+    - - op: promote
+        target: replica
+        mode: force
+        split_s: 1
+    - - op: kill
+        target: replica
+        signal: SIGKILL
+      - op: restart
+        target: killed
+        after: 0
+        delay_s: 1
+    - - op: repoint
+        target: replica
+        to: replica
+deployment:
+  mode: standalone
+  replicas_per_primary: 3
+  base_port: 7500

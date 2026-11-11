@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 33f42d7fb597..653d5f7fe3d4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b84ea5f1c915
+seed: 11
+experiment:
+  id: proposed.functions-resync-compare
+  inputs:
+    repl_diskless_load: swapdb
+    replica_lazy_flush: 'yes'
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

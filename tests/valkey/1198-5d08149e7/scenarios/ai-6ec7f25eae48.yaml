@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 66ae8b713528..5d08149e726b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6ec7f25eae48
+seed: 11982
+experiment:
+  id: proposed.cluster-slots-cached-client-obuf-limit
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey db7b7396ff1c..a939cb88ee0c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-68228964835b
+seed: 136802
+experiment:
+  id: proposed.watch-exec-import-expired
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

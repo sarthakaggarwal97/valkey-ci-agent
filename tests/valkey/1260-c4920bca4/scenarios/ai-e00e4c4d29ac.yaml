@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 653d5f7fe3d4..c4920bca4a66.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e00e4c4d29ac
+seed: 11002
+experiment:
+  id: proposed.strtod-zset-sort-callsites
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

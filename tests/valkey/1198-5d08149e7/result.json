@@ -1,0 +1,57 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5d08149e726bb7d393d76401c7be683ceaf67b7b",
+  "parent": "66ae8b71352853ee90a0a9d4cddbbb406c189416",
+  "pr": 1198,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use fake client flag to replace not conn check (#1198)",
+  "date": "2024-11-27",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 2,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 8,
+    "executed": 8,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 10.378,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in genClientAddrString",
+      "scenario": "ai-82b2e1122d2e",
+      "seed": 11981,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1198",
+      "fingerprint": "5dd7162d838edeb29636",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11 in genClientAddrString",
+      "scenario": "ai-6ec7f25eae48",
+      "seed": 11982,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1198",
+      "fingerprint": "5dd7162d838edeb29636",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

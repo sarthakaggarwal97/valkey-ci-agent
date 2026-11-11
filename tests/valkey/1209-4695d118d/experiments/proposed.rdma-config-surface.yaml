@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.rdma-config-surface
+deployment:
+  modes: [standalone]
+metadata:
+  description: New rdma-port/rdma-bind/rdma-rx-size/rdma-completion-vector configs
+    exist, validate, apply-fail and roll back cleanly; parent rejects them as unknown
+components:
+- use: valkey.action.commands
+  id: rdmacfg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, GET, rdma-port], expect_difference: true, expect: {equals: [
+          rdma-port, "0"]}}
+    - {command: [CONFIG, GET, rdma-bind], expect_difference: true, expect: {equals: [
+          rdma-bind, ""]}}
+    - {command: [CONFIG, GET, rdma-rx-size], expect_difference: true, expect: {equals: [
+          rdma-rx-size, "1048576"]}}
+    - {command: [CONFIG, GET, rdma-completion-vector], expect_difference: true, expect: {
+        equals: [rdma-completion-vector, "-1"]}}
+    - {command: [CONFIG, SET, rdma-port, "0"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, rdma-port, "6399"], expect_difference: true, expect: {
+        error: true}}
+    - {command: [CONFIG, GET, rdma-port], expect_difference: true, expect: {equals: [
+          rdma-port, "0"]}}
+    - {command: [CONFIG, SET, rdma-port, "65536"], expect_difference: true, expect: {
+        error: true}}
+    - {command: [CONFIG, SET, rdma-port, "-1"], expect_difference: true, expect: {
+        error: true}}
+    - {command: [CONFIG, SET, rdma-rx-size, "131072"], expect_difference: true, expect: {
+        error: "immutable"}}
+    - {command: [CONFIG, SET, rdma-completion-vector, "5"], expect_difference: true,
+      expect: {error: "immutable"}}
+    - {command: [CONFIG, SET, rdma-bind, "10.0.0.1 10.0.0.2 10.0.0.3 10.0.0.4 10.0.0.5\
+          \ 10.0.0.6 10.0.0.7 10.0.0.8 10.0.0.9 10.0.0.10 10.0.0.11 10.0.0.12 10.0.0.13\
+          \ 10.0.0.14 10.0.0.15 10.0.0.16 10.0.0.17"], expect_difference: true, expect: {
+        error: "Too many bind addresses"}}
+    - {command: [CONFIG, SET, rdma-bind, "127.0.0.1"], expect_difference: true, expect: {
+        error: true}}
+    - {command: [CONFIG, GET, rdma-bind], expect_difference: true, expect: {equals: [
+          rdma-bind, ""]}}
+    - {command: [CONFIG, SET, rdma-bind, ""], expect_difference: true, expect: {error: true}}
+    - {command: [CONFIG, SET, rdma-port, "0", maxmemory, "104857600"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, maxmemory], expect_difference: true, expect: {equals: [
+          maxmemory, "104857600"]}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rdmacfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rdmacfg}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "979f4c1ceba9eecc0f984101775b101ab87b58fc",
+  "parent": "377ed22c971878b29b6d2c2c582198f2629f82ed",
+  "pr": 1340,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add cmake-build-debug and cmake-build-release to gitignore (#1340)",
+  "date": "2024-11-22",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2016,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds cmake-build-debug/ and cmake-build-release/ to .gitignore. It is a repository housekeeping/build-tooling change with no effect on any Valkey binary, command, reply, replication, persistence, or tool behavior, so there is nothing a runtime scenario could exercise."
+}

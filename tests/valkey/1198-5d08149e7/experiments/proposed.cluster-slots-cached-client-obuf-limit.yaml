@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.cluster-slots-cached-client-obuf-limit
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTER SLOTS under a tiny normal client-output-buffer-limit exercises
+    the fake cached-response client (the only fake client with a non-NULL conn) in
+    closeClientOnOutputBufferLimitReached
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slots
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, client-output-buffer-limit, "normal 1 1 0"], expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SLOTS], expect_difference: true, expect: {exists: true}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slots}

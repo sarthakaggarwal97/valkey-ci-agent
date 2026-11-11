@@ -1,0 +1,71 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c4920bca4a6681b2ba652e4dc52b72fe47db516a",
+  "parent": "653d5f7fe3d44adfb2a2e10c9110a3efacd3f0da",
+  "pr": 1260,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Integrating fast_float to optionally replace strtod (#1260)",
+  "date": "2024-11-25",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 10,
+  "proven": 1,
+  "hunted": 6,
+  "dropped": 4,
+  "recall": true,
+  "coverage": {
+    "lines": 17,
+    "executed": 17,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 10.8774,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-2a8b870aca3a",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-09b46b2273f0",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-4a15820d4b62",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2422a774861f",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-64a0f3122614",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'zsort' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (ZCOUNT z 0x1 0x3), 6 (ZRANGEBYSCORE z (0x0 (0x2), 7 (ZRANGEBYSCORE z 1 3), 8 (ZADD z2 0x10 m), 9 (ZSCORE z2 m), 19 (SORT mylist BY weigh"
+    },
+    {
+      "scenario": "ai-e00e4c4d29ac",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'zsort' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (ZCOUNT z 0x1 0x3), 6 (ZRANGEBYSCORE z (0x0 (0x2), 7 (ZRANGEBYSCORE z 1 3), 8 (ZADD z2 0x10 m), 9 (ZSCORE z2 m), 19 (SORT mylist BY weigh"
+    },
+    {
+      "scenario": "ai-c0320da77f07",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'zsort' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (ZCOUNT z 0x1 0x3), 6 (ZRANGEBYSCORE z (0x0 (0x2), 7 (ZRANGEBYSCORE z 1 3), 8 (ZADD z2 0x10 m), 9 (ZSCORE z2 m), 19 (SORT mylist BY weigh"
+    }
+  ]
+}

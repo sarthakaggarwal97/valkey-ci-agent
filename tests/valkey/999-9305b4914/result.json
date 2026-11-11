@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9305b49145172da781b8af2b5b96f9643e4367ec",
+  "parent": "469d41fb37d7c88d508b0a8c7ac495a8f00c717f",
+  "pr": 999,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add tag for dual-channel logs (#999)",
+  "date": "2024-11-26",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3155,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a '<Dual Channel> ' prefix to dual-channel replication log messages via a new dualChannelServerLog macro (compile-time string concatenation of the format literal) and rewords one log line, updating the matching Tcl test. No command reply, replication protocol byte, state transition, or data path changes \u2014 only server-log text at unchanged log levels. The fuzzer's oracles (replies, ledger, deployment state, liveness) cannot observe log wording, so no scenario can exercise or detect this change; any macro misuse would be a compile error already caught by the build."
+}

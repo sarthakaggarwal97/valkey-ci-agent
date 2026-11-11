@@ -1,0 +1,83 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "db7b7396ff1cc98832396a57e8d3e76e0eebd5fa",
+  "parent": "5d08149e726bb7d393d76401c7be683ceaf67b7b",
+  "pr": 1326,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make KEYS can visit expired key in import-source state (#1326)",
+  "date": "2024-11-28",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.551,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-de602e16b67a",
+      "build": "unstable",
+      "seed": 1326001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-de602e16b67a",
+      "build": "unstable",
+      "seed": 1326002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-de602e16b67a",
+      "build": "unstable",
+      "seed": 1326003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0f6e60c55f3b",
+      "build": "unstable",
+      "seed": 1326002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0f6e60c55f3b",
+      "build": "unstable",
+      "seed": 1326003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-0f6e60c55f3b",
+      "build": "unstable",
+      "seed": 1326004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-56dfe6bd4820",
+      "build": "unstable",
+      "seed": 1326003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-56dfe6bd4820",
+      "build": "unstable",
+      "seed": 1326004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-56dfe6bd4820",
+      "build": "unstable",
+      "seed": 1326005,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

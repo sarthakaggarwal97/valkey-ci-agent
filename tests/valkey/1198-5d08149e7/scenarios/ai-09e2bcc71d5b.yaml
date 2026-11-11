@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 66ae8b713528..5d08149e726b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-09e2bcc71d5b
+seed: 101
+experiment:
+  id: proposed.module-temp-client-fake-flag
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 2
+    maxmemory_clients: 16mb
+deployment:
+  mode: standalone
+  base_port: 7000

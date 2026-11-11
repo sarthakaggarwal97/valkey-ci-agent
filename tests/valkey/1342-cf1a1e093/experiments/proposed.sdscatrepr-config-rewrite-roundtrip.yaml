@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.sdscatrepr-config-rewrite-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CONFIG REWRITE quotes string config values with sdscatrepr and reads them back
+    through sdssplitargs on restart. The batched sdscatrepr checks isprint() before
+    the escape switch, so printable '\' and '"' are copied unescaped and a backslash-bearing
+    value is corrupted across rewrite+restart. Non-printable bytes must still round-trip
+    identically on both builds.
+components:
+- use: valkey.action.commands
+  id: rewrite-roundtrip
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, masterauth, 'pass\word'], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, masterauth], expect_difference: true, expect: {equals: [
+          masterauth, 'pass\word']}}
+    - {command: [CONFIG, SET, masterauth, 'tab\there'], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, masterauth], expect_difference: true, expect: {equals: [
+          masterauth, 'tab\there']}}
+    - {command: [CONFIG, SET, masterauth, !!binary 'QR8JIH5/Wg=='], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, masterauth], expect: {equals: [masterauth, !!binary 'QR8JIH5/Wg==']}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rewrite-roundtrip.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rewrite-roundtrip}

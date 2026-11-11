@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey db7b7396ff1c..a939cb88ee0c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-26f2fdf5e4d4
+seed: 110003
+experiment:
+  id: proposed.keys-import-mode-expired
+  inputs:
+    resp: 2
+    cluster: true
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

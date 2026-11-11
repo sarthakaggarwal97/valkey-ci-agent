@@ -1,0 +1,88 @@
+extends: [valkey.liveness]
+id: proposed.cluster-meet-forget-reset-log
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER MEET/FORGET/RESET and all three CLUSTER FAILOVER branches run
+    the new catClientInfoShortString logging on a 3-node private cluster; replies
+    compared across builds, a candidate crash, hang, or sanitizer report fails
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, enum: [1, 4], default: 1}
+components:
+- use: valkey.action.commands
+  id: meet
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    server_config: {io-threads: {$ref: inputs.io_threads}}
+    timeout_s: 15
+    commands:
+    - {command: [CLIENT, SETINFO, lib-name, fuzz-lib], expect: {equals: OK}}
+    - {command: [CLIENT, SETINFO, lib-ver, 1.2.3], expect: {equals: OK}}
+    - {command: [CLUSTER, MEET, not-an-ip, 7777], expect: {error: "Invalid node address"}}
+    - {command: [CLUSTER, MEET, "", 7777], expect: {error: "Invalid node address"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 0], expect: {error: "Invalid node address"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, -1], expect: {error: "Invalid node address"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 65536], expect: {error: "Invalid node address"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 9223372036854775807], expect: {error: "Invalid\
+          \ node address"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, notaport], expect: {error: "Invalid base\
+          \ port"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 7777, 0], expect: {error: "Invalid node\
+          \ address"}}
+    - {command: [CLUSTER, MEET, "<node.1.host>", "<node.1.port>"], expect: {equals: OK}}
+    - {command: [CLIENT, SETNAME, meet-admin], expect: {equals: OK}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 1], expect: {equals: OK}}
+    - {command: [CLUSTER, FORGET, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa], expect: {
+        error: "Unknown node"}}
+    - {command: [CLUSTER, FORGET, ""], expect: {error: "Unknown node"}}
+    - {command: [CLUSTER, FORGET, "<node.0.id>"], expect: {error: "forget myself"}}
+    - {command: [CLUSTER, FORGET, "<node.2.id>"], expect: {equals: OK}}
+    - {command: [CLUSTER, FORGET, "<node.2.id>"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, hide-user-data-from-log, yes], expect: {equals: OK}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 2], expect: {equals: OK}}
+    - {command: [CONFIG, SET, hide-user-data-from-log, no], expect: {equals: OK}}
+    - {command: [CLUSTER, RESET, BOTH], expect: {error: "syntax"}}
+    - {command: [SET, resetkey, v], expect: {equals: OK}}
+    - {command: [CLUSTER, RESET, HARD], expect: {error: "containing keys"}}
+    - {command: [DEL, resetkey], expect: {equals: 1}}
+    - {command: [CLUSTER, RESET, SOFT], node: 2, expect: {equals: OK}}
+    - {command: [CLUSTER, RESET, HARD], node: 2, expect: {equals: OK}}
+    - {command: [CLUSTER, FAILOVER], expect: {error: "to a replica"}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [CLUSTER, FAILOVER], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, expect: {contains: "role:master"},
+      compare: skip}
+    - {command: [INFO, replication], node: 0, wait_s: 30, expect: {contains: "role:slave"},
+      compare: skip}
+    - {command: [INFO, replication], node: 0, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [CLUSTER, FAILOVER, TAKEOVER], node: 0, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 0, wait_s: 30, expect: {contains: "role:master"},
+      compare: skip}
+    - {command: [INFO, replication], node: 1, wait_s: 30, expect: {contains: "role:slave"},
+      compare: skip}
+    - {command: [INFO, replication], node: 1, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [CLUSTER, FAILOVER, FORCE], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 60, expect: {contains: "role:master"},
+      compare: skip}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [PING], node: 2, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [meet.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: meet}

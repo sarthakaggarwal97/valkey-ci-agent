@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.sdscatrepr-cli-quote-backslash
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli quoted output (sdscatrepr) of values holding backslash,
+    double-quote, and control bytes, compared across builds
+components:
+- use: valkey.action.tools
+  id: cli-repr
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, SET, kbs, "a\\b"], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, GET, kbs], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "\"a\\b\"\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SET, kq, "a\"b"], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, GET, kq], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "\"a\"b\"\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SET, kmix, "say \"hi\"\\now"], expect: {
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, GET, kmix], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "\"say \"hi\"\\now\"\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SET, kctl, "\a\b\r\nx"], expect: {stdout: {
+          equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, GET, kctl], expect: {exit: {
+          equals: 0}, stdout: {equals: "\"\\a\\b\\r\\nx\"\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SET, kempty, ""], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --no-raw, GET, kempty], expect: {exit: {
+          equals: 0}, stdout: {equals: "\"\"\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --csv, GET, kq], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "\"a\"b\""}}}
+required_events: [cli-repr.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-repr}

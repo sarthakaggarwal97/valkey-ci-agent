@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 653d5f7fe3d4..c4920bca4a66.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c1c99393036e
+seed: 11004
+experiment:
+  id: proposed.strtod-debug-script-double
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

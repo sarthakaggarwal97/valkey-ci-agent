@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2d48a39c2781e72200b2e360ef250009c6701711",
+  "parent": "cf1a1e0931bd2db77c23b0058d8660461873dc8f",
+  "pr": 1347,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Save open's errno when opening temp rdb fails to prevent it from being modified (#1347)",
+  "date": "2024-11-25",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2906,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only saves errno across a sleep() in the replica's temp-RDB open retry loop so the warning log prints the correct strerror on platforms (macOS) where sleep clobbers errno. Control flow, replies, replication behavior and data handling are unchanged; the only observable difference is the text of a log message on an error path that requires open() to fail repeatedly (disk full or permissions), which the fuzzer cannot induce without root and which no oracle evaluates. No scenario can reach or judge this change."
+}

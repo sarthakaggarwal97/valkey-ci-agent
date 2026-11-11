@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.strtod-debug-script-double
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Drives the two valkey_strtod call sites not reachable through plain data commands
+    - DEBUG SLEEP argument parsing (debug.c) and the RESP3 double reply parser (resp_parser.c
+    parseDouble), reached by a Lua script that calls redis.setresp(3) and reads ZSCORE/ZINCRBY
+    double replies, including a 1.7e308 near-overflow score, comparing both builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dbgresp
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [DEBUG, SLEEP, "0"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.05"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "abc"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, " 0.05"], expect: {equals: OK}}
+    - {command: [ZADD, z, 1.5, a, -2.25, b, 1.7e308, c], expect: {equals: 3}}
+    - {command: [EVAL, "redis.setresp(3) local t = redis.call('ZSCORE', KEYS[1], 'a')\
+          \ return tostring(t['double'])", 1, z], expect: {equals: "1.5"}}
+    - {command: [EVAL, "redis.setresp(3) local t = redis.call('ZINCRBY', KEYS[1],\
+          \ '0.25', 'b') return tostring(t['double'])", 1, z], expect: {equals: "-2"}}
+    - {command: [EVAL, "redis.setresp(3) local t = redis.call('ZSCORE', KEYS[1], 'c')\
+          \ return tostring(t['double'])", 1, z], expect: {equals: "1.7e+308"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dbgresp.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbgresp}

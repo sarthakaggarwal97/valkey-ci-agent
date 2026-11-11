@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b56eed2479191dfd1f644768b7144c35a75ef52c",
+  "parent": "b486a415009660f355d0a8eb9fd67a9c9cb9cc6e",
+  "pr": 1266,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove valkey specific changes in jemalloc source code (#1266)",
+  "date": "2024-11-21",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 0,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 116,
+    "executed": 116,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.2439,
+  "findings": [],
+  "recorded": []
+}

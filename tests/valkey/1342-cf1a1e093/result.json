@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cf1a1e0931bd2db77c23b0058d8660461873dc8f",
+  "parent": "c4920bca4a6681b2ba652e4dc52b72fe47db516a",
+  "pr": 1342,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize sdscatrepr by batch processing printable characters (#1342)",
+  "date": "2024-11-25",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 1,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 19,
+    "executed": 13,
+    "percent": 68,
+    "uncovered": [
+      "src/sds.c:967",
+      "src/sds.c:968",
+      "src/sds.c:969",
+      "src/sds.c:970",
+      "src/sds.c:972",
+      "src/sds.c:973"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 10.3446,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-e2f37289d4e7",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'cli-repr' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (valkey-cli -p $port --no-raw GET kbs), 3 (valkey-cli -p $port --no-raw GET kq), 5 (valkey-cli -p $port --no-raw GET kmix), 10 (valkey"
+    }
+  ]
+}

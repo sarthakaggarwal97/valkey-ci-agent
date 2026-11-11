@@ -1,0 +1,22 @@
+extends: [valkey.liveness]
+id: proposed.rdma-bind-rewrite-deploy
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG REWRITE on a deployment started with rdma-bind set (rdma-port
+    0, so no RDMA listener), driving rewriteConfigRdmaBindOption with a non-empty
+    address list
+components:
+- use: valkey.action.commands
+  id: rdmarw
+  config:
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, rdma-bind], expect: {equals: [rdma-bind, "127.0.0.1"]}}
+    - {command: [CONFIG, SET, rdma-port, "6411"], expect: {error: "RDMA"}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {command: [CONFIG, GET, rdma-bind], expect: {equals: [rdma-bind, "127.0.0.1"]}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+required_events: [rdmarw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rdmarw}

@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9851006d6d7af570d7f38025f4b1de68f12c7731",
+  "parent": "b9d224097a46dbe62ec0857cb91e7c67505a200e",
+  "pr": 1249,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add short client info log to CLUSTER MEET / FORGET / RESET commands (#1249)",
+  "date": "2024-11-23",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 19,
+    "executed": 18,
+    "percent": 94,
+    "uncovered": [
+      "src/server.c:4328"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 9.7781,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-8e42fc8452ca",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'meet' returned ERROR: expectations both builds violate alike, so they are not about the change: 10 (CLUSTER MEET <node.1.host> <node.1.port>)"
+    },
+    {
+      "scenario": "ai-076fabfa007d",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'meet' returned ERROR: expectations both builds violate alike, so they are not about the change: 10 (CLUSTER MEET <node.1.host> <node.1.port>)"
+    }
+  ]
+}

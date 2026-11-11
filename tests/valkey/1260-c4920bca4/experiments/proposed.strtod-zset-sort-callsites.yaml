@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.strtod-zset-sort-callsites
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Parity of valkey_strtod (fast_float) vs strtod at the zslParseRange, string2d,
+    SORT BY and zzlStrtod call sites. glibc strtod accepts hex floats and leading
+    whitespace; fast_float rejects them with EINVAL, so ZRANGEBYSCORE/ZCOUNT bounds,
+    ZADD scores, SORT BY weights and CONFIG SET latency-tracking-info-percentiles
+    must now error where the parent silently parsed a value.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zsort
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [ZADD, z, 1.5, a], expect: {equals: 1}}
+    - {command: [ZADD, z, 2.25, b, -0.125, c], expect: {equals: 2}}
+    - {command: [ZSCORE, z, a]}
+    - {command: [ZRANGEBYSCORE, z, "-0.5", "3"], expect: {equals: [c, a, b]}}
+    - {command: [ZRANGEBYSCORE, z, "(0.5", "(2.5"], expect: {equals: [a, b]}}
+    - {command: [ZCOUNT, z, "0x1", "0x3"], expect_difference: true, expect: {error: "not\
+          \ a float"}}
+    - {command: [ZRANGEBYSCORE, z, "(0x0", "(0x2"], expect_difference: true, expect: {
+        error: "not a float"}}
+    - {command: [ZRANGEBYSCORE, z, " 1", "3"], expect_difference: true, expect: {
+        error: "not a float"}}
+    - {command: [ZADD, z2, "0x10", m], expect_difference: true, expect: {error: "not\
+          \ a valid float"}}
+    - {command: [ZSCORE, z2, m], expect_difference: true, expect: {exists: false}}
+    - {command: [ZADD, z3, "1e400", m], expect: {error: "not a valid float"}}
+    - {command: [ZADD, z3, "", m], expect: {error: "not a valid float"}}
+    - {command: [ZADD, z3, ".5", m], expect: {equals: 1}}
+    - {command: [RPUSH, mylist, a, b, c], expect: {equals: 3}}
+    - {command: [SET, weight_a, "3.5"], expect: {equals: OK}}
+    - {command: [SET, weight_b, "1.25"], expect: {equals: OK}}
+    - {command: [SET, weight_c, "2.75"], expect: {equals: OK}}
+    - {command: [SORT, mylist, BY, "weight_*"], expect: {equals: [b, c, a]}}
+    - {command: [SET, weight_b, "0x5"], expect: {equals: OK}}
+    - {command: [SORT, mylist, BY, "weight_*"], expect_difference: true, expect: {
+        error: "converted into double"}}
+    - {command: [SET, weight_b, " 1.25"], expect: {equals: OK}}
+    - {command: [SORT, mylist, BY, "weight_*"], expect_difference: true, expect: {
+        error: "converted into double"}}
+    - {command: [CONFIG, SET, latency-tracking-info-percentiles, "0x32 99"], expect_difference: true,
+      expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [zsort.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zsort}

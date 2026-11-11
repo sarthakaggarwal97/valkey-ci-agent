@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.watch-exec-import-expired
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Drives keyIsExpired (the new wrapper over keyIsExpiredWithDictIndex) through its
+    multi.c callers: WATCH on a key whose TTL has passed (watchForKey), EXEC with
+    a watched key that expires after WATCH (isWatchedKeyExpired), and SWAPDB with
+    a watcher on a key that is expired in the other db (touchAllWatchedKeysInDb),
+    both in import mode and out of it. KEYS under import mode is the marked command:
+    the parent hides the TTL-passed key, the change lists it.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: watchseq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, '0'], expect: {equals: OK}}
+    - {command: [CONFIG, SET, import-mode, 'yes'], expect: {equals: OK}}
+    - {command: [SET, k, v, EXAT, '1'], expect: {equals: OK}}
+    - {command: [KEYS, '*'], expect_difference: true, expect: {equals: [k]}}
+    - {command: [WATCH, k], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [PONG]}}
+    - {command: [SELECT, '1'], expect: {equals: OK}}
+    - {command: [WATCH, k], expect: {equals: OK}}
+    - {command: [SWAPDB, '0', '1'], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: false}}
+    - {command: [CONFIG, SET, import-mode, 'no'], expect: {equals: OK}}
+    - {command: [WATCH, k], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [PONG]}}
+    - {command: [SET, pk, v, PX, '50'], expect: {equals: OK}}
+    - {command: [WATCH, pk], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, '0.2'], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [watchseq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: watchseq}

@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 653d5f7fe3d4..c4920bca4a66.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9b738c6a15e9
+seed: 101
+experiment:
+  id: proposed.strtod-cli-timeout
+deployment:
+  mode: standalone
+  base_port: 7000

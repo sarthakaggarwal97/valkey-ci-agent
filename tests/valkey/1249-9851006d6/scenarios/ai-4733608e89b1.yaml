@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b9d224097a46..9851006d6d7a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4733608e89b1
+seed: 103
+experiment:
+  id: proposed.replicaof-failover-short-log
+  inputs:
+    resp: 2
+    io_threads: 1
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

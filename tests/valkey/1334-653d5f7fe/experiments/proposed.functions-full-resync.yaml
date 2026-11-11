@@ -1,0 +1,63 @@
+extends: [valkey.base]
+id: proposed.functions-full-resync
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Backlog-overflow full resync of a replica that already holds 100 functions,
+    under writes; the functions ctx swap/clear must not crash or lose functions
+inputs:
+  properties:
+    pause_s: {type: number, minimum: 0.5, maximum: 30, default: 3}
+components:
+- use: valkey.action.commands
+  id: load-functions
+  config:
+    instances: primary
+    timeout_s: 10
+    commands:
+    - command: [FUNCTION, LOAD, "#!lua name=biglib\nfor i=1,100 do server.register_function{function_name='f'\
+          \ .. i, callback=function() return i end, flags={'no-writes'}} end"]
+      expect: {equals: biglib}
+- use: valkey.observer.info
+  id: resync-info
+  config:
+    instances: primaries
+    interval_s: 0.1
+    sections: [stats]
+    expectations:
+    - {field: sync_full, delta_min: 1, evidence_id: valkey.replication.full-resync-counted,
+      required: true}
+- use: valkey.fault.process-signal
+  id: stall-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.pause_s}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, load-functions, resync-info, stall-replica]
+  config: {seconds: 2}
+- use: valkey.action.poll
+  id: links-up
+  depends_on: [warm-up]
+  config:
+    instances: replicas
+    section: replication
+    field: master_link_status
+    predicate: {equals: up}
+    timeout_s: 120
+- use: valkey.action.commands
+  id: verify-functions
+  depends_on: [links-up]
+  config:
+    instances: replicas
+    timeout_s: 10
+    commands:
+    - {command: [FCALL_RO, f1, 0], expect: {equals: 1}}
+required_events: [warm-up.completed, links-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: stall-replica}
+- {evidence_id: valkey.replication.full-resync-counted, source: resync-info}
+- {evidence_id: valkey.command.sequence, source: verify-functions}
