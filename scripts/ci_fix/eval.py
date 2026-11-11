@@ -86,6 +86,8 @@ class Case:
     scheduled: bool = False
     # The workflow file the job is in, without ``.yml``: a pull request also runs ``ci`` and ``codecov``.
     workflow: str = Source.DAILY.value
+    # The commit whose workflow file defined the job, when not ``sha``: weekly runs the default branch's.
+    workflow_sha: str = ""
     # A fix for a backport branch: an upstream change, ported.
     backport: bool = False
     # A failure on a contributor's pull request: a patch for a comment, reviewed and never run.
@@ -132,6 +134,7 @@ def load_cases(path: Path = CASES_FILE) -> dict[str, Case]:
             scheduled=bool(item.get("scheduled")), backport=bool(item.get("backport")),
             suggest=bool(item.get("suggest")),
             workflow=str(item.get("workflow") or Source.DAILY.value),
+            workflow_sha=str(item.get("workflow_sha") or ""),
             test_name=str(test.get("name") or ""), test_file=str(test.get("file") or ""),
             expect_port=str(expect.get("port") or ""), expect_pull=int(expect.get("pull") or 0),
             expect_refusal=bool(expect.get("refuse")),
@@ -179,6 +182,7 @@ def plan_case(case: Case, job_log: str) -> FixPlan:
         failed_tests=(FailedTest.from_report(case.test_name, case.test_file),) if case.test_file else (),
         source=Source.DAILY if case.scheduled else None,
         workflow=case.workflow,
+        workflow_sha=case.workflow_sha,
     )
     if case.backport:
         target = FixTarget(
