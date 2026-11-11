@@ -561,3 +561,88 @@ cases:
     workflow: codecov
     sha: 9abbfd2557a492e325a164a93122f9626abc0b1d
     base_branch: unstable
+
+  # Failures on contributors' pull requests, as of 2026-11-11: the bot may only comment
+  # with a patch, which is reviewed and never run.
+  - id: sg-build-atomic
+    about: A build error in the unit tests from the pull request's own header change.
+    repo: valkey-io/valkey
+    run_id: 42509466289
+    job_id: 130199702041
+    job: test-ubuntu-latest
+    workflow: ci
+    sha: 7ec53125cbc7708331d7e0c50956468d750c7e2d
+    base_branch: unstable
+    pr: 5329
+    suggest: true
+
+  - id: sg-module-crash
+    about: A module crash test failing on a pull request that changes the crash handler.
+    repo: valkey-io/valkey
+    run_id: 42847193878
+    job_id: 129937939495
+    job: test-ubuntu-latest
+    workflow: ci
+    sha: f207b46cffaee113dae2b974e5038b5f688243e6
+    base_branch: unstable
+    pr: 5346
+    suggest: true
+    test:
+      name: "Test module crash when info crashes with an assertion "
+      file: tests/unit/moduleapi/crash.tcl
+
+  - id: sg-asan-ptrace
+    about: A sanitizer warning about ptrace on a pull request that changes one replication test.
+    repo: valkey-io/valkey
+    run_id: 43021192431
+    job_id: 130524520542
+    job: test-sanitizer-address
+    workflow: ci
+    sha: d607f3ec211e9242ea7054e9ee95a89687bc0f9e
+    base_branch: unstable
+    pr: 5323
+    suggest: true
+
+  - id: sg-reply-blocking
+    about: A test the pull request itself adds, failing under TLS.
+    repo: valkey-io/valkey
+    run_id: 42870363226
+    job_id: 130019701376
+    job: test-ubuntu-latest-cmake-tls
+    workflow: ci
+    sha: c379403ee8fcd1a97534661980996fbdada21a24
+    base_branch: unstable
+    pr: 3381
+    suggest: true
+    test:
+      name: A client that connected while the AOF was off for a sync load can FLUSHDB after promotion
+      file: tests/unit/reply-blocking.tcl
+
+  - id: sg-unrelated-flake
+    about: The empty-shard failure of issue 5215 on a pull request that does not touch the cluster.
+    repo: valkey-io/valkey
+    run_id: 42726855571
+    job_id: 129534578051
+    job: test-ubuntu-latest
+    workflow: ci
+    sha: 0a3d20b8ef5ce58cf26bbd0f0bda0a2beb1f3bd5
+    base_branch: unstable
+    pr: 4970
+    suggest: true
+    test:
+      name: Empty-shard migration target is auto-updated after failover in target shard
+      file: tests/unit/cluster/slot-migration.tcl
+
+  - id: sg-apt-infra
+    about: A dependency install that failed in every job of the run.
+    repo: valkey-io/valkey
+    run_id: 43041988370
+    job_id: 130595914517
+    job: test-sanitizer-address
+    workflow: ci
+    sha: 74e1cf146dccb09adb8983ef2ca05955a0844d6b
+    base_branch: unstable
+    pr: 5360
+    suggest: true
+    expect:
+      refuse: true

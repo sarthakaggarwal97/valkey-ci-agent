@@ -88,6 +88,8 @@ class Case:
     workflow: str = Source.DAILY.value
     # A fix for a backport branch: an upstream change, ported.
     backport: bool = False
+    # A failure on a contributor's pull request: a patch for a comment, reviewed and never run.
+    suggest: bool = False
     test_name: str = ""
     test_file: str = ""
     # The known fix: the upstream commit to port, or the pull request a person wrote.
@@ -128,6 +130,7 @@ def load_cases(path: Path = CASES_FILE) -> dict[str, Case]:
             sha=str(item.get("sha") or ""), base_branch=str(item.get("base_branch") or ""),
             pr=int(item.get("pr") or 0), issue=int(item.get("issue") or 0),
             scheduled=bool(item.get("scheduled")), backport=bool(item.get("backport")),
+            suggest=bool(item.get("suggest")),
             workflow=str(item.get("workflow") or Source.DAILY.value),
             test_name=str(test.get("name") or ""), test_file=str(test.get("file") or ""),
             expect_port=str(expect.get("port") or ""), expect_pull=int(expect.get("pull") or 0),
@@ -151,6 +154,8 @@ def _problem(case: Case) -> str:
         return "its sha is not a full commit SHA"
     if sum(map(bool, (case.expect_port, case.expect_pull, case.expect_refusal))) > 1:
         return "it expects at most one of a port, a pull request and a refusal"
+    if case.suggest and (case.backport or not case.pr):
+        return "a suggestion is for a pull request, and not a backport"
     if case.expect_port and not (is_full_sha(case.expect_port) and case.backport):
         return "a port is a full commit SHA, expected of a backport case"
     return ""
@@ -181,6 +186,12 @@ def plan_case(case: Case, job_log: str) -> FixPlan:
             branch=f"agent/backport/sweep/{case.base_branch}", expected_sha=case.sha,
         )
         task = FixTask(failure, target, FixPolicy.BACKPORT)
+    elif case.suggest:
+        target = FixTarget(
+            TargetKind.SUGGEST, case.repo, base_repo_full_name=case.repo,
+            branch=f"pull-{case.pr}", expected_sha=case.sha,
+        )
+        task = FixTask(failure, target, FixPolicy.GENERAL)
     else:
         target = FixTarget(
             TargetKind.DRAFT_PR, case.repo, base_repo_full_name=case.repo,

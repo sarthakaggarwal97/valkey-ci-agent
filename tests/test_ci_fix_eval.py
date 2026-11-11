@@ -46,7 +46,7 @@ def test_every_case_in_the_repository_can_be_replayed_and_scored():
         plan = plan_case(case, "the job log")
         assert plan.front_door is FrontDoor.EVAL and plan.task.target.expected_sha == case.sha
         # A case on the default branch must not find the fix that landed after it.
-        assert plan.task.as_of_failure is not case.backport
+        assert plan.task.as_of_failure is not (case.backport or case.suggest)
 
 
 @pytest.mark.parametrize(("change", "problem"), [
@@ -56,6 +56,7 @@ def test_every_case_in_the_repository_can_be_replayed_and_scored():
     ({"expect": {"pull": 9, "port": _PORT}}, "at most one of a port, a pull request and a refusal"),
     ({"expect": {"pull": 9, "refuse": True}}, "at most one of a port, a pull request and a refusal"),
     ({"expect": {"port": _PORT}}, "expected of a backport case"),  # not a backport: nothing to port from
+    ({"suggest": True}, "a suggestion is for a pull request"),
 ])
 def test_a_case_that_could_not_be_replayed_or_scored_is_refused(tmp_path, change, problem):
     case = {"id": "c", "about": "a", "repo": "o/r", "run_id": 1, "job_id": 2, "job": "j", "sha": _SHA,
@@ -88,6 +89,13 @@ def test_a_backport_case_is_planned_like_the_follow_up_and_sees_the_default_bran
     assert task.policy is FixPolicy.BACKPORT and task.target.kind is TargetKind.UPDATE_PR
     assert task.target.branch == "agent/backport/sweep/9.0"
     assert not task.as_of_failure and not task.failure.scheduled and task.failure.pr_number == 5
+
+
+def test_a_suggest_case_is_planned_as_a_comment_on_the_pull_request():
+    task = plan_case(_case(pr=7, suggest=True, expect_pull=0), "log").task
+
+    assert task.policy is FixPolicy.GENERAL and task.target.kind is TargetKind.SUGGEST
+    assert not task.as_of_failure and task.failure.pr_number == 7
 
 
 def _patch(*lines: str, paths: tuple[str, ...] = ("src/net.c",), **fields) -> FixOutcome:
