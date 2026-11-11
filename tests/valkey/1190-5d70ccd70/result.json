@@ -1,0 +1,53 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5d70ccd70eb42db718e0176987891f91d21d29c8",
+  "parent": "285064b114c80cce5bd4a48bf8d6493c9d0e0971",
+  "pr": 1190,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make replica CLUSTER RESET flush async based on lazyfree-lazy-user-flush (#1190)",
+  "date": "2024-10-23",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.0982,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-1ded365101ee",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'reset' returned ERROR: expectations both builds violate alike, so they are not about the change: 13 (CLUSTER MEET <node.0.host> <node.0.port> on node 1), 14 (CLUSTER REPLICATE <node.0.id> on node 1), 15 (DBSIZE on node 1)"
+    },
+    {
+      "scenario": "ai-5f0cac1fca3f",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'reset' returned ERROR: expectations both builds violate alike, so they are not about the change: 13 (CLUSTER MEET <node.0.host> <node.0.port> on node 1), 14 (CLUSTER REPLICATE <node.0.id> on node 1), 15 (DBSIZE on node 1)"
+    },
+    {
+      "scenario": "ai-3e8e526c5a2e",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'reset' returned ERROR: expectations both builds violate alike, so they are not about the change: 13 (CLUSTER MEET <node.0.host> <node.0.port> on node 1), 14 (CLUSTER REPLICATE <node.0.id> on node 1), 15 (DBSIZE on node 1)"
+    },
+    {
+      "scenario": "ai-e682a07cb806",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'reset' returned ERROR: expectations both builds violate alike, so they are not about the change: 13 (CLUSTER MEET <node.0.host> <node.0.port> on node 1), 14 (CLUSTER REPLICATE <node.0.id> on node 1), 15 (DBSIZE on node 1)"
+    }
+  ]
+}

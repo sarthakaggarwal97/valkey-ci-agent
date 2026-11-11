@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c176de4251cb..c419524c05d7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-238f88fb3aca
+seed: 22
+experiment:
+  id: proposed.inline-arg-trim
+  inputs:
+    resp: 2
+    io_threads: 4
+deployment:
+  mode: standalone
+  base_port: 7100

@@ -1,0 +1,42 @@
+extends: [valkey.base]
+id: proposed.logfmt-under-replication
+deployment:
+  modes: [standalone, cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: "Under log-format logfmt (set by the scenario's server_config), restart\
+    \ a replica while writes run: primary and replica must emit well-formed logfmt\
+    \ lines, no legacy-format line may appear, and no acknowledged write may be lost"
+components:
+- use: valkey.observer.log
+  id: logfmt-lines
+  config:
+    instances: all
+    expect:
+    - {pattern: "pid=\\d+ role=primary timestamp=\"[^\"]+\" level=(debug|info|notice|warning)\
+        \ message=\"", evidence_id: proposed.logfmt.primary-line, required: true}
+    - {pattern: "pid=\\d+ role=replica timestamp=\"[^\"]+\" level=(debug|info|notice|warning)\
+        \ message=\"", evidence_id: proposed.logfmt.replica-line, required: true}
+    - {pattern: "pid=\\d+ role=RDB/AOF timestamp=\"[^\"]+\" level=", evidence_id: proposed.logfmt.child-line}
+    forbidden:
+    - {pattern: "^\\d+:[MSCX] \\d{2} [A-Z][a-z]{2} \\d{4} "}
+- use: valkey.fault.process-signal
+  id: restart-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: SIGTERM
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, restart-replica, logfmt-lines]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 4}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: restart-replica}
+- {evidence_id: proposed.logfmt.primary-line, source: logfmt-lines}
+- {evidence_id: proposed.logfmt.replica-line, source: logfmt-lines}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8ee7a580254d5600a2af32ac30ce2a103b7d83fb",
+  "parent": "c21f1dc084d49ea74883ba93583bf957f7636635",
+  "pr": 1233,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Document log format configs in valkey.conf (#1233)",
+  "date": "2024-10-29",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2085,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds comment lines to valkey.conf documenting the existing log-format and log-timestamp-format configs. All added lines are commented out (# log-format legacy, # log-timestamp-format legacy), so no server behaviour, config parsing, or logging output changes; there is nothing a scenario could reach or break."
+}

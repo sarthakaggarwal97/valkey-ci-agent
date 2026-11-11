@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 55bbbe09a3b3..9c60fcdae241.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-42341a72b7dd
+seed: 1213
+experiment:
+  id: proposed.security-check-renamed-host
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

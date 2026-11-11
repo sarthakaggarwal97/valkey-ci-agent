@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 71f8c34eede9..29b83f1ac8dd.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1a8ec6039831
+seed: 103
+experiment:
+  id: proposed.bgsave-cancel-repl-child
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

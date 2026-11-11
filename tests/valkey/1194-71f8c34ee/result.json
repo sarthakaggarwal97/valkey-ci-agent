@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "71f8c34eede9a8e0fdab09b53ff4202d8bbaa434",
+  "parent": "2743b7e04beecc3128b696e2b90a4916f45dc1c4",
+  "pr": 1194,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "RDMA: Fix listener priv opaque pointer (#1194)",
+  "date": "2024-10-21",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5637,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to src/rdma.c, which is compiled only when Valkey is built with BUILD_RDMA=module (default is BUILD_RDMA=no), so the fuzzer's builds do not contain the changed code at all. Even on an RDMA-enabled build, reaching rdmaFdToListener/rdmaChangeListener requires an RDMA device (or root-configured soft-RoCE) and a client speaking the RDMA transport; no installed component, tool or experiment speaks RDMA, and the runs have no root. No scenario can reach the changed behaviour."
+}

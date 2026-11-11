@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2743b7e04beecc3128b696e2b90a4916f45dc1c4",
+  "parent": "64cfdf61eb8352e93f128db2065dc6528895e7de",
+  "pr": 1182,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix SORT GET to ignore special pattern # in cluster slot check (#1182)",
+  "date": "2024-10-19",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.3382,
+  "findings": [],
+  "recorded": []
+}

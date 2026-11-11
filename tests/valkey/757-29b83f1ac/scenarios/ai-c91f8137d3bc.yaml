@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 71f8c34eede9..29b83f1ac8dd.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c91f8137d3bc
+seed: 105
+experiment:
+  id: proposed.bgsave-cancel-under-kill
+  inputs:
+    stable_keys: 2000
+    key_save_delay_us: 3000
+    cancel_delay_s: 0.2
+    signal: SIGTERM
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7400

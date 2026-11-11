@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.bgsave-cancel-repl-child
+deployment:
+  modes: [standalone]
+metadata:
+  description: BGSAVE CANCEL kills the RDB child that is feeding a replica's full
+    sync (child_type is CHILD_TYPE_RDB for it too); the replica must reconnect, full-sync
+    again and converge
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: repl-cancel
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 2
+    server_config: {save: "", repl-diskless-sync-delay: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    commands:
+    - {node: 0, command: [DEBUG, POPULATE, 300], expect: {equals: OK}}
+    - {node: 0, command: [CONFIG, SET, rdb-key-save-delay, 30000], expect: {equals: OK}}
+    - {node: 1, command: [REPLICAOF, <node.0.host>, <node.0.port>], expect: {equals: OK}}
+    - {node: 0, command: [INFO, persistence], wait_s: 30, expect: {contains: "rdb_bgsave_in_progress:1"},
+      compare: skip}
+    - {node: 0, command: [BGSAVE, CANCEL], expect_difference: true, expect: {equals: Background
+          saving cancelled}}
+    - {node: 0, command: [CONFIG, SET, rdb-key-save-delay, 0], expect: {equals: OK}}
+    - {node: 1, command: [INFO, replication], wait_s: 60, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {node: 0, command: [SET, canary, aftercancel], expect: {equals: OK}}
+    - {node: 1, command: [GET, canary], wait_s: 20, expect: {equals: aftercancel}}
+    - {node: 1, command: [DBSIZE], wait_s: 20, expect: {equals: 301}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [repl-cancel.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: repl-cancel}

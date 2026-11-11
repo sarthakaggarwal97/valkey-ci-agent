@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4be09e434a3b5bf55e6e6b5a98f315720e31010f",
+  "parent": "9c60fcdae241a7e1dedc2f51d19491d168d66b9b",
+  "pr": 1224,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix typo in valkey.conf file's shutdown section (#1224)",
+  "date": "2024-10-25",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2311,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only fixes a typo in a comment in valkey.conf (the shutdown-timeout documentation: 'before the primary exists' \u2192 'before the primary exits'). It touches no code, no default values, and no parsing behavior \u2014 comments are ignored by the config loader \u2014 so there is no runtime behavior to exercise and no scenario is needed."
+}

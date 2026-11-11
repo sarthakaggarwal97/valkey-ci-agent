@@ -1,0 +1,38 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5d2ff853a335af2bc2c1527da126b3e947269ad2",
+  "parent": "4be09e434a3b5bf55e6e6b5a98f315720e31010f",
+  "pr": 1226,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix minor repldbfd leak in updateReplicasWaitingBgsave if fstat fails (#1226)",
+  "date": "2024-10-27",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 9,
+    "executed": 4,
+    "percent": 44,
+    "uncovered": [
+      "src/replication.c:1797",
+      "src/replication.c:1801",
+      "src/replication.c:1802",
+      "src/replication.c:1803",
+      "src/replication.c:1804"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 3.6394,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 0,
+    "recall": false
+  }
+}

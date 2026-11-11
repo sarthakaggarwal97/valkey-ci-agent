@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c21f1dc084d49ea74883ba93583bf957f7636635",
+  "parent": "5d2ff853a335af2bc2c1527da126b3e947269ad2",
+  "pr": 1220,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Increase the IO_THREADS_MAX_NUM. (#1220)",
+  "date": "2024-10-27",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.3314,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

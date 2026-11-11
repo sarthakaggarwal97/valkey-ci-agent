@@ -1,0 +1,78 @@
+extends: [valkey.liveness]
+id: proposed.log-format-config-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: "New log-format and log-timestamp-format configs: CONFIG GET/SET and\
+    \ enum validation, logfmt scrubbing of quotes, newlines and over-long messages\
+    \ via DEBUG LOG, child logging under logfmt, CONFIG REWRITE and restart persistence"
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: logcfg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, log-format], expect_difference: true, expect: {equals: [
+          log-format, legacy]}}
+    - {command: [CONFIG, SET, log-format, bogus], expect_difference: true, expect: {
+        error: true}}
+    - {command: [CONFIG, SET, log-format, logfmt], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, GET, log-format], expect_difference: true, expect: {equals: [
+          log-format, logfmt]}}
+    - {command: [DEBUG, LOG, "plain message under logfmt"], expect: {equals: OK}}
+    - {command: [DEBUG, LOG, "quote\" newline\n carriage\r mixed \"\"\n\r end"], expect: {
+        equals: OK}}
+    - command:
+      - DEBUG
+      - LOG
+      - "x\"y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"\
+        y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"\
+        y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"\
+        y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"\
+        y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"\
+        y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"\
+        y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"\
+        y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"\
+        y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"\
+        y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"\
+        y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"\
+        y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_x\"y\nz\rw-0123456789-abcdefghijklmnopqrstuvw_"
+      expect: {equals: OK}
+    - {command: [DEBUG, LOG, ""], expect: {equals: OK}}
+    - {command: [CONFIG, SET, log-timestamp-format, iso8601], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DEBUG, LOG, "logfmt with iso8601 timestamp"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, log-timestamp-format, milliseconds], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DEBUG, LOG, "logfmt with milliseconds timestamp"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, log-timestamp-format, ""], expect_difference: true,
+      expect: {error: true}}
+    - {command: [BGSAVE], expect: {contains: "Background saving"}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, log-format], expect_difference: true, expect: {equals: [
+          log-format, logfmt]}}
+    - {command: [CONFIG, GET, log-timestamp-format], expect_difference: true, expect: {
+        equals: [log-timestamp-format, milliseconds]}}
+    - {command: [DEBUG, LOG, "after restart under rewritten logfmt config \"quoted\"\
+          \nline"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, log-format, legacy], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [DEBUG, LOG, "back to legacy at runtime"], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [logcfg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: logcfg}

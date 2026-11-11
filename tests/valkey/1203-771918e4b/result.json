@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "771918e4bf52406519dd66e7421de00bc6169d63",
+  "parent": "5885dc56bdb40b3e0ea9b3d20a8bb08c7f2c3157",
+  "pr": 1203,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Updating command.def by running the generate-command-code.py  (#1203)",
+  "date": "2024-10-21",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2914,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

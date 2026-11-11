@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5885dc56bdb40b3e0ea9b3d20a8bb08c7f2c3157",
+  "parent": "29b83f1ac8dd80a9c3214c1e1f0ff3b7730fb612",
+  "pr": 1200,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix BGSAVE CANCEL since and history fields (#1200)",
+  "date": "2024-10-21",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.7822,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

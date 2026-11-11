@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "55bbbe09a3b37a98c907dbfbc225768ff253e84f",
+  "parent": "2956367731305f73005b44b26d6f665564731de3",
+  "pr": 1022,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Configurable log and timestamp formats (logfmt, ISO8601) (#1022)",
+  "date": "2024-10-25",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 1,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 61,
+    "executed": 60,
+    "percent": 98,
+    "uncovered": [
+      "src/server.c:219"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.6565,
+  "findings": [],
+  "recorded": []
+}

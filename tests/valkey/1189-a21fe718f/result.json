@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a21fe718f46e5987dd9cf1ca698dce6d0d060795",
+  "parent": "c419524c05d7544636d5bc0cc0cb333052b0a517",
+  "pr": 1189,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Limit CLUSTER_CANT_FAILOVER_DATA_AGE log to 10 times period (#1189)",
+  "date": "2024-10-24",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.1589,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rate-limits one serverLog() notice in clusterLogCantFailover(): when a replica is repeatedly blocked from failover by CLUSTER_CANT_FAILOVER_DATA_AGE, the log is emitted every 10 seconds instead of every 1. It is logging-only: the new branch is a single comparison plus return, the caller's control flow and all failover/election decisions are unchanged, and cant_failover_reason is not exposed in any reply (not in CLUSTER INFO), so no command output, replication, or data path differs between the builds. The only observable difference is the frequency of one log line while the clus"
+}

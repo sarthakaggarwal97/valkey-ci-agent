@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.security-check-renamed-post
+deployment:
+  modes: [standalone]
+metadata:
+  description: A command renamed to "post" executes on the change build but aborts
+    the connection on the parent, where the security check still runs before command
+    lookup
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cmd
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {rename-command: "SET post"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [post, k, v], expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, k], expect_difference: true, expect: {equals: v}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cmd}

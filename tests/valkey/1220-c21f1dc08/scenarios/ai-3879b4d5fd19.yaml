@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5d2ff853a335..c21f1dc084d4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3879b4d5fd19
+seed: 101
+experiment:
+  id: proposed.io-threads-clamp-removed
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

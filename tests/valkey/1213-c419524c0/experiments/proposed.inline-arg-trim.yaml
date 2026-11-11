@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.inline-arg-trim
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Inline protocol arguments are trimmed with sdsRemoveFreeSpace in processInlineBuffer.
+    DEBUG SDSLEN on a raw string value stored from an inline SET shows far less free
+    space than on the parent (which keeps the sdssplitargs over-allocation for values
+    under 32KB), and the trim must not corrupt plain, quoted, hex-escaped, empty,
+    or integer arguments, or command lookup.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, enum: [1, 4], default: 1}
+components:
+- use: valkey.action.commands
+  id: inline
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {io-threads: {$ref: inputs.io_threads}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {raw: "PING\r\n", connection: inline, expect: {equals: PONG}}
+    - {raw: "   \r\n", connection: inline, expect: {exists: false}}
+    - {raw: "\"\"\r\n", connection: inline, expect: {error: "unknown command"}}
+    - {raw: "SET k600 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r\
+        \n", connection: inline, expect: {equals: OK}}
+    - {command: [STRLEN, k600], expect: {min: 500, max: 700}}
+    - {command: [GETRANGE, k600, 0, 3], expect: {equals: aaaa}}
+    - {command: [GETRANGE, k600, -4, -1], expect: {equals: aaaa}}
+    - {command: [DEBUG, SDSLEN, k600], expect_difference: true, expect: {contains: "val_sds_len:"}}
+    - {raw: "SET k1400 bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\r\
+        \n", connection: inline, expect: {equals: OK}}
+    - {command: [STRLEN, k1400], expect: {min: 1200, max: 1600}}
+    - {command: [GETRANGE, k1400, -4, -1], expect: {equals: bbbb}}
+    - {command: [DEBUG, SDSLEN, k1400], expect_difference: true, expect: {contains: "val_sds_len:"}}
+    - {raw: "\"SE\\x54\" ek \"\\x41\\x42 C\"\r\n", connection: inline, expect: {equals: OK}}
+    - {command: [GET, ek], expect: {equals: "AB C"}}
+    - {raw: "SET kq 'a\\'b'\r\n", connection: inline, expect: {equals: OK}}
+    - {command: [GET, kq], expect: {equals: "a'b"}}
+    - {raw: "SET \"\" emptykey\r\n", connection: inline, expect: {equals: OK}}
+    - {command: [GET, ""], expect: {equals: emptykey}}
+    - {raw: "SET ke \"\"\r\n", connection: inline, expect: {equals: OK}}
+    - {command: [STRLEN, ke], expect: {equals: 0}}
+    - {raw: "\tRPUSH\t L  x x x x x x x x \r\n", connection: inline, expect: {equals: 8}}
+    - {command: [LRANGE, L, 0, -1], expect: {equals: [x, x, x, x, x, x, x, x]}}
+    - {raw: "SET ki 9223372036854775807\r\n", connection: inline, expect: {equals: OK}}
+    - {command: [GET, ki], expect: {equals: "9223372036854775807"}}
+    - {raw: "GET \"oops\r\n", connection: bad, expect: {error: "unbalanced"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [inline.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: inline}

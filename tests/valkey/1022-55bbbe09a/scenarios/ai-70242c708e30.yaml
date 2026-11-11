@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 295636773130..55bbbe09a3b3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-70242c708e30
+seed: 1102
+experiment:
+  id: proposed.logfmt-under-replication
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7100
+  server_config:
+    log-format: logfmt
+    log-timestamp-format: iso8601

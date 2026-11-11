@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.bgsave-cancel-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: BGSAVE CANCEL aborts a running save, cancels a scheduled one (explicit
+    SCHEDULE and the implicit in-EXEC one), errors when neither exists, and is a syntax
+    error on the parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: cancel-seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {save: ""}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [BGSAVE, CANCEL], expect_difference: true, expect: {error: "not in\
+          \ progress or scheduled"}}
+    - {command: [BGSAVE, cAnCeL], expect_difference: true, expect: {error: "not in\
+          \ progress or scheduled"}}
+    - {command: [BGSAVE, CANCEL, NOW], expect: {error: "syntax"}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, 10000], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 400], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {equals: Background saving started}}
+    - {command: [INFO, persistence], wait_s: 20, expect: {contains: "rdb_bgsave_in_progress:1"},
+      compare: skip}
+    - {command: [BGSAVE], expect: {error: "already in progress"}}
+    - {command: [BGSAVE, SCHEDULE], expect: {error: "already in progress"}}
+    - {command: [BGSAVE, CANCEL], expect_difference: true, expect: {equals: Background
+          saving cancelled}}
+    - {command: [INFO, persistence], wait_s: 40, expect: {contains: "rdb_bgsave_in_progress:0"},
+      compare: skip}
+    - {command: [INFO, persistence], expect: {contains: "rdb_last_bgsave_status:ok"},
+      compare: skip}
+    - {command: [BGSAVE, CANCEL], expect_difference: true, expect: {error: "not in\
+          \ progress or scheduled"}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, 0], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {equals: Background saving started}}
+    - {command: [INFO, persistence], wait_s: 20, expect: {contains: "rdb_bgsave_in_progress:0"},
+      compare: skip}
+    - {command: [CONFIG, SET, rdb-key-save-delay, 15000], expect: {equals: OK}}
+    - {command: [BGREWRITEAOF], expect: {contains: "rewriting"}}
+    - {command: [INFO, persistence], wait_s: 20, expect: {contains: "aof_rewrite_in_progress:1"},
+      compare: skip}
+    - {command: [BGSAVE, SCHEDULE], expect: {equals: Background saving scheduled}}
+    - {command: [BGSAVE, CANCEL], expect_difference: true, expect: {equals: Scheduled
+          background saving cancelled}}
+    - {command: [BGSAVE, CANCEL], expect_difference: true, expect: {error: "not in\
+          \ progress or scheduled"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {equals: QUEUED}}
+    - {command: [BGSAVE, CANCEL], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [Background saving
+            scheduled, Scheduled background saving cancelled]}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [cancel-seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cancel-seq}

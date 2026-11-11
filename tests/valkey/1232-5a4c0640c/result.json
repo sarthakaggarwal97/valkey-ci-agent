@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5a4c0640cebe922de563e03ff2a683b89612f522",
+  "parent": "8ee7a580254d5600a2af32ac30ce2a103b7d83fb",
+  "pr": 1232,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Mark main and serverAssert as weak symbols to be overridden (#1232)",
+  "date": "2024-10-29",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2499,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds __attribute__((weak)) to main and _serverAssert and drops the --allow-multiple-definition linker flag so the unit-test binary can supply its own main/assert handler; in valkey-server itself no overriding strong symbol exists, so the linked code and all runtime behavior (commands, replication, persistence, assertion handling) are unchanged. It is a build/CI/test-infrastructure change with no behavior to reach from a running server, so no scenario is warranted."
+}

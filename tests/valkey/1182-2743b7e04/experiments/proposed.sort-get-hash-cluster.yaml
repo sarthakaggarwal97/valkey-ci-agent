@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.sort-get-hash-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: "SORT/SORT_RO GET '#' is allowed in cluster mode after the fix; real\
+    \ GET patterns in other slots stay denied"
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sortget
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [RPUSH, "{a}mylist", "1", "2", "3"], expect: {equals: 3}}
+    - {command: [MSET, "{a}weight_1", "3", "{a}weight_2", "2", "{a}weight_3", "1",
+        "{a}data_1", one, "{a}data_2", two, "{a}data_3", three], expect: {equals: OK}}
+    - {command: [SORT, "{a}mylist", GET, "#"], expect_difference: true, expect: {
+        equals: ["1", "2", "3"]}}
+    - {command: [SORT_RO, "{a}mylist", GET, "#"], expect_difference: true, expect: {
+        equals: ["1", "2", "3"]}}
+    - {command: [SORT, "{a}mylist", BY, "{a}weight_*", GET, "#"], expect_difference: true,
+      expect: {equals: ["3", "2", "1"]}}
+    - {command: [SORT_RO, "{a}mylist", BY, "{a}weight_*", GET, "{a}data_*", GET, "#"],
+      expect_difference: true, expect: {equals: [three, "3", two, "2", one, "1"]}}
+    - {command: [SORT, "{a}mylist", ALPHA, GET, "#", GET, "#"], expect_difference: true,
+      expect: {equals: ["1", "1", "2", "2", "3", "3"]}}
+    - {command: [SORT, "{a}mylist", GET, "#", STORE, "{a}dst"], expect_difference: true,
+      expect: {equals: 3}}
+    - {command: [LRANGE, "{a}dst", 0, -1], expect_difference: true, expect: {equals: [
+          "1", "2", "3"]}}
+    - {command: [SORT, "{a}mylist", GET, "get*"], expect: {error: "GET option of SORT\
+          \ denied"}}
+    - {command: [SORT, "{a}mylist", GET, "##"], expect: {error: "GET option of SORT\
+          \ denied"}}
+    - {command: [SORT, "{a}mylist", GET, "#x"], expect: {error: "GET option of SORT\
+          \ denied"}}
+    - {command: [SORT, "{a}mylist", GET, "#", GET, "get*"], expect: {error: "GET option\
+          \ of SORT denied"}}
+    - {command: [SORT, "{a}mylist", BY, "by*"], expect: {error: "BY option of SORT\
+          \ denied"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [sortget.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sortget}

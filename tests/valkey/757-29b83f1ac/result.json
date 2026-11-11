@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "29b83f1ac8dd80a9c3214c1e1f0ff3b7730fb612",
+  "parent": "71f8c34eede9a8e0fdab09b53ff4202d8bbaa434",
+  "pr": 757,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Introduce bgsave cancel (#757)",
+  "date": "2024-10-21",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 3,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 14,
+    "executed": 14,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 13.2141,
+  "findings": [],
+  "recorded": []
+}

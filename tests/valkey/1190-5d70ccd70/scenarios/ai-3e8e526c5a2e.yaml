@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 285064b114c8..5d70ccd70eb4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3e8e526c5a2e
+seed: 13
+experiment:
+  id: proposed.cluster-reset-replica-lazy-flush
+  inputs:
+    resp: 2
+    appendonly: 'yes'
+    concurrency: 0
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

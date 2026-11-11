@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b803f7aeff4ffe43c866a52d9ea830add33b5834",
+  "parent": "5d70ccd70eb42db718e0176987891f91d21d29c8",
+  "pr": 1211,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Cleaned up getSlotOrReply is return -1 instead of C_ERR (#1211)",
+  "date": "2024-10-23",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2956,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure cosmetic refactor with no behavior change: C_ERR is '#define C_ERR -1' (src/server.h:112), so replacing '== C_ERR' with '== -1' at the getSlotOrReply call sites in cluster_legacy.c and cluster_slot_stats.c compiles to the identical comparison. The function already returned the literal -1 on invalid slots; only a comment was added. No reply, validation, or control-flow change exists to exercise."
+}

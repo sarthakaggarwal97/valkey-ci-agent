@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "13f5f665f259f229d707116432f8ef2969cae0c7",
+  "parent": "5a4c0640cebe922de563e03ff2a683b89612f522",
+  "pr": 1239,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update the argument of clusterNodeGetReplica declaration (#1239)",
+  "date": "2024-10-30",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2074,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames a parameter (slave_idx to replica_idx) in the clusterNodeGetReplica function declaration in src/cluster.h. A parameter name in a C declaration has no effect on compiled code or behavior; this is a pure naming cleanup with nothing to test."
+}

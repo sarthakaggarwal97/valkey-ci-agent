@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.io-threads-clamp-removed
+deployment:
+  modes: [standalone]
+metadata:
+  description: io-threads 64, which the parent silently clamped to 16, now spawns
+    64 IO threads; traffic offloaded to them answers correctly
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: iothreads
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {io-threads: 64, events-per-io-thread: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, GET, io-threads], expect_difference: true, expect: {contains: "64"}}
+    - {command: [DEBUG, POPULATE, 100000], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 100000}}
+    - {command: [GET, "key:777"], connection: c1, expect: {equals: "value:777"}}
+    - {command: [GET, "key:99999"], connection: c2, expect: {equals: "value:99999"}}
+    - {command: [SETRANGE, big, 1000000, x], connection: c3, expect: {equals: 1000001}}
+    - {command: [STRLEN, big], expect: {equals: 1000001}}
+    - {command: [GETRANGE, big, 1000000, 1000000], connection: c1, expect: {equals: x}}
+    - {command: [MSET, k1, v1, k2, v2, k3, v3, k4, v4, k5, v5, k6, v6, k7, v7, k8,
+        v8], expect: {equals: OK}}
+    - {command: [MGET, k1, k2, k3, k4, k5, k6, k7, k8], connection: c2, expect: {
+        equals: [v1, v2, v3, v4, v5, v6, v7, v8]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, m1, a], expect: {equals: QUEUED}}
+    - {command: [INCR, ctr], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, 1]}}
+    - {command: [GET, m1], connection: c3, expect: {equals: a}}
+    - {command: [SET, "", empty-key-value], expect: {equals: OK}}
+    - {command: [GET, ""], connection: c1, expect: {equals: empty-key-value}}
+    - {command: [WAIT, 0, 0], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [iothreads.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: iothreads}

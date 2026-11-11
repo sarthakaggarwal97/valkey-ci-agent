@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2956367731305f73005b44b26d6f665564731de3",
+  "parent": "a21fe718f46e5987dd9cf1ca698dce6d0d060795",
+  "pr": 1222,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Maintain return value of rdbSaveDb after writing slot-info aux (#1222)",
+  "date": "2024-10-24",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3807,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds `written += res;` so rdbSaveDb's returned byte count includes the slot-info aux field. rdbSaveDb has a single caller (rdbSaveRio, src/rdb.c:1423) which only checks the return value for -1 (error); the non-negative byte count is never read by any code path. The bytes written to the RDB stream are identical on both builds \u2014 the fix corrects an internal counter nobody consumes, so there is no observable behaviour change (no reply, no RDB content, no replication or persistence effect) for a scenario to exercise or an oracle to judge."
+}

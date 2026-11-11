@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 295636773130..55bbbe09a3b3.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d49e502e7092
+seed: 1105
+experiment:
+  id: valkey.replication-full-resync
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7400
+  server_config:
+    log-format: logfmt
+    log-timestamp-format: milliseconds

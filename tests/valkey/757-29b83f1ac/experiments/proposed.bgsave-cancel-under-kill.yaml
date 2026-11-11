@@ -1,0 +1,76 @@
+extends: [valkey.base]
+id: proposed.bgsave-cancel-under-kill
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Under writes, BGSAVE CANCEL aborts a slow disk save (status not_completed,
+    temp RDB cleaned up); the primary is then killed and restarted, the replica resyncs,
+    no acknowledged write is lost outside the fsync window, and the next BGSAVE succeeds
+inputs:
+  properties:
+    key_save_delay_us: {type: integer, minimum: 0, maximum: 100000, default: 1500}
+    cancel_delay_s: {type: number, minimum: 0, maximum: 5, default: 0.8}
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+startup_overlays:
+- overlay_id: slow-save
+  server_config:
+    rdb-key-save-delay: {$ref: inputs.key_save_delay_us}
+components:
+- use: valkey.observer.log
+  id: logs
+  config:
+    instances: primary
+    expect:
+    - {evidence_id: valkey.bgsave.log-cancel-requested, pattern: "Background saving\
+        \ will be aborted due to user request", required: true}
+    - {evidence_id: valkey.bgsave.log-terminated-by-signal, pattern: "Background saving\
+        \ terminated by signal"}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 4}
+- use: valkey.action.commands
+  id: start-save
+  depends_on: [warm-up, logs]
+  config:
+    instances: primary
+    commands:
+    - {command: [BGSAVE], expect: {equals: "Background saving started"}, wait_s: 10}
+- use: valkey.action.sleep
+  id: cancel-delay
+  depends_on: [start-save]
+  config: {seconds: {$ref: inputs.cancel_delay_s}}
+- use: valkey.action.bgsave
+  id: bgsave
+  depends_on: [cancel-delay, kill-primary]
+  config: {instances: primary, args: [CANCEL], expect: not_completed, timeout_s: 60}
+- use: valkey.fault.process-signal
+  id: kill-primary
+  config:
+    when_event: bgsave.save-completed
+    instance: primary
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [bgsave]
+  config: {seconds: 8}
+- use: valkey.action.bgsave
+  id: bgsave-after
+  depends_on: [settle]
+  config: {instances: primary, expect: ok, timeout_s: 100}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_s: 2.5
+    loss_window_faults: [kill-primary]
+    loss_window_scope: fault_targets
+    converge_timeout_s: 60
+required_events: [bgsave.save-started, bgsave.save-completed, kill-primary.recovered]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: start-save}
+- {evidence_id: valkey.fault.injected, source: kill-primary}
+- {evidence_id: valkey.bgsave.result, source: bgsave}
+- {evidence_id: valkey.bgsave.result, source: bgsave-after}

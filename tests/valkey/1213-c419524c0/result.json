@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c419524c05d7544636d5bc0cc0cb333052b0a517",
+  "parent": "c176de4251cb82eb2b005b40fe284b93bdaa7353",
+  "pr": 1213,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Trim free space from inline command argument strings to avoid excess memory usage (#1213)",
+  "date": "2024-10-23",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.5375,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-157124652ede",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'inline' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (STRLEN k1400)"
+    },
+    {
+      "scenario": "ai-238f88fb3aca",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'inline' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (STRLEN k1400)"
+    },
+    {
+      "scenario": "ai-13e1ee94841a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'inline' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (STRLEN k1400)"
+    }
+  ]
+}

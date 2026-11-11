@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9c60fcdae241a7e1dedc2f51d19491d168d66b9b",
+  "parent": "55bbbe09a3b37a98c907dbfbc225768ff253e84f",
+  "pr": 1212,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Do security attack check only when command not found to reduce the critical path (#1212)",
+  "date": "2024-10-25",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.5266,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-90f52540b508",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'cmd' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (post k v), 1 (GET k)"
+    },
+    {
+      "scenario": "ai-42341a72b7dd",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'cmd' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (host: k v), 1 (GET k)"
+    }
+  ]
+}

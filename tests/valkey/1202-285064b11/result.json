@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "285064b114c80cce5bd4a48bf8d6493c9d0e0971",
+  "parent": "771918e4bf52406519dd66e7421de00bc6169d63",
+  "pr": 1202,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "fix typo  (#1202)",
+  "date": "2024-10-21",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2123,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only a comment in src/io_threads.c, correcting the typo 'areadty' to 'already' in trySendReadToIOThreads. No executable code, config, protocol, or build file changes; behaviour is identical on both builds, so no scenario is needed."
+}
