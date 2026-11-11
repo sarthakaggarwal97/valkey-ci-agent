@@ -1350,10 +1350,14 @@ def _summary(merge: dict[str, Any], result: dict[str, Any] | None, now: str) -> 
     # Tests skipped as unsupported, most often a setting the build does not know: one reason, so a skip that
     # every merge hits (a renamed config) shows in PROGRESS.md, not only in a dropped count. The rejected
     # directive sits at the tail of a FATAL CONFIG error (">>> 'name value'"), past the capability prefix, so
-    # keep enough of it to name the config, or PROGRESS.md shows an uninformative "at line " with no clue which.
+    # keep the head and the tail, or PROGRESS.md shows an uninformative "at line " with no clue which; a plain
+    # [:300] also stopped inside the instance's log path a provision error leads with (valkey #1252), losing
+    # the directive entirely.
     skipped = [r for r in result.get("recorded") or [] if r.get("status") == "SKIP_UNSUPPORTED"]
     if skipped:
-        entry["skipped"] = {"count": len(skipped), "reason": str(skipped[0].get("reason") or "")[:300]}
+        reason = str(skipped[0].get("reason") or "")
+        entry["skipped"] = {"count": len(skipped),
+                            "reason": reason if len(reason) <= 300 else f"{reason[:150]} […] {reason[-144:]}"}
     if not result.get("error"):
         # record() keeps the tests of a merge whose run finished.
         entry["folder"] = merge_folder(merge)

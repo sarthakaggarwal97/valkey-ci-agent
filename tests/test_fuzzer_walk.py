@@ -780,6 +780,21 @@ def test_a_skip_reasons_rejected_directive_survives_in_the_summary():
     assert "cluster-config-save-behavior" in walk._summary(_merge(), result, "now")["skipped"]["reason"]
 
 
+def test_a_skip_reason_led_by_a_long_log_path_keeps_its_directive():
+    # valkey #1252: a provision error leads with the instance's log path, so a plain [:300] stopped inside it
+    # and the rejected directive at the tail was lost; the head and the tail are both kept.
+    reason = (
+        "the run could not start: runner execution failed during deployment.provision: LocalDeploymentError: "
+        "Instance valkey-0 failed to start within 60s (process output from /home/runner/work/valkey-ci-agent/"
+        "valkey-ci-agent/walk-work/runs/ai-d5812612ef67-merge-7101/artifacts/data/logs/7101-dae728eb-valkey-0"
+        ".stdio.log: | *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** | Reading the configuration file, "
+        "at line 18 | >>> 'cluster-replica-no-failover \"if-empty\"' | argument must be 'yes' or 'no')"
+    )
+    result = {"recorded": [{"scenario": "s", "status": "SKIP_UNSUPPORTED", "reason": reason}]}
+    kept = walk._summary(_merge(), result, "now")["skipped"]["reason"]
+    assert "cluster-replica-no-failover" in kept and len(kept) <= 300
+
+
 def test_the_same_commands_unreached_on_both_builds_is_no_regressed_fix(monkeypatch, tmp_path):
     # valkey-json #123: its test reached the change on 24 commands at the merge and on unstable, with the same few
     # marked commands unreached on both, and was filed as a regressed fix.
