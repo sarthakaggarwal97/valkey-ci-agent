@@ -660,3 +660,20 @@ cases:
     test:
       name: Active defrag - AOF loading
       file: tests/unit/memefficiency.tcl
+
+  # A release branch's failure in the weekly run of every release branch, fixed on its sweep PR:
+  # the daily.yml job, replayed as scheduled, on the sweep PR's head.
+  - id: wk80-pause-randomkey
+    about: The 8.0 weekly failure of a client pause test, on the 8.0 sweep PR's head.
+    repo: valkey-io/valkey
+    run_id: 42453432437
+    job_id: 128647314414
+    job: test-ubuntu-tls-io-threads
+    sha: 82796d69c93bcc01af43b6bfa22b00e63d1d79d8
+    base_branch: '8.0'
+    pr: 5077
+    backport: true
+    scheduled: true
+    test:
+      name: Test the randomkey command will not cause the server to get into an infinite loop during the client pause write
+      file: tests/unit/pause.tcl
