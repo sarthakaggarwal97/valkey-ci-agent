@@ -496,17 +496,26 @@ def gcov_counts(text: str) -> dict[int, int]:
 
 def gcov(tree: Path, path: str) -> dict[int, int] | None:
     """How often each executable line of ``path`` ran on the coverage build in ``tree``, from every run so far;
-    None when the build compiles no object of it."""
+    None when the directory compiled without instrumentation (objects but no notes)."""
     source = tree / path
-    if not source.with_suffix(".gcno").is_file():
-        return None
-    subprocess.run(["gcov", "-o", ".", source.name], cwd=source.parent, check=True, capture_output=True, text=True,
-                   timeout=300)
     report = source.parent / f"{source.name}.gcov"
-    # A file of data alone (cli_commands.c is tables from commands.def) has no functions: gcov writes no report.
-    if not report.is_file():
-        return {}
-    return gcov_counts(report.read_text(errors="replace"))
+    if source.with_suffix(".gcno").is_file():
+        subprocess.run(["gcov", "-o", ".", source.name], cwd=source.parent, check=True, capture_output=True,
+                       text=True, timeout=300)
+        # A file of data alone (cli_commands.c is tables from commands.def) has no functions: gcov writes no report.
+        return gcov_counts(report.read_text(errors="replace")) if report.is_file() else {}
+    # No notes of its own: a file another compiles (ae.c #includes ae_epoll.c, the walk's #740), one the platform
+    # leaves out (ae_select.c under epoll), or one the build never compiles (the src/modules examples). gcov over
+    # the directory's notes writes the included files' reports too; a file still without one is compiled nowhere,
+    # so it has no executable lines.
+    noted = sorted(p.name for p in source.parent.glob("*.gcno"))
+    if noted:
+        subprocess.run(["gcov", "-o", ".", *noted], cwd=source.parent, check=True, capture_output=True, text=True,
+                       timeout=300)
+        return gcov_counts(report.read_text(errors="replace")) if report.is_file() else {}
+    # A directory of objects without notes compiled uninstrumented (modules/lua before the CFLAGS fix, #5117):
+    # a measurement that failed, kept visible; one with neither is not part of the build.
+    return None if any(source.parent.glob("*.o")) else {}
 
 
 def coverage(changed: dict[str, list[int]], counts: dict[str, dict[int, int] | None]) -> dict[str, Any]:

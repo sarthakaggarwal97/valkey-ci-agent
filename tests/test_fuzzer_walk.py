@@ -1195,6 +1195,33 @@ def test_gcov_of_a_file_without_functions_is_measured_as_no_executable_lines(mon
     assert walk.gcov(tmp_path, "src/cli_commands.c") == {}
 
 
+def test_gcov_of_a_file_another_compiles_is_read_from_the_directorys_notes(monkeypatch, tmp_path):
+    # valkey #740 touched src/ae_epoll.c, which ae.c #includes: it has no .gcno of its own, and the merge's
+    # coverage was reported as "the build left no gcov notes" of it. gcov over the directory's notes writes the
+    # included files' reports too; a file still without one (ae_select.c under epoll, the never-built
+    # src/modules examples) is compiled nowhere, so it has no executable lines, not a failed measurement.
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "ae_epoll.c").write_text("static int aeApiCreate(void) { return 0; }\n")
+    (tmp_path / "src" / "ae_select.c").write_text("static int aeApiCreate(void) { return 1; }\n")
+    (tmp_path / "src" / "ae.gcno").write_bytes(b"")
+
+    def run(command, cwd, **kw):
+        assert command == ["gcov", "-o", ".", "ae.gcno"]
+        (Path(cwd) / "ae_epoll.c.gcov").write_text("        7:    1:static int aeApiCreate(void) { return 0; }\n")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(walk.subprocess, "run", run)
+    assert walk.gcov(tmp_path, "src/ae_epoll.c") == {1: 7}
+    assert walk.gcov(tmp_path, "src/ae_select.c") == {}
+    # The build never compiles src/modules' examples: no notes, no objects, nothing to measure.
+    (tmp_path / "src" / "modules").mkdir()
+    (tmp_path / "src" / "modules" / "helloworld.c").write_text("int x;\n")
+    assert walk.gcov(tmp_path, "src/modules/helloworld.c") == {}
+    # A directory of objects without notes compiled uninstrumented: still a measurement that failed.
+    (tmp_path / "src" / "modules" / "helloworld.o").write_bytes(b"")
+    assert walk.gcov(tmp_path, "src/modules/helloworld.c") is None
+
+
 def _rounds(executed: list[int], lines: int = 10, tests: list[list[str]] | None = None, started: float | None = None):
     """cover() with fakes: each measure reports the next of ``executed``; each round walks the next of ``tests``."""
     measured: list[list[str]] = []
