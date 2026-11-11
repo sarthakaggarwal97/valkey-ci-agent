@@ -1,0 +1,25 @@
+extends: [valkey.liveness]
+id: proposed.cluster-fix-uncovered-slots-stack-type
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: valkey-cli --cluster fix on a cluster that has uncovered slots must
+    not read the uncovered-slots dict's freed stack-local dictType at cleanup
+inputs:
+  properties:
+    confirm: {type: string, default: ""}
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 30
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, DELSLOTSRANGE, 0, 100], expect: {
+        stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: ["--cluster", fix, "127.0.0.1:$port"], stdin: {$ref: inputs.confirm},
+      expect_difference: true, expect: {exit: {in: [0, 1]}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

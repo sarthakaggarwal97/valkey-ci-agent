@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6dfb8203cc55ec3b05f838eee23ebcc92b953679",
+  "parent": "27fce29500745899d4fc7322a40569567fef5685",
+  "pr": 874,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add debug-context config (#874)",
+  "date": "2024-08-12",
+  "unstable": "1b03cf5e3c77ff1891ec759fef75947daa1db9fd",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 2,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.2515,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

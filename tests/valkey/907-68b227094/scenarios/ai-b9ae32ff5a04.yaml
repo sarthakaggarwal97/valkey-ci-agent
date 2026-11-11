@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 131857e80a42..68b227094760.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b9ae32ff5a04
+seed: 7000
+experiment:
+  id: proposed.cluster-fix-uncovered-slots-dangling-dicttype
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

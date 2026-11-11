@@ -1,0 +1,49 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "929283fc6f03b0d3dcc5dcc1847be1c5c6688157",
+  "parent": "5166d489da1bbf49643dd6b44cd2593e21c09dc3",
+  "pr": 811,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Dual channel replication should not update lastbgsave_status when transfer error (#811)",
+  "date": "2024-08-12",
+  "unstable": "1b03cf5e3c77ff1891ec759fef75947daa1db9fd",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 1,
+  "hunted": 3,
+  "dropped": 3,
+  "recall": true,
+  "coverage": {
+    "lines": 2,
+    "executed": 1,
+    "percent": 50,
+    "uncovered": [
+      "src/rdb.c:3455"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 15.2492,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-4ee19156f36c",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "required evidence was not observed: valkey.rdb.transfer-signal-logged from logs; the run did not reach what it tests, so no trustworthy verdict is possible"
+    },
+    {
+      "scenario": "ai-6204ad135669",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "no trustworthy verdict is possible; required components did not do their part outside an oracle or action, depend on one that did not, judged a deployment whose teardown failed, or were skipped: kill-mid-transfer"
+    },
+    {
+      "scenario": "ai-f743ef5ef868",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "required evidence was not observed: valkey.rdb.transfer-signal-logged from logs; the run did not reach what it tests, so no trustworthy verdict is possible"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+extends: [valkey.liveness]
+id: proposed.cluster-fix-uncovered-slots-uaf
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli --cluster fix on a cluster with uncovered slots must not
+    touch freed stack memory when releasing clusterManagerUncoveredSlots on cleanup
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 60
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, DELSLOTSRANGE, 0, 100], expect: {
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: ['127.0.0.1:$port', --cluster, fix, '127.0.0.1:$port'],
+      stdin: null, expect_difference: true, expect: {exit: {min: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

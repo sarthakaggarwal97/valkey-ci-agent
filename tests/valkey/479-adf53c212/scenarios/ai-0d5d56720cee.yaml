@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fc9f29103396..adf53c212be1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0d5d56720cee
+seed: 479002
+experiment:
+  id: proposed.debug-object-lfu-fields
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

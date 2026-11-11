@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "103365fe0e37b91be20992afd047ba4e3aa3ad47",
+  "parent": "4d284daefd4667dcbb9b10db86b0e2ef1da595d5",
+  "pr": 839,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Log unexpected $ENDOFF responses in dual channel replication (#839)",
+  "date": "2024-08-14",
+  "unstable": "1b03cf5e3c77ff1891ec759fef75947daa1db9fd",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.236,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff adds only a serverLog(LL_WARNING, ...) call on an already-existing error path in fullSyncWithPrimary (dual-channel replication): when sscanf fails to parse the $ENDOFF response, the code goes to the same goto error as before, now with a log line first. There is no change to replies, replication state, data handling, or control flow, and the new log fires only if a primary sends a malformed $ENDOFF, which no genuine Valkey build produces. The fuzzer's oracles cannot observe log output, so no scenario can distinguish the change from its parent; this is a diagnostics-only change that nee"
+}

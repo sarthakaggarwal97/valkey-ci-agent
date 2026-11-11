@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6dfb8203cc55..76f809bc1934.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3be6f11efd8b
+seed: 82901
+experiment:
+  id: proposed.zunion-accumulator-removal
+  inputs:
+    resp: 2
+    zset_max_listpack_entries: 128
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

@@ -1,0 +1,45 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "27fce29500745899d4fc7322a40569567fef5685",
+  "parent": "1c198a95ac33933c4e89d7783b21c767cca7e234",
+  "pr": 837,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix dual-channel-replication related issues (#837)",
+  "date": "2024-08-12",
+  "unstable": "1b03cf5e3c77ff1891ec759fef75947daa1db9fd",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 9,
+  "proven": 0,
+  "hunted": 7,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 8,
+    "executed": 8,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 16.5851,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-f8a751a6b034",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during fault.inject: LookupError: no live instance matches 'replica'"
+    },
+    {
+      "scenario": "ai-5de795b18351",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'chaos' returned ERROR: wave 1 kill 1.2 had no target: every live replica is already killed; wave 2 kill 2.2 had no target: every live replica is already killed"
+    }
+  ],
+  "recall_round": {
+    "tests": 5,
+    "recall": false
+  }
+}

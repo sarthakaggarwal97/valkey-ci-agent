@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7424620ca06c3172ee21af6384080cd6d6463c53",
+  "parent": "109cc21267eb88b9cea0d66f2fa69d40293d2a67",
+  "pr": 838,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Check if the server is currently running the feature before cron run (#838)",
+  "date": "2024-08-08",
+  "unstable": "1b03cf5e3c77ff1891ec759fef75947daa1db9fd",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2852,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only reorders two side-effect-free condition checks in serverCron: run_with_period(100) is a pure macro (an if over server.cronloops and server.hz with no state mutation, server.h:638), so testing server.cluster_enabled or moduleCount() before it instead of after yields the exact same calls to clusterCron() and modulesCron() at the exact same ticks. It is a performance refactor with no behaviour change, so no scenario can distinguish the builds."
+}

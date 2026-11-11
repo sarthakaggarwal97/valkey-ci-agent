@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.debug-object-lfu-fields
+deployment:
+  modes: [standalone]
+metadata:
+  description: DEBUG OBJECT reports lfu_freq and lfu_access_time_minutes under both
+    non-LFU and LFU maxmemory policies, in normal and FAST mode, for string and quicklist
+    encodings
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dbgobj
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {lfu-decay-time: 0, list-max-listpack-size: 4}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [DEBUG, OBJECT, k], expect_difference: true, expect: {contains: "lfu_freq:"}}
+    - {command: [DEBUG, OBJECT, k, FAST], expect_difference: true, expect: {contains: "lfu_access_time_minutes:"}}
+    - {command: [OBJECT, FREQ, k], expect: {error: "LFU maxmemory policy is not selected"}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-lfu], expect: {equals: OK}}
+    - {command: [DEBUG, OBJECT, k], expect_difference: true, expect: {contains: "lfu_freq:"}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [OBJECT, FREQ, k2], expect: {equals: 5}}
+    - {command: [DEBUG, OBJECT, k2], expect_difference: true, expect: {contains: "lfu_freq:5"}}
+    - {command: [DEBUG, OBJECT, k2, FAST], expect_difference: true, expect: {contains: "lfu_freq:5"}}
+    - {command: [GET, k2], expect: {equals: v2}}
+    - {command: [DEBUG, OBJECT, k2], expect_difference: true, expect: {contains: "lfu_freq:6"}}
+    - {command: [RPUSH, biglist, a, b, c, d, e, f, g, h, i, j], expect: {equals: 10}}
+    - {command: [DEBUG, OBJECT, biglist], expect_difference: true, expect: {contains: "lfu_freq:5"}}
+    - {command: [DEBUG, OBJECT, missing], expect: {error: "no such key"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dbgobj.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbgobj}

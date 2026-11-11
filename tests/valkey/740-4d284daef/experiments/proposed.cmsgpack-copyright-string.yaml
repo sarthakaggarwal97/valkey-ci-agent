@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.cmsgpack-copyright-string
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    The only compiled line in the copyright-transfer change is the LUACMSGPACK_COPYRIGHT
+    string exposed to Lua scripts as cmsgpack._COPYRIGHT. Compare the EVAL reply across
+    the two builds and confirm cmsgpack pack/unpack still round-trips after the recompile.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [EVAL, "return cmsgpack._COPYRIGHT", 0], expect_difference: true,
+      expect: {equals: "Copyright (C) 2012, Redis Ltd."}}
+    - {command: [EVAL, "return cmsgpack._NAME", 0], expect: {equals: cmsgpack}}
+    - {command: [EVAL, "return cmsgpack.unpack(cmsgpack.pack('hello'))", 0], expect: {
+        equals: hello}}
+    - {command: [EVAL, "local t = cmsgpack.unpack(cmsgpack.pack({1,2,3})) return t[2]",
+        0], expect: {equals: 2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

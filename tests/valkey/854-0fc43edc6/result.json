@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0fc43edc6cf388854bc824f192647cc59f7019e7",
+  "parent": "facd123ce60e8d39cbdfcedd51c72569d755d68a",
+  "pr": 854,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update sentinel conf access string to allow hello channel access (#854)",
+  "date": "2024-08-03",
+  "unstable": "1b03cf5e3c77ff1891ec759fef75947daa1db9fd",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2164,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only a commented-out example ACL line in sentinel.conf (documentation inside a # comment block). No code, config parsing, or runtime behaviour changed, so there is no path for a scenario to reach or break."
+}

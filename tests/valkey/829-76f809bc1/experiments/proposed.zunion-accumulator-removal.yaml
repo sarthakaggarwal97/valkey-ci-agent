@@ -1,0 +1,88 @@
+extends: [valkey.liveness]
+id: proposed.zunion-accumulator-removal
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    ZUNION/ZUNIONSTORE after the accumulator-dict removal (#829): the result dict
+    is now built in place and each entry's value is mutated from an inline double
+    to a skiplist score pointer. The sequence drives aggregation, weights, inf/-inf,
+    duplicate and set inputs, a union that outgrows the initial dictExpand (rehash
+    before the pointer-conversion pass), then reads and mutates the result through
+    the dict (ZSCORE, ZINCRBY, ZREM, ZPOPMIN). The change intends identical replies,
+    so no command is marked expect_difference: the oracle is reply equality with the
+    parent plus liveness.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    zset_max_listpack_entries: {type: integer, default: 128}
+components:
+- use: valkey.action.commands
+  id: zunion
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      zset-max-listpack-entries: {$ref: inputs.zset_max_listpack_entries}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ZADD, za, 1, a, 2, b, 3, c], expect: {equals: 3}}
+    - {command: [ZADD, zb, 10, b, 20, c, 30, d], expect: {equals: 3}}
+    - {command: [ZUNION, 2, za, zb, WITHSCORES]}
+    - {command: [ZUNION, 2, za, zb, WEIGHTS, 2, -1, AGGREGATE, MIN, WITHSCORES]}
+    - {command: [ZUNION, 2, za, zb, AGGREGATE, MAX, WITHSCORES]}
+    - {command: [ZUNION, 2, za, za, WEIGHTS, 2147483648, 4294967296, WITHSCORES]}
+    - {command: [ZADD, zinf1, inf, x], expect: {equals: 1}}
+    - {command: [ZADD, zinf2, -inf, x], expect: {equals: 1}}
+    - {command: [ZUNIONSTORE, dinf, 2, zinf1, zinf2], expect: {equals: 1}}
+    - {command: [ZSCORE, dinf, x]}
+    - {command: [ZUNION, 1, zinf1, WEIGHTS, 0, WITHSCORES]}
+    - {command: [SADD, s1, a, e, ""], expect: {equals: 3}}
+    - {command: [ZUNIONSTORE, d1, 3, za, zb, s1], expect: {equals: 6}}
+    - {command: [ZRANGE, d1, 0, -1, WITHSCORES]}
+    - {command: [ZSCORE, d1, ""]}
+    - {command: [ZSCORE, d1, b]}
+    - {command: [ZUNIONSTORE, d1, 2, d1, za], expect: {equals: 6}}
+    - {command: [ZRANGE, d1, 0, -1, WITHSCORES]}
+    - {command: [SET, str, hello], expect: {equals: OK}}
+    - {command: [ZUNIONSTORE, str, 1, za], expect: {equals: 3}}
+    - {command: [ZUNIONSTORE, d1, 1, nosuchkey], expect: {equals: 0}}
+    - {command: [EXISTS, d1], expect: {equals: 0}}
+    - {command: [ZUNION, 1, nosuchkey, WITHSCORES]}
+    - {command: [ZADD, weights, 1, w], expect: {equals: 1}}
+    - {command: [ZUNION, 2, za, weights, WITHSCORES]}
+    - {command: [ZUNIONSTORE, d2, 0, za], expect: {error: true}}
+    - {command: [ZADD, big1, 1, b101, 1, b102, 1, b103, 1, b104, 1, b105, 1, b106,
+        1, b107, 1, b108, 1, b109, 1, b110, 1, b111, 1, b112, 1, b113, 1, b114, 1,
+        b115, 1, b116, 1, b117, 1, b118, 1, b119, 1, b120, 1, b121, 1, b122, 1, b123,
+        1, b124, 1, b125, 1, b126, 1, b127, 1, b128, 1, b129, 1, b130, 1, b131, 1,
+        b132, 1, b133, 1, b134], expect: {equals: 34}}
+    - {command: [ZADD, big2, 2, c201, 2, c202, 2, c203, 2, c204, 2, c205, 2, c206,
+        2, c207, 2, c208, 2, c209, 2, c210, 2, c211, 2, c212, 2, c213, 2, c214, 2,
+        c215, 2, c216, 2, c217, 2, c218, 2, c219, 2, c220, 2, c221, 2, c222, 2, c223,
+        2, c224, 2, c225, 2, c226, 2, c227, 2, c228, 2, c229, 2, c230, 2, c231, 2,
+        c232, 2, c233, 2, c234], expect: {equals: 34}}
+    - {command: [ZADD, big3, 3, d301, 3, d302, 3, d303, 3, d304, 3, d305, 3, d306,
+        3, d307, 3, d308, 3, d309, 3, d310, 3, d311, 3, d312, 3, d313, 3, d314, 3,
+        d315, 3, d316, 3, d317, 3, d318, 3, d319, 3, d320, 3, d321, 3, d322, 3, d323,
+        3, d324, 3, d325, 3, d326, 3, d327, 3, d328, 3, d329, 3, d330, 3, d331, 3,
+        d332, 3, d333, 3, d334], expect: {equals: 34}}
+    - {command: [ZUNIONSTORE, dbig, 4, big1, big2, big3, za], expect: {equals: 105}}
+    - {command: [ZCARD, dbig], expect: {equals: 105}}
+    - {command: [ZSCORE, dbig, d334]}
+    - {command: [ZINCRBY, dbig, 5, c201]}
+    - {command: [ZREM, dbig, b101, c202, nosuchmember], expect: {equals: 2}}
+    - {command: [ZPOPMIN, dbig, 2]}
+    - {command: [ZRANGE, dbig, 0, 5, WITHSCORES]}
+    - {command: [ZRANGEBYSCORE, dbig, 2, 2, LIMIT, 0, 5]}
+    - {command: [ZUNION, 3, big1, big2, big3, WITHSCORES]}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [zunion.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zunion}

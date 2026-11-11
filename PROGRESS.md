@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-11T20:16+00:00.
+Updated 2026-11-11T21:14+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1852 | 672 | #881 (2024-08-16) | 268 | 264.6 |
+| valkey-io/valkey | 1873 | 653 | #855 (2024-08-03) | 289 | 267.6 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 64 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 9.1 |
 | valkey-io/valkey-search | 672 | 0 | f8106e72e984 (2024-11-27) | 0 | 96.0 |
@@ -13,28 +13,28 @@ Updated 2026-11-11T20:16+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-11T19:56:31+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43062859018): 20 merge(s) tested, 0 without a code change.
+[2026-11-11T21:14:56+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43091847369): 20 merge(s) tested, 4 without a code change.
 
-- [valkey-io/valkey#1535](https://github.com/valkey-io/valkey/pull/1535) ([tests](tests/valkey/1535-e60990e57/)): Fix crash when freeing newly created node when nodeIp2String fail (#1535): 0 of 9 test(s) reached the change, coverage 50%
-- [valkey-io/valkey#951](https://github.com/valkey-io/valkey/pull/951) ([tests](tests/valkey/951-694246cfa/)): Drop the outdated script replication example comments (#951): declined: The change is purely a comment edit in afterErrorReply (src/networking.c): it replaces an outdated EVAL script-replication example with updated explanatory text. No executable code, control flow, reply, replication behaviour, or configuration changes, so there is no behaviour to regress an
-- [valkey-io/valkey#792](https://github.com/valkey-io/valkey/pull/792) ([tests](tests/valkey/792-d66a06e81/)): Make KEYS to be an exact match if there is no pattern (#792): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#948](https://github.com/valkey-io/valkey/pull/948) ([tests](tests/valkey/948-73698fa02/)): Fix invalid escape sequence in utils, minor cleanup in python script  (#948): declined: The change edits only utils/generate-unit-test-header.py, a build-time Python helper that generates the unit-test header: it makes the TEST_PROTOTYPE regex a raw string to fix a Python invalid-escape-sequence warning. The regex matches the same patterns as before, and no server, replicatio
-- [valkey-io/valkey#938](https://github.com/valkey-io/valkey/pull/938) ([tests](tests/valkey/938-9f4b1adbe/)): Add explicit assert to ensure thread_shared_qb won't expand (#938): 0 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#816](https://github.com/valkey-io/valkey/pull/816) ([tests](tests/valkey/816-c7d1daea0/)): Add epoch information to failover auth denied logs (#816): declined: The change only edits the text of three serverLog warning messages in clusterSendFailoverAuthIfNeeded, appending the requested epoch to the 'Failover auth denied' logs. No control flow, vote logic, cluster bus message, reply, or persisted state changes, so there is no behaviour a scenario'
-- [valkey-io/valkey#594](https://github.com/valkey-io/valkey/pull/594) ([tests](tests/valkey/594-0053429a0/)): Update "Total" message and used_memory_human log information in serverCron() function (#594): declined: The change only edits the text of a periodic LL_DEBUG log line in serverCron() (adding a human-readable form of zmalloc_used_memory() via the existing bytesToHuman helper, whose prototype is added to server.h). It alters no command replies, no replication, persistence, or cluster behaviour
-- [valkey-io/valkey#901](https://github.com/valkey-io/valkey/pull/901) ([tests](tests/valkey/901-b48596a91/)): Add support for setting the group on a unix domain socket (#901): 3 of 7 test(s) reached the change, coverage 66%
-- [valkey-io/valkey#928](https://github.com/valkey-io/valkey/pull/928) ([tests](tests/valkey/928-804599497/)): valkey-cli make source node ignores NOREPLICAS when doing the last CLUSTER SETSLOT (#928): declined: The change is confined to valkey-cli's cluster manager: clusterManagerMoveSlot now treats a NOREPLICAS reply to the final CLUSTER SETSLOT <slot> NODE on the source primary as benign (valkey-cli.c:5044). That reply only occurs on a multi-primary cluster where the source primary pre-replicat
-- [valkey-io/valkey#879](https://github.com/valkey-io/valkey/pull/879) ([tests](tests/valkey/879-5d97f5133/)): Fix CLUSTER SETSLOT block and unblock error when all replicas are down (#879): 1 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#930](https://github.com/valkey-io/valkey/pull/930) ([tests](tests/valkey/930-0a11c4a14/)): Delete redundant declaration clusterNodeCoversSlot and countKeysInSlot (#930): declined: The diff deletes two redundant forward declarations (clusterNodeCoversSlot and countKeysInSlot) from src/cluster_legacy.c; the functions' definitions, call sites, and remaining declarations are unchanged, so the compiled code and all runtime behaviour are identical. This is a pure code-cle
-- [valkey-io/valkey#759](https://github.com/valkey-io/valkey/pull/759) ([tests](tests/valkey/759-959dd3485/)): Decline unsubscribe related command in non-subscribed mode (#759): declined: no proposed test validated
-- [valkey-io/valkey#884](https://github.com/valkey-io/valkey/pull/884) ([tests](tests/valkey/884-08aaeea4b/)): Avoid to re-establish replication if node is already myself primary in CLUSTER REPLICATE (#884): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#911](https://github.com/valkey-io/valkey/pull/911) ([tests](tests/valkey/911-a1ac459ef/)): Set repl-backlog-size from 1mb to 10mb by default (#911): 1 of 4 test(s) reached the change
-- [valkey-io/valkey#916](https://github.com/valkey-io/valkey/pull/916) ([tests](tests/valkey/916-2673320b6/)): RDMA: Support user keepalive command (#916): declined: The change is confined to src/rdma.c: a per-connection keepalive timer, zero-initialized ValkeyRdmaCmd structs, and event-loop plumbing in the RDMA accept/disconnect path. That code runs only when a client connects over the RDMA transport, which requires a build with BUILD_RDMA and an RDMA
-- [valkey-io/valkey#885](https://github.com/valkey-io/valkey/pull/885) ([tests](tests/valkey/885-e1b362918/)): Fix data loss when replica do a failover with a old history repl offset (#885): 1 of 12 test(s) reached the change, coverage 85%
-- [valkey-io/valkey#925](https://github.com/valkey-io/valkey/pull/925) ([tests](tests/valkey/925-829243e76/)): Correct RDB_EOF_MARK_SIZE usage where EOF mark is relevant (#925): declined: The change replaces CONFIG_RUN_ID_SIZE with RDB_EOF_MARK_SIZE in readSyncBulkPayload's diskless-sync EOF-mark handling. Both macros are defined as 40 (src/server.h:128-129), so every buffer declaration, memcpy, memmove, memcmp and ftruncate offset in the changed code compiles to the identi
-- [valkey-io/valkey#919](https://github.com/valkey-io/valkey/pull/919) ([tests](tests/valkey/919-e2ab7ffd8/)): Make use of a single listNode pointer for blocking utility lists (#919): 0 of 4 test(s) reached the change, coverage 100%; crash, predates #919, since fixed (recorded)
-- [valkey-io/valkey#787](https://github.com/valkey-io/valkey/pull/787) ([tests](tests/valkey/787-70b928580/)): Optimize linear search of WAIT and WAITAOF when unblocking the client (#787): 0 of 5 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#789](https://github.com/valkey-io/valkey/pull/789) ([tests](tests/valkey/789-33c7ca41b/)): Add 4 commands for sentinel and update most test cases and json files (#789): declined: The change only adds alias subcommand names (SENTINEL PRIMARIES/PRIMARY/IS-PRIMARY-DOWN-BY-ADDR/GET-PRIMARY-ADDR-BY-NAME) inside sentinelCommand plus command-table/JSON metadata and Sentinel TCL test renames; the old MASTER* spellings keep working, so no existing behaviour changes. Every S
+- [valkey-io/valkey#5351](https://github.com/valkey-io/valkey/pull/5351): to retry, the job left no result
+- [valkey-io/valkey#479](https://github.com/valkey-io/valkey/pull/479) ([tests](tests/valkey/479-adf53c212/)): Add lfu support for DEBUG OBJECT command, added lfu_freq and lfu_access_time_minutes fields (#479): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#5209](https://github.com/valkey-io/valkey/pull/5209) ([tests](tests/valkey/5209-5a4ed2e08/)): Allow null in GEOHASH and OBJECT reply schemas (#5209): declined: The change only edits reply_schema metadata in src/commands/*.json (GEOHASH, OBJECT FREQ/IDLETIME/REFCOUNT) to allow null, plus Tcl tests. The server code already returned null for missing keys/members on both builds (geo.c addReplyNull, object.c addReplyNull), and reply schemas are docume
+- [valkey-io/valkey#881](https://github.com/valkey-io/valkey/pull/881) ([tests](tests/valkey/881-fc9f29103/)): Make a light weight version of DEBUG OBJECT, add FAST option (#881): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#839](https://github.com/valkey-io/valkey/pull/839) ([tests](tests/valkey/839-103365fe0/)): Log unexpected $ENDOFF responses in dual channel replication (#839): declined: The diff adds only a serverLog(LL_WARNING, ...) call on an already-existing error path in fullSyncWithPrimary (dual-channel replication): when sscanf fails to parse the $ENDOFF response, the code goes to the same goto error as before, now with a log line first. There is no change to replie
+- [valkey-io/valkey#740](https://github.com/valkey-io/valkey/pull/740) ([tests](tests/valkey/740-4d284daef/)): Copyright update to reflect IP transfer from salvatore to Redis (#740): 1 of 1 test(s) reached the change, coverage not measured (the build left no gcov notes of src/ae_epoll.c, src/ae_select.c, src/modules/helloblock.c, src/modules/hellocluster.c, src/modules/hellodict.c, src/modules/hellohook.c, src/modules/hellotimer.c, src/m)
+- [valkey-io/valkey#907](https://github.com/valkey-io/valkey/pull/907) ([tests](tests/valkey/907-68b227094/)): Prevent later accesses to unallocated memory (#907): 0 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#871](https://github.com/valkey-io/valkey/pull/871) ([tests](tests/valkey/871-131857e80/)): To avoid bouncing -REDIRECT during FAILOVER (#871): 2 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#876](https://github.com/valkey-io/valkey/pull/876) ([tests](tests/valkey/876-370bdb3e4/)): Change server.daylight_active to an atomic variable (#876): declined: The change only makes server.daylight_active an _Atomic int with relaxed load/store, annotating a benign data race between the cron thread updating the DST flag and other threads reading it while formatting log timestamps. It changes no command reply, no log output, no replication/persiste
+- [valkey-io/valkey#867](https://github.com/valkey-io/valkey/pull/867): to retry, the job left no result
+- [valkey-io/valkey#829](https://github.com/valkey-io/valkey/pull/829) ([tests](tests/valkey/829-76f809bc1/)): Optimize ZUNION[STORE] command by removing unnecessary accumulator dict (#829): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#874](https://github.com/valkey-io/valkey/pull/874) ([tests](tests/valkey/874-6dfb8203c/)): Add debug-context config (#874): declined: no proposed test validated
+- [valkey-io/valkey#837](https://github.com/valkey-io/valkey/pull/837) ([tests](tests/valkey/837-27fce2950/)): Fix dual-channel-replication related issues (#837): 0 of 9 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#896](https://github.com/valkey-io/valkey/pull/896) ([tests](tests/valkey/896-1c198a95a/)): Add debug assert on duplicate freeClientAsync (#896): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#811](https://github.com/valkey-io/valkey/pull/811) ([tests](tests/valkey/811-929283fc6/)): Dual channel replication should not update lastbgsave_status when transfer error (#811): 1 of 6 test(s) reached the change, coverage 50%
+- [valkey-io/valkey#805](https://github.com/valkey-io/valkey/pull/805) ([tests](tests/valkey/805-5166d489d/)): Correctly recode client infomation to the slowlog when runing script (#805): 3 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#838](https://github.com/valkey-io/valkey/pull/838) ([tests](tests/valkey/838-7424620ca/)): Check if the server is currently running the feature before cron run (#838): declined: The change only reorders two side-effect-free condition checks in serverCron: run_with_period(100) is a pure macro (an if over server.cronloops and server.hz with no state mutation, server.h:638), so testing server.cluster_enabled or moduleCount() before it instead of after yields the exac
+- [valkey-io/valkey#847](https://github.com/valkey-io/valkey/pull/847): to retry, the job left no result
+- [valkey-io/valkey#780](https://github.com/valkey-io/valkey/pull/780) ([tests](tests/valkey/780-380f70081/)): Improve cluster cant failover log conditions (#780): declined: The change only alters diagnostic logging in clusterLogCantFailover: it removes the suppression of the cant-failover log while the primary's FAIL state is recent, and lowers the re-log period from 10s to 1s. No command reply, cluster election decision, replication, persistence, or data pat
+- [valkey-io/valkey#854](https://github.com/valkey-io/valkey/pull/854) ([tests](tests/valkey/854-0fc43edc6/)): Update sentinel conf access string to allow hello channel access (#854): declined: The change edits only a commented-out example ACL line in sentinel.conf (documentation inside a # comment block). No code, config parsing, or runtime behaviour changed, so there is no path for a scenario to reach or break.
 
 ### valkey-io/valkey-bloom
 
@@ -53,10 +53,10 @@ Updated 2026-11-11T20:16+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 817 of 1303 tested (63%)
-- Changed-line coverage: median 100% of 818 merge(s) measured, 65 under 50%
-- Recall: 220 parents flagged of 347 fix merges
-- Claude: $877.91 in the last 24 hours, $9516.40 in the last 7 days, $9516.40 in all
+- Merges whose tests reached the change: 823 of 1313 tested (63%)
+- Changed-line coverage: median 100% of 827 merge(s) measured, 65 under 50%
+- Recall: 220 parents flagged of 348 fix merges
+- Claude: $944.05 in the last 24 hours, $9582.54 in the last 7 days, $9582.54 in all
 - Issues filed: 71
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
@@ -133,5 +133,6 @@ Updated 2026-11-11T20:16+00:00.
 ## Retries
 
 - [valkey-io/valkey#1310](https://github.com/valkey-io/valkey/pull/1310): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
-- [valkey-io/valkey#479](https://github.com/valkey-io/valkey/pull/479): attempt 0 of 3, the job left no result
-- [valkey-io/valkey#5209](https://github.com/valkey-io/valkey/pull/5209): attempt 0 of 3, the job left no result
+- [valkey-io/valkey#5351](https://github.com/valkey-io/valkey/pull/5351): attempt 0 of 3, the job left no result
+- [valkey-io/valkey#867](https://github.com/valkey-io/valkey/pull/867): attempt 0 of 3, the job left no result
+- [valkey-io/valkey#847](https://github.com/valkey-io/valkey/pull/847): attempt 0 of 3, the job left no result

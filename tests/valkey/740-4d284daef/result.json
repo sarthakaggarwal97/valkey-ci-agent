@@ -1,0 +1,39 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4d284daefd4667dcbb9b10db86b0e2ef1da595d5",
+  "parent": "68b227094760b6214096f0ca46135a7b5bd8fcf6",
+  "pr": 740,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Copyright update to reflect IP transfer from salvatore to Redis (#740)",
+  "date": "2024-08-14",
+  "unstable": "1b03cf5e3c77ff1891ec759fef75947daa1db9fd",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [
+      "src/ae_epoll.c",
+      "src/ae_select.c",
+      "src/modules/helloblock.c",
+      "src/modules/hellocluster.c",
+      "src/modules/hellodict.c",
+      "src/modules/hellohook.c",
+      "src/modules/hellotimer.c",
+      "src/modules/hellotype.c",
+      "src/modules/helloworld.c"
+    ],
+    "rounds": 0
+  },
+  "cost_usd": 1.0087,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the build left no gcov notes of src/ae_epoll.c, src/ae_select.c, src/modules/helloblock.c, src/modules/hellocluster.c, src/modules/hellodict.c, src/modules/hellohook.c, src/modules/hellotimer.c, src/modules/hellotype.c, src/modules/helloworld.c"
+}

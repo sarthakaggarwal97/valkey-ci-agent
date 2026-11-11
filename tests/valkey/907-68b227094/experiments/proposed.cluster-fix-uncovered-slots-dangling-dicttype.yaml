@@ -1,0 +1,26 @@
+extends: [valkey.liveness]
+id: proposed.cluster-fix-uncovered-slots-dangling-dicttype
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: valkey-cli --cluster fix on a cluster with an uncovered slot allocates
+    clusterManagerUncoveredSlots; the parent used a stack-local dictType so freeClusterManager's
+    later dictRelease is a use-after-return
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 30
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, COUNTKEYSINSLOT, 0], expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, DELSLOTS, 0], expect: {stdout: {
+          equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [--cluster, fix, '127.0.0.1:$port'], stdin: "no\n",
+      compare: skip, expect_difference: true, expect: {exit: {equals: 1}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

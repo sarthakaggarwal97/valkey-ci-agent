@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "370bdb3e4679c6b4a333301e1854a2a61a818f0d",
+  "parent": "6cb86fff51e77fe8307cf4847f2473b5eb7d3933",
+  "pr": 876,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Change server.daylight_active to an atomic variable (#876)",
+  "date": "2024-08-14",
+  "unstable": "1b03cf5e3c77ff1891ec759fef75947daa1db9fd",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.255,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only makes server.daylight_active an _Atomic int with relaxed load/store, annotating a benign data race between the cron thread updating the DST flag and other threads reading it while formatting log timestamps. It changes no command reply, no log output, no replication/persistence/failover behavior \u2014 the loaded values are identical to the parent build. It is a pure thread-safety refactor visible only to ThreadSanitizer, so no fuzzer scenario can reach or distinguish it."
+}

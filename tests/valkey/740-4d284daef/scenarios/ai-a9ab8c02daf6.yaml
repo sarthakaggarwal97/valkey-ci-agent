@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 68b227094760..4d284daefd46.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a9ab8c02daf6
+seed: 740001
+experiment:
+  id: proposed.cmsgpack-copyright-string
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

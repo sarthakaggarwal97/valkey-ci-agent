@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "68b227094760b6214096f0ca46135a7b5bd8fcf6",
+  "parent": "131857e80a42d3059214beb24a9c2937ba72559e",
+  "pr": 907,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Prevent later accesses to unallocated memory (#907)",
+  "date": "2024-08-14",
+  "unstable": "1b03cf5e3c77ff1891ec759fef75947daa1db9fd",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.8321,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 2,
+    "recall": false
+  }
+}

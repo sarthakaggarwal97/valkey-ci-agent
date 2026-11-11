@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1c198a95ac33..27fce2950074.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-89b8a87c1a41
+seed: 101
+experiment:
+  id: proposed.dual-channel-sync-offset
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

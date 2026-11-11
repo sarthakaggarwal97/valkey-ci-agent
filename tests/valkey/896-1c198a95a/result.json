@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1c198a95ac33933c4e89d7783b21c767cca7e234",
+  "parent": "929283fc6f03b0d3dcc5dcc1847be1c5c6688157",
+  "pr": 896,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add debug assert on duplicate freeClientAsync (#896)",
+  "date": "2024-08-12",
+  "unstable": "1b03cf5e3c77ff1891ec759fef75947daa1db9fd",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.0254,
+  "findings": [],
+  "recorded": []
+}

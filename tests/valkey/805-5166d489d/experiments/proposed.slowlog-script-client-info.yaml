@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.slowlog-script-client-info
+deployment:
+  modes: [standalone]
+metadata:
+  description: Slowlog entries for commands run inside EVAL and FCALL record the calling
+    client's name and peer address, not the fake script client's empty ones
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: slowlog
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 20
+    commands:
+    - {command: [CLIENT, SETNAME, slow-caller], expect: {equals: OK}}
+    - {command: [CONFIG, SET, slowlog-log-slower-than, "0"], expect: {equals: OK}}
+    - {command: [SLOWLOG, RESET], expect: {equals: OK}}
+    - {command: [EVAL, "return server.call('ping')", "0"], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, slowlog-log-slower-than, "1000000"], expect: {equals: OK}}
+    - command: [EVAL, "local e = server.call('slowlog','get',2) return {e[1][6], e[2][6],\
+          \ (e[1][5] == e[2][5]) and 1 or 0, (string.len(e[1][5]) > 0) and 1 or 0,\
+          \ (string.len(e[2][5]) > 0) and 1 or 0}", "0"]
+      expect_difference: true
+      expect: {equals: [slow-caller, slow-caller, 1, 1, 1]}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nredis.register_function('myfunc',\
+          \ function(keys, args) return server.call('ping') end)"], expect: {equals: mylib}}
+    - {command: [CONFIG, SET, slowlog-log-slower-than, "0"], expect: {equals: OK}}
+    - {command: [SLOWLOG, RESET], expect: {equals: OK}}
+    - {command: [FCALL, myfunc, "0"], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, slowlog-log-slower-than, "1000000"], expect: {equals: OK}}
+    - command: [EVAL, "local e = server.call('slowlog','get',2) return {e[1][6], e[2][6],\
+          \ (e[1][5] == e[2][5]) and 1 or 0, (string.len(e[1][5]) > 0) and 1 or 0,\
+          \ (string.len(e[2][5]) > 0) and 1 or 0}", "0"]
+      expect_difference: true
+      expect: {equals: [slow-caller, slow-caller, 1, 1, 1]}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slowlog.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slowlog}

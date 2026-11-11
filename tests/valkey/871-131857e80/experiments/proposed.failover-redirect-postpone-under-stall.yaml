@@ -1,0 +1,54 @@
+extends: [valkey.base]
+id: proposed.failover-redirect-postpone-under-stall
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: FAILOVER FORCE to a SIGSTOPped replica parks a CLIENT CAPA REDIRECT
+    write during failover-in-progress; after FAILOVER ABORT the client resumes and
+    the write executes, with workload, ledger and state oracles judging the deployment
+inputs:
+  required: [failover_port]
+  properties:
+    failover_host: {type: string, default: "127.0.0.1"}
+    failover_port: {type: integer}
+components:
+- use: valkey.fault.process-signal
+  id: stall-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: SIGSTOP
+    pause_s: 12
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, stall-replica]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: stall-settle
+  depends_on: [warm-up]
+  config: {seconds: 1}
+- use: valkey.action.commands
+  id: drive
+  depends_on: [stall-settle]
+  config:
+    instances: primary
+    timeout_s: 20
+    commands:
+    - {command: [CLIENT, CAPA, REDIRECT], connection: redir, expect: {equals: OK}}
+    - {command: [FAILOVER, TO, {$ref: inputs.failover_host}, {$ref: inputs.failover_port},
+        TIMEOUT, 100, FORCE], expect: {equals: OK}}
+    - {command: [INFO, replication], wait_s: 8, expect: {contains: "master_failover_state:failover-in-progress"}}
+    - {raw: "SET redirprobe 1\r\n", connection: redir, expect: {exists: false}}
+    - {command: [FAILOVER, ABORT], expect: {equals: OK}}
+    - {command: [GET, redirprobe], wait_s: 8, expect: {equals: "1"}}
+    - {read: true, connection: redir, expect: {equals: [OK]}}
+    - {command: [INFO, replication], wait_s: 10, expect: {contains: "master_failover_state:no-failover"}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [drive]
+  config: {seconds: 15}
+required_events: [drive.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: stall-replica}
+- {evidence_id: valkey.command.sequence, source: drive}

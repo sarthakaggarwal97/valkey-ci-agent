@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7424620ca06c..5166d489da1b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7bc01ad18459
+seed: 805001
+experiment:
+  id: proposed.slowlog-script-client-info
+  inputs:
+    resp: 2
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

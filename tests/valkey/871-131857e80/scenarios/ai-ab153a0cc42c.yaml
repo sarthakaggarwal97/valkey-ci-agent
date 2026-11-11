@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 370bdb3e4679..131857e80a42.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ab153a0cc42c
+seed: 303
+experiment:
+  id: proposed.failover-redirect-postpone-under-stall
+  inputs:
+    failover_host: 127.0.0.1
+    failover_port: 7201
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7200

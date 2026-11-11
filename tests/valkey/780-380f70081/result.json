@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "380f70081686d68739536990f5c8535d1382524d",
+  "parent": "bfdab65791a72e356b9ad61866a790a8646a4c62",
+  "pr": 780,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Improve cluster cant failover log conditions (#780)",
+  "date": "2024-08-06",
+  "unstable": "1b03cf5e3c77ff1891ec759fef75947daa1db9fd",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3692,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters diagnostic logging in clusterLogCantFailover: it removes the suppression of the cant-failover log while the primary's FAIL state is recent, and lowers the re-log period from 10s to 1s. No command reply, cluster election decision, replication, persistence, or data path changes; cant_failover_reason is never exposed outside cluster_legacy.c and was already assigned before the removed early return. The fuzzer's oracles cannot observe log verbosity, so no scenario can reach or distinguish this change."
+}

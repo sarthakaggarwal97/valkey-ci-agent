@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.debug-object-fast
+deployment:
+  modes: [standalone]
+metadata:
+  description: DEBUG OBJECT gains a FAST option that skips serializedlength and the
+    quicklist uncompressed-size walk; the parent rejects every 4-arg form
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dbgobj
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      enable-debug-command: "yes"
+      list-max-listpack-size: 4
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, str, hello], expect: {equals: OK}}
+    - {command: [RPUSH, biglist, e01, e02, e03, e04, e05, e06, e07, e08, e09, e10,
+        e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24], expect: {
+        equals: 24}}
+    - {command: [OBJECT, ENCODING, biglist], compare: skip, expect: {equals: quicklist}}
+    - {command: [DEBUG, OBJECT, biglist], compare: skip, expect: {contains: "ql_uncompressed_size:"}}
+    - {command: [DEBUG, OBJECT, str], compare: skip, expect: {contains: "serializedlength:"}}
+    - {command: [DEBUG, OBJECT, biglist, fast], expect_difference: true, expect: {
+        contains: "ql_nodes:"}}
+    - {command: [DEBUG, OBJECT, str, FaSt], expect_difference: true, expect: {contains: "encoding:embstr"}}
+    - {command: [DEBUG, OBJECT, biglist, bogus], expect_difference: true, expect: {
+        contains: "serializedlength:"}}
+    - {command: [DEBUG, OBJECT, missing, fast], expect_difference: true, expect: {
+        error: "no such key"}}
+    - {command: [SET, fast, v], expect: {equals: OK}}
+    - {command: [DEBUG, OBJECT, fast, fast], expect_difference: true, expect: {contains: "refcount:"}}
+    - {command: [CONFIG, SET, list-compress-depth, 1], expect: {equals: OK}}
+    - {command: [DEL, biglist], expect: {equals: 1}}
+    - {command: [RPUSH, biglist, e01, e02, e03, e04, e05, e06, e07, e08, e09, e10,
+        e11, e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24], expect: {
+        equals: 24}}
+    - {command: [DEBUG, OBJECT, biglist], compare: skip, expect: {contains: "ql_uncompressed_size:"}}
+    - {command: [DEBUG, OBJECT, biglist, fast], expect_difference: true, expect: {
+        contains: "ql_compressed:1"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dbgobj.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbgobj}

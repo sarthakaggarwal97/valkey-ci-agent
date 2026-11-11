@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 131857e80a42..68b227094760.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4c5e2fd5833d
+seed: 7100
+experiment:
+  id: proposed.cluster-fix-uncovered-slots-stack-type
+  inputs:
+    confirm: 'yes'
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 0
+  base_port: 7100
