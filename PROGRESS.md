@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-11T15:27+00:00.
+Updated 2026-11-11T15:32+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -13,8 +13,9 @@ Updated 2026-11-11T15:27+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-11T15:14:17+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43043302164): 20 merge(s) tested, 7 without a code change.
+[2026-11-11T15:32:39+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43046358595): 20 merge(s) tested, 0 without a code change.
 
+- [valkey-io/valkey#1535](https://github.com/valkey-io/valkey/pull/1535): to retry, the job left no result
 - [valkey-io/valkey#951](https://github.com/valkey-io/valkey/pull/951): to retry, the job left no result
 - [valkey-io/valkey#792](https://github.com/valkey-io/valkey/pull/792): to retry, the job left no result
 - [valkey-io/valkey#948](https://github.com/valkey-io/valkey/pull/948): to retry, the job left no result
@@ -34,7 +35,6 @@ Updated 2026-11-11T15:27+00:00.
 - [valkey-io/valkey#919](https://github.com/valkey-io/valkey/pull/919): to retry, the job left no result
 - [valkey-io/valkey#787](https://github.com/valkey-io/valkey/pull/787): to retry, the job left no result
 - [valkey-io/valkey#789](https://github.com/valkey-io/valkey/pull/789): to retry, the job left no result
-- [valkey-io/valkey#479](https://github.com/valkey-io/valkey/pull/479): to retry, the job left no result
 
 ### valkey-io/valkey-bloom
 
@@ -132,7 +132,7 @@ Updated 2026-11-11T15:27+00:00.
 
 ## Retries
 
-- [valkey-io/valkey#1535](https://github.com/valkey-io/valkey/pull/1535): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
+- [valkey-io/valkey#1535](https://github.com/valkey-io/valkey/pull/1535): attempt 0 of 3, the job left no result
 - [valkey-io/valkey#1310](https://github.com/valkey-io/valkey/pull/1310): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
 - [valkey-io/valkey#951](https://github.com/valkey-io/valkey/pull/951): attempt 0 of 3, the job left no result
 - [valkey-io/valkey#792](https://github.com/valkey-io/valkey/pull/792): attempt 0 of 3, the job left no result
