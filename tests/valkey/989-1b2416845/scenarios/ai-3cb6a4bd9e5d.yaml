@@ -1,0 +1,24 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 58fe9c0138af..1b241684508b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3cb6a4bd9e5d
+seed: 989002
+experiment:
+  id: proposed.dual-channel-local-buffer
+  inputs:
+    replica_obuf_limit: replica 1048576 0 0
+    stable_keys: 3000
+    mutable_keys: 300
+    mutation_rate: 1500
+    value_size: 4096
+    run_before_sync_s: 1
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7100
+  server_config:
+    dual-channel-replication-enabled: 'yes'
+    repl-diskless-sync: 'yes'
+    repl-diskless-sync-delay: '0'
+    rdb-key-save-delay: '500'
+    key-load-delay: '200'
+    repl-backlog-size: 4mb

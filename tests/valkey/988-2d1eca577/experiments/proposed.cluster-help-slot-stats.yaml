@@ -1,0 +1,29 @@
+extends: [valkey.liveness]
+id: proposed.cluster-help-slot-stats
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER HELP lists the SLOT-STATS subcommand on the changed build but
+    not on the parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: help
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CLUSTER, HELP], expect_difference: true, expect: {contains: "SLOT-STATS"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [help.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: help}

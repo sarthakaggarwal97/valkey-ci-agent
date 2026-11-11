@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1b241684508bd6fd63c083c25a9a4195a8e242d9",
+  "parent": "58fe9c0138af8a45dfcb906a3d5c631a6d6e9a30",
+  "pr": 989,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Dual Channel Replication - Verify Replica Local Buffer Limit Configuration (#989)",
+  "date": "2024-09-10",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 8.7023,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 9b51949abe36..647852659760.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ef28e36fdf3b
+seed: 303
+experiment:
+  id: proposed.aof-preamble-flip-restart
+  inputs:
+    flip_to: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200
+  server_config:
+    appendonly: 'yes'
+    aof-use-rdb-preamble: 'yes'

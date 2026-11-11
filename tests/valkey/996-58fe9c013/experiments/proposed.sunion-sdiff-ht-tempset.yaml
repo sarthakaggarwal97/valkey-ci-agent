@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.sunion-sdiff-ht-tempset
+deployment:
+  modes: [standalone]
+metadata:
+  description: SUNION/SDIFF temp set now starts as a hashtable when any input set
+    is listpack/HT; contents, dedup, cardinality and STORE encodings compared against
+    the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sets
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {set-max-intset-entries: 512, set-max-listpack-entries: 128, set-max-listpack-value: 64}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SADD, int1, "1", "2", "3", "5", "8"], expect: {equals: 5}}
+    - {command: [SADD, int2, "0", "3", "5", "2147483647", "2147483648", "4294967296",
+        "9223372036854775807", "-9223372036854775808"], expect: {equals: 8}}
+    - {command: [SUNION, int1, int2], expect: {equals: ["-9223372036854775808", "0",
+          "1", "2", "3", "5", "8", "2147483647", "2147483648", "4294967296", "9223372036854775807"]}}
+    - {command: [SDIFF, int1, int2], expect: {equals: ["1", "2", "8"]}}
+    - {command: [SADD, lp1, a, b, c, "", "01", " 1", "+1", keyword], expect: {equals: 8}}
+    - {command: [SUNION, lp1], expect_difference: true, expect: {exists: true}}
+    - {command: [SUNION, lp1, int1], expect_difference: true, expect: {exists: true}}
+    - {command: [SUNION, int1, lp1], expect_difference: true, expect: {exists: true}}
+    - {command: [SUNION, int1, lp1], compare: unordered, expect: {exists: true}}
+    - {command: [SUNION, int2, lp1], compare: unordered, expect: {exists: true}}
+    - {command: [SADD, lpmax, "9223372036854775807", hello], expect: {equals: 2}}
+    - {command: [SUNION, int2, lpmax], compare: unordered, expect: {exists: true}}
+    - {command: [SUNION, nokey1, lp1, nokey2], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [SDIFF, lp1, int1], expect_difference: true, expect: {exists: true}}
+    - {command: [SADD, lpbig, e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, zzz],
+      expect: {equals: 12}}
+    - {command: [SADD, tiny, zzz], expect: {equals: 1}}
+    - {command: [SDIFF, lpbig, tiny, tiny, tiny, tiny], expect_difference: true, expect: {
+        exists: true}}
+    - {command: [SDIFF, tiny, lpbig], expect: {equals: []}}
+    - {command: [SDIFF, lp1, lp1], expect: {equals: []}}
+    - {command: [SDIFF, nokey1, lp1], expect: {equals: []}}
+    - {command: [SADD, big1, vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv,
+        shortone], expect: {equals: 2}}
+    - {command: [SUNION, big1, int1], compare: unordered, expect: {exists: true}}
+    - {command: [SUNIONSTORE, d1, lp1, int1], expect: {equals: 13}}
+    - {command: [SMEMBERS, d1], compare: unordered, expect: {exists: true}}
+    - {command: [SCARD, d1], expect: {equals: 13}}
+    - {command: [OBJECT, ENCODING, d1], compare: skip, expect: {equals: listpack}}
+    - {command: [SDIFFSTORE, d2, lpbig, tiny], expect: {equals: 11}}
+    - {command: [OBJECT, ENCODING, d2], compare: skip, expect: {equals: listpack}}
+    - {command: [SUNIONSTORE, d3, int1, int2], expect: {equals: 11}}
+    - {command: [OBJECT, ENCODING, d3], compare: skip, expect: {equals: intset}}
+    - {command: [ECHO, end-of-sequence], expect: {equals: end-of-sequence}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [sets.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sets}

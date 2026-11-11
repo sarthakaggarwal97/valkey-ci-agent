@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-11T13:24+00:00.
+Updated 2026-11-11T13:33+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1779 | 743 | #1001 (2024-09-10) | 273 | 254.1 |
+| valkey-io/valkey | 1799 | 724 | #877 (2024-09-02) | 293 | 257.0 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 64 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 9.1 |
 | valkey-io/valkey-search | 672 | 0 | f8106e72e984 (2024-11-27) | 0 | 96.0 |
@@ -13,28 +13,28 @@ Updated 2026-11-11T13:24+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-11T11:14:53+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42997269033): 20 merge(s) tested, 8 without a code change.
+[2026-11-11T13:33:08+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43010363615): 20 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey#1115](https://github.com/valkey-io/valkey/pull/1115): to retry, Claude Code failed (rc=1): API Error: Claude's response exceeded the 64000 output token maximum. To configure this behavior, set the CLAUDE_CODE_MAX_OUTPUT_TOKENS environment variable.
-- [valkey-io/valkey#1039](https://github.com/valkey-io/valkey/pull/1039) ([tests](tests/valkey/1039-c15eee340/)): Changes `tcmalloc.h` header location (#1039): declined: The diff only changes the #include path for the tcmalloc header in src/zmalloc.h (google/tcmalloc.h -> gperftools/tcmalloc.h), effective only when compiled with USE_TCMALLOC. It is a build fix with no runtime behaviour change: no command, reply, replication, persistence or memory-accountin
-- [valkey-io/valkey#1064](https://github.com/valkey-io/valkey/pull/1064) ([tests](tests/valkey/1064-56fba564b/)): Print an empty primary log when primary lost its last slot (#1064): 0 of 2 test(s) reached the change, coverage 83%
-- [valkey-io/valkey#1053](https://github.com/valkey-io/valkey/pull/1053) ([tests](tests/valkey/1053-d07c29791/)): Use _Thread_local to solve threads.h build issue (#1053): declined: The change only replaces a conditional #include <threads.h>/__thread fallback with the equivalent C11 keyword _Thread_local for the thread_local macro in zmalloc.c. It is a build/portability fix with identical runtime semantics (the same thread-local storage class for the used_memory threa
-- [valkey-io/valkey#1048](https://github.com/valkey-io/valkey/pull/1048) ([tests](tests/valkey/1048-56c90b78e/)): Fix a typo in the valkey.conf (#1048): declined: The change only fixes a typo in a comment line of valkey.conf (capitalized 'BE' changed to 'be'). Comments in the sample config are never parsed or acted on by the server; no code, default, or directive changed, so there is no behaviour to test.
-- [valkey-io/valkey#1040](https://github.com/valkey-io/valkey/pull/1040) ([tests](tests/valkey/1040-ea7a7995e/)): Fix default value of primary-reboot-down-after-period in sentinel.conf (#1040): declined: The change only edits the example sentinel.conf shipped with the source, renaming the primary in the default 'SENTINEL primary-reboot-down-after-period' line from 'myprimary' to 'mymaster' so it matches the 'SENTINEL monitor mymaster' directive in the same file. No code path, command behav
-- [valkey-io/valkey#1058](https://github.com/valkey-io/valkey/pull/1058) ([tests](tests/valkey/1058-7fab15795/)): Add log about old primary after myself failover (#1058): declined: The change only adds a serverLog(LL_NOTICE) line in clusterFailoverReplaceYourPrimary() recording the old primary when a replica promotes itself. It changes no command reply, state transition, replication, or persistence behavior. The logged values are safe: the function returns early when
-- [valkey-io/valkey#1046](https://github.com/valkey-io/valkey/pull/1046) ([tests](tests/valkey/1046-4593dc2f0/)): Fix memory allocation for server databases (#1046): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1042](https://github.com/valkey-io/valkey/pull/1042) ([tests](tests/valkey/1042-ba71c7e56/)): Copy 'errno' and use copied value in the if check of retry in cluster migrate commands socket_err block. (#1042): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1007](https://github.com/valkey-io/valkey/pull/1007) ([tests](tests/valkey/1007-f89ff3137/)): Add --moduleapi option to better use runtest-moduleapi (#1007): declined: The change only edits the project's own test harness: runtest-moduleapi and tests/test_helper.tcl gain a --moduleapi flag that globs unit/moduleapi/*.tcl instead of hardcoding the test list. No server, tool, or module code changes; no runtime behaviour, reply, replication, persistence, or 
-- [valkey-io/valkey#1029](https://github.com/valkey-io/valkey/pull/1029) ([tests](tests/valkey/1029-9f8185f5c/)): Update valkey-benchmark log output to reference 'server' instead of 'Redis' (#1029): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#926](https://github.com/valkey-io/valkey/pull/926) ([tests](tests/valkey/926-17390383b/)): Replica flush the old data after RDB file is ok in disk-based replication (#926): 0 of 6 test(s) reached the change, coverage 90%
-- [valkey-io/valkey#943](https://github.com/valkey-io/valkey/pull/943) ([tests](tests/valkey/943-09def3cf0/)): Improve code readability in dict.c (#943): declined: The change is a pure readability refactor of dict.c: internal helpers are renamed (underscore prefixes removed), relocated, and marked static, a stale TODO comment is deleted, and unit tests are updated to the new names. Every moved function body (dictRehashStep, dictNextExp, dictInit, dic
-- [valkey-io/valkey#981](https://github.com/valkey-io/valkey/pull/981) ([tests](tests/valkey/981-dcc7678fc/)): Fix replica unable trigger migration when it received CLUSTER SETSLOT in advance (#981): 2 of 4 test(s) reached the change, coverage 100%; [check, appeared after #981](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/125)
-- [valkey-io/valkey#1025](https://github.com/valkey-io/valkey/pull/1025) ([tests](tests/valkey/1025-d090fbefd/)): Add the missing help output for new command: client capa redirect (#1025): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#822](https://github.com/valkey-io/valkey/pull/822) ([tests](tests/valkey/822-38457b732/)): Trigger a save of the cluster configuration file before shutting down (#822): 0 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1023](https://github.com/valkey-io/valkey/pull/1023) ([tests](tests/valkey/1023-3513f2202/)): Make clang-format insert a newline at end of file if missing (#1023): declined: The change adds InsertNewlineAtEOF to src/.clang-format, a formatting/tooling configuration only. It alters no compiled code and no runtime behaviour of the server or tools, so no scenario can exercise it.
-- [valkey-io/valkey#1013](https://github.com/valkey-io/valkey/pull/1013) ([tests](tests/valkey/1013-8cca11ac5/)): Fix wrong count for replica's tot-net-out (#1013): 2 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#995](https://github.com/valkey-io/valkey/pull/995) ([tests](tests/valkey/995-fa348e2e5/)): Optimize the per slot dictionary by checking for cluster mode earlier (#995): 0 of 6 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1010](https://github.com/valkey-io/valkey/pull/1010) ([tests](tests/valkey/1010-c77e8f223/)): Added .git-blame-ignore-revs (#1010): declined: The change adds only a .git-blame-ignore-revs file, metadata for git-blame to skip formatting/rename commits. It contains no code, config, build, or behavior change in Valkey itself, so no scenario can reach it and none is needed.
+- [valkey-io/valkey#5349](https://github.com/valkey-io/valkey/pull/5349) ([tests](tests/valkey/5349-d5bf376a3/)): Treat a torn annotation at the end of an AOF file as a short read (#5349): 1 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1115](https://github.com/valkey-io/valkey/pull/1115) ([tests](tests/valkey/1115-150c197bd/)): Apply CVE patches for CVE-2024-31449, CVE-2024-31227, CVE-2024-31228 (#1115): 2 of 3 test(s) reached the change, coverage 100%; crash, fixed by #1115 (recorded)
+- [valkey-io/valkey#1001](https://github.com/valkey-io/valkey/pull/1001) ([tests](tests/valkey/1001-4033c99ef/)): Fix module RdbLoad wrongly disable the AOF (#1001): 1 of 1 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#989](https://github.com/valkey-io/valkey/pull/989) ([tests](tests/valkey/989-1b2416845/)): Dual Channel Replication - Verify Replica Local Buffer Limit Configuration (#989): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#996](https://github.com/valkey-io/valkey/pull/996) ([tests](tests/valkey/996-58fe9c013/)): Use hashtable as the default type of temp set object during sunion/sdiff (#996): 2 of 2 test(s) reached the change, coverage 100%; [regressed-fix, the fix of #996 regressed](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/126)
+- [valkey-io/valkey#1011](https://github.com/valkey-io/valkey/pull/1011) ([tests](tests/valkey/1011-9f0c80187/)): Fix crash in async IO threads with TLS (#1011): 0 of 6 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#778](https://github.com/valkey-io/valkey/pull/778) ([tests](tests/valkey/778-affbea5dc/)): For MEETs, save the extensions support flag immediately during MEET processing (#778): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1002](https://github.com/valkey-io/valkey/pull/1002) ([tests](tests/valkey/1002-50c1fe59f/)): Add missing moduleapi getchannels test and fix tests (#1002): declined: The change modifies only test infrastructure: it registers the existing getchannels moduleapi test in the runtest-moduleapi runner script and updates the expected ACL DRYRUN error-message strings in tests/unit/moduleapi/getchannels.tcl to match the server's current message format ('User <n
+- [valkey-io/valkey#1004](https://github.com/valkey-io/valkey/pull/1004) ([tests](tests/valkey/1004-f504cf233/)): add assertion for kvstore's dictType (#1004): declined: The change only adds assertions in kvstoreCreate that the dictType's rehashingStarted, rehashingCompleted and dictMetadataBytes callbacks are the kvstore-specific ones. Every existing caller (kvstoreKeysDictType, kvstoreExpiresDictType, kvstoreChannelDictType in server.c) already sets exac
+- [valkey-io/valkey#946](https://github.com/valkey-io/valkey/pull/946) ([tests](tests/valkey/946-20d583f77/)): Migrate dict.c unit tests to new framework (#946): declined: The change only migrates dict.c's unit tests from the legacy SERVER_TEST in-binary test runner to the new standalone unit-test framework (new src/unit/test_dict.c, removal of the #ifdef SERVER_TEST block in dict.c, its prototype in dict.h, and the 'dict' entry in server.c's serverTests tab
+- [valkey-io/valkey#949](https://github.com/valkey-io/valkey/pull/949) ([tests](tests/valkey/949-14016d2df/)): Migrate listpack.c unit tests to new framework  (#949): declined: The change only migrates listpack unit tests to the new test framework: it deletes the #ifdef SERVER_TEST test block from listpack.c (compiled only into test builds, never the shipped server), removes the test declaration from listpack.h and the test-dispatch entry from server.c's serverTe
+- [valkey-io/valkey#875](https://github.com/valkey-io/valkey/pull/875) ([tests](tests/valkey/875-c642cf013/)): Add client info to SHUTDOWN / CLUSTER FAILOVER logs (#875): 0 of 8 test(s) reached the change, coverage 94%; [crash, predates #875](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/127)
+- [valkey-io/valkey#886](https://github.com/valkey-io/valkey/pull/886) ([tests](tests/valkey/886-647852659/)): Fix aof base suffix when modifying aof-use-rdb-preamble during rewrite (#886): 1 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#965](https://github.com/valkey-io/valkey/pull/965) ([tests](tests/valkey/965-9b51949ab/)): Fix missing replication link re-connection when primary's IP/port is updated in `clusterProcessGossipSection` (#965): 0 of 3 test(s) reached the change, coverage 0%
+- [valkey-io/valkey#993](https://github.com/valkey-io/valkey/pull/993) ([tests](tests/valkey/993-9033734b6/)): Add newline to argv in crash report when doing redact (#993): declined: The change only fixes log formatting in the crash report: it removes a trailing space and adds a missing newline to the serverLog lines printed for redacted argv entries in _serverAssertPrintClientInfo and logCurrentClient (src/debug.c). These functions run only inside the assertion/crash 
+- [valkey-io/valkey#988](https://github.com/valkey-io/valkey/pull/988) ([tests](tests/valkey/988-2d1eca577/)): Add SLOT-STATS under CLUSTER HELP string. (#988): 0 of 2 test(s) reached the change
+- [valkey-io/valkey#983](https://github.com/valkey-io/valkey/pull/983) ([tests](tests/valkey/983-ea58fbf40/)): Rewrite lazyfree docs in valkey.conf to reflect that lazy is now default (#983): declined: The change edits only comment text in valkey.conf: it rewrites the LAZY FREEING section's documentation to say lazy freeing is the default since Valkey 8.0. Every configuration directive in the section keeps its existing name and value (all remain 'yes'), and no C source, parsing code, or 
+- [valkey-io/valkey#979](https://github.com/valkey-io/valkey/pull/979) ([tests](tests/valkey/979-f143ffd2a/)): Fix typo in valkey-cli.c (#979): declined: The change only corrects a typo in a log message string ("replicsa" -> "replicas") printed by valkey-cli's clusterManagerOptimizeAntiAffinity warning. No control flow, command behavior, reply, exit status, or data path changes; it is a cosmetic text fix with no behavior to regress, so no s
+- [valkey-io/valkey#749](https://github.com/valkey-io/valkey/pull/749) ([tests](tests/valkey/749-981f977ab/)): Improve type safety and refactor dict entry handling (#749): 0 of 9 test(s) reached the change, coverage 81%
+- [valkey-io/valkey#982](https://github.com/valkey-io/valkey/pull/982) ([tests](tests/valkey/982-3e14516d8/)): Initialize all the fields for the test kvstore (#982): declined: The change modifies only src/unit/test_kvstore.c, a unit-test fixture: it initializes the kvstore rehashing and metadata-size callbacks in the test-only dictType so the kvstore unit tests exercise the real callback paths. No shipped server code, command behaviour, replication, persistence,
 
 ### valkey-io/valkey-bloom
 
@@ -53,11 +53,11 @@ Updated 2026-11-11T13:24+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 799 of 1266 tested (63%)
-- Changed-line coverage: median 100% of 787 merge(s) measured, 63 under 50%
-- Recall: 215 parents flagged of 338 fix merges
-- Claude: $854.40 in the last 24 hours, $9215.20 in the last 7 days, $9215.20 in all
-- Issues filed: 69
+- Merges whose tests reached the change: 804 of 1278 tested (63%)
+- Changed-line coverage: median 100% of 798 merge(s) measured, 64 under 50%
+- Recall: 217 parents flagged of 342 fix merges
+- Claude: $950.56 in the last 24 hours, $9311.36 in the last 7 days, $9311.36 in all
+- Issues filed: 71
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/102
@@ -77,6 +77,8 @@ Updated 2026-11-11T13:24+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/117
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/122
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/125
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/126
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/127
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -132,4 +134,3 @@ Updated 2026-11-11T13:24+00:00.
 
 - [valkey-io/valkey#1535](https://github.com/valkey-io/valkey/pull/1535): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
 - [valkey-io/valkey#1310](https://github.com/valkey-io/valkey/pull/1310): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
-- [valkey-io/valkey#1115](https://github.com/valkey-io/valkey/pull/1115): attempt 2 of 3, Claude Code failed (rc=1): API Error: Claude's response exceeded the 64000 output token maximum. To configure this behavior, set the CLAUDE_CODE_MAX_OUTPUT_TOKENS environment variable.

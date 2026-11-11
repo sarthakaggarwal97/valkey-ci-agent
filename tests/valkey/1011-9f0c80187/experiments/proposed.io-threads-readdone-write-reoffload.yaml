@@ -1,0 +1,18 @@
+extends: [valkey.base]
+id: proposed.io-threads-readdone-write-reoffload
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: Pipelined large list reads under active IO threads hold a client with
+    an offloaded pending read and a completed-but-unflushed write, racing the read-done
+    write re-offload
+inputs:
+  properties:
+    run_s: {type: number, minimum: 1, maximum: 120, default: 25}
+components:
+- use: valkey.action.sleep
+  id: soak
+  depends_on: [writes]
+  config: {seconds: {$ref: inputs.run_s}}
+required_evidence:
+- {evidence_id: valkey.workload.ledger, source: writes}

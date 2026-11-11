@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "50c1fe59f7634b9b4658d4fdf9ce52d3468ed8ce",
+  "parent": "f504cf233bd08d56b1aa4af6c1ef3a2b4aa0ac60",
+  "pr": 1002,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add missing moduleapi getchannels test and fix tests (#1002)",
+  "date": "2024-09-10",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2466,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only test infrastructure: it registers the existing getchannels moduleapi test in the runtest-moduleapi runner script and updates the expected ACL DRYRUN error-message strings in tests/unit/moduleapi/getchannels.tcl to match the server's current message format ('User <name> has no permissions...'). No source file under src/ is touched, so no server behaviour, command reply, replication, or persistence path changes; there is nothing for a fuzzer scenario to exercise."
+}

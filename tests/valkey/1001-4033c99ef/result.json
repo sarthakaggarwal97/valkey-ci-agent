@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4033c99ef522cd66150878dee8a97dc057b05a25",
+  "parent": "1b241684508bd6fd63c083c25a9a4195a8e242d9",
+  "pr": 1001,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix module RdbLoad wrongly disable the AOF (#1001)",
+  "date": "2024-09-10",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 9.928,
+  "findings": [],
+  "recorded": []
+}

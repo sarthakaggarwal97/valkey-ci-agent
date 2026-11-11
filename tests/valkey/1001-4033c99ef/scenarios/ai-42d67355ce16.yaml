@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1b241684508b..4033c99ef522.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-42d67355ce16
+seed: 1101
+experiment:
+  id: proposed.module-rdbload-aof-compare
+  inputs:
+    resp: 2
+    appendfsync: always
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

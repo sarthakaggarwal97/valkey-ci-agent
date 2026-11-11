@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.aof-preamble-flip-tools
+deployment:
+  modes: [standalone]
+metadata:
+  description: Flip aof-use-rdb-preamble while a slowed AOF rewrite runs; valkey-check-aof
+    must report a base file whose suffix matches the format the rewrite started with,
+    in both flip directions
+components:
+- use: valkey.action.tools
+  id: flip
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    ignore: ['^\d+:[A-Z] .*\n']
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, aof-use-rdb-preamble, "no"],
+      expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, appendonly, "yes"], expect: {
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, -r, 20, -i, 0.1, PING]}
+    - {tool: valkey-cli, args: [-p, $port, SET, foo, bar], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, rdb-key-save-delay, 1000000],
+      expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, BGREWRITEAOF], expect: {stdout: {contains: "rewriting\
+            \ started"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, aof-use-rdb-preamble, "yes"],
+      expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, rdb-key-save-delay, 0], expect: {
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, -r, 30, -i, 0.1, PING]}
+    - {tool: valkey-check-aof, args: [appendonlydir/appendonly.aof.manifest], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "appendonly.aof.2.base.aof"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, rdb-key-save-delay, 1000000],
+      expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, BGREWRITEAOF], expect: {stdout: {contains: "rewriting\
+            \ started"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, aof-use-rdb-preamble, "no"],
+      expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, rdb-key-save-delay, 0], expect: {
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, -r, 30, -i, 0.1, PING]}
+    - {tool: valkey-check-aof, args: [appendonlydir/appendonly.aof.manifest], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "appendonly.aof.3.base.rdb"}}}
+    - {tool: valkey-cli, args: [-p, $port, DEBUG, LOADAOF], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, GET, foo], expect: {stdout: {equals: "bar\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: flip}

@@ -1,0 +1,81 @@
+extends: [valkey.liveness]
+id: proposed.dict-entry-paths
+deployment:
+  modes: [standalone]
+metadata:
+  description: Exercises every dict entry kind (embedded keyspace keys, no-value set
+    entries, normal hash/zset/expires entries) and the rewritten value get/set/incr
+    paths, replies compared against the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dict-paths
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      hash-max-listpack-entries: 0
+      set-max-listpack-entries: 0
+      set-max-intset-entries: 0
+      zset-max-listpack-entries: 0
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [APPEND, k1, xyz], expect: {equals: 5}}
+    - {command: [SET, '', ''], expect: {equals: OK}}
+    - {command: [GET, ''], expect: {equals: ''}}
+    - {command: [PEXPIREAT, k1, 9223372036854775807], expect: {equals: 1}}
+    - {command: [PERSIST, k1], expect: {equals: 1}}
+    - {command: [EXPIREAT, k1, 33177600000], expect: {equals: 1}}
+    - {command: [EXPIRETIME, k1], expect: {equals: 33177600000}}
+    - {command: [RENAME, k1, k2], expect: {equals: OK}}
+    - {command: [EXPIRETIME, k2], expect: {equals: 33177600000}}
+    - {command: [MSET, 'k:01', a, 'k:02', a, 'k:03', a, 'k:04', a, 'k:05', a, 'k:06',
+        a, 'k:07', a, 'k:08', a, 'k:09', a, 'k:10', a, 'k:11', a, 'k:12', a, 'k:13',
+        a, 'k:14', a, 'k:15', a, 'k:16', a, 'k:17', a, 'k:18', a, 'k:19', a, 'k:20',
+        a, 'k:21', a, 'k:22', a, 'k:23', a, 'k:24', a], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 26}}
+    - {command: [KEYS, 'k:*'], compare: unordered}
+    - {command: [DEL, 'k:01', 'k:02', 'k:03', 'k:04', 'k:05', 'k:06', 'k:07', 'k:08',
+        'k:09', 'k:10', 'k:11', 'k:12'], expect: {equals: 12}}
+    - {command: [DBSIZE], expect: {equals: 14}}
+    - {command: [SADD, s, a, b, c, ''], expect: {equals: 4}}
+    - {command: [SADD, s, m01, m02, m03, m04, m05, m06, m07, m08, m09, m10, m11, m12,
+        m13, m14, m15, m16], expect: {equals: 16}}
+    - {command: [SCARD, s], expect: {equals: 20}}
+    - {command: [SREM, s, a, '', m05, m06], expect: {equals: 4}}
+    - {command: [SMEMBERS, s], compare: unordered}
+    - {command: [SMISMEMBER, s, a, b, m07], expect: {equals: [0, 1, 1]}}
+    - {command: [SINTERSTORE, sdst, s, s], expect: {equals: 16}}
+    - {command: [SUNIONSTORE, sun, s, sdst], expect: {equals: 16}}
+    - {command: [HSET, h, f1, v1, f2, v2, '', ev], expect: {equals: 3}}
+    - {command: [HSET, h, f1, nv], expect: {equals: 0}}
+    - {command: [HGET, h, f1], expect: {equals: nv}}
+    - {command: [HGET, h, ''], expect: {equals: ev}}
+    - {command: [HDEL, h, f2], expect: {equals: 1}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HSET, fields, fields, fields], expect: {equals: 1}}
+    - {command: [HGET, fields, fields], expect: {equals: fields}}
+    - {command: [ZADD, z, 1.5, a, 2.5, b], expect: {equals: 2}}
+    - {command: [ZINCRBY, z, 0.5, a]}
+    - {command: [ZUNIONSTORE, zu, 2, z, z, WEIGHTS, 1, 2], expect: {equals: 2}}
+    - {command: [ZSCORE, zu, a]}
+    - {command: [ZRANGE, zu, 0, -1, WITHSCORES]}
+    - {command: [ZINTERSTORE, zi, 2, z, zu, AGGREGATE, MAX], expect: {equals: 2}}
+    - {command: [ZSCORE, zi, b]}
+    - {command: [MEMORY, USAGE, h], compare: skip}
+    - {command: [SCAN, 0, COUNT, 1000], compare: skip}
+    - {command: [DEL, s, h, z], expect: {equals: 3}}
+    - {command: [DBSIZE], expect: {equals: 19}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dict-paths.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dict-paths}

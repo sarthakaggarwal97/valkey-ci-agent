@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 647852659760..c642cf0134cf.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9eedbdc0b00c
+seed: 87501
+experiment:
+  id: proposed.cluster-failover-client-log
+  inputs:
+    hide_user_data: 'no'
+deployment:
+  mode: standalone
+  base_port: 7000

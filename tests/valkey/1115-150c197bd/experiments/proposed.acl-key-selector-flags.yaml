@@ -1,0 +1,28 @@
+extends: [valkey.liveness]
+id: proposed.acl-key-selector-flags
+deployment:
+  modes: [standalone]
+metadata:
+  description: "CVE-2024-31227: a %-selector key pattern with no R/W flag before ~\
+    \ is a syntax error, not an accepted flagless pattern"
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 10
+    commands:
+    - {command: [ACL, SETUSER, u1, on, nopass, "%~foo", "+@all"], expect_difference: true,
+      expect: {error: "Syntax error"}}
+    - {command: [ACL, SETUSER, u2, on, nopass, "%~", "+@all"], expect_difference: true,
+      expect: {error: "Syntax error"}}
+    - {command: [ACL, SETUSER, u3, on, nopass, "%RW~ok", "+@all"], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

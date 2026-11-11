@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 647852659760..c642cf0134cf.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fb0ab9835cc4
+seed: 875002
+experiment:
+  id: proposed.shutdown-restart-client-log
+  inputs:
+    hide_user_data: 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7100

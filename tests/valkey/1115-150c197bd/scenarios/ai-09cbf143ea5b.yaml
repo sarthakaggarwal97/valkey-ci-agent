@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b77440a9b91c..150c197bdd5f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-09cbf143ea5b
+seed: 1001
+experiment:
+  id: proposed.acl-key-selector-flags
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

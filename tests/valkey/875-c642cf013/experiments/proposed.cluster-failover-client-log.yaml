@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.cluster-failover-client-log
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER FAILOVER FORCE and TAKEOVER from a named client log the client
+    info without crashing, leaking, or changing replies, with and without hide-user-data-from-log
+inputs:
+  properties:
+    hide_user_data: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: failover
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    server_config: {cluster-node-timeout: 2000}
+    timeout_s: 180
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [CLIENT, SETNAME, failover-requester], node: 1, expect: {equals: OK}}
+    - {command: [CONFIG, SET, hide-user-data-from-log, {$ref: inputs.hide_user_data}],
+      node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, FAILOVER, FORCE], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 60, compare: skip, expect: {
+        contains: "role:master"}}
+    - {command: [INFO, replication], node: 0, wait_s: 60, compare: skip, expect: {
+        contains: "role:slave"}}
+    - {command: [CLIENT, SETNAME, takeover-requester], node: 0, expect: {equals: OK}}
+    - {command: [CONFIG, SET, hide-user-data-from-log, {$ref: inputs.hide_user_data}],
+      node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, FAILOVER, TAKEOVER], node: 0, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 0, wait_s: 60, compare: skip, expect: {
+        contains: "role:master"}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [failover.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: failover}

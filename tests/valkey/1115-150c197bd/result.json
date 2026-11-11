@@ -1,0 +1,50 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "150c197bdd5f5474671cc7705b62be799c6f6e4c",
+  "parent": "b77440a9b91cfe156fd0c368ef3d767a17b7f011",
+  "pr": 1115,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Apply CVE patches for CVE-2024-31449, CVE-2024-31227, CVE-2024-31228 (#1115)",
+  "date": "2024-10-02",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.0398,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 11",
+      "scenario": "ai-ddf4de4d99cc",
+      "seed": 1003,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1115",
+      "fingerprint": "dd83aa3f66710e3f8986",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-9fb5f7dca06e",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'glob' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (KEYS *?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?*?"
+    }
+  ]
+}

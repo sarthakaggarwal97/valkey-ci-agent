@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f504cf233bd08d56b1aa4af6c1ef3a2b4aa0ac60",
+  "parent": "20d583f774efd0de8415f17ed575854414b8ecab",
+  "pr": 1004,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "add assertion for kvstore's dictType (#1004)",
+  "date": "2024-09-09",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3213,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds assertions in kvstoreCreate that the dictType's rehashingStarted, rehashingCompleted and dictMetadataBytes callbacks are the kvstore-specific ones. Every existing caller (kvstoreKeysDictType, kvstoreExpiresDictType, kvstoreChannelDictType in server.c) already sets exactly those callbacks, so the assertions pass trivially at every server startup and there is no runtime behaviour difference between the two builds. The assertions are a developer safety net against future mis-wired dictTypes; no command, replication, persistence or failover path can distinguish the builds, and"
+}

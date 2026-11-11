@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "20d583f774efd0de8415f17ed575854414b8ecab",
+  "parent": "14016d2df7ce6e7726012c2b0ec023b2a64ef2d1",
+  "pr": 946,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Migrate dict.c unit tests to new framework (#946)",
+  "date": "2024-09-09",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3208,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only migrates dict.c's unit tests from the legacy SERVER_TEST in-binary test runner to the new standalone unit-test framework (new src/unit/test_dict.c, removal of the #ifdef SERVER_TEST block in dict.c, its prototype in dict.h, and the 'dict' entry in server.c's serverTests table). All removed code was compiled only when SERVER_TEST is defined and the added code is test-only; no server runtime behaviour, command reply, data structure logic, replication or persistence path is altered, so there is nothing a fuzzer scenario against a real server could exercise."
+}

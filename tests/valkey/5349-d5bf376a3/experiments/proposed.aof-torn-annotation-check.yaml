@@ -1,0 +1,21 @@
+extends: [valkey.liveness]
+id: proposed.aof-torn-annotation-check
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-aof flags a torn annotation at the end of an AOF and --fix
+    truncates it
+components:
+- use: valkey.action.tools
+  id: check-aof
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files:
+      appendonly.aof: !!binary 'KjMNCiQzDQpTRVQNCiQzDQpmb28NCiQ1DQpoZWxsbw0KI1RTOjE3MDAwMDAwMDA='
+    runs:
+    - {tool: valkey-check-aof, args: [appendonly.aof], expect_difference: true, expect: {
+        exit: {equals: 1}, stdout: {contains: "Torn annotation at the end of the file"}}}
+    - {tool: valkey-check-aof, args: [--fix, appendonly.aof], stdin: "y\n", expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "Successfully truncated AOF"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check-aof}

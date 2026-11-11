@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "14016d2df7ce6e7726012c2b0ec023b2a64ef2d1",
+  "parent": "c642cf0134cf03ca9a5aff8ce126b982fcc48324",
+  "pr": 949,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Migrate listpack.c unit tests to new framework  (#949)",
+  "date": "2024-09-09",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3947,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only migrates listpack unit tests to the new test framework: it deletes the #ifdef SERVER_TEST test block from listpack.c (compiled only into test builds, never the shipped server), removes the test declaration from listpack.h and the test-dispatch entry from server.c's serverTests table, and adds the equivalent tests as src/unit/test_listpack.c. No production listpack code or any runtime behaviour changes, so there is no reachable path for a fuzzer scenario to exercise."
+}

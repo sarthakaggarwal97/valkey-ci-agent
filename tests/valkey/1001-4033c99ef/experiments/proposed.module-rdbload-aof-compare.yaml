@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.module-rdbload-aof-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: ValkeyModule_RdbLoad on an appendonly-yes server must re-enable the
+    AOF; on the parent it stays disabled, so post-load writes vanish and a restart
+    resurrects the stale pre-load AOF
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    appendfsync: {type: string, enum: [always, everysec], default: always}
+components:
+- use: valkey.action.commands
+  id: plain
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {appendonly: "yes", appendfsync: {$ref: inputs.appendfsync}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [SET, k, v1], expect: {equals: OK}}
+    - {command: [test.rdbsave, dump.rdb], expect: {equals: OK}}
+    - {command: [SET, k, v2], expect: {equals: OK}}
+    - {command: [SET, only-in-aof, x], expect: {equals: OK}}
+    - {command: [test.rdbload, dump.rdb], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v1}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [INFO, persistence], expect_difference: true, expect: {contains: "aof_enabled:1"}}
+    - {command: [SET, after-load, v3], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, k], expect_difference: true, expect: {equals: v1}}
+    - {command: [GET, after-load], expect_difference: true, expect: {equals: v3}}
+    - {command: [EXISTS, only-in-aof], expect_difference: true, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+- use: valkey.action.commands
+  id: during-rewrite
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {appendonly: "yes", appendfsync: {$ref: inputs.appendfsync}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [SET, k, v1], expect: {equals: OK}}
+    - {command: [test.rdbsave, dump.rdb], expect: {equals: OK}}
+    - {command: [SET, k, v2], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 300000], expect: {equals: OK}}
+    - {command: [BGREWRITEAOF], expect: {contains: "rewriting"}}
+    - {command: [test.rdbload, dump.rdb], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v1}}
+    - {command: [DBSIZE], expect: {equals: 1}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [INFO, persistence], expect_difference: true, expect: {contains: "aof_enabled:1"}}
+    - {command: [SET, after-load, v3], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, k], expect_difference: true, expect: {equals: v1}}
+    - {command: [GET, after-load], expect_difference: true, expect: {equals: v3}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [plain.completed, during-rewrite.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: plain}
+- {evidence_id: valkey.command.sequence, source: during-rewrite}

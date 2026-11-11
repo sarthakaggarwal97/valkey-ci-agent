@@ -1,0 +1,52 @@
+extends: [valkey.base, valkey.command-table]
+id: proposed.io-threads-read-write-done-churn
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: >-
+    Pipelined large replies and whole-command-table traffic with reads and writes
+    offloaded to IO threads, plus bursts of CLIENT KILL, so write completions are
+    processed inside processIOThreadsReadDone while more replies are pending and connections
+    drop mid-write; the server must not crash or hang, and no acknowledged write may
+    be lost.
+components:
+- use: valkey.workload.key-value
+  id: list-reads
+  config:
+    mutable_keys: 2
+    rate: 100
+    value_size: 64
+    list_keys: 8
+    list_length: 2000
+    list_element_size: 128
+    list_read_batch: 50
+    mix: {set: 0.1, lrange: 0.6, lindex: 0.3}
+    prefix: ioread
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, commands, list-reads]
+  config: {seconds: 5}
+- use: valkey.action.commands
+  id: kill-clients
+  depends_on: [warm-up]
+  config:
+    instances: primaries
+    commands:
+    - {command: [CLIENT, KILL, TYPE, normal], expect: {min: 0}}
+    - {command: [CLIENT, KILL, TYPE, normal], expect: {min: 0}}
+    - {command: [CLIENT, KILL, TYPE, normal], expect: {min: 0}}
+    - {command: [CLIENT, KILL, TYPE, normal], expect: {min: 0}}
+    - {command: [CLIENT, KILL, TYPE, normal], expect: {min: 0}}
+    - {command: [CLIENT, KILL, TYPE, normal], expect: {min: 0}}
+    - {command: [CLIENT, KILL, TYPE, normal], expect: {min: 0}}
+    - {command: [CLIENT, KILL, TYPE, normal], expect: {min: 0}}
+    - {command: [CLIENT, KILL, TYPE, normal], expect: {min: 0}}
+    - {command: [CLIENT, KILL, TYPE, normal], expect: {min: 0}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [kill-clients]
+  config: {seconds: 5}
+required_events: [kill-clients.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: kill-clients}

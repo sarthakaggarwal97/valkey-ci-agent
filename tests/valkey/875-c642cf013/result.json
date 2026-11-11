@@ -1,0 +1,72 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c642cf0134cf03ca9a5aff8ce126b982fcc48324",
+  "parent": "6478526597601b23455fef75a3a87f030bd12bd2",
+  "pr": 875,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add client info to SHUTDOWN / CLUSTER FAILOVER logs (#875)",
+  "date": "2024-09-08",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 17,
+    "executed": 16,
+    "percent": 94,
+    "uncovered": [
+      "src/server.c:1563"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 9.2392,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 0",
+      "scenario": "ai-d3992f6b4b17",
+      "seed": 875001,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #875",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/127"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 0",
+      "scenario": "ai-fb0ab9835cc4",
+      "seed": 875002,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #875",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/127"
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-1adbec83e62f",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "component 'kill-primary' did not undo its process.stopped on valkey-0: it was undone by the owner after a failed undo"
+    },
+    {
+      "scenario": "ai-1a162dde2431",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "component 'kill-primary' did not undo its process.stopped on valkey-0: it was undone by the owner after a failed undo"
+    }
+  ]
+}

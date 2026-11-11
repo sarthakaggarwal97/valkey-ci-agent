@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ea58fbf40d175a2a97c6ea7c6bc9df59798e013e",
+  "parent": "f143ffd2a5b550e3490dbef0679d090dbaf5b416",
+  "pr": 983,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rewrite lazyfree docs in valkey.conf to reflect that lazy is now default (#983)",
+  "date": "2024-09-03",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2381,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only comment text in valkey.conf: it rewrites the LAZY FREEING section's documentation to say lazy freeing is the default since Valkey 8.0. Every configuration directive in the section keeps its existing name and value (all remain 'yes'), and no C source, parsing code, or default is modified. A comment-only documentation change produces no behaviour difference between the parent and the change, so there is nothing a scenario could reach or compare."
+}

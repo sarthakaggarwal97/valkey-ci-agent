@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9033734b6b0df062fa70b5d6579769b6f9c38896",
+  "parent": "2d1eca577ef73e5ab6a5450d7c833924f591ae1a",
+  "pr": 993,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add newline to argv in crash report when doing redact (#993)",
+  "date": "2024-09-05",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2881,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only fixes log formatting in the crash report: it removes a trailing space and adds a missing newline to the serverLog lines printed for redacted argv entries in _serverAssertPrintClientInfo and logCurrentClient (src/debug.c). These functions run only inside the assertion/crash handlers, so the change has no effect on command replies, data, replication, or any behaviour an oracle can judge \u2014 it is a cosmetic logging change with no behaviour change, and needs no scenario."
+}

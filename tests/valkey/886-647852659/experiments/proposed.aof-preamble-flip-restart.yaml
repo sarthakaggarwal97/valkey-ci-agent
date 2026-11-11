@@ -1,0 +1,73 @@
+extends: [valkey.base]
+id: proposed.aof-preamble-flip-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: Flip aof-use-rdb-preamble during a slowed AOF rewrite under live writes,
+    SIGKILL the primary once the rewrite lands, and restart it from the multi-part
+    AOF; no acknowledged write may be lost
+inputs:
+  properties:
+    flip_to: {type: string, enum: ["yes", "no"], default: "yes"}
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: set-delay
+  depends_on: [warm-up]
+  config:
+    instances: primary
+    commands:
+    - {command: [CONFIG, SET, rdb-key-save-delay, 3000]}
+- use: valkey.action.commands
+  id: start-rewrite
+  depends_on: [set-delay]
+  config:
+    instances: primary
+    commands:
+    - {command: [BGREWRITEAOF], expect: {contains: rewriting}}
+- use: valkey.action.commands
+  id: flip
+  depends_on: [start-rewrite]
+  config:
+    instances: primary
+    commands:
+    - {command: [CONFIG, SET, aof-use-rdb-preamble, {$ref: inputs.flip_to}]}
+- use: valkey.action.commands
+  id: clear-delay
+  depends_on: [flip]
+  config:
+    instances: primary
+    commands:
+    - {command: [CONFIG, SET, rdb-key-save-delay, 0]}
+- use: valkey.action.poll
+  id: rewrite-done
+  depends_on: [clear-delay, kill-primary]
+  config:
+    instances: primary
+    section: persistence
+    field: aof_rewrite_in_progress
+    predicate: {equals: 0}
+    timeout_s: 120
+- use: valkey.fault.process-signal
+  id: kill-primary
+  config:
+    when_event: rewrite-done.completed
+    instance: primary
+    signal: SIGKILL
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [rewrite-done]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_s: 2.5
+    loss_window_faults: [kill-primary]
+required_events: [flip.completed, rewrite-done.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-primary}

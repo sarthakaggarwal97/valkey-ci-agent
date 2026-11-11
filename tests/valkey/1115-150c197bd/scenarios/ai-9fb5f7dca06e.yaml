@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b77440a9b91c..150c197bdd5f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9fb5f7dca06e
+seed: 1002
+experiment:
+  id: proposed.stringmatch-nesting-cap
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7100

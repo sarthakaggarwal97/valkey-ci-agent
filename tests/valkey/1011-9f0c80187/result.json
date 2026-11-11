@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9f0c80187e55517a8ee23f4ad31a65622e45fb84",
+  "parent": "affbea5dc1ae1a0d80019c4f313d2bf1c3fcb7f9",
+  "pr": 1011,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix crash in async IO threads with TLS (#1011)",
+  "date": "2024-09-10",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 11.3351,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 3,
+    "recall": false
+  }
+}

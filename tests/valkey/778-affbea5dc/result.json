@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "affbea5dc1ae1a0d80019c4f313d2bf1c3fcb7f9",
+  "parent": "50c1fe59f7634b9b4658d4fdf9ce52d3468ed8ce",
+  "pr": 778,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "For MEETs, save the extensions support flag immediately during MEET processing (#778)",
+  "date": "2024-09-09",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.3284,
+  "findings": [],
+  "recorded": []
+}

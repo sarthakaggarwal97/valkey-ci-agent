@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3e14516d8602..981f977abfde.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2899bee21e01
+seed: 11
+experiment:
+  id: proposed.stream-blocked-refcount
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

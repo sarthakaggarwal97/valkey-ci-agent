@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f143ffd2a5b550e3490dbef0679d090dbaf5b416",
+  "parent": "981f977abfdea7b00101a305b632e876b507bd89",
+  "pr": 979,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix typo in valkey-cli.c (#979)",
+  "date": "2024-09-03",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2121,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only corrects a typo in a log message string (\"replicsa\" -> \"replicas\") printed by valkey-cli's clusterManagerOptimizeAntiAffinity warning. No control flow, command behavior, reply, exit status, or data path changes; it is a cosmetic text fix with no behavior to regress, so no scenario is needed."
+}

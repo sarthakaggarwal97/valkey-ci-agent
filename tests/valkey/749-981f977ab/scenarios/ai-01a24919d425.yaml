@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3e14516d8602..981f977abfde.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-01a24919d425
+seed: 33
+experiment:
+  id: proposed.defrag-entry-sweep
+deployment:
+  mode: standalone
+  base_port: 7200

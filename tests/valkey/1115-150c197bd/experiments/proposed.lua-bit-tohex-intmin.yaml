@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.lua-bit-tohex-intmin
+deployment:
+  modes: [standalone]
+metadata:
+  description: "CVE-2024-31449: bit.tohex with digit count INT32_MIN no longer overflows\
+    \ on negation; returns 0000FFFF and the server survives"
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: tohex
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [EVAL, "return bit.tohex(65535, -2147483648)", "0"], expect_difference: true,
+      expect: {equals: "0000FFFF"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: tohex}

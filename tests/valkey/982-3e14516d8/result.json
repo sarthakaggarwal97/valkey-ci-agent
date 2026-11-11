@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3e14516d8602f77427f593d3f9bfcfa328fc9757",
+  "parent": "5fdb47c2e262693269b231ebfb38116fc4d2f147",
+  "pr": 982,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Initialize all the fields for the test kvstore (#982)",
+  "date": "2024-09-02",
+  "unstable": "d5bf376a3e594672473886a37b0921fc7dbec931",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2204,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only src/unit/test_kvstore.c, a unit-test fixture: it initializes the kvstore rehashing and metadata-size callbacks in the test-only dictType so the kvstore unit tests exercise the real callback paths. No shipped server code, command behaviour, replication, persistence, or protocol path changes, so no fuzzer scenario can reach or distinguish this change; the kvstore unit tests themselves cover it."
+}

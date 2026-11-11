@@ -1,0 +1,74 @@
+id: proposed.dual-channel-local-buffer
+extends: [valkey.base]
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: >-
+    Forced dual-channel full sync while writes stream, with the replica's local replication
+    buffer limit (the client-output-buffer-limit replica hard limit) set per scenario:
+    0 must mean unlimited local buffering, a small hard limit must stop buffering
+    and still complete the sync with no acknowledged write lost.
+inputs:
+  properties:
+    run_before_sync_s: {type: number, minimum: 0, maximum: 600, default: 1}
+    replica_obuf_limit:
+      type: string
+      default: "replica 0 0 0"
+startup_overlays:
+- overlay_id: full-sync
+  server_config:
+    repl-diskless-sync-delay: 0
+    enable-debug-command: "yes"
+- overlay_id: replica-local-buffer-limit
+  conflict_policy: override
+  selector: replicas
+  server_config:
+    client-output-buffer-limit: {$ref: inputs.replica_obuf_limit}
+components:
+- use: valkey.observer.log
+  id: dual-channel-logs
+  config:
+    instances: replicas
+    expect:
+    - {evidence_id: valkey.replication.dual-channel-streamed, pattern: "Successfully\
+        \ streamed replication data into memory"}
+    - {evidence_id: valkey.replication.local-buffer-limit-logged, pattern: "Replication\
+        \ buffer limit reached, stopping buffering"}
+- use: valkey.observer.info
+  id: buffer-info
+  config:
+    instances: replicas
+    interval_s: 0.05
+    sections: [replication]
+    expectations:
+    - {evidence_id: valkey.replication.local-buffer-grew, field: replicas_repl_buffer_peak,
+      delta_min: 1}
+- use: valkey.action.sleep
+  id: run-before-sync
+  depends_on: [writes, dual-channel-logs, buffer-info]
+  config: {seconds: {$ref: inputs.run_before_sync_s}}
+- use: valkey.action.commands
+  id: force-full-sync
+  depends_on: [run-before-sync]
+  config:
+    instances: primaries
+    commands:
+    - {command: [DEBUG, CHANGE-REPL-ID], expect: {equals: OK}}
+    - {command: [CLIENT, KILL, TYPE, replica]}
+- use: valkey.action.poll
+  id: links-up
+  depends_on: [force-full-sync]
+  config:
+    instances: replicas
+    section: replication
+    field: master_link_status
+    predicate: {equals: up}
+    timeout_s: 120
+- use: valkey.oracle.ledger
+  id: data
+  config: {converge_timeout_s: 120}
+required_events: [force-full-sync.completed, links-up.completed]
+required_evidence:
+- {evidence_id: valkey.replication.dual-channel-streamed, source: dual-channel-logs}
+- {evidence_id: valkey.replication.local-buffer-grew, source: buffer-info}

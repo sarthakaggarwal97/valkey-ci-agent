@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.shutdown-restart-client-log
+deployment:
+  modes: [standalone]
+metadata:
+  description: SHUTDOWN and DEBUG RESTART sent by a named valkey-cli client, so prepareForShutdown
+    and restartServer run with a non-NULL client and format its info into the shutdown
+    log on both builds without a crash
+inputs:
+  properties:
+    hide_user_data: {type: string, enum: ["yes", "no"], default: "yes"}
+components:
+- use: valkey.action.tools
+  id: shutdown-cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, SET, k, v], expect: {exit: {equals: 0},
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, hide-user-data-from-log, {
+          $ref: inputs.hide_user_data}], expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port], stdin: "CLIENT SETNAME shutdown-origin\n\
+        SHUTDOWN NOSAVE\n", compare: skip}
+- use: valkey.action.tools
+  id: restart-cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, SET, k, v], expect: {exit: {equals: 0},
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, hide-user-data-from-log, {
+          $ref: inputs.hide_user_data}], expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port], stdin: "CLIENT SETNAME restart-origin\n\
+        DEBUG RESTART\n", compare: skip}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: shutdown-cli}
+- {evidence_id: valkey.tool.runs, source: restart-cli}

@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey affbea5dc1ae..9f0c80187e55.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a325190cd3a1
+seed: 7201
+experiment:
+  id: proposed.io-threads-readdone-write-reoffload
+  inputs:
+    run_s: 30
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    io-threads: 2
+    events-per-io-thread: 0
+    io-threads-do-reads: true

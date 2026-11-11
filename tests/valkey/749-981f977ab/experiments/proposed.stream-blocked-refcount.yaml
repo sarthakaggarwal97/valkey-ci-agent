@@ -1,0 +1,48 @@
+extends: [valkey.liveness]
+id: proposed.stream-blocked-refcount
+deployment:
+  modes: [standalone]
+metadata:
+  description: Several XREADGROUP clients blocked on one stream key drive the unblock-on-nokey
+    refcount through dictIncrUnsignedIntegerVal, incremented by each extra blocker
+    and decremented by a timeout release and a partial wake
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: blockers
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [XADD, s, "1-1", f, init], expect: {equals: "1-1"}}
+    - {command: [XGROUP, CREATE, s, g, "$"], expect: {equals: OK}}
+    - {command: [XREADGROUP, GROUP, g, consumer1, BLOCK, 20000, STREAMS, s, ">"],
+      connection: conn1}
+    - {command: [XREADGROUP, GROUP, g, consumer2, BLOCK, 20000, STREAMS, s, ">"],
+      connection: conn2}
+    - {command: [INFO, clients], compare: skip, wait_s: 10, expect: {contains: "blocked_clients:2"}}
+    - {command: [XREADGROUP, GROUP, g, consumer3, BLOCK, 4000, STREAMS, s, ">"], connection: conn3}
+    - {command: [INFO, clients], compare: skip, wait_s: 10, expect: {contains: "blocked_clients:3"}}
+    - {command: [INFO, clients], compare: skip, wait_s: 15, expect: {contains: "blocked_clients:2"}}
+    - {command: [XADD, s, "2-2", f, a], expect: {equals: "2-2"}}
+    - {command: [INFO, clients], compare: skip, wait_s: 10, expect: {contains: "blocked_clients:1"}}
+    - {command: [XADD, s, "3-3", f, b], expect: {equals: "3-3"}}
+    - {command: [INFO, clients], compare: skip, wait_s: 10, expect: {contains: "blocked_clients:0"}}
+    - {connection: conn1, read: true, compare: skip, expect: {exists: true}}
+    - {connection: conn2, read: true, compare: skip, expect: {exists: true}}
+    - {connection: conn3, read: true, compare: skip, expect: {exists: true}}
+    - {command: [XLEN, s], expect: {equals: 3}}
+    - {command: [XRANGE, s, "-", "+"], expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [blockers.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: blockers}
