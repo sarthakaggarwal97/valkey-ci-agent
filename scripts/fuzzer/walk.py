@@ -120,6 +120,9 @@ MAX_MISSES = 10
 REFUSAL = "Usage Policy"
 REFUSAL_WAIT = timedelta(days=1)
 MAX_REFUSALS = 5
+# A proposal whose answer ran past the output token maximum answers the same way again (valkey #2146: three
+# runs, each cut off the same, $52 in all), so the merge is done with its error at once, never retried.
+OVERFLOW = "output token maximum"
 # Seeds each test runs with on unstable: its own and the next ones.
 HUNT_SEEDS = 3
 RUN_TIMEOUT_S = 900
@@ -1412,7 +1415,7 @@ def update(state: dict[str, Any], planned: dict[str, Any], results: list[dict[st
             entry.pop("retry_after", None)
         entry["cost_usd"] = round(float(entry.get("cost_usd") or 0) + float((result or {}).get("cost_usd") or 0), 4)
         if (entry["attempts"] >= MAX_ATTEMPTS or entry.get("misses", 0) >= MAX_MISSES
-                or entry.get("refusals", 0) >= MAX_REFUSALS):
+                or entry.get("refusals", 0) >= MAX_REFUSALS or OVERFLOW in entry["error"]):
             state["done"][sha] = {**_summary(merge, result or {"error": entry["error"]}, now),
                                   "cost_usd": entry["cost_usd"]}
             state["failed"].pop(sha, None)

@@ -280,6 +280,20 @@ def test_a_refused_merge_is_retried_a_day_later_without_counting_an_attempt():
     assert state["done"][refused["sha"]]["reason"] == REFUSED
 
 
+def test_an_output_token_overflow_gives_the_merge_up_at_once():
+    # valkey #2146 and #1115: an answer past the output token maximum overflows the same way every retry (#2146
+    # burned $52 over three runs), so the merge is done with its error on the first one.
+    overflowed = _merge(sha="c" * 40, pr=2146)
+    planned = {"repo": walk.VALKEY_REPO, "merges": [overflowed], "skipped": [], "pointer": {"head": "h"}}
+    error = ("Claude Code failed (rc=1): API Error: Claude's response exceeded the 64000 output token maximum. "
+             "To configure this behavior, set the CLAUDE_CODE_MAX_OUTPUT_TOKENS environment variable.")
+    state = update(initial_state(walk.VALKEY_REPO), planned, [_result(overflowed, error=error, cost_usd=4.0)],
+                   now=NOW)
+    assert overflowed["sha"] not in state["failed"]
+    assert state["done"][overflowed["sha"]]["outcome"] == "error"
+    assert state["done"][overflowed["sha"]]["reason"] == error
+
+
 def test_a_run_that_could_not_start_counts_a_miss_not_an_attempt():
     # valkey #4425, #3374, #3438: a deployment or an artifact failed before the test, so nothing was learned;
     # a transient infra blip must not give the merge up after MAX_ATTEMPTS like a build or test failure.
