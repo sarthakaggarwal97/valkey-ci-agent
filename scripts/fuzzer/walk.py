@@ -142,7 +142,7 @@ COVERAGE_ROUNDS = 3
 ROUNDS_WITHIN_S = 3 * 3600
 UNCOVERED_KEPT = 50
 CONTEXT_LINES = 3
-# A fix merge (its subject says "fix") whose tests never showed the change, by a marked command replying
+# A fix merge (its subject names a bug, _BUG_RE) whose tests never showed the change, by a marked command replying
 # otherwise on the parent or a crash of the parent, gets RECALL_ROUNDS more round: shown what its tests' marked
 # commands replied on both builds, alike, the first MARKED_KEPT of them, each reply cut to REPLY_CHARS.
 RECALL_ROUNDS = 1
@@ -175,6 +175,10 @@ _FRAME_RE = re.compile(r"#\d+ 0x[0-9a-f]+ in (\S+)")
 _LIBRARY_FRAME_RE = re.compile(r"alloc|Alloc|operator new|^rapidjson::|^std::|^__|^_Z")
 _EIP_RE = re.compile(r"EIP:\s*\n[^\n(]*\((\w+)")
 _FIX_RE = re.compile(r"\bfix", re.IGNORECASE)
+# A subject that names a bug without the word "fix" ("Avoid double close on repl_transfer_fd", "Reject integer
+# overflow of length fields"): the merges the recall round is for.
+_BUG_RE = re.compile(r"\b(fix|bug|crash|leak|race|deadlock|overflow|corrupt|incorrect|wrong|use.after.free|uaf|prevent)"
+                     r"|double (free|close)|out.of.bounds", re.IGNORECASE)
 _HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)")
 
 
@@ -1290,7 +1294,7 @@ def _walk(merge: dict[str, Any], result: dict[str, Any], ask: Callable[[str, Pat
                     else COVERAGE_NO_CODE)
         except _Unmeasured as exc:
             result["coverage_reason"] = str(exc)
-    if (_FIX_RE.search(merge.get("subject") or "") and not result["recall"] and finished
+    if (_BUG_RE.search(merge.get("subject") or "") and not result["recall"] and finished
             and time.monotonic() - started < ROUNDS_WITHIN_S):
         shown = []
         for test, doc in finished:

@@ -1363,7 +1363,10 @@ def test_the_recall_section_shows_each_tests_marked_commands_and_both_builds_rep
     assert "x" * walk.REPLY_CHARS + "..." in walk.unreached_section(long, [])
 
 
-@pytest.mark.parametrize("subject, shown", [("Fix LSET (#4716)", True), ("Optimize LSET (#4716)", False)])
+@pytest.mark.parametrize("subject, shown", [
+    ("Fix LSET (#4716)", True), ("Avoid double close on repl_transfer_fd (#1349)", True),
+    ("Reject integer overflow of length fields (#3920)", True), ("Optimize LSET (#4716)", False),
+    ("Add a prefix option (#1)", False)])
 def test_a_fix_merge_whose_tests_never_showed_the_change_gets_one_more_round_shown_their_replies(
         monkeypatch, tmp_path, subject, shown):
     first, second = (_scenario(f"seed: {seed}\nexperiment: {{id: proposed.lset}}\ndeployment: {{mode: standalone}}\n")
