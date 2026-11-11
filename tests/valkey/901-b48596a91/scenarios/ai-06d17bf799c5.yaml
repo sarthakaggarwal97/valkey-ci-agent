@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 829aa7fe3cdb..b48596a91421.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-06d17bf799c5
+seed: 902
+experiment:
+  id: proposed.unixsocketgroup-config
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

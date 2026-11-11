@@ -1,0 +1,50 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b48596a91421cc3a3ec3f73babe050ba1ae11d2d",
+  "parent": "829aa7fe3cdb81f53bd3c1e08e0e4e291357761b",
+  "pr": 901,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add support for setting the group on a unix domain socket (#901)",
+  "date": "2024-08-23",
+  "unstable": "5a4ed2e08464c2b9d7f8fcd0e17918a0597154de",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 3,
+  "hunted": 5,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 18,
+    "executed": 12,
+    "percent": 66,
+    "uncovered": [
+      "src/anet.c:521",
+      "src/anet.c:522",
+      "src/anet.c:523",
+      "src/anet.c:528",
+      "src/anet.c:529",
+      "src/anet.c:530"
+    ],
+    "unnoted": [
+      "src/rdma.c"
+    ],
+    "rounds": 2
+  },
+  "cost_usd": 11.8255,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-c22ba348fab3",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during capability.probe: RunnerError: capability 'socket-group-error-probe' returned ERROR: default: probe server exited: 17:29:56.458 * Configuration loaded 21617:M 11 Nov 2026 17:29:56.458 * monotonic clock: POSIX clock_gettime 21617:M 11 Nov 2026 17:29:56.458 * Running mod"
+    },
+    {
+      "scenario": "ai-fe19d3496008",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during capability.probe: RunnerError: capability 'socket-group-error-probe' returned ERROR: default: probe server exited: 2026 17:29:57.020 * Configuration loaded 21624:M 11 Nov 2026 17:29:57.020 * monotonic clock: POSIX clock_gettime 21624:M 11 Nov 2026 17:29:57.021 * Runnin"
+    }
+  ]
+}

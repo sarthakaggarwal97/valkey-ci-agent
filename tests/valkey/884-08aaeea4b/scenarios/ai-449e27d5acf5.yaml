@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 39f8bcb91b3b..08aaeea4b771.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-449e27d5acf5
+seed: 101
+experiment:
+  id: proposed.cluster-replicate-idempotent
+  inputs:
+    resp: 2
+    diskless: 'no'
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e1b3629186a89ee1aec86c0f512d3faafa62d91c",
+  "parent": "829243e76bb658b9f2379ce47a7a5c302dd360fa",
+  "pr": 885,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix data loss when replica do a failover with a old history repl offset (#885)",
+  "date": "2024-08-21",
+  "unstable": "5a4ed2e08464c2b9d7f8fcd0e17918a0597154de",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 12,
+  "proven": 1,
+  "hunted": 12,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 21,
+    "executed": 18,
+    "percent": 85,
+    "uncovered": [
+      "src/cluster_legacy.c:2373",
+      "src/cluster_legacy.c:2601",
+      "src/cluster_legacy.c:3403"
+    ],
+    "unnoted": [],
+    "rounds": 2
+  },
+  "cost_usd": 24.9447,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7795152fff06..e2ab7ffd894a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-228ad432f231
+seed: 9191
+experiment:
+  id: proposed.blocking-union-crossover
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

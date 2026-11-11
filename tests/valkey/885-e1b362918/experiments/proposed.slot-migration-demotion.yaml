@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.slot-migration-demotion
+deployment:
+  modes: [standalone]
+metadata:
+  description: A primary demoted by slot migration (direct CLUSTER SETSLOT and gossip
+    UPDATE) must drop its cached history and full sync; the empty-primary branch is
+    kept with replica migration disabled
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    timeout_s: 30
+    server_config:
+      cluster-require-full-coverage: "no"
+      cluster-node-timeout: 2000
+    commands:
+    - {command: [CONFIG, SET, cluster-allow-replica-migration, "no"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 5061, IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 5061, MIGRATING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 5061, NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [GET, bar], node: 0, wait_s: 60, compare: skip, expect: {error: MOVED}}
+    - {command: [CLUSTER, SETSLOT, 5061, MIGRATING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 5061, IMPORTING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 5061, NODE, "<node.0.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [GET, bar], node: 1, wait_s: 60, compare: skip, expect: {error: MOVED}}
+    - {command: [INFO, replication], node: 1, compare: skip, expect: {contains: "role:master"}}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, "<node.0.id>"], node: 2, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, MIGRATING, "<node.2.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.2.id>"], node: 2, expect: {
+        equals: OK}}
+    - {command: [GET, foo], node: 0, wait_s: 60, compare: skip, expect: {error: MOVED}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.0.id>"], node: 2, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 2, wait_s: 60, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [INFO, replication], node: 2, compare: skip, expect: {contains: "role:slave"}}
+    - {command: [INFO, stats], node: 0, expect_difference: true, expect: {contains: "sync_partial_err:0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [migrate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

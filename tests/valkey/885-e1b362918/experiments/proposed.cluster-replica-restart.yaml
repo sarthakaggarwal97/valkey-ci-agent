@@ -1,0 +1,34 @@
+extends: [valkey.base]
+id: proposed.cluster-replica-restart
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: SIGKILL a cluster replica under writes and restart it at once; it re-enables
+    replication from nodes.conf in clusterCron, resyncs, and loses no acknowledged
+    write
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+components:
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-replica]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 8}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-replica}

@@ -1,0 +1,23 @@
+extends: [valkey.base]
+id: proposed.unixsocketgroup-listen-ok
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Start the candidate on a unix socket with unixsocketgroup set to a group the fuzzer's
+    user belongs to: anetListen's getgrnam and chown on the socket path must succeed
+    for the probe server to come up and report the config, then the deployment runs
+    the key-value workload under the liveness, ledger and deployment-state oracles.
+inputs:
+  properties:
+    group: {type: string, default: users}
+components:
+- use: valkey.capability.build-probe
+  id: socket-group-probe
+  config:
+    startup_config:
+      unixsocketgroup: {$ref: inputs.group}
+    config_get:
+      unixsocketgroup: null
+required_evidence:
+- {evidence_id: valkey.capability.supported, source: socket-group-probe}

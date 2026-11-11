@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e2ab7ffd894a44d836019c62710c20c7ef5852b3",
+  "parent": "7795152fff06f8200f5e4239ff612b240f638e14",
+  "pr": 919,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make use of a single listNode pointer for blocking utility lists (#919)",
+  "date": "2024-08-20",
+  "unstable": "5a4ed2e08464c2b9d7f8fcd0e17918a0597154de",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.3719,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:244 'calculateKeySlot(key) == server.current_client->slot' is not true",
+      "scenario": "ai-c7fad9ef2056",
+      "seed": 9193,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #919, since fixed",
+      "fingerprint": "49979a14dba799f32598",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

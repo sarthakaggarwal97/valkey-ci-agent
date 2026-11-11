@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "694246cfab971560b02a7cf228f71b9d1cbea87e",
+  "parent": "d66a06e8183818c035bb78706f46fd62645db07e",
+  "pr": 951,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Drop the outdated script replication example comments (#951)",
+  "date": "2024-08-27",
+  "unstable": "5a4ed2e08464c2b9d7f8fcd0e17918a0597154de",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2082,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely a comment edit in afterErrorReply (src/networking.c): it replaces an outdated EVAL script-replication example with updated explanatory text. No executable code, control flow, reply, replication behaviour, or configuration changes, so there is no behaviour to regress and no scenario is needed."
+}

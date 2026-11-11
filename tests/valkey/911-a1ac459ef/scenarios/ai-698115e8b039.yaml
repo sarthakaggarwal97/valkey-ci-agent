@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b8dd4fbbf7e9..a1ac459ef1f4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-698115e8b039
+seed: 9101
+experiment:
+  id: proposed.repl-backlog-default
+deployment:
+  mode: standalone
+  base_port: 7000

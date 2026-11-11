@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 829aa7fe3cdb..b48596a91421.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3df698921b65
+seed: 90101
+experiment:
+  id: proposed.unixsocketgroup-listen-ok
+  inputs:
+    group: users
+deployment:
+  mode: standalone
+  base_port: 7000
+  server_config:
+    unixsocketgroup: users

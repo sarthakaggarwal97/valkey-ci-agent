@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.setslot-replica-down-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER SETSLOT with the shard's only replica disconnected returns
+    OK on the fixed build instead of blocking and failing with NOREPLICAS
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: setslot
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 2, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 0, wait_s: 30, expect: {contains: "state=online"},
+      compare: skip}
+    - {command: [CLUSTER, NODES], node: 0, wait_s: 30, expect: {contains: "slave <node.0.id>"},
+      compare: skip}
+    - {raw: "DEBUG SLEEP 5\r\n", connection: freeze, node: 2}
+    - {command: [CLIENT, KILL, TYPE, replica], node: 0, expect: {equals: 1}}
+    - {command: [CLUSTER, SETSLOT, 0, MIGRATING, "<node.1.id>", TIMEOUT, 500], node: 0,
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 0, NODE, "<node.1.id>", TIMEOUT, 500], node: 0,
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 0, STABLE, TIMEOUT, 500], node: 0, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [INFO, replication], node: 0, wait_s: 30, expect: {contains: "state=online"},
+      compare: skip}
+    - {command: [CLUSTER, SETSLOT, 2, MIGRATING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 2, STABLE], node: 0, expect: {equals: OK}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [setslot.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: setslot}

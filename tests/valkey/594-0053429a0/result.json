@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0053429a02a903d3947334bf4abf3c2160f81f2c",
+  "parent": "b48596a91421cc3a3ec3f73babe050ba1ae11d2d",
+  "pr": 594,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update \"Total\" message and used_memory_human log information in serverCron() function (#594)",
+  "date": "2024-08-23",
+  "unstable": "5a4ed2e08464c2b9d7f8fcd0e17918a0597154de",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2194,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits the text of a periodic LL_DEBUG log line in serverCron() (adding a human-readable form of zmalloc_used_memory() via the existing bytesToHuman helper, whose prototype is added to server.h). It alters no command replies, no replication, persistence, or cluster behaviour, and no data structures \u2014 it is a cosmetic logging change with no externally observable behaviour for the fuzzer's oracles or a compared command sequence to detect, so no scenario is needed."
+}

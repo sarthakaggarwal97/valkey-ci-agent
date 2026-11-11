@@ -1,0 +1,36 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e60990e5798a4a9a943aa444dba24855d59674c0",
+  "parent": "c338de3d464f8b69057377ca409e21906d40735a",
+  "pr": 1535,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix crash when freeing newly created node when nodeIp2String fail (#1535)",
+  "date": "2025-01-10",
+  "unstable": "5a4ed2e08464c2b9d7f8fcd0e17918a0597154de",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 9,
+  "proven": 0,
+  "hunted": 9,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 6,
+    "executed": 3,
+    "percent": 50,
+    "uncovered": [
+      "src/cluster_legacy.c:3253",
+      "src/cluster_legacy.c:3255",
+      "src/cluster_legacy.c:3256"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 6.9915,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 3,
+    "recall": false
+  }
+}

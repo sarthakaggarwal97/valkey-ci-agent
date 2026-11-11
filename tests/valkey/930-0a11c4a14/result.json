@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0a11c4a14093ac6486eea2a912a2befdf3ea0fb3",
+  "parent": "b12668af7a81b48c4c3e3ec35d1271281657d5e4",
+  "pr": 930,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Delete redundant declaration clusterNodeCoversSlot and countKeysInSlot (#930)",
+  "date": "2024-08-23",
+  "unstable": "5a4ed2e08464c2b9d7f8fcd0e17918a0597154de",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2405,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff deletes two redundant forward declarations (clusterNodeCoversSlot and countKeysInSlot) from src/cluster_legacy.c; the functions' definitions, call sites, and remaining declarations are unchanged, so the compiled code and all runtime behaviour are identical. This is a pure code-cleanup refactor with no testable behaviour change."
+}

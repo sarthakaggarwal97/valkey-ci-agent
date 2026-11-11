@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.keys-exact-match-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: Exact-match KEYS in cluster mode, where patternHashSlot picks the slot
+    for kvstoreDictFind, including hashtag corner cases and a node owning no slots
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: keys
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [KEYS, "*"], expect: {equals: []}}
+    - {command: [DEBUG, POPULATE, 1000], expect: {equals: OK}}
+    - {command: [SET, "foo{t}", v], expect: {equals: OK}}
+    - {command: [SET, "{t}", v], expect: {equals: OK}}
+    - {command: [SET, "bar{t}", v], expect: {equals: OK}}
+    - {command: [SET, "a{}b", v], expect: {equals: OK}}
+    - {command: [SET, "{abc", v], expect: {equals: OK}}
+    - {command: [SET, "{{x}}", v], expect: {equals: OK}}
+    - {command: [SET, "", v], expect: {equals: OK}}
+    - {command: [SET, plain, v], expect: {equals: OK}}
+    - {command: [KEYS, "foo{t}"], expect: {equals: ["foo{t}"]}}
+    - {command: [KEYS, "{t}"], expect: {equals: ["{t}"]}}
+    - {command: [KEYS, "a{}b"], expect: {equals: ["a{}b"]}}
+    - {command: [KEYS, "{abc"], expect: {equals: ["{abc"]}}
+    - {command: [KEYS, "{{x}}"], expect: {equals: ["{{x}}"]}}
+    - {command: [KEYS, ""], expect: {equals: [""]}}
+    - {command: [KEYS, plain], expect: {equals: [plain]}}
+    - {command: [KEYS, "key:500"], expect: {equals: ["key:500"]}}
+    - {command: [KEYS, "non-exist{t}"], expect: {equals: []}}
+    - {command: [KEYS, "{t}*"], compare: unordered}
+    - {command: [KEYS, "*{t}*"], compare: unordered}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [SET, "vol{t}", v, PX, 100], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.3], expect: {equals: OK}}
+    - {command: [KEYS, "vol{t}"], expect: {equals: []}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 1], expect: {equals: OK}}
+    - {command: [KEYS, "foo{t}"], node: 1, expect: {equals: []}}
+    - {command: [KEYS, plain], node: 1, expect: {equals: []}}
+    - {command: [KEYS, "*"], node: 1, expect: {equals: []}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [keys.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: keys}

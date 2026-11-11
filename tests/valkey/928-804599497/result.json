@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "804599497212873710269f7bd589e3a7164f6fdd",
+  "parent": "5d97f5133c271313cd5a172617e8af1fe845e0e2",
+  "pr": 928,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "valkey-cli make source node ignores NOREPLICAS when doing the last CLUSTER SETSLOT (#928)",
+  "date": "2024-08-23",
+  "unstable": "5a4ed2e08464c2b9d7f8fcd0e17918a0597154de",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 6.834,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to valkey-cli's cluster manager: clusterManagerMoveSlot now treats a NOREPLICAS reply to the final CLUSTER SETSLOT <slot> NODE on the source primary as benign (valkey-cli.c:5044). That reply only occurs on a multi-primary cluster where the source primary pre-replicates SETSLOT to at least one online >=7.4 replica, blocks the client (cluster_legacy.c:6312-6326), and the replicas migrate to another primary during the block so the ack wait times out (blocked.c:245) - i.e. mid slot-migration driven by valkey-cli --cluster rebalance/reshard. The fuzzer cannot reach this path:"
+}

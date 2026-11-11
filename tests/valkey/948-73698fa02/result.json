@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "73698fa028be57ae710940f47f536f6d822a44bb",
+  "parent": "9f4b1adbea6aa729c767257495dec23635923a3e",
+  "pr": 948,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix invalid escape sequence in utils, minor cleanup in python script  (#948)",
+  "date": "2024-08-26",
+  "unstable": "5a4ed2e08464c2b9d7f8fcd0e17918a0597154de",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2118,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only utils/generate-unit-test-header.py, a build-time Python helper that generates the unit-test header: it makes the TEST_PROTOTYPE regex a raw string to fix a Python invalid-escape-sequence warning. The regex matches the same patterns as before, and no server, replication, persistence, command, or tool code path changes, so there is no runtime behaviour for a fuzzer scenario to reach."
+}

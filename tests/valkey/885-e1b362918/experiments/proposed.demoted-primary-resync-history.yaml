@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.demoted-primary-resync-history
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    A primary demoted with CLUSTER REPLICATE drops its cached replication history
+    and asks for a full sync (PSYNC ? -1, so the new primary counts no failed partial
+    sync), while a primary demoted by a same-shard manual failover still partially
+    resyncs with the promoted replica.
+inputs:
+  properties:
+    dual_channel: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: demote
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    server_config:
+      dual-channel-replication-enabled: {$ref: inputs.dual_channel}
+    timeout_s: 15
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [SET, k3, v3], expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 60, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [INFO, stats], node: 0, expect_difference: true, expect: {contains: "sync_partial_err:0"},
+      compare: skip}
+    - {command: [READONLY], node: 1, expect: {equals: OK}}
+    - {command: [GET, k1], node: 1, wait_s: 30, expect: {equals: v1}}
+    - {command: [CLUSTER, FAILOVER], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 60, expect: {contains: "role:master"},
+      compare: skip}
+    - {command: [INFO, replication], node: 0, wait_s: 60, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [INFO, stats], node: 1, expect: {contains: "sync_partial_ok:1"}, compare: skip}
+    - {command: [SET, k4, v4], node: 1, expect: {equals: OK}}
+    - {command: [READONLY], node: 0, expect: {equals: OK}}
+    - {command: [GET, k4], node: 0, wait_s: 30, expect: {equals: v4}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [demote.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: demote}

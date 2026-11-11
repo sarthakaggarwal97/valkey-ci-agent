@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "829243e76bb658b9f2379ce47a7a5c302dd360fa",
+  "parent": "e2ab7ffd894a44d836019c62710c20c7ef5852b3",
+  "pr": 925,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Correct RDB_EOF_MARK_SIZE usage where EOF mark is relevant (#925)",
+  "date": "2024-08-21",
+  "unstable": "5a4ed2e08464c2b9d7f8fcd0e17918a0597154de",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.304,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change replaces CONFIG_RUN_ID_SIZE with RDB_EOF_MARK_SIZE in readSyncBulkPayload's diskless-sync EOF-mark handling. Both macros are defined as 40 (src/server.h:128-129), so every buffer declaration, memcpy, memmove, memcmp and ftruncate offset in the changed code compiles to the identical constant as before. It is a pure readability/semantic refactor with no behavior change on any path \u2014 replication, resync and RDB transfer behave byte-for-byte the same \u2014 so there is nothing a scenario could distinguish between the two builds."
+}

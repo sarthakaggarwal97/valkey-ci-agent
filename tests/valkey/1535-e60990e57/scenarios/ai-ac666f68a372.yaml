@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey c338de3d464f..e60990e5798a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ac666f68a372
+seed: 201
+experiment:
+  id: proposed.cluster-meet-handshake-link-error
+  inputs:
+    signal: SIGKILL
+deployment:
+  mode: cluster
+  primaries: 5
+  replicas_per_primary: 1
+  base_port: 7100
+  server_config:
+    cluster-node-timeout: 2000

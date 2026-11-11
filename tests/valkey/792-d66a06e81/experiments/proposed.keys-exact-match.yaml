@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.keys-exact-match
+deployment:
+  modes: [standalone]
+metadata:
+  description: KEYS with a wildcard-free pattern takes the new exact-match kvstoreDictFind
+    path; every reply must match the parent's full-scan behaviour
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: keys
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [KEYS, "*"], expect: {equals: []}}
+    - {command: [KEYS, foo], expect: {equals: []}}
+    - {command: [KEYS, ""], expect: {equals: []}}
+    - {command: [DEBUG, POPULATE, 1000], expect: {equals: OK}}
+    - {command: [SET, fo, v], expect: {equals: OK}}
+    - {command: [SET, foo, v], expect: {equals: OK}}
+    - {command: [SET, fooo, v], expect: {equals: OK}}
+    - {command: [SET, "foo{t}", v], expect: {equals: OK}}
+    - {command: [SET, 'foo\', v], expect: {equals: OK}}
+    - {command: [SET, "", v], expect: {equals: OK}}
+    - {command: [SET, !!binary "YQBi", v], expect: {equals: OK}}
+    - {command: [KEYS, foo], expect: {equals: [foo]}}
+    - {command: [KEYS, "key:500"], expect: {equals: ["key:500"]}}
+    - {command: [KEYS, "foo{t}"], expect: {equals: ["foo{t}"]}}
+    - {command: [KEYS, ""], expect: {equals: [""]}}
+    - {command: [KEYS, !!binary "YQBi"], expect: {equals: [!!binary "YQBi"]}}
+    - {command: [KEYS, non-exist], expect: {equals: []}}
+    - {command: [KEYS, 'foo\'], expect: {equals: ['foo\']}}
+    - {command: [KEYS, 'foo\\'], expect: {equals: ['foo\']}}
+    - {command: [KEYS, "*foo"], compare: unordered, expect: {equals: [foo]}}
+    - {command: [KEYS, "foo*"], compare: unordered}
+    - {command: [KEYS, "*"], compare: unordered}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [SET, vol, v, PX, 100], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.3], expect: {equals: OK}}
+    - {command: [KEYS, vol], expect: {equals: []}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 1], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [KEYS, foo], expect: {equals: QUEUED}}
+    - {command: [KEYS, non-exist], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [[foo], []]}}
+    - {command: [SELECT, 5], expect: {equals: OK}}
+    - {command: [KEYS, foo], expect: {equals: []}}
+    - {command: [SET, foo, other], expect: {equals: OK}}
+    - {command: [KEYS, foo], expect: {equals: [foo]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [keys.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: keys}

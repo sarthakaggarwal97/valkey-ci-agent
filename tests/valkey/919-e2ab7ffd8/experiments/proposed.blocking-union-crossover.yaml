@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.blocking-union-crossover
+deployment:
+  modes: [standalone]
+metadata:
+  description: Cycle one client between postpone blocking and WAIT/WAITAOF blocking
+    across pauses and a standalone failover, so the unioned bstate list node is set,
+    cleared and reused
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: crossover
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [SET, base, v], expect: {equals: OK}}
+    - {command: [CLIENT, PAUSE, 300, WRITE], expect: {equals: OK}}
+    - {connection: w1, command: [SET, pw, "1"], expect: {equals: OK}}
+    - {connection: w1, command: [WAIT, 1, 100], expect: {equals: 0}}
+    - {command: [CLIENT, PAUSE, 300, ALL], expect: {equals: OK}}
+    - {connection: w1, command: [WAIT, 1, 100], expect: {equals: 0}}
+    - {connection: w1, command: [GET, pw], expect: {equals: "1"}}
+    - {command: [CLIENT, UNPAUSE], expect: {equals: OK}}
+    - {command: [CONFIG, SET, appendonly, yes], expect: {equals: OK}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [SET, a1, "1"], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 0], expect: {equals: [1, 0]}}
+    - {command: [CLIENT, PAUSE, 300, ALL], expect: {equals: OK}}
+    - {connection: w1, command: [WAITAOF, 1, 0, 0], expect: {equals: [1, 0]}}
+    - {node: 1, command: [REPLICAOF, <node.0.host>, <node.0.port>], expect: {equals: OK}}
+    - {node: 1, command: [INFO, replication], wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [SET, r1, "1"], expect: {equals: OK}}
+    - {command: [WAIT, 1, 1000], wait_s: 30, expect: {equals: 1}}
+    - {command: [CLIENT, PAUSE, 300, ALL], expect: {equals: OK}}
+    - {connection: w1, command: [WAIT, 1, 2000], wait_s: 30, expect: {equals: 1}}
+    - {command: [FAILOVER, TO, <node.1.host>, <node.1.port>], expect: {equals: OK}}
+    - {command: [SET, after-failover, "1"], wait_s: 30, expect: {error: true}}
+    - {node: 1, command: [SET, on-new-primary, "1"], wait_s: 30, expect: {equals: OK}}
+    - {node: 1, command: [WAIT, 1, 1000], wait_s: 30, expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [crossover.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: crossover}

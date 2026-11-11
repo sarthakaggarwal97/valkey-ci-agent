@@ -1,0 +1,44 @@
+extends: [valkey.base]
+id: proposed.cluster-meet-handshake-link-error
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Kill nodes mid cluster-bus MEET handshake so a peer processes a MEET
+    on an errored inbound link; the node must not crash freeing the newly created
+    node
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+components:
+- use: valkey.fault.process-signal
+  id: kill-primary
+  config:
+    when_event: warm-up.completed
+    instance: primary
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+    restart_delay_s: 0.2
+- use: valkey.fault.process-signal
+  id: kill-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+    restart_delay_s: 0.6
+    delay_s: 0.4
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-primary, kill-replica]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 8}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-primary}

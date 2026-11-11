@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.cluster-replicate-idempotent-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: After the primary restarts and the replica has resynced, a redundant
+    CLUSTER REPLICATE is a no-op on the fix (the link stays up, no extra full sync)
+    while the parent forces another full resync; the replica must stay attached and
+    keep its data either way.
+components:
+- use: valkey.action.commands
+  id: replicate-restart
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 15
+    commands:
+    - {command: [SET, k1, v1], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, <node.0.id>], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [SAVE], node: 0, expect: {equals: OK}}
+    - {restart: true, node: 0}
+    - {command: [INFO, replication], node: 1, wait_s: 60, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [INFO, stats], node: 0, wait_s: 30, expect: {contains: "sync_full:1\r"},
+      compare: skip}
+    - {command: [CLUSTER, REPLICATE, <node.0.id>], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, expect_difference: true, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [INFO, replication], node: 1, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [INFO, stats], node: 0, expect_difference: true, expect: {contains: "sync_full:1\r"},
+      compare: skip}
+    - {command: [READONLY], node: 1, expect: {equals: OK}}
+    - {command: [GET, k1], node: 1, expect: {equals: v1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [replicate-restart.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: replicate-restart}

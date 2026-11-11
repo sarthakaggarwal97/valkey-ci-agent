@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.unixsocketgroup-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: unixsocketgroup is registered as an immutable string config that defaults
+    to empty, matches CONFIG GET globs, rejects CONFIG SET, and survives CONFIG REWRITE
+    and a restart
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: usg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, unixsocketgroup], expect_difference: true, expect: {
+        contains: unixsocketgroup}}
+    - {command: [CONFIG, GET, "unixsocketg*"], expect_difference: true, expect: {
+        contains: unixsocketgroup}}
+    - {command: [CONFIG, SET, unixsocketgroup, wheel], expect_difference: true, expect: {
+        error: immutable}}
+    - {command: [CONFIG, SET, unixsocketgroup, ""], expect_difference: true, expect: {
+        error: immutable}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, unixsocketgroup], expect_difference: true, expect: {
+        contains: unixsocketgroup}}
+    - {command: [SET, k, v1], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [usg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: usg}

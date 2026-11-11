@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 829243e76bb6..e1b3629186a8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c12c207c820b
+seed: 885001
+experiment:
+  id: proposed.takeover-chain-subreplica
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  base_port: 7000

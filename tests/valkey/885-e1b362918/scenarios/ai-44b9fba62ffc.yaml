@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 829243e76bb6..e1b3629186a8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-44b9fba62ffc
+seed: 101
+experiment:
+  id: proposed.slot-migration-demotion
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

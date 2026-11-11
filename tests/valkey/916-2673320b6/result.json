@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2673320b66a3b39c47dc8a00ab54d16eb8e6137b",
+  "parent": "e1b3629186a89ee1aec86c0f512d3faafa62d91c",
+  "pr": 916,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "RDMA: Support user keepalive command (#916)",
+  "date": "2024-08-21",
+  "unstable": "5a4ed2e08464c2b9d7f8fcd0e17918a0597154de",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3588,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to src/rdma.c: a per-connection keepalive timer, zero-initialized ValkeyRdmaCmd structs, and event-loop plumbing in the RDMA accept/disconnect path. That code runs only when a client connects over the RDMA transport, which requires a build with BUILD_RDMA and an RDMA device (soft-RoCE setup needs root, which these runs do not have). No installed experiment or component speaks RDMA \u2014 they all connect over TCP \u2014 so no composable experiment or scenario can reach the changed code paths."
+}

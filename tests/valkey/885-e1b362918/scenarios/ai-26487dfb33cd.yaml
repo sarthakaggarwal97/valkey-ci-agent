@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 829243e76bb6..e1b3629186a8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-26487dfb33cd
+seed: 202
+experiment:
+  id: proposed.standalone-failover-psync
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

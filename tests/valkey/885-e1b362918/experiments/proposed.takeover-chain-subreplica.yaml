@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.takeover-chain-subreplica
+deployment:
+  modes: [standalone]
+metadata:
+  description: Chained CLUSTER FAILOVER TAKEOVER in one 3-node shard folds each sub-replica
+    onto the new primary through the same-shard psync path, with no data lost
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.commands
+  id: chain
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 3
+    timeout_s: 300
+    commands:
+    - {command: [SET, key1, v1], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, wait_s: 30, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 2, wait_s: 30, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 60, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [INFO, replication], node: 2, wait_s: 60, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [CLUSTER, FAILOVER, TAKEOVER], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 0, wait_s: 60, expect: {contains: "role:slave"},
+      compare: skip}
+    - {command: [INFO, replication], node: 1, wait_s: 90, expect: {contains: "connected_slaves:2"},
+      compare: skip}
+    - {command: [SET, key2, v2], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, FAILOVER, TAKEOVER], node: 2, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 60, expect: {contains: "role:slave"},
+      compare: skip}
+    - {command: [INFO, replication], node: 2, wait_s: 90, expect: {contains: "connected_slaves:2"},
+      compare: skip}
+    - {command: [GET, key1], node: 2, expect: {equals: v1}}
+    - {command: [GET, key2], node: 2, expect: {equals: v2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [chain.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: chain}

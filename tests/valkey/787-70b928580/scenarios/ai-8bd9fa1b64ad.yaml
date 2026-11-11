@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 33c7ca41be82..70b92858025b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8bd9fa1b64ad
+seed: 103
+experiment:
+  id: proposed.wait-prerepl-setslot
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7200

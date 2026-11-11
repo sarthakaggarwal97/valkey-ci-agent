@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 73698fa028be..d66a06e81838.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-71c95a1539cf
+seed: 202
+experiment:
+  id: proposed.keys-exact-match-cluster
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7100

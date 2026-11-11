@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "33c7ca41be82cc0c50f8230caa01e7e7760baa87",
+  "parent": "adf53c212be1b1334c66608e4c60c4ddf8d6db46",
+  "pr": 789,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add 4 commands for sentinel and update most test cases and json files (#789)",
+  "date": "2024-08-16",
+  "unstable": "5a4ed2e08464c2b9d7f8fcd0e17918a0597154de",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.7275,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds alias subcommand names (SENTINEL PRIMARIES/PRIMARY/IS-PRIMARY-DOWN-BY-ADDR/GET-PRIMARY-ADDR-BY-NAME) inside sentinelCommand plus command-table/JSON metadata and Sentinel TCL test renames; the old MASTER* spellings keep working, so no existing behaviour changes. Every SENTINEL subcommand is CMD_ONLY_SENTINEL (src/server.c:2965), registered only when the process runs in sentinel mode, which is entered solely via the executable name 'valkey-sentinel' or the --sentinel argv flag (src/server.c:6401-6410) and cannot be enabled by any config directive. The fuzzer deploys only sta"
+}

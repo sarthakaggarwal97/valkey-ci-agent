@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "959dd3485bb44cf057013384c0c2253e07a19a4e",
+  "parent": "8d9b8c9d3d5fd9e22e18230a0ff86afba06bcc9a",
+  "pr": 759,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Decline unsubscribe related command in non-subscribed mode (#759)",
+  "date": "2024-08-22",
+  "unstable": "5a4ed2e08464c2b9d7f8fcd0e17918a0597154de",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 3,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.4495,
+  "findings": [],
+  "recorded": [],
+  "reason": "no proposed test validated"
+}

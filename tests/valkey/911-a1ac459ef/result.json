@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a1ac459ef1f48e44b2429446243917c67afab401",
+  "parent": "b8dd4fbbf7e9f052b5d94c27602f616474ed8d41",
+  "pr": 911,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Set repl-backlog-size from 1mb to 10mb by default (#911)",
+  "date": "2024-08-21",
+  "unstable": "5a4ed2e08464c2b9d7f8fcd0e17918a0597154de",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 1,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.2649,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

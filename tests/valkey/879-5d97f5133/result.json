@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5d97f5133c271313cd5a172617e8af1fe845e0e2",
+  "parent": "0a11c4a14093ac6486eea2a912a2befdf3ea0fb3",
+  "pr": 879,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix CLUSTER SETSLOT block and unblock error when all replicas are down (#879)",
+  "date": "2024-08-23",
+  "unstable": "5a4ed2e08464c2b9d7f8fcd0e17918a0597154de",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 19.9295,
+  "findings": [],
+  "recorded": []
+}

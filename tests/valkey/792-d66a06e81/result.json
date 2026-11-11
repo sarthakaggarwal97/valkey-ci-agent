@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d66a06e8183818c035bb78706f46fd62645db07e",
+  "parent": "73698fa028be57ae710940f47f536f6d822a44bb",
+  "pr": 792,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make KEYS to be an exact match if there is no pattern (#792)",
+  "date": "2024-08-27",
+  "unstable": "5a4ed2e08464c2b9d7f8fcd0e17918a0597154de",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 19,
+    "executed": 19,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.8804,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-8af04d6e770b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'keys' returned ERROR: expectations both builds violate alike, so they are not about the change: 15 (KEYS <binary>)"
+    },
+    {
+      "scenario": "ai-2ddeb64c0b31",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'keys' returned ERROR: expectations both builds violate alike, so they are not about the change: 15 (KEYS <binary>)"
+    }
+  ]
+}

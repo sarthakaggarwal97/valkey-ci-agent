@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 829243e76bb6..e1b3629186a8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9a7f8c65adb5
+seed: 101
+experiment:
+  id: proposed.demoted-primary-resync-history
+  inputs:
+    dual_channel: 'no'
+deployment:
+  mode: standalone
+  base_port: 7000

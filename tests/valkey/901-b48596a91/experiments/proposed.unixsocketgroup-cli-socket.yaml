@@ -1,0 +1,28 @@
+extends: [valkey.liveness]
+id: proposed.unixsocketgroup-cli-socket
+deployment:
+  modes: [standalone]
+metadata:
+  description: the default (no group configured) unix-socket listener still accepts
+    connections after the anetListen signature and priv1/priv2 rewiring, and the new
+    config is visible over the socket
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [-s, $socket, PING], expect: {exit: {equals: 0}, stdout: {
+          equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-s, $socket, SET, k, v1], expect: {exit: {equals: 0},
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-s, $socket, GET, k], expect: {exit: {equals: 0},
+        stdout: {equals: "v1\n"}}}
+    - {tool: valkey-cli, args: [-s, $socket, CONFIG, GET, unixsocketgroup], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: unixsocketgroup}}}
+    - {tool: valkey-benchmark, args: [-s, $socket, -n, 200, -c, 4, -t, "set,get",
+        -q], compare: skip, expect: {exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

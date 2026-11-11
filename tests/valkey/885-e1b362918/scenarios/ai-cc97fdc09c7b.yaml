@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 829243e76bb6..e1b3629186a8.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-cc97fdc09c7b
+seed: 885004
+experiment:
+  id: proposed.cluster-replica-restart
+  inputs:
+    signal: SIGKILL
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7300
