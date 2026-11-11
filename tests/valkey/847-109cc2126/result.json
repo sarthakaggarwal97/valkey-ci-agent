@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "109cc21267eb88b9cea0d66f2fa69d40293d2a67",
+  "parent": "380f70081686d68739536990f5c8535d1382524d",
+  "pr": 847,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Assert network bytes out for replication slot stat computation is only allowed on primary (#847)",
+  "date": "2024-08-07",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.9501,
+  "findings": [],
+  "recorded": []
+}

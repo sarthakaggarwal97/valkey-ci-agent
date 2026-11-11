@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3cca26881a1d9631a614352fc812e75d6ba2710b",
+  "parent": "f00c8f6214b2b3f6eec7af74cdf6485ffbb33ed3",
+  "pr": 823,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Improve CPU usage in tests with IO threads (#823)",
+  "date": "2024-07-23",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.775,
+  "findings": [],
+  "recorded": []
+}

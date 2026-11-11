@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "parent": "ae7060ae939a7a960e675cc0492ae36270ed9845",
+  "pr": 4913,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Expire stale Sentinel primary-down reports before quorum checks (#4913)",
+  "date": "2026-11-11",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.029,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is entirely inside src/sentinel.c (sentinelCheckObjectivelyDown / sentinelAskPrimaryStateToOtherSentinels): stale SRI_PRIMARY_DOWN reports from peer Sentinels are now expired before the quorum count, in code that only executes in a process running in Sentinel mode while it monitors a primary together with other Sentinels. The fuzzer has no way to reach that code: its deployment modes are standalone and cluster only (the architecture doc lists Sentinel as an unimplemented mode), no installed experiment or component starts or drives a Sentinel, valkey.action.commands' private compare "
+}

@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5c073a58e40973d9996778a705196f2bd876bb05",
+  "parent": "3cca26881a1d9631a614352fc812e75d6ba2710b",
+  "pr": 817,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Increase rioConnsetWrite max chunk size to 16K (#817)",
+  "date": "2024-07-24",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.7113,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-048dfafdd436",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during fault.inject: LookupError: no live instance matches 'replica'"
+    },
+    {
+      "scenario": "ai-5ca969c3ee97",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'chaos' returned ERROR: wave 1 failover 1.1 could not be observed: LocalDeploymentError: no replica of the primary of shard 0 synced within 30s, so no failover was sent: {7201: 'offset 0'}"
+    }
+  ]
+}

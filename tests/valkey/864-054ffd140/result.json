@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "054ffd140f4982850aae147908b968215613641c",
+  "parent": "b728e4170f8f83abf992054c3e14de4c69af0550",
+  "pr": 864,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix outdated comment of migrate in valkey-cli --cluster (#864)",
+  "date": "2024-08-03",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2063,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only a code comment in valkey-cli's clusterManagerMigrateKeysInSlot (describing when --cluster-replace applies); no executable code, output, or behaviour is modified, so there is nothing a scenario could observe differing between the two builds."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f622e375a06bb8a2e700826c1af1af448155ad69",
+  "parent": "76f809bc193497f94f887e2ce55529449f432d9d",
+  "pr": 867,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Better messages when valkey-cli cluster --fix meet value check failed (#867)",
+  "date": "2024-08-13",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.8158,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff changes only src/valkey-cli.c, inside the cluster manager's BUSYKEY value check: when `valkey-cli --cluster fix` (or reshard/rebalance) retries a MIGRATE that failed with BUSYKEY, clusterManagerCompareKeysValues now captures the DEBUG DIGEST-VALUE error reply and prints a clearer hint ('DEBUG command is not allowed... turn on enable-debug-command' or 'DEBUG DIGEST-VALUE command is not supported... use --cluster-replace'), and a connection error during that check now prints a message and exit(1) instead of silently failing. No server behaviour changes, so no compared command sequence o"
+}

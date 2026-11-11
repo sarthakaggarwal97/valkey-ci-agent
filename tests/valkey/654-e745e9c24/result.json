@@ -1,0 +1,62 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e745e9c240d1ecb511286c2f493df63e6e7c8d0f",
+  "parent": "48ca2c91763ddfc6484f9e06cff3bbddd94f1c89",
+  "pr": 654,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Adds Light-weight cluster bus header for pubsub message. (#654)",
+  "date": "2024-07-26",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 133,
+    "executed": 115,
+    "percent": 86,
+    "uncovered": [
+      "src/cluster_legacy.c:230",
+      "src/cluster_legacy.c:231",
+      "src/cluster_legacy.c:2912",
+      "src/cluster_legacy.c:2923",
+      "src/cluster_legacy.c:2926",
+      "src/cluster_legacy.c:2989",
+      "src/cluster_legacy.c:2990",
+      "src/cluster_legacy.c:3047",
+      "src/cluster_legacy.c:3048",
+      "src/cluster_legacy.c:3052",
+      "src/cluster_legacy.c:3076",
+      "src/cluster_legacy.c:3426",
+      "src/cluster_legacy.c:4024",
+      "src/cluster_legacy.c:4034",
+      "src/cluster_legacy.c:4035",
+      "src/cluster_legacy.c:4159",
+      "src/cluster_legacy.c:4160",
+      "src/cluster_legacy.c:4162"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.1841,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:239 'calculateKeySlot(key) == server.current_client->slot' is not true",
+      "scenario": "ai-fb5239388a3f",
+      "seed": 1103,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #654, since fixed",
+      "fingerprint": "49979a14dba799f32598",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

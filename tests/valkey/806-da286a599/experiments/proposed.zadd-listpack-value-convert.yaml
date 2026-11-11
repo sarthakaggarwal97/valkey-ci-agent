@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.zadd-listpack-value-convert
+deployment:
+  modes: [standalone]
+metadata:
+  description: ZADD now converts a listpack zset to skiplist up front when any member
+    exceeds zset-max-listpack-value, even when every add is a NOP (XX miss, GT miss,
+    NaN error); the parent converts only on actual insert
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zadd
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-value: 8, zset-max-listpack-entries: 128}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [ZADD, zs, 1, aa, 2, bb, 3, cc], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, zs], expect: {equals: listpack}}
+    - {command: [ZADD, zs, XX, 5, member-longer-than-eight], expect: {equals: 0}}
+    - {command: [OBJECT, ENCODING, zs], expect_difference: true, expect: {equals: skiplist}}
+    - {command: [ZRANGE, zs, 0, -1], expect: {equals: [aa, bb, cc]}}
+    - {command: [ZCARD, zs], expect: {equals: 3}}
+    - {command: [ZADD, zs2, 10, e1, 20, e2], expect: {equals: 2}}
+    - {command: [CONFIG, SET, zset-max-listpack-value, 1], expect: {equals: OK}}
+    - {command: [OBJECT, ENCODING, zs2], expect: {equals: listpack}}
+    - {command: [ZADD, zs2, GT, 5, e1], expect: {equals: 0}}
+    - {command: [OBJECT, ENCODING, zs2], expect_difference: true, expect: {equals: skiplist}}
+    - {command: [ZRANGE, zs2, 0, -1], expect: {equals: [e1, e2]}}
+    - {command: [CONFIG, SET, zset-max-listpack-value, 8], expect: {equals: OK}}
+    - {command: [ZADD, zs3, "inf", e1], expect: {equals: 1}}
+    - {command: [CONFIG, SET, zset-max-listpack-value, 1], expect: {equals: OK}}
+    - {command: [ZINCRBY, zs3, "-inf", e1], expect: {error: "not a number"}}
+    - {command: [OBJECT, ENCODING, zs3], expect_difference: true, expect: {equals: skiplist}}
+    - {command: [ZSCORE, zs3, e1], expect: {exists: true}}
+    - {command: [CONFIG, SET, zset-max-listpack-value, 8], expect: {equals: OK}}
+    - {command: [ZADD, zs4, 1, aaaa], expect: {equals: 1}}
+    - {command: [ZADD, zs4, XX, 2, len8len8], expect: {equals: 0}}
+    - {command: [OBJECT, ENCODING, zs4], expect: {equals: listpack}}
+    - {command: [CONFIG, SET, zset-max-listpack-entries, 4], expect: {equals: OK}}
+    - {command: [ZADD, zs5, 1, a, 2, b], expect: {equals: 2}}
+    - {command: [ZADD, zs5, XX, 1, p, 2, q, 3, r, 4, s, 5, t], expect: {equals: 0}}
+    - {command: [OBJECT, ENCODING, zs5], expect: {equals: skiplist}}
+    - {command: [ZADD, zs6, 1, "", 2, this-member-is-longer-than-eight], expect: {
+        equals: 2}}
+    - {command: [OBJECT, ENCODING, zs6], expect: {equals: skiplist}}
+    - {command: [ZRANGE, zs6, 0, -1], expect: {equals: ["", this-member-is-longer-than-eight]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [zadd.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zadd}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ae7060ae939a7a960e675cc0492ae36270ed9845",
+  "parent": "1b03cf5e3c77ff1891ec759fef75947daa1db9fd",
+  "pr": 5246,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Allow null in SENTINEL GET-PRIMARY-ADDR-BY-NAME reply schema (#5246)",
+  "date": "2026-11-11",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3433,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff only changes the reply_schema metadata in the sentinel-get-primary-addr-by-name.json and sentinel-get-master-addr-by-name.json command definition files (to document that a null reply is valid for an unknown primary) and adds a Tcl regression test. The server's reply code in src/sentinel.c is untouched: it already returned a null array for an unknown primary on both the parent and the change. reply_schema is not compiled into commands.def or the server binary, so no runtime behaviour differs between the two builds; there is nothing a scenario could reach or compare. Additionally, SENTI"
+}

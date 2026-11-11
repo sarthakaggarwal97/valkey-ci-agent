@@ -1,0 +1,45 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1d188420741d4453615f776574f97984334a9939",
+  "parent": "fa238dc0496e6fbb3c2c031e18718589ea6695d6",
+  "pr": 834,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix bug in writeToClient (#834)",
+  "date": "2024-07-30",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.64,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-caeffc81f744",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: ValueError: Exceeds the limit (4300 digits) for integer string conversion: value has 16000 digits; use sys.set_int_max_str_digits() to increase the limit"
+    },
+    {
+      "scenario": "ai-8787e625cf38",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: ValueError: Exceeds the limit (4300 digits) for integer string conversion: value has 16000 digits; use sys.set_int_max_str_digits() to increase the limit"
+    }
+  ],
+  "recall_round": {
+    "tests": 0,
+    "recall": false
+  }
+}

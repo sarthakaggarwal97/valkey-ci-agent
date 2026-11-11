@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e32518d6553e4bd9d7742926b65fdc3fb18a0da6",
+  "parent": "e1d936b339c04ec4dd48c0f281ecafe3eea692b5",
+  "pr": 826,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix unexpected behavior when turning appendonly on and off within a transaction (#826)",
+  "date": "2024-07-27",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 3.4507,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix only guards stopAppendOnly() against operating on an already-closed descriptor (aof_fd == -1) and adds log lines. That path is reached when AOF is enabled-but-merely-scheduled (inside EXEC, or with another background child active) and then disabled in the same transaction, leaving aof_fd == -1. On the parent this does flushAppendOnlyFile(1) (a provable no-op: empty buffer and incr offsets both 0, so it early-returns for every fsync policy and the always-exit path is unreachable), then valkey_fsync(-1) and close(-1), which return EBADF harmlessly and only emit a log warning. There is no"
+}

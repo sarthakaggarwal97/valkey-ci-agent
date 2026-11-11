@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "48ca2c91763ddfc6484f9e06cff3bbddd94f1c89",
+  "parent": "da286a599d24da71ad353c35e84d3d4b85f9b89c",
+  "pr": 804,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Improve dual channel replication stability and fix compatibility issues (#804)",
+  "date": "2024-07-25",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 10,
+  "proven": 1,
+  "hunted": 7,
+  "dropped": 3,
+  "recall": true,
+  "coverage": {
+    "lines": 20,
+    "executed": 17,
+    "percent": 85,
+    "uncovered": [
+      "src/replication.c:2866",
+      "src/replication.c:2867",
+      "src/replication.c:2868"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 6.9119,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-b4d48949d6a2",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: LookupError: no live instance matches 'replica'"
+    },
+    {
+      "scenario": "ai-d1d3270d0efc",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: LookupError: no live instance matches 'replica'"
+    },
+    {
+      "scenario": "ai-bff9a11f5c2b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: LookupError: no live instance matches 'replica'"
+    }
+  ]
+}

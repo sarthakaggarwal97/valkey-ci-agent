@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey da286a599d24..48ca2c91763d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6b417b271afe
+seed: 9001
+experiment:
+  id: proposed.dual-channel-pause-after-fork-grace
+  inputs:
+    grace_s: 2
+    replica_pause_s: 15
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7000

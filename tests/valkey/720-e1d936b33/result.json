@@ -1,0 +1,64 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e1d936b339c04ec4dd48c0f281ecafe3eea692b5",
+  "parent": "e745e9c240d1ecb511286c2f493df63e6e7c8d0f",
+  "pr": 720,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add network-bytes-in and network-bytes-out metric support under CLUSTER SLOT-STATS command (#20) (#720)",
+  "date": "2024-07-26",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 4,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 79,
+    "executed": 73,
+    "percent": 92,
+    "uncovered": [
+      "src/cluster_slot_stats.c:44",
+      "src/cluster_slot_stats.c:45",
+      "src/cluster_slot_stats.c:48",
+      "src/cluster_slot_stats.c:49",
+      "src/cluster_slot_stats.c:162",
+      "src/cluster_slot_stats.c:163"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.9882,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:244 'calculateKeySlot(key) == server.current_client->slot' is not true",
+      "scenario": "ai-7c448a6c2e66",
+      "seed": 424201,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #720, since fixed",
+      "fingerprint": "49979a14dba799f32598",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:244 'calculateKeySlot(key) == server.current_client->slot' is not true",
+      "scenario": "ai-019004e9c914",
+      "seed": 424202,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #720, since fixed",
+      "fingerprint": "49979a14dba799f32598",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6dad976b853ec8fb60ef607df1628a5a819c00a4",
+  "parent": "5a4ed2e08464c2b9d7f8fcd0e17918a0597154de",
+  "pr": 5351,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use leaf counts in the zset leaf compaction pause test (#5351)",
+  "date": "2026-11-11",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.6987,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "aaa783436244956fbf0d198439c91709f25765e6",
+  "parent": "b4d96caa78eee5cd203d829c4d637b2a839a8955",
+  "pr": 840,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Handle underflow condition of network out slot stats metric (#840)",
+  "date": "2024-07-29",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 10,
+    "executed": 10,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.5214,
+  "findings": [],
+  "recorded": []
+}

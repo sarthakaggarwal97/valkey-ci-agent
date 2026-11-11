@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.write-to-client-large-reply
+deployment:
+  modes: [standalone]
+metadata:
+  description: A large single static-buffer bulk reply must reach the client intact;
+    the parent corrupts it when the write is split across connWrite calls
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SETRANGE, k, 16299, x], expect: {equals: 16300}}
+    - {command: [STRLEN, k], expect: {equals: 16300}}
+    - {command: [GET, k], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

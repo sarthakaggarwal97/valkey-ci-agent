@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f00c8f6214b2b3f6eec7af74cdf6485ffbb33ed3",
+  "parent": "59aa00823c3691c50da452f2df2c4bc24e46696d",
+  "pr": 818,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Modify clusterSaveConfig function call to use C_OK / C_ERR return value (#818)",
+  "date": "2024-07-24",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2971,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure cosmetic refactor: the change substitutes the macros C_OK/C_ERR for the literals 0/-1 in two comparisons of clusterSaveConfig's return value (clusterSaveConfigOrDie and CLUSTER SAVECONFIG) and updates a comment. server.h defines C_OK as 0 and C_ERR as -1, so the compiled behaviour is identical on both the success and error paths; there is no observable behaviour to test and no scenario can distinguish the two builds."
+}

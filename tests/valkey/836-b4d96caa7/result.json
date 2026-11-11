@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b4d96caa78eee5cd203d829c4d637b2a839a8955",
+  "parent": "9211aed72e335ecf8923bd87f955bd019e731519",
+  "pr": 836,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove static to avoid compiler warning (#836)",
+  "date": "2024-07-28",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2166,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change removes 'static' from createClusterMsgSendBlock in cluster_legacy.c solely to silence a compiler warning. It changes the function's linkage only; the function body, call sites, and all runtime behavior (cluster message allocation and sending) are identical to the parent build. A pure build/compiler-warning fix with no behavior change needs no scenario."
+}

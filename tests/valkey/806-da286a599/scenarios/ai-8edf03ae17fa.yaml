@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5c073a58e409..da286a599d24.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8edf03ae17fa
+seed: 1
+experiment:
+  id: proposed.zadd-listpack-value-convert
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

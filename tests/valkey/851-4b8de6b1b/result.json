@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4b8de6b1be24b2c64f6e3e188b6dd6d9bca575b1",
+  "parent": "1d188420741d4453615f776574f97984334a9939",
+  "pr": 851,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update replica version comparison to handle version 8 RC candidates (#851)",
+  "date": "2024-07-31",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.4717,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters how CLUSTER SETSLOT classifies a replica whose reported version falls in [7.2.255, 8.0.0) (the 8.0 release candidates): the primary now replicates SETSLOT to such replicas instead of using the non-replicated fallback. Reaching the branch requires a genuine cluster replica (the guard tests myself->num_replicas, which comes from cluster topology, not from a raw PSYNC/REPLCONF client), and a genuine replica of any build the fuzzer can run reports its VALKEY_VERSION. Both builds under test (the change and its parent) report 255.255.255 (version.h), which exceeds both the old"
+}

@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.zset-btree-leaves-debug-object
+deployment:
+  modes: [standalone]
+metadata:
+  description: DEBUG OBJECT reports btree_leaves for btree-encoded sorted sets, through
+    a one-leaf tree, a large fill, compaction-heavy deletions, and deletions made
+    while a BGSAVE child parks leaf compaction
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: leaves
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes", save: "", zset-max-listpack-entries: 0,
+      list-max-listpack-size: 4}
+    resp: {$ref: inputs.resp}
+    timeout_s: 90
+    commands:
+    - {command: [ZADD, zsmall, 1, a], expect: {equals: 1}}
+    - {command: [OBJECT, ENCODING, zsmall], compare: skip, expect: {equals: btree}}
+    - {command: [DEBUG, OBJECT, zsmall], expect_difference: true, expect: {contains: "btree_leaves:1"}}
+    - {command: [DEBUG, OBJECT, zsmall, fast], expect_difference: true, expect: {
+        contains: "btree_leaves:1"}}
+    - {command: [RPUSH, biglist, a, b, c, d, e, f], expect: {equals: 6}}
+    - {command: [DEBUG, OBJECT, biglist], compare: skip, expect: {contains: "ql_nodes:"}}
+    - command: [EVAL, "for i=1,12000 do redis.call('ZADD', KEYS[1], i, string.format('m:%012d',\
+          \ i)) end return redis.call('ZCARD', KEYS[1])", "1", zbig]
+      expect: {equals: 12000}
+    - {command: [DEBUG, OBJECT, zbig], expect_difference: true, expect: {contains: "btree_leaves:"}}
+    - {command: [CONFIG, SET, rdb-key-save-delay, "500000"], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {contains: "Background saving started"}}
+    - command: [EVAL, "for i=1,12000 do if i % 3 ~= 0 then redis.call('ZREM', KEYS[1],\
+          \ string.format('m:%012d', i)) end end return redis.call('ZCARD', KEYS[1])",
+        "1", zbig]
+      expect: {equals: 4000}
+    - {command: [DEBUG, OBJECT, zbig], expect_difference: true, expect: {contains: "btree_leaves:"}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "rdb_bgsave_in_progress:0"}}
+    - command: [EVAL, "for i=1,12000 do if i % 6 == 3 then redis.call('ZREM', KEYS[1],\
+          \ string.format('m:%012d', i)) end end return redis.call('ZCARD', KEYS[1])",
+        "1", zbig]
+      expect: {equals: 2000}
+    - {command: [DEBUG, OBJECT, zbig], expect_difference: true, expect: {contains: "btree_leaves:"}}
+    - {command: [ZCARD, zbig], expect: {equals: 2000}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [leaves.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: leaves}

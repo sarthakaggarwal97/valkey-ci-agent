@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5a4ed2e08464..6dad976b853e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-03764041caee
+seed: 53512
+experiment:
+  id: proposed.zset-btree-leaves-debug-object
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

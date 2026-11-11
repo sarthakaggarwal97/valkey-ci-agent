@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.slot-stats-network-bytes
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER SLOT-STATS network-bytes-in/out fields and ORDERBY metrics,
+    driven through multibulk, inline, MULTI/EXEC, blocked-client and sharded pub/sub
+    accounting paths, compared with the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slotstats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    server_config: {cluster-slot-stats-enabled: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, KEYSLOT, foo], expect: {equals: 12182}}
+    - {command: [CLUSTER, KEYSLOT, bar], expect: {equals: 5061}}
+    - {command: [SET, foo, v1], expect: {equals: OK}}
+    - {command: [SETRANGE, foo, 9999, x], expect: {equals: 10000}}
+    - {command: [GET, foo]}
+    - {raw: "SET foo inlineval\r\n", connection: inline, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, foo, tx1], expect: {equals: QUEUED}}
+    - {command: [GET, foo], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, tx1]}}
+    - {command: [EXEC], expect: {error: true}}
+    - {command: [BLPOP, bar, 0.1]}
+    - {command: [LPUSH, bar, x1], expect: {equals: 1}}
+    - {command: [BLPOP, bar, 0], expect: {equals: [bar, x1]}}
+    - {command: [SSUBSCRIBE, foo], connection: sub}
+    - {command: [SPUBLISH, foo, hello], expect: {equals: 1}}
+    - {connection: sub, read: true}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 12182, 12182], expect_difference: true,
+      expect: {contains: network-bytes-in}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 5061, 5061], expect_difference: true,
+      expect: {contains: network-bytes-out}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, network-bytes-in, LIMIT, 3, DESC],
+      expect_difference: true, expect: {error: false}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, network-bytes-out, LIMIT, 3, ASC],
+      expect_difference: true, expect: {error: false}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, network-bytes-in, LIMIT, -1], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, no-such-metric], expect: {error: true}}
+    - {command: [CONFIG, SET, cluster-slot-stats-enabled, no], expect: {equals: OK}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, network-bytes-in], expect: {error: true}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 12182, 12182], expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slotstats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotstats}

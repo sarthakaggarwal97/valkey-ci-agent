@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "da286a599d24da71ad353c35e84d3d4b85f9b89c",
+  "parent": "5c073a58e40973d9996778a705196f2bd876bb05",
+  "pr": 806,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize the logic for checking the conversion of zset from listpack to skiplist during the ZADD operation. (#806)",
+  "date": "2024-07-25",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 9,
+    "executed": 9,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.6468,
+  "findings": [],
+  "recorded": []
+}

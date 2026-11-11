@@ -1,0 +1,106 @@
+extends: [valkey.base]
+id: proposed.dual-channel-pause-after-fork-grace
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1, maximum: 1}
+metadata:
+  description: >
+    Arm DEBUG PAUSE-AFTER-FORK on the primary and force a dual-channel full sync.
+    The primary SIGSTOPs itself after the replication fork (debugPauseProcess), the
+    replica loads the RDB and is stalled before its main channel can establish PSYNC,
+    the primary is resumed and must keep the protected RDB client until the DELAY-RDB-CLIENT-FREE-SECONDS
+    grace period expires, then free it with the grace log line. The stalled replica
+    then resumes and completes a clean full sync with no acknowledged write lost.
+inputs:
+  properties:
+    grace_s: {type: integer, minimum: 1, maximum: 10, default: 2}
+    replica_pause_s: {type: number, minimum: 6, maximum: 60, default: 15}
+startup_overlays:
+- overlay_id: dual-channel
+  server_config:
+    dual-channel-replication-enabled: "yes"
+    repl-diskless-sync: "yes"
+    repl-diskless-sync-delay: 0
+    repl-timeout: 60
+    enable-debug-command: "yes"
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 2}
+- use: valkey.action.commands
+  id: arm
+  depends_on: [warm-up]
+  config:
+    instances: primary
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, PAUSE-AFTER-FORK, 1], expect: {equals: OK}}
+    - {command: [DEBUG, DELAY-RDB-CLIENT-FREE-SECONDS, {$ref: inputs.grace_s}], expect: {
+        equals: OK}}
+    - {command: [DEBUG, CHANGE-REPL-ID], expect: {equals: OK}}
+    - {command: [CLIENT, KILL, TYPE, replica], expect: {min: 1}}
+- use: valkey.observer.log-trigger
+  id: replica-load
+  config:
+    instances: replicas
+    rules:
+    - {pattern: "Done loading RDB", publish: replica.rdb-loaded, evidence_id: valkey.dualchannel.rdb-loaded,
+      required: true}
+- use: valkey.fault.process-signal
+  id: resume-primary
+  config:
+    when_event: replica.rdb-loaded
+    delay_s: 2
+    instance: primary
+    signal: SIGSTOP
+    pause_s: 1
+- use: valkey.fault.process-signal
+  id: pause-replica
+  config:
+    when_event: replica.rdb-loaded
+    instance: replica
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.replica_pause_s}
+- use: valkey.observer.log-trigger
+  id: primary-grace
+  config:
+    instances: primaries
+    rules:
+    - {pattern: "failed to establish PSYNC within the grace period", publish: primary.grace-expired,
+      evidence_id: valkey.dualchannel.grace-expired, required: true}
+- use: valkey.observer.log
+  id: pause-log
+  config:
+    instances: primaries
+    expect:
+    - {pattern: "Process is about to stop", evidence_id: valkey.dualchannel.pause-logged,
+      required: true}
+    - {pattern: "Process has been continued", evidence_id: valkey.dualchannel.continue-logged}
+- use: valkey.action.wait-event
+  id: await-grace
+  depends_on: [arm]
+  config: {event: primary.grace-expired, timeout_s: 90}
+- use: valkey.action.commands
+  id: disarm
+  depends_on: [await-grace]
+  config:
+    instances: primary
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, PAUSE-AFTER-FORK, 0], expect: {equals: OK}}
+- use: valkey.action.poll
+  id: links-up
+  depends_on: [disarm]
+  config:
+    instances: replicas
+    section: replication
+    field: master_link_status
+    predicate: {equals: up}
+    timeout_s: 120
+- use: valkey.oracle.ledger
+  id: data
+  config: {converge_timeout_s: 120}
+required_events: [replica.rdb-loaded, primary.grace-expired]
+required_evidence:
+- {evidence_id: valkey.dualchannel.pause-logged, source: pause-log}

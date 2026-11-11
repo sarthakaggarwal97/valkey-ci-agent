@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.slot-stats-replication-bytes
+deployment:
+  modes: [standalone]
+metadata:
+  description: Per-slot network byte accounting across a cluster primary and its replica,
+    including replication-stream egress on the primary and the replica-side getKeySlot
+    backfill for replicated commands, compared with the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: repl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    server_config: {cluster-slot-stats-enabled: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, compare: skip, wait_s: 30, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [SET, foo, v1], node: 0, expect: {equals: OK}}
+    - {command: [MULTI], node: 0, expect: {equals: OK}}
+    - {command: [SET, foo, v2], node: 0, expect: {equals: QUEUED}}
+    - {command: [DEL, foo], node: 0, expect: {equals: QUEUED}}
+    - {command: [EXEC], node: 0, expect: {equals: [OK, 1]}}
+    - {command: [SET, foo, v3], node: 0, expect: {equals: OK}}
+    - {command: [SSUBSCRIBE, foo], node: 1, connection: rsub}
+    - {command: [SPUBLISH, foo, hello], node: 0}
+    - {command: [WAIT, 1, 1000], node: 0, wait_s: 30, expect: {min: 1}}
+    - {connection: rsub, node: 1, read: true}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 12182, 12182], node: 0, expect_difference: true,
+      expect: {contains: network-bytes-out}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 12182, 12182], node: 1, expect_difference: true,
+      expect: {contains: network-bytes-in}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, network-bytes-out, LIMIT, 3, DESC],
+      node: 0, expect_difference: true, expect: {error: false}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, network-bytes-in, LIMIT, 3, DESC],
+      node: 1, expect_difference: true, expect: {error: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [repl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: repl}

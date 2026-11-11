@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "facd123ce60e8d39cbdfcedd51c72569d755d68a",
+  "parent": "054ffd140f4982850aae147908b968215613641c",
+  "pr": 855,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update redis.conf to valkey.conf in log message (#855)",
+  "date": "2024-08-03",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2092,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewords a log message (redis.conf -> valkey.conf) in the replication bulk-transfer timeout warning in replicationCron. No command reply, replication logic, persistence, or config behaviour changes, so there is nothing a scenario could exercise or an oracle could judge; no test is needed."
+}

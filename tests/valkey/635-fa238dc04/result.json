@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fa238dc0496e6fbb3c2c031e18718589ea6695d6",
+  "parent": "aaa783436244956fbf0d198439c91709f25765e6",
+  "pr": 635,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update dir in valkey.conf to mention cluster-config-file (#635)",
+  "date": "2024-07-30",
+  "unstable": "2552339180c60d22b5255fdb38a6b8166c9fed04",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2053,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds three comment lines to the sample valkey.conf documenting that a relative cluster-config-file path is resolved under 'dir'. It is documentation only: no source code, config parsing, or runtime behaviour changes, so there is no path a scenario could reach or distinguish between the two builds."
+}
