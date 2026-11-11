@@ -318,13 +318,15 @@ cases:
     base_branch: unstable
 
   - id: tls-unload-almalinux9
-    about: A server that does not stop after the TLS module refuses to unload, in an AlmaLinux 9 container.
+    about: A dispatched Daily run that tested a fork's commit, in an AlmaLinux 9 container. Nothing in this repository failed.
     repo: valkey-io/valkey
     run_id: 42726097837
     job_id: 129532002851
     job: test-almalinux9-tls-module
     sha: d5b4fda740a4d71eb138ff3722442a9f5f546056
     base_branch: unstable
+    expect:
+      refuse: true
 
   - id: infra-checkout
     about: A job whose checkout failed before anything was built. No code change fixes it.
