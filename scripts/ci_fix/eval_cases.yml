@@ -646,3 +646,17 @@ cases:
     suggest: true
     expect:
       refuse: true
+
+  - id: bp90-defrag-aof-el9
+    about: The 9.0 failure the follow-up timed out on twice on 2026-11-11, verifying 40 loops of a slow test.
+    repo: valkey-io/valkey
+    run_id: 42886254469
+    job_id: 130075246335
+    job: test-almalinux9-jemalloc
+    sha: b3aafc7c1bb6ddfab60623224cd16044a33890c4
+    base_branch: '9.0'
+    pr: 5073
+    backport: true
+    test:
+      name: Active defrag - AOF loading
+      file: tests/unit/memefficiency.tcl
