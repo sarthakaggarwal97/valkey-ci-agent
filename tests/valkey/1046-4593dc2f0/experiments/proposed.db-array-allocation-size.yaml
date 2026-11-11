@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.db-array-allocation-size
+deployment:
+  modes: [standalone]
+metadata:
+  description: The server database array over-allocation inflates startup used_memory
+    on the parent build but not on the fixed build
+inputs:
+  properties:
+    databases: {type: integer, default: 10000}
+    max_mb: {type: integer, default: 40}
+components:
+- use: valkey.action.commands
+  id: memcheck
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {databases: {$ref: inputs.databases}}
+    timeout_s: 20
+    commands:
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [EVAL, "local m = redis.call('INFO','memory'); local u = tonumber(string.match(m,'used_memory:(%d+)'));\
+          \ return math.floor(u/1048576)", 0], expect_difference: true, expect: {
+        max: {$ref: inputs.max_mb}}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [memcheck.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: memcheck}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7fab15795f5d419acc284e002119190b00718881",
+  "parent": "56fd97733b60d59014c97fbca906ff3e20ef04f5",
+  "pr": 1058,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add log about old primary after myself failover (#1058)",
+  "date": "2024-09-20",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2699,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a serverLog(LL_NOTICE) line in clusterFailoverReplaceYourPrimary() recording the old primary when a replica promotes itself. It changes no command reply, state transition, replication, or persistence behavior. The logged values are safe: the function returns early when old_primary is NULL, and human_nodename is always an sds initialized to sdsempty(), the same idiom used by many existing log lines in cluster_legacy.c. A log-only change has no observable behavior for the fuzzer's oracles or a compared command sequence to detect, so no scenario is needed."
+}

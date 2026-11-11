@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 76a59788e6b9..38457b73208d.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-bacc1b91bd2b
+seed: 70002
+experiment:
+  id: proposed.cluster-sigterm-restart
+  inputs:
+    instance: replica
+    restart_delay_s: 1
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 2
+  base_port: 7100
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec

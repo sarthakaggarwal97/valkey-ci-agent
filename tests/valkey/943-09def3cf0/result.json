@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "09def3cf03b93586bd49f689753b7d749e3bea55",
+  "parent": "dcc7678fc4d4b7b26e79b76489d37a93064420c3",
+  "pr": 943,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Improve code readability in dict.c (#943)",
+  "date": "2024-09-13",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3339,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure readability refactor of dict.c: internal helpers are renamed (underscore prefixes removed), relocated, and marked static, a stale TODO comment is deleted, and unit tests are updated to the new names. Every moved function body (dictRehashStep, dictNextExp, dictInit, dictReset, dictResizeWithOptionalCheck, dictExpandIfAutoResizeAllowed, dictShrinkIfAutoResizeAllowed, dictClear, dictBucketRehash) is logically identical to the removed original, so no command reply, resize/rehash behaviour, or any other observable server behaviour changes. There is nothing for a scenario to exe"
+}

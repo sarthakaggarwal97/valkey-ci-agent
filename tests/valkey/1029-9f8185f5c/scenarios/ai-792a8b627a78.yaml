@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 17390383b58e..9f8185f5c80b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-792a8b627a78
+seed: 7000
+experiment:
+  id: proposed.benchmark-client-connect-error-message
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  base_port: 7000

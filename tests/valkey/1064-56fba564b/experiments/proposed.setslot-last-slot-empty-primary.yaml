@@ -1,0 +1,87 @@
+extends: [valkey.liveness]
+id: proposed.setslot-last-slot-empty-primary
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    With cluster-allow-replica-migration off, a primary that loses its last slot must
+    stay a live empty primary and its replica must stay attached. Drives both changed
+    paths: CLUSTER SETSLOT NODE on the losing node (the new serverAssert and empty-primary
+    log, replicated to its replica) and the gossip/UPDATE path on the losing primary
+    and on its replica (the new nodeIsPrimary guard). The change alters no replies,
+    so no command is marked expect_difference; a candidate crash, a lost role or link,
+    or an unexplained reply difference is the finding.
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: lastslot
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    server_config: {cluster-allow-replica-migration: "no"}
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.1.id>"], node: 2, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 2, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, MIGRATING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [GET, foo], node: 0, wait_s: 30, expect: {error: "MOVED 12182"}}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, MIGRATING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [INFO, replication], node: 1, compare: skip, expect: {contains: "role:master"}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.0.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [GET, foo], node: 1, wait_s: 30, expect: {error: "MOVED 12182"}}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, MIGRATING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [GET, foo], node: 0, wait_s: 30, expect: {error: "MOVED 12182"}}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, MIGRATING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.0.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [GET, foo], node: 1, wait_s: 30, expect: {error: "MOVED 12182"}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [INFO, replication], node: 1, compare: skip, expect: {contains: "role:master"}}
+    - {command: [INFO, replication], node: 2, compare: skip, expect: {contains: "role:slave"}}
+    - {command: [INFO, replication], node: 2, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [GET, foo], node: 0, expect: {equals: null}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [lastslot.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: lastslot}

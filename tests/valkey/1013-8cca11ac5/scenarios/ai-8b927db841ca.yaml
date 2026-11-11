@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey fa348e2e5970..8cca11ac5410.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8b927db841ca
+seed: 101
+experiment:
+  id: proposed.replica-tot-net-out
+  inputs:
+    resp: 2
+    dual_channel: 'no'
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ba71c7e56e40..4593dc2f0596.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e68f70f06f0b
+seed: 1046
+experiment:
+  id: proposed.db-array-allocation-size
+  inputs:
+    databases: 10000
+    max_mb: 40
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

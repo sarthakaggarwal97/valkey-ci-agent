@@ -1,0 +1,64 @@
+extends: [valkey.liveness]
+id: proposed.migrate-slot-import-socket-err
+deployment:
+  modes: [standalone]
+metadata:
+  description: Slot migration MIGRATE (RESTORE-ASKING) across a killed cached socket
+    and a timed-out target, then finalized
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.commands
+  id: slotmig
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 2
+    timeout_s: 15
+    commands:
+    - {command: [SET, foo, v1], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{foo}2", v2], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{foo}3", v3], node: 0, expect: {equals: OK}}
+    - {command: [SET, "{foo}4", v4], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, KEYSLOT, foo], node: 0, expect: {equals: 12182}}
+    - {command: [CLUSTER, SETSLOT, 12182, IMPORTING, <node.0.id>], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, MIGRATING, <node.1.id>], node: 0, expect: {
+        equals: OK}}
+    - {command: [MIGRATE, <node.1.host>, <node.1.port>, foo, 0, 1000], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLIENT, KILL, LADDR, "<node.1.host>:<node.1.port>"], node: 1, connection: killer,
+      compare: skip, expect: {min: 1}}
+    - {command: [MIGRATE, <node.1.host>, <node.1.port>, "", 0, 1000, KEYS, "{foo}2",
+        "{foo}3"], node: 0, expect: {equals: OK}}
+    - {command: [CLIENT, KILL, LADDR, "<node.1.host>:<node.1.port>"], node: 1, connection: killer,
+      compare: skip, expect: {min: 1}}
+    - {raw: "DEBUG SLEEP 4\r\n", node: 1, connection: sleeper, expect: {exists: false}}
+    - {command: [MIGRATE, <node.1.host>, <node.1.port>, "{foo}4", 0, 500], node: 0,
+      expect: {error: "IOERR"}}
+    - {command: [EXISTS, "{foo}4"], node: 0, expect: {equals: 1}}
+    - {command: [PING], node: 1, wait_s: 10, expect: {equals: PONG}}
+    - {read: true, node: 1, connection: sleeper, compare: skip}
+    - {command: [MIGRATE, <node.1.host>, <node.1.port>, "{foo}4", 0, 1000, REPLACE],
+      node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, <node.1.id>], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, <node.1.id>], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], node: 0, expect: {equals: 0}}
+    - {command: [GET, foo], node: 1, wait_s: 10, expect: {equals: v1}}
+    - {command: [MGET, "{foo}2", "{foo}3", "{foo}4"], node: 1, expect: {equals: [
+          v2, v3, v4]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slotmig.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotmig}

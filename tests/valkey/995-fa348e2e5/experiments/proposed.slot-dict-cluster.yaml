@@ -1,0 +1,66 @@
+extends: [valkey.liveness]
+id: proposed.slot-dict-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Cluster-mode dict indexing after the getKVStoreIndexForKey rewrite: keys must
+    land in the hash slot's dictionary (CLUSTER COUNTKEYSINSLOT/GETKEYSINSLOT), the
+    cached c->slot path must hold for overwrite, expire, lazy delete, SORT BY and
+    scripts, and shard pubsub and PUBSUB SHARDNUMSUB must use keyHashSlot; replies
+    compared with the parent on one-node clusters.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, foo, v1], expect: {equals: OK}}
+    - {command: [SET, bar, v2], expect: {equals: OK}}
+    - {command: [CLUSTER, KEYSLOT, foo], expect: {equals: 12182}}
+    - {command: [CLUSTER, KEYSLOT, bar], expect: {equals: 5061}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect: {equals: 1}}
+    - {command: [CLUSTER, GETKEYSINSLOT, 12182, 10], expect: {equals: [foo]}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 5061], expect: {equals: 1}}
+    - {command: [MSET, foo, x, bar, y], expect: {error: CROSSSLOT}}
+    - {command: [MSET, "{tag}a", 1, "{tag}b", 2], expect: {equals: OK}}
+    - {command: [PEXPIRE, foo, 1], expect: {equals: 1}}
+    - {command: [DEBUG, SLEEP, 0.1], expect: {equals: OK}}
+    - {command: [GET, foo], expect: {exists: false}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12182], expect: {equals: 0}}
+    - {command: [EXPIRE, bar, 100], expect: {equals: 1}}
+    - {command: [PERSIST, bar], expect: {equals: 1}}
+    - {command: [RPUSH, "{s}list", 3, 1, 2], expect: {equals: 3}}
+    - {command: [MSET, "{s}w_1", 10, "{s}w_2", 5, "{s}w_3", 1], expect: {equals: OK}}
+    - {command: [SORT, "{s}list", BY, "{s}w_*"], expect: {equals: ["3", "2", "1"]}}
+    - {command: [SORT, "{s}list", BY, "w_*"], expect: {error: "BY option of SORT denied"}}
+    - {command: [EVAL, "return redis.call('SET', KEYS[1], 'sv')", 1, "{s}k"], expect: {
+        equals: OK}}
+    - {command: [GET, "{s}k"], expect: {equals: sv}}
+    - {command: [SSUBSCRIBE, chan], connection: subB}
+    - {command: [SPUBLISH, chan, msg], expect: {equals: 1}}
+    - {command: [DEBUG, SLEEP, 0.1], expect: {equals: OK}}
+    - {connection: subB, read: true}
+    - {command: [PUBSUB, SHARDNUMSUB, chan, nochan], expect: {equals: [chan, 1, nochan,
+          0]}}
+    - {command: [SUNSUBSCRIBE, chan], connection: subB}
+    - {command: [SET, "{}x", v], expect: {equals: OK}}
+    - {command: [DEL, "{}x"], expect: {equals: 1}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8cca11ac541012e6bfbe995fb0367e6a058719b6",
+  "parent": "fa348e2e59700244e60df2edeb1219f2989e0284",
+  "pr": 1013,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix wrong count for replica's tot-net-out (#1013)",
+  "date": "2024-09-12",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.7972,
+  "findings": [],
+  "recorded": []
+}

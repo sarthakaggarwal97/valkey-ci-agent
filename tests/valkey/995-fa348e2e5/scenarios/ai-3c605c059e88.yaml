@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2b207ee1b380..fa348e2e5970.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3c605c059e88
+seed: 102
+experiment:
+  id: proposed.slot-dict-standalone
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

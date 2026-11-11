@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f89ff3137d437e7c43d910e4d28ed8fbed44decc",
+  "parent": "9f8185f5c80bc98bdbc631b90ccf13929d6a0cbc",
+  "pr": 1007,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add --moduleapi option to better use runtest-moduleapi (#1007)",
+  "date": "2024-09-17",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2379,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits the project's own test harness: runtest-moduleapi and tests/test_helper.tcl gain a --moduleapi flag that globs unit/moduleapi/*.tcl instead of hardcoding the test list. No server, tool, or module code changes; no runtime behaviour, reply, replication, persistence, or config path is affected, so there is nothing a fuzzer scenario could reach or break."
+}

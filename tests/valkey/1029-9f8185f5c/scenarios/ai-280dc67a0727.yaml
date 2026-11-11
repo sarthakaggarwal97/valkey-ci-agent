@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 17390383b58e..9f8185f5c80b.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-280dc67a0727
+seed: 1
+experiment:
+  id: proposed.benchmark-connect-error-message
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

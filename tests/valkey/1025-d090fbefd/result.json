@@ -1,0 +1,42 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d090fbefded1c1f67a4450100fe42d0dbdbad564",
+  "parent": "3cc619f6378e46b005604e9e24c75f948a7322db",
+  "pr": 1025,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add the missing help output for new command: client capa redirect (#1025)",
+  "date": "2024-09-13",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 0.6978,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-f168784ef3cd",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'help' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (CLIENT CAPA), 5 (CLIENT HELP extra-arg)"
+    },
+    {
+      "scenario": "ai-e9fc353db16b",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'help' returned ERROR: expectations both builds violate alike, so they are not about the change: 4 (CLIENT CAPA), 5 (CLIENT HELP extra-arg)"
+    }
+  ],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "56fba564b609d389fdd8f64e1234f46a052a6ed7",
+  "parent": "d07c29791a4cecd8bce76b05d046981f39fe5fcd",
+  "pr": 1064,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Print an empty primary log when primary lost its last slot (#1064)",
+  "date": "2024-09-23",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 6,
+    "executed": 5,
+    "percent": 83,
+    "uncovered": [
+      "src/cluster_legacy.c:2673"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 15.3206,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-34ea9f2b7a2e",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'lastslot' returned ERROR: expectations both builds violate alike, so they are not about the change: 22 (GET foo on node 1), 27 (GET foo)"
+    },
+    {
+      "scenario": "ai-477f04dcf8e4",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'lastslot' returned ERROR: expectations both builds violate alike, so they are not about the change: 22 (GET foo on node 1), 27 (GET foo)"
+    }
+  ]
+}

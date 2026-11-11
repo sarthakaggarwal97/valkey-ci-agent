@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d07c29791a4cecd8bce76b05d046981f39fe5fcd",
+  "parent": "56c90b78e3477fc5d10b341979af38ddafac54c6",
+  "pr": 1053,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use _Thread_local to solve threads.h build issue (#1053)",
+  "date": "2024-09-22",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2217,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only replaces a conditional #include <threads.h>/__thread fallback with the equivalent C11 keyword _Thread_local for the thread_local macro in zmalloc.c. It is a build/portability fix with identical runtime semantics (the same thread-local storage class for the used_memory thread index), so there is no behaviour change to test: any build that compiles produces the same code as before."
+}

@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ba71c7e56e40daed2871975b3ff433383a20cd93",
+  "parent": "ff69b4be1db24ea4e3b111e8e865af0df601b907",
+  "pr": 1042,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Copy 'errno' and use copied value in the if check of retry in cluster migrate commands socket_err block. (#1042)",
+  "date": "2024-09-18",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 3,
+    "executed": 3,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 8.3104,
+  "findings": [],
+  "recorded": []
+}

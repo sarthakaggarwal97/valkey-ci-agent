@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "56c90b78e3477fc5d10b341979af38ddafac54c6",
+  "parent": "ea7a7995ed072dcf836e6e38076305295d4abd15",
+  "pr": 1048,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix a typo in the valkey.conf (#1048)",
+  "date": "2024-09-21",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2055,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only fixes a typo in a comment line of valkey.conf (capitalized 'BE' changed to 'be'). Comments in the sample config are never parsed or acted on by the server; no code, default, or directive changed, so there is no behaviour to test."
+}

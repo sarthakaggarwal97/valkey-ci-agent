@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ff69b4be1db2..ba71c7e56e40.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-91f8bbf1345d
+seed: 103
+experiment:
+  id: proposed.migrate-slot-import-socket-err
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  base_port: 7200

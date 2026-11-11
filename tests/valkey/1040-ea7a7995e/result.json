@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ea7a7995ed072dcf836e6e38076305295d4abd15",
+  "parent": "d9c41e9ef9b787e4cbf27b14548de179267d9380",
+  "pr": 1040,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix default value of primary-reboot-down-after-period in sentinel.conf (#1040)",
+  "date": "2024-09-21",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2238,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits the example sentinel.conf shipped with the source, renaming the primary in the default 'SENTINEL primary-reboot-down-after-period' line from 'myprimary' to 'mymaster' so it matches the 'SENTINEL monitor mymaster' directive in the same file. No code path, command behaviour, reply, replication, failover, or persistence logic changes, and the fuzzer's servers never start from this example file, so no scenario can reach or validate the change."
+}

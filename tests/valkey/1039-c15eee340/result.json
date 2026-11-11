@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c15eee3407ecca35f274afc76e52a602a18ddfa1",
+  "parent": "56fba564b609d389fdd8f64e1234f46a052a6ed7",
+  "pr": 1039,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Changes `tcmalloc.h` header location (#1039)",
+  "date": "2024-09-23",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2207,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff only changes the #include path for the tcmalloc header in src/zmalloc.h (google/tcmalloc.h -> gperftools/tcmalloc.h), effective only when compiled with USE_TCMALLOC. It is a build fix with no runtime behaviour change: no command, reply, replication, persistence or memory-accounting logic is altered, and the fuzzer's builds are not tcmalloc builds, so no scenario can reach or distinguish anything. Whether it works is decided entirely by whether the build compiles."
+}

@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.client-help-capa
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLIENT HELP lists the CAPA subcommand added in 8.0.0; the parent build's
+    help omits it
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: help
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CLIENT, HELP], expect_difference: true, expect: {contains: "CAPA\
+          \ <option> [options...]"}}
+    - {command: [CLIENT, CAPA, REDIRECT], expect: {equals: OK}}
+    - {command: [CLIENT, CAPA, REDIRECT, REDIRECT, REDIRECT], expect: {equals: OK}}
+    - {command: [CLIENT, CAPA, no-such-capability], expect: {equals: OK}}
+    - {command: [CLIENT, CAPA], expect: {error: "Unknown subcommand"}}
+    - {command: [CLIENT, HELP, extra-arg], expect: {error: "Unknown subcommand"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [help.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: help}

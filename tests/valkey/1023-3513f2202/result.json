@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3513f220276c1905aeaadc362b59a7ed10cad168",
+  "parent": "8cca11ac541012e6bfbe995fb0367e6a058719b6",
+  "pr": 1023,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make clang-format insert a newline at end of file if missing (#1023)",
+  "date": "2024-09-11",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2023,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds InsertNewlineAtEOF to src/.clang-format, a formatting/tooling configuration only. It alters no compiled code and no runtime behaviour of the server or tools, so no scenario can exercise it."
+}

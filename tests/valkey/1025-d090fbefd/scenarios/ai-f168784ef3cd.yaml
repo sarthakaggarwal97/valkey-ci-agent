@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 3cc619f6378e..d090fbefded1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f168784ef3cd
+seed: 1101
+experiment:
+  id: proposed.client-help-capa
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

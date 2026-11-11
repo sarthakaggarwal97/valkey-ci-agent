@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ff69b4be1db2..ba71c7e56e40.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-46e2ccad714f
+seed: 102
+experiment:
+  id: proposed.migrate-socket-err-retry
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

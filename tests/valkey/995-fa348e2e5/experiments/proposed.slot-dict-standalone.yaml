@@ -1,0 +1,70 @@
+extends: [valkey.liveness]
+id: proposed.slot-dict-standalone
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Standalone paths that previously went through calculateKeySlot (shard pubsub,
+    expires and lazy deletes, UNLINK, LFU shared-object duplication in lookupKey,
+    SORT BY/GET, RDB reload via dbAddRDBLoad) must index dict 0 and never trip the
+    new serverAssert(cluster_enabled) in getKeySlot; replies compared with the parent.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "no", save: "", maxmemory: 100mb, maxmemory-policy: noeviction}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, shared, 123], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-lfu], expect: {equals: OK}}
+    - {command: [GET, shared], expect: {equals: "123"}}
+    - {command: [SET, k2, v, EX, 100], expect: {equals: OK}}
+    - {command: [PERSIST, k2], expect: {equals: 1}}
+    - {command: [EXPIRE, k2, 100], expect: {equals: 1}}
+    - {command: [GETEX, k2, PERSIST], expect: {equals: v}}
+    - {command: [SET, k2, w], expect: {equals: OK}}
+    - {command: [PEXPIRE, k2, 1], expect: {equals: 1}}
+    - {command: [DEBUG, SLEEP, 0.1], expect: {equals: OK}}
+    - {command: [GET, k2], expect: {exists: false}}
+    - {command: [SSUBSCRIBE, news], connection: subA}
+    - {command: [SPUBLISH, news, hello], expect: {equals: 1}}
+    - {command: [DEBUG, SLEEP, 0.1], expect: {equals: OK}}
+    - {connection: subA, read: true}
+    - {command: [PUBSUB, SHARDCHANNELS], expect: {equals: [news]}}
+    - {command: [PUBSUB, SHARDNUMSUB, news, missing], expect: {equals: [news, 1, missing,
+          0]}}
+    - {command: [SUNSUBSCRIBE, news], connection: subA}
+    - {command: [PUBSUB, SHARDCHANNELS], expect: {equals: []}}
+    - {command: [RPUSH, mylist, 3, 1, 2], expect: {equals: 3}}
+    - {command: [MSET, weight_1, 10, weight_2, 5, weight_3, 1], expect: {equals: OK}}
+    - {command: [SORT, mylist, BY, "weight_*"], expect: {equals: ["3", "2", "1"]}}
+    - {command: [SORT, mylist, BY, "weight_*", GET, "weight_*"], expect: {equals: [
+          "1", "5", "10"]}}
+    - {command: [UNLINK, mylist, weight_1], expect: {equals: 2}}
+    - {command: [DEL, weight_2], expect: {equals: 1}}
+    - {command: [SET, "", empty], expect: {equals: OK}}
+    - {command: [EXPIRE, "", 100], expect: {equals: 1}}
+    - {command: [DEL, ""], expect: {equals: 1}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, t1, a], expect: {equals: QUEUED}}
+    - {command: [GET, t1], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, a]}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, shared], expect: {equals: "123"}}
+    - {command: [DBSIZE], expect: {equals: 3}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

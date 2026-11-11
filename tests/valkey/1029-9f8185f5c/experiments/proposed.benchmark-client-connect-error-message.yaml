@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-client-connect-error-message
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark's per-client connect failure (fd exhaustion) logs
+    'Could not connect to server at', for TCP and for a unix socket
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: inputs.parent}
+    server: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-benchmark, args: [-h, 127.0.0.1, -p, $port, -c, 1000000, -n, 1,
+        -t, ping], expect_difference: true, expect: {exit: {equals: 1}, stderr: {
+          contains: "Could not connect to server at "}}}
+    - {tool: valkey-benchmark, args: [-s, $socket, -c, 1000000, -n, 1, -t, ping],
+      expect_difference: true, expect: {exit: {equals: 1}, stderr: {contains: "Could\
+            \ not connect to server at "}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

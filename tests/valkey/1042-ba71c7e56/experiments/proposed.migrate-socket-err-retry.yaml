@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.migrate-socket-err-retry
+deployment:
+  modes: [standalone]
+metadata:
+  description: MIGRATE retry-on-dead-socket and no-retry-on-timeout behave the same
+    after copying errno in socket_err
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: migrate
+  config:
+    compare_with: {$ref: inputs.parent}
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SET, k1, v1], node: 0, expect: {equals: OK}}
+    - {command: [SET, k2, v2], node: 0, expect: {equals: OK}}
+    - {command: [SET, k3, v3], node: 0, expect: {equals: OK}}
+    - {command: [SET, k4, v4], node: 0, expect: {equals: OK}}
+    - {command: [MIGRATE, <node.1.host>, <node.1.port>, k1, 0, 1000], node: 0, expect: {
+        equals: OK}}
+    - {command: [GET, k1], node: 1, expect: {equals: v1}}
+    - {command: [EXISTS, k1], node: 0, expect: {equals: 0}}
+    - {command: [CLIENT, KILL, LADDR, "<node.1.host>:<node.1.port>"], node: 1, connection: killer,
+      compare: skip, expect: {min: 1}}
+    - {command: [MIGRATE, <node.1.host>, <node.1.port>, "", 0, 1000, KEYS, k2, k3],
+      node: 0, expect: {equals: OK}}
+    - {command: [MGET, k2, k3], node: 1, expect: {equals: [v2, v3]}}
+    - {raw: "DEBUG SLEEP 4\r\n", node: 1, connection: sleeper, expect: {exists: false}}
+    - {command: [MIGRATE, <node.1.host>, <node.1.port>, k4, 1, 500], node: 0, expect: {
+        error: "IOERR"}}
+    - {command: [EXISTS, k4], node: 0, expect: {equals: 1}}
+    - {command: [PING], node: 1, wait_s: 10, expect: {equals: PONG}}
+    - {read: true, node: 1, connection: sleeper, compare: skip}
+    - {command: [SELECT, 1], node: 1, expect: {equals: OK}}
+    - {command: [EXISTS, k4], node: 1, wait_s: 5, expect: {equals: 1}}
+    - {command: [MIGRATE, <node.1.host>, <node.1.port>, nosuchkey, 0, 1000], node: 0,
+      expect: {equals: NOKEY}}
+    - {command: [SET, k5, v5], node: 0, expect: {equals: OK}}
+    - {command: [MIGRATE, <node.1.host>, <node.1.port>, k5, 0, 1000, COPY], node: 0,
+      expect: {equals: OK}}
+    - {command: [EXISTS, k5], node: 0, expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [migrate.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: migrate}

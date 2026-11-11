@@ -1,0 +1,25 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-connect-error-message
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark connection-failure message says 'server' instead of
+    'Redis', on the TCP and unix-socket paths, and a successful run is otherwise unchanged
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 30
+    runs:
+    - {tool: valkey-benchmark, args: [-h, 127.0.0.1, -p, 1, -c, 1, -n, 1, -t, ping],
+      expect_difference: true, expect: {exit: {equals: 1}, stderr: {contains: "Could\
+            \ not connect to server at 127.0.0.1:1"}}}
+    - {tool: valkey-benchmark, args: [-s, no-such.sock, -c, 1, -n, 1, -t, ping], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "Could not connect to server\
+            \ at no-such.sock"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 1, -n, 10, -t, ping, -q], compare: skip,
+      expect: {exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

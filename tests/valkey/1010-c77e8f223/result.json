@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c77e8f223ce18b51749fb7d1191ed305a64eda79",
+  "parent": "4033c99ef522cd66150878dee8a97dc057b05a25",
+  "pr": 1010,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Added .git-blame-ignore-revs (#1010)",
+  "date": "2024-09-10",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2064,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds only a .git-blame-ignore-revs file, metadata for git-blame to skip formatting/rename commits. It contains no code, config, build, or behavior change in Valkey itself, so no scenario can reach it and none is needed."
+}

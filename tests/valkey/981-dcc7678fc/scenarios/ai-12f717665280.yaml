@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d090fbefded1..dcc7678fc4d4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-12f717665280
+seed: 98101
+experiment:
+  id: proposed.setslot-replica-shard-jump
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

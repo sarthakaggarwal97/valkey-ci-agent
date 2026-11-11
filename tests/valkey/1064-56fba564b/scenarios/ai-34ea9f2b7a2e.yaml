@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d07c29791a4c..56fba564b609.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-34ea9f2b7a2e
+seed: 1101
+experiment:
+  id: proposed.setslot-last-slot-empty-primary
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

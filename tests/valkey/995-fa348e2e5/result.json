@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fa348e2e59700244e60df2edeb1219f2989e0284",
+  "parent": "2b207ee1b3808c5eb5de6879651104044ca162b2",
+  "pr": 995,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize the per slot dictionary by checking for cluster mode earlier (#995)",
+  "date": "2024-09-11",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 28,
+    "executed": 28,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.9048,
+  "findings": [],
+  "recorded": []
+}

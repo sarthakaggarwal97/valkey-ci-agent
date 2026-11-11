@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.setslot-replica-shard-jump
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    A replica that receives the replicated CLUSTER SETSLOT taking its shard's last
+    slot must reconfigure itself as a replica of the new slot owner at once (valkey-io/valkey
+    PR 981), survive freeing its primary link inside the replicated command (protectClient),
+    and complete the required full sync with the new primary (dont_cache_primary).
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: setslot
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, SETSLOT, "0", IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "0", MIGRATING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "0", NODE, "<node.1.id>"], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "0", NODE, "<node.1.id>"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.1.id>"], node: 2, expect: {equals: OK}}
+    - {command: [WAIT, "1", "100"], node: 1, wait_s: 30, expect: {equals: 1}}
+    - {command: [CONFIG, SET, cluster-allow-replica-migration, "no"], node: 1, expect: {
+        equals: OK}}
+    - {command: [DEBUG, DROP-CLUSTER-PACKET-FILTER, "1"], node: 2, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "0", IMPORTING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "0", MIGRATING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "0", NODE, "<node.0.id>"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "0", NODE, "<node.0.id>", TIMEOUT, "5000"], node: 1,
+      expect_difference: true, expect: {error: true}}
+    - {command: [ROLE], node: 2, expect_difference: true, expect: {contains: "<node.0.port>"}}
+    - {command: [ROLE], node: 2, wait_s: 30, expect_difference: true, expect: {contains: connected}}
+    - {command: [DEBUG, DROP-CLUSTER-PACKET-FILTER, "-1"], node: 2, expect: {equals: OK}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    - {command: [PING], node: 2, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [setslot.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: setslot}

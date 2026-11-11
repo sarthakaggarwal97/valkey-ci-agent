@@ -1,0 +1,57 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dcc7678fc4d4b7b26e79b76489d37a93064420c3",
+  "parent": "d090fbefded1c1f67a4450100fe42d0dbdbad564",
+  "pr": 981,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix replica unable trigger migration when it received CLUSTER SETSLOT in advance (#981)",
+  "date": "2024-09-13",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 9,
+    "executed": 9,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 12.3483,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 12 (ROLE on node 2) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[\"slave\",\"127.0.0.1\",\"<node.0.port>\",\"handshake\",-1]}, not {\"r",
+      "scenario": "ai-12f717665280",
+      "seed": 98101,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #981",
+      "fingerprint": "e5d1a1ebb9bde7f21f96",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/125"
+    },
+    {
+      "rule": "check",
+      "detail": "variant-mismatch: command 12 (ROLE on node 2) replies otherwise with server_config {\"hash-max-listpack-entries\":0,\"list-max-listpack-size\":0,\"set-max-intset-entries\":0,\"set-max-listpack-entries\":0,\"zset-max-listpack-entries\":0}: {\"reply\":[\"slave\",\"127.0.0.1\",\"<node.0.port>\",\"handshake\",-1]}, not {\"r",
+      "scenario": "ai-60a4dc922a86",
+      "seed": 98102,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "not reproduced",
+      "fingerprint": "e5d1a1ebb9bde7f21f96",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}
