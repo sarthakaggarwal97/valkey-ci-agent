@@ -89,8 +89,11 @@ class Case:
     test_name: str = ""
     test_file: str = ""
     # The known fix: the upstream commit to port, or the pull request a person wrote.
+    # A failure with neither is one nobody has fixed yet: its candidate is read, not scored.
     expect_port: str = ""
     expect_pull: int = 0
+    # A failure no code change fixes (a runner that could not check out).
+    expect_refusal: bool = False
     # What the bot lacks for this case, for whoever reads its result.
     gap: str = ""
 
@@ -125,6 +128,7 @@ def load_cases(path: Path = CASES_FILE) -> dict[str, Case]:
             scheduled=bool(item.get("scheduled")), backport=bool(item.get("backport")),
             test_name=str(test.get("name") or ""), test_file=str(test.get("file") or ""),
             expect_port=str(expect.get("port") or ""), expect_pull=int(expect.get("pull") or 0),
+            expect_refusal=bool(expect.get("refuse")),
             gap=str(item.get("gap") or ""),
         )
         problem = _problem(case)
@@ -142,8 +146,8 @@ def _problem(case: Case) -> str:
         return "it needs repo, run_id, job_id, job and base_branch"
     if not is_full_sha(case.sha):
         return "its sha is not a full commit SHA"
-    if bool(case.expect_port) == bool(case.expect_pull):
-        return "it expects exactly one of a port and a pull request"
+    if sum(map(bool, (case.expect_port, case.expect_pull, case.expect_refusal))) > 1:
+        return "it expects at most one of a port, a pull request and a refusal"
     if case.expect_port and not (is_full_sha(case.expect_port) and case.backport):
         return "a port is a full commit SHA, expected of a backport case"
     return ""
@@ -203,15 +207,27 @@ def report_result(gh: Any, plan: FixPlan, result: FixResult) -> dict[str, Any]: 
 
 def score_case(case: Case, outcome: FixOutcome, known: tuple[tuple[str, ...], str] = ((), "")) -> Score:
     """Compare ``outcome`` with ``case``'s known fix; ``known`` is a known pull request's files and patch."""
-    expected = f"port of `{case.expect_port[:12]}`" if case.expect_port else f"pull request #{case.expect_pull}"
+    expected = (
+        f"port of `{case.expect_port[:12]}`" if case.expect_port
+        else f"pull request #{case.expect_pull}" if case.expect_pull
+        else "a refusal" if case.expect_refusal else "no fix is known"
+    )
     candidate = outcome.candidate
     if candidate is None:
         return Score(case.id, "failed", outcome.error or "the fix ended without a candidate", expected)
     if candidate.action is CandidateAction.REFUSE:
-        return Score(case.id, "refused", candidate.summary, expected, got="refusal")
+        return Score(case.id, "match" if case.expect_refusal else "refused", candidate.summary, expected, got="refusal")
     if case.expect_port:
         return _port_score(case, candidate, expected)
-    return _patch_score(case, candidate, expected, known)
+    if case.expect_pull:
+        return _patch_score(case, candidate, expected, known)
+    got = (
+        f"port of `{candidate.port_commit[:12]}`" if candidate.action is CandidateAction.PORT
+        else "patch to " + ", ".join(f"`{path}`" for path in candidate.changed_paths)
+    )
+    if case.expect_refusal:
+        return Score(case.id, "differs", "It proposed a change where none fixes the failure.", expected, got=got)
+    return Score(case.id, "unscored", "Nobody has fixed this failure yet: read the candidate.", expected, got=got)
 
 
 def _port_score(case: Case, candidate: FixCandidate, expected: str) -> Score:

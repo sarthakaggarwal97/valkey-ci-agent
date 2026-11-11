@@ -53,8 +53,8 @@ def test_every_case_in_the_repository_can_be_replayed_and_scored():
     ({"id": "Not An Id"}, "its id is not"),
     ({"sha": "abc123"}, "not a full commit SHA"),
     ({"job_id": 0}, "it needs repo, run_id, job_id, job and base_branch"),
-    ({"expect": {}}, "exactly one of a port and a pull request"),
-    ({"expect": {"pull": 9, "port": _PORT}}, "exactly one of a port and a pull request"),
+    ({"expect": {"pull": 9, "port": _PORT}}, "at most one of a port, a pull request and a refusal"),
+    ({"expect": {"pull": 9, "refuse": True}}, "at most one of a port, a pull request and a refusal"),
     ({"expect": {"port": _PORT}}, "expected of a backport case"),  # not a backport: nothing to port from
 ])
 def test_a_case_that_could_not_be_replayed_or_scored_is_refused(tmp_path, change, problem):
@@ -237,3 +237,21 @@ def test_the_eval_runs_the_production_fix_and_can_write_nowhere():
     assert token["if"] == "inputs.front_door != 'eval'"
     # A real fix still plans and publishes with the App: only its secrets stopped being required of a replay.
     assert shared["on"]["workflow_call"]["secrets"]["AWS_ROLE_ARN"] == {"required": "true"}
+
+
+def test_a_failure_nobody_fixed_is_read_not_scored_and_an_expected_refusal_matches(tmp_path):
+    from scripts.ci_fix.eval import score_case
+    from scripts.ci_fix.models import CandidateAction, FixCandidate, FixOutcome
+
+    base = {"id": "c", "about": "a", "repo": "o/r", "run_id": 1, "job_id": 2, "job": "j", "sha": _SHA,
+            "base_branch": "unstable"}
+    path = tmp_path / "cases.yml"
+    path.write_text(yaml.safe_dump({"cases": [base, {**base, "id": "r", "expect": {"refuse": True}}]}), encoding="utf-8")
+    cases = load_cases(path)
+    patch = FixOutcome(candidate=FixCandidate(action=CandidateAction.PATCH, changed_paths=("a.c",), patch="+x"))
+    refusal = FixOutcome(candidate=FixCandidate(action=CandidateAction.REFUSE, summary="infrastructure"))
+
+    assert score_case(cases["c"], patch).verdict == "unscored"
+    assert score_case(cases["c"], refusal).verdict == "refused"
+    assert score_case(cases["r"], refusal).verdict == "match"
+    assert score_case(cases["r"], patch).verdict == "differs"

@@ -218,3 +218,121 @@ cases:
     expect:
       pull: 5026
     gap: The log names no test, so a fix is reviewed, not run.
+
+  # --- Paths the first fourteen cases never ran: a job's container (EL8, EL9,
+  # Fedora, Alpine), an ARM runner, a 32-bit build, a 22 MB log, a sentinel
+  # test on the default branch, and a failure no code change fixes.
+
+  - id: empty-shard-almalinux8
+    about: "#5215: an empty-shard slot migration test, in an AlmaLinux 8 container. The known fix is in src/cluster_legacy.c."
+    repo: valkey-io/valkey
+    run_id: 42538873922
+    job_id: 128909156829
+    job: test-almalinux8-jemalloc
+    sha: aa7545348b688b469d073a01ce4836ed637577f9
+    base_branch: unstable
+    issue: 5215
+    scheduled: true
+    test:
+      name: Empty-shard migration target is auto-updated after failover in target shard
+      file: tests/unit/cluster/slot-migration.tcl
+    expect:
+      pull: 5204
+
+  - id: empty-shard-alpine
+    about: "#5215: the same slot migration test, in an Alpine container (musl)."
+    repo: valkey-io/valkey
+    run_id: 41255833447
+    job_id: 124698680767
+    job: test-alpine-jemalloc
+    sha: 3ef5fef19fe4ca9da1841282205239705edc23e4
+    base_branch: unstable
+    issue: 5215
+    scheduled: true
+    test:
+      name: Empty-shard migration target is auto-updated after failover in target shard
+      file: tests/unit/cluster/slot-migration.tcl
+    expect:
+      pull: 5204
+
+  - id: empty-shard-arm
+    about: "#5215: the same slot migration test, on an ARM runner."
+    repo: valkey-io/valkey
+    run_id: 42727557710
+    job_id: 129536983542
+    job: test-ubuntu-arm
+    sha: 116e7f9534440b7b8d4370a6d3038eb760acbcee
+    base_branch: unstable
+    issue: 5215
+    test:
+      name: Empty-shard migration target is auto-updated after failover in target shard
+      file: tests/unit/cluster/slot-migration.tcl
+    expect:
+      pull: 5204
+
+  - id: defrag-aof-32bit
+    about: "#3954: active defrag while loading an AOF, in the 32-bit build. Nobody has fixed it."
+    repo: valkey-io/valkey
+    run_id: 42428677977
+    job_id: 128572475338
+    job: test-ubuntu-32bit
+    sha: aa7545348b688b469d073a01ce4836ed637577f9
+    base_branch: unstable
+    issue: 3954
+    scheduled: true
+    test:
+      name: Active defrag - AOF loading
+      file: tests/unit/memefficiency.tcl
+
+  - id: zset-btree-ubsan
+    about: A ZSET btree test under the undefined-behavior sanitizer, with no issue filed yet.
+    repo: valkey-io/valkey
+    run_id: 42929407205
+    job_id: 130224054206
+    job: test-sanitizer-undefined (gcc)
+    sha: 9abbfd2557a492e325a164a93122f9626abc0b1d
+    base_branch: unstable
+    scheduled: true
+    test:
+      name: ZSET btree leaf compaction pauses while a child process exists
+      file: tests/unit/type/zset.tcl
+
+  - id: sentinel-reboot
+    about: "#3890: a sentinel test, which names no file and which no command here runs, on the default branch."
+    repo: valkey-io/valkey
+    run_id: 40792659062
+    job_id: 123181412477
+    job: test-ubuntu-tls-no-tls
+    sha: f2ca837edc75e2238f880d89ade60babb6e6ed9e
+    base_branch: unstable
+    issue: 3890
+    scheduled: true
+
+  - id: cant-start-fedora
+    about: Servers that cannot start with the TLS module in a Fedora container; the job's log is 22 MB.
+    repo: valkey-io/valkey
+    run_id: 42727447250
+    job_id: 129536613368
+    job: test-fedoralatest-tls-module
+    sha: d5b4fda740a4d71eb138ff3722442a9f5f546056
+    base_branch: unstable
+
+  - id: tls-unload-almalinux9
+    about: A server that does not stop after the TLS module refuses to unload, in an AlmaLinux 9 container.
+    repo: valkey-io/valkey
+    run_id: 42726097837
+    job_id: 129532002851
+    job: test-almalinux9-tls-module
+    sha: d5b4fda740a4d71eb138ff3722442a9f5f546056
+    base_branch: unstable
+
+  - id: infra-checkout
+    about: A job whose checkout failed before anything was built. No code change fixes it.
+    repo: valkey-io/valkey
+    run_id: 42974569848
+    job_id: 130370534612
+    job: test-sanitizer-undefined (gcc)
+    sha: 9abbfd2557a492e325a164a93122f9626abc0b1d
+    base_branch: unstable
+    expect:
+      refuse: true
