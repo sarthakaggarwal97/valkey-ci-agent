@@ -1,0 +1,49 @@
+extends: [valkey.base]
+id: proposed.diskless-sync-kill-syncing-replica
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Force a full resync whose RDB child is slowed by rdb-key-save-delay,
+    then SIGKILL the only syncing replica mid-transfer, so the primary must reap the
+    RDB child from unlinkClient/freeClient when the last waiting replica drops; the
+    replica restarts, resyncs again, and no acknowledged write may be lost
+inputs:
+  properties:
+    warm_up_s: {type: number, default: 2, minimum: 0.5, maximum: 30}
+    sync_wait_s: {type: number, default: 1.5, minimum: 0.1, maximum: 30}
+    settle_s: {type: number, default: 10, minimum: 1, maximum: 60}
+components:
+- use: valkey.fault.process-signal
+  id: first-kill
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: SIGKILL
+    restart_mode: immediate
+- use: valkey.fault.process-signal
+  id: mid-transfer-kill
+  config:
+    when_event: await-sync.completed
+    instance: replica
+    signal: SIGKILL
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, first-kill, mid-transfer-kill]
+  config: {seconds: {$ref: inputs.warm_up_s}}
+- use: valkey.action.sleep
+  id: await-sync
+  depends_on: [warm-up]
+  config: {seconds: {$ref: inputs.sync_wait_s}}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [await-sync]
+  config: {seconds: {$ref: inputs.settle_s}}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed, await-sync.completed, settle.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: first-kill}
+- {evidence_id: valkey.fault.injected, source: mid-transfer-kill}

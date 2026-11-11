@@ -1,0 +1,28 @@
+extends: [valkey.liveness]
+id: proposed.function-restore-free-sync
+deployment:
+  modes: [standalone]
+metadata:
+  description: FUNCTION RESTORE frees the swapped-out current ctx (sync branch) and
+    the leftover payload ctx (restore-end path)
+components:
+- use: valkey.action.commands
+  id: restore
+  config:
+    resp: 2
+    timeout_s: 15
+    commands:
+    - {command: [DEBUG, SET-SKIP-CHECKSUM-VALIDATION, "1"], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nserver.register_function('myfunc',\
+          \ function(keys, args) return 1 end)"], expect: {equals: mylib}}
+    - {command: [FUNCTION, RESTORE, !!binary "CwAAAAAAAAAAAA==", FLUSH], expect: {
+        equals: OK}}
+    - {command: [FUNCTION, LIST], expect: {equals: []}}
+    - {command: [FUNCTION, LOAD, "#!lua name=lib2\nserver.register_function('f2',\
+          \ function(keys, args) return 2 end)"], expect: {equals: lib2}}
+    - {command: [FUNCTION, RESTORE, !!binary "CwAAAAAAAAAAAA==", APPEND], expect: {
+        equals: OK}}
+    - {command: [FUNCTION, RESTORE, !!binary "CwAAAAAAAAAAAA==", REPLACE], expect: {
+        equals: OK}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: restore}

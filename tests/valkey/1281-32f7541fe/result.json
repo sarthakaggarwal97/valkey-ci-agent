@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "32f7541fe34e5e0520a5917d09661756d330bd11",
+  "parent": "863d31280369a290c5b51f446a2c018ce3e98da0",
+  "pr": 1281,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Simplify dictType callbacks and move some macros from dict.h to dict.c (#1281)",
+  "date": "2024-11-14",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5728,
+  "findings": [],
+  "recorded": [],
+  "reason": "Pure mechanical refactor: the change removes the unused `dict *d` parameter from the dictType keyDup/keyCompare/keyDestructor/valDestructor callbacks and updates all implementations and call sites; every affected callback previously began with UNUSED(d), so none ever used the parameter. The dictFreeKey/dictFreeVal macros moved from dict.h into dict.c as static functions used nowhere else, and dictCompareKeys became a static inline with identical logic. No command reply, data path, replication, persistence, or module-visible behavior changes, so no scenario can observe a difference between the "
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "94113fde7fb251e24911e51ab8cf2a696864ebb6",
+  "parent": "aa2dd3ecb82bce5d76f7796c5e6df3e5c6e55203",
+  "pr": 1271,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Improvements for TLS with I/O threads (#1271)",
+  "date": "2024-11-17",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.1886,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to src/tls.c: it fixes main-thread/I/O-thread races on SSL objects (caching SSL_pending() in a new TLS_CONN_FLAG_HAS_PENDING flag set at each SSL_read, narrowing ERR_clear_error() to just before each SSL call, and running updatePendingData on write events too). Every modified line executes only on TLS connections. The fuzzer cannot create one: the provider rejects tls-port in any server_config or instance_configs (and the private servers of valkey.action.commands/valkey.action.tools apply the same refusal list, while CONFIG SET of a port is refused in sequences), no inst"
+}

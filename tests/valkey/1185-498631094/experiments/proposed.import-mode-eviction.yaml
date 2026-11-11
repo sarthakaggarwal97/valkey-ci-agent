@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.import-mode-eviction
+deployment:
+  modes: [standalone]
+metadata:
+  description: Import mode forbids eviction on a primary under maxmemory allkeys-lru,
+    data survives, and the key is still readable after leaving import mode
+components:
+- use: valkey.action.commands
+  id: evict
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, import-mode, yes], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CLIENT, IMPORT-SOURCE, ON], expect_difference: true, expect: {equals: OK}}
+    - {command: [SET, key, val], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-lru], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, 1], expect: {equals: OK}}
+    - {command: [SET, key1, val1], expect: {error: "OOM"}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 1}}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: [CLIENT, IMPORT-SOURCE, OFF], expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, SET, import-mode, no], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [GET, key], expect_difference: true, expect: {equals: val}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [evict.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evict}

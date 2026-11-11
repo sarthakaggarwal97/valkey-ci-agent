@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f553ccbda674..6038eda010df.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-92098ac15f25
+seed: 1101
+experiment:
+  id: proposed.function-restore-free-sync
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
+  server_config:
+    lazyfree-lazy-user-flush: 'no'

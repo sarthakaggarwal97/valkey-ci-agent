@@ -1,0 +1,64 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "92181b67970efad6df82ea2319ccd4a266dfec5e",
+  "parent": "4e2493e5c961b36e6832e8d6ea259939b0cf0fde",
+  "pr": 1131,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix primary crash when processing dirty slots during shutdown wait / failover wait / client pause (#1131)",
+  "date": "2024-11-15",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.9061,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: server.c:3319 '!(isPausedActions(PAUSE_ACTION_REPLICA) && (!server.client_pause_in_transaction))' is not true",
+      "scenario": "ai-9a32df7d4c21",
+      "seed": 11131,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1131",
+      "fingerprint": "d1196f8635848c439280",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: server.c:3319 '!(isPausedActions(PAUSE_ACTION_REPLICA) && (!server.client_pause_in_transaction))' is not true",
+      "scenario": "ai-340451069e8b",
+      "seed": 11231,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1131",
+      "fingerprint": "d1196f8635848c439280",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-539ebad5a0e3",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'dirtyslot' returned ERROR: the parent did not answer command 6 (CLUSTER COUNTKEYSINSLOT 12182): TimeoutError: Timeout reading from /tmp/vfc-w2z67pm2/s.sock"
+    }
+  ]
+}

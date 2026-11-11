@@ -1,0 +1,55 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4e2493e5c961b36e6832e8d6ea259939b0cf0fde",
+  "parent": "d3f3b9cc3a452b6d18e9e862dcae5a923952c8da",
+  "pr": 1227,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Kill diskless fork child asap when the last replica drop (#1227)",
+  "date": "2024-11-15",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 4,
+  "recall": false,
+  "coverage": {
+    "lines": 9,
+    "executed": 8,
+    "percent": 88,
+    "uncovered": [
+      "src/networking.c:1789"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 16.7713,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-8b83b7fad550",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "required evidence was not observed: valkey.diskless.last-replica-drop-logged from primary-logs; the run did not reach what it tests, so no trustworthy verdict is possible"
+    },
+    {
+      "scenario": "ai-9c467496d507",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "required evidence was not observed: valkey.diskless.last-replica-drop-logged from primary-logs; the run did not reach what it tests, so no trustworthy verdict is possible"
+    },
+    {
+      "scenario": "ai-84165ced0e9e",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "required evidence was not observed: valkey.diskless.last-replica-drop-logged from primary-logs; the run did not reach what it tests, so no trustworthy verdict is possible"
+    },
+    {
+      "scenario": "ai-a013e78d1765",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "required evidence was not observed: valkey.diskless.last-replica-drop-logged from primary-logs; the run did not reach what it tests, so no trustworthy verdict is possible"
+    }
+  ]
+}

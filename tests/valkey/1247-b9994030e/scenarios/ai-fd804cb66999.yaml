@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 32f7541fe34e..b9994030e952.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fd804cb66999
+seed: 1002
+experiment:
+  id: proposed.clusterbus-handshake-timeout
+  inputs:
+    node_timeout_ms: 15000
+    converge_wait_s: 60
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

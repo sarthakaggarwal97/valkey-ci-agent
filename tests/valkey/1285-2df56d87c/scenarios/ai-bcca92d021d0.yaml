@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a2d22c63c007..2df56d87c0eb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-bcca92d021d0
+seed: 101
+experiment:
+  id: proposed.empty-primary-dirty-slot
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

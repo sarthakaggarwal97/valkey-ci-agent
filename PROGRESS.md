@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-11T02:06+00:00.
+Updated 2026-11-11T02:16+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1633 | 889 | #1298 (2024-11-21) | 288 | 233.3 |
+| valkey-io/valkey | 1654 | 868 | #1009 (2024-11-11) | 285 | 236.3 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.6 |
 | valkey-io/valkey-json | 64 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 9.1 |
 | valkey-io/valkey-search | 672 | 0 | f8106e72e984 (2024-11-27) | 1 | 96.0 |
@@ -13,28 +13,28 @@ Updated 2026-11-11T02:06+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-11T00:09:59+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42916522777): 20 merge(s) tested, 3 without a code change.
+[2026-11-11T02:16:57+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/42929188310): 20 merge(s) tested, 2 without a code change.
 
-- [valkey-io/valkey#1209](https://github.com/valkey-io/valkey/pull/1209) ([tests](tests/valkey/1209-4695d118d/)): RDMA builtin support (#1209): 2 of 4 test(s) reached the change, coverage 33%
-- [valkey-io/valkey#1368](https://github.com/valkey-io/valkey/pull/1368) ([tests](tests/valkey/1368-a939cb88e/)): Handle keyIsExpiredWithDictIndex to make it check for import mode (#1368): 3 of 5 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1326](https://github.com/valkey-io/valkey/pull/1326) ([tests](tests/valkey/1326-db7b7396f/)): Make KEYS can visit expired key in import-source state (#1326): 3 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1198](https://github.com/valkey-io/valkey/pull/1198) ([tests](tests/valkey/1198-5d08149e7/)): Use fake client flag to replace not conn check (#1198): 2 of 6 test(s) reached the change, coverage 100%; crash, fixed by #1198 (recorded)
-- [valkey-io/valkey#999](https://github.com/valkey-io/valkey/pull/999) ([tests](tests/valkey/999-9305b4914/)): Add tag for dual-channel logs (#999): declined: The change only adds a '<Dual Channel> ' prefix to dual-channel replication log messages via a new dualChannelServerLog macro (compile-time string concatenation of the format literal) and rewords one log line, updating the matching Tcl test. No command reply, replication protocol byte, sta
-- [valkey-io/valkey#1349](https://github.com/valkey-io/valkey/pull/1349) ([tests](tests/valkey/1349-469d41fb3/)): Avoid double close on repl_transfer_fd (#1349): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1347](https://github.com/valkey-io/valkey/pull/1347) ([tests](tests/valkey/1347-2d48a39c2/)): Save open's errno when opening temp rdb fails to prevent it from being modified (#1347): declined: The change only saves errno across a sleep() in the replica's temp-RDB open retry loop so the warning log prints the correct strerror on platforms (macOS) where sleep clobbers errno. Control flow, replies, replication behavior and data handling are unchanged; the only observable difference
-- [valkey-io/valkey#1342](https://github.com/valkey-io/valkey/pull/1342) ([tests](tests/valkey/1342-cf1a1e093/)): Optimize sdscatrepr by batch processing printable characters (#1342): 1 of 2 test(s) reached the change, coverage 68%
-- [valkey-io/valkey#1260](https://github.com/valkey-io/valkey/pull/1260) ([tests](tests/valkey/1260-c4920bca4/)): Integrating fast_float to optionally replace strtod (#1260): 1 of 10 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1334](https://github.com/valkey-io/valkey/pull/1334) ([tests](tests/valkey/1334-653d5f7fe/)): Support empty callback on function and free temp function in async way (#1334): 0 of 6 test(s) reached the change, coverage 95%; crash, fixed by #1334 (recorded); crash, introduced and since fixed (recorded)
-- [valkey-io/valkey#1276](https://github.com/valkey-io/valkey/pull/1276) ([tests](tests/valkey/1276-33f42d7fb/)): CMake fixes + README update (#1276): declined: The change modifies only CMake build scripts (CMakeLists.txt, cmake/Modules/*, deps/*/CMakeLists.txt) and the README. It alters how the binaries are compiled and linked (sanitizer flag plumbing, tcmalloc linkage via pkg-config, jemalloc build error handling, Lua mkstemp detection) and docu
-- [valkey-io/valkey#1249](https://github.com/valkey-io/valkey/pull/1249) ([tests](tests/valkey/1249-9851006d6/)): Add short client info log to CLUSTER MEET / FORGET / RESET commands (#1249): 0 of 6 test(s) reached the change, coverage 94%
-- [valkey-io/valkey#1295](https://github.com/valkey-io/valkey/pull/1295) ([tests](tests/valkey/1295-b9d224097/)): Brocast a PONG to all node in cluster when role changed (#1295): 1 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1340](https://github.com/valkey-io/valkey/pull/1340) ([tests](tests/valkey/1340-979f4c1ce/)): Add cmake-build-debug and cmake-build-release to gitignore (#1340): declined: The change only adds cmake-build-debug/ and cmake-build-release/ to .gitignore. It is a repository housekeeping/build-tooling change with no effect on any Valkey binary, command, reply, replication, persistence, or tool behavior, so there is nothing a runtime scenario could exercise.
-- [valkey-io/valkey#971](https://github.com/valkey-io/valkey/pull/971) ([tests](tests/valkey/971-377ed22c9/)): [feat] add Ubuntu 24.04 Noble package support (#971): declined: The change edits only utils/releasetools/build-config.json, adding Ubuntu 24.04 (noble) x86_64 and arm64 deb targets to the release packaging matrix. It is a build/CI packaging configuration change with no effect on server behaviour, commands, replication, persistence, or any tool the fuzz
-- [valkey-io/valkey#1205](https://github.com/valkey-io/valkey/pull/1205) ([tests](tests/valkey/1205-18d1eb5a8/)): Remove redundant dict_index calculations (#1205): declined: This is a pure performance refactor with no behavioral change. In both lookupKey and keysCommand the change only removes redundant recomputations of a key's dict index (hash slot). getKVStoreIndexForKey is a deterministic function of the key, so computing it once and reusing it yields the 
-- [valkey-io/valkey#1253](https://github.com/valkey-io/valkey/pull/1253) ([tests](tests/valkey/1253-43b502616/)): Fix argument types of formatting functions (#1253): declined: The change only corrects the argument types passed to sdscatfmt in representSlotInfo (slot ranges in CLUSTER NODES, values always 0-16383) and in valkey-cli's clusterManagerNodeInfo (a small non-negative int replica count). In both cases the values fit in the low 32 bits that were already 
-- [valkey-io/valkey#1327](https://github.com/valkey-io/valkey/pull/1327) ([tests](tests/valkey/1327-50aae13b0/)): Skip reclaim file page cache test in valgrind (#1327): declined: The change is confined to the unit-test harness (src/unit/test_main.c, test_help.h, test_util.c, README): it adds a --valgrind flag and uses it to skip the reclaimFilePageCache unit test under valgrind. No server runtime, command, replication, persistence or tool behaviour changes, so no f
-- [valkey-io/valkey#1274](https://github.com/valkey-io/valkey/pull/1274) ([tests](tests/valkey/1274-c4be326c3/)): Make manual failover reset the on-going election to promote failover (#1274): 2 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#1266](https://github.com/valkey-io/valkey/pull/1266) ([tests](tests/valkey/1266-b56eed247/)): Remove valkey specific changes in jemalloc source code (#1266): 0 of 7 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1298](https://github.com/valkey-io/valkey/pull/1298) ([tests](tests/valkey/1298-b486a4150/)): Preserve original fd blocking state in TLS I/O operations (#1298): declined: The change only alters TLS synchronous I/O (connTLSSyncWrite/Read/ReadLine in src/tls.c, compiled only with BUILD_TLS and exercised only on a TLS connection doing blocking I/O, such as a TLS replication handshake or MIGRATE over TLS). The fuzzer cannot open any TLS connection: builds are m
+- [valkey-io/valkey#1254](https://github.com/valkey-io/valkey/pull/1254) ([tests](tests/valkey/1254-6038eda01/)): Make FUNCTION RESTORE FLUSH flush async based on lazyfree-lazy-user-flush (#1254): 0 of 4 test(s) reached the change, coverage 90%; crash, introduced and since fixed (recorded); crash, introduced and since fixed (recorded)
+- [valkey-io/valkey#1332](https://github.com/valkey-io/valkey/pull/1332) ([tests](tests/valkey/1332-f553ccbda/)): Use goto to cleanup error handling in readSyncBulkPayload (#1332): 0 of 3 test(s) reached the change, coverage 33%
+- [valkey-io/valkey#1185](https://github.com/valkey-io/valkey/pull/1185) ([tests](tests/valkey/1185-498631094/)): Import-mode: Avoid expiration and eviction during data syncing (#1185): 4 of 7 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1305](https://github.com/valkey-io/valkey/pull/1305) ([tests](tests/valkey/1305-ee386c92f/)): Manual failover vote is not limited by two times the node timeout (#1305): 0 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1320](https://github.com/valkey-io/valkey/pull/1320) ([tests](tests/valkey/1320-132798b57/)): Receipt of REPLCONF VERSION reply should be triggered by event (#1320): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1310](https://github.com/valkey-io/valkey/pull/1310): to retry, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
+- [valkey-io/valkey#1318](https://github.com/valkey-io/valkey/pull/1318) ([tests](tests/valkey/1318-f9d0b8762/)): Upgrade macos-12 to macos-13 in workflows (#1318): declined: The change edits only GitHub Actions workflow files (.github/workflows/daily.yml and deps/hiredis/.github/workflows/build.yml), replacing the macos-12 runner image with macos-13. It is a pure CI configuration change with no modification to Valkey server, replication, persistence, tools, or
+- [valkey-io/valkey#1199](https://github.com/valkey-io/valkey/pull/1199) ([tests](tests/valkey/1199-c5012cc63/)): Optimize RDB load performance and fix cluster mode resizing on replica side (#1199): 2 of 7 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1314](https://github.com/valkey-io/valkey/pull/1314) ([tests](tests/valkey/1314-d07674fc0/)): Fix sds unittest tests to check for zmalloc_usable_size (#1314): declined: The change modifies only unit-test files (src/unit/test_sds.c and src/unit/test_zmalloc.c): it switches test assertions from s_malloc_size to s_malloc_usable_size and adds a diagnostic TEST_PRINT_INFO line. No server, replication, persistence, command, or tool code changes, so no running v
+- [valkey-io/valkey#1271](https://github.com/valkey-io/valkey/pull/1271) ([tests](tests/valkey/1271-94113fde7/)): Improvements for TLS with I/O threads (#1271): declined: The change is confined to src/tls.c: it fixes main-thread/I/O-thread races on SSL objects (caching SSL_pending() in a new TLS_CONN_FLAG_HAS_PENDING flag set at each SSL_read, narrowing ERR_clear_error() to just before each SSL call, and running updatePendingData on write events too). Every
+- [valkey-io/valkey#1297](https://github.com/valkey-io/valkey/pull/1297) ([tests](tests/valkey/1297-86f33ea2b/)): Unprotect rdb channel when bgsave child fails in dual channel replication (#1297): 0 of 5 test(s) reached the change, coverage 0%
+- [valkey-io/valkey#1131](https://github.com/valkey-io/valkey/pull/1131) ([tests](tests/valkey/1131-92181b679/)): Fix primary crash when processing dirty slots during shutdown wait / failover wait / client pause (#1131): 2 of 4 test(s) reached the change, coverage 100%; crash, fixed by #1131 (recorded)
+- [valkey-io/valkey#1227](https://github.com/valkey-io/valkey/pull/1227) ([tests](tests/valkey/1227-4e2493e5c/)): Kill diskless fork child asap when the last replica drop (#1227): 0 of 8 test(s) reached the change, coverage 88%
+- [valkey-io/valkey#1247](https://github.com/valkey-io/valkey/pull/1247) ([tests](tests/valkey/1247-b9994030e/)): Log clusterbus handshake timeout failures (#1247): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#1281](https://github.com/valkey-io/valkey/pull/1281) ([tests](tests/valkey/1281-32f7541fe/)): Simplify dictType callbacks and move some macros from dict.h to dict.c (#1281): declined: Pure mechanical refactor: the change removes the unused `dict *d` parameter from the dictType keyDup/keyCompare/keyDestructor/valDestructor callbacks and updates all implementations and call sites; every affected callback previously began with UNUSED(d), so none ever used the parameter. Th
+- [valkey-io/valkey#1296](https://github.com/valkey-io/valkey/pull/1296) ([tests](tests/valkey/1296-863d31280/)): Fix link-time optimization to work correctly for unit tests (i.e. -flto flag) (#1290) (#1296): declined: The change is build-system only: it adds -ffat-lto-objects to the GCC LTO optimization flags in src/Makefile so unit-test binaries link correctly under -flto=auto. No server code, command behavior, replication, persistence, or reply format changes; there is no runtime path a fuzzer scenari
+- [valkey-io/valkey#515](https://github.com/valkey-io/valkey/pull/515) ([tests](tests/valkey/515-4a9864206/)): Migrate quicklist unit test to new framework (#515): declined: The change migrates the quicklist unit tests from the legacy SERVER_TEST embedded framework to the new unit-test framework: it deletes #ifdef SERVER_TEST test code from quicklist.c and server.c, adds src/unit/test_quicklist.c, and updates the Makefile and CI. The only lines that newly comp
+- [valkey-io/valkey#1301](https://github.com/valkey-io/valkey/pull/1301) ([tests](tests/valkey/1301-6fba747c3/)): Fix log printing always shows the role as child under daemonize (#1301): declined: The change only resets server.pid after daemonize() so that log lines from a daemonized server show role M/S instead of the stale 'child' role (and so startSaving() fires the correct module persistence subevent). The differing behaviour exists only when the server runs with 'daemonize yes'
+- [valkey-io/valkey#1285](https://github.com/valkey-io/valkey/pull/1285) ([tests](tests/valkey/1285-2df56d87c/)): Fix empty primary may have dirty slots data due to bad migration (#1285): 2 of 3 test(s) reached the change, coverage 80%
 
 ### valkey-io/valkey-bloom
 
@@ -53,10 +53,10 @@ Updated 2026-11-11T02:06+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 773 of 1209 tested (64%)
-- Changed-line coverage: median 100% of 737 merge(s) measured, 58 under 50%
-- Recall: 204 parents flagged of 324 fix merges
-- Claude: $904.51 in the last 24 hours, $8815.87 in the last 7 days, $8815.87 in all
+- Merges whose tests reached the change: 777 of 1220 tested (64%)
+- Changed-line coverage: median 100% of 748 merge(s) measured, 60 under 50%
+- Recall: 207 parents flagged of 327 fix merges
+- Claude: $979.32 in the last 24 hours, $8914.80 in the last 7 days, $8914.80 in all
 - Issues filed: 67
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
@@ -130,3 +130,4 @@ Updated 2026-11-11T02:06+00:00.
 
 - [valkey-io/valkey#1948](https://github.com/valkey-io/valkey/pull/1948): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
 - [valkey-io/valkey#1535](https://github.com/valkey-io/valkey/pull/1535): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict
+- [valkey-io/valkey#1310](https://github.com/valkey-io/valkey/pull/1310): attempt 0 of 3, Claude Code failed (rc=1): API Error: Claude Code is unable to respond to this request, which appears to violate our Usage Policy (https://www.anthropic.com/legal/aup). This request triggered restrict

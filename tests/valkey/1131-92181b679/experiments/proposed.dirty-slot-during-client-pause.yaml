@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.dirty-slot-during-client-pause
+deployment:
+  modes: [standalone]
+metadata:
+  description: A cluster primary loses a slot (its keys still present) while paused
+    by CLIENT PAUSE WRITE, then deletes the dirty slot and replicates DEL; the parent
+    asserts in propagateNow and crashes, the change survives.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    server_config: {type: object, default: {}}
+components:
+- use: valkey.action.commands
+  id: dirtyslot
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    server_config: {$ref: inputs.server_config}
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 2, expect: {equals: OK}}
+    - {command: [SET, foo, "0"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, "12182"], node: 2, wait_s: 30, expect: {
+        equals: 1}}
+    - {command: [CLIENT, PAUSE, "30000", WRITE], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, BUMPEPOCH], node: 1, compare: skip}
+    - {command: [CLUSTER, SETSLOT, "12182", NODE, "<node.1.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, "12182"], node: 0, wait_s: 25, expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [PING], node: 0, expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dirtyslot.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dirtyslot}

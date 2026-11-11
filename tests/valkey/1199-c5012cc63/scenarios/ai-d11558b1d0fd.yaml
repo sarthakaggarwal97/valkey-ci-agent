@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d07674fc01fd..c5012cc630bb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d11558b1d0fd
+seed: 11192
+experiment:
+  id: proposed.cluster-replica-resize-populate
+  inputs: {}
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 2
+  base_port: 7100
+  server_config:
+    enable-debug-command: 'yes'
+    cluster-node-timeout: '15000'

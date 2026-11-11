@@ -1,0 +1,21 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 92181b67970e..86f33ea2b05e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f545fb88b8c5
+seed: 86332020
+experiment:
+  id: proposed.dual-channel-rdb-child-fail
+  inputs:
+    resync_delay_s: 0.5
+    stable_keys: 6000
+    mutable_keys: 400
+    mutation_rate: 800
+    value_size: 256
+deployment:
+  mode: standalone
+  replicas_per_primary: 2
+  base_port: 7100
+  server_config:
+    dual-channel-replication-enabled: 'yes'
+    repl-diskless-sync: 'yes'
+    repl-diskless-sync-delay: '0'
+    rdb-key-save-delay: 2000

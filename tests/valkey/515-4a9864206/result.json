@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4a9864206f8aa1b3b33976c0a96b292d3fa4905a",
+  "parent": "6fba747c39bee10e27942afabd2c46be4b4fae39",
+  "pr": 515,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Migrate quicklist unit test to new framework (#515)",
+  "date": "2024-11-14",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5192,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change migrates the quicklist unit tests from the legacy SERVER_TEST embedded framework to the new unit-test framework: it deletes #ifdef SERVER_TEST test code from quicklist.c and server.c, adds src/unit/test_quicklist.c, and updates the Makefile and CI. The only lines that newly compile into the server are the two node->attempted_compress assignments whose SERVER_TEST guards were removed; attempted_compress is a pre-existing 1-bit struct field read only by tests and a debug printf, with no production logic branching on it. No command reply, encoding, replication or persistence behavior c"
+}

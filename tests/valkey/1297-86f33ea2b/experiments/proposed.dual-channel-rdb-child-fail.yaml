@@ -1,0 +1,46 @@
+extends: [valkey.base]
+id: proposed.dual-channel-rdb-child-fail
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Kill a replica mid dual-channel diskless full sync so the primary's
+    RDB-transfer child fails while the replica's rdb-channel client is still protected,
+    then verify the primary frees it cleanly (no leak, no crash) and the replica resyncs
+    with no acknowledged write lost
+inputs:
+  properties:
+    resync_delay_s: {type: number, minimum: 0, maximum: 60, default: 1}
+components:
+- use: valkey.fault.process-signal
+  id: prime-resync
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: SIGKILL
+    restart: true
+    restart_mode: immediate
+- use: valkey.fault.process-signal
+  id: drop-during-sync
+  config:
+    when_event: prime-resync.recovered
+    delay_s: {$ref: inputs.resync_delay_s}
+    instance: replica
+    signal: SIGKILL
+    restart: true
+    restart_mode: immediate
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, prime-resync, drop-during-sync]
+  config: {seconds: 4}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 6}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed, prime-resync.recovered, drop-during-sync.injected]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: drop-during-sync}
+- {evidence_id: valkey.data.ledger-verified, source: data}

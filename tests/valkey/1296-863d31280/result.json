@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "863d31280369a290c5b51f446a2c018ce3e98da0",
+  "parent": "4a9864206f8aa1b3b33976c0a96b292d3fa4905a",
+  "pr": 1296,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix link-time optimization to work correctly for unit tests (i.e. -flto flag) (#1290) (#1296)",
+  "date": "2024-11-13",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2178,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is build-system only: it adds -ffat-lto-objects to the GCC LTO optimization flags in src/Makefile so unit-test binaries link correctly under -flto=auto. No server code, command behavior, replication, persistence, or reply format changes; there is no runtime path a fuzzer scenario could reach or distinguish between the two builds."
+}

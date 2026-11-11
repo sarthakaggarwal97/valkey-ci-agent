@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f9d0b876224beecc8386cce5e11d43e649b82189",
+  "parent": "c5012cc630bb65c07a17ea870630edd8825cde52",
+  "pr": 1318,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Upgrade macos-12 to macos-13 in workflows (#1318)",
+  "date": "2024-11-18",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2134,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only GitHub Actions workflow files (.github/workflows/daily.yml and deps/hiredis/.github/workflows/build.yml), replacing the macos-12 runner image with macos-13. It is a pure CI configuration change with no modification to Valkey server, replication, persistence, tools, or client code, so no runtime behaviour changed and no fuzzer scenario can reach it."
+}

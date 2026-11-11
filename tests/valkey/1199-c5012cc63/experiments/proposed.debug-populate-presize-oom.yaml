@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.debug-populate-presize-oom
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    DEBUG POPULATE with an un-allocatable presize as the very first command on an
+    empty keyspace. The parent skips the not-yet-created keyspace dict in kvstoreExpand
+    (if (!d) continue), never calls dictTryExpand, never reports the OOM guard, and
+    runs away populating keys (no reply). The fix creates the dict first, dictTryExpand
+    fails on the impossible preallocation, and DEBUG POPULATE replies 'OOM in dictTryExpand'.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: populate
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 3
+    commands:
+    - {raw: "DEBUG POPULATE 35184372088832\r\n", connection: pop, expect_difference: true,
+      expect: {error: "OOM"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: populate}

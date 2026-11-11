@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b486a415009660f355d0a8eb9fd67a9c9cb9cc6e",
+  "parent": "6038eda010dfb99eff908cf0839cc41004383acd",
+  "pr": 1298,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Preserve original fd blocking state in TLS I/O operations (#1298)",
+  "date": "2024-11-21",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.1203,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only alters TLS synchronous I/O (connTLSSyncWrite/Read/ReadLine in src/tls.c, compiled only with BUILD_TLS and exercised only on a TLS connection doing blocking I/O, such as a TLS replication handshake or MIGRATE over TLS). The fuzzer cannot open any TLS connection: builds are made with plain make (no BUILD_TLS), tls-port is rejected in every server_config, CONFIG SET of a port is refused inside compared sequences, no component provisions certificates, and all harness clients and private compare servers use plain TCP or unix sockets. The anet.c part is a behaviour-preserving refacto"
+}

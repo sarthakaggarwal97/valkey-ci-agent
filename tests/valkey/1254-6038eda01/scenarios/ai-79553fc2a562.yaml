@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f553ccbda674..6038eda010df.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-79553fc2a562
+seed: 70001
+experiment:
+  id: proposed.function-restore-flush-async
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

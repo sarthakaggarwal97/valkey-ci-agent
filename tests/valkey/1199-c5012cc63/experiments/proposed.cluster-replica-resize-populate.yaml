@@ -1,0 +1,23 @@
+extends: [valkey.liveness]
+id: proposed.cluster-replica-resize-populate
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: DEBUG POPULATE on a cluster replica drives the replica-side dbExpand
+    slot resize; dbExpandSkipSlot now resolves the replica's primary before testing
+    slot coverage
+inputs:
+  properties: {}
+components:
+- use: valkey.action.commands
+  id: populate
+  config:
+    instances: replica
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, POPULATE, "200000"], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {min: 1}}
+    - {command: [PING], expect: {equals: PONG}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: populate}

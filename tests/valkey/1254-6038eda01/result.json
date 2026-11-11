@@ -1,0 +1,59 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6038eda010dfb99eff908cf0839cc41004383acd",
+  "parent": "f553ccbda674caa13d3cfa6e8096c5f19cb3a9c1",
+  "pr": 1254,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make FUNCTION RESTORE FLUSH flush async based on lazyfree-lazy-user-flush (#1254)",
+  "date": "2024-11-21",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 10,
+    "executed": 9,
+    "percent": 90,
+    "uncovered": [
+      "src/functions.c:801"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.6885,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: script_lua.c:192 'lua_islightuserdata(lua, -1)' is not true",
+      "scenario": "ai-79553fc2a562",
+      "seed": 70001,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "bf3463511acff8519029",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: exited with status 1",
+      "scenario": "ai-d03d296a79cc",
+      "seed": 70101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "0983036c3f568781eccc",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

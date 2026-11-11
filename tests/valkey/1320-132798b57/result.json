@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "132798b57d7f95ad5901495d566578bf8ba71390",
+  "parent": "3d0c8342030654bdfaf74d08d2d5645ff616c7a7",
+  "pr": 1320,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Receipt of REPLCONF VERSION reply should be triggered by event (#1320)",
+  "date": "2024-11-19",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.1928,
+  "findings": [],
+  "recorded": []
+}

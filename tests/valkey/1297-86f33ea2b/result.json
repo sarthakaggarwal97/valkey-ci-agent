@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "86f33ea2b05e0f14391942c635a87974eb103937",
+  "parent": "92181b67970efad6df82ea2319ccd4a266dfec5e",
+  "pr": 1297,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Unprotect rdb channel when bgsave child fails in dual channel replication (#1297)",
+  "date": "2024-11-15",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 1,
+    "executed": 0,
+    "percent": 0,
+    "uncovered": [
+      "src/replication.c:1745"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 19.9543,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-a5b3001a1375",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "required evidence was not observed: valkey.replication.bgsave-child-failed from sync-fail-log; the run did not reach what it tests, so no trustworthy verdict is possible"
+    },
+    {
+      "scenario": "ai-442fe5250749",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "required evidence was not observed: valkey.replication.bgsave-child-failed from sync-fail-log; the run did not reach what it tests, so no trustworthy verdict is possible"
+    }
+  ]
+}

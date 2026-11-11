@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2df56d87c0ebe802f38e8922bb2ea1e4ca9cfa76",
+  "parent": "a2d22c63c007eee1709ca71d9bf1e912fadb4f87",
+  "pr": 1285,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix empty primary may have dirty slots data due to bad migration (#1285)",
+  "date": "2024-11-11",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 5,
+    "executed": 4,
+    "percent": 80,
+    "uncovered": [
+      "src/cluster_legacy.c:2696"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.2658,
+  "findings": [],
+  "recorded": []
+}

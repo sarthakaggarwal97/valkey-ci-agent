@@ -1,0 +1,26 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d3f3b9cc3a45..4e2493e5c961.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-19ad43974d52
+seed: 101
+experiment:
+  id: proposed.diskless-sync-kill-syncing-replica
+  inputs:
+    warm_up_s: 2
+    sync_wait_s: 1.0
+    settle_s: 10
+    mutation_rate: 500
+    value_size: 1024
+    stable_keys: 2000
+    mutable_keys: 200
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7000
+  server_config:
+    repl-diskless-sync: 'yes'
+    repl-diskless-sync-delay: '0'
+    repl-diskless-load: disabled
+    dual-channel-replication-enabled: 'no'
+    rdb-key-save-delay: '2000'
+    repl-backlog-size: 32kb
+    save: ''

@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.clusterbus-handshake-timeout
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CLUSTER MEET to unreachable IPv4 and IPv6 addresses creates handshake nodes that
+    the cluster cron must delete after the handshake timeout, the path that now logs
+    a warning formatted from node->ip, node->cport and the timeout right before clusterDelNode
+    frees the node. Several handshake nodes are deleted in one cron sweep, the path
+    runs again after a re-meet and on a node holding no slots, and the cluster must
+    stay healthy with no crash on either build.
+inputs:
+  properties:
+    node_timeout_ms:
+      type: integer
+      minimum: 500
+      maximum: 60000
+      default: 1000
+      description: cluster-node-timeout of the private servers; below 1000 the handshake
+        timeout clamps to 1000ms
+    converge_wait_s:
+      type: number
+      minimum: 5
+      maximum: 300
+      default: 60
+      description: how long to poll for the handshake nodes to be deleted
+components:
+- use: valkey.action.commands
+  id: meet
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    server_config:
+      cluster-node-timeout: {$ref: inputs.node_timeout_ms}
+    timeout_s: 90
+    commands:
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "cluster_state:ok"}}
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "cluster_known_nodes:2"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 1, 1], expect: {equals: OK}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 2, 2], expect: {equals: OK}}
+    - {command: [CLUSTER, MEET, "::1", 3, 3], expect: {equals: OK}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 65535, 65535], expect: {equals: OK}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 1, 1], expect: {equals: OK}}
+    - {command: [CLUSTER, MEET, not-an-ip, 1, 1], expect: {error: "Invalid node address"}}
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "cluster_known_nodes:6"}}
+    - {command: [CLUSTER, INFO], compare: skip, wait_s: {$ref: inputs.converge_wait_s},
+      expect: {contains: "cluster_known_nodes:2"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 1, 1], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], compare: skip, wait_s: {$ref: inputs.converge_wait_s},
+      expect: {contains: "cluster_known_nodes:2"}}
+    - {command: [CLUSTER, MEET, 127.0.0.1, 2, 2], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 1, compare: skip, wait_s: {$ref: inputs.converge_wait_s},
+      expect: {contains: "cluster_known_nodes:2"}}
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "cluster_state:ok"}}
+    - {command: [CLUSTER, INFO], node: 1, compare: skip, expect: {contains: "cluster_state:ok"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [meet.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: meet}

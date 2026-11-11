@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.import-mode-expiration
+deployment:
+  modes: [standalone]
+metadata:
+  description: Import mode suppresses active and lazy expiration; import-source clients
+    see expired keys, plain clients do not; RANDOMKEY returns an expired key; keys
+    set with a past expiry are kept; everything expires after import mode is turned
+    off
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CLIENT, IMPORT-SOURCE, ON], expect_difference: true, expect: {error: "not\
+          \ in import mode"}}
+    - {command: [CONFIG, SET, import-mode, yes], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CLIENT, IMPORT-SOURCE], expect_difference: true, expect: {error: true}}
+    - {command: [CLIENT, IMPORT-SOURCE, BOGUS], expect_difference: true, expect: {
+        error: "syntax"}}
+    - {command: [CLIENT, IMPORT-SOURCE, ON], expect_difference: true, expect: {equals: OK}}
+    - {command: [SET, foo1, bar1, PX, 1], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.5"], expect: {equals: OK}}
+    - {command: [GET, foo1], expect_difference: true, expect: {equals: bar1}}
+    - {command: [TYPE, foo1], expect_difference: true, expect: {equals: string}}
+    - {command: [GET, foo1], connection: plain}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 1}}
+    - {command: [RANDOMKEY], connection: plain, expect_difference: true, expect: {
+        equals: foo1}}
+    - {command: [SET, k3, v3], expect: {equals: OK}}
+    - {command: [PEXPIREAT, k3, 1], expect: {equals: 1}}
+    - {command: [EXISTS, k3], expect_difference: true, expect: {equals: 1}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 2}}
+    - {command: [CLIENT, IMPORT-SOURCE, OFF], expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, foo1]}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 2}}
+    - {command: [CONFIG, SET, import-mode, no], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [GET, foo1]}
+    - {command: [EXISTS, k3], expect: {equals: 0}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

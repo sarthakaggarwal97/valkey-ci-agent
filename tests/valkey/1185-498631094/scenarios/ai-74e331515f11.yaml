@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ee386c92ffa9..49863109453f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-74e331515f11
+seed: 103
+experiment:
+  id: proposed.import-mode-eviction
+deployment:
+  mode: standalone
+  base_port: 7200

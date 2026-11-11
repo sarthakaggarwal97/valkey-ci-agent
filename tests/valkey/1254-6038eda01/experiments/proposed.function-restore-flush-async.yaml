@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.function-restore-flush-async
+deployment:
+  modes: [standalone]
+metadata:
+  description: FUNCTION RESTORE FLUSH frees a >64-function context via the async bio-thread
+    path under lazyfree-lazy-user-flush; no crash, leak, or replica divergence
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: flush
+  config:
+    compare_with: {$ref: inputs.parent}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    server_config: {lazyfree-lazy-user-flush: "yes", enable-debug-command: "yes"}
+    checks: {concurrency: 8, replica: true, faults: true}
+    commands:
+    - {command: [DEBUG, set-skip-checksum-validation, "1"], expect: {equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=biglib\nfor i=1,200 do server.register_function('f'..i,function(keys,args)\
+          \ return i end) end"], expect: {equals: biglib}}
+    - {command: [FCALL, f1, "0"], expect: {equals: 1}}
+    - {command: [FUNCTION, RESTORE, !!binary "CwAAAAAAAAAAAA==", FLUSH], expect: {
+        equals: OK}}
+    - {command: [FUNCTION, LIST], expect: {equals: []}}
+    - {command: [FUNCTION, LOAD, "#!lua name=biglib\nfor i=1,200 do server.register_function('f'..i,function(keys,args)\
+          \ return i end) end"], expect: {equals: biglib}}
+    - {command: [FUNCTION, RESTORE, !!binary "CwAAAAAAAAAAAA==", FLUSH], expect: {
+        equals: OK}}
+    - {command: [FUNCTION, LOAD, "#!lua name=biglib\nfor i=1,200 do server.register_function('f'..i,function(keys,args)\
+          \ return i end) end"], expect: {equals: biglib}}
+    - {command: [FUNCTION, RESTORE, !!binary "CwAAAAAAAAAAAA==", FLUSH], expect: {
+        equals: OK}}
+    - {command: [FUNCTION, LIST], expect: {equals: []}}
+    - {command: [PING], expect: {equals: PONG}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: flush}

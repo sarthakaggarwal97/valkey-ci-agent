@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6fba747c39bee10e27942afabd2c46be4b4fae39",
+  "parent": "2df56d87c0ebe802f38e8922bb2ea1e4ca9cfa76",
+  "pr": 1301,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix log printing always shows the role as child under daemonize (#1301)",
+  "date": "2024-11-14",
+  "unstable": "9abbfd2557a492e325a164a93122f9626abc0b1d",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6136,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only resets server.pid after daemonize() so that log lines from a daemonized server show role M/S instead of the stale 'child' role (and so startSaving() fires the correct module persistence subevent). The differing behaviour exists only when the server runs with 'daemonize yes', which the fuzzer cannot use: it supervises its servers in the foreground, and a daemonized server forks away from its process tracking; daemonize is also an immutable config, so no command sequence can enable it. Even under daemonize, the only observable effect is the role character inside the log file \u2014 no"
+}
