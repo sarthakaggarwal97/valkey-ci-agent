@@ -126,6 +126,10 @@ RUN_TIMEOUT_S = 900
 # What valkey-server prints when its config file holds a directive or value the build does not accept. A
 # deployment instance that dies on it makes the run unsupported on that build, not a failure to walk again.
 REJECTED_CONFIG = "FATAL CONFIG FILE ERROR"
+# What a run's error says when the deployment or an artifact failed before the test (valkey #4425, #3374,
+# #3438: provisioning, environment acquisition, a flaky cluster). Nothing was tested, so this counts a miss,
+# not an attempt: a transient infra blip must not give a merge up unwalked after MAX_ATTEMPTS.
+UNSTARTED = "could not start"
 # What Claude is told when its timeout cuts it off, in the same session, and how long it has to answer.
 TIME_UP_PROMPT = ("Your time is up. Stop reading and answer now with what you have: the one JSON object the first "
                   "message asks for, or its \"reason\" alone if you found no test worth writing.")
@@ -1396,12 +1400,15 @@ def update(state: dict[str, Any], planned: dict[str, Any], results: list[dict[st
             continue
         entry = state["failed"].get(sha) or {**{key: merge.get(key) for key in MERGE_KEYS}, "attempts": 0}
         entry["error"] = result["error"] if result is not None else "the job left no result"
+        # A run that could not start tested nothing: like a job that left no result, it is a miss, not an
+        # attempt, so a transient infra blip does not give the merge up after MAX_ATTEMPTS.
+        unstarted = result is not None and UNSTARTED in entry["error"]
         if REFUSAL in entry["error"]:
             entry["refusals"] = entry.get("refusals", 0) + 1
             entry["retry_after"] = (datetime.fromisoformat(now) + REFUSAL_WAIT).isoformat(timespec="seconds")
         else:
-            entry["attempts"] += int(result is not None)
-            entry["misses"] = entry.get("misses", 0) + int(result is None)
+            entry["attempts"] += int(result is not None and not unstarted)
+            entry["misses"] = entry.get("misses", 0) + int(result is None or unstarted)
             entry.pop("retry_after", None)
         entry["cost_usd"] = round(float(entry.get("cost_usd") or 0) + float((result or {}).get("cost_usd") or 0), 4)
         if (entry["attempts"] >= MAX_ATTEMPTS or entry.get("misses", 0) >= MAX_MISSES

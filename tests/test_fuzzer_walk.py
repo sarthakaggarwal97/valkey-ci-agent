@@ -280,6 +280,25 @@ def test_a_refused_merge_is_retried_a_day_later_without_counting_an_attempt():
     assert state["done"][refused["sha"]]["reason"] == REFUSED
 
 
+def test_a_run_that_could_not_start_counts_a_miss_not_an_attempt():
+    # valkey #4425, #3374, #3438: a deployment or an artifact failed before the test, so nothing was learned;
+    # a transient infra blip must not give the merge up after MAX_ATTEMPTS like a build or test failure.
+    unstarted = _merge(sha="c" * 40, pr=4425)
+    planned = {"repo": walk.VALKEY_REPO, "merges": [unstarted], "skipped": [], "pointer": {"head": "h"}}
+    error = "2 of 25 run(s) could not start: the run could not start: environment acquisition failed"
+    state = initial_state(walk.VALKEY_REPO)
+    for _ in range(MAX_ATTEMPTS + 1):
+        state = update(state, planned, [_result(unstarted, error=error, cost_usd=1.0)], now=NOW)
+    entry = state["failed"][unstarted["sha"]]
+    assert (entry["attempts"], entry["misses"]) == (0, MAX_ATTEMPTS + 1)
+    assert "retry_after" not in entry
+    for _ in range(walk.MAX_MISSES - MAX_ATTEMPTS - 1):
+        assert unstarted["sha"] in state["failed"]
+        state = update(state, planned, [_result(unstarted, error=error, cost_usd=1.0)], now=NOW)
+    assert unstarted["sha"] not in state["failed"]
+    assert state["done"][unstarted["sha"]]["outcome"] == "error"
+
+
 def test_a_merge_waiting_to_be_retried_leaves_the_run_to_others(json_repo):
     shas = _shas(json_repo)
     state = initial_state(JSON)
