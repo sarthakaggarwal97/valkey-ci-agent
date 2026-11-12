@@ -50,10 +50,9 @@ issues, a person opened a fix within 24 hours for 23 of the 32 that were
 fixed by a pull request. Review is the constraint: `valkey-io/valkey` has
 448 open pull requests, and 411 of them are waiting for review. A useful
 factory therefore spends as little reviewer time as possible, and hands
-reviewers changes that already carry their own evidence. Its work is the
-issues nobody has picked up: today 20 open bug issues have no assignee and
-no linked fix, along with small features whose behaviour is agreed and the
-test failures Daily CI reports.
+reviewers changes that already carry their own evidence. It targets work
+nobody has picked up: today 20 open bug issues have no assignee and no
+linked fix. It also takes small features whose behaviour is agreed.
 
 `valkey-ci-agent` already runs a CI fix bot. It takes a failed CI job, has
 Claude propose a fix, verifies the fix, and posts it as a commit or a
@@ -95,24 +94,19 @@ flowchart TD
 ```
 
 A run that stops early still comments on the issue, which helps whoever
-picks the issue up.
+picks it up.
 
 ### Intake
 
 The bot acts only on a label applied by someone with write access to
 `valkey-io/valkey`, checked when it reads the label. Anyone with triage
 access can apply a label, so this check is what keeps the bot under
-committers' direction. The bot ignores labels applied by other bots, and
-pins the issue as it read at the moment the label went on. It skips an
-issue that is assigned or that has an open pull request claiming to fix
-it, and repeats that check just before it publishes.
+committers' direction. The bot skips an issue that is assigned or that has
+an open pull request claiming to fix it, and repeats that check just before
+it publishes.
 
-**Detector issues**, which the bot files for failing tests in Daily CI,
-continue through the existing CI fix path, with the failed job as their
-evidence. Daily CI failures include flaky tests that don't fail on
-demand. For those, the result says its evidence is repeated passes, not a
-test that fails first. They comment as they do today, and only a labelled
-issue opens a pull request.
+Test failures that the bot already files from Daily CI keep their existing
+path, with the failed CI job as their evidence.
 
 ### Producing the change
 
@@ -121,7 +115,7 @@ The bot works in two phases.
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 20, "rankSpacing": 28, "wrappingWidth": 360}}}%%
 flowchart TD
-    A["Claude writes a test"] --> B["Code checks the test only touches tests"]
+    A["Claude writes a test"] --> B["Code checks that only test files changed"]
     B --> C["Build the unstable branch, run the test three times"]
     C -->|"does not fail as required, up to five attempts"| A
     C -->|"fails all three times"| P2["Phase 2: Claude writes the change"]
@@ -149,14 +143,13 @@ to pass ten times in a row and once under AddressSanitizer, requires every
 changed test file to pass in full, and runs the same build, formatting and
 generated-file checks as Valkey's CI. The change must not touch CI
 configuration or vendored dependencies, must not add a command, and must
-stay under 45,000 characters, the limit the bot already applies to the
-patches it suggests.
+stay small enough to review in one sitting.
 
 **Crashes.** Valkey fixes crashes in public with a reproducing test, and so
 does the bot. For an issue filed as a crash report, a crash is the expected
 failure. The committer decides when labelling whether a crash is a
-potential security issue, and if so follows `SECURITY.md` instead. A crash that
-nobody expected stops the run, and the bot publishes nothing about it.
+potential security issue, and if so follows `SECURITY.md` instead. A crash
+that nobody expected stops the run, and the bot publishes nothing about it.
 
 ### Meeting the reviewers' standard
 
@@ -165,11 +158,10 @@ fix passed all of its tests and a reviewer still found three holes in it.
 Four mechanisms raise the quality of the change before a person sees it.
 
 First, the bot reads the guidelines Valkey already gives contributors:
-`AGENTS.md`, `DEVELOPMENT_GUIDE.md` and the test READMEs. It reads them from
-the default branch, so a pull request can't rewrite the rules it is judged
-by. Second, it reads the two or three most recent merged fixes to the files
-it is changing, together with their review comments, because examples show
-the standard better than rules do. Third, a lint enforces the rules a
+`AGENTS.md`, `DEVELOPMENT_GUIDE.md` and the test READMEs. Second, it reads
+the two or three most recent merged fixes to the files it is changing,
+together with their review comments, because examples show the standard
+better than rules do. Third, a lint enforces the rules a
 machine can check, such as waiting on a condition instead of sleeping for a
 fixed time.
 
@@ -210,18 +202,14 @@ The pull request opens as a draft. Its description starts with a short
 summary suitable for the squash commit, and puts the root cause, the
 evidence and anything not established under an "AI generated details"
 section, as Valkey pull requests already do. The bot's commits carry no DCO
-sign-off. As on the bot's backport pull requests today, a committer approves
-the DCO check by hand when merging (open question 2).
+sign-off, and how a committer certifies them is open question 2.
 
 Until a committer reviews it, the bot looks after the pull request on its
-own. It fixes CI failures that its own change caused, which it confirms by
-checking that the same job passes on `unstable`, and it does this at most
-twice. It rebases onto `unstable` only on a merge conflict, because a branch
-that is merely behind doesn't need updating and every push reruns CI. It
-marks the pull request ready for review once CI is green. After a review,
-it acts only when a committer asks, for example with the existing
-`@valkeyrie-ops fix` command. If it pushes after an approval, it dismisses
-that approval, because an approval must cover the code that was read.
+own. It fixes CI failures caused by its own change, and leaves alone
+failures that `unstable` already has. It rebases only on a merge conflict,
+because every push reruns CI. Once CI is green, it marks the pull request
+ready for review. After a review, it acts only when a committer asks, for
+example with the existing `@valkeyrie-ops fix` command.
 
 ### Safety
 
@@ -240,9 +228,9 @@ and the diagram shows what limits each one.
 
 We recommend that the pull requests come from a fork (open question 1).
 Today the bot pushes backport branches to `valkey-io/valkey` itself, where
-CI runs with the Codecov token and CodeQL's write permission before anyone
-reads the change. That is acceptable for cherry-picks of reviewed commits,
-and not for code written from an untrusted issue. A fork gives the bot's
+CI runs with repository secrets before anyone reads the change. That is
+acceptable for cherry-picks of reviewed commits, but not for code written
+from an untrusted issue. A fork gives the bot's
 pull requests the same permissions as an outside contributor's, and matches
 Valkey's own `AGENTS.md`, which says agents must not push upstream. The
 token the factory requests on `valkey-io/valkey` has no write access to
@@ -256,7 +244,7 @@ push or a comment.
 
 ## Rollout and success measures
 
-The factory rolls out in four steps, and each step must earn the next.
+Each step must earn the next.
 
 | Step | What runs | Moves on when |
 |---|---|---|
@@ -282,9 +270,8 @@ without merging, pauses step 3 until someone has looked at why.
 ## Alternatives considered
 
 **A comment command instead of a label.** A comment carries a hint, but a
-label is visible as a queue and cancels cleanly when removed. A label's
-weakness, that anyone with triage access can apply it, is closed by
-checking who applied it.
+label is visible as a queue and cancels cleanly when removed. The check on
+who applied it, described under intake, closes its one weakness.
 
 **Applying review comments automatically.** This is faster, but it pushes in
 the middle of reviews that arrive one comment at a time. In the sample, a
@@ -307,8 +294,7 @@ edits.
    Bedrock's provider data sharing, so the provider retains what a run reads
    and writes. The TSC needs to agree who funds this, set a monthly cap
    once the replay has measured the cost of a run, and accept the
-   data-sharing setting or choose the fallback model that `docs/setup.md`
-   documents.
+   data-sharing setting or choose a model that doesn't require it.
 
 ## Appendix A: What the design reuses
 
@@ -337,7 +323,7 @@ is a judgement made from the diffs.
 | Fix pull requests opened within 24 hours of the issue | 23 of 32 |
 | Median time from opening a fix pull request to merging it | 6.5 days |
 | Merged fixes where a reviewer found holes after the tests passed | 1, with 3 holes |
-| Inline review comments on 20 sampled fix pull requests that were design or correctness questions | 1 in 3 of 77 |
+| Share of 77 inline review comments, on 20 sampled fix pull requests, that were design or correctness questions | One third |
 | Fix pull requests merged between 23 October and 10 November that fixed a crash, assertion or leak in public | 8 of 20 |
 | Open pull requests, and those awaiting review | 448 and 411 |
 | Open bug issues with no assignee and no linked pull request | 20 |
