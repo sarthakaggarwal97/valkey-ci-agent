@@ -48,9 +48,8 @@ Updated 2026-11-12T02:58+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-12T02:58:10+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43130534641): 1 merge(s) tested, 0 without a code change.
+[2026-11-12T02:58:58+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43144995161): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search#1589](https://github.com/valkey-io/valkey-search/pull/1589) ([tests](tests/valkey-search/1589-612423eee/)):  Fix RDB load abort when a tracked vector key is missing from the keyspace (#1589): 5 of 5 test(s) reached the change; crash, fixed by #1589 (recorded)
 
 ## Totals
 
