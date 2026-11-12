@@ -28,7 +28,7 @@ of our process, so the design spends as little review time as possible.
 
 `valkey-ci-agent` already runs a CI fix bot that takes a failed CI job, has
 Claude propose a fix, verifies it, and posts it. This reuses that engine
-and nearly everything around it; [what it reuses](#what-it-reuses) maps
+and most of the code around it; [what it reuses](#what-it-reuses) maps
 each part. What changes is the input: a bug report, which anyone can
 write, instead of a CI log.
 
@@ -142,19 +142,23 @@ flowchart TD
 ```
 
 A hostile bug report may try to steer Claude, and the design assumes that
-sometimes works. That is why the issue is pinned once a committer has read
-it, why the fix job has no token, why tests can't reach the network or
-change the built server, and why publish strips mentions, extra closing
-keywords and links from everything the model wrote.
+sometimes works. So the issue is pinned once a committer has read it, the
+fix job has no token, and tests can't reach the network or change the
+built server. Publish strips mentions, extra closing keywords and links
+from everything the model wrote.
 
-The bot keeps no database and no state of its own. What it needs to
-remember lives on GitHub: the label is the queue, the bot's status comment
-on the issue records what it did, which revision it read and how many runs
-it has made, a marker on the PR counts its CI fixes, and repository
-variables hold the kill switch and the rollout step. Every pass rereads
-that state, so a run that dies leaves nothing to clean up, and repeating a
-pass can't push or post twice. The markers are bookkeeping, not a security
-boundary: committers can edit comments.
+The bot keeps no database and no state of its own. Everything it needs to
+remember lives on GitHub:
+
+- the label is the queue;
+- the bot's status comment on the issue records what it did, which
+  revision it read, and how many runs it has made;
+- a marker on the PR counts its CI fixes;
+- repository variables hold the kill switch and the rollout step.
+
+Every pass rereads that state, so a run that dies leaves nothing to clean
+up, and repeating a pass can't push or post twice. The markers are
+bookkeeping, not a security boundary: committers can edit comments.
 
 The PRs come from a fork owned by a machine user. Today the bot pushes
 backport branches to `valkey-io/valkey` itself, where CI runs the moment a
@@ -254,7 +258,9 @@ sweep resolves cherry-pick conflicts, reruns every check, and pushes only
 if they pass.
 
 Once a committer has reviewed or pushed, the bot pushes only when a
-committer asks, with `@valkeyrie-ops fix` or, from step 4, `address`. If it pushes after an approval, it dismisses the approval,
+committer asks, with `@valkeyrie-ops fix` or, from step 4, `address`. A
+conflict after review is only reported: the committer resolves it, as on
+any contributor's PR, so the bot never rewrites code under a review. If it pushes after an approval, it dismisses the approval,
 because `unstable` doesn't and an approval should mean the code that was
 read.
 
@@ -289,7 +295,7 @@ each part to what it reuses, and what is new.
 
 ## Open questions
 
-- Do the bot's PRs come from a fork, as argued above, or from branches in
-  `valkey-io/valkey` like backports?
+- A fork, as argued above, or branches in `valkey-io/valkey` like
+  backports?
 - Who funds the model spend? The default model requires Bedrock's provider
   data sharing, so the provider keeps what a run reads and writes.
