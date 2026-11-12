@@ -262,9 +262,9 @@ if they pass.
 Once a committer has reviewed or pushed, the bot pushes only when a
 committer asks, with `@valkeyrie-ops fix` or, from step 4, `address`. A
 conflict after review is only reported: the committer resolves it, as on
-any contributor's PR, so the bot never rewrites code under a review. If it pushes after an approval, it dismisses the approval,
-because `unstable` doesn't and an approval should mean the code that was
-read.
+any contributor's PR, so the bot never rewrites code under a review. If
+it pushes after an approval, it dismisses the approval, because `unstable`
+doesn't and an approval should mean the code that was read.
 
 ## Rolling it out
 
@@ -293,7 +293,7 @@ each part to what it reuses, and what is new.
 | Rebasing on conflict | The backport sweep's cherry-pick and Claude conflict resolution in `backport/conflict_resolver.py` | Running it under the fix job's containment |
 | Review loop | The release-notes watcher's review-thread reading and replies in `release_notes/review.py` | Applying comments to code rather than one notes file |
 | Quality | The bot's guide in `ci_fix/guides/` and the Valkey guidelines it already hands the agent; the replay eval on the `ci-fix-replay-eval` branch | Recent fixes with their reviews, the lint, the checklist, issue cases in the replay |
-| State | GitHub only: labels, marker comments and run names, as every other workflow here | Nothing |
+| State | GitHub only: labels, the bot's comments and repository variables, as every other workflow here | Nothing |
 
 ## Open questions
 
