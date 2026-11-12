@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.availability-zone-info
+deployment:
+  modes: [standalone]
+metadata:
+  description: New availability-zone config is settable, shown in INFO server, survives
+    CONFIG REWRITE and restart; parent rejects it
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: az
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [INFO, server], compare: skip, expect: {contains: "availability_zone:\r\
+          \n"}}
+    - {command: [CONFIG, GET, availability-zone], expect_difference: true, expect: {
+        contains: availability-zone}}
+    - {command: [CONFIG, SET, availability-zone, us-east-1a], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, availability-zone], expect_difference: true, expect: {
+        contains: us-east-1a}}
+    - {command: [INFO, server], compare: skip, expect: {contains: "availability_zone:us-east-1a\r\
+          \n"}}
+    - {command: [CONFIG, SET, availability-zone, ""], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [INFO, server], compare: skip, expect: {contains: "availability_zone:\r\
+          \n"}}
+    - {command: [CONFIG, SET, availability-zone, "us west 2a"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, availability-zone], expect_difference: true, expect: {
+        contains: "us west 2a"}}
+    - {command: [INFO, server], compare: skip, expect: {contains: "availability_zone:us\
+          \ west 2a\r\n"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [az.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: az}

@@ -1,0 +1,122 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4135894a5d40f7270a2127d601fbf4f81ca4ab26",
+  "parent": "495a121f1938ccba6a249bd44df7d963fd32139a",
+  "pr": 660,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update remaining `master` references to `primary` (#660)",
+  "date": "2024-06-17",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 18,
+  "proven": 5,
+  "hunted": 17,
+  "dropped": 2,
+  "recall": true,
+  "coverage": {
+    "lines": 88,
+    "executed": 59,
+    "percent": 67,
+    "uncovered": [
+      "src/cluster_legacy.c:4157",
+      "src/config.c:2894",
+      "src/networking.c:2236",
+      "src/replication.c:1837",
+      "src/replication.c:1897",
+      "src/replication.c:2151",
+      "src/replication.c:2206",
+      "src/replication.c:2412",
+      "src/replication.c:2437",
+      "src/replication.c:2788",
+      "src/replication.c:2800",
+      "src/replication.c:2814",
+      "src/replication.c:2838",
+      "src/replication.c:3630",
+      "src/valkey-benchmark.c:840",
+      "src/valkey-benchmark.c:1205",
+      "src/valkey-cli.c:4166",
+      "src/valkey-cli.c:4220",
+      "src/valkey-cli.c:4222",
+      "src/valkey-cli.c:4994",
+      "src/valkey-cli.c:6698",
+      "src/valkey-cli.c:6909",
+      "src/valkey-cli.c:6915",
+      "src/valkey-cli.c:8132",
+      "src/valkey-cli.c:8138",
+      "src/valkey-cli.c:8157",
+      "src/valkey-cli.c:8220",
+      "src/valkey-cli.c:8249",
+      "src/valkey-cli.c:8254"
+    ],
+    "unnoted": [],
+    "rounds": 3
+  },
+  "cost_usd": 27.5339,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 14548:M 12 Nov 2026 05:33:38.514 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-a091166b2e2f",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #660",
+      "fingerprint": "fc5dd8800759ea043461",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/128"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 14548:M 12 Nov 2026 05:33:38.514 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-a091166b2e2f",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #660",
+      "fingerprint": "a2d618f987d3c76f00fc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/129"
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 15648:M 12 Nov 2026 05:35:43.355 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-ff3efc3e7703",
+      "seed": 102,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #660",
+      "fingerprint": "fc5dd8800759ea043461",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/128"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 15648:M 12 Nov 2026 05:35:43.355 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-ff3efc3e7703",
+      "seed": 102,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #660",
+      "fingerprint": "a2d618f987d3c76f00fc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/129"
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-a4eaf76ba29e",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "required evidence was not observed: valkey.log.sync-io-error from repl-logs; the run did not reach what it tests, so no trustworthy verdict is possible"
+    }
+  ]
+}

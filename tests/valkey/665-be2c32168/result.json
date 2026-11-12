@@ -1,0 +1,98 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "be2c3216824207613cf00b1e5579ee510b7fadc2",
+  "parent": "a2cc2fe26ddf5fac46476ec1f958dea56e35a513",
+  "pr": 665,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Support RDB compatability with Redis 7.2.4 RDB format (#665)",
+  "date": "2024-06-18",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 2,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 14,
+    "executed": 9,
+    "percent": 64,
+    "uncovered": [
+      "src/rdb.c:1355",
+      "src/rdb.c:1356",
+      "src/rdb.c:3135",
+      "src/rdb.c:3136",
+      "src/rdb.c:3137"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 8.7023,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 15227:M 12 Nov 2026 05:45:33.349 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-b2e424f809e6",
+      "seed": 7101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #665",
+      "fingerprint": "fc5dd8800759ea043461",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/128"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 15227:M 12 Nov 2026 05:45:33.349 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-b2e424f809e6",
+      "seed": 7101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #665",
+      "fingerprint": "a2d618f987d3c76f00fc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/129"
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 23768:M 12 Nov 2026 06:30:01.676 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-30801d2ed5ff",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #665",
+      "fingerprint": "fc5dd8800759ea043461",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/128"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 23768:M 12 Nov 2026 06:30:01.676 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-30801d2ed5ff",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #665",
+      "fingerprint": "a2d618f987d3c76f00fc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/129"
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-351eaf55059d",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'reload' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (CONFIG SET dbfilename corrupt.rdb), 2 (restart), 3 (PING)"
+    }
+  ]
+}

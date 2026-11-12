@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ad5704f80368dcd994c03e57a455c95dc48396b2",
+  "parent": "2b0723957e264f042951145a8c64eba65eb5a037",
+  "pr": 700,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Upstream the availability zone info string from KeyDB (#700)",
+  "date": "2024-06-27",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.3275,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

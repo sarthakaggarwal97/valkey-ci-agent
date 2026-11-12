@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5d2348cee288..0143b7c9dd7e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a30ea6c6d1d1
+seed: 11
+experiment:
+  id: valkey.aof-durability
+  inputs:
+    appendfsync: everysec
+    loss_window_s: 2.5
+    mutation_rate: 4000
+    mutable_keys: 5000
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7400

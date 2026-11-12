@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "495a121f1938ccba6a249bd44df7d963fd32139a",
+  "parent": "5a51bf5045d1713f5ebf58011dcb8900805be164",
+  "pr": 633,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Adjust the log level of some logs in the cluster (#633)",
+  "date": "2024-06-18",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2447,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only raises the log level (LL_VERBOSE/LL_DEBUG to LL_NOTICE) and slightly rewords four serverLog messages in src/cluster_legacy.c (configEpoch collision, gossip failure-report add/remove, mismatching PONG sender ID, node possibly failing). No control flow, cluster state, command reply, replication, or persistence behavior is altered; the only observable difference is log text, which no fuzzer oracle inspects. A scenario cannot distinguish the two builds, so no test is needed."
+}

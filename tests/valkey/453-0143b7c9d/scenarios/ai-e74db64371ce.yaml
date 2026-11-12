@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5d2348cee288..0143b7c9dd7e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e74db64371ce
+seed: 453
+experiment:
+  id: proposed.sds-free-size-churn
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

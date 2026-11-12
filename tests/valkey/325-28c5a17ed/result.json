@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "28c5a17edfff1c4607b16d3416bb1e021986d138",
+  "parent": "ab3873011a6c208fab4005f7ace87df03850cf03",
+  "pr": 325,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "replica redirect read&write to primary in standalone mode (#325)",
+  "date": "2024-06-27",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 5,
+  "hunted": 5,
+  "dropped": 1,
+  "recall": true,
+  "coverage": {
+    "lines": 10,
+    "executed": 10,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 13.683,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-6fe9042a8d64",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'redirect' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (SET k2 v2 on node 1)"
+    },
+    {
+      "scenario": "ai-43744dd6735c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'redirect' returned ERROR: expectations both builds violate alike, so they are not about the change: 6 (SET k2 v2 on node 1)"
+    },
+    {
+      "scenario": "ai-b3416bc9a916",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'primary-back' returned ERROR: kill-primary.recovered observed 0/1 times before timeout"
+    }
+  ]
+}

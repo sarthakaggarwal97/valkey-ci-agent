@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f9d0b876224b..3d0c83420306.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c470efda0066
+seed: 1310
+experiment:
+  id: proposed.lua-lru-defrag-crash
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000
+  server_config:
+    activedefrag: 'yes'
+    active-defrag-ignore-bytes: 1
+    active-defrag-threshold-lower: 1
+    active-defrag-cycle-min: 99
+    active-defrag-cycle-max: 99
+    hz: 100

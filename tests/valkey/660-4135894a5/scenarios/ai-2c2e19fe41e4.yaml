@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 495a121f1938..4135894a5d40.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2c2e19fe41e4
+seed: 7101
+experiment:
+  id: proposed.replica-auth-connect-primary-logs
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

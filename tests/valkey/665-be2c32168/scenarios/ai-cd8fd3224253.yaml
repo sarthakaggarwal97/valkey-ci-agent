@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a2cc2fe26ddf..be2c32168242.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-cd8fd3224253
+seed: 7001
+experiment:
+  id: proposed.rdb-version-compat
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

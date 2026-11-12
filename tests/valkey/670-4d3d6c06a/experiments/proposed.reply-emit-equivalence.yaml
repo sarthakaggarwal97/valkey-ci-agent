@@ -1,0 +1,95 @@
+extends: [valkey.liveness]
+id: proposed.reply-emit-equivalence
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    The addReply* refactor (prepareClientToWrite hoisted out of addReplyLongLong,
+    addReplyAggregateLen, addReplyBulkLen, addReplyBulkCBuffer and addReplyBulkSds,
+    bodies rewritten onto _addReplyToBufferOrList) must leave every reply byte-identical
+    to the parent build: shared vs formatted headers at the OBJ_SHARED_BULKHDR_LEN=32
+    boundary, empty bulks and aggregates, replies that spill past the static output
+    buffer into the reply list, INT64 edges, RESP3 map/set/push types, MULTI/EXEC
+    nesting, scripting fake clients and pushes.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: replies
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {hash-max-listpack-entries: 16}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, empty, ""], expect: {equals: OK}}
+    - {command: [GET, empty], expect: {equals: ""}}
+    - {command: [STRLEN, empty], expect: {equals: 0}}
+    - {command: [SET, k31, "0123456789abcdefghij0123456789a"], expect: {equals: OK}}
+    - {command: [GET, k31], expect: {equals: "0123456789abcdefghij0123456789a"}}
+    - {command: [SET, k32, "0123456789abcdefghij0123456789ab"], expect: {equals: OK}}
+    - {command: [GET, k32], expect: {equals: "0123456789abcdefghij0123456789ab"}}
+    - {command: [SETRANGE, big, 19999, A], expect: {equals: 20000}}
+    - {command: [GET, big], expect: {exists: true}}
+    - {command: [STRLEN, big], expect: {equals: 20000}}
+    - {command: [GETRANGE, big, 19990, 19999], expect: {exists: true}}
+    - {command: [SETBIT, bits, 7, 1], expect: {equals: 0}}
+    - {command: [SETBIT, bits, 7, 1], expect: {equals: 1}}
+    - {command: [SET, n, "9223372036854775806"], expect: {equals: OK}}
+    - {command: [INCR, n], expect: {equals: 9223372036854775807}}
+    - {command: [INCR, n], expect: {error: true}}
+    - {command: [SET, m, "-9223372036854775807"], expect: {equals: OK}}
+    - {command: [DECR, m], expect: {equals: -9223372036854775808}}
+    - {command: [DECRBY, z, 5], expect: {equals: -5}}
+    - {command: [LRANGE, nosuch, 0, -1], expect: {exists: true}}
+    - {command: [HGETALL, nosuch], expect: {exists: true}}
+    - {command: [RPUSH, l, e01, e02, e03, e04, e05, e06, e07, e08, e09, e10, e11,
+        e12, e13, e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24, e25, e26,
+        e27, e28, e29, e30, e31, e32, e33, e34, e35, e36, e37, e38, e39, e40], expect: {
+        equals: 40}}
+    - {command: [LRANGE, l, 0, 30], expect: {exists: true}}
+    - {command: [LRANGE, l, 0, 31], expect: {exists: true}}
+    - {command: [LRANGE, l, 0, -1], expect: {exists: true}}
+    - {command: [HSET, hsmall, f1, v1, f2, v2], expect: {equals: 2}}
+    - {command: [HGETALL, hsmall], compare: unordered-pairs}
+    - {command: [HSET, hbig, f01, v01, f02, v02, f03, v03, f04, v04, f05, v05, f06,
+        v06, f07, v07, f08, v08, f09, v09, f10, v10, f11, v11, f12, v12, f13, v13,
+        f14, v14, f15, v15, f16, v16, f17, v17, f18, v18, f19, v19, f20, v20, f21,
+        v21, f22, v22, f23, v23, f24, v24, f25, v25, f26, v26, f27, v27, f28, v28,
+        f29, v29, f30, v30, f31, v31, f32, v32, f33, v33, f34, v34, f35, v35, f36,
+        v36, f37, v37, f38, v38, f39, v39, f40, v40], expect: {equals: 40}}
+    - {command: [HGETALL, hbig], compare: unordered-pairs}
+    - {command: [SADD, s3, a, b, c], expect: {equals: 3}}
+    - {command: [SMEMBERS, s3], compare: unordered}
+    - {command: [SADD, sbig, m01, m02, m03, m04, m05, m06, m07, m08, m09, m10, m11,
+        m12, m13, m14, m15, m16, m17, m18, m19, m20, m21, m22, m23, m24, m25, m26,
+        m27, m28, m29, m30, m31, m32, m33, m34, m35, m36, m37, m38, m39, m40], expect: {
+        equals: 40}}
+    - {command: [SMEMBERS, sbig], compare: unordered}
+    - {command: [CONFIG, GET, maxmemory], expect: {exists: true}}
+    - {command: [XADD, st, 1-1, f, v], expect: {equals: 1-1}}
+    - {command: [XADD, st, 2-2, f, v], expect: {equals: 2-2}}
+    - {command: [XRANGE, st, "-", "+"], expect: {exists: true}}
+    - {command: [HSET, fields, fields, fields], expect: {equals: 1}}
+    - {command: [HGET, fields, fields], expect: {equals: fields}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, empty], expect: {equals: QUEUED}}
+    - {command: [LLEN, l], expect: {equals: QUEUED}}
+    - {command: [HGETALL, hsmall], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {exists: true}}
+    - {command: [EXEC], expect: {error: true}}
+    - {command: [EVAL, "return {1,'a',{2,'b'}}", 0], expect: {exists: true}}
+    - {command: [SUBSCRIBE, ch1], connection: sub, expect: {exists: true}}
+    - {command: [PUBLISH, ch1, hello], expect: {equals: 1}}
+    - {connection: sub, read: true, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [replies.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: replies}

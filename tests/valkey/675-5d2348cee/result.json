@@ -1,0 +1,66 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5d2348cee288d3e3f94e51bac51f6597315af043",
+  "parent": "e84eda90925d4e9c276a57ddb0c9dfc2ec497367",
+  "pr": 675,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update json file and sentinelCommand function for Valkey Sentinel  (#675)",
+  "date": "2024-06-19",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.3784,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-85dddf2a01e9",
+      "build": "unstable",
+      "seed": 675001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-85dddf2a01e9",
+      "build": "unstable",
+      "seed": 675002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-85dddf2a01e9",
+      "build": "unstable",
+      "seed": 675003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c3be2da83b7d",
+      "build": "unstable",
+      "seed": 675002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c3be2da83b7d",
+      "build": "unstable",
+      "seed": 675003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c3be2da83b7d",
+      "build": "unstable",
+      "seed": 675004,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

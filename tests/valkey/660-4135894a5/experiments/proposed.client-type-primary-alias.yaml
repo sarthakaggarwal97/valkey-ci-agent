@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.client-type-primary-alias
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLIENT KILL/LIST TYPE now accepts the 'primary' alias for 'master'
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: clienttype
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CLIENT, LIST, TYPE, master], expect: {equals: ""}}
+    - {command: [CLIENT, LIST, TYPE, replica], expect: {equals: ""}}
+    - {command: [CLIENT, LIST, TYPE, primary], expect_difference: true, expect: {
+        equals: ""}}
+    - {command: [CLIENT, LIST, TYPE, PRIMARY], expect_difference: true, expect: {
+        equals: ""}}
+    - {command: [CLIENT, LIST, TYPE, Primary], expect_difference: true, expect: {
+        equals: ""}}
+    - {command: [CLIENT, KILL, TYPE, master], expect: {equals: 0}}
+    - {command: [CLIENT, KILL, TYPE, primary], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [CLIENT, KILL, TYPE, PRIMARY], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [CLIENT, LIST, TYPE, bogus], expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [clienttype.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: clienttype}

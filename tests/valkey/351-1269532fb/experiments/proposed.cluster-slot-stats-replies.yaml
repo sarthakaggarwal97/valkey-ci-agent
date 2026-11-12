@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.cluster-slot-stats-replies
+deployment:
+  modes: [cluster]
+metadata:
+  description: CLUSTER SLOT-STATS SLOTSRANGE and ORDERBY reply shape and key-count,
+    compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slotstats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SET, '{a}1', v], expect: {equals: OK}}
+    - {command: [SET, '{a}2', v], expect: {equals: OK}}
+    - {command: [SET, '{b}1', v], expect: {equals: OK}}
+    - {command: [CLUSTER, 'SLOT-STATS', SLOTSRANGE, 0, 2], expect_difference: true,
+      expect: {equals: []}}
+    - {command: [CLUSTER, 'SLOT-STATS', ORDERBY, key-count, LIMIT, 3, DESC], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CLUSTER, 'SLOT-STATS', ORDERBY, key-count, LIMIT, 3, ASC], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CLUSTER, KEYSLOT, '{a}1'], expect: {min: 0, max: 16383}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slotstats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotstats}

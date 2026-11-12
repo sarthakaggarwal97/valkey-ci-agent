@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7719dbb84bbe..1269532fbd2c.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b99fb7982020
+seed: 7004
+experiment:
+  id: proposed.cluster-slot-stats-parser
+  inputs:
+    resp: 3
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 0
+  base_port: 7300

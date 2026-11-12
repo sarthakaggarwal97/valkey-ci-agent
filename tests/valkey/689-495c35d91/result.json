@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "495c35d918ffc92b5fe5b7180ea722c282826460",
+  "parent": "b49eaad367c334d5226a785123bc9cf4a1f89a25",
+  "pr": 689,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add check in CLUSTERLINK KILL cmd to avoid freeing links to myself (#689)",
+  "date": "2024-06-25",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.1017,
+  "findings": [],
+  "recorded": []
+}

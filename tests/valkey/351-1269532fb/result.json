@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1269532fbd2c9fce170651159476ab49f1c5dff9",
+  "parent": "7719dbb84bbe6861ac60277915ab22d208159680",
+  "pr": 351,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Introduce CLUSTER SLOT-STATS command (#20). (#351)",
+  "date": "2024-06-27",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 7,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 101,
+    "executed": 100,
+    "percent": 99,
+    "uncovered": [
+      "src/cluster_slot_stats.c:180"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.3529,
+  "findings": [],
+  "recorded": []
+}

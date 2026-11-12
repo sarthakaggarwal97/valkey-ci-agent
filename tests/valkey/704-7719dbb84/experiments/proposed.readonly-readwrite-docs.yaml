@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.readonly-readwrite-docs
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS summary for READONLY and READWRITE changed to 'Valkey
+    replica node' wording; command behaviour itself unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, DOCS, readonly], expect_difference: true, expect: {contains: "Valkey\
+          \ replica node"}}
+    - {command: [COMMAND, DOCS, readwrite], expect_difference: true, expect: {contains: "Valkey\
+          \ replica node"}}
+    - {command: [READONLY], expect: {equals: OK}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v}}
+    - {command: [READWRITE], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

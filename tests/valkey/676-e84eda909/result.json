@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e84eda90925d4e9c276a57ddb0c9dfc2ec497367",
+  "parent": "ae2d4217e147996bd6c546f559aa564f873f9203",
+  "pr": 676,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove useless code in sentinel source code (#676)",
+  "date": "2024-06-19",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2194,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only deletes an empty conditional block in sentinelHandleRedisInstance (an `if (ri->flags & (SRI_PRIMARY | SRI_REPLICA))` whose body was just the comment 'Nothing so far.'). The condition had no side effects and the body was empty, so the compiled behavior is identical on both builds; there is no observable path to test."
+}

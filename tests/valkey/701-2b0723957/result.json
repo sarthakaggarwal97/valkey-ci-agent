@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2b0723957e264f042951145a8c64eba65eb5a037",
+  "parent": "28c5a17edfff1c4607b16d3416bb1e021986d138",
+  "pr": 701,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Enable protected-configs, debug and module commands in create-cluster script (#701)",
+  "date": "2024-06-27",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2347,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only utils/create-cluster/create-cluster, a developer helper shell script, adding --enable-protected-configs, --enable-debug-command and --enable-module-command to the valkey-server launch line for locally created test clusters. No server, valkey-cli, valkey-benchmark or check-tool code changes; the fuzzer launches servers itself and never invokes this script, so no runtime behaviour of the builds under test differs and no scenario can exercise the change."
+}

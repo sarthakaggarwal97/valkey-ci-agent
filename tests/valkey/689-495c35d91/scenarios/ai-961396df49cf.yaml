@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b49eaad367c3..495c35d918ff.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-961396df49cf
+seed: 7000
+experiment:
+  id: proposed.clusterlink-kill-self
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  base_port: 7000

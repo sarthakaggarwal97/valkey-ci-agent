@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ad5704f80368..7719dbb84bbe.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9b3723e1369d
+seed: 7041102
+experiment:
+  id: proposed.readonly-readwrite-docs
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

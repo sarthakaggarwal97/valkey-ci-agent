@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a2cc2fe26ddf5fac46476ec1f958dea56e35a513",
+  "parent": "b33f932c5670749bea67933c10578336c67f16e6",
+  "pr": 658,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix memory leak when loading slot migrations states fails (#658)",
+  "date": "2024-06-17",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.9593,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only frees two robjs on an error branch in rdbLoadRioWithLoadingCtx: when a registered dynamic RDB aux-field decoder returns C_ERR. The sole registered decoder, clusterDecodeOpenSlotsAuxField (cluster-slot-states), runs only during a cluster full sync (RDBFLAGS_REPLICATION) and returns C_OK for all well-formed input. The matching encoder always produces well-formed records, so a real full sync never makes it return C_ERR; a truncated stream fails earlier in rdbLoadStringObject on a cleanup path this change does not touch. Reaching the leaked branch requires a complete-but-malformed "
+}

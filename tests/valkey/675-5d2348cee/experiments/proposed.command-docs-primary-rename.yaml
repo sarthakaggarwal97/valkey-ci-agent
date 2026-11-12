@@ -1,0 +1,34 @@
+extends: [valkey.liveness]
+id: proposed.command-docs-primary-rename
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND DOCS summaries for WAITAOF and SLAVEOF say primary instead
+    of master after the Sentinel terminology rename
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, DOCS, WAITAOF], expect_difference: true, expect: {contains: "append-only\
+          \ file of the primary"}}
+    - {command: [COMMAND, DOCS, SLAVEOF], expect_difference: true, expect: {contains: "promotes\
+          \ it to being a primary"}}
+    - {command: [COMMAND, DOCS, WAIT], expect: {contains: "asynchronous replication"}}
+    - {command: [COMMAND, COUNT], expect: {min: 100}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

@@ -1,0 +1,128 @@
+extends: [valkey.liveness]
+id: proposed.lua-lru-defrag-crash
+deployment:
+  modes: [standalone]
+metadata:
+  description: Overflowing the EVAL script LRU under active defrag must not crash
+    (use-after-free on a defrag-relocated script SHA)
+components:
+- use: valkey.action.commands
+  id: evals
+  config:
+    timeout_s: 60
+    commands:
+    - {connection: bulk, raw: "EVAL --0 0\r\nEVAL --1 0\r\nEVAL --2 0\r\nEVAL --3\
+        \ 0\r\nEVAL --4 0\r\nEVAL --5 0\r\nEVAL --6 0\r\nEVAL --7 0\r\nEVAL --8 0\r\
+        \nEVAL --9 0\r\nEVAL --10 0\r\nEVAL --11 0\r\nEVAL --12 0\r\nEVAL --13 0\r\
+        \nEVAL --14 0\r\nEVAL --15 0\r\nEVAL --16 0\r\nEVAL --17 0\r\nEVAL --18 0\r\
+        \nEVAL --19 0\r\nEVAL --20 0\r\nEVAL --21 0\r\nEVAL --22 0\r\nEVAL --23 0\r\
+        \nEVAL --24 0\r\nEVAL --25 0\r\nEVAL --26 0\r\nEVAL --27 0\r\nEVAL --28 0\r\
+        \nEVAL --29 0\r\nEVAL --30 0\r\nEVAL --31 0\r\nEVAL --32 0\r\nEVAL --33 0\r\
+        \nEVAL --34 0\r\nEVAL --35 0\r\nEVAL --36 0\r\nEVAL --37 0\r\nEVAL --38 0\r\
+        \nEVAL --39 0\r\nEVAL --40 0\r\nEVAL --41 0\r\nEVAL --42 0\r\nEVAL --43 0\r\
+        \nEVAL --44 0\r\nEVAL --45 0\r\nEVAL --46 0\r\nEVAL --47 0\r\nEVAL --48 0\r\
+        \nEVAL --49 0\r\nEVAL --50 0\r\nEVAL --51 0\r\nEVAL --52 0\r\nEVAL --53 0\r\
+        \nEVAL --54 0\r\nEVAL --55 0\r\nEVAL --56 0\r\nEVAL --57 0\r\nEVAL --58 0\r\
+        \nEVAL --59 0\r\nEVAL --60 0\r\nEVAL --61 0\r\nEVAL --62 0\r\nEVAL --63 0\r\
+        \nEVAL --64 0\r\nEVAL --65 0\r\nEVAL --66 0\r\nEVAL --67 0\r\nEVAL --68 0\r\
+        \nEVAL --69 0\r\nEVAL --70 0\r\nEVAL --71 0\r\nEVAL --72 0\r\nEVAL --73 0\r\
+        \nEVAL --74 0\r\nEVAL --75 0\r\nEVAL --76 0\r\nEVAL --77 0\r\nEVAL --78 0\r\
+        \nEVAL --79 0\r\nEVAL --80 0\r\nEVAL --81 0\r\nEVAL --82 0\r\nEVAL --83 0\r\
+        \nEVAL --84 0\r\nEVAL --85 0\r\nEVAL --86 0\r\nEVAL --87 0\r\nEVAL --88 0\r\
+        \nEVAL --89 0\r\nEVAL --90 0\r\nEVAL --91 0\r\nEVAL --92 0\r\nEVAL --93 0\r\
+        \nEVAL --94 0\r\nEVAL --95 0\r\nEVAL --96 0\r\nEVAL --97 0\r\nEVAL --98 0\r\
+        \nEVAL --99 0\r\nEVAL --100 0\r\nEVAL --101 0\r\nEVAL --102 0\r\nEVAL --103\
+        \ 0\r\nEVAL --104 0\r\nEVAL --105 0\r\nEVAL --106 0\r\nEVAL --107 0\r\nEVAL\
+        \ --108 0\r\nEVAL --109 0\r\nEVAL --110 0\r\nEVAL --111 0\r\nEVAL --112 0\r\
+        \nEVAL --113 0\r\nEVAL --114 0\r\nEVAL --115 0\r\nEVAL --116 0\r\nEVAL --117\
+        \ 0\r\nEVAL --118 0\r\nEVAL --119 0\r\nEVAL --120 0\r\nEVAL --121 0\r\nEVAL\
+        \ --122 0\r\nEVAL --123 0\r\nEVAL --124 0\r\nEVAL --125 0\r\nEVAL --126 0\r\
+        \nEVAL --127 0\r\nEVAL --128 0\r\nEVAL --129 0\r\nEVAL --130 0\r\nEVAL --131\
+        \ 0\r\nEVAL --132 0\r\nEVAL --133 0\r\nEVAL --134 0\r\nEVAL --135 0\r\nEVAL\
+        \ --136 0\r\nEVAL --137 0\r\nEVAL --138 0\r\nEVAL --139 0\r\nEVAL --140 0\r\
+        \nEVAL --141 0\r\nEVAL --142 0\r\nEVAL --143 0\r\nEVAL --144 0\r\nEVAL --145\
+        \ 0\r\nEVAL --146 0\r\nEVAL --147 0\r\nEVAL --148 0\r\nEVAL --149 0\r\nEVAL\
+        \ --150 0\r\nEVAL --151 0\r\nEVAL --152 0\r\nEVAL --153 0\r\nEVAL --154 0\r\
+        \nEVAL --155 0\r\nEVAL --156 0\r\nEVAL --157 0\r\nEVAL --158 0\r\nEVAL --159\
+        \ 0\r\nEVAL --160 0\r\nEVAL --161 0\r\nEVAL --162 0\r\nEVAL --163 0\r\nEVAL\
+        \ --164 0\r\nEVAL --165 0\r\nEVAL --166 0\r\nEVAL --167 0\r\nEVAL --168 0\r\
+        \nEVAL --169 0\r\nEVAL --170 0\r\nEVAL --171 0\r\nEVAL --172 0\r\nEVAL --173\
+        \ 0\r\nEVAL --174 0\r\nEVAL --175 0\r\nEVAL --176 0\r\nEVAL --177 0\r\nEVAL\
+        \ --178 0\r\nEVAL --179 0\r\nEVAL --180 0\r\nEVAL --181 0\r\nEVAL --182 0\r\
+        \nEVAL --183 0\r\nEVAL --184 0\r\nEVAL --185 0\r\nEVAL --186 0\r\nEVAL --187\
+        \ 0\r\nEVAL --188 0\r\nEVAL --189 0\r\nEVAL --190 0\r\nEVAL --191 0\r\nEVAL\
+        \ --192 0\r\nEVAL --193 0\r\nEVAL --194 0\r\nEVAL --195 0\r\nEVAL --196 0\r\
+        \nEVAL --197 0\r\nEVAL --198 0\r\nEVAL --199 0\r\nEVAL --200 0\r\nEVAL --201\
+        \ 0\r\nEVAL --202 0\r\nEVAL --203 0\r\nEVAL --204 0\r\nEVAL --205 0\r\nEVAL\
+        \ --206 0\r\nEVAL --207 0\r\nEVAL --208 0\r\nEVAL --209 0\r\nEVAL --210 0\r\
+        \nEVAL --211 0\r\nEVAL --212 0\r\nEVAL --213 0\r\nEVAL --214 0\r\nEVAL --215\
+        \ 0\r\nEVAL --216 0\r\nEVAL --217 0\r\nEVAL --218 0\r\nEVAL --219 0\r\nEVAL\
+        \ --220 0\r\nEVAL --221 0\r\nEVAL --222 0\r\nEVAL --223 0\r\nEVAL --224 0\r\
+        \nEVAL --225 0\r\nEVAL --226 0\r\nEVAL --227 0\r\nEVAL --228 0\r\nEVAL --229\
+        \ 0\r\nEVAL --230 0\r\nEVAL --231 0\r\nEVAL --232 0\r\nEVAL --233 0\r\nEVAL\
+        \ --234 0\r\nEVAL --235 0\r\nEVAL --236 0\r\nEVAL --237 0\r\nEVAL --238 0\r\
+        \nEVAL --239 0\r\nEVAL --240 0\r\nEVAL --241 0\r\nEVAL --242 0\r\nEVAL --243\
+        \ 0\r\nEVAL --244 0\r\nEVAL --245 0\r\nEVAL --246 0\r\nEVAL --247 0\r\nEVAL\
+        \ --248 0\r\nEVAL --249 0\r\nEVAL --250 0\r\nEVAL --251 0\r\nEVAL --252 0\r\
+        \nEVAL --253 0\r\nEVAL --254 0\r\nEVAL --255 0\r\nEVAL --256 0\r\nEVAL --257\
+        \ 0\r\nEVAL --258 0\r\nEVAL --259 0\r\nEVAL --260 0\r\nEVAL --261 0\r\nEVAL\
+        \ --262 0\r\nEVAL --263 0\r\nEVAL --264 0\r\nEVAL --265 0\r\nEVAL --266 0\r\
+        \nEVAL --267 0\r\nEVAL --268 0\r\nEVAL --269 0\r\nEVAL --270 0\r\nEVAL --271\
+        \ 0\r\nEVAL --272 0\r\nEVAL --273 0\r\nEVAL --274 0\r\nEVAL --275 0\r\nEVAL\
+        \ --276 0\r\nEVAL --277 0\r\nEVAL --278 0\r\nEVAL --279 0\r\nEVAL --280 0\r\
+        \nEVAL --281 0\r\nEVAL --282 0\r\nEVAL --283 0\r\nEVAL --284 0\r\nEVAL --285\
+        \ 0\r\nEVAL --286 0\r\nEVAL --287 0\r\nEVAL --288 0\r\nEVAL --289 0\r\nEVAL\
+        \ --290 0\r\nEVAL --291 0\r\nEVAL --292 0\r\nEVAL --293 0\r\nEVAL --294 0\r\
+        \nEVAL --295 0\r\nEVAL --296 0\r\nEVAL --297 0\r\nEVAL --298 0\r\nEVAL --299\
+        \ 0\r\nEVAL --300 0\r\nEVAL --301 0\r\nEVAL --302 0\r\nEVAL --303 0\r\nEVAL\
+        \ --304 0\r\nEVAL --305 0\r\nEVAL --306 0\r\nEVAL --307 0\r\nEVAL --308 0\r\
+        \nEVAL --309 0\r\nEVAL --310 0\r\nEVAL --311 0\r\nEVAL --312 0\r\nEVAL --313\
+        \ 0\r\nEVAL --314 0\r\nEVAL --315 0\r\nEVAL --316 0\r\nEVAL --317 0\r\nEVAL\
+        \ --318 0\r\nEVAL --319 0\r\nEVAL --320 0\r\nEVAL --321 0\r\nEVAL --322 0\r\
+        \nEVAL --323 0\r\nEVAL --324 0\r\nEVAL --325 0\r\nEVAL --326 0\r\nEVAL --327\
+        \ 0\r\nEVAL --328 0\r\nEVAL --329 0\r\nEVAL --330 0\r\nEVAL --331 0\r\nEVAL\
+        \ --332 0\r\nEVAL --333 0\r\nEVAL --334 0\r\nEVAL --335 0\r\nEVAL --336 0\r\
+        \nEVAL --337 0\r\nEVAL --338 0\r\nEVAL --339 0\r\nEVAL --340 0\r\nEVAL --341\
+        \ 0\r\nEVAL --342 0\r\nEVAL --343 0\r\nEVAL --344 0\r\nEVAL --345 0\r\nEVAL\
+        \ --346 0\r\nEVAL --347 0\r\nEVAL --348 0\r\nEVAL --349 0\r\nEVAL --350 0\r\
+        \nEVAL --351 0\r\nEVAL --352 0\r\nEVAL --353 0\r\nEVAL --354 0\r\nEVAL --355\
+        \ 0\r\nEVAL --356 0\r\nEVAL --357 0\r\nEVAL --358 0\r\nEVAL --359 0\r\nEVAL\
+        \ --360 0\r\nEVAL --361 0\r\nEVAL --362 0\r\nEVAL --363 0\r\nEVAL --364 0\r\
+        \nEVAL --365 0\r\nEVAL --366 0\r\nEVAL --367 0\r\nEVAL --368 0\r\nEVAL --369\
+        \ 0\r\nEVAL --370 0\r\nEVAL --371 0\r\nEVAL --372 0\r\nEVAL --373 0\r\nEVAL\
+        \ --374 0\r\nEVAL --375 0\r\nEVAL --376 0\r\nEVAL --377 0\r\nEVAL --378 0\r\
+        \nEVAL --379 0\r\nEVAL --380 0\r\nEVAL --381 0\r\nEVAL --382 0\r\nEVAL --383\
+        \ 0\r\nEVAL --384 0\r\nEVAL --385 0\r\nEVAL --386 0\r\nEVAL --387 0\r\nEVAL\
+        \ --388 0\r\nEVAL --389 0\r\nEVAL --390 0\r\nEVAL --391 0\r\nEVAL --392 0\r\
+        \nEVAL --393 0\r\nEVAL --394 0\r\nEVAL --395 0\r\nEVAL --396 0\r\nEVAL --397\
+        \ 0\r\nEVAL --398 0\r\nEVAL --399 0\r\nEVAL --400 0\r\nEVAL --401 0\r\nEVAL\
+        \ --402 0\r\nEVAL --403 0\r\nEVAL --404 0\r\nEVAL --405 0\r\nEVAL --406 0\r\
+        \nEVAL --407 0\r\nEVAL --408 0\r\nEVAL --409 0\r\nEVAL --410 0\r\nEVAL --411\
+        \ 0\r\nEVAL --412 0\r\nEVAL --413 0\r\nEVAL --414 0\r\nEVAL --415 0\r\nEVAL\
+        \ --416 0\r\nEVAL --417 0\r\nEVAL --418 0\r\nEVAL --419 0\r\nEVAL --420 0\r\
+        \nEVAL --421 0\r\nEVAL --422 0\r\nEVAL --423 0\r\nEVAL --424 0\r\nEVAL --425\
+        \ 0\r\nEVAL --426 0\r\nEVAL --427 0\r\nEVAL --428 0\r\nEVAL --429 0\r\nEVAL\
+        \ --430 0\r\nEVAL --431 0\r\nEVAL --432 0\r\nEVAL --433 0\r\nEVAL --434 0\r\
+        \nEVAL --435 0\r\nEVAL --436 0\r\nEVAL --437 0\r\nEVAL --438 0\r\nEVAL --439\
+        \ 0\r\nEVAL --440 0\r\nEVAL --441 0\r\nEVAL --442 0\r\nEVAL --443 0\r\nEVAL\
+        \ --444 0\r\nEVAL --445 0\r\nEVAL --446 0\r\nEVAL --447 0\r\nEVAL --448 0\r\
+        \nEVAL --449 0\r\nEVAL --450 0\r\nEVAL --451 0\r\nEVAL --452 0\r\nEVAL --453\
+        \ 0\r\nEVAL --454 0\r\nEVAL --455 0\r\nEVAL --456 0\r\nEVAL --457 0\r\nEVAL\
+        \ --458 0\r\nEVAL --459 0\r\nEVAL --460 0\r\nEVAL --461 0\r\nEVAL --462 0\r\
+        \nEVAL --463 0\r\nEVAL --464 0\r\nEVAL --465 0\r\nEVAL --466 0\r\nEVAL --467\
+        \ 0\r\nEVAL --468 0\r\nEVAL --469 0\r\nEVAL --470 0\r\nEVAL --471 0\r\nEVAL\
+        \ --472 0\r\nEVAL --473 0\r\nEVAL --474 0\r\nEVAL --475 0\r\nEVAL --476 0\r\
+        \nEVAL --477 0\r\nEVAL --478 0\r\nEVAL --479 0\r\nEVAL --480 0\r\nEVAL --481\
+        \ 0\r\nEVAL --482 0\r\nEVAL --483 0\r\nEVAL --484 0\r\nEVAL --485 0\r\nEVAL\
+        \ --486 0\r\nEVAL --487 0\r\nEVAL --488 0\r\nEVAL --489 0\r\nEVAL --490 0\r\
+        \nEVAL --491 0\r\nEVAL --492 0\r\nEVAL --493 0\r\nEVAL --494 0\r\nEVAL --495\
+        \ 0\r\nEVAL --496 0\r\nEVAL --497 0\r\nEVAL --498 0\r\nEVAL --499 0\r\nEVAL\
+        \ --500 0\r\nEVAL --501 0\r\nEVAL --502 0\r\nEVAL --503 0\r\nEVAL --504 0\r\
+        \nEVAL --505 0\r\nEVAL --506 0\r\nEVAL --507 0\r\nEVAL --508 0\r\nEVAL --509\
+        \ 0\r\nEVAL --510 0\r\nEVAL --511 0\r\nEVAL --512 0\r\nEVAL --513 0\r\nEVAL\
+        \ --514 0\r\nEVAL --515 0\r\nEVAL --516 0\r\nEVAL --517 0\r\nEVAL --518 0\r\
+        \nEVAL --519 0\r\nEVAL --520 0\r\n"}
+    - {connection: bulk, read: true, expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: evals}

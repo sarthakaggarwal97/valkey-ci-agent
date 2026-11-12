@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a2cc2fe26ddf..be2c32168242.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-351eaf55059d
+seed: 102
+experiment:
+  id: proposed.rdb-slot-info-malformed
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+    cluster: true
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.cluster-slot-stats-orderby-nolimit
+deployment:
+  modes: [cluster]
+metadata:
+  description: CLUSTER SLOT-STATS ORDERBY with no LIMIT token, driving the limit variable
+    left unassigned by the parser
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: nolimit
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SET, '{z}1', v], expect: {equals: OK}}
+    - {command: [SET, '{z}2', v], expect: {equals: OK}}
+    - {command: [CLUSTER, 'SLOT-STATS', ORDERBY, key-count], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CLUSTER, 'SLOT-STATS', ORDERBY, key-count, DESC], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [CLUSTER, 'SLOT-STATS', ORDERBY, key-count, ASC], expect_difference: true,
+      expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [nolimit.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: nolimit}

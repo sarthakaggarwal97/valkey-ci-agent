@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.debug-help-missing-commas
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    DEBUG HELP must list the CLOSE-CLUSTER-LINK-ON-PACKET-DROP description and the
+    OOM header as separate lines; the parent build merges them into one element because
+    of missing commas between adjacent string literals.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: debughelp
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, HELP], expect_difference: true, expect: {contains: "    This\
+          \ is valid only when DROP-CLUSTER-PACKET-FILTER is set to a valid packet\
+          \ type."}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 1], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [debughelp.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: debughelp}

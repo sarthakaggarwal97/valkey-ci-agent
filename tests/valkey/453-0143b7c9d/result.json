@@ -1,0 +1,56 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0143b7c9dd7ec38fec5469a1055d96e8f4f0984c",
+  "parent": "5d2348cee288d3e3f94e51bac51f6597315af043",
+  "pr": 453,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add zfree_with_size to optimize sdsfree since we can get zmalloc_size from the header (#453)",
+  "date": "2024-06-19",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 17,
+    "executed": 17,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.1698,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:236 'calculateKeySlot(key) == server.current_client->slot' is not true",
+      "scenario": "ai-278575d00f54",
+      "seed": 1001,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #453, since fixed",
+      "fingerprint": "49979a14dba799f32598",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-e74db64371ce",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'churn' returned ERROR: expectations both builds violate alike, so they are not about the change: 20 (GETRANGE big 99998 100000)"
+    },
+    {
+      "scenario": "ai-b429a66d99a1",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'churn' returned ERROR: expectations both builds violate alike, so they are not about the change: 20 (GETRANGE big 99998 100000)"
+    }
+  ]
+}

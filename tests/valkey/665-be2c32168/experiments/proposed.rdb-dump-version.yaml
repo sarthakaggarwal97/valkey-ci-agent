@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.rdb-dump-version
+deployment:
+  modes: [standalone]
+metadata:
+  description: DUMP's RDB version footer drops from 12 to 11 with the Redis 7.2.4
+    RDB format
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dump
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SET, k, hello], expect: {equals: OK}}
+    - {command: [DUMP, k], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dump.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dump}

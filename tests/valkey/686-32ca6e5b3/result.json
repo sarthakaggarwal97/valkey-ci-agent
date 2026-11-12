@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "32ca6e5b38bfc4a15878c2b6ff3d2c71da1026e3",
+  "parent": "ce79539047ccecf39951168e5f30e2cd9a3135ec",
+  "pr": 686,
+  "pr_repo": "valkey-io/valkey",
+  "subject": " Improve `CLUSTER SETSLOT` replication handling to support older replica versions. (#686)",
+  "date": "2024-06-23",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 13,
+    "executed": 13,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 9.8994,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-bcc3f77eab05",
+      "build": "unstable",
+      "seed": 686002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-bcc3f77eab05",
+      "build": "unstable",
+      "seed": 686003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-bcc3f77eab05",
+      "build": "unstable",
+      "seed": 686004,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

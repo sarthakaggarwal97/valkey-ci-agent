@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.setslot-legacy-replica-skips-replication
+deployment:
+  modes: [cluster]
+metadata:
+  description: CLUSTER SETSLOT does not replicate slot state to replicas when a pre-8.0.0
+    replica is attached
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.commands
+  id: setslot
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 3
+    server_config: {repl-ping-replica-period: 3600, repl-diskless-sync: "no"}
+    timeout_s: 20
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 2, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 2, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [INFO, replication], node: 0, wait_s: 30, compare: skip, expect: {
+        contains: "connected_slaves:1"}}
+    - {command: [REPLCONF, listening-port, "<node.1.port>"], node: 0, connection: legacy,
+      expect: {equals: OK}}
+    - {command: [REPLCONF, capa, eof, capa, psync2], node: 0, connection: legacy,
+      expect: {equals: OK}}
+    - {command: [REPLCONF, VERSION, "7.4.0"], node: 0, connection: legacy, expect: {
+        equals: OK}}
+    - {command: [PSYNC, "?", "-1"], node: 0, connection: legacy, compare: skip, expect: {
+        exists: true}}
+    - {command: [INFO, replication], node: 0, wait_s: 30, compare: skip, expect: {
+        contains: "connected_slaves:2"}}
+    - {command: [CLUSTER, SETSLOT, "0", MIGRATING, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, NODES], node: 2, wait_s: 15, expect_difference: true, compare: skip,
+      expect: {contains: "[0->-<node.1.id>]"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: setslot}

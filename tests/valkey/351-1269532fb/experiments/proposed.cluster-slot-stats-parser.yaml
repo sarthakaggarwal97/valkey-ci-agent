@@ -1,0 +1,56 @@
+extends: [valkey.liveness]
+id: proposed.cluster-slot-stats-parser
+deployment:
+  modes: [cluster]
+metadata:
+  description: CLUSTER SLOT-STATS argument parser error surface and adversarial boundaries,
+    compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: parse
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [CLUSTER, 'SLOT-STATS'], expect_difference: true, expect: {error: true}}
+    - {command: [CLUSTER, 'SLOT-STATS', BOGUS], expect_difference: true, expect: {
+        error: true}}
+    - {command: [CLUSTER, 'SLOT-STATS', SLOTSRANGE, 10, 5], expect_difference: true,
+      expect: {error: "greater than end slot"}}
+    - {command: [CLUSTER, 'SLOT-STATS', SLOTSRANGE, -1, 5], expect_difference: true,
+      expect: {error: "Invalid or out of range slot"}}
+    - {command: [CLUSTER, 'SLOT-STATS', SLOTSRANGE, 0, 16384], expect_difference: true,
+      expect: {error: "Invalid or out of range slot"}}
+    - {command: [CLUSTER, 'SLOT-STATS', SLOTSRANGE, 0, 9999999999999], expect_difference: true,
+      expect: {error: "Invalid or out of range slot"}}
+    - {command: [CLUSTER, 'SLOT-STATS', SLOTSRANGE, x, 5], expect_difference: true,
+      expect: {error: "Invalid or out of range slot"}}
+    - {command: [CLUSTER, 'SLOT-STATS', ORDERBY, bytes], expect_difference: true,
+      expect: {error: "Unrecognized sort metric"}}
+    - {command: [CLUSTER, 'SLOT-STATS', ORDERBY, key-count, LIMIT, 0], expect_difference: true,
+      expect: {error: "Limit has to lie"}}
+    - {command: [CLUSTER, 'SLOT-STATS', ORDERBY, key-count, LIMIT, 16385], expect_difference: true,
+      expect: {error: "Limit has to lie"}}
+    - {command: [CLUSTER, 'SLOT-STATS', ORDERBY, key-count, LIMIT, 5, LIMIT, 5], expect_difference: true,
+      expect: {error: "Multiple filters"}}
+    - {command: [CLUSTER, 'SLOT-STATS', ORDERBY, key-count, ASC, DESC], expect_difference: true,
+      expect: {error: "Multiple filters"}}
+    - {command: [CLUSTER, 'SLOT-STATS', ORDERBY, key-count, JUNK], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CLUSTER, 'SLOT-STATS', ORDERBY, key-count, LIMIT], expect_difference: true,
+      expect: {error: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [parse.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: parse}

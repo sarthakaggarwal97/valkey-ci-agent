@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7719dbb84bbe6861ac60277915ab22d208159680",
+  "parent": "ad5704f80368dcd994c03e57a455c95dc48396b2",
+  "pr": 704,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update readonly and readwrite json (#704)",
+  "date": "2024-06-27",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.2528,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

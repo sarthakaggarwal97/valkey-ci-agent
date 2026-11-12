@@ -1,0 +1,86 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b33f932c5670749bea67933c10578336c67f16e6",
+  "parent": "4135894a5d40f7270a2127d601fbf4f81ca4ab26",
+  "pr": 662,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add missing commas from debug command (#662)",
+  "date": "2024-06-18",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 0.8989,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 14476:M 12 Nov 2026 05:25:25.461 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-7d60b6875adc",
+      "seed": 662001,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #662",
+      "fingerprint": "fc5dd8800759ea043461",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/128"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 14476:M 12 Nov 2026 05:25:25.461 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-7d60b6875adc",
+      "seed": 662001,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #662",
+      "fingerprint": "a2d618f987d3c76f00fc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/129"
+    },
+    {
+      "rule": "check",
+      "detail": "compat-load: the candidate exited loading the parent's RDB: 15564:M 12 Nov 2026 05:27:22.781 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-950a2dc51b85",
+      "seed": 662002,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #662",
+      "fingerprint": "fc5dd8800759ea043461",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/128"
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 15564:M 12 Nov 2026 05:27:22.781 # Fatal error loading the DB, check server logs. Exiting.",
+      "scenario": "ai-950a2dc51b85",
+      "seed": 662002,
+      "builds": {
+        "parent": false,
+        "merge": false,
+        "unstable": true
+      },
+      "verdict": "appeared after #662",
+      "fingerprint": "a2d618f987d3c76f00fc",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/129"
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

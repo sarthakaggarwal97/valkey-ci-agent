@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3df9d4279414bf46a9d85d599d2e60055ddaea1d",
+  "parent": "4d3d6c06a15fc5a1a2f9e17b6341cc46850a30f4",
+  "pr": 694,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix bad memory accounting for sds when no malloc_size available (#694)",
+  "date": "2024-06-25",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4938,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change swaps s_malloc_size for s_malloc_usable_size in sdsAllocSize for SDS_TYPE_5 strings. These differ only when HAVE_MALLOC_SIZE is undefined, i.e. a build compiled with NO_MALLOC_USABLE_SIZE on a libc without malloc_usable_size/malloc_size; on every default Linux build (jemalloc, tcmalloc, or glibc) HAVE_MALLOC_SIZE is defined and zmalloc_usable_size(p) is #defined to zmalloc_size(p) (src/zmalloc.h:160), so the patched code compiles to exactly the parent's code. The fuzzer cannot control compile-time flags, so on the runner-supplied builds the change and parent are behaviorally identic"
+}

@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.standalone-readonly-capa
+deployment:
+  modes: [standalone]
+metadata:
+  description: READONLY, READWRITE and CLIENT CAPA now succeed on a standalone server
+    (the parent rejects them); capa on a primary never redirects, and CLIENT CAPA
+    queues inside MULTI
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: capa
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [READONLY], expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, nosuch], expect: {equals: null}}
+    - {command: [READWRITE], expect_difference: true, expect: {equals: OK}}
+    - {command: [CLIENT, CAPA, redirect], expect_difference: true, expect: {equals: OK}}
+    - {command: [CLIENT, CAPA, ""], expect_difference: true, expect: {equals: OK}}
+    - {command: [CLIENT, CAPA, redirect, redirect, REDIRECT, Redirect, unknown-capability,
+        redirect, redirect], expect_difference: true, expect: {equals: OK}}
+    - {command: [CLIENT, CAPA], expect_difference: true, expect: {error: "wrong number\
+          \ of arguments"}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [CLIENT, CAPA, redirect], expect_difference: true, expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {equals: [OK]}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [GET, k2], expect: {equals: v2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [capa.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: capa}

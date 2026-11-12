@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e84eda90925d..5d2348cee288.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-85dddf2a01e9
+seed: 675001
+experiment:
+  id: proposed.command-docs-primary-rename
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

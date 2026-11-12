@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.clusterlink-kill-self
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: DEBUG CLUSTERLINK KILL targeting the node's own id is rejected by the
+    change but accepted by the parent
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.commands
+  id: linkkill
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 2
+    server_config: {enable-debug-command: yes}
+    timeout_s: 20
+    commands:
+    - {command: [DEBUG, CLUSTERLINK, KILL, all, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [DEBUG, CLUSTERLINK, KILL, all, "<node.0.id>"], node: 0, expect_difference: true,
+      expect: {error: "myself"}}
+    - {command: [DEBUG, CLUSTERLINK, KILL, from, "<node.0.id>"], node: 0, expect_difference: true,
+      expect: {error: "myself"}}
+    - {command: [DEBUG, CLUSTERLINK, KILL, to, "<node.0.id>"], node: 0, expect_difference: true,
+      expect: {error: "myself"}}
+    - {command: [DEBUG, CLUSTERLINK, KILL, all, abcabcabcabcabcabcabcabcabcabcabcabcabca],
+      node: 0, expect: {error: "Unknown node"}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: linkkill}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4135894a5d40..b33f932c5670.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7d60b6875adc
+seed: 662001
+experiment:
+  id: proposed.debug-help-missing-commas
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

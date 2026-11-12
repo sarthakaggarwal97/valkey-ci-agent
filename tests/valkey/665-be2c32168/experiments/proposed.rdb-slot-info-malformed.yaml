@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.rdb-slot-info-malformed
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: A malformed slot-info AUX field in a loaded RDB is rejected by the
+    change build and ignored by the parent
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: reload
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    files:
+      corrupt.rdb: !!binary 'UkVESVMwMDEx+glzbG90LWluZm8ENSwxMP8AAAAAAAAAAA=='
+    commands:
+    - {command: [CONFIG, SET, dbfilename, corrupt.rdb], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect_difference: true, expect: {exists: false}}
+    - {command: [PING], expect_difference: true, expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: reload}

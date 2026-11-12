@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.cluster-slot-stats-disabled
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER SLOT-STATS on a non-cluster server takes the cluster-disabled
+    branch, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: disabled
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CLUSTER, 'SLOT-STATS', SLOTSRANGE, 0, 16383], expect_difference: true,
+      expect: {error: "cluster support disabled"}}
+    - {command: [CLUSTER, 'SLOT-STATS', ORDERBY, key-count], expect_difference: true,
+      expect: {error: "cluster support disabled"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [disabled.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: disabled}

@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ab3873011a6c..28c5a17edfff.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-43744dd6735c
+seed: 2
+experiment:
+  id: proposed.replica-capa-redirect
+  inputs:
+    resp: 3
+    replica_read_only: 'yes'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

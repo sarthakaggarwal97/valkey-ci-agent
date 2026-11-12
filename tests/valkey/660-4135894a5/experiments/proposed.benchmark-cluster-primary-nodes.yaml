@@ -1,0 +1,19 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-cluster-primary-nodes
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark --cluster prints the renamed primary wording of the
+    build under test against the parent's master wording
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, -n, 100, -c, 2, -t, set],
+      expect_difference: true, expect: {stdout: {contains: "primary nodes:"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

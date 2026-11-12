@@ -1,0 +1,32 @@
+extends: [valkey.base]
+id: proposed.cluster-node-restart-nodesconf
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Gracefully restart a cluster replica under writes; on startup clusterLoadConfig
+    re-parses nodes.conf flags through the new master-or-primary and slave-or-replica
+    branches and the node rejoins with the right role
+components:
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes]
+  config: {seconds: 3}
+- use: valkey.action.restart-instance
+  id: restart-replica
+  depends_on: [warm-up]
+  config: {instance: replica}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [restart-replica]
+  config: {seconds: 15}
+- use: valkey.observer.log
+  id: load-logs
+  config:
+    instances: replicas
+    expect:
+    - {pattern: "Node configuration loaded, I'm", evidence_id: valkey.log.nodesconf-loaded,
+      required: true}
+required_evidence:
+- {evidence_id: valkey.instance.restarted, source: restart-replica}
+- {evidence_id: valkey.log.nodesconf-loaded, source: load-logs}

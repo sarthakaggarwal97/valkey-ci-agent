@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.tools-primary-wording
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli cluster manager output, --rdb SYNC transfer messages, and
+    valkey-benchmark cluster banner say "primary" where the parent said "master"
+components:
+- use: valkey.action.tools
+  id: tools
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 60
+    ignore:
+    - '[^\n]*\r'
+    - '^.*requests completed in.*\n'
+    - '^.*per second.*\n'
+    - '^\s+\d+\.\d+.*\n'
+    - '^.*writing \d+ bytes.*\n'
+    runs:
+    - {tool: valkey-cli, args: [--cluster, info, "127.0.0.1:$port"], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "keys in 1 primaries."}}}
+    - {tool: valkey-cli, args: [--cluster, rebalance, "127.0.0.1:$port", --cluster-weight,
+        aaaaaaaaaaaa=2], expect_difference: true, expect: {stdout: {contains: "No\
+            \ such primary node"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, repl-diskless-sync, "no"],
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, --rdb, backup.rdb], expect_difference: true,
+      expect: {exit: {equals: 0}, stderr: {contains: "SYNC sent to primary"}}}
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, -t, set, -n, 100, -c,
+        2, -d, 16], expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: "cluster mode: yes (1 primaries)"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: tools}

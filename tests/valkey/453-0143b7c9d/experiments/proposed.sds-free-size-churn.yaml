@@ -1,0 +1,87 @@
+extends: [valkey.liveness]
+id: proposed.sds-free-size-churn
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Churn sds strings across every header type (5/8/16/32), the embstr/raw boundary,
+    APPEND/SETRANGE growth and hyperloglog's sdsResize path, then free them. sdsfree
+    now passes a header-derived size to jemalloc's sized free (je_sdallocx); a header
+    alloc field that disagrees with the real allocation corrupts the heap, caught
+    by the liveness oracle and by the reply comparison against the parent build. No
+    reply is meant to differ.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {set-max-listpack-entries: 0, hash-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, e, ""], expect: {equals: OK}}
+    - {command: [GET, e], expect: {equals: ""}}
+    - {command: [DEL, e], expect: {equals: 1}}
+    - {command: [SET, k31, "0123456789012345678901234567890"], expect: {equals: OK}}
+    - {command: [SET, k32, "01234567890123456789012345678901"], expect: {equals: OK}}
+    - {command: [SET, k44, "01234567890123456789012345678901234567890123"], expect: {
+        equals: OK}}
+    - {command: [SET, k45, "012345678901234567890123456789012345678901234"], expect: {
+        equals: OK}}
+    - {command: [STRLEN, k45], expect: {equals: 45}}
+    - {command: [DEL, k31, k32, k44, k45], expect: {equals: 4}}
+    - {command: [SET, a, ""], expect: {equals: OK}}
+    - {command: [APPEND, a, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      expect: {equals: 64}}
+    - {command: [APPEND, a, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      expect: {equals: 128}}
+    - {command: [APPEND, a, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      expect: {equals: 192}}
+    - {command: [APPEND, a, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      expect: {equals: 256}}
+    - {command: [APPEND, a, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      expect: {equals: 320}}
+    - {command: [APPEND, a, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      expect: {equals: 384}}
+    - {command: [DEL, a], expect: {equals: 1}}
+    - {command: [SETRANGE, big, 65535, x], expect: {equals: 65536}}
+    - {command: [STRLEN, big], expect: {equals: 65536}}
+    - {command: [SETRANGE, big, 100000, y], expect: {equals: 100001}}
+    - {command: [GETRANGE, big, 99998, 100000], expect: {equals: !!binary "AAB5"}}
+    - {command: [COPY, big, big2], expect: {equals: 1}}
+    - {command: [SETRANGE, big2, 1000000, z], expect: {equals: 1000001}}
+    - {command: [DEL, big, big2], expect: {equals: 2}}
+    - {command: [SADD, s, "", "0123456789012345678901234567890", "01234567890123456789012345678901"],
+      expect: {equals: 3}}
+    - {command: [SREM, s, ""], expect: {equals: 1}}
+    - {command: [SCARD, s], expect: {equals: 2}}
+    - {command: [SMEMBERS, s], compare: unordered}
+    - {command: [DEL, s], expect: {equals: 1}}
+    - {command: [HSET, h, fields, x, "0123456789012345678901234567890", y], expect: {
+        equals: 2}}
+    - {command: [HGETALL, h], compare: unordered-pairs}
+    - {command: [HDEL, h, fields], expect: {equals: 1}}
+    - {command: [DEL, h], expect: {equals: 1}}
+    - {command: [CONFIG, SET, hll-sparse-max-bytes, "0"], expect: {equals: OK}}
+    - {command: [PFADD, d, e1, e2, e3, e4, e5, e6, e7, e8, e9, e10], expect: {equals: 1}}
+    - {command: [PFCOUNT, d], expect: {equals: 10}}
+    - {command: [DEL, d], expect: {equals: 1}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, t, v], expect: {equals: QUEUED}}
+    - {command: [APPEND, t, "012345678901234567890123456789012345678901234"], expect: {
+        equals: QUEUED}}
+    - {command: [DEL, t], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, 46, 1]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

@@ -1,0 +1,23 @@
+extends: [valkey.liveness]
+id: proposed.rdb-version-compat
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-check-rdb rejects a v12 RDB and the removed slot-info opcode
+    244 that the parent still reads
+components:
+- use: valkey.action.tools
+  id: check
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files:
+      v12.rdb: !!binary 'UkVESVMwMDEy/wAAAAAAAAAA'
+      slotinfo.rdb: !!binary 'UkVESVMwMDEx/gD0AAAA/wAAAAAAAAAA'
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - {tool: valkey-check-rdb, args: [v12.rdb], expect_difference: true, expect: {
+        stdout: {contains: "Can't handle RDB format version 12"}}}
+    - {tool: valkey-check-rdb, args: [slotinfo.rdb], expect_difference: true, expect: {
+        stdout: {contains: "Invalid object type: 244"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: check}

@@ -1,0 +1,14 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ce79539047cc..32ca6e5b38bf.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ec993b3a3367
+seed: 7001
+experiment:
+  id: proposed.setslot-legacy-replica-skips-replication
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 2
+  base_port: 7000

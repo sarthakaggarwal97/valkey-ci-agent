@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ab3873011a6c208fab4005f7ace87df03850cf03",
+  "parent": "495c35d918ffc92b5fe5b7180ea722c282826460",
+  "pr": 691,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replacing REDIS_STATIC with static (#691)",
+  "date": "2024-06-26",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3972,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the REDIS_STATIC macro to the literal keyword static in src/quicklist.c and removes the now-unused -DREDIS_STATIC=''/-DSERVER_STATIC='' definitions from the Makefiles. quicklist.c's fallback already defined REDIS_STATIC as static (the Makefile defined SERVER_STATIC, a different symbol, and Lua's sources never reference REDIS_STATIC), so every affected function was compiled with identical static linkage before and after. No runtime behaviour, reply, encoding, persistence or replication path changes; it is a pure build/refactor change that needs no scenario."
+}

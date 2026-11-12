@@ -1,0 +1,59 @@
+extends: [valkey.liveness]
+id: proposed.script-show
+deployment:
+  modes: [standalone]
+metadata:
+  description: SCRIPT SHOW dumps a cached script by sha1, and the NOSCRIPT error message
+    drops "Please use EVAL."
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: show
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 10
+    commands:
+    - {command: [SCRIPT, LOAD, "return 'dump'"], expect: {equals: 4f5a49d7b18244a3b100d159b78b51474e23e081}}
+    - {command: [SCRIPT, SHOW, 4f5a49d7b18244a3b100d159b78b51474e23e081], expect_difference: true,
+      expect: {equals: "return 'dump'"}}
+    - {command: [SCRIPT, SHOW, 4F5A49D7B18244A3B100D159B78B51474E23E081], expect_difference: true,
+      expect: {equals: "return 'dump'"}}
+    - {command: [SCRIPT, SHOW, AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA], expect_difference: true,
+      expect: {error: NOSCRIPT}}
+    - {command: [SCRIPT, SHOW, b534286061d4b06c06015ae8], expect_difference: true,
+      expect: {error: NOSCRIPT}}
+    - {command: [SCRIPT, SHOW, ""], expect_difference: true, expect: {error: NOSCRIPT}}
+    - {command: [SCRIPT, SHOW, !!binary "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhAA=="],
+      expect_difference: true, expect: {error: NOSCRIPT}}
+    - {command: [SCRIPT, SHOW, 4f5a49d7b18244a3b100d159b78b51474e23e081, 4f5a49d7b18244a3b100d159b78b51474e23e081],
+      expect_difference: true, expect: {error: true}}
+    - {command: [SCRIPT, SHOW], expect_difference: true, expect: {error: true}}
+    - {command: [EVALSHA, ffffffffffffffffffffffffffffffffffffffff, 0], expect_difference: true,
+      expect: {error: "No matching script"}}
+    - {command: [EVALSHA, abc, 0], expect_difference: true, expect: {error: "No matching\
+          \ script"}}
+    - {command: [EVALSHA_RO, ffffffffffffffffffffffffffffffffffffffff, 0], expect_difference: true,
+      expect: {error: "No matching script"}}
+    - {command: [SCRIPT, HELP], expect_difference: true, expect: {contains: "SHOW\
+          \ <sha1>"}}
+    - {command: [COMMAND, COUNT], expect_difference: true, expect: {min: 100}}
+    - {command: [ACL, SETUSER, u, on, ">pw", "+script|show"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SCRIPT, FLUSH, SYNC], expect: {equals: OK}}
+    - {command: [SCRIPT, SHOW, 4f5a49d7b18244a3b100d159b78b51474e23e081], expect_difference: true,
+      expect: {error: NOSCRIPT}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [show.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: show}
