@@ -84,3 +84,41 @@ jobs:
           path: ci-fix-score/
           retention-days: 30
           overwrite: true
+
+  # Fork test only, do not merge: a fork92-* case's fix is published to the
+  # fork's copy of the 9.2 sweep (scripts/ci_fix/fork_publish.py), as the user.
+  fork-publish:
+    name: "Publish to the fork's test sweep (${{ inputs.case }})"
+    needs: fix
+    if: always() && startsWith(inputs.case, 'fork92-') && github.repository == 'sarthakaggarwal97/valkey-ci-agent'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Download the plan
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: ci-fix-plan-eval-${{ inputs.case }}
+          path: ci-fix-plan
+
+      - name: Download the fix
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: ci-fix-result-eval-${{ inputs.case }}
+          path: ci-fix-result
+
+      - name: Publish to the fork
+        shell: bash
+        env:
+          FORK_TOKEN: ${{ secrets.REHEARSAL_PAT }}
+        run: python -m scripts.ci_fix.fork_publish --plan ci-fix-plan --outcome ci-fix-result

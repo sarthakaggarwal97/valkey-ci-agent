@@ -745,3 +745,38 @@ cases:
     base_branch: '9.1'
     pr: 5074
     backport: true
+
+  # Fork test only: 9.2 sweep failures whose bot fixes were reverted, replayed on the
+  # sweep as it is now and published to the fork's copy of it (scripts/ci_fix/fork_publish.py).
+  - id: fork92-valgrind-replication
+    about: 9.2's valgrind integration job, where replication tests time out under valgrind.
+    repo: valkey-io/valkey
+    run_id: 43103834112
+    job_id: 130801873014
+    job: test-valgrind-test (integration-type)
+    sha: 8fe49206e5a989cd5cd83ceb8a4cfc158bc452d6
+    base_branch: '9.2'
+    pr: 5357
+    backport: true
+
+  - id: fork92-alma-jemalloc
+    about: 9.2's almalinux8 jemalloc job, with client-eviction and pubsub tests failing on a slow runner.
+    repo: valkey-io/valkey
+    run_id: 43194672116
+    job_id: 131102624996
+    job: test-almalinux8-jemalloc
+    sha: 8fe49206e5a989cd5cd83ceb8a4cfc158bc452d6
+    base_branch: '9.2'
+    pr: 5357
+    backport: true
+
+  - id: fork92-centos-failover
+    about: 9.2's centosstream9 job, where a manual failover test sees the bumped epoch too early.
+    repo: valkey-io/valkey
+    run_id: 43137901844
+    job_id: 130917552537
+    job: test-centosstream9-tls-module-no-tls
+    sha: 8fe49206e5a989cd5cd83ceb8a4cfc158bc452d6
+    base_branch: '9.2'
+    pr: 5357
+    backport: true
