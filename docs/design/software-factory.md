@@ -9,6 +9,12 @@ the recipe, improve it for everyone, or say how often it is right. This
 post proposes one shared recipe for Valkey, kept in a repository, reviewed
 like code, and measured in one place.
 
+In short: a committer puts the label `needs-agent-fix` on an issue. The
+bot writes a test that shows the bug, or the agreed behaviour of a small
+feature, and then the change that makes the test pass. If both hold up,
+it opens a draft pull request and keeps it green, and committers review
+and merge it like any other.
+
 ```mermaid
 flowchart TD
     A["Issue: a bug, or a small feature"] -->|"a committer applies needs-agent-fix"| B["Intake: who labelled it, and is anyone already on it?"]
@@ -22,10 +28,6 @@ flowchart TD
     H --> I["Committers review and merge, as for any PR"]
 ```
 
-The goal isn't speed: in a sample of recently closed Valkey bugs, a person
-had opened a fix PR for most of them within a day. Review is the slow part
-of our process, so the design spends as little review time as possible.
-
 `valkey-ci-agent` already runs a CI fix bot that takes a failed CI job, has
 Claude propose a fix, verifies it, and posts it. This reuses that engine
 and most of the code around it; [what it reuses](#what-it-reuses) maps
@@ -35,7 +37,11 @@ already agreed. New commands and breaking changes stay out, because they
 are TSC decisions, and exploratory work and refactors are outside this
 proposal's scope.
 
-## Three rules
+The goal isn't speed: in a sample of recently closed Valkey bugs, a person
+had opened a fix PR for most of them within a day. Review is the slow part
+of our process, so the design spends as little review time as possible.
+
+## Four rules
 
 1. **Nothing the bot writes is pushed until code has built it and run its
    test.** A change that can't be verified is posted as a comment, or not
@@ -46,14 +52,31 @@ proposal's scope.
    on a bot PR need write access to `valkey-io/valkey`, checked live. The
    trigger is a label rather than a comment because a label is a queue
    anyone can see, waits when the bot is busy, and cancels when removed.
+4. **It doesn't duplicate people's work.** People often get to a fix
+   first, so the bot skips an issue that is assigned or has an open PR
+   saying it fixes it, and checks again right before it publishes. The
+   detector-issue path already makes both checks.
 
-Because people often get to a fix first, the likeliest waste is duplicate
-work. The bot skips an issue that is assigned or has an open PR
-saying it fixes it, and checks again right before it publishes, in case
-someone started while it ran. The detector-issue path already makes both
-checks.
+## How it rolls out
 
-## Evidence first: a failing test
+Each step has to earn the next.
+
+1. **Replay.** Run the recipe on 40 recently closed bugs and a set of
+   recent small features, writing nothing to Valkey, and count, for each
+   kind separately, how often a committer would have merged the result.
+2. **Comments.** The label turns on, but the bot only comments with its
+   test and patch.
+3. **Pull requests.** Draft PRs, at most five open at a time. A revert, or a
+   run of PRs closed unmerged, stops new ones.
+4. **Review loop.** `@valkeyrie-ops address` applies a committer's review
+   comments in one commit, rerunning every check. It never runs unprompted.
+
+Bugs go first in the queue until features have numbers of their own.
+
+The rest of this post goes into the detail: how a run works, the review
+it has to pass, the pull request, and how the bot is contained.
+
+## How a run works
 
 A CI fix starts from evidence: a job that failed. An issue is only
 someone's description, so the bot's first job is to produce the evidence
@@ -131,64 +154,6 @@ files after a Daily CI failure, keep going through the existing engine
 with the failed job as evidence. They are mostly flaky tests, which don't
 fail on demand, so the engine can only show the test passing repeatedly
 with the fix. Their PRs say that this is a weaker claim.
-
-## Code decides, Claude helps
-
-Code works out what to act on, checks everything Claude hands back, and
-makes every commit and push. Claude is used only where reading and
-understanding code is the task. A run is the CI fix bot's three jobs, and
-only the outer two can reach GitHub.
-
-```mermaid
-flowchart TD
-    I["Issue: anyone can write it"]
-    subgraph Plan["Plan job: read and comment token"]
-        P["Check who labelled it<br/>pin the issue and the unstable commit"]
-    end
-    subgraph Fix["Fix job: no GitHub token"]
-        C["Claude: edits files, no shell"]
-        T["Builds and tests: separate accounts,<br/>loopback only, read-only build"]
-    end
-    subgraph Publish["Publish job: write token"]
-        U["Recheck the target<br/>filter the text, scan for secrets"]
-    end
-    O["PR from the bot's fork,<br/>treated like an outside contributor's"]
-    I -->|"a committer applies the label"| P
-    P -->|"links never fetched<br/>only committers' comments are direction"| C
-    C <--> T
-    T -->|"only what passed every check"| U
-    U --> O
-```
-
-A hostile issue may try to steer Claude, and the design assumes that
-sometimes works. So the issue is pinned once a committer has read it, the
-fix job has no token, and tests can't reach the network or change the
-built server. Publish strips mentions, extra closing keywords and links
-from everything the model wrote.
-
-The bot keeps no database and no state of its own. Everything it needs to
-remember lives on GitHub:
-
-- the label is the queue;
-- the bot's status comment on the issue records what it did, which
-  revision it read, and how many runs it has made;
-- a marker on the PR counts its CI fixes;
-- repository variables hold the kill switch and the rollout step.
-
-Every pass rereads that state, so a run that dies leaves nothing to clean
-up, and repeating a pass can't push or post twice. The markers are
-bookkeeping, not a security boundary: committers can edit comments.
-
-The PRs come from a fork owned by a machine user. Today the bot pushes
-backport branches to `valkey-io/valkey` itself, where CI runs the moment a
-branch is pushed, before anyone has read it, in jobs holding the Codecov
-token and CodeQL's write permission. That's acceptable for cherry-picks of
-reviewed commits, not for code written from a stranger's issue. A
-fork PR gets what any outside contributor's PR gets, and Valkey's own
-`AGENTS.md` says agents should never push upstream. The fork belongs to a
-user account because GitHub won't let committers push fixups to an
-organization-owned fork. The bot's token on `valkey-io/valkey` asks only
-for pull request and issue write, so it can't merge.
 
 ## Meeting the reviewers' standard
 
@@ -291,20 +256,63 @@ any contributor's PR, so the bot never rewrites code under a review. If
 it pushes after an approval, it dismisses the approval, because `unstable`
 doesn't and an approval should mean the code that was read.
 
-## Rolling it out
+## Keeping it contained
 
-Each step has to earn the next.
+Code works out what to act on, checks everything Claude hands back, and
+makes every commit and push. Claude is used only where reading and
+understanding code is the task. A run is the CI fix bot's three jobs, and
+only the outer two can reach GitHub.
 
-1. **Replay.** Run the recipe on 40 recently closed bugs and a set of
-   recent small features, writing nothing to Valkey, and count, for each
-   kind separately, how often a committer would have merged the result.
-   Bugs go first in the queue until features have numbers of their own.
-2. **Comments.** The label turns on, but the bot only comments with its
-   test and patch.
-3. **Pull requests.** Draft PRs, at most five open at a time. A revert, or a
-   run of PRs closed unmerged, stops new ones.
-4. **Review loop.** `@valkeyrie-ops address` applies a committer's review
-   comments in one commit, rerunning every check. It never runs unprompted.
+```mermaid
+flowchart TD
+    I["Issue: anyone can write it"]
+    subgraph Plan["Plan job: read and comment token"]
+        P["Check who labelled it<br/>pin the issue and the unstable commit"]
+    end
+    subgraph Fix["Fix job: no GitHub token"]
+        C["Claude: edits files, no shell"]
+        T["Builds and tests: separate accounts,<br/>loopback only, read-only build"]
+    end
+    subgraph Publish["Publish job: write token"]
+        U["Recheck the target<br/>filter the text, scan for secrets"]
+    end
+    O["PR from the bot's fork,<br/>treated like an outside contributor's"]
+    I -->|"a committer applies the label"| P
+    P -->|"links never fetched<br/>only committers' comments are direction"| C
+    C <--> T
+    T -->|"only what passed every check"| U
+    U --> O
+```
+
+A hostile issue may try to steer Claude, and the design assumes that
+sometimes works. So the issue is pinned once a committer has read it, the
+fix job has no token, and tests can't reach the network or change the
+built server. Publish strips mentions, extra closing keywords and links
+from everything the model wrote.
+
+The bot keeps no database and no state of its own. Everything it needs to
+remember lives on GitHub:
+
+- the label is the queue;
+- the bot's status comment on the issue records what it did, which
+  revision it read, and how many runs it has made;
+- a marker on the PR counts its CI fixes;
+- repository variables hold the kill switch and the rollout step.
+
+Every pass rereads that state, so a run that dies leaves nothing to clean
+up, and repeating a pass can't push or post twice. The markers are
+bookkeeping, not a security boundary: committers can edit comments.
+
+The PRs come from a fork owned by a machine user. Today the bot pushes
+backport branches to `valkey-io/valkey` itself, where CI runs the moment a
+branch is pushed, before anyone has read it, in jobs holding the Codecov
+token and CodeQL's write permission. That's acceptable for cherry-picks of
+reviewed commits, not for code written from a stranger's issue. A
+fork PR gets what any outside contributor's PR gets, and Valkey's own
+`AGENTS.md` says agents should never push upstream. The fork belongs to a
+user account because GitHub won't let committers push fixups to an
+organization-owned fork. The bot's token on `valkey-io/valkey` asks only
+for pull request and issue write, so it can't merge.
 
 ## What it reuses
 
