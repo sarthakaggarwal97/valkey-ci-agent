@@ -11,7 +11,7 @@ like code, and measured in one place.
 
 ```mermaid
 flowchart TD
-    A["Bug report"] -->|"a committer applies needs-agent-fix"| B["Intake: who labelled it, and is it eligible?"]
+    A["Bug report"] -->|"a committer applies needs-agent-fix"| B["Intake: who labelled it, and is anyone already on it?"]
     B -->|"no"| X["Label removed, with the reason"]
     B -->|"yes"| C["Phase 1: write a test that fails"]
     C -->|"no test fails the right way"| D["Comment: what it found, and what it could not reproduce"]
@@ -43,6 +43,12 @@ write, instead of a CI log.
    on a bot PR need write access to `valkey-io/valkey`, checked live. The
    trigger is a label rather than a comment because a label is a queue
    anyone can see, waits when the bot is busy, and cancels when removed.
+
+People usually open a fix within a day, so the likeliest waste is
+duplicate work. The bot skips an issue that is assigned or has an open PR
+saying it fixes it, and checks again right before it publishes, in case
+someone started while it ran. The detector-issue path already makes both
+checks.
 
 ## Evidence first: a failing test
 
@@ -96,8 +102,7 @@ Then code checks that:
 - `-Werror`, `clang-format` and the generated-file check pass;
 - nothing under `.github/` or `deps/` changed, no command was added, and
   the patch is small enough to review in one sitting;
-- a second, read-only Claude session approves it against the checklist
-  below.
+- a second, read-only Claude session fails to break it (below).
 
 A failure goes back to Claude once. If nothing holds up, the bot still
 posts the failing test, which helps whoever picks up the bug.
@@ -180,11 +185,11 @@ them.
 
 ```mermaid
 flowchart TD
-    G["Valkey's guidelines"] --> R["The recipe: prompts, lint, checklist"]
+    G["Valkey's guidelines"] --> R["The recipe: prompts, lint, review"]
     E["Recent fixes and their reviews"] --> R
     R --> PR["Bot PRs"]
     PR --> RV["Committers review"]
-    RV -->|"a comment that keeps coming up"| CH["Change the lint, the checklist,<br/>the bot's guide or AGENTS.md"]
+    RV -->|"a comment that keeps coming up"| CH["Change the lint, the review,<br/>the bot's guide or AGENTS.md"]
     CH -->|"replayed against past bugs first"| R
 ```
 
@@ -203,11 +208,15 @@ what the standard is; these show it.
 `wait_for_condition` instead of a fixed `after`, each rule citing its
 guideline.
 
-**A checklist** for what it can't. The reviewer session rejects a change
-that isn't the smallest fix for the cause, doesn't match the code around
-it, tests something easier than the issue claims, leaves non-obvious
-behaviour unexplained, would be hard to backport, or changes an existing
-test without a reason that holds.
+**A reviewer that has to find a hole.** The second session's job is not
+to approve against a list but to find a case the fix still gets wrong: if
+the issue describes a failure after a restart, a test that only checks
+behaviour before one. It must name a specific counterexample, or explain
+why none exists. When it can write the counterexample as a test, code runs
+it, and if that test fails on the fixed code the fix goes back to Claude
+with it. The reviewer also rejects a change that isn't the smallest fix
+for the cause, doesn't match the code around it, would be hard to
+backport, or changes an existing test without a reason that holds.
 
 Advice that applies to every contributor should move from the bot's own
 guide into `AGENTS.md`, where everyone's tools read it. For modules, each
@@ -286,13 +295,13 @@ each part to what it reuses, and what is new.
 
 | Part | Reuses | New |
 |---|---|---|
-| Intake | The detector-issue dispatcher and `ci-fix-issues.yml`, which already queue one run per issue, two at a time; the live permission check in `ci_fix/gate.py` | Reading the label event, checking the labeller's role instead of team membership |
+| Intake | The detector-issue dispatcher and `ci-fix-issues.yml`, which already queue one run per issue, two at a time; their checks for an assignee and an open fix PR; the live permission check in `ci_fix/gate.py` | Reading the label event, checking the labeller's role instead of team membership |
 | The run | `ci-fix-run.yml`'s plan, fix and publish jobs; the CI fix engine and its two Claude sessions; the separate system account in `common/isolation.py`; the test loops in `ci_fix/verification.py` | A way into the engine without a failed CI job; the reproduce phase; crash detection; loopback-only networking and a read-only build |
 | Publishing | `ci_fix/publish.py` and the leased push in `ci_fix/push.py`; the backport registry's `push_repo`, which already pushes to a fork owned by another account | Filtering the model's text and scanning for secrets |
 | Fixing CI | The backport CI follow-up, which already watches the bot's PRs and hands one failed job at a time to the CI fix bot; `@valkeyrie-ops fix` for anything a committer wants fixed | Comparing with the same job on `unstable`; following PRs into `unstable`; pushing to a fork head, where `fix` only suggests a patch today |
 | Rebasing on conflict | The backport sweep's cherry-pick and Claude conflict resolution in `backport/conflict_resolver.py` | Running it under the fix job's containment |
 | Review loop | The release-notes watcher's review-thread reading and replies in `release_notes/review.py` | Applying comments to code rather than one notes file |
-| Quality | The bot's guide in `ci_fix/guides/` and the Valkey guidelines it already hands the agent; the replay eval on the `ci-fix-replay-eval` branch | Recent fixes with their reviews, the lint, the checklist, issue cases in the replay |
+| Quality | The bot's guide in `ci_fix/guides/` and the Valkey guidelines it already hands the agent; the replay eval on the `ci-fix-replay-eval` branch | Recent fixes with their reviews, the lint, the counterexample review and running its test, issue cases in the replay |
 | State | GitHub only: labels, the bot's comments and repository variables, as every other workflow here | Nothing |
 
 ## Open questions
