@@ -11,7 +11,7 @@ like code, and measured in one place.
 
 ```mermaid
 flowchart TD
-    A["Bug report"] -->|"a committer applies needs-agent-fix"| B["Intake: who labelled it, and is anyone already on it?"]
+    A["Issue: a bug, or a small feature"] -->|"a committer applies needs-agent-fix"| B["Intake: who labelled it, and is anyone already on it?"]
     B -->|"no"| X["Label removed, with the reason"]
     B -->|"yes"| C["Phase 1: write a test that fails"]
     C -->|"no test fails the right way"| D["Comment: what it found, and what it could not reproduce"]
@@ -29,8 +29,9 @@ of our process, so the design spends as little review time as possible.
 `valkey-ci-agent` already runs a CI fix bot that takes a failed CI job, has
 Claude propose a fix, verifies it, and posts it. This reuses that engine
 and most of the code around it; [what it reuses](#what-it-reuses) maps
-each part. What changes is the input: a bug report, which anyone can
-write, instead of a CI log.
+each part. What changes is the input: an issue, which anyone can write,
+instead of a CI log. It can be a bug or a small feature whose behaviour is
+already agreed.
 
 ## Three rules
 
@@ -81,8 +82,8 @@ under `tests/` or `src/unit/`, but not touch the harness (`tests/support/`,
 `tests/helpers/`, `test_helper.tcl`, the unit-test Makefile). "Its own
 assertion" means the runner reports the failure for that test by name: an
 `[err]` from runtest with no `[exception]` or timeout, or a `[  FAILED  ]`
-from the unit-test binary. A test that fails only because it calls a
-command the fix hasn't added yet doesn't count.
+from the unit-test binary. For a bug, a test that fails only because it
+calls a command the fix hasn't added yet doesn't count.
 
 Valkey fixes crashes in public, and so does the bot: for a `[CRASH]`
 report, a crash is the expected failure. A committer who thinks a bug may
@@ -112,6 +113,22 @@ merged fix passed all its tests and a reviewer still found three holes in
 it. The checks keep PRs that aren't worth a reviewer's time from reaching
 one.
 
+**Features.** For a feature, the evidence is the agreed behaviour. Phase 1
+starts by writing it down as a short list of acceptance criteria, using
+only the issue and committers' comments. If Claude can't do that without
+guessing, because a question is still open or two options are still being
+discussed, the run stops and the bot posts that the issue doesn't have
+enough information yet, with the questions that need answering. Otherwise
+the tests encode those criteria and fail first because the feature
+doesn't exist yet, which is the failure phase 1 expects for a feature. The
+criteria go in the comment or the PR body, so reviewers check the spec as
+well as the code.
+
+New commands and breaking changes stay out, because they are TSC
+decisions. Exploratory work and refactors are outside this proposal's
+scope. Bugs and features are reported separately, and bugs go first in
+the queue until features have numbers of their own.
+
 Detector issues, the `test-failure` issues the bot's Test Failure Detector
 files after a Daily CI failure, keep going through the existing engine
 with the failed job as evidence. They are mostly flaky tests, which don't
@@ -127,7 +144,7 @@ only the outer two can reach GitHub.
 
 ```mermaid
 flowchart TD
-    I["Bug report: anyone can write it"]
+    I["Issue: anyone can write it"]
     subgraph Plan["Plan job: read and comment token"]
         P["Check who labelled it<br/>pin the issue and the unstable commit"]
     end
@@ -146,7 +163,7 @@ flowchart TD
     U --> O
 ```
 
-A hostile bug report may try to steer Claude, and the design assumes that
+A hostile issue may try to steer Claude, and the design assumes that
 sometimes works. So the issue is pinned once a committer has read it, the
 fix job has no token, and tests can't reach the network or change the
 built server. Publish strips mentions, extra closing keywords and links
@@ -169,7 +186,7 @@ The PRs come from a fork owned by a machine user. Today the bot pushes
 backport branches to `valkey-io/valkey` itself, where CI runs the moment a
 branch is pushed, before anyone has read it, in jobs holding the Codecov
 token and CodeQL's write permission. That's acceptable for cherry-picks of
-reviewed commits, not for code written from a stranger's bug report. A
+reviewed commits, not for code written from a stranger's issue. A
 fork PR gets what any outside contributor's PR gets, and Valkey's own
 `AGENTS.md` says agents should never push upstream. The fork belongs to a
 user account because GitHub won't let committers push fixups to an
@@ -211,10 +228,11 @@ guideline.
 **A reviewer that has to find a hole.** The second session's job is not
 to approve against a list but to find a case the fix still gets wrong: if
 the issue describes a failure after a restart, a test that only checks
-behaviour before one. It must name a specific counterexample, or explain
-why none exists. When it can write the counterexample as a test, code runs
-it, and if that test fails on the fixed code the fix goes back to Claude
-with it. The reviewer also rejects a change that isn't the smallest fix
+behaviour before one. For a feature, it looks for a criterion the tests
+don't cover, or a reading of the issue the criteria miss. It must name a
+specific counterexample, or explain why none exists. When it can write the
+counterexample as a test, code runs it, and if that test fails on the
+fixed code the fix goes back to Claude with it. The reviewer also rejects a change that isn't the smallest fix
 for the cause, doesn't match the code around it, would be hard to
 backport, or changes an existing test without a reason that holds.
 
@@ -279,8 +297,9 @@ doesn't and an approval should mean the code that was read.
 
 Each step has to earn the next.
 
-1. **Replay.** Run the recipe on 40 recently closed bugs, writing nothing to
-   Valkey, and count how often a committer would have merged the result.
+1. **Replay.** Run the recipe on 40 recently closed bugs and a set of
+   recent small features, writing nothing to Valkey, and count separately
+   how often a committer would have merged the result.
 2. **Comments.** The label turns on, but the bot only comments with its
    test and patch.
 3. **Pull requests.** Draft PRs, at most five open at a time. A revert, or a
@@ -296,12 +315,12 @@ each part to what it reuses, and what is new.
 | Part | Reuses | New |
 |---|---|---|
 | Intake | The detector-issue dispatcher and `ci-fix-issues.yml`, which already queue one run per issue, two at a time; their checks for an assignee and an open fix PR; the live permission check in `ci_fix/gate.py` | Reading the label event, checking the labeller's role instead of team membership |
-| The run | `ci-fix-run.yml`'s plan, fix and publish jobs; the CI fix engine and its two Claude sessions; the separate system account in `common/isolation.py`; the test loops in `ci_fix/verification.py` | A way into the engine without a failed CI job; the reproduce phase; crash detection; loopback-only networking and a read-only build |
+| The run | `ci-fix-run.yml`'s plan, fix and publish jobs; the CI fix engine and its two Claude sessions; the separate system account in `common/isolation.py`; the test loops in `ci_fix/verification.py` | A way into the engine without a failed CI job; the reproduce phase, and writing a feature's criteria first; crash detection; loopback-only networking and a read-only build |
 | Publishing | `ci_fix/publish.py` and the leased push in `ci_fix/push.py`; the backport registry's `push_repo`, which already pushes to a fork owned by another account | Filtering the model's text and scanning for secrets |
 | Fixing CI | The backport CI follow-up, which already watches the bot's PRs and hands one failed job at a time to the CI fix bot; `@valkeyrie-ops fix` for anything a committer wants fixed | Comparing with the same job on `unstable`; following PRs into `unstable`; pushing to a fork head, where `fix` only suggests a patch today |
 | Rebasing on conflict | The backport sweep's cherry-pick and Claude conflict resolution in `backport/conflict_resolver.py` | Running it under the fix job's containment |
 | Review loop | The release-notes watcher's review-thread reading and replies in `release_notes/review.py` | Applying comments to code rather than one notes file |
-| Quality | The bot's guide in `ci_fix/guides/` and the Valkey guidelines it already hands the agent; the replay eval on the `ci-fix-replay-eval` branch | Recent fixes with their reviews, the lint, the counterexample review and running its test, issue cases in the replay |
+| Quality | The bot's guide in `ci_fix/guides/` and the Valkey guidelines it already hands the agent; the replay eval on the `ci-fix-replay-eval` branch | Recent fixes with their reviews, the lint, the counterexample review and running its test, bug and feature cases in the replay |
 | State | GitHub only: labels, the bot's comments and repository variables, as every other workflow here | Nothing |
 
 ## Open questions
