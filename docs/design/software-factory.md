@@ -16,7 +16,7 @@ it opens a draft pull request and keeps it green, and committers review
 and merge it like any other.
 
 ```mermaid
-%%{init: {"flowchart": {"nodeSpacing": 20, "rankSpacing": 28}}}%%
+%%{init: {"flowchart": {"nodeSpacing": 20, "rankSpacing": 28, "wrappingWidth": 360}}}%%
 flowchart TD
     A["Issue labelled needs-agent-fix"] --> B["Intake: a committer labelled it,<br/>and nobody is on it already?"]
     B -->|"no"| X["Label removed, with the reason"]
@@ -84,7 +84,7 @@ itself: for a bug, a test that fails because of the bug; for a feature, the
 agreed behaviour written down, and tests that encode it.
 
 ```mermaid
-%%{init: {"flowchart": {"nodeSpacing": 20, "rankSpacing": 28}}}%%
+%%{init: {"flowchart": {"nodeSpacing": 20, "rankSpacing": 28, "wrappingWidth": 360}}}%%
 flowchart TD
     A["Claude writes and names a test"] --> B["Code checks: test files only,<br/>no harness edits, no crashing servers"]
     B -->|"passes"| C["Build the pinned commit,<br/>run the test three times"]
@@ -148,7 +148,7 @@ and the reviewer session is the same model reading its own kind of work.
 Four things raise the floor.
 
 ```mermaid
-%%{init: {"flowchart": {"nodeSpacing": 20, "rankSpacing": 28}}}%%
+%%{init: {"flowchart": {"nodeSpacing": 20, "rankSpacing": 28, "wrappingWidth": 360}}}%%
 flowchart TD
     G["Valkey's guidelines"] --> R["The recipe: prompts, lint, review"]
     E["Recent fixes and their reviews"] --> R
@@ -241,7 +241,7 @@ understanding code is the task. A run is the CI fix bot's three jobs, and
 only the outer two can reach GitHub.
 
 ```mermaid
-%%{init: {"flowchart": {"nodeSpacing": 20, "rankSpacing": 28}}}%%
+%%{init: {"flowchart": {"nodeSpacing": 20, "rankSpacing": 28, "wrappingWidth": 360}}}%%
 flowchart TD
     I["Issue: anyone can write it"] -->|"a committer applies the label"| P
     subgraph Plan["Plan job: read and comment token"]
