@@ -2,8 +2,6 @@
 
 *From a labelled issue to a pull request a committer is willing to own.*
 
-Status: proposal, not built yet. Author: Sarthak Aggarwal, November 2026.
-
 Many of us have our own prompts and setup for getting a model to write
 code, each with its own idea of when the result is good enough.
 That works for one person. It doesn't work for a project: nobody can see
