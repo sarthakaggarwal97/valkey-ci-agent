@@ -231,7 +231,9 @@ def test_the_eval_runs_the_production_fix_and_can_write_nowhere():
     workflow = yaml.load(text, Loader=yaml.BaseLoader)
 
     assert set(workflow["on"]) == {"workflow_dispatch"} and workflow["permissions"] == {}
-    assert set(workflow["jobs"]) == {"fix", "score"}
+    # Fork test only, do not merge: fork-publish writes to the user's fork, and only there.
+    assert set(workflow["jobs"]) == {"fix", "score", "fork-publish"}
+    assert "github.repository == 'sarthakaggarwal97/valkey-ci-agent'" in workflow["jobs"]["fork-publish"]["if"]
     fix = workflow["jobs"]["fix"]
     assert fix["uses"] == "./.github/workflows/ci-fix-run.yml" and fix["with"]["front_door"] == "eval"
     assert fix["secrets"] == {"AWS_ROLE_ARN": "${{ secrets.AWS_ROLE_ARN }}"}
