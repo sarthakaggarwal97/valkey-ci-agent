@@ -4,8 +4,8 @@
 
 Status: proposal, not built yet. Author: Sarthak Aggarwal, November 2026.
 
-Many of us now have our own prompts and our own setup for getting a model
-to write code, each with its own idea of when the result is good enough.
+Many of us have our own prompts and setup for getting a model to write
+code, each with its own idea of when the result is good enough.
 That works for one person. It doesn't work for a project: nobody can see
 the recipe, improve it for everyone, or say how often it is right. This
 post proposes one shared recipe for Valkey, kept in a repository, reviewed
@@ -25,13 +25,11 @@ flowchart TD
     I --> J["The owner squash-merges, with their own sign-off"]
 ```
 
-The committer who applies the label owns the resulting PR, as if they had
-written it. The goal isn't speed: in a sample of recently closed Valkey
-bugs, a person had opened a fix PR for most of them within a day. Review
-is the slow part of our process, so the design is built to spend as little
-review time as possible.
+The goal isn't speed: in a sample of recently closed Valkey bugs, a person
+had opened a fix PR for most of them within a day. Review is the slow part
+of our process, so the design spends as little review time as possible.
 
-None of this starts from zero. `valkey-ci-agent` already runs a CI fix bot
+`valkey-ci-agent` already runs a CI fix bot
 that takes a failed CI job, has Claude propose a fix, verifies it, and
 posts it. This builds on that engine and its containment. What changes is
 the input: a bug report, which anyone can write, instead of a CI log.
@@ -48,7 +46,7 @@ the input: a bug report, which anyone can write, instead of a CI log.
    trigger is a label rather than a comment because a label is a queue
    anyone can see, waits when the bot is busy, and cancels when removed.
 
-## A failing test is the whole game
+## Evidence first: a failing test
 
 A CI fix starts from evidence: a job that failed. A bug report is only
 someone's description, so the bot's first job is to produce the evidence
@@ -145,13 +143,21 @@ it, why the fix job has no token, why tests can't reach the network or
 change the built server, and why publish strips mentions, extra closing
 keywords and links from everything the model wrote.
 
+The bot keeps no database and no state of its own. What it needs to
+remember lives on GitHub: the label is the queue, the bot's status comment
+on the issue records what it did, which revision it read and how many runs
+it has made, a marker on the PR counts its CI fixes, and repository
+variables hold the kill switch and the rollout step. Every pass rereads that state, so a run that dies leaves nothing to
+clean up, and repeating a pass can't push or post twice. The markers are
+bookkeeping, not a security boundary: committers can edit comments.
+
 The PRs come from a fork owned by a machine user. Today the bot pushes
 backport branches to `valkey-io/valkey` itself, where CI runs the moment a
 branch is pushed, before anyone has read it, in jobs holding the Codecov
 token and CodeQL's write permission. That's acceptable for cherry-picks of
 reviewed commits, not for code written from a stranger's bug report. A
 fork PR gets what any outside contributor's PR gets, and Valkey's own
-`AGENTS.md` already says agents should never push upstream. The fork
+`AGENTS.md` says agents should never push upstream. The fork
 belongs to a user account because GitHub won't let committers push fixups
 to an organization-owned fork. The bot's token on `valkey-io/valkey` asks
 only for pull request and issue write, so it can't merge.
@@ -160,7 +166,7 @@ only for pull request and issue write, so it can't merge.
 
 No check can guarantee a fix is the one a committer would have written,
 and the reviewer session is the same model reading its own kind of work.
-Four inputs raise the floor, and recurring review comments feed back into
+Four things raise the floor, and recurring review comments feed back into
 them.
 
 ```mermaid
@@ -224,7 +230,7 @@ stateDiagram-v2
 The PR's body opens with a short summary meant to become the squash commit
 message. The rest sits under `<details><summary>AI generated
 details</summary>`, as Valkey PRs already do: the root cause, each change
-to an existing test and why, exactly what code verified, and what isn't
+to an existing test and why, what code verified, and what isn't
 established. When the bot fixes red CI on its own, the fix may only touch
 files the PR already changes, so a bug-fix PR doesn't collect fixes for
 other people's flaky tests. If it pushes after an approval, it dismisses
@@ -233,7 +239,7 @@ code that was read.
 
 ### Who signs the DCO
 
-This is where the TSC is needed most. Valkey requires a `Signed-off-by`
+Valkey requires a `Signed-off-by`
 from a known person on every commit, and a bot can't certify where code
 came from, so the bot's commits carry no sign-off. The DCO check can't
 enforce a human one either. The DCO app skips commits authored by bot
