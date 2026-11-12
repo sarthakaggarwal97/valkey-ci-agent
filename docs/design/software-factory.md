@@ -14,7 +14,7 @@ flowchart TD
     A["Issue: a bug, or a small feature"] -->|"a committer applies needs-agent-fix"| B["Intake: who labelled it, and is anyone already on it?"]
     B -->|"no"| X["Label removed, with the reason"]
     B -->|"yes"| C["Phase 1: write a test that fails"]
-    C -->|"no test fails the right way"| D["Comment: what it found, and what it could not reproduce"]
+    C -->|"no test fails the right way"| D["Comment: what it found, and what is missing"]
     C --> E["Phase 2: write a fix the test passes, then checks and a second review"]
     E -->|"no fix holds up"| F["Comment: the failing test and the analysis"]
     E --> G["Draft PR from the bot's fork"]
@@ -31,7 +31,9 @@ Claude propose a fix, verifies it, and posts it. This reuses that engine
 and most of the code around it; [what it reuses](#what-it-reuses) maps
 each part. What changes is the input: an issue, which anyone can write,
 instead of a CI log. It can be a bug or a small feature whose behaviour is
-already agreed.
+already agreed. New commands and breaking changes stay out, because they
+are TSC decisions, and exploratory work and refactors are outside this
+proposal's scope.
 
 ## Three rules
 
@@ -45,17 +47,19 @@ already agreed.
    trigger is a label rather than a comment because a label is a queue
    anyone can see, waits when the bot is busy, and cancels when removed.
 
-People usually open a fix within a day, so the likeliest waste is
-duplicate work. The bot skips an issue that is assigned or has an open PR
+Because people often get to a fix first, the likeliest waste is duplicate
+work. The bot skips an issue that is assigned or has an open PR
 saying it fixes it, and checks again right before it publishes, in case
 someone started while it ran. The detector-issue path already makes both
 checks.
 
 ## Evidence first: a failing test
 
-A CI fix starts from evidence: a job that failed. A bug report is only
+A CI fix starts from evidence: a job that failed. An issue is only
 someone's description, so the bot's first job is to produce the evidence
-itself, a test that fails because of the bug. The run has two phases.
+itself: for a bug, a test that fails because of the bug; for a feature, the
+agreed behaviour written down, and tests that encode it. The run has two
+phases.
 
 ```mermaid
 flowchart TD
@@ -82,8 +86,8 @@ under `tests/` or `src/unit/`, but not touch the harness (`tests/support/`,
 `tests/helpers/`, `test_helper.tcl`, the unit-test Makefile). "Its own
 assertion" means the runner reports the failure for that test by name: an
 `[err]` from runtest with no `[exception]` or timeout, or a `[  FAILED  ]`
-from the unit-test binary. For a bug, a test that fails only because it
-calls a command the fix hasn't added yet doesn't count.
+from the unit-test binary. A bug's test that fails only because it calls
+a command the fix hasn't added yet doesn't count.
 
 Valkey fixes crashes in public, and so does the bot: for a `[CRASH]`
 report, a crash is the expected failure. A committer who thinks a bug may
@@ -113,21 +117,14 @@ merged fix passed all its tests and a reviewer still found three holes in
 it. The checks keep PRs that aren't worth a reviewer's time from reaching
 one.
 
-**Features.** For a feature, the evidence is the agreed behaviour. Phase 1
-starts by writing it down as a short list of acceptance criteria, using
-only the issue and committers' comments. If Claude can't do that without
-guessing, because a question is still open or two options are still being
-discussed, the run stops and the bot posts that the issue doesn't have
-enough information yet, with the questions that need answering. Otherwise
-the tests encode those criteria and fail first because the feature
-doesn't exist yet, which is the failure phase 1 expects for a feature. The
-criteria go in the comment or the PR body, so reviewers check the spec as
-well as the code.
-
-New commands and breaking changes stay out, because they are TSC
-decisions. Exploratory work and refactors are outside this proposal's
-scope. Bugs and features are reported separately, and bugs go first in
-the queue until features have numbers of their own.
+**Features.** Phase 1 starts by writing the agreed behaviour as a short
+list of acceptance criteria, using only the issue and committers'
+comments. If Claude can't do that without guessing, because a question is
+still open or two options are still being discussed, the run stops and
+the bot posts the questions that need answering. Otherwise the tests
+encode those criteria and fail first because the feature doesn't exist
+yet, the one failure phase 1 accepts for a feature. The criteria go in the
+comment or the PR body, so reviewers check the spec as well as the code.
 
 Detector issues, the `test-failure` issues the bot's Test Failure Detector
 files after a Daily CI failure, keep going through the existing engine
@@ -207,7 +204,7 @@ flowchart TD
     R --> PR["Bot PRs"]
     PR --> RV["Committers review"]
     RV -->|"a comment that keeps coming up"| CH["Change the lint, the review,<br/>the bot's guide or AGENTS.md"]
-    CH -->|"replayed against past bugs first"| R
+    CH -->|"replayed against past issues first"| R
 ```
 
 **Valkey's guidelines:** the ones the CI fix bot already hands its agent:
@@ -232,9 +229,10 @@ behaviour before one. For a feature, it looks for a criterion the tests
 don't cover, or a reading of the issue the criteria miss. It must name a
 specific counterexample, or explain why none exists. When it can write the
 counterexample as a test, code runs it, and if that test fails on the
-fixed code the fix goes back to Claude with it. The reviewer also rejects a change that isn't the smallest fix
-for the cause, doesn't match the code around it, would be hard to
-backport, or changes an existing test without a reason that holds.
+fixed code the fix goes back to Claude with it. The reviewer also rejects
+a change that isn't the smallest fix for the cause, doesn't match the code
+around it, would be hard to backport, or changes an existing test without
+a reason that holds.
 
 Advice that applies to every contributor should move from the bot's own
 guide into `AGENTS.md`, where everyone's tools read it. For modules, each
@@ -298,8 +296,9 @@ doesn't and an approval should mean the code that was read.
 Each step has to earn the next.
 
 1. **Replay.** Run the recipe on 40 recently closed bugs and a set of
-   recent small features, writing nothing to Valkey, and count separately
-   how often a committer would have merged the result.
+   recent small features, writing nothing to Valkey, and count, for each
+   kind separately, how often a committer would have merged the result.
+   Bugs go first in the queue until features have numbers of their own.
 2. **Comments.** The label turns on, but the bot only comments with its
    test and patch.
 3. **Pull requests.** Draft PRs, at most five open at a time. A revert, or a
