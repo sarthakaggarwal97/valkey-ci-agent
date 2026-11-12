@@ -19,6 +19,7 @@ import textwrap
 from pathlib import Path
 from typing import Callable
 
+from scripts.backport import ci_sweep
 from scripts.ci_fix.models import CandidateAction, FixCandidate, FixTarget, TargetKind
 from scripts.ci_fix.policy import (
     WRITABLE_BRANCH_PREFIXES,
@@ -57,12 +58,17 @@ def push_candidate(
     git_env: dict[str, str],
     pre_push_check: PrePushCheck | None = None,
     allow_ci_changes: bool = False,
+    onto: str = "",
+    trailers: tuple[str, ...] = (),
 ) -> str:
     """Commit ``candidate`` on ``target.expected_sha`` and push it.
 
     ``UPDATE_PR`` requires the remote branch to still point at
     ``expected_sha``. ``DRAFT_PR`` creates a new branch and requires that the
-    remote ref not exist. A change under ``.github/`` is refused unless
+    remote ref not exist. With ``target.fix_branch``, it goes to that branch
+    instead: on top of its fixes, rebuilt on ``expected_sha``, when it is at
+    ``onto``, or as its first commit when ``onto`` is empty. ``trailers``
+    end the commit message of a patch. A change under ``.github/`` is refused unless
     ``allow_ci_changes`` (``policy.allows_ci_changes``). Returns the new
     commit SHA.
     """
@@ -76,6 +82,8 @@ def push_candidate(
             pre_push_check=pre_push_check,
             create=create,
             allow_ci_changes=allow_ci_changes,
+            onto=onto,
+            trailers=trailers,
         )
     if candidate.action is CandidateAction.PORT:
         return _push_port(
@@ -85,6 +93,7 @@ def push_candidate(
             pre_push_check=pre_push_check,
             create=create,
             allow_ci_changes=allow_ci_changes,
+            onto=onto,
         )
     raise PushRefused("Refusing to push: the agent did not prepare a fix.")
 
@@ -97,6 +106,8 @@ def _push_patch(
     pre_push_check: PrePushCheck | None,
     create: bool,
     allow_ci_changes: bool,
+    onto: str,
+    trailers: tuple[str, ...] = (),
 ) -> str:
     if not candidate.changed_paths:
         raise PushRefused("Refusing to push: the candidate has no changed paths.")
@@ -117,7 +128,8 @@ def _push_patch(
                     f"{staged!r} (expected {expected!r})."
                 )
             _set_identity(repo_dir)
-            run_git(str(repo_dir), "commit", "-m", commit_message(candidate))
+            message = commit_message(candidate) + ("\n\n" + "\n".join(trailers) if trailers else "")
+            run_git(str(repo_dir), "commit", "-m", message)
             _push(
                 repo_dir,
                 target,
@@ -125,6 +137,7 @@ def _push_patch(
                 pre_push_check=pre_push_check,
                 create=create,
                 allow_ci_changes=allow_ci_changes,
+                onto=onto,
             )
             return git_output(str(repo_dir), "rev-parse", "HEAD").strip()
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
@@ -139,6 +152,7 @@ def _push_port(
     pre_push_check: PrePushCheck | None,
     create: bool,
     allow_ci_changes: bool,
+    onto: str,
 ) -> str:
     commit = candidate.port_commit.strip()
     if not is_full_sha(commit):
@@ -165,6 +179,7 @@ def _push_port(
                 pre_push_check=pre_push_check,
                 create=create,
                 allow_ci_changes=allow_ci_changes,
+                onto=onto,
             )
             return git_output(str(repo_dir), "rev-parse", "HEAD").strip()
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
@@ -183,15 +198,16 @@ def _validate_target(target: FixTarget) -> None:
         )
     if not is_full_sha(target.expected_sha):
         raise PushRefused(f"Refusing to push from malformed SHA {target.expected_sha!r}.")
-    if not is_writable_branch(target.branch):
-        raise PushRefused(
-            f"Refusing to push to {target.branch!r}: CI fix only writes under "
-            f"{', '.join(WRITABLE_BRANCH_PREFIXES)}."
-        )
-    try:
-        run_git(None, "check-ref-format", "--branch", target.branch)
-    except subprocess.CalledProcessError as exc:
-        raise PushRefused(f"Refusing to push to malformed branch {target.branch!r}.") from exc
+    for branch in filter(None, (target.branch, target.fix_branch)):
+        if not is_writable_branch(branch):
+            raise PushRefused(
+                f"Refusing to push to {branch!r}: CI fix only writes under "
+                f"{', '.join(WRITABLE_BRANCH_PREFIXES)}."
+            )
+        try:
+            run_git(None, "check-ref-format", "--branch", branch)
+        except subprocess.CalledProcessError as exc:
+            raise PushRefused(f"Refusing to push to malformed branch {branch!r}.") from exc
 
 
 def _clone(repo_full_name: str, destination: Path) -> None:
@@ -243,6 +259,7 @@ def _push(
     pre_push_check: PrePushCheck | None,
     create: bool,
     allow_ci_changes: bool,
+    onto: str,
 ) -> None:
     if not _is_ancestor(str(repo_dir), target.expected_sha, "HEAD"):
         raise PushRefused(
@@ -273,8 +290,6 @@ def _push(
         if reason:
             raise PushRefused(f"Refusing to push: {reason}")
 
-    destination = f"refs/heads/{target.branch}"
-    expected_remote = "" if create else target.expected_sha
     run_git(
         str(repo_dir),
         "remote",
@@ -282,6 +297,15 @@ def _push(
         "origin",
         github_https_url(target.repo_full_name),
     )
+    branch, expected_remote = target.branch, ("" if create else target.expected_sha)
+    if target.fix_branch:
+        # The fix stays off the branch it was made on: it is merged onto the
+        # branch of the pull request that collects them, which takes that
+        # branch's new commits with it.
+        branch, expected_remote, create = target.fix_branch, onto, not onto
+        if onto:
+            _onto_ci_sweep(repo_dir, onto, branch, target.expected_sha, git_env=git_env)
+    destination = f"refs/heads/{branch}"
     if create:
         # An empty lease rejects an existing ref only when the push changes
         # it: pushing a commit identical to the one already there succeeds as
@@ -311,6 +335,28 @@ def _push(
         raise PushFailed(f"CI-fix push failed: {exc}") from exc
     except (subprocess.TimeoutExpired, OSError) as exc:
         raise PushFailed(f"CI-fix push failed: {exc}") from exc
+
+
+def _onto_ci_sweep(repo_dir: Path, onto: str, branch: str, sweep: str, *, git_env: dict[str, str]) -> None:
+    """Check out ``branch``'s fixes, at ``onto``, rebuilt on ``sweep``, with the commit at HEAD on top."""
+    fix = git_output(str(repo_dir), "rev-parse", "HEAD").strip()
+    try:
+        run_git(str(repo_dir), "fetch", "origin", f"refs/heads/{branch}", env=git_env)
+    except subprocess.CalledProcessError as exc:
+        raise PushFailed(f"CI-fix fetch of {branch} failed: {exc}") from exc
+    fetched = git_output(str(repo_dir), "rev-parse", "FETCH_HEAD").strip()
+    if fetched != onto:
+        raise PushStale(f"Refusing to push: {branch} moved from {onto[:12]} to {fetched[:12]}.")
+    adds, _has, foreign = ci_sweep.fixes_on(str(repo_dir), sweep, onto)
+    if foreign:
+        raise PushRefused(f"Refusing to push: {branch} has commits the bot did not make.")
+    _head, _kept, dropped = ci_sweep.rebuild(str(repo_dir), sweep, adds)
+    if dropped:
+        raise PushRefused(f"Refusing to push: {branch} is not on the sweep's head yet, and the next sweep rebuilds it.")
+    try:
+        run_git(str(repo_dir), "cherry-pick", fix)
+    except subprocess.CalledProcessError as exc:
+        raise PushRefused(f"Refusing to push: the fix does not apply on top of {branch}'s fixes.") from exc
 
 
 def check_port(repo_dir: Path, commit: str, head_sha: str) -> None:
@@ -429,7 +475,7 @@ def _is_stale_lease(exc: subprocess.CalledProcessError) -> bool:
 
 def commit_message(candidate: FixCandidate) -> str:
     """Return a concise bot-authored commit message for an authored patch."""
-    subject = fit_subject(f"Fix {candidate.failing_check or 'CI failure'}")
+    subject = fit_subject(candidate.title or f"Fix {candidate.failing_check or 'CI failure'}")
     paragraphs = [candidate.root_cause.strip(), candidate.reasoning.strip()]
     body = "\n\n".join(
         textwrap.fill(
@@ -458,4 +504,4 @@ def fit_subject(subject: str) -> str:
     # "Fix x during y in" reads as a mistake: do not end on a word that only leads to the next.
     while len(words) > 1 and words[-1].lower().strip("(`") in _DANGLING:
         words.pop()
-    return " ".join(words).rstrip(" .(")
+    return " ".join(words).rstrip(" .(,;:")

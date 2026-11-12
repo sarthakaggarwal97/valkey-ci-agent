@@ -410,6 +410,32 @@ def sibling_branch_changes(repo_dir: str, paths: tuple[str, ...], *, own_branch:
     return "\n\n".join(sections) + "\n" if sections else ""
 
 
+def pending_fixes(repo_dir: str, fix_branch: str) -> str:
+    """Markdown: the commits ``fix_branch`` has that the checkout lacks, with diffs.
+
+    A sweep PR's fixes wait in its CI-sweep PR, so the sweep's head, and its
+    CI, are without them until that is merged: the same test failing in
+    another job would otherwise be fixed again.
+    """
+    ref = f"origin/{fix_branch}"
+    try:
+        commits = _log(repo_dir, f"HEAD..{ref}", f"--max-count={_SIBLING_COMMITS}")
+        lines, diffs = [], []
+        for sha in commits:
+            subject, date = _subject_and_date(repo_dir, sha)
+            lines.append(f"- `{sha[:12]}` {date} {subject}")
+            diff = git_output(repo_dir, "show", "--no-ext-diff", "--no-textconv", "--format=", sha)
+            if len(diff) > _DIFF_CHARS:
+                diff = diff[:_DIFF_CHARS] + "\n[... diff truncated ...]"
+            diffs += ["", f"## `{sha[:12]}`: {subject}", "", "```diff", diff.rstrip("\n"), "```"]
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
+        logger.info("Could not read what %s adds: %s", ref, exc)
+        return ""
+    if not lines:
+        return ""
+    return "\n".join([f"# `{fix_branch}`", "", *lines, *diffs]) + "\n"
+
+
 def summarize_prior_fixes(fixes: tuple[PriorFix, ...]) -> str:
     """One line per candidate, for the prompt and the maintainer report."""
     lines = []

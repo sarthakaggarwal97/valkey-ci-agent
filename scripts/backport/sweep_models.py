@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from scripts.backport import models as _models
 
@@ -58,3 +59,5 @@ class PreparedBranchSweep:
     result: BranchSweepResult
     backport_label: str = "backport"
     llm_conflict_label: str = "ai-resolved-conflicts"
+    # How the open CI-sweep PR goes onto this head (``ci_sweep.Plan``), if there is one.
+    ci_sweep: Any = None

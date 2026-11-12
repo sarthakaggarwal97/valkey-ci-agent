@@ -7,6 +7,7 @@ from scripts.ci_fix.models import FailedTest
 from scripts.ci_fix.prior_fixes import (
     failing_test_history,
     find_prior_fixes,
+    pending_fixes,
     render_prior_fixes,
     sibling_branch_changes,
     summarize_prior_fixes,
@@ -320,3 +321,23 @@ def test_every_upstream_commit_a_branch_lacks_is_indexed_with_its_files(tmp_path
     _refresh(clone, "origin/unstable")
     assert unported_index(str(clone)) == ""
 
+
+
+def test_the_fixes_waiting_in_the_ci_sweep_pr_are_listed_with_their_diffs(tmp_path):
+    """The sweep's head is without them until the CI-sweep PR is merged: the same test failing in another job is not fixed twice."""
+    upstream, clone, _ = _clone_like_the_engine(tmp_path)
+    git(upstream, "branch", "agent/backport/sweep/9.0", "9.0")
+    git(upstream, "checkout", "-q", "-b", "agent/backport/ci-sweep/9.0", "agent/backport/sweep/9.0")
+    fix = commit(upstream, TEST_FILE, "test v1\nwait for the replica\n", "Fix the replication test: wait for the replica")
+    git(upstream, "checkout", "-q", "agent/backport/sweep/9.0")
+    commit(upstream, "src/server.c", "a backport\n", "Backport something (#1)")
+    git(upstream, "checkout", "-q", "agent/backport/ci-sweep/9.0")
+    git(upstream, "merge", "-q", "--no-ff", "--no-edit", "agent/backport/sweep/9.0")
+    _refresh(clone, "origin/agent/backport/sweep/9.0")
+
+    listed = pending_fixes(str(clone), "agent/backport/ci-sweep/9.0")
+
+    assert listed.startswith("# `agent/backport/ci-sweep/9.0`\n\n")
+    assert [line.split("`")[1] for line in listed.splitlines() if line.startswith("- ")] == [fix[:12]]
+    assert "+wait for the replica" in listed and "Backport something" not in listed and "Merge" not in listed
+    assert pending_fixes(str(clone), "agent/backport/ci-sweep/9.1") == ""
