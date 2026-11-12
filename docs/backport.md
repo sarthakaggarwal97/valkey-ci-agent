@@ -89,13 +89,16 @@ A repository can opt in to two kinds of help with
 
 The first is a repair. Claude gets one attempt to fix a backport that failed
 validation. It may only edit the files the backport touched, and it is not
-allowed to delete tests to make the failure go away.
+allowed to delete tests to make the failure go away. Claude has no shell
+there, so it is given the validation log and a file with the commits the
+backport brought and their diff.
 
 The second is for tests that can't run on an older branch at all. Sometimes a
 fix comes with a new test written for a test harness that the release branch
 doesn't have. Rather than quietly dropping the test, Claude ports what the
 test checks into an existing test that the branch does support, and the whole
-backport is validated again. If that can't be done, the backport fails
+backport is validated again. A long upstream test is given to Claude whole,
+as a file. If that can't be done, the backport fails
 instead of going in without its test.
 
 ## When a backport PR's own CI fails
@@ -169,7 +172,10 @@ Claude then reads the diff and the list of candidate branches and decides
 whether the change is worth backporting, and to which of those branches. It
 can narrow the list but never add to it. The agent posts one comment per PR
 naming the branches and their boards, and only when Claude is highly
-confident. PRs that change only tests, CI, or docs are never suggested. If it
+confident. PRs that change only docs are never suggested. PRs that change
+only tests or CI are judged too, since a release branch may need a test or CI
+fix to keep its own CI working, but they are never commented on: they appear
+in the job summary with the branches Claude picked. If it
 can't reach a decision about a PR, it posts nothing for that PR and marks the
 run as failed, so the next day's run tries again.
 

@@ -63,6 +63,7 @@ from scripts.ci_fix.prior_fixes import (
     find_prior_fixes,
     paths_in_log,
     render_prior_fixes,
+    sibling_branch_changes,
     summarize_prior_fixes,
     unported_changes,
     unported_index,
@@ -128,12 +129,15 @@ _MAX_TESTS = 3
 # Where a repository's test conventions for the agent live, and the
 # repository's own docs that the agent should read when present.
 _GUIDES_DIR = Path(__file__).resolve().parent / "guides"
+# The repository's own guidelines, given to the agent and the reviewer at the
+# end of the bot's guide. Not CONTRIBUTING.md, which is about process (the
+# DCO, design documents), nor .github/instructions/, which summarizes
+# DEVELOPMENT_GUIDE.md for another review tool.
 _REPO_DOCS = (
-    "tests/README.md",
-    ".github/instructions/integration-tests.instructions.md",
     "AGENTS.md",
     "DEVELOPMENT_GUIDE.md",
-    "CONTRIBUTING.md",
+    "tests/README.md",
+    "src/unit/README.md",
 )
 
 AgentFunc = Callable[..., FixCandidate]
@@ -189,7 +193,7 @@ def prepare_fix(
         return _fix_loop(
             task, repo_dir, original_head, job_log, context, plan,
             agent_func=agent_func, review=review_func or review_candidate,
-            run_test=run_test if runs_tests and plan is not None else None, deadline=deadline, job=job, tests=tests,
+            run_test=run_test if runs_tests else None, deadline=deadline, job=job, tests=tests,
         )
 
 
@@ -400,6 +404,8 @@ def _establish(
     if fixes:
         logger.info("Existing-fix candidates: %s", "; ".join(f"{f.sha[:12]} {f.subject}" for f in fixes))
     guide = guide_for(task.failure.repo_full_name)
+    if guide:
+        guide += repository_guidelines(repo_dir)
     context = FixContext(
         prior_fixes=summarize_prior_fixes(fixes),
         prior_fixes_detail=render_prior_fixes(repo_dir, fixes),
@@ -410,13 +416,19 @@ def _establish(
             if upstream_first else ""
         ),
         unported_index=unported_index(repo_dir) if upstream_first else "",
+        sibling_changes=(
+            sibling_branch_changes(
+                repo_dir, tuple(dict.fromkeys([*(test.file for test in tests if test.file), *paths])),
+                own_branch=task.target.branch, base_branch=task.failure.base_branch,
+            )
+            if upstream_first and task.policy is FixPolicy.BACKPORT else ""
+        ),
         verification=described,
         verified_by_code=plan is not None,
         upstream_first=upstream_first,
         reviewed_only=reviewed_only,
         only_built=only_built,
         guide=guide,
-        guide_paths=tuple(path for path in _REPO_DOCS if guide and (Path(repo_dir) / path).is_file()),
     )
     return context, plan
 
@@ -445,6 +457,44 @@ def _ignore_generated_copies(repo_dir: str) -> None:
                                + ISOLATED_COPY_PATTERN + "\n", encoding="utf-8")
     except OSError as exc:
         logger.warning("Could not ignore generated test copies in %s: %s", repo_dir, exc)
+
+
+def repository_guidelines(repo_dir: str) -> str:
+    """The repository's own guidelines as its default branch has them, to end the bot's guide with.
+
+    Naming their paths was not enough: of 93 fix sessions, 95% read the
+    guide they were handed and 2% opened ``tests/README.md``. And they are
+    taken from the default branch, not the checkout: a release branch cut
+    before a guideline was written does not have it (Valkey's 9.0 and older
+    have neither ``AGENTS.md`` nor ``DEVELOPMENT_GUIDE.md``), and a pull
+    request cannot rewrite what its own fix is judged by. The checkout's copy
+    stands in only where the default branch cannot be read.
+    """
+    default_ref = default_branch_ref(repo_dir)
+    sections: list[str] = []
+    for path in _REPO_DOCS:
+        text = ""
+        if default_ref:
+            try:
+                text = git_output(repo_dir, "show", f"{default_ref}:{path}")
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+                text = ""
+        if not text.strip():
+            try:
+                text = (Path(repo_dir) / path).read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+        if text.strip():
+            sections.append(f"## The repository's `{path}`\n\n{text.strip()}\n")
+    if not sections:
+        return ""
+    return (
+        "\n\n---\n\n# The repository's own guidelines\n\n"
+        "As the default branch has them. They are the authority on style and conventions. What the "
+        "policy above lets you change still decides what you may change, and a release branch may "
+        "lack a helper or an option they mention: use only what this branch has.\n\n"
+        + "\n".join(sections)
+    )
 
 
 def guide_for(repo_full_name: str) -> str:
@@ -524,6 +574,17 @@ def _fix_loop(
             continue
 
         checks = list(established)
+        round_plan = plan
+        named = _named_plan(task, repo_dir, candidate, context, job) if run_test is not None else None
+        if named is not None:
+            round_plan, named_tests = named
+            # Not the plan code made before the agent ran, which ran nothing.
+            checks = [check for check in checks if check != context.verification]
+            checks.append(
+                "Code could not tell from the log which test failed, so it ran the one the author named: "
+                + ", ".join(f"`{test.name}` in `{test.file}`" if test.name else f"`{test.file}`" for test in named_tests)
+                + ". Check against the log that it is the test that failed."
+            )
         if context.upstream_first and candidate.action is CandidateAction.PATCH and not candidate.adapts:
             checks.append(_OWN_FIX)
         if outcome.undeclared:
@@ -540,8 +601,8 @@ def _fix_loop(
         touches: tuple[int, ...] = ()
         try:
             failed = ""
-            if run_test is not None and plan is not None:
-                failed = _verify(reviewed, repo_dir, plan, run_test, deadline, checks)
+            if run_test is not None and round_plan is not None:
+                failed = _verify(reviewed, repo_dir, round_plan, run_test, deadline, checks)
             if not failed:
                 # The reviewer sees what the checks showed, not only the plan.
                 approved, reasoning = review(
@@ -573,7 +634,7 @@ def _fix_loop(
             continue
         return replace(
             candidate, verification="\n".join(checks), also_touches=touches,
-            not_run=context.reviewed_only or context.only_built,
+            not_run=(context.reviewed_only or context.only_built) and named is None,
         )
     return _refusal(
         f"No candidate passed its test and review in {MAX_ROUNDS} attempts. Last: {last}",
@@ -701,6 +762,40 @@ def tree_patch(repo_dir: str) -> str:
 
 def _noun(candidate: FixCandidate) -> str:
     return "port" if candidate.action is CandidateAction.PORT else "patch"
+
+
+def _named_plan(
+    task: FixTask, repo_dir: str, candidate: FixCandidate, context: FixContext, job: JobCommands | None,
+) -> tuple[VerifyPlan, tuple[FailedTest, ...]] | None:
+    """The plan that runs the tests the agent named, when code could name none: (plan, tests), or None.
+
+    A valgrind or sanitizer report, or a test client's exception, names no
+    test on its result line; the agent reads the whole log and can. Only a
+    test that is in the checkout is run, and the reviewer is told which one
+    it was and asked to check it against the log.
+    """
+    if not (context.reviewed_only or context.only_built) or not candidate.failing_tests:
+        return None
+    named = []
+    for test in locate_unit_tests(repo_dir, candidate.failing_tests):
+        path = Path(repo_dir, test.file)
+        if ".." in Path(test.file).parts or not _inside_checkout(repo_dir, path) or not path.is_file():
+            continue
+        if test.name and test.name not in path.read_text(encoding="utf-8", errors="replace"):
+            continue
+        named.append(test)
+    if not named:
+        return None
+    plan = plan_for(repo_dir, tuple(named), scheduled=task.failure.scheduled, job=job)
+    return (plan, plan.tests or tuple(named)) if plan is not None else None
+
+
+def _inside_checkout(repo_dir: str, path: Path) -> bool:
+    try:
+        path.resolve().relative_to(Path(repo_dir).resolve())
+    except ValueError:
+        return False
+    return True
 
 
 def _established_checks(context: FixContext) -> list[str]:

@@ -1067,6 +1067,67 @@ def test_a_backport_branch_takes_a_fix_of_its_own_where_none_is_upstream(tmp_pat
     assert "the default branch does not have it" in candidate.verification
 
 
+def test_the_guide_ends_with_the_repositorys_own_guidelines_from_its_default_branch(tmp_path, monkeypatch):
+    """Naming their paths was not enough: 2% of sessions opened tests/README.md, 95% read the guide handed to them.
+
+    And a release branch cut before a guideline was written does not have it.
+    """
+    source, head_sha = _source_repo(tmp_path)
+    git(source, "checkout", "-q", "-b", "upstream")
+    for path, text in (("AGENTS.md", "Keep changes minimal and easy to backport.\n"),
+                       ("tests/README.md", "the default branch's test readme\n")):
+        (source / path).parent.mkdir(parents=True, exist_ok=True)
+        (source / path).write_text(text, encoding="utf-8")
+        git(source, "add", path)
+    git(source, "commit", "-qm", "Write the guidelines")
+    git(source, "checkout", "-q", head_sha)
+    # The release branch has an older test readme of its own, and no AGENTS.md.
+    (source / "tests").mkdir(exist_ok=True)
+    (source / "tests" / "README.md").write_text("the release branch's older readme\n", encoding="utf-8")
+    git(source, "add", "tests/README.md")
+    git(source, "commit", "-qm", "An older readme")
+    release_head = git(source, "rev-parse", "HEAD")
+    _install_clone(monkeypatch, source)
+    monkeypatch.setattr(engine_mod, "guide_for", lambda _repo: "# The bot's policy\n")
+    agent = _adapting_agent("", "tests/value.tcl")
+
+    engine_mod.prepare_fix(_backport(_task(release_head)), _LOG, agent_func=agent)
+
+    guide = agent.contexts[0].guide
+    assert guide.startswith("# The bot's policy\n") and "# The repository's own guidelines" in guide
+    assert "## The repository's `AGENTS.md`\n\nKeep changes minimal and easy to backport." in guide
+    assert "the default branch's test readme" in guide and "the release branch's older readme" not in guide
+    # One the default branch does not have either is left out.
+    assert "DEVELOPMENT_GUIDE.md" not in guide
+
+
+def test_without_a_default_branch_to_read_the_checkouts_own_guidelines_stand_in(tmp_path, monkeypatch):
+    (tmp_path / "AGENTS.md").write_text("from the checkout\n", encoding="utf-8")
+    monkeypatch.setattr(engine_mod, "default_branch_ref", lambda _repo: "")
+
+    assert "## The repository's `AGENTS.md`\n\nfrom the checkout" in engine_mod.repository_guidelines(str(tmp_path))
+    assert engine_mod.repository_guidelines(str(tmp_path / "nowhere")) == ""
+
+
+def test_a_backport_fix_is_shown_what_the_other_release_branches_changed(tmp_path, monkeypatch):
+    source, head_sha = _source_repo(tmp_path)
+    _upstream_commit(source, head_sha)
+    _install_clone(monkeypatch, source)
+    asked = []
+    monkeypatch.setattr(engine_mod, "sibling_branch_changes",
+                        lambda _repo, paths, **kwargs: asked.append((paths, kwargs)) or "# Release branch `9.1`\n")
+    task = _backport(_task(head_sha))
+    task = replace(task, target=replace(task.target, branch="agent/backport/sweep/main"))
+    backport, general = _adapting_agent(""), _adapting_agent("")
+
+    engine_mod.prepare_fix(task, _LOG, agent_func=backport)
+    engine_mod.prepare_fix(_task(head_sha), _LOG, agent_func=general)
+
+    assert backport.contexts[0].sibling_changes == "# Release branch `9.1`\n"
+    assert asked[0][1] == {"own_branch": "agent/backport/sweep/main", "base_branch": "main"} and len(asked) == 1
+    assert general.contexts[0].sibling_changes == ""
+
+
 def test_a_backport_branch_takes_a_patch_that_adapts_a_merged_upstream_commit(tmp_path, monkeypatch):
     source, head_sha = _source_repo(tmp_path)
     commit = _upstream_commit(source, head_sha)
@@ -1301,6 +1362,74 @@ def test_a_session_that_dies_on_a_model_api_error_twice_is_a_failed_attempt(tmp_
         _prepare(tmp_path, monkeypatch, agent)
 
     assert agent.call_count == 2
+
+
+def _valgrind_repo(tmp_path):
+    """A checkout with a Tcl test file and runtest, whose CI log names no test: a valgrind report."""
+    source, _head = _source_repo(tmp_path)
+    (source / "runtest").write_text("#!/bin/sh\n", encoding="utf-8")
+    (source / "tests" / "unit").mkdir(parents=True)
+    (source / "tests" / "unit" / "save.tcl").write_text('test "Save with bgsave" {\n    r ping\n}\n', encoding="utf-8")
+    git(source, "add", ".")
+    git(source, "commit", "-qm", "A test")
+    return source, git(source, "rev-parse", "HEAD")
+
+
+def _naming_agent(*named):
+    """An agent that fixes value.txt and names ``named`` as the tests the log shows failing."""
+    def agent(task, repo_dir, job_log, **_kwargs):  # noqa: ARG001
+        (Path(repo_dir) / "value.txt").write_text("right\n", encoding="utf-8")
+        return FixCandidate(action=CandidateAction.PATCH, failing_check="valgrind", root_cause="a race",
+                            reasoning="fix it", changed_paths=("value.txt",), failing_tests=named)
+    return agent
+
+
+_VALGRIND_LOG = "[err]: Valgrind error: ==20204== Memcheck, a memory error detector\n"
+
+
+def test_a_failure_no_test_was_named_for_runs_the_test_the_agent_named(tmp_path, monkeypatch):
+    """Code could not read the test from the log; the agent did, and with it the fix is run, not posted."""
+    from scripts.ci_fix.models import FailedTest
+
+    source, head_sha = _valgrind_repo(tmp_path)
+    _install_clone(monkeypatch, source)
+    monkeypatch.setattr(engine_mod, "plan_for", _REAL_PLAN_FOR)
+    commands = []
+
+    candidate = engine_mod.prepare_fix(
+        _task(head_sha), _VALGRIND_LOG, agent_func=_naming_agent(FailedTest("Save with bgsave", "tests/unit/save.tcl")),
+        review_func=lambda *_a, **_k: (True, "the named test is the one in the report"),
+        test_func=lambda _repo, command, _timeout: commands.append(command) or TestRun(
+            True, "[ok]: Save with bgsave (1 ms)", report="[ok]: Save with bgsave (1 ms)"),
+        job=JobCommands(build="make valgrind", runtest="./runtest --valgrind --clients 1 --timeout 2400"),
+    )
+
+    assert candidate.action is CandidateAction.PATCH and not candidate.not_run
+    assert any("--valgrind" in c and "--only 'Save with bgsave'" in c and "unit/save" in c for c in commands)
+    assert "ran the one the author named: `Save with bgsave` in `tests/unit/save.tcl`" in candidate.verification
+    assert "this fix was reviewed, not run" not in candidate.verification
+
+
+@pytest.mark.parametrize("named", [
+    ("Not a test in the file", "tests/unit/save.tcl"),
+    ("Save with bgsave", "tests/unit/missing.tcl"),
+    ("Save with bgsave", "../outside.tcl"),
+])
+def test_a_named_test_that_is_not_in_the_checkout_is_not_run(tmp_path, monkeypatch, named):
+    from scripts.ci_fix.models import FailedTest
+
+    source, head_sha = _valgrind_repo(tmp_path)
+    _install_clone(monkeypatch, source)
+    monkeypatch.setattr(engine_mod, "plan_for", _REAL_PLAN_FOR)
+    commands = []
+
+    candidate = engine_mod.prepare_fix(
+        _task(head_sha), _VALGRIND_LOG, agent_func=_naming_agent(FailedTest(*named)),
+        review_func=lambda *_a, **_k: (True, "fine"),
+        test_func=lambda _repo, command, _timeout: commands.append(command) or TestRun(True, ""),
+    )
+
+    assert candidate.not_run and commands == []
 
 
 def test_a_later_round_whose_agent_fails_is_a_failed_attempt_not_a_refusal(tmp_path, monkeypatch):

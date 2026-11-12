@@ -88,6 +88,14 @@ merged upstream comes first, and where none fixes the failure Claude writes a
 patch. When there is nothing upstream to port, as on `unstable` itself, the
 patch is reviewed but not run.
 
+Claude reads the whole log, and often can tell which test a report or a test
+client's exception came from where the bot's parser cannot. It names that
+test, and the bot runs it with the change the way the job runs it, under
+valgrind or a sanitizer when the job uses one. The bot checks only that the
+test is in the checkout; the reviewer is told the test was named by Claude
+and checks it against the log. A job that runs only the module API tests,
+like Daily's valgrind "misc" jobs, is replayed in its own environment too.
+
 The bot never pushes a patch it wrote and could not run. It posts the patch
 in a comment, says that it was not run, and leaves it for a person to apply.
 A port of a commit merged upstream is still pushed when it only builds here:
@@ -95,8 +103,12 @@ it ran where it was merged, and the PR's own CI runs the check.
 
 **Claude diagnoses and edits.** Claude gets the job's whole log, whatever the
 history search found, the verification command, and Valkey's testing
-conventions: the bot's own guide in `scripts/ci_fix/guides/valkey-io__valkey.md`
-plus the repository's `tests/README.md` and contributor docs. It then does one
+conventions: the bot's own guide in `scripts/ci_fix/guides/valkey-io__valkey.md`,
+which ends with Valkey's own guidelines (`AGENTS.md`, `DEVELOPMENT_GUIDE.md`,
+`tests/README.md` and `src/unit/README.md`). Those are taken from the default
+branch, so an older release branch gets the current ones and a pull request
+cannot change the rules its fix is judged by. The reviewer reads the same
+file. It then does one
 of three things: ports an existing fix (preferred when one fits), writes a
 small patch, or declines. It is told to aim for the fix a maintainer would
 write. Where the evidence leaves a few possible causes and one change is right
@@ -116,6 +128,12 @@ commit removes. An adaptation often writes something else in their place,
 such as another encoding to assert or a wider tolerance. Naming a commit that
 only touches the same file is not enough, and the reviewer reads the named
 commit's diff next to the patch.
+
+One failure often shows up on several release branches, so Claude is also
+given what the bot's pull requests into the other release branches changed in
+the files the failure names, with diffs. When one of those commits fixes the
+same failure, it makes the same change here, so the branches do not each
+carry a different fix. A commit that was reverted is left out.
 
 Where no upstream commit fixes the failure, such as a test that is flaky on
 `unstable` too, Claude writes the fix on the backport branch, in the test or

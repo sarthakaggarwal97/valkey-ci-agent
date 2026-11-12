@@ -678,3 +678,70 @@ cases:
     test:
       name: Test the randomkey command will not cause the server to get into an infinite loop during the client pause write
       file: tests/unit/pause.tcl
+
+  # Failures the bot's log parser names no test for (from the 2026-11-12 survey): the agent names it.
+  - id: nt72-valgrind-misc
+    about: 7.2's weekly valgrind report after the module rdbloadsave test, in a job that runs only module tests.
+    repo: valkey-io/valkey
+    run_id: 42453432437
+    job_id: 128647314595
+    job: test-valgrind-misc
+    workflow: weekly
+    sha: aeb878d334573e52567bbad9a135b69d1931ef21
+    workflow_sha: aa7545348b688b469d073a01ce4836ed637577f9
+    base_branch: '7.2'
+    pr: 5072
+    backport: true
+    scheduled: true
+
+  - id: nt72-cluster-exception
+    about: 7.2's weekly cluster job, where a test calls a helper with the wrong arguments and the test client throws.
+    repo: valkey-io/valkey
+    run_id: 42453432437
+    job_id: 128647314579
+    job: test-valgrind-test (cluster)
+    workflow: weekly
+    sha: aeb878d334573e52567bbad9a135b69d1931ef21
+    workflow_sha: aa7545348b688b469d073a01ce4836ed637577f9
+    base_branch: '7.2'
+    pr: 5072
+    backport: true
+    scheduled: true
+
+  - id: nt92-macos-exception
+    about: 9.2's weekly macOS job, where a test uses an lsearch option the runner's Tcl lacks.
+    repo: valkey-io/valkey
+    run_id: 42453432437
+    job_id: 128690640302
+    job: test-macos-latest
+    workflow: weekly
+    sha: b7727afeca60d676aa77aa9ad3f3d636c550c5c5
+    workflow_sha: aa7545348b688b469d073a01ce4836ed637577f9
+    base_branch: '9.2'
+    pr: 5357
+    backport: true
+    scheduled: true
+
+  - id: nt80-asan-ptrace
+    about: 8.0's sanitizer job, with a LeakSanitizer ptrace warning among sixteen parallel test clients.
+    repo: valkey-io/valkey
+    run_id: 42951727846
+    job_id: 130297342229
+    job: test-sanitizer-address
+    workflow: ci
+    sha: 8260c7c69f350f7bc9096149a7ddf7e8a857ddf2
+    base_branch: '8.0'
+    pr: 5077
+    backport: true
+
+  - id: nt91-asan-ptrace
+    about: 9.1's sanitizer job, with a LeakSanitizer ptrace warning among sixteen parallel test clients.
+    repo: valkey-io/valkey
+    run_id: 42788858007
+    job_id: 129736862180
+    job: test-sanitizer-address
+    workflow: ci
+    sha: 36495778121afa94e1abf14cc618a5dd9beff72a
+    base_branch: '9.1'
+    pr: 5074
+    backport: true

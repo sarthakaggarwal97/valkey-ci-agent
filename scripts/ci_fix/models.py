@@ -205,6 +205,10 @@ class FixCandidate:
     # The merged upstream commit a patch adapts to this branch, checked by
     # code; set only where an upstream change comes first (FixContext.upstream_first).
     adapts: str = ""
+    # The tests the agent read in the log as the ones that failed. Code runs
+    # them when it could name none itself: a valgrind or sanitizer report,
+    # or a test client's exception, names no test on its result line.
+    failing_tests: tuple[FailedTest, ...] = ()
     # What code established about the candidate (local test runs and the
     # review), for the maintainer report. Never written by the agent.
     verification: str = ""
@@ -236,6 +240,9 @@ class FixContext:
     # Every commit the default branch has and the working commit lacks, with
     # the files it changes: the fix may be in a file the failure does not name.
     unported_index: str = ""
+    # What the bot's pull requests into the other release branches changed in
+    # the failure's files: one failure is fixed the same way on every branch.
+    sibling_changes: str = ""
     # How code verifies a candidate, and whether it does.
     verification: str = ""
     verified_by_code: bool = False
@@ -249,9 +256,9 @@ class FixContext:
     # Nothing here can run the failing check, but an upstream change may fix
     # it: a candidate is built and reviewed, not run.
     only_built: bool = False
-    # The repository's test conventions, and its own docs in the checkout.
+    # The bot's guide for the repository, ending with the repository's own
+    # guidelines as its default branch has them.
     guide: str = ""
-    guide_paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

@@ -1,19 +1,17 @@
 # Fixing a failing Valkey test
 
-Valkey documents its own tests. Read, in your checkout, whichever of these
-exist before you change a test; they are the authority on helpers, tags and
-conventions, and they match the branch you are on:
+Valkey's own guidelines for code and tests are at the end of this file, as the
+default branch has them (`AGENTS.md`, `DEVELOPMENT_GUIDE.md`, `tests/README.md`
+and `src/unit/README.md`). Read them: they are the authority on style and
+conventions.
 
-- `tests/README.md`
-- `.github/instructions/integration-tests.instructions.md`
-- `AGENTS.md`, `DEVELOPMENT_GUIDE.md`, `CONTRIBUTING.md`
-- `tests/support/util.tcl`, `tests/support/test.tcl` and
-  `tests/test_helper.tcl` for what a `wait_for_*` or `verify_*` helper
-  actually does, and whether this branch has it: helpers and runtest options
-  differ between release lines, so use only what this branch's `tests/`
-  defines.
+Before you use a `wait_for_*` or `verify_*` helper or a runtest option, read
+`tests/support/util.tcl`, `tests/support/test.tcl` and `tests/test_helper.tcl`
+in your checkout for what it actually does, and whether this branch has it.
+Helpers and options differ between release lines, so use only what this
+branch's `tests/` defines.
 
-What follows is the bot's own policy, not a summary of those files.
+What follows first is the bot's own policy, not a summary of those files.
 
 ## First decide what failed
 
@@ -53,6 +51,26 @@ A test that fails once in many runs is still a bug. Find the race in the log
 (`--dump-logs` prints each server's log after a failure) before editing.
 Valgrind and sanitizer builds are many times slower; scale a wait with
 `$::valgrind` rather than hard-coding a longer one everywhere.
+
+## Writing the test
+
+- Assert an exact value only while the state it reads cannot move. While the
+  server is still doing work in the background, assert a bound
+  (`assert_range`, `assert_morethan`) or wait for the state first.
+- Fix a race by holding the moving part still, not by waiting longer:
+  `pause_process` and `resume_process` stop and resume a server, and
+  `tests/support/util.tcl` has more.
+- Give every wait a failure message that prints the state it was waiting
+  for, in `wait_for_condition`'s `else` clause, so the next failure explains
+  itself.
+- Check a result by reading the data back. That the server did not crash is
+  not a check.
+- Use an existing helper before writing a new one.
+
+## Comments
+
+A comment says what the code does or why, briefly. No narration of the fix,
+no history ("previously", "now"), and no PR or issue numbers.
 
 ## Scope
 

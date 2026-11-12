@@ -224,7 +224,6 @@ def test_the_agent_is_told_what_code_established_and_shown_ports_first(tmp_path,
         verification="Code checks your change with `./runtest ...` (40 loop(s)).",
         verified_by_code=True,
         guide="# Fixing a failing Valkey test",
-        guide_paths=("tests/README.md",),
     )
 
     agent_mod.run_fix_agent(_task(), str(tmp_path), "log", context=context)
@@ -234,7 +233,8 @@ def test_the_agent_is_told_what_code_established_and_shown_ports_first(tmp_path,
     assert "choose `port` with its full SHA rather than writing a new fix" in prompt
     assert "### Verification\nCode checks your change with `./runtest ...`" in prompt
     assert "CI job log is your evidence" in prompt
-    assert "`tests/README.md`" in prompt
+    assert "test-guide.md before you change anything" in prompt
+    assert "the repository's own guidelines for code and tests" in prompt
     # Code verifies with its own command, and the test is never bent to it.
     assert "only that counts: do not claim to have run anything" in prompt
     assert "never change a test so that it can run alone" in prompt
@@ -265,9 +265,28 @@ def test_a_fix_that_will_not_be_run_says_what_is_and_is_not_established(tmp_path
     agent_mod.run_fix_agent(_task(), str(tmp_path), "log", context=FixContext(
         reviewed_only=True, verification="No command here can run the failing check, so this fix was reviewed, not run."))
 
-    assert "your patch will be\nreviewed and published as not run" in seen["prompt"]
-    assert "say plainly what the log and the code establish\nand what they do not" in seen["prompt"]
+    assert "Unless\nyou name it in `failing_tests` and code can run it" in seen["prompt"]
+    assert "say plainly what the log and the code establish and what they\ndo not" in seen["prompt"]
     assert "### Verification\nNo command here can run the failing check" in seen["prompt"]
+    assert "If you can, name it in `failing_tests`" in seen["prompt"]
+
+
+def test_the_agent_may_name_the_tests_the_log_shows_failing(tmp_path, monkeypatch) -> None:
+    """A valgrind or sanitizer report, or a test client's exception, names no test on its result line."""
+    from scripts.ci_fix.models import FailedTest
+
+    tests = [{"file": "tests/unit/moduleapi/rdbloadsave.tcl", "name": "Module rdbloadsave with bgsave"},
+             {"file": "tests/unit/a.tcl", "name": ""}, {"file": "", "name": "no file"}, "not a test",
+             {"file": "tests/unit/a.tcl", "name": ""}]
+    monkeypatch.setattr(agent_mod, "run_agent", lambda *_a, **_k: _result(
+        {"action": "patch", "summary": "fixed", "changed_paths": ["a.c"], "failing_tests": tests}))
+
+    candidate = agent_mod.run_fix_agent(_task(), str(tmp_path), "log")
+
+    assert candidate.failing_tests == (
+        FailedTest("Module rdbloadsave with bgsave", "tests/unit/moduleapi/rdbloadsave.tcl"),
+        FailedTest("", "tests/unit/a.tcl"),
+    )
 
 
 def test_where_an_upstream_change_comes_first_the_agent_is_told_and_its_claim_is_read(
@@ -289,6 +308,13 @@ def test_where_an_upstream_change_comes_first_the_agent_is_told_and_its_claim_is
     assert "### Upstream changes this branch lacks" in seen["prompt"] and "upstream-changes.md" in seen["prompt"]
     # And every commit it lacks, by the files it changes: the fix may be in a file the log does not name.
     assert "### Every upstream commit this branch lacks" in seen["prompt"] and "upstream-commits.md" in seen["prompt"]
+    assert "other-release-branches.md" not in seen["prompt"]
+
+    # What the other release branches' pull requests changed in the same files: one failure, one fix.
+    sibling = FixContext(upstream_first=True, sibling_changes="# Release branch `9.1`\n")
+    agent_mod.run_fix_agent(_task(), str(tmp_path), "log", context=sibling)
+    assert "other-release-branches.md" in seen["prompt"]
+    assert "the same fix on every release branch" in seen["prompt"]
     assert candidate.adapts == "d" * 40
 
 
@@ -373,6 +399,7 @@ def test_the_review_sees_the_port_verification_and_guide(tmp_path, monkeypatch) 
     # run on a new model turned down the one merged fix for a flake because it widened an assertion.
     assert "do not judge its design again" in seen["prompt"]
     assert "a looser threshold unless" not in seen["prompt"] and "is a rejection" not in seen["prompt"]
+    assert "for a state that cannot happen" not in seen["prompt"]
 
     # A fix written here is judged on its merits, against the repository's conventions; and a
     # verified candidate's review reads what the checks found, and what a patch says it adapts.
@@ -388,6 +415,9 @@ def test_the_review_sees_the_port_verification_and_guide(tmp_path, monkeypatch) 
     assert "What code checked:\nWith the fix, `make` builds." in seen["prompt"]
     assert f"adapts upstream commit {'d' * 40}" in seen["prompt"]
     assert "a looser threshold unless" in seen["prompt"] and "do not judge its design again" not in seen["prompt"]
+    # Written fixes are also held to the test-quality rules in the bot's guide.
+    assert "for a state that cannot happen" in seen["prompt"]
+    assert "comments that narrate the fix" in seen["prompt"]
     assert "a skip tag instead of a fix, is a rejection" in seen["prompt"]
 
 
