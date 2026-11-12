@@ -23,7 +23,7 @@ from github import Auth, Github
 from scripts.backport import ci_followup, ci_sweep
 from scripts.ci_fix import policy, publish
 from scripts.ci_fix.github_runs import FailedJob
-from scripts.ci_fix.models import FixOutcome, FixPlan, FixPolicy, FixTarget, FrontDoor, TargetKind
+from scripts.ci_fix.models import Failure, FixOutcome, FixPlan, FixPolicy, FixTarget, FrontDoor, TargetKind
 from scripts.ci_fix.run import OUTCOME_FILE, PLAN_FILE
 from scripts.ci_fix.state import load
 from scripts.common.git_auth import GitAuth
@@ -46,6 +46,11 @@ def main() -> int:
     policy.is_bot_author = lambda author: author == login  # type: ignore[assignment]
     publish.is_bot_author = policy.is_bot_author  # type: ignore[assignment]
     ci_followup.is_bot_author = policy.is_bot_author  # type: ignore[assignment]
+    # The failed run is valkey-io's, not the fork's: its links go there.
+    origin = "https://github.com/valkey-io/valkey/actions/runs"
+    Failure.run_url = property(  # type: ignore[method-assign,assignment]
+        lambda self: f"{origin}/{self.run_id}" + (f"/attempts/{self.run_attempt}" if self.run_attempt > 1 else "")
+    )
 
     replayed = load(args.plan / PLAN_FILE, FixPlan)
     outcome = load(args.outcome / OUTCOME_FILE, FixOutcome)
