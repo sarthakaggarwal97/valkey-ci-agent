@@ -60,7 +60,7 @@ flowchart TD
     R["Output goes back to Claude"]
     N(["After five attempts: comment<br/>with what it could not reproduce"])
     P2(["Phase 2"])
-    S(["Stop: see Crashes"])
+    S(["Stop and publish nothing"])
     A --> B
     B -->|"fails a check"| R
     B -->|"passes"| C
@@ -79,6 +79,12 @@ assertion" means the runner reports the failure for that test by name: an
 `[err]` from runtest with no `[exception]` or timeout, or a `[  FAILED  ]`
 from the unit-test binary. A test that fails only because it calls a
 command the fix hasn't added yet doesn't count.
+
+Valkey fixes crashes in public, and so does the bot: for a `[CRASH]`
+report, a crash is the expected failure. A committer who thinks a bug may
+be a vulnerability follows `SECURITY.md` instead of applying the label. A
+crash nobody expected stops the run, and the bot publishes nothing about
+it.
 
 **Phase 2: fix.** The phase 1 test is frozen: code records its hash and
 checks it after every build, so the fix can't weaken what it is judged
@@ -237,124 +243,31 @@ other people's flaky tests. If it pushes after an approval, it dismisses
 the approval, because `unstable` doesn't and an approval should mean the
 code that was read.
 
-### Who signs the DCO
+### Signing off
 
-Valkey requires a `Signed-off-by`
-from a known person on every commit, and a bot can't certify where code
-came from, so the bot's commits carry no sign-off. The DCO check can't
-enforce a human one either. The DCO app skips commits authored by bot
-accounts. It only flags the bot's commits today because their author email
-matches no GitHub account; on backport PRs a committer then approves the
-sign-off by hand. Fix that email and the check passes silently.
-
-So the owner certifies the change as an AI-assisted contribution of their
-own: when they squash-merge, they add their `Signed-off-by` and an
-`Assisted-by:` line naming the model. GitHub won't enforce that, so a
-weekly report flags any merged bot PR that wasn't squashed, lacks the
-owner's sign-off, or was approved only by its owner. The alternative,
-letting whoever merges certify with nobody owning the PR, asks someone to
-sign for code they may only have seen when they pressed merge.
-
-## Crashes
-
-Valkey fixes crashes in public, with a test that reproduces them, and the
-bot does the same. Holding every crash back would be stricter than the
-project is with itself. Whether a bug might be a vulnerability is decided
-when the label goes on: if a committer thinks it might be, they follow
-`SECURITY.md` instead, as they would for their own fix. For a `[CRASH]`
-report, a crash is the expected failure.
-
-The case to guard is a crash nobody expected: the test crashes the server
-on what looked like a wrong-result bug, or the AddressSanitizer check finds
-a memory error in existing code. The run stops and, in public, looks like
-any other run that produced no result. If the TSC allows it, the test goes
-into a draft security advisory that only the owner and the security team
-can see. For that to hold, runs on bug reports keep the model's session and
-the test output out of the public workflow log, and upload nothing until
-code has classified the run.
+Valkey already accepts AI-assisted contributions: the person who submits
+one signs off and owns its quality. Bot PRs follow the same rule. The
+bot's own commits carry no sign-off; the owner adds their `Signed-off-by`
+and an `Assisted-by:` line naming the model when they squash-merge.
 
 ## Rolling it out
 
-Each step is switched on separately and has to earn the next.
+Each step has to earn the next.
 
-**Step 0: replay.** The recipe runs on 40 recently closed bugs, closed after
-the model's training cutoff, seeing only what each issue said before it was
-fixed and `unstable` as it was then. Nothing is written to
-`valkey-io/valkey`. A case is publishable if the bot's checks pass, the
-original fixer's own test passes with the bot's fix, and a committer who
-didn't write that fix says they'd own the bot's PR. It also tells us what a
-run costs.
+1. **Replay.** Run the recipe on 40 recently closed bugs, writing nothing to
+   Valkey, and count how often a committer would have owned the result.
+2. **Comments.** The label turns on, but the bot only comments with its
+   test and patch.
+3. **Pull requests.** Draft PRs, at most five open at a time. A revert, or a
+   run of PRs closed unmerged, stops new ones.
+4. **Review loop.** `@valkeyrie-ops address` applies review comments and
+   `@valkeyrie-ops update` merges `unstable` in. Neither runs unprompted.
 
-**Step 1: comments.** The label turns on, but the bot only comments with its
-test, analysis and patch. It moves on after ten comments in 90 days, at
-least half confirmed useful: the bot's test failed before a person's later
-fix and passed after it, or a committer other than the owner said it
-helped. The TSC is asked again before step 2, the first time the bot opens
-PRs into Valkey.
+## Open questions
 
-**Step 2: pull requests.** Judged on the first ten: at least half merged,
-at least three of those with no changes pushed by a person, review effort
-no higher than for comparable human fixes, and none reverted within 60
-days. A revert, or three bot PRs in a row closed unmerged, stops new PRs
-until the operator has written down what went wrong.
-
-**Step 3: the review loop.** Two commands on a bot PR.
-`@valkeyrie-ops address` applies the committers' new review comments in
-one commit, takes `suggestion` blocks exactly as written, reruns every
-check, and replies on each thread without resolving it.
-`@valkeyrie-ops update` merges `unstable` into the branch, sends only
-conflicted files to Claude, and never rebases. Neither runs unprompted:
-reviews arrive one comment at a time from several people, and in my sample
-a third of the comments were design questions, not edits.
-
-## What to expect
-
-From two samples of past work. Nothing was run, so "would fail first" is a
-judgement from reading diffs.
-
-| | |
-|---|---|
-| Of the 32 PRs that fixed the 40 most recently closed `bug` issues: came with a test | 26 |
-| … whose test would plausibly fail first on one Ubuntu machine | at most 21 |
-| … opened by a person within 24 hours of the issue | 23 |
-| … median days from opening to merge | 6.5 |
-| Of about 20 fix PRs merged in late October and early November: crashes, assertions or leaks, fixed in public with a test | 8 |
-| Open PRs in `valkey-io/valkey` today, and how many await review | 448 and 411 |
-| Open `bug` issues today, unassigned, with no linked PR | 20 |
-
-The pool is small: the bot only takes labelled issues, many Valkey fixes
-arrive as a PR with no issue, and leaks, other platforms, multi-node
-timing and performance work are out of reach of one test on one Linux
-machine. The gain isn't volume. It's a shared recipe we can measure and
-improve, fixes for bugs nobody has picked up, and failing tests that help
-people even when the bot's fix doesn't. With 411 PRs already waiting, the
-bot never has more than five open.
-
-## What we need decided
-
-This creates two roles, the owner of a bot PR and the operator of the
-factory, so the TSC may want to treat it as a major decision.
-
-| # | Decision | Proposed | Before |
-|---|---|---|---|
-| 1 | Certification | The owner signs off at squash-merge, as in [who signs the DCO](#who-signs-the-dco). The squash commit will probably name the bot as its author, and `CONTRIBUTING.md` doesn't accept anonymous contributors, so I'd like the TSC's view, with Linux Foundation counsel if it wants. If no, we stop at step 0. | Step 1 |
-| 2 | The fork | Owned by a machine user, with a token limited to the fork. Who owns it, proposed before step 2. | Step 2 |
-| 3 | Who applies the label | Committers. Applying it is also the security call. | Step 1 |
-| 4 | Who runs it | I operate it, with a second operator named before step 1. Admins of `valkey-ci-agent` can switch it off, and recipe changes need a Valkey committer's approval. | Step 1 |
-| 5 | Spend, vendor and data | Claude on Bedrock, through the agent's existing AWS account, funded by **[to fill in]**. The default model requires Bedrock's provider data sharing, so the provider keeps what a run reads and writes. A TSC budget for step 0, a monthly ceiling after it. | Step 0 |
-| 6 | Go or no-go | At least one case in five publishable in step 0. | Step 0 |
-| 7 | Unexpected crashes | Let the App write draft security advisories. Without it, the bot discards the test. | Step 1 |
-
-## What's left for the build
-
-The CI fix engine assumes a failed CI job everywhere, so bug reports need a
-new way in, and the two-phase run, the crash detection and the locked-down
-build are new. Steps 0 and 2 are each large; step 1 is medium. The precise
-rules (intake, limits, the ready rule, metrics, time budgets) get settled
-as each step is built, starting from the longer version of this document
-in the branch's history. Before building, a test fork checks the GitHub
-behaviour the design leans on: whether fork PRs need a committer to
-approve their workflow runs, whether the App can open PRs from a machine
-user's fork and dismiss approvals, what `unstable`'s "extra approval for
-unattributed changes" rule does to an App's PR, and whether Valkey's tests
-pass with loopback-only networking.
+- Is the owner's sign-off enough for a bot-authored commit, as it is for
+  AI-assisted work today?
+- Do the bot's PRs come from a fork, as argued above, or from branches in
+  `valkey-io/valkey` like backports?
+- Who funds the model spend? The default model requires Bedrock's provider
+  data sharing, so the provider keeps what a run reads and writes.
