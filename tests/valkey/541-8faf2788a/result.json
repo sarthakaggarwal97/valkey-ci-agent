@@ -1,0 +1,67 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8faf2788a207373b2cb356188f939accaaf6ce37",
+  "parent": "1ea49e5845a11250a13273c725720822c26860f1",
+  "pr": 541,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Embed key into dict entry (#541)",
+  "date": "2024-07-02",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 12,
+  "proven": 4,
+  "hunted": 12,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 105,
+    "executed": 104,
+    "percent": 99,
+    "uncovered": [
+      "src/dict.c:1005"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 12.9936,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-2ce708721e8e",
+      "build": "unstable",
+      "seed": 303,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2ce708721e8e",
+      "build": "unstable",
+      "seed": 304,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-2ce708721e8e",
+      "build": "unstable",
+      "seed": 305,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d9421866c129",
+      "build": "unstable",
+      "seed": 404,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d9421866c129",
+      "build": "unstable",
+      "seed": 405,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-d9421866c129",
+      "build": "unstable",
+      "seed": 406,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

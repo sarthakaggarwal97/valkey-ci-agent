@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5f0ccf147845..bbfd041895ee.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-cadee27205ed
+seed: 7000
+experiment:
+  id: proposed.io-threads-writev-large-reply
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

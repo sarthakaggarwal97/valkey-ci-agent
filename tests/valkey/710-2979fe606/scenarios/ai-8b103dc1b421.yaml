@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 518f0bf79bae..2979fe606057.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-8b103dc1b421
+seed: 710
+experiment:
+  id: proposed.cluster-slot-stats-orderby-tiebreak
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

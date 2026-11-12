@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.used-memory-accounting
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    zmalloc_used_memory, now summed from per-thread counters, stays correct when memory
+    allocated on the main thread is freed on a bio lazyfree thread (the per-thread
+    slot wraps negative and the sum must still be right): maxmemory OOM refusals appear
+    exactly while the data is held and clear once an async flush has freed it, identically
+    on both builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, enum: [1, 4], default: 4}
+components:
+- use: valkey.action.commands
+  id: memacct
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      io-threads: {$ref: inputs.io_threads}
+      io-threads-do-reads: "yes"
+      lazyfree-lazy-user-del: "yes"
+      lazyfree-lazy-user-flush: "yes"
+      lazyfree-lazy-expire: "yes"
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, maxmemory-policy, noeviction], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "1000", "memkey:", "65536"], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 1000}}
+    - {command: [CONFIG, SET, maxmemory, "33554432"], expect: {equals: OK}}
+    - {command: [SET, probe, v], expect: {error: "OOM"}}
+    - {command: [GET, "memkey:1"], expect: {exists: true}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [SET, probe, v], wait_s: 30, expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, "0"], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, "500", "round2:", "65536"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory, "33554432"], expect: {equals: OK}}
+    - {command: [APPEND, probe, vv], expect: {error: "OOM"}}
+    - {command: [FLUSHALL, SYNC], expect: {equals: OK}}
+    - {command: [SET, probe2, v], wait_s: 30, expect: {equals: OK}}
+    - {command: [INFO, memory], compare: skip, expect: {contains: "used_memory:"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [memacct.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: memacct}

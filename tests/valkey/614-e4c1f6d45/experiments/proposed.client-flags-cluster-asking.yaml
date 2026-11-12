@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.client-flags-cluster-asking
+deployment:
+  modes: [standalone]
+metadata:
+  description: ASKING set/clear across commands and MULTI on an importing slot, and
+    READONLY/READWRITE flags, compared across two-node clusters of both builds
+components:
+- use: valkey.action.commands
+  id: asking
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, SETSLOT, "12182", IMPORTING, "<node.0.id>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [GET, foo], node: 1, expect: {error: MOVED}}
+    - {command: [ASKING], node: 1, expect: {equals: OK}}
+    - {command: [GET, foo], node: 1, expect: {exists: false}}
+    - {command: [GET, foo], node: 1, expect: {error: MOVED}}
+    - {command: [ASKING], node: 1, expect: {equals: OK}}
+    - {command: [MULTI], node: 1, expect: {equals: OK}}
+    - {command: [GET, foo], node: 1, expect: {equals: QUEUED}}
+    - {command: [EXEC], node: 1, expect: {exists: true}}
+    - {command: [GET, foo], node: 1, expect: {error: MOVED}}
+    - {command: [READONLY], expect: {equals: OK}}
+    - {command: [CLIENT, INFO], compare: skip, expect: {contains: "flags=r"}}
+    - {command: [READWRITE], expect: {equals: OK}}
+    - {command: [CLIENT, INFO], compare: skip, expect: {contains: "flags=N"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [asking.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: asking}

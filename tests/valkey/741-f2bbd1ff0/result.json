@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f2bbd1ff0f650182e7df1fda1055551389bb79c2",
+  "parent": "16803788451bfe8d5e6b757e5263653650cbd274",
+  "pr": 741,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix minor memory leak in clusterLoadConfig (#741)",
+  "date": "2024-07-04",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2963,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds sdsfreesplitres(argv, argc) before a goto fmterr in clusterLoadConfig; the fmterr path immediately logs and calls exit(1), so the freed memory would have been reclaimed by process termination anyway. There is no observable behavior change on any input \u2014 same log, same exit code, same cluster state \u2014 making this a code-hygiene/leak-sanitizer fix with nothing a scenario could distinguish."
+}

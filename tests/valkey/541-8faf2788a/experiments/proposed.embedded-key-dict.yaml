@@ -1,0 +1,80 @@
+extends: [valkey.liveness]
+id: proposed.embedded-key-dict
+deployment:
+  modes: [standalone]
+metadata:
+  description: Key lifecycle through the embedded dict entry (add, rename, copy, move,
+    expire, delete, RDB save/restart/load, MEMORY USAGE) compared against the parent
+    build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [SET, "", v0], expect: {equals: OK}}
+    - {command: [GET, ""], expect: {equals: v0}}
+    - {command: [SET, k, v1], expect: {equals: OK}}
+    - {command: [APPEND, k, v2], expect: {equals: 4}}
+    - {command: [SET, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", v], expect: {equals: OK}}
+    - {command: [MEMORY, USAGE, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], expect_difference: true,
+      expect: {min: 1}}
+    - {command: [SET, "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ",
+        vlong], expect: {equals: OK}}
+    - {command: [GET, "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ"],
+      expect: {equals: vlong}}
+    - {command: [SET, "9223372036854775807", big], expect: {equals: OK}}
+    - {command: [GET, "9223372036854775807"], expect: {equals: big}}
+    - {command: [HSET, fields, fields, v, keys, v2], expect: {equals: 2}}
+    - {command: [HGETALL, fields], compare: unordered-pairs}
+    - {command: [SET, kexp, v, EX, 100], expect: {equals: OK}}
+    - {command: [TTL, kexp], compare: skip}
+    - {command: [PERSIST, kexp], expect: {equals: 1}}
+    - {command: [TTL, kexp], expect: {equals: -1}}
+    - {command: [EXPIRE, kexp, 100], expect: {equals: 1}}
+    - {command: [RENAME, kexp, kexp2], expect: {equals: OK}}
+    - {command: [TTL, kexp2], compare: skip}
+    - {command: [EXISTS, kexp], expect: {equals: 0}}
+    - {command: [COPY, kexp2, kcopy], expect: {equals: 1}}
+    - {command: [EXPIRE, kcopy, 9223372036854775807], expect: {error: "invalid expire"}}
+    - {command: [DEL, kexp2], expect: {equals: 1}}
+    - {command: [SET, kdel, v, EX, 100], expect: {equals: OK}}
+    - {command: [UNLINK, kdel], expect: {equals: 1}}
+    - {command: [SET, kmv, vm], expect: {equals: OK}}
+    - {command: [MOVE, kmv, 1], expect: {equals: 1}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [GET, kmv], expect: {equals: vm}}
+    - {command: [EXPIRE, kmv, 500], expect: {equals: 1}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 10000], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {min: 10000}}
+    - {command: [EXPIRE, "key:1", 10000], expect: {equals: 1}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {min: 10000}}
+    - {command: [GET, "key:1"], expect: {equals: "value:1"}}
+    - {command: [TTL, "key:1"], compare: skip}
+    - {command: [GET, ""], expect: {equals: v0}}
+    - {command: [GET, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], expect: {equals: v}}
+    - {command: [MEMORY, USAGE, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"], expect_difference: true,
+      expect: {min: 1}}
+    - {command: [SELECT, 1], expect: {equals: OK}}
+    - {command: [GET, kmv], expect: {equals: vm}}
+    - {command: [SELECT, 0], expect: {equals: OK}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

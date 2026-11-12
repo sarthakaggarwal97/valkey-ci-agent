@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9f4f6036b80410e849664236a0b3994645106262",
+  "parent": "752b6ee8ff75a72c364feca8b667f9e723df0c4c",
+  "pr": 718,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Restore comments for client flags (#718)",
+  "date": "2024-07-01",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2402,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff only restores inline comments on the ClientFlags bitfield in src/server.h; every field's name, width and order is unchanged, so no compiled behaviour differs between the change and its parent. A comment-only change needs no scenario."
+}

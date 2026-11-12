@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.client-flags-debug-script
+deployment:
+  modes: [standalone]
+metadata:
+  description: DEBUG PROTOCOL push (flag.pushing save and restore) and SCRIPT DEBUG
+    YES/SYNC/NO (lua_debug and lua_debug_sync set and cleared), then plain EVAL and
+    EVALSHA
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dbg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, PROTOCOL, push], connection: p, compare: skip}
+    - {read: true, connection: p, compare: skip}
+    - {command: [PING], connection: p, expect: {equals: PONG}}
+    - {command: [SCRIPT, DEBUG, "SYNC"], connection: d, expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, "NO"], connection: d, expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, "YES"], connection: d, expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, "NO"], connection: d, expect: {equals: OK}}
+    - {command: [EVAL, "return server.call('SET', KEYS[1], ARGV[1])", 1, sk, sv],
+      expect: {equals: OK}}
+    - {command: [GET, sk], expect: {equals: sv}}
+    - {command: [SCRIPT, LOAD, "return 1"], expect: {equals: e0e1f9fabfc9d4800c877a703b823ac0578ff831}}
+    - {command: [EVALSHA, e0e1f9fabfc9d4800c877a703b823ac0578ff831, 0], expect: {
+        equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [dbg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbg}

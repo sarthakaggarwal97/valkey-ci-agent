@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0cc16d0298995ae4292b0d317e17fa82c338942a",
+  "parent": "fa01a293659b25bbf6fd396299dd24f3f5deb6b8",
+  "pr": 729,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix wrong reserved bits in ClientFlags (#729)",
+  "date": "2024-07-02",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7559,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only corrects the ClientFlags reserved bitfield from 11 to 10 bits so the 54 named flag bits plus reserved fit exactly in the one uint64_t that is unioned with raw_flag. The reserved field is never read or written anywhere in the codebase, no code serializes ClientFlags or depends on its size, and on the parent the extra bit merely made the compiler allocate a second, never-accessed 64-bit word. The fix changes struct layout (client shrinks by 8 bytes) but no command reply, replication, persistence, or cluster behavior, so there is nothing a scenario could observe."
+}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7415a576a8c4..e4c1f6d45af9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-e4a5f6f2b9f5
+seed: 61403
+experiment:
+  id: proposed.client-flags-key-blocking
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

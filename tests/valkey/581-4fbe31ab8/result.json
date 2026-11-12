@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4fbe31ab87ba2a5fd1360328f5e75993986fa0d0",
+  "parent": "1269532fbd2c9fce170651159476ab49f1c5dff9",
+  "pr": 581,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix the TLS and REPS issues about CLUSTER SLOTS cache (#581)",
+  "date": "2024-06-28",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 4,
+  "recall": false,
+  "coverage": {
+    "lines": 17,
+    "executed": 17,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 12.5919,
+  "findings": [],
+  "recorded": [],
+  "recall_round": {
+    "tests": 0,
+    "recall": false
+  }
+}

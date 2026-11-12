@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "518f0bf79bae984e5b93e03b5b951369419d4ca3",
+  "parent": "7f7ef9a3fac516751ecdf20542753c321a12e0ba",
+  "pr": 709,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix limit undefined behavior crash in CLUSTER SLOT-STATS (#709)",
+  "date": "2024-06-28",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.3844,
+  "findings": [],
+  "recorded": []
+}

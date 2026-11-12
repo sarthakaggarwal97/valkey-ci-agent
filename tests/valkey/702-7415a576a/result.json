@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7415a576a8c49fdb946ac45aa66f4a462872d277",
+  "parent": "b59762f734897cc511d3c68a219bed5e99752123",
+  "pr": 702,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add prompt when Ctrl-C pressed (#702)",
+  "date": "2024-06-28",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.74,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds only an informational printf (plus fflush) to valkey-cli's interactive Ctrl-C handler in pubsub mode; the reconnect logic and all state handling are unchanged. The branch is reachable only when SIGINT is delivered to an interactive valkey-cli REPL session (sigIntHandler is the sole setter of blocking_state_aborted), and the fuzzer's valkey.action.tools harness can only supply argv, stdin, env and files \u2014 it cannot send a signal to the running tool, so no experiment can reach the changed line. Since the change alters no server behaviour, no command reply, and no data or control "
+}

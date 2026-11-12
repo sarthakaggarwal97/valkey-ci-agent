@@ -1,0 +1,101 @@
+extends: [valkey.liveness]
+id: proposed.cluster-slot-stats-orderby-tiebreak
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CLUSTER SLOT-STATS ORDERBY breaks key-count ties by ascending slot number, in
+    both ASC and DESC order. The parent sorts tied slots with an unstable qsort, so
+    on an empty one-node cluster (16384 slots all tied at key-count 0) it returns
+    tied slots in arbitrary order; the fixed build returns them in ascending slot
+    order. Checked on RESP2 and RESP3, with a unique leader key, and after CLUSTER
+    DELSLOTSRANGE restricts the owned slot set.
+components:
+- use: valkey.action.commands
+  id: stats-resp2
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: 2
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, LIMIT, 5, ASC], expect_difference: true,
+      expect: {equals: [[0, [key-count, 0]], [1, [key-count, 0]], [2, [key-count,
+              0]], [3, [key-count, 0]], [4, [key-count, 0]]]}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, LIMIT, 5, DESC], expect_difference: true,
+      expect: {equals: [[0, [key-count, 0]], [1, [key-count, 0]], [2, [key-count,
+              0]], [3, [key-count, 0]], [4, [key-count, 0]]]}}
+    - {command: [SET, "{123456789}", v], expect: {equals: OK}}
+    - {command: [CLUSTER, KEYSLOT, "{123456789}"], expect: {equals: 12739}}
+    - {command: [CLUSTER, COUNTKEYSINSLOT, 12739], expect: {equals: 1}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, LIMIT, 4, DESC], expect_difference: true,
+      expect: {equals: [[12739, [key-count, 1]], [0, [key-count, 0]], [1, [key-count,
+              0]], [2, [key-count, 0]]]}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, LIMIT, 4, ASC], expect_difference: true,
+      expect: {equals: [[0, [key-count, 0]], [1, [key-count, 0]], [2, [key-count,
+              0]], [3, [key-count, 0]]]}}
+    - {command: [CLUSTER, DELSLOTSRANGE, 0, 99], expect: {equals: OK}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, LIMIT, 5, ASC], expect_difference: true,
+      expect: {equals: [[100, [key-count, 0]], [101, [key-count, 0]], [102, [key-count,
+              0]], [103, [key-count, 0]], [104, [key-count, 0]]]}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, LIMIT, 3, DESC], expect_difference: true,
+      expect: {equals: [[12739, [key-count, 1]], [100, [key-count, 0]], [101, [key-count,
+              0]]]}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, LIMIT, 0], expect: {error: "Limit\
+          \ has to lie in between"}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, LIMIT, 16385], expect: {
+        error: "Limit has to lie in between"}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, ASC, DESC], expect: {error: "Multiple\
+          \ filters of the same type"}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, cpu-usec], expect: {error: "Unrecognized\
+          \ sort metric"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+- use: valkey.action.commands
+  id: stats-resp3
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: 3
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, LIMIT, 5, ASC], expect_difference: true,
+      expect: {equals: [[0, {key-count: 0}], [1, {key-count: 0}], [2, {key-count: 0}],
+          [3, {key-count: 0}], [4, {key-count: 0}]]}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, LIMIT, 5, DESC], expect_difference: true,
+      expect: {equals: [[0, {key-count: 0}], [1, {key-count: 0}], [2, {key-count: 0}],
+          [3, {key-count: 0}], [4, {key-count: 0}]]}}
+    - {command: [SET, "{123456789}", v], expect: {equals: OK}}
+    - {command: [CLUSTER, KEYSLOT, "{123456789}"], expect: {equals: 12739}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, LIMIT, 4, DESC], expect_difference: true,
+      expect: {equals: [[12739, {key-count: 1}], [0, {key-count: 0}], [1, {key-count: 0}],
+          [2, {key-count: 0}]]}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, LIMIT, 4, ASC], expect_difference: true,
+      expect: {equals: [[0, {key-count: 0}], [1, {key-count: 0}], [2, {key-count: 0}],
+          [3, {key-count: 0}]]}}
+    - {command: [CLUSTER, DELSLOTSRANGE, 0, 99], expect: {equals: OK}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, LIMIT, 5, ASC], expect_difference: true,
+      expect: {equals: [[100, {key-count: 0}], [101, {key-count: 0}], [102, {key-count: 0}],
+          [103, {key-count: 0}], [104, {key-count: 0}]]}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, LIMIT, 3, DESC], expect_difference: true,
+      expect: {equals: [[12739, {key-count: 1}], [100, {key-count: 0}], [101, {key-count: 0}]]}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, LIMIT, 0], expect: {error: "Limit\
+          \ has to lie in between"}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, key-count, ASC, DESC], expect: {error: "Multiple\
+          \ filters of the same type"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [stats-resp2.completed, stats-resp3.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: stats-resp2}
+- {evidence_id: valkey.command.sequence, source: stats-resp3}

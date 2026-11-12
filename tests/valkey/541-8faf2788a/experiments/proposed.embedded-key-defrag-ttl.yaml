@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.embedded-key-defrag-ttl
+deployment:
+  modes: [standalone]
+metadata:
+  description: Active defrag relocates embedded-key dict entries while the expires
+    dict points at the embedded sds; TTLs, values and expiry lookups must survive
+    the relocation on both builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    defrag_cycle_min: {type: integer, minimum: 1, maximum: 99, default: 25}
+components:
+- use: valkey.action.commands
+  id: defrag
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      activedefrag: "yes"
+      active-defrag-ignore-bytes: "1"
+      active-defrag-threshold-lower: "0"
+      active-defrag-cycle-min: {$ref: inputs.defrag_cycle_min}
+      active-defrag-cycle-max: "99"
+    resp: {$ref: inputs.resp}
+    timeout_s: 240
+    commands:
+    - {command: [EVAL, "for i=0,119999 do redis.call('SET','k:'..i,string.rep('x',64),'EX',1000)\
+          \ end return redis.call('DBSIZE')", "0"], expect: {equals: 120000}}
+    - {command: [EVAL, "local d=0 for i=0,119998,2 do d=d+redis.call('DEL','k:'..i)\
+          \ end return d", "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local s=redis.call('INFO','stats') local h=tonumber(string.match(s,'active_defrag_key_hits:(%d+)'))\
+          \ if h and h>=100 then return 1 end return 0", "0"], wait_s: 60, expect: {
+        equals: 1}}
+    - {command: [EVAL, "for i=200000,279999 do redis.call('SET','k:'..i,string.rep('y',64),'EX',1000)\
+          \ end return redis.call('DBSIZE')", "0"], expect: {equals: 140000}}
+    - {command: [EVAL, "local s=redis.call('INFO','stats') local h=tonumber(string.match(s,'active_defrag_key_hits:(%d+)'))\
+          \ if h and h>=2000 then return 1 end return 0", "0"], wait_s: 60, expect: {
+        equals: 1}}
+    - {command: [EVAL, "if redis.call('GET','k:1')==string.rep('x',64) then return\
+          \ 1 end return 0", "0"], expect: {equals: 1}}
+    - {command: [EVAL, "local n=0 for i=1,119999,2 do if redis.call('TTL','k:'..i)>0\
+          \ then n=n+1 end end return n", "0"], expect: {equals: 60000}}
+    - {command: [EVAL, "local n=0 for i=1,9999,2 do n=n+redis.call('PERSIST','k:'..i)\
+          \ end return n", "0"], expect: {equals: 5000}}
+    - {command: [EVAL, "local n=0 for i=1,9999,2 do n=n+redis.call('EXPIRE','k:'..i,500)\
+          \ end return n", "0"], expect: {equals: 5000}}
+    - {command: [DBSIZE], expect: {equals: 140000}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [defrag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: defrag}

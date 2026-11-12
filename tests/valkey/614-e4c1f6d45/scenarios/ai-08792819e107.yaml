@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7415a576a8c4..e4c1f6d45af9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-08792819e107
+seed: 1002
+experiment:
+  id: proposed.client-flags-multi-watch
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

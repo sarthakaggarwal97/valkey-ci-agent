@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2d6791bb1157..6bf1d02edf96.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3b1e08de3eda
+seed: 723001
+experiment:
+  id: proposed.multi-nested-abort
+  inputs:
+    resp: 2
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

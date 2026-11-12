@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1ea49e5845a11250a13273c725720822c26860f1",
+  "parent": "eff45f546762577bd1877dfeece41c53b39926ad",
+  "pr": 731,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make valkey compatible with redis-sentinel to start sentinel (#731)",
+  "date": "2024-07-02",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.124,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a second strstr on argv[0]'s basename so that a redis-sentinel symlink starts Sentinel mode. The trigger is the name the binary is invoked under, which nothing in the fuzzer controls: the runner supplies the build and launches it as valkey-server, valkey.action.tools runs only the four whitelisted tools, valkey.action.commands starts its private servers under the real binary name, and Sentinel is not a supported deployment mode, so no experiment composed from installed components can reach the changed branch. For every invocation the fuzzer can produce the new strstr retur"
+}

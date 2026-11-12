@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "752b6ee8ff75a72c364feca8b667f9e723df0c4c",
+  "parent": "24208812a658c5dbb843dc20f9615e801be37d46",
+  "pr": 721,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Avoid compilation error oin valkey-cli (#721)",
+  "date": "2024-07-01",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2173,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds an unreachable `return 0;` after an `assert(0)` in clusterManagerNodePrimaryRandom() in valkey-cli.c to fix a compilation warning/error about control reaching the end of a non-void function. The added statement can never execute at runtime, so no behavior of valkey-cli or the server changes; it is a build fix that needs no scenario."
+}

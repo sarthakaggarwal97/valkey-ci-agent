@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1ea49e5845a1..8faf2788a207.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fcb18cfc40ee
+seed: 103
+experiment:
+  id: valkey.replication-full-resync
+  inputs:
+    mutable_keys: 500
+    mutation_rate: 1500
+    stable_keys: 2000
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    repl-diskless-sync: 'yes'
+    repl-diskless-load: on-empty-db

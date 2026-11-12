@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1ea49e5845a1..8faf2788a207.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ae93ae7b9e33
+seed: 101
+experiment:
+  id: proposed.embedded-key-dict
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

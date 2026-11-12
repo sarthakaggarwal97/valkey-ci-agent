@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.embedded-key-memusage
+deployment:
+  modes: [standalone]
+metadata:
+  description: dictEntryMemUsage is now entry-type aware - MEMORY USAGE of a hashtable
+    set (key-direct and no-value entries) and of a top-level key (embedded entry)
+    must differ from the parent's flat sizeof(dictEntry), while hash and zset accounting
+    and DEBUG STRUCTSIZE stay equal; set churn exercises no-value entry chains
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: mem
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config:
+      enable-debug-command: "yes"
+      set-max-listpack-entries: "0"
+      set-max-intset-entries: "0"
+      hash-max-listpack-entries: "0"
+      zset-max-listpack-entries: "0"
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [EVAL, "for i=1,5000 do redis.call('SADD','s','e:'..i) end return\
+          \ redis.call('SCARD','s')", "0"], expect: {equals: 5000}}
+    - {command: [EVAL, "for i=1,5000 do redis.call('HSET','h','f:'..i,'v:'..i) end\
+          \ return redis.call('HLEN','h')", "0"], expect: {equals: 5000}}
+    - {command: [EVAL, "for i=1,2000 do redis.call('ZADD','z',i,'m:'..i) end return\
+          \ redis.call('ZCARD','z')", "0"], expect: {equals: 2000}}
+    - {command: [SET, mk, "0123456789012345678901234567890123456789012345678901234567890123"],
+      expect: {equals: OK}}
+    - {command: [MEMORY, USAGE, s, SAMPLES, "0"], expect_difference: true, expect: {
+        min: 50000, max: 800000}}
+    - {command: [MEMORY, USAGE, h, SAMPLES, "0"], expect: {min: 100000, max: 2000000}}
+    - {command: [MEMORY, USAGE, z, SAMPLES, "0"], expect: {min: 50000, max: 2000000}}
+    - {command: [MEMORY, USAGE, mk], expect_difference: true, expect: {min: 60, max: 2000}}
+    - {command: [DEBUG, STRUCTSIZE], expect: {exists: true}}
+    - {command: [EVAL, "local n=0 for i=101,5000 do n=n+redis.call('SREM','s','e:'..i)\
+          \ end return n", "0"], expect: {equals: 4900}}
+    - {command: [SCARD, s], expect: {equals: 100}}
+    - {command: [MEMORY, USAGE, s, SAMPLES, "0"], expect_difference: true, expect: {
+        min: 1000, max: 20000}}
+    - {command: [EVAL, "for i=1,5000 do redis.call('SADD','s','r:'..i) end return\
+          \ redis.call('SCARD','s')", "0"], expect: {equals: 5100}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [mem.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: mem}

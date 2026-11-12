@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "16803788451bfe8d5e6b757e5263653650cbd274",
+  "parent": "6bf1d02edf962674cb32dc2e4f2f13d3d8cece3f",
+  "pr": 706,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update redis keyword to valkey in some sentinel functions (Redis Legacy) (#706)",
+  "date": "2024-07-04",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6798,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure rename refactor in src/sentinel.c: sentinelRedisInstance and related functions/types are renamed to sentinelValkeyInstance, redisAeEvents to ValkeyAeEvents, and the REDIS_SENTINEL_PORT macro to VALKEY_SENTINEL_PORT with the same value (26379). Every hunk is an identifier or comment rename with identical logic; no command reply, protocol output, config option, default value, or control flow is altered, so there is no observable behaviour difference between the two builds for any scenario to exercise."
+}

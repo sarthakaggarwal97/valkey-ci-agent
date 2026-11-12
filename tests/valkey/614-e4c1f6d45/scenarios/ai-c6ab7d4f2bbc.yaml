@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7415a576a8c4..e4c1f6d45af9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c6ab7d4f2bbc
+seed: 201
+experiment:
+  id: proposed.client-flags-replica-expire-watch
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.multi-nested-abort
+deployment:
+  modes: [standalone]
+metadata:
+  description: Nested MULTI or WATCH inside MULTI is rejected with NO_MULTI and aborts
+    the transaction with EXECABORT, so queued writes are not applied; the parent executed
+    them
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: txn
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [SET, "k1{t}", v1], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "k1{t}", v2], expect: {equals: QUEUED}}
+    - {command: [MULTI], expect_difference: true, expect: {error: "not allowed inside\
+          \ a transaction"}}
+    - {command: [SET, "k1{t}", v3], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect_difference: true, expect: {error: "EXECABORT"}}
+    - {command: [GET, "k1{t}"], expect_difference: true, expect: {equals: v1}}
+    - {command: [SET, "k2{t}", a], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "k2{t}", b], expect: {equals: QUEUED}}
+    - {command: [WATCH, "k2{t}"], expect_difference: true, expect: {error: "not allowed\
+          \ inside a transaction"}}
+    - {command: [EXEC], expect_difference: true, expect: {error: "EXECABORT"}}
+    - {command: [GET, "k2{t}"], expect_difference: true, expect: {equals: a}}
+    - {command: [SET, "wk{t}", "1"], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [WATCH, "wk{t}", "wk2{t}", "wk3{t}"], expect_difference: true, expect: {
+        error: "not allowed inside a transaction"}}
+    - {command: [EXEC], expect_difference: true, expect: {error: "EXECABORT"}}
+    - {command: [SET, "wk{t}", "2"], connection: other, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, "wk{t}"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: ["2"]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [MULTI], expect_difference: true, expect: {error: true}}
+    - {command: [MULTI], expect_difference: true, expect: {error: true}}
+    - {command: [WATCH, "k3{t}"], expect_difference: true, expect: {error: true}}
+    - {command: [DISCARD], expect: {equals: OK}}
+    - {command: [WATCH, "k3{t}"], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "k3{t}", z], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK]}}
+    - {command: [GET, "k3{t}"], expect: {equals: z}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [UNWATCH], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [txn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: txn}

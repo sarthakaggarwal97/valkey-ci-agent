@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 7415a576a8c4..e4c1f6d45af9.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ee71080d3b8c
+seed: 1005
+experiment:
+  id: proposed.client-flags-cluster-asking
+deployment:
+  mode: standalone
+  base_port: 7400

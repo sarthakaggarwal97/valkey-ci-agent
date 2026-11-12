@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.io-threads-config-defaults-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: io-threads above the new max of 16 is clamped at load, io-threads-do-reads
+    defaults to yes, and events-per-io-thread exists and is modifiable; the parent
+    keeps 20 threads, defaults do-reads to no and rejects the new option
+components:
+- use: valkey.action.commands
+  id: defaults
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {io-threads: 20}
+    resp: 2
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, GET, io-threads], expect_difference: true, expect: {equals: [
+          io-threads, "16"]}}
+    - {command: [CONFIG, GET, io-threads-do-reads], expect_difference: true, expect: {
+        equals: [io-threads-do-reads, "yes"]}}
+    - {command: [CONFIG, GET, events-per-io-thread], expect_difference: true, expect: {
+        equals: [events-per-io-thread, "2"]}}
+    - {command: [CONFIG, SET, events-per-io-thread, "1"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [defaults.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: defaults}

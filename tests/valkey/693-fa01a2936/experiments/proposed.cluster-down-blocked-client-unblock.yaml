@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.cluster-down-blocked-client-unblock
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    The module-auth fix (#693) moved the BLOCKED_MODULE-not-on-keys early return above
+    the cluster-down check in clusterRedirectBlockedClientIfNeeded. The module branch
+    itself needs a module auth callback, which these runs cannot load, so this sequence
+    guards every path the reorder moved across: a key-blocked client must still be
+    unblocked with -CLUSTERDOWN when the cluster goes down, with 'Hash slot not served'
+    when its slot is unassigned under cluster-require-full-coverage no, and normally
+    by a write once the cluster recovers; blocked_clients must return to 0 each time
+    on both builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: blocked
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    server_config:
+      cluster-require-full-coverage: "yes"
+    commands:
+    - {command: [CLUSTER, KEYSLOT, foo], expect: {equals: 12182}}
+    - {raw: "BLPOP foo 0\r\n", connection: blk}
+    - {command: [INFO, clients], compare: skip, wait_s: 15, expect: {contains: "blocked_clients:1"}}
+    - {command: [CLUSTER, DELSLOTS, 0], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], compare: skip, wait_s: 15, expect: {contains: "cluster_state:fail"}}
+    - {command: [INFO, clients], compare: skip, wait_s: 15, expect: {contains: "blocked_clients:0"}}
+    - {read: true, connection: blk, expect: {contains: CLUSTERDOWN}}
+    - {command: [CLUSTER, ADDSLOTS, 0], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], compare: skip, wait_s: 30, expect: {contains: "cluster_state:ok"}}
+    - {command: [CONFIG, SET, cluster-require-full-coverage, no], expect: {equals: OK}}
+    - {raw: "BLPOP foo 0\r\n", connection: blk2}
+    - {command: [INFO, clients], compare: skip, wait_s: 15, expect: {contains: "blocked_clients:1"}}
+    - {command: [CLUSTER, DELSLOTS, 12182], expect: {equals: OK}}
+    - {command: [INFO, clients], compare: skip, wait_s: 15, expect: {contains: "blocked_clients:0"}}
+    - {read: true, connection: blk2, expect: {contains: "Hash slot not served"}}
+    - {command: [CLUSTER, ADDSLOTS, 12182], expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], compare: skip, wait_s: 30, expect: {contains: "cluster_state:ok"}}
+    - {raw: "BLPOP foo 0\r\n", connection: blk3}
+    - {command: [INFO, clients], compare: skip, wait_s: 15, expect: {contains: "blocked_clients:1"}}
+    - {command: [LPUSH, foo, v1], expect: {equals: 1}}
+    - {command: [INFO, clients], compare: skip, wait_s: 15, expect: {contains: "blocked_clients:0"}}
+    - {read: true, connection: blk3, expect: {contains: foo}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [blocked.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: blocked}

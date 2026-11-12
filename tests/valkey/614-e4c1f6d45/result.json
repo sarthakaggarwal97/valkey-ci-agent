@@ -1,0 +1,134 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e4c1f6d45af9c9a51177483c4be7537d832903c0",
+  "parent": "7415a576a8c49fdb946ac45aa66f4a462872d277",
+  "pr": 614,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replace client flags to bitfield (#614)",
+  "date": "2024-06-30",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 26,
+  "proven": 0,
+  "hunted": 20,
+  "dropped": 8,
+  "recall": false,
+  "coverage": {
+    "lines": 472,
+    "executed": 289,
+    "percent": 61,
+    "uncovered": [
+      "src/acl.c:509",
+      "src/acl.c:513",
+      "src/acl.c:1497",
+      "src/acl.c:1502",
+      "src/blocked.c:136",
+      "src/blocked.c:259",
+      "src/debug.c:1029",
+      "src/module.c:3857",
+      "src/module.c:3859",
+      "src/module.c:3867",
+      "src/module.c:5959",
+      "src/module.c:6425",
+      "src/module.c:6426",
+      "src/module.c:6495",
+      "src/module.c:6499",
+      "src/module.c:7850",
+      "src/module.c:7908",
+      "src/module.c:7915",
+      "src/module.c:7919",
+      "src/module.c:7920",
+      "src/module.c:7921",
+      "src/module.c:8014",
+      "src/module.c:8015",
+      "src/module.c:8302",
+      "src/module.c:8303",
+      "src/module.c:9468",
+      "src/module.c:9472",
+      "src/module.c:9783",
+      "src/module.c:9790",
+      "src/module.c:9793",
+      "src/networking.c:115",
+      "src/networking.c:1211",
+      "src/networking.c:1228",
+      "src/networking.c:1519",
+      "src/networking.c:1538",
+      "src/networking.c:1539",
+      "src/networking.c:2629",
+      "src/networking.c:2711",
+      "src/networking.c:3054",
+      "src/networking.c:3055",
+      "src/networking.c:3070",
+      "src/networking.c:3198",
+      "src/networking.c:3202",
+      "src/networking.c:3342",
+      "src/networking.c:3385",
+      "src/networking.c:3416",
+      "src/networking.c:3418",
+      "src/networking.c:3420",
+      "src/networking.c:3422",
+      "src/networking.c:3438"
+    ],
+    "unnoted": [],
+    "rounds": 2
+  },
+  "cost_usd": 29.6252,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-14112e9f821e",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'auth' returned ERROR: command 7 (EXEC on connection c1) got no reply: TimeoutError: Timeout reading from /tmp/vfc-_puwphgl/s.sock"
+    },
+    {
+      "scenario": "ai-b689949d1b40",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'auth' returned ERROR: command 7 (EXEC on connection c1) got no reply: TimeoutError: Timeout reading from /tmp/vfc-8vgwxk91/s.sock"
+    },
+    {
+      "scenario": "ai-2c0fd31e285c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'dbg' returned ERROR: expectations both builds violate alike, so they are not about the change: 9 (SCRIPT LOAD return 1), 10 (EVALSHA e0e1f9fabfc9d4800c877a703b823ac0578ff831 0)"
+    },
+    {
+      "scenario": "ai-ba20f43627e0",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'dbg' returned ERROR: expectations both builds violate alike, so they are not about the change: 0 (DEBUG PROTOCOL push on connection p), 9 (SCRIPT LOAD return 1), 10 (EVALSHA e0e1f9fabfc9d4800c877a703b823ac0578ff831 0)"
+    },
+    {
+      "scenario": "ai-aa36fc9f7e25",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'auth' returned ERROR: command 10 (EXEC) got no reply: TimeoutError: Timeout reading from /tmp/vfc-9gcxpgtt/s.sock"
+    },
+    {
+      "scenario": "ai-1251a1e01363",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'auth' returned ERROR: command 3 (GET k on connection anon) got no reply: cannot connect: ResponseError: NOAUTH HELLO must be called with the client already authenticated, otherwise the HELLO <proto> AUTH <user> <pass> option can be used"
+    },
+    {
+      "scenario": "ai-5393d11d6d02",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'ldb' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (read on connection dbg), 4 (PING on connection dbg), 10 (PING on connection dbg2)"
+    },
+    {
+      "scenario": "ai-64d8e17cb2dc",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'mauth' returned ERROR: command 12 (EXEC on connection c1) got no reply: TimeoutError: Timeout reading from /tmp/vfc-z4mb8w4k/s.sock"
+    },
+    {
+      "scenario": "ai-3c180da00f72",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'mauth' returned ERROR: command 12 (EXEC on connection c1) got no reply: TimeoutError: Timeout reading from /tmp/vfc-mi7ogtq4/s.sock"
+    }
+  ]
+}

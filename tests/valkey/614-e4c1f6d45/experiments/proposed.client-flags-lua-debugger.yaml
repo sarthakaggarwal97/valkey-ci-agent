@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.client-flags-lua-debugger
+deployment:
+  modes: [standalone]
+metadata:
+  description: lua_debug_sync and close_after_reply bits through a synchronous and
+    a forked SCRIPT DEBUG session driven over the debugger protocol
+components:
+- use: valkey.action.commands
+  id: ldb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 2
+    timeout_s: 15
+    commands:
+    - {command: [SCRIPT, DEBUG, SYNC], connection: dbg, expect: {equals: OK}}
+    - {command: [EVAL, "return 1", 0], connection: dbg, compare: skip, expect: {exists: true}}
+    - {raw: "continue\r\n", connection: dbg, compare: skip, expect: {exists: true}}
+    - {read: true, connection: dbg, compare: skip, expect: {exists: true}}
+    - {command: [PING], connection: dbg, expect: {exists: false}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [SCRIPT, DEBUG, YES], connection: dbg2, expect: {equals: OK}}
+    - {command: [EVAL, "return 2", 0], connection: dbg2, compare: skip, expect: {
+        exists: true}}
+    - {raw: "continue\r\n", connection: dbg2, compare: skip}
+    - {read: true, connection: dbg2, compare: skip}
+    - {command: [PING], connection: dbg2, expect: {exists: false}}
+    - {command: [SET, after, 1], expect: {equals: OK}}
+    - {command: [GET, after], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [ldb.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ldb}

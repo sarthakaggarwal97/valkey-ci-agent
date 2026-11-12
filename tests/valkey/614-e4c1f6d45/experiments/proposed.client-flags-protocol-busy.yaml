@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.client-flags-protocol-busy
+deployment:
+  modes: [standalone]
+metadata:
+  description: protocol_error/close_after_reply on malformed requests at loglevel
+    verbose, protected during script timeout and DEBUG LOADAOF, close_asap breaking
+    KEYS under an output buffer limit
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: proto
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {loglevel: verbose, busy-reply-threshold: 100}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {raw: "*abc\r\n", connection: p1, expect: {error: "Protocol error"}}
+    - {command: [PING], connection: p1, expect: {exists: false}}
+    - {raw: "*1\r\n$abc\r\n", connection: p2, expect: {error: "Protocol error"}}
+    - {command: [PING], connection: p2, expect: {exists: false}}
+    - {raw: "PING \"\r\n", connection: p3, expect: {error: "unbalanced"}}
+    - {command: [PING], connection: p3, expect: {exists: false}}
+    - {raw: "*3\r\n$4\r\nEVAL\r\n$17\r\nwhile true do end\r\n$1\r\n0\r\n", connection: lua}
+    - {command: [SCRIPT, KILL], wait_s: 10, expect: {equals: OK}}
+    - {read: true, connection: lua, compare: skip, expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, SET, appendonly, yes], expect: {equals: OK}}
+    - {command: [SET, ak, av], expect: {equals: OK}}
+    - {command: [INFO, persistence], wait_s: 20, expect: {contains: "aof_rewrite_in_progress:0"},
+      compare: skip}
+    - {command: [DEBUG, LOADAOF], expect: {equals: OK}}
+    - {command: [GET, ak], expect: {equals: av}}
+    - {command: [CONFIG, SET, appendonly, no], expect: {equals: OK}}
+    - {command: [DEBUG, POPULATE, 5000], expect: {equals: OK}}
+    - {command: [CONFIG, SET, client-output-buffer-limit, "normal 4096 0 0"], expect: {
+        equals: OK}}
+    - {command: [KEYS, "*"], connection: big, compare: skip, expect: {exists: false}}
+    - {command: [CONFIG, SET, client-output-buffer-limit, "normal 0 0 0"], expect: {
+        equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 5001}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [proto.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: proto}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1ea49e5845a1..8faf2788a207.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fb1454a2008b
+seed: 202
+experiment:
+  id: proposed.embedded-key-defrag-ttl
+  inputs:
+    resp: 3
+    defrag_cycle_min: 90
+deployment:
+  mode: standalone
+  base_port: 7100

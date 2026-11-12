@@ -1,0 +1,47 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2979fe606057437b344b08b0758722c64dfe0fd0",
+  "parent": "518f0bf79bae984e5b93e03b5b951369419d4ca3",
+  "pr": 710,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "CLUSTER SLOT-STATS ORDERBY when stats are the same, compare by slot in ascending order (#710)",
+  "date": "2024-06-28",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.8164,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-8b103dc1b421",
+      "build": "unstable",
+      "seed": 710,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8b103dc1b421",
+      "build": "unstable",
+      "seed": 711,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-8b103dc1b421",
+      "build": "unstable",
+      "seed": 712,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

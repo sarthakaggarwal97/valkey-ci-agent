@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6bf1d02edf962674cb32dc2e4f2f13d3d8cece3f",
+  "parent": "2d6791bb1157af52e20ffd1fb4ca025c283153d3",
+  "pr": 723,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Nested MULTI or WATCH in MULTI now will abort the transaction (#723)",
+  "date": "2024-07-03",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 1,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.8157,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

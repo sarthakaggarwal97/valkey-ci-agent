@@ -1,0 +1,63 @@
+extends: [valkey.liveness]
+id: proposed.client-flags-multi-watch
+deployment:
+  modes: [standalone]
+metadata:
+  description: MULTI/EXEC/WATCH dirty-CAS and dirty-EXEC flag transitions, CLIENT
+    INFO flag letters, and CLIENT REPLY OFF/SKIP handoff, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: multiwatch
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [EXEC], expect: {error: "EXEC without MULTI"}}
+    - {command: [DISCARD], expect: {error: "DISCARD without MULTI"}}
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [WATCH, k1], expect: {equals: OK}}
+    - {command: [SET, k1, v2], connection: w, expect: {equals: OK}}
+    - {command: [CLIENT, INFO], compare: skip, expect: {contains: "flags=d"}}
+    - {command: [WATCH, k2], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [MULTI], expect: {error: "MULTI calls can not be nested"}}
+    - {command: [WATCH, k2], expect: {error: "WATCH inside MULTI is not allowed"}}
+    - {command: [GET, k1], expect: {equals: QUEUED}}
+    - {command: [CLIENT, LIST], connection: w, compare: skip, expect: {contains: "flags=x"}}
+    - {command: [EXEC], expect: {exists: false}}
+    - {command: [GET, k1], expect: {equals: v2}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [NOSUCHCMD, a], expect: {error: "unknown command"}}
+    - {command: [SET, k1, v3], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {error: EXECABORT}}
+    - {command: [GET, k1], expect: {equals: v2}}
+    - {command: [WATCH, k1], expect: {equals: OK}}
+    - {command: [UNWATCH], expect: {equals: OK}}
+    - {command: [SET, k1, v4], connection: w, expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [v4]}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [RESET], expect: {equals: RESET}}
+    - {command: [EXEC], expect: {error: "EXEC without MULTI"}}
+    - {raw: "CLIENT REPLY SKIP\r\n", connection: q, expect: {exists: false}}
+    - {raw: "PING\r\n", connection: q, expect: {exists: false}}
+    - {raw: "PING\r\n", connection: q, expect: {contains: PONG}}
+    - {raw: "CLIENT REPLY OFF\r\n", connection: q, expect: {exists: false}}
+    - {raw: "PING\r\n", connection: q, expect: {exists: false}}
+    - {raw: "CLIENT REPLY ON\r\n", connection: q, expect: {contains: OK}}
+    - {command: [PING], connection: q, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [multiwatch.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: multiwatch}

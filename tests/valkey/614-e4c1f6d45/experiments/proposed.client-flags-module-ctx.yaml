@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.client-flags-module-ctx
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module GetClientInfoById flag mapping, RM_Call temp client deny_blocking
+    (SHUTDOWN refused, BLPOP returns null) and allow_oom paths, via tests/modules/misc.so
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: modctx
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [test.clientinfo], compare: skip}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [test.clientinfo], expect: {equals: QUEUED}}
+    - {command: [EXEC], compare: skip}
+    - {command: [test.rm_call, SHUTDOWN], expect: {error: "DENY BLOCKING"}}
+    - {command: [test.rm_call, BLPOP, nokey, 0], expect: {equals: null}}
+    - {command: [test.rm_call, SET, mk, mv], expect: {equals: OK}}
+    - {command: [GET, mk], expect: {equals: mv}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [NOSUCHCMD], expect: {error: true}}
+    - {command: [EXEC], expect: {error: EXECABORT}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modctx.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modctx}

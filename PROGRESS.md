@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-12T05:02+00:00.
+Updated 2026-11-12T05:14+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1923 | 607 | #766 (2024-07-09) | 246 | 271.1 |
+| valkey-io/valkey | 1948 | 582 | #351 (2024-06-27) | 271 | 274.7 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 11.6 |
 | valkey-io/valkey-json | 64 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 4.4 |
 | valkey-io/valkey-search | 673 | 0 | f8106e72e984 (2024-11-27) | 1 | 96.1 |
@@ -13,28 +13,28 @@ Updated 2026-11-12T05:02+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-12T01:32:05+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43116260972): 20 merge(s) tested, 8 without a code change.
+[2026-11-12T05:14:03+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43135168590): 20 merge(s) tested, 5 without a code change.
 
-- [valkey-io/valkey#762](https://github.com/valkey-io/valkey/pull/762) ([tests](tests/valkey/762-59aa00823/)): Replicas with the same offset queue up for election (#762): 0 of 3 test(s) reached the change, coverage 100%; crash, predates #762, since fixed (recorded)
-- [valkey-io/valkey#810](https://github.com/valkey-io/valkey/pull/810) ([tests](tests/valkey/810-9a7bf910c/)): Fix extra reply in debug sleep-after-fork-seconds error path (#810): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#712](https://github.com/valkey-io/valkey/pull/712) ([tests](tests/valkey/712-5000c050b/)): Add cpu-usec metric support under CLUSTER SLOT-STATS command (#20). (#712): 3 of 5 test(s) reached the change, coverage 100%; crash, introduced and since fixed (recorded)
-- [valkey-io/valkey#776](https://github.com/valkey-io/valkey/pull/776) ([tests](tests/valkey/776-14e09e981/)): Fix the wrong woff when execute WAIT / WAITAOF in script (#776): 2 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#807](https://github.com/valkey-io/valkey/pull/807) ([tests](tests/valkey/807-6eb19cf38/)): Typo fix in hyperloglog.c (#807): declined: The change only fixes a spelling typo inside a code comment in src/hyperloglog.c (hypreloglog -> hyperloglog). No executable code, behaviour, reply, or data format is affected, so there is nothing to test.
-- [valkey-io/valkey#782](https://github.com/valkey-io/valkey/pull/782) ([tests](tests/valkey/782-15a829023/)): Optimize failover time when the new primary node is down again (#782): 0 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#790](https://github.com/valkey-io/valkey/pull/790) ([tests](tests/valkey/790-816accea7/)): Generate correct slot information in cluster shards command on primary failure  (#790): 0 of 3 test(s) reached the change, coverage 95%
-- [valkey-io/valkey#763](https://github.com/valkey-io/valkey/pull/763) ([tests](tests/valkey/763-94bc15cb7/)): Io thread work offload (#763): 3 of 8 test(s) reached the change, coverage 80%
-- [valkey-io/valkey#803](https://github.com/valkey-io/valkey/pull/803) ([tests](tests/valkey/803-8b480310a/)): Remove read handler upon RDB connection close (#803): 0 of 3 test(s) reached the change, coverage 0%
-- [valkey-io/valkey#801](https://github.com/valkey-io/valkey/pull/801) ([tests](tests/valkey/801-36e81d9e7/)): Fix rdb_child_exit_pipe incorrect close call (#801): declined: The change only moves close(server.rdb_child_exit_pipe) inside the existing !dual_channel branches in rdbSaveToReplicasSockets. In non-dual-channel diskless sync the closed fds and their order are identical on both builds. In dual-channel sync rdb_child_exit_pipe is always -1 (asserted at 
-- [valkey-io/valkey#800](https://github.com/valkey-io/valkey/pull/800) ([tests](tests/valkey/800-c58437150/)): Fix rdb pipe uninitialized false positive warning (#800): declined: The change only initializes two local variables (rdb_pipe_write, safe_to_exit_pipe) to 0 in rdbSaveToReplicasSockets to silence a false-positive 'may be used uninitialized' compiler warning. Every read or close of those variables is guarded by !dual_channel, the same path that assigns them
-- [valkey-io/valkey#60](https://github.com/valkey-io/valkey/pull/60) ([tests](tests/valkey/60-ff6b780fe/)): Dual channel replication (#60): 6 of 25 test(s) reached the change, coverage 79%
-- [valkey-io/valkey#754](https://github.com/valkey-io/valkey/pull/754) ([tests](tests/valkey/754-66d0f7d9a/)): Ensure only primary sender drives slot ownership updates (#754): 0 of 4 test(s) reached the change, coverage 91%
-- [valkey-io/valkey#647](https://github.com/valkey-io/valkey/pull/647) ([tests](tests/valkey/647-1a8bd045f/)): Replace master-reboot-down-after-period with primary-reboot-down-after-period in sentinel.conf (#647): declined: The change is confined to Sentinel mode: sentinelHandleConfiguration (parsing the 'sentinel primary-reboot-down-after-period' directive at startup), sentinelSetCommand (SENTINEL SET), and rewriteConfigSentinelOption (CONFIG REWRITE in a Sentinel), plus a sentinel.conf comment and a Sentine
-- [valkey-io/valkey#477](https://github.com/valkey-io/valkey/pull/477) ([tests](tests/valkey/477-dd4bd5065/)): Introduce Valkey Over RDMA transport (experimental) (#477): declined: The change only adds a new optional RDMA transport module (src/rdma.c) that is compiled solely when BUILD_RDMA=module is set (default BUILD_RDMA=no does nothing), plus Makefile/CI/README/test-harness additions. No existing server code path is modified. Exercising it would require a build w
-- [valkey-io/valkey#500](https://github.com/valkey-io/valkey/pull/500) ([tests](tests/valkey/500-418901dec/)): Limit tracking custom errors (e.g. from LUA) while allowing non custom errors to be tracked normally (#500): 2 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#738](https://github.com/valkey-io/valkey/pull/738) ([tests](tests/valkey/738-34649bd03/)): Configurable cluster blacklist TTL (#738): 2 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#756](https://github.com/valkey-io/valkey/pull/756) ([tests](tests/valkey/756-b4ac2c406/)): Update gitignore to ignore the cluster-cluster test files (#756): declined: The change modifies only .gitignore, widening three ignore patterns (dump.rdb -> dump*.rdb, appendonlydir -> appendonlydir*, nodes.conf -> nodes*.conf) so cluster-cluster test artifacts are untracked. It is a repository housekeeping/CI-hygiene change with no code, config, protocol, or beha
-- [valkey-io/valkey#736](https://github.com/valkey-io/valkey/pull/736) ([tests](tests/valkey/736-a323dce89/)): Dual stack and client-specific IPs in cluster (#736): 2 of 7 test(s) reached the change, coverage 70%; crash, introduced and since fixed (recorded); crash, introduced and since fixed (recorded); crash, introduced and since fixed (recorded)
-- [valkey-io/valkey#752](https://github.com/valkey-io/valkey/pull/752) ([tests](tests/valkey/752-6a5a11f21/)): Fix ULong config boundary checking (#752): declined: The fix routes NUMERIC_TYPE_ULONG configs through the unsigned boundary-check branch of numericBoundaryCheck instead of the signed one, but no observable behavior changes on the test platform. The only ULONG configs are active-defrag-max-scan-fields (bounds 1..LONG_MAX), slowlog-max-len an
+- [valkey-io/valkey#725](https://github.com/valkey-io/valkey/pull/725) ([tests](tests/valkey/725-548b4e0ea/)): Calculate the actual mask to be removed in the eventloop before aeApiDelEvent (#725): 0 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#758](https://github.com/valkey-io/valkey/pull/758) ([tests](tests/valkey/758-bbfd04189/)): Async IO threads (#758): 2 of 25 test(s) reached the change, coverage 81%
+- [valkey-io/valkey#755](https://github.com/valkey-io/valkey/pull/755) ([tests](tests/valkey/755-5f0ccf147/)): Remove duplicate definition of UNUSED(V) (#755): declined: The change only deletes a duplicate `#define UNUSED(V)` macro inside the `#ifdef SERVER_TEST` section of src/dict.c. The identical macro remains defined elsewhere, and this block is only compiled for the server's internal unit tests, not for normal builds. No command, reply, replication, p
+- [valkey-io/valkey#741](https://github.com/valkey-io/valkey/pull/741) ([tests](tests/valkey/741-f2bbd1ff0/)): Fix minor memory leak in clusterLoadConfig (#741): declined: The change only adds sdsfreesplitres(argv, argc) before a goto fmterr in clusterLoadConfig; the fmterr path immediately logs and calls exit(1), so the freed memory would have been reclaimed by process termination anyway. There is no observable behavior change on any input — same log, same 
+- [valkey-io/valkey#706](https://github.com/valkey-io/valkey/pull/706) ([tests](tests/valkey/706-168037884/)): Update redis keyword to valkey in some sentinel functions (Redis Legacy) (#706): declined: The change is a pure rename refactor in src/sentinel.c: sentinelRedisInstance and related functions/types are renamed to sentinelValkeyInstance, redisAeEvents to ValkeyAeEvents, and the REDIS_SENTINEL_PORT macro to VALKEY_SENTINEL_PORT with the same value (26379). Every hunk is an identifi
+- [valkey-io/valkey#723](https://github.com/valkey-io/valkey/pull/723) ([tests](tests/valkey/723-6bf1d02ed/)): Nested MULTI or WATCH in MULTI now will abort the transaction (#723): 2 of 2 test(s) reached the change
+- [valkey-io/valkey#735](https://github.com/valkey-io/valkey/pull/735) ([tests](tests/valkey/735-2d6791bb1/)): Use clusterNodeIsVotingPrimary function to check the right (#735): declined: This is a semantics-preserving refactor: the inline checks `nodeIsReplica(node) || node->numslots == 0` in clearNodeFailureIfNeeded and clusterSendFailoverAuthIfNeeded are replaced by `!clusterNodeIsVotingPrimary(node)`, whose definition ((flags & CLUSTER_NODE_PRIMARY) && numslots) is logi
+- [valkey-io/valkey#541](https://github.com/valkey-io/valkey/pull/541) ([tests](tests/valkey/541-8faf2788a/)): Embed key into dict entry (#541): 4 of 12 test(s) reached the change, coverage 99%
+- [valkey-io/valkey#731](https://github.com/valkey-io/valkey/pull/731) ([tests](tests/valkey/731-1ea49e584/)): Make valkey compatible with redis-sentinel to start sentinel (#731): declined: The change only adds a second strstr on argv[0]'s basename so that a redis-sentinel symlink starts Sentinel mode. The trigger is the name the binary is invoked under, which nothing in the fuzzer controls: the runner supplies the build and launches it as valkey-server, valkey.action.tools r
+- [valkey-io/valkey#674](https://github.com/valkey-io/valkey/pull/674) ([tests](tests/valkey/674-3323e422a/)): Introduce thread-local storage variable to update thread's own used_memory and sum when reading to reduce atomic contention. (#674): 0 of 6 test(s) reached the change, coverage 81%
+- [valkey-io/valkey#729](https://github.com/valkey-io/valkey/pull/729) ([tests](tests/valkey/729-0cc16d029/)): Fix wrong reserved bits in ClientFlags (#729): declined: The change only corrects the ClientFlags reserved bitfield from 11 to 10 bits so the 54 named flag bits plus reserved fit exactly in the one uint64_t that is unioned with raw_flag. The reserved field is never read or written anywhere in the codebase, no code serializes ClientFlags or depen
+- [valkey-io/valkey#693](https://github.com/valkey-io/valkey/pull/693) ([tests](tests/valkey/693-fa01a2936/)): Allow Module authentication to succeed when cluster is down (#693): 0 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#718](https://github.com/valkey-io/valkey/pull/718) ([tests](tests/valkey/718-9f4f6036b/)): Restore comments for client flags (#718): declined: The diff only restores inline comments on the ClientFlags bitfield in src/server.h; every field's name, width and order is unchanged, so no compiled behaviour differs between the change and its parent. A comment-only change needs no scenario.
+- [valkey-io/valkey#721](https://github.com/valkey-io/valkey/pull/721) ([tests](tests/valkey/721-752b6ee8f/)): Avoid compilation error oin valkey-cli (#721): declined: The change only adds an unreachable `return 0;` after an `assert(0)` in clusterManagerNodePrimaryRandom() in valkey-cli.c to fix a compilation warning/error about control reaching the end of a non-void function. The added statement can never execute at runtime, so no behavior of valkey-cli
+- [valkey-io/valkey#614](https://github.com/valkey-io/valkey/pull/614) ([tests](tests/valkey/614-e4c1f6d45/)): Replace client flags to bitfield (#614): 0 of 26 test(s) reached the change, coverage 61%
+- [valkey-io/valkey#702](https://github.com/valkey-io/valkey/pull/702) ([tests](tests/valkey/702-7415a576a/)): Add prompt when Ctrl-C pressed (#702): declined: The change adds only an informational printf (plus fflush) to valkey-cli's interactive Ctrl-C handler in pubsub mode; the reconnect logic and all state handling are unchanged. The branch is reachable only when SIGINT is delivered to an interactive valkey-cli REPL session (sigIntHandler is 
+- [valkey-io/valkey#710](https://github.com/valkey-io/valkey/pull/710) ([tests](tests/valkey/710-2979fe606/)): CLUSTER SLOT-STATS ORDERBY when stats are the same, compare by slot in ascending order (#710): 0 of 1 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#709](https://github.com/valkey-io/valkey/pull/709) ([tests](tests/valkey/709-518f0bf79/)): Fix limit undefined behavior crash in CLUSTER SLOT-STATS (#709): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#711](https://github.com/valkey-io/valkey/pull/711) ([tests](tests/valkey/711-7f7ef9a3f/)): Update availability-zone to use the flag instead of the number 0 (#711): declined: The change replaces the literal 0 with the macro ALLOW_EMPTY_STRING in the availability-zone config definition in src/config.c; ALLOW_EMPTY_STRING is #defined as 0 (src/config.c:1900), so the compiled behavior is identical. This is a readability-only refactor with no behavior change, so no
+- [valkey-io/valkey#581](https://github.com/valkey-io/valkey/pull/581) ([tests](tests/valkey/581-4fbe31ab8/)): Fix the TLS and REPS issues about CLUSTER SLOTS cache (#581): 0 of 2 test(s) reached the change, coverage 100%
 
 ### valkey-io/valkey-bloom
 
@@ -53,10 +53,10 @@ Updated 2026-11-12T05:02+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 836 of 1337 tested (63%)
-- Changed-line coverage: median 100% of 849 merge(s) measured, 66 under 50%
-- Recall: 224 parents flagged of 353 fix merges
-- Claude: $772.08 in the last 24 hours, $9526.41 in the last 7 days, $9733.98 in all
+- Merges whose tests reached the change: 840 of 1347 tested (62%)
+- Changed-line coverage: median 100% of 858 merge(s) measured, 66 under 50%
+- Recall: 225 parents flagged of 355 fix merges
+- Claude: $889.01 in the last 24 hours, $9643.34 in the last 7 days, $9850.90 in all
 - Issues filed: 71
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

@@ -1,0 +1,27 @@
+extends: [valkey.liveness]
+id: proposed.io-threads-writev-large-reply
+deployment:
+  modes: [standalone]
+metadata:
+  description: A multi-megabyte reply drives the writevToClient gather loop and its
+    NET_MAX_WRITES_PER_EVENT handling
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bigreply
+  config:
+    server_config: {io-threads: 1, maxmemory-policy: noeviction}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, list-max-listpack-size, "4"], expect: {equals: OK}}
+    - {command: [EVAL, "for i=1,200000 do redis.call('RPUSH', KEYS[1], string.rep('x',\
+          \ 64)) end return redis.call('LLEN', KEYS[1])", 1, biglist], expect: {equals: 200000}}
+    - {command: [LRANGE, biglist, 0, -1], expect: {exists: true}}
+    - {command: [LLEN, biglist], expect: {equals: 200000}}
+    - {command: [DEBUG, JMAP], expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bigreply}

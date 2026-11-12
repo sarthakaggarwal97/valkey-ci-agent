@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.client-flags-key-blocking
+deployment:
+  modes: [standalone]
+metadata:
+  description: BLPOP unblocked by a push (pending_command reprocess), by timeout,
+    and force-unblocked by a primary-to-replica role change
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: blk
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {raw: "BLPOP k1 0\r\n", connection: b1}
+    - {command: [DEBUG, SLEEP, 0.2]}
+    - {command: [LPUSH, k1, v1], expect: {equals: 1}}
+    - {read: true, connection: b1, expect: {equals: [[k1, v1]]}}
+    - {command: [LRANGE, k1, 0, -1], expect: {equals: []}}
+    - {raw: "BLPOP k2 1\r\n", connection: b2}
+    - {command: [DEBUG, SLEEP, 1.5]}
+    - {read: true, connection: b2}
+    - {raw: "BLPOP k3 0\r\n", connection: b3}
+    - {command: [DEBUG, SLEEP, 0.2]}
+    - {command: [REPLICAOF, "127.0.0.1", 1], expect: {equals: OK}}
+    - {read: true, connection: b3}
+    - {command: [REPLICAOF, "NO", "ONE"], expect: {equals: OK}}
+    - {command: [LPUSH, k3, v3], expect: {equals: 1}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [blk.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: blk}

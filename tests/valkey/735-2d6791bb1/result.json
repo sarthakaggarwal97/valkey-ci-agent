@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2d6791bb1157af52e20ffd1fb4ca025c283153d3",
+  "parent": "b298dfd6ef5c8572965c8154526ea76381fa29d2",
+  "pr": 735,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use clusterNodeIsVotingPrimary function to check the right (#735)",
+  "date": "2024-07-03",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3966,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a semantics-preserving refactor: the inline checks `nodeIsReplica(node) || node->numslots == 0` in clearNodeFailureIfNeeded and clusterSendFailoverAuthIfNeeded are replaced by `!clusterNodeIsVotingPrimary(node)`, whose definition ((flags & CLUSTER_NODE_PRIMARY) && numslots) is logically equivalent for every reachable node state \u2014 the two conditions could only diverge for a node with assigned slots but neither role flag set, which cannot occur since handshake nodes (the only nodes without a role flag) always have numslots == 0 and slots are only attributed to nodes already flagged prima"
+}
