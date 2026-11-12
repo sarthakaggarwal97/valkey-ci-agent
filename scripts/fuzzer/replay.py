@@ -16,12 +16,6 @@ batch counts the runs that reached the change, did not, or showed an
 unexplained difference (``change_runs``). Only the replay is made up: the
 proposals, the batch and the monitor are the live ones.
 
-valkey-io/valkey#4749 changed how a full sync picks its codec and transport,
-and what the primary logs of it. The fuzzer's ``valkey.oracle.repl-compression``
-knows only the new rules, and nothing a build reports tells the two apart, so
-a merge before #4749 leaves the experiments it judges out of its batch, both
-the random draws and the proposals. A live batch never tests a build that old.
-
 The merges of a module repository the PR batch builds (valkey-json) replay
 the same way, on one pinned Valkey build: ``plan`` resolves a valkey-io/valkey
 ref once and gives every merge that commit (``valkey_sha``), and each merge's
@@ -43,8 +37,6 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-
-import yaml
 
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -88,12 +80,6 @@ _MERGE_SHA_RE = re.compile(r"[0-9a-f]{7,40}")
 # The Valkey a module's merges load into: a branch, a tag or a full commit, fetched from here.
 _REF_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,99}")
 VALKEY_URL = f"https://github.com/{VALKEY_REPO}.git"
-# valkey-io/valkey#4749, and the experiments whose oracle models its rules.
-REPL_COMPRESSION_RULES = "7fe7ca45ffc7bb0ba009a952a2f64395e45e432a"
-REPL_COMPRESSION_EXPERIMENTS = (
-    "valkey.repl-compression-full-sync", "valkey.repl-compression-partial-resync",
-    "valkey.repl-compression-runtime-change", "valkey.replication-chaos",
-)
 
 
 def plan(
@@ -138,7 +124,7 @@ def plan(
         sha, parent = shas.split()[:2]
         match = _PR_SUBJECT_RE.search(subject)
         entry = {"index": index, "sha": sha, "parent": parent, "pr": int(match.group(1)) if match else None,
-                 "subject": subject[:200], "exclude_experiments": [] if is_module else excluded_experiments(repo_dir, sha)}
+                 "subject": subject[:200]}
         planned.append({**entry, "valkey_sha": valkey_sha} if is_module else entry)
     planned = planned[:first] if first else planned
     if len(planned) > MAX_MERGES:
@@ -161,23 +147,6 @@ def resolve_commit(ref: str, url: str) -> str:
             raise ValueError(f"cannot fetch {ref} from {url}: {fetched.stderr.strip()[:300]}")
         return subprocess.run(["git", "-C", td, "rev-parse", "FETCH_HEAD^{commit}"], check=True,
                               capture_output=True, text=True).stdout.strip()
-
-
-def excluded_experiments(valkey_dir: Path, sha: str) -> list[str]:
-    """The experiments a batch of ``sha`` leaves out: those whose rules ``sha`` predates."""
-    check = subprocess.run(
-        ["git", "-C", str(valkey_dir), "merge-base", "--is-ancestor", REPL_COMPRESSION_RULES, sha],
-        capture_output=True, text=True,
-    )
-    if check.returncode not in (0, 1):
-        raise RuntimeError(f"cannot tell whether {sha} has {REPL_COMPRESSION_RULES}: {check.stderr.strip()}")
-    return [] if check.returncode == 0 else list(REPL_COMPRESSION_EXPERIMENTS)
-
-
-def _experiment(text: str) -> str | None:
-    doc = yaml.safe_load(text)
-    experiment = doc.get("experiment") if isinstance(doc, dict) else None
-    return str(experiment.get("id")) if isinstance(experiment, dict) else None
 
 
 def describe(merge: dict[str, Any], repo: str) -> str:
@@ -237,12 +206,6 @@ def run(
         logger.warning("Proposing scenarios for %s failed: %s", result["change"], exc, exc_info=True)
         summary, scenarios = change.summary(), {}
         result["proposal_error"] = " ".join(str(exc).split())[:500]
-    excluded = list(merge.get("exclude_experiments") or [])
-    if excluded:
-        # A proposed experiment never matches: the experiments stay as they are.
-        kept = {name: text for name, text in scenarios.items() if _experiment(text) not in excluded}
-        result["excluded_proposals"] = len(scenarios) - len(kept)
-        scenarios = kept
     parent_sha: str | None = merge["parent"]
     if is_module:
         # One pinned Valkey build, and the module built at the merge and at its parent, whatever was proposed.
@@ -255,9 +218,7 @@ def run(
         (out_dir / REPLAY_FILE).write_text(json.dumps(result, indent=2), encoding="utf-8")
         logger.info("%s: %s", result["change"], result["skipped"])
         return result
-    # The exclusion only applies to the random baseline; without one the workflow refuses it.
     inputs = batch_dispatch_inputs(summary, scenarios, random_seeds=random_seeds, request_id=result["request_id"],
-                                   exclude_experiments=excluded if random_seeds else (),
                                    parent_sha=parent_sha, build=build, experiments=experiments or None,
                                    module=module)
     # GitHub's clock and ours may differ a little.

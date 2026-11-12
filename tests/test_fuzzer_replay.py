@@ -47,17 +47,13 @@ def valkey(tmp_path) -> Path:
     return repo
 
 
-def test_plan_lists_the_first_parent_merges_oldest_first(valkey, monkeypatch):
+def test_plan_lists_the_first_parent_merges_oldest_first(valkey):
     shas = _git(valkey, "log", "--first-parent", "--format=%H", "unstable").splitlines()[::-1]
-    # The second merge brings the rules the repl-compression oracle models.
-    monkeypatch.setattr(replay_mod, "REPL_COMPRESSION_RULES", shas[2])
-
     merges = plan(valkey, f"{shas[0]}..unstable")
 
     assert [(m["index"], m["sha"], m["parent"], m["pr"]) for m in merges] == [
         (0, shas[1], shas[0], 4716), (1, shas[2], shas[1], 5071), (2, shas[3], shas[2], None),
     ]
-    assert [m["exclude_experiments"] for m in merges] == [list(replay_mod.REPL_COMPRESSION_EXPERIMENTS), [], []]
     assert [m["subject"] for m in merges] == ["Fix the forkless save (#4716)", "Add PHPATHCOUNT (#5071)",
                                              "Merge the side branch"]
     assert plan(valkey, f"{shas[0]}..unstable", first=1) == merges[:1]
@@ -65,17 +61,14 @@ def test_plan_lists_the_first_parent_merges_oldest_first(valkey, monkeypatch):
         plan(valkey, "unstable")
 
 
-def test_plan_takes_the_merges_given_in_their_order(valkey, monkeypatch):
+def test_plan_takes_the_merges_given_in_their_order(valkey):
     shas = _git(valkey, "log", "--first-parent", "--format=%H", "unstable").splitlines()[::-1]
-    monkeypatch.setattr(replay_mod, "REPL_COMPRESSION_RULES", shas[2])
-
     # Out of history order, one abbreviated: kept in the order given, each resolved with its first parent.
     merges = plan(valkey, merges=[shas[3], shas[1][:9]])
 
     assert [(m["index"], m["sha"], m["parent"], m["pr"]) for m in merges] == [
         (0, shas[3], shas[2], None), (1, shas[1], shas[0], 4716),
     ]
-    assert [m["exclude_experiments"] for m in merges] == [[], list(replay_mod.REPL_COMPRESSION_EXPERIMENTS)]
     assert merges[1]["subject"] == "Fix the forkless save (#4716)"
     assert plan(valkey, merges=[shas[3], shas[1]], first=1) == merges[:1]
 
@@ -85,15 +78,13 @@ def test_plan_takes_the_merges_given_in_their_order(valkey, monkeypatch):
     ("abc", "7 to 40 lowercase hex"),
     ("HEAD~1", "7 to 40 lowercase hex"),
 ])
-def test_plan_refuses_a_merge_it_cannot_resolve(valkey, monkeypatch, sha, error):
-    monkeypatch.setattr(replay_mod, "REPL_COMPRESSION_RULES", _git(valkey, "rev-parse", "HEAD"))
+def test_plan_refuses_a_merge_it_cannot_resolve(valkey, sha, error):
     with pytest.raises(ValueError, match=error):
         plan(valkey, merges=[sha])
 
 
-def test_plan_command_takes_merges_separated_by_commas_or_spaces(valkey, monkeypatch, tmp_path):
+def test_plan_command_takes_merges_separated_by_commas_or_spaces(valkey, tmp_path):
     shas = _git(valkey, "log", "--first-parent", "--format=%H", "unstable").splitlines()[::-1]
-    monkeypatch.setattr(replay_mod, "REPL_COMPRESSION_RULES", shas[0])
     out = tmp_path / "merges.json"
     assert replay_mod.main(["plan", "--repo-dir", str(valkey), "--merges", f"{shas[2]}, {shas[1]} {shas[3]}",
                             "--out", str(out)]) == 0
@@ -228,59 +219,11 @@ def test_a_change_that_needs_no_test_is_recorded(monkeypatch, tmp_path):
     assert dispatched[0][0]["scenarios"] == "{}"
 
 
-def test_plan_needs_the_rules_commit_in_the_clone(valkey, monkeypatch):
-    monkeypatch.setattr(replay_mod, "REPL_COMPRESSION_RULES", "f" * 40)
-    with pytest.raises(RuntimeError, match="cannot tell whether"):
-        plan(valkey, "HEAD~1..unstable")
-
-
-def test_a_merge_before_the_rules_leaves_their_experiments_out(monkeypatch, tmp_path):
-    chaos = "seed: 8\nexperiment: {id: valkey.replication-chaos}\ndeployment: {mode: standalone}\n"
-    docs = [check_scenario(text)[0] for text in (SCENARIO, chaos)]
-
-    def propose(change, *, out_dir, **kw):
-        (out_dir / "scenarios").mkdir(parents=True)
-        run = ProposalRun(change=change)
-        for index, doc in enumerate(docs, 1):
-            name = doc["scenario_id"]
-            (out_dir / "scenarios" / f"{name}.yaml").write_text(_render_scenario(doc, change))
-            run.proposals.append(Proposal(index=index, rationale="why", text="x", scenario_id=name,
-                                          file=f"scenarios/{name}.yaml"))
-        return run
-
-    merge = {**_merge(), "exclude_experiments": list(replay_mod.REPL_COMPRESSION_EXPERIMENTS)}
-    result, _, dispatched, _ = _replay(monkeypatch, tmp_path, propose=propose, merge=merge)
-
-    ((inputs, _),) = dispatched
-    assert list(json.loads(inputs["scenarios"])) == [docs[0]["scenario_id"]]
-    assert inputs["valkey_parent_sha"] == "a" * 40
-    assert inputs["exclude_experiments"] == " ".join(replay_mod.REPL_COMPRESSION_EXPERIMENTS)
-    assert (result["proposed"], result["excluded_proposals"]) == (2, 1)
-
-
 def test_plan_refuses_more_merges_than_a_matrix_runs(valkey, monkeypatch):
     monkeypatch.setattr(replay_mod, "MAX_MERGES", 2)
-    monkeypatch.setattr(replay_mod, "REPL_COMPRESSION_RULES", _git(valkey, "rev-parse", "HEAD~3"))
     with pytest.raises(ValueError, match="holds 3 merges; a replay runs at most 2"):
         plan(valkey, "HEAD~3..unstable")
     assert len(plan(valkey, "HEAD~3..unstable", first=2)) == 2
-
-
-def test_without_a_random_baseline_the_exclusion_is_not_sent(monkeypatch, tmp_path):
-    doc = check_scenario(SCENARIO)[0]
-
-    def propose(change, *, out_dir, **kw):
-        (out_dir / "scenarios").mkdir(parents=True)
-        (out_dir / "scenarios" / f"{doc['scenario_id']}.yaml").write_text(_render_scenario(doc, change))
-        run = ProposalRun(change=change)
-        run.proposals.append(Proposal(index=1, rationale="why", text=SCENARIO, scenario_id=doc["scenario_id"],
-                                      file=f"scenarios/{doc['scenario_id']}.yaml"))
-        return run
-
-    merge = {**_merge(), "exclude_experiments": list(replay_mod.REPL_COMPRESSION_EXPERIMENTS)}
-    _, _, dispatched, _ = _replay(monkeypatch, tmp_path, propose=propose, merge=merge, random_seeds=0)
-    ((inputs, _),) = dispatched
-    assert "exclude_experiments" not in inputs and "random_seeds" not in inputs
 
 
 def test_replay_json_names_the_batch_as_soon_as_it_is_found(monkeypatch, tmp_path):
@@ -341,22 +284,19 @@ def test_a_merge_needs_full_commits(monkeypatch, tmp_path):
 # --- Modules -------------------------------------------------------------------
 
 
-def test_a_module_repository_plans_its_merges_onto_one_valkey_and_leaves_nothing_out(valkey, monkeypatch):
-    # Not a commit of the module: a Valkey merge would fail to tell whether it has the rules.
-    monkeypatch.setattr(replay_mod, "REPL_COMPRESSION_RULES", "f" * 40)
+def test_a_module_repository_plans_its_merges_onto_one_valkey(valkey):
     shas = _git(valkey, "log", "--first-parent", "--format=%H", "unstable").splitlines()[::-1]
     merges = plan(valkey, f"{shas[0]}..unstable", repository="valkey-io/valkey-json", valkey_sha=PINNED)
     assert [(m["sha"], m["parent"], m["pr"]) for m in merges] == [
         (shas[1], shas[0], 4716), (shas[2], shas[1], 5071), (shas[3], shas[2], None),
     ]
-    assert [(m["exclude_experiments"], m["valkey_sha"]) for m in merges] == [([], PINNED)] * 3
+    assert [m["valkey_sha"] for m in merges] == [PINNED] * 3
     assert plan(valkey, merges=[shas[2]], repository="someone/valkey-json", valkey_sha=PINNED)[0]["sha"] == shas[2]
     with pytest.raises(ValueError, match="needs the full Valkey commit its merges load into"):
         plan(valkey, f"{shas[0]}..unstable", repository="valkey-io/valkey-json", valkey_sha="unstable")
     with pytest.raises(ValueError, match="valkey-io/valkey-search is neither Valkey nor a module the PR batch builds"):
         plan(valkey, f"{shas[0]}..unstable", repository="valkey-io/valkey-search")
     # A Valkey merge carries no pinned Valkey: it is the build.
-    monkeypatch.setattr(replay_mod, "REPL_COMPRESSION_RULES", shas[0])
     assert "valkey_sha" not in plan(valkey, f"{shas[0]}..unstable", repository="someone/valkey")[0]
 
 
@@ -396,7 +336,7 @@ def test_a_module_merge_runs_on_the_pinned_valkey_with_the_module_built_at_the_m
         seen["valkey_sha"] = valkey_sha
         return _write(out_dir, change, *docs)
 
-    merge = {**_merge(), "valkey_sha": PINNED, "exclude_experiments": []}
+    merge = {**_merge(), "valkey_sha": PINNED}
     result, fetched, dispatched, _ = _replay(monkeypatch, tmp_path, propose=propose, merge=merge,
                                              repo="valkey-io/valkey-json")
 
@@ -417,7 +357,7 @@ def test_a_module_merge_whose_proposal_failed_still_loads_the_module(monkeypatch
     def propose(change, **kw):
         raise RuntimeError("Claude Code failed (rc=1)")
 
-    merge = {**_merge(), "valkey_sha": PINNED, "exclude_experiments": []}
+    merge = {**_merge(), "valkey_sha": PINNED}
     _, _, dispatched, _ = _replay(monkeypatch, tmp_path, propose=propose, merge=merge, repo="valkey-io/valkey-json")
     ((inputs, _),) = dispatched
     assert (inputs["scenarios"], inputs["valkey_sha"], inputs["module_sha"]) == ("{}", PINNED, "b" * 40)

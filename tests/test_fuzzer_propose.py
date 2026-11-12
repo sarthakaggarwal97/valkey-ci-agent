@@ -1317,8 +1317,8 @@ def test_the_prompts_render():
     assert "examples/valkey/experiments/replica-killed-under-writes.yaml" in prompt
     # The builds under test may predate a config an experiment's probe needs: the prompt says when to pick
     # the probed experiments, or every test of an old merge is skipped as unsupported (valkey #2753, #2852).
-    assert "src/config.c has forkless-infrastructure-enabled" in prompt
-    assert "only when it has\ncluster-config-save-behavior" in prompt
+    assert "src/config.c has cluster-config-save-behavior" in prompt
+    assert "valkey.forkless-save" not in prompt
     # These runs have no root: a scenario on valkey.cluster-partition or valkey.bgsave-disk-full is skipped
     # whole by their host probe (valkey #5145, #4655, #4654, #3438), so the prompt names them as never-pick.
     assert "never\npick valkey.cluster-partition or valkey.bgsave-disk-full" in prompt
