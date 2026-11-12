@@ -1,0 +1,747 @@
+# Failures whose fix is known, replayed by scripts/ci_fix/eval.py to see what
+# the CI fix bot prepares for them. Nothing is published.
+#
+# Each case is one exact failed job. `expect` names its fix: `port` is the
+# upstream commit a backport branch should take; `pull` is the pull request a
+# person wrote (merged or still open). `gap` says what the bot lacks for a
+# case, so that its result is read with that in mind.
+#
+# A case on the default branch is replayed as of its failed commit, so the fix
+# that landed later is not there to find. A backport case sees the default
+# branch as it is now, which is where its port comes from.
+#
+# A case lasts as long as GitHub keeps its job log (90 days); `plan` says so
+# when one has aged out.
+cases:
+  - id: sanitizer-leak-8.1
+    about: LeakSanitizer report in the sentinel valkey-cli hint test, on the 8.1 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42788083633
+    job_id: 129734399755
+    job: test-sanitizer-address (clang)
+    sha: 533a67f8dc2a060b9f53a3975ad6a08238e2ad45
+    base_branch: "8.1"
+    pr: 5075
+    backport: true
+    expect:
+      port: c86f6ee511e1a36488feb3b8e62093e69195d332  # Free valkey-cli test hint before exiting (#5274)
+
+  - id: hashexpire-9.0
+    about: A hash-field expiry test that fails with libc malloc, on the 9.0 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42795329838
+    job_id: 129758961802
+    job: test-ubuntu-libc-malloc
+    sha: f0f4ab83b7a8e0d22d26f13d36b9b7657b066488
+    base_branch: "9.0"
+    pr: 5073
+    backport: true
+    expect:
+      port: caf5f2bfc20dd5371d87202ee338b348593e2a1b  # (#4785), which the bot did port here
+
+  - id: pause-busy-script
+    about: "#5224: a busy script ending while the replica's postponed primary is paused, with I/O threads."
+    repo: valkey-io/valkey
+    run_id: 42726275643
+    job_id: 129532588086
+    job: test-ubuntu-tls-io-threads
+    sha: d5b4fda740a4d71eb138ff3722442a9f5f546056
+    base_branch: unstable
+    issue: 5224
+    scheduled: true
+    test:
+      name: Busy script ending while the replica's postponed primary is paused
+      file: tests/unit/pause.tcl
+    expect:
+      pull: 5271  # a fix in src/, where the bot pushed a test-side wait instead
+
+  - id: del-node-macos
+    about: "#5330: valkey-cli --cluster del-node of an unreachable node, on macOS."
+    repo: valkey-io/valkey
+    run_id: 42726275643
+    job_id: 129532587982
+    job: test-macos-latest
+    sha: d5b4fda740a4d71eb138ff3722442a9f5f546056
+    base_branch: unstable
+    issue: 5330
+    scheduled: true
+    test:
+      name: "del-node: Delete unreachable node without slots"
+      file: tests/unit/cluster/cli.tcl
+    expect:
+      pull: 5331
+
+  - id: tcl85-stride
+    about: "#5285: a test used lsort -stride, which macOS's Tcl 8.5 does not have."
+    repo: valkey-io/valkey
+    run_id: 41744961340
+    job_id: 126295526487
+    job: test-macos-latest
+    sha: 9ff39f353cac273a3df8e10070ac9b9dc9ed310b
+    base_branch: unstable
+    issue: 5285
+    scheduled: true
+    expect:
+      pull: 5276
+    gap: The log names no test, so a fix is reviewed, not run; and only macOS's Tcl fails it.
+
+  - id: reply-schema
+    about: "#5306: the reply-schema validator rejected CONFIG SET's reply."
+    repo: valkey-io/valkey
+    run_id: 41939533851
+    job_id: 126956469385
+    job: reply-schemas-validator
+    sha: c86f6ee511e1a36488feb3b8e62093e69195d332
+    base_branch: unstable
+    issue: 5306
+    scheduled: true
+    expect:
+      pull: 5287
+    gap: The log names no test and nothing here runs the reply-schema validator, so a fix is reviewed, not run.
+
+  - id: sanitizer-leak-7.2
+    about: The same LeakSanitizer report on the 7.2 backport PR, the oldest branch.
+    repo: valkey-io/valkey
+    run_id: 42817431023
+    job_id: 129833969869
+    job: test-sanitizer-address (clang)
+    sha: ee00e76e6c3b48264335b124e755f2c6ab3a300a
+    base_branch: "7.2"
+    pr: 5072
+    backport: true
+    expect:
+      port: c86f6ee511e1a36488feb3b8e62093e69195d332  # (#5274)
+
+  - id: sanitizer-leak-9.0
+    about: The same LeakSanitizer report on the 9.0 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42886254469
+    job_id: 130075246631
+    job: test-sanitizer-address (clang)
+    sha: b3aafc7c1bb6ddfab60623224cd16044a33890c4
+    base_branch: "9.0"
+    pr: 5073
+    backport: true
+    expect:
+      port: c86f6ee511e1a36488feb3b8e62093e69195d332  # (#5274)
+
+  - id: forkless-flushdb-valgrind
+    about: "#5302: FLUSHDB during a forkless sync, under valgrind."
+    repo: valkey-io/valkey
+    run_id: 42726275643
+    job_id: 129532587938
+    job: test-valgrind-no-malloc-usable-size-test (integration-type)
+    sha: d5b4fda740a4d71eb138ff3722442a9f5f546056
+    base_branch: unstable
+    issue: 5302
+    scheduled: true
+    test:
+      name: FLUSHDB during forkless sync replays correctly (primary diskless=no, replica load=disabled)
+      file: tests/integration/replication.tcl
+    expect:
+      pull: 5314
+
+  - id: forkless-write-window
+    about: "#5301: writes after a background iterator ends must still reach the replica, under valgrind."
+    repo: valkey-io/valkey
+    run_id: 42726275643
+    job_id: 129532588146
+    job: test-valgrind-test (integration-type)
+    sha: d5b4fda740a4d71eb138ff3722442a9f5f546056
+    base_branch: unstable
+    issue: 5301
+    scheduled: true
+    test:
+      name: Writes after bg iterator termination still reach the replica
+      file: tests/integration/replication.tcl
+    expect:
+      pull: 5333
+
+  - id: repl-flow-control-macos
+    about: "#4860: the primary link's read count with I/O threads, on macOS."
+    repo: valkey-io/valkey
+    run_id: 42538873922
+    job_id: 128909156621
+    job: test-macos-latest
+    sha: aa7545348b688b469d073a01ce4836ed637577f9
+    base_branch: unstable
+    issue: 4860
+    scheduled: true
+    test:
+      name: Primary link stays on the main thread with I/O threads enabled
+      file: tests/integration/replication-flow-control.tcl
+    expect:
+      pull: 5323
+
+  - id: moduleapi-timer-valgrind
+    about: "#5188: a module's blocked-client time against its timer period, under valgrind."
+    repo: valkey-io/valkey
+    run_id: 41744961340
+    job_id: 126295526156
+    job: test-valgrind-no-malloc-usable-size-misc
+    sha: 9ff39f353cac273a3df8e10070ac9b9dc9ed310b
+    base_branch: unstable
+    issue: 5188
+    scheduled: true
+    test:
+      name: block time is equal to timer period
+      file: tests/unit/moduleapi/blockedclient.tcl
+    expect:
+      pull: 5324
+
+  - id: lz4-dual-channel
+    about: "#5216: a corrupt lz4 dual-channel stream must retry without promoting the replica."
+    repo: valkey-io/valkey
+    run_id: 40978346098
+    job_id: 123811852366
+    job: test-sanitizer-force-defrag
+    sha: 6e3eddf4976d0d02c1ecf6dbf19fdd3eb0f2e84b
+    base_branch: unstable
+    issue: 5216
+    scheduled: true
+    test:
+      name: Corrupt buffered lz4 dual-channel stream retries without promoting the replica
+      file: tests/integration/repl-compression.tcl
+    expect:
+      pull: 5295
+
+  - id: nodes-conf-mkdir
+    about: "#5217: a cluster test could not create its nodes.conf folder, in a container job."
+    repo: valkey-io/valkey
+    run_id: 40978346098
+    job_id: 123811852718
+    job: test-ubuntu-jemalloc-fortify
+    sha: 6e3eddf4976d0d02c1ecf6dbf19fdd3eb0f2e84b
+    base_branch: unstable
+    issue: 5217
+    scheduled: true
+    expect:
+      pull: 5026
+    gap: The log names no test, so a fix is reviewed, not run.
+
+  # --- Paths the first fourteen cases never ran: a job's container (EL8, EL9,
+  # Fedora, Alpine), an ARM runner, a 32-bit build, a 22 MB log, a sentinel
+  # test on the default branch, and a failure no code change fixes.
+
+  - id: empty-shard-almalinux8
+    about: "#5215: an empty-shard slot migration test, in an AlmaLinux 8 container. The known fix is in src/cluster_legacy.c."
+    repo: valkey-io/valkey
+    run_id: 42538873922
+    job_id: 128909156829
+    job: test-almalinux8-jemalloc
+    sha: aa7545348b688b469d073a01ce4836ed637577f9
+    base_branch: unstable
+    issue: 5215
+    scheduled: true
+    test:
+      name: Empty-shard migration target is auto-updated after failover in target shard
+      file: tests/unit/cluster/slot-migration.tcl
+    expect:
+      pull: 5204
+
+  - id: empty-shard-alpine
+    about: "#5215: the same slot migration test, in an Alpine container (musl)."
+    repo: valkey-io/valkey
+    run_id: 41255833447
+    job_id: 124698680767
+    job: test-alpine-jemalloc
+    sha: 3ef5fef19fe4ca9da1841282205239705edc23e4
+    base_branch: unstable
+    issue: 5215
+    scheduled: true
+    test:
+      name: Empty-shard migration target is auto-updated after failover in target shard
+      file: tests/unit/cluster/slot-migration.tcl
+    expect:
+      pull: 5204
+
+  - id: empty-shard-arm
+    about: "#5215: the same slot migration test, on an ARM runner."
+    repo: valkey-io/valkey
+    run_id: 42727557710
+    job_id: 129536983542
+    job: test-ubuntu-arm
+    sha: 116e7f9534440b7b8d4370a6d3038eb760acbcee
+    base_branch: unstable
+    issue: 5215
+    test:
+      name: Empty-shard migration target is auto-updated after failover in target shard
+      file: tests/unit/cluster/slot-migration.tcl
+    expect:
+      pull: 5204
+
+  - id: defrag-aof-32bit
+    about: "#3954: active defrag while loading an AOF, in the 32-bit build. Nobody has fixed it."
+    repo: valkey-io/valkey
+    run_id: 42428677977
+    job_id: 128572475338
+    job: test-ubuntu-32bit
+    sha: aa7545348b688b469d073a01ce4836ed637577f9
+    base_branch: unstable
+    issue: 3954
+    scheduled: true
+    test:
+      name: Active defrag - AOF loading
+      file: tests/unit/memefficiency.tcl
+
+  - id: zset-btree-ubsan
+    about: A ZSET btree test under the undefined-behavior sanitizer, with no issue filed yet.
+    repo: valkey-io/valkey
+    run_id: 42929407205
+    job_id: 130224054206
+    job: test-sanitizer-undefined (gcc)
+    sha: 9abbfd2557a492e325a164a93122f9626abc0b1d
+    base_branch: unstable
+    scheduled: true
+    test:
+      name: ZSET btree leaf compaction pauses while a child process exists
+      file: tests/unit/type/zset.tcl
+
+  - id: sentinel-reboot
+    about: "#3890: a sentinel test, which names no file and which no command here runs, on the default branch."
+    repo: valkey-io/valkey
+    run_id: 40792659062
+    job_id: 123181412477
+    job: test-ubuntu-tls-no-tls
+    sha: f2ca837edc75e2238f880d89ade60babb6e6ed9e
+    base_branch: unstable
+    issue: 3890
+    scheduled: true
+
+  - id: cant-start-fedora
+    about: Servers that cannot start with the TLS module in a Fedora container; the job's log is 22 MB.
+    repo: valkey-io/valkey
+    run_id: 42727447250
+    job_id: 129536613368
+    job: test-fedoralatest-tls-module
+    sha: d5b4fda740a4d71eb138ff3722442a9f5f546056
+    base_branch: unstable
+
+  - id: tls-unload-almalinux9
+    about: A dispatched Daily run that tested a fork's commit, in an AlmaLinux 9 container. Nothing in this repository failed.
+    repo: valkey-io/valkey
+    run_id: 42726097837
+    job_id: 129532002851
+    job: test-almalinux9-tls-module
+    sha: d5b4fda740a4d71eb138ff3722442a9f5f546056
+    base_branch: unstable
+    expect:
+      refuse: true
+
+  - id: infra-checkout
+    about: A job whose checkout failed before anything was built. No code change fixes it.
+    repo: valkey-io/valkey
+    run_id: 42974569848
+    job_id: 130370534612
+    job: test-sanitizer-undefined (gcc)
+    sha: 9abbfd2557a492e325a164a93122f9626abc0b1d
+    base_branch: unstable
+    expect:
+      refuse: true
+
+  # --- What is failing on the open backport pull requests' heads today (2026-11-11): the
+  # failures the backport follow-up would be asked to fix. No fix is known for most.
+
+  - id: bp80-sentinel-leak
+    about: The sentinel valkey-cli hint leak on the 8.0 backport PR's current head.
+    repo: valkey-io/valkey
+    run_id: 42993097593
+    job_id: 130430467879
+    job: test-sanitizer-address (clang)
+    sha: 423a091189c9e3eafb015b07ba3dd1ea2158c762
+    base_branch: '8.0'
+    pr: 5077
+    backport: true
+    expect:
+      port: c86f6ee511e1a36488feb3b8e62093e69195d332
+
+  - id: bp80-valgrind-misc
+    about: Valgrind errors that name no test, on the 8.0 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42993097593
+    job_id: 130430467777
+    job: test-valgrind-no-malloc-usable-size-misc
+    sha: 423a091189c9e3eafb015b07ba3dd1ea2158c762
+    base_branch: '8.0'
+    pr: 5077
+    backport: true
+
+  - id: bp80-alpine-moved
+    about: A MOVED exception between tests in an Alpine container, on the 8.0 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42993097593
+    job_id: 130430467384
+    job: test-alpine-libc-malloc
+    sha: 423a091189c9e3eafb015b07ba3dd1ea2158c762
+    base_branch: '8.0'
+    pr: 5077
+    backport: true
+
+  - id: bp80-manual-takeover
+    about: A cluster manual takeover test on the 8.0 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42993097593
+    job_id: 130430467151
+    job: test-ubuntu-jemalloc-fortify
+    sha: 423a091189c9e3eafb015b07ba3dd1ea2158c762
+    base_branch: '8.0'
+    pr: 5077
+    backport: true
+    test:
+      name: 'Instance #0, #1, #2 gets converted into a slaves'
+      file: tests/unit/cluster/manual-takeover.tcl
+
+  - id: bp81-fedora-moved
+    about: A MOVED exception between tests in a Fedora container, on the 8.1 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42993376767
+    job_id: 130431384708
+    job: test-fedoralatest-tls-module-no-tls
+    sha: 18692ae972c71acba4225bbcc5d9c3ab73204e06
+    base_branch: '8.1'
+    pr: 5075
+    backport: true
+
+  - id: bp81-asan-gcc
+    about: An address sanitizer job that names no failing test, on the 8.1 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42993376767
+    job_id: 130431384557
+    job: test-sanitizer-address (gcc)
+    sha: 18692ae972c71acba4225bbcc5d9c3ab73204e06
+    base_branch: '8.1'
+    pr: 5075
+    backport: true
+
+  - id: bp81-force-defrag
+    about: The force-defrag sanitizer job, naming no failing test, on the 8.1 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42993376767
+    job_id: 130431384479
+    job: test-sanitizer-force-defrag
+    sha: 18692ae972c71acba4225bbcc5d9c3ab73204e06
+    base_branch: '8.1'
+    pr: 5075
+    backport: true
+
+  - id: bp81-codecov-build
+    about: The code-coverage job's build breaks on the 8.1 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42993376810
+    job_id: 130431382953
+    job: code-coverage
+    sha: 18692ae972c71acba4225bbcc5d9c3ab73204e06
+    base_branch: '8.1'
+    pr: 5075
+    backport: true
+    workflow: codecov
+
+  - id: bp91-migrateslots
+    about: A slot migration test with TLS on the 9.1 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42993396425
+    job_id: 130431449429
+    job: test-ubuntu-tls
+    sha: 0ae68b1f5b7af93b4a4e8c01a1d94e07f0bfec4a
+    base_branch: '9.1'
+    pr: 5074
+    backport: true
+    test:
+      name: Restart source primary during migration (without save) causes failure
+      file: tests/unit/cluster/cluster-migrateslots.tcl
+
+  - id: bp90-restore-ttl
+    about: A hash field TTL test with libc malloc on the 9.0 backport PR.
+    repo: valkey-io/valkey
+    run_id: 43004906063
+    job_id: 130469839662
+    job: test-ubuntu-libc-malloc
+    sha: 3b553049c47b4b82bfb75e5617c1d94cd3c66d0c
+    base_branch: '9.0'
+    pr: 5073
+    backport: true
+    test:
+      name: RESTORE Preserves Field TTLs
+      file: tests/unit/hashexpire.tcl
+
+  - id: bp90-compat-defrag
+    about: An active defrag test in the compatibility job against 7.2.11, on the 9.0 backport PR.
+    repo: valkey-io/valkey
+    run_id: 43004905995
+    job_id: 130469838858
+    job: test-ubuntu-latest-compatibility (7.2.11, valkey-7.2.11-noble-x86_64.tar.gz)
+    sha: 3b553049c47b4b82bfb75e5617c1d94cd3c66d0c
+    base_branch: '9.0'
+    pr: 5073
+    backport: true
+    workflow: ci
+    test:
+      name: 'Active Defrag stream: cluster'
+      file: tests/unit/memefficiency.tcl
+
+  - id: bp90-asan
+    about: CI's address sanitizer job, naming no failing test, on the 9.0 backport PR.
+    repo: valkey-io/valkey
+    run_id: 43004905995
+    job_id: 130469838820
+    job: test-sanitizer-address
+    sha: 3b553049c47b4b82bfb75e5617c1d94cd3c66d0c
+    base_branch: '9.0'
+    pr: 5073
+    backport: true
+    workflow: ci
+
+  - id: bp72-diskless-drop
+    about: A diskless replication test in an Alpine container, on the 7.2 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42999431411
+    job_id: 130451584119
+    job: test-alpine-libc-malloc
+    sha: ba661105a2d9940cdc896a5f2ceda288298e4b1e
+    base_branch: '7.2'
+    pr: 5072
+    backport: true
+    test:
+      name: diskless all replicas drop during rdb pipe
+      file: tests/integration/replication.tcl
+
+  - id: bp72-valgrind-misc
+    about: Valgrind errors that name no test, on the 7.2 backport PR.
+    repo: valkey-io/valkey
+    run_id: 42999431411
+    job_id: 130451583689
+    job: test-valgrind-misc
+    sha: ba661105a2d9940cdc896a5f2ceda288298e4b1e
+    base_branch: '7.2'
+    pr: 5072
+    backport: true
+
+  # --- The same backport failures, fixed where their refusals say the fix belongs: on the
+  # default branch. The log is the release branch's; the checkout is the default branch's head.
+
+  - id: up-restore-ttl
+    about: The 9.0 hash field TTL failure, fixed on the default branch.
+    repo: valkey-io/valkey
+    run_id: 43004906063
+    job_id: 130469839662
+    job: test-ubuntu-libc-malloc
+    sha: 9abbfd2557a492e325a164a93122f9626abc0b1d
+    base_branch: unstable
+    test:
+      name: RESTORE Preserves Field TTLs
+      file: tests/unit/hashexpire.tcl
+
+  - id: up-diskless-drop
+    about: The 7.2 diskless replication failure, fixed on the default branch.
+    repo: valkey-io/valkey
+    run_id: 42999431411
+    job_id: 130451584119
+    job: test-alpine-libc-malloc
+    sha: 9abbfd2557a492e325a164a93122f9626abc0b1d
+    base_branch: unstable
+    test:
+      name: diskless all replicas drop during rdb pipe
+      file: tests/integration/replication.tcl
+
+  - id: up-valgrind-sigusr1
+    about: The 8.0 valgrind report about a child killed before its signal handler was installed, fixed on the default branch.
+    repo: valkey-io/valkey
+    run_id: 42993097593
+    job_id: 130430467777
+    job: test-valgrind-no-malloc-usable-size-misc
+    sha: 9abbfd2557a492e325a164a93122f9626abc0b1d
+    base_branch: unstable
+
+  - id: up-codecov-exit
+    about: The 8.1 coverage job's hang in a replication test, fixed on the default branch.
+    repo: valkey-io/valkey
+    run_id: 42993376810
+    job_id: 130431382953
+    job: code-coverage
+    workflow: codecov
+    sha: 9abbfd2557a492e325a164a93122f9626abc0b1d
+    base_branch: unstable
+
+  # Failures on contributors' pull requests, as of 2026-11-11: the bot may only comment
+  # with a patch, which is reviewed and never run.
+  - id: sg-build-atomic
+    about: A build error in the unit tests from the pull request's own header change.
+    repo: valkey-io/valkey
+    run_id: 42509466289
+    job_id: 130199702041
+    job: test-ubuntu-latest
+    workflow: ci
+    sha: 7ec53125cbc7708331d7e0c50956468d750c7e2d
+    base_branch: unstable
+    pr: 5329
+    suggest: true
+
+  - id: sg-module-crash
+    about: A module crash test failing on a pull request that changes the crash handler.
+    repo: valkey-io/valkey
+    run_id: 42847193878
+    job_id: 129937939495
+    job: test-ubuntu-latest
+    workflow: ci
+    sha: f207b46cffaee113dae2b974e5038b5f688243e6
+    base_branch: unstable
+    pr: 5346
+    suggest: true
+    test:
+      name: "Test module crash when info crashes with an assertion "
+      file: tests/unit/moduleapi/crash.tcl
+
+  - id: sg-asan-ptrace
+    about: A sanitizer warning about ptrace on a pull request that changes one replication test.
+    repo: valkey-io/valkey
+    run_id: 43021192431
+    job_id: 130524520542
+    job: test-sanitizer-address
+    workflow: ci
+    sha: d607f3ec211e9242ea7054e9ee95a89687bc0f9e
+    base_branch: unstable
+    pr: 5323
+    suggest: true
+
+  - id: sg-reply-blocking
+    about: A test the pull request itself adds, failing under TLS.
+    repo: valkey-io/valkey
+    run_id: 42870363226
+    job_id: 130019701376
+    job: test-ubuntu-latest-cmake-tls
+    workflow: ci
+    sha: c379403ee8fcd1a97534661980996fbdada21a24
+    base_branch: unstable
+    pr: 3381
+    suggest: true
+    test:
+      name: A client that connected while the AOF was off for a sync load can FLUSHDB after promotion
+      file: tests/unit/reply-blocking.tcl
+
+  - id: sg-unrelated-flake
+    about: The empty-shard failure of issue 5215 on a pull request that does not touch the cluster.
+    repo: valkey-io/valkey
+    run_id: 42726855571
+    job_id: 129534578051
+    job: test-ubuntu-latest
+    workflow: ci
+    sha: 0a3d20b8ef5ce58cf26bbd0f0bda0a2beb1f3bd5
+    base_branch: unstable
+    pr: 4970
+    suggest: true
+    test:
+      name: Empty-shard migration target is auto-updated after failover in target shard
+      file: tests/unit/cluster/slot-migration.tcl
+
+  - id: sg-apt-infra
+    about: A dependency install that failed in every job of the run.
+    repo: valkey-io/valkey
+    run_id: 43041988370
+    job_id: 130595914517
+    job: test-sanitizer-address
+    workflow: ci
+    sha: 74e1cf146dccb09adb8983ef2ca05955a0844d6b
+    base_branch: unstable
+    pr: 5360
+    suggest: true
+    expect:
+      refuse: true
+
+  - id: bp90-defrag-aof-el9
+    about: The 9.0 failure the follow-up timed out on twice on 2026-11-11, verifying 40 loops of a slow test.
+    repo: valkey-io/valkey
+    run_id: 42886254469
+    job_id: 130075246335
+    job: test-almalinux9-jemalloc
+    sha: b3aafc7c1bb6ddfab60623224cd16044a33890c4
+    base_branch: '9.0'
+    pr: 5073
+    backport: true
+    test:
+      name: Active defrag - AOF loading
+      file: tests/unit/memefficiency.tcl
+
+  # A release branch's failure in the weekly run of every release branch, fixed on its sweep PR:
+  # the daily.yml job, replayed as scheduled, on the sweep PR's head.
+  - id: wk80-pause-randomkey
+    about: The 8.0 weekly failure of a client pause test, on the 8.0 sweep PR's head.
+    repo: valkey-io/valkey
+    run_id: 42453432437
+    job_id: 128647314414
+    job: test-ubuntu-tls-io-threads
+    sha: 82796d69c93bcc01af43b6bfa22b00e63d1d79d8
+    workflow_sha: aa7545348b688b469d073a01ce4836ed637577f9
+    base_branch: '8.0'
+    pr: 5077
+    backport: true
+    scheduled: true
+    test:
+      name: Test the randomkey command will not cause the server to get into an infinite loop during the client pause write
+      file: tests/unit/pause.tcl
+
+  # Failures the bot's log parser names no test for (from the 2026-11-12 survey): the agent names it.
+  - id: nt72-valgrind-misc
+    about: 7.2's weekly valgrind report after the module rdbloadsave test, in a job that runs only module tests.
+    repo: valkey-io/valkey
+    run_id: 42453432437
+    job_id: 128647314595
+    job: test-valgrind-misc
+    workflow: weekly
+    sha: aeb878d334573e52567bbad9a135b69d1931ef21
+    workflow_sha: aa7545348b688b469d073a01ce4836ed637577f9
+    base_branch: '7.2'
+    pr: 5072
+    backport: true
+    scheduled: true
+
+  - id: nt72-cluster-exception
+    about: 7.2's weekly cluster job, where a test calls a helper with the wrong arguments and the test client throws.
+    repo: valkey-io/valkey
+    run_id: 42453432437
+    job_id: 128647314579
+    job: test-valgrind-test (cluster)
+    workflow: weekly
+    sha: aeb878d334573e52567bbad9a135b69d1931ef21
+    workflow_sha: aa7545348b688b469d073a01ce4836ed637577f9
+    base_branch: '7.2'
+    pr: 5072
+    backport: true
+    scheduled: true
+
+  - id: nt92-macos-exception
+    about: 9.2's weekly macOS job, where a test uses an lsearch option the runner's Tcl lacks.
+    repo: valkey-io/valkey
+    run_id: 42453432437
+    job_id: 128690640302
+    job: test-macos-latest
+    workflow: weekly
+    sha: b7727afeca60d676aa77aa9ad3f3d636c550c5c5
+    workflow_sha: aa7545348b688b469d073a01ce4836ed637577f9
+    base_branch: '9.2'
+    pr: 5357
+    backport: true
+    scheduled: true
+
+  - id: nt80-asan-ptrace
+    about: 8.0's sanitizer job, with a LeakSanitizer ptrace warning among sixteen parallel test clients.
+    repo: valkey-io/valkey
+    run_id: 42951727846
+    job_id: 130297342229
+    job: test-sanitizer-address
+    workflow: ci
+    sha: 8260c7c69f350f7bc9096149a7ddf7e8a857ddf2
+    base_branch: '8.0'
+    pr: 5077
+    backport: true
+
+  - id: nt91-asan-ptrace
+    about: 9.1's sanitizer job, with a LeakSanitizer ptrace warning among sixteen parallel test clients.
+    repo: valkey-io/valkey
+    run_id: 42788858007
+    job_id: 129736862180
+    job: test-sanitizer-address
+    workflow: ci
+    sha: 36495778121afa94e1abf14cc618a5dd9beff72a
+    base_branch: '9.1'
+    pr: 5074
+    backport: true
