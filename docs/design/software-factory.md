@@ -188,11 +188,12 @@ flowchart TD
     CH -->|"replayed against past bugs first"| R
 ```
 
-**Valkey's guidelines:** `AGENTS.md`, `DEVELOPMENT_GUIDE.md`,
-`CONTRIBUTING.md`, `tests/README.md` and `src/unit/README.md`, from the
-pinned commit. Not `.github/instructions/`: those were added for Copilot,
-derive from `DEVELOPMENT_GUIDE.md`, and have mostly not changed since, and
-a stale copy is worse than none.
+**Valkey's guidelines:** the ones the CI fix bot already hands its agent:
+`AGENTS.md`, `DEVELOPMENT_GUIDE.md`, `tests/README.md` and
+`src/unit/README.md`, read from the default branch so a PR can't rewrite
+the rules it is judged by. Not `.github/instructions/`: those were added
+for Copilot, derive from `DEVELOPMENT_GUIDE.md`, and have mostly not
+changed since, and a stale copy is worse than none.
 
 **Recent fixes and their reviews:** the two or three latest merged fixes to
 the files being changed, with the review comments they got. Guidelines say
@@ -237,7 +238,8 @@ The PR's body opens with a short summary meant to become the squash commit
 message. The rest sits under `<details><summary>AI generated
 details</summary>`, as Valkey PRs already do: the root cause, each change
 to an existing test and why, what code verified, and what isn't
-established.
+established. The bot's commits carry no DCO sign-off; as on its backport
+PRs today, a committer approves the DCO check by hand when merging.
 
 Until a committer reviews it, the bot looks after the PR in two ways, and
 nothing else.
@@ -290,7 +292,7 @@ each part to what it reuses, and what is new.
 | Fixing CI | The backport CI follow-up, which already watches the bot's PRs and hands one failed job at a time to the CI fix bot; `@valkeyrie-ops fix` for anything a committer wants fixed | Comparing with the same job on `unstable`; following PRs into `unstable`; pushing to a fork head, where `fix` only suggests a patch today |
 | Rebasing on conflict | The backport sweep's cherry-pick and Claude conflict resolution in `backport/conflict_resolver.py` | Running it under the fix job's containment |
 | Review loop | The release-notes watcher's review-thread reading and replies in `release_notes/review.py` | Applying comments to code rather than one notes file |
-| Quality | The bot's guide in `ci_fix/guides/`; the replay eval on the `ci-fix-replay-eval` branch | Recent fixes with their reviews, the lint, the checklist, issue cases in the replay |
+| Quality | The bot's guide in `ci_fix/guides/` and the Valkey guidelines it already hands the agent; the replay eval on the `ci-fix-replay-eval` branch | Recent fixes with their reviews, the lint, the checklist, issue cases in the replay |
 | State | GitHub only: labels, marker comments and run names, as every other workflow here | Nothing |
 
 ## Open questions
