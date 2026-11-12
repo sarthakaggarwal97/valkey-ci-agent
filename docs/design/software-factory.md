@@ -1,6 +1,6 @@
 # A software factory for Valkey
 
-*From a labelled issue to a pull request a committer is willing to own.*
+*From a labelled issue to a tested pull request.*
 
 Many of us have our own prompts and setup for getting a model to write
 code, each with its own idea of when the result is good enough.
@@ -18,27 +18,27 @@ flowchart TD
     C --> E["Phase 2: write a fix the test passes, then checks and a second review"]
     E -->|"no fix holds up"| F["Comment: the failing test and the analysis"]
     E --> G["Draft PR from the bot's fork"]
-    G --> H["Upkeep: keep it green, mark it ready"]
-    H --> I["A second committer approves"]
-    I --> J["The owner squash-merges, with their own sign-off"]
+    G --> H["Upkeep: fix its own failures, rebase on conflict, mark it ready"]
+    H --> I["Committers review and merge, as for any PR"]
 ```
 
 The goal isn't speed: in a sample of recently closed Valkey bugs, a person
 had opened a fix PR for most of them within a day. Review is the slow part
 of our process, so the design spends as little review time as possible.
 
-`valkey-ci-agent` already runs a CI fix bot
-that takes a failed CI job, has Claude propose a fix, verifies it, and
-posts it. This builds on that engine and its containment. What changes is
-the input: a bug report, which anyone can write, instead of a CI log.
+`valkey-ci-agent` already runs a CI fix bot that takes a failed CI job, has
+Claude propose a fix, verifies it, and posts it. This reuses that engine
+and nearly everything around it; [what it reuses](#what-it-reuses) maps
+each part. What changes is the input: a bug report, which anyone can
+write, instead of a CI log.
 
 ## Three rules
 
 1. **Nothing the bot writes is pushed until code has built it and run its
    test.** A change that can't be verified is posted as a comment, or not
    at all.
-2. **Every bot PR has a person who owns it,** and the bot never merges or
-   approves.
+2. **The bot never merges or approves.** Committers review and merge its
+   PRs like any other.
 3. **Only committers can direct it.** Applying the label and every command
    on a bot PR need write access to `valkey-io/valkey`, checked live. The
    trigger is a label rather than a comment because a label is a queue
@@ -64,7 +64,7 @@ flowchart TD
     B -->|"passes"| C
     C -->|"fails 3 of 3 on its own assertion"| P2
     C -->|"does not fail the right way"| R
-    C -->|"crash the owner expected"| P2
+    C -->|"crash on a CRASH report"| P2
     C -->|"crash nobody expected"| S
     R -->|"attempts left"| A
     R -->|"none left"| N
@@ -117,8 +117,8 @@ with the fix. Their PRs say that this is a weaker claim.
 
 Code works out what to act on, checks everything Claude hands back, and
 makes every commit and push. Claude is used only where reading and
-understanding code is the task. A run is three jobs, and only the outer
-two can reach GitHub.
+understanding code is the task. A run is the CI fix bot's three jobs, and
+only the outer two can reach GitHub.
 
 ```mermaid
 flowchart TD
@@ -151,9 +151,10 @@ The bot keeps no database and no state of its own. What it needs to
 remember lives on GitHub: the label is the queue, the bot's status comment
 on the issue records what it did, which revision it read and how many runs
 it has made, a marker on the PR counts its CI fixes, and repository
-variables hold the kill switch and the rollout step. Every pass rereads that state, so a run that dies leaves nothing to
-clean up, and repeating a pass can't push or post twice. The markers are
-bookkeeping, not a security boundary: committers can edit comments.
+variables hold the kill switch and the rollout step. Every pass rereads
+that state, so a run that dies leaves nothing to clean up, and repeating a
+pass can't push or post twice. The markers are bookkeeping, not a security
+boundary: committers can edit comments.
 
 The PRs come from a fork owned by a machine user. Today the bot pushes
 backport branches to `valkey-io/valkey` itself, where CI runs the moment a
@@ -161,10 +162,10 @@ branch is pushed, before anyone has read it, in jobs holding the Codecov
 token and CodeQL's write permission. That's acceptable for cherry-picks of
 reviewed commits, not for code written from a stranger's bug report. A
 fork PR gets what any outside contributor's PR gets, and Valkey's own
-`AGENTS.md` says agents should never push upstream. The fork
-belongs to a user account because GitHub won't let committers push fixups
-to an organization-owned fork. The bot's token on `valkey-io/valkey` asks
-only for pull request and issue write, so it can't merge.
+`AGENTS.md` says agents should never push upstream. The fork belongs to a
+user account because GitHub won't let committers push fixups to an
+organization-owned fork. The bot's token on `valkey-io/valkey` asks only
+for pull request and issue write, so it can't merge.
 
 ## Meeting the reviewers' standard
 
@@ -209,22 +210,19 @@ repository gets its own profile of guidelines, test runners, build
 commands and lint. `valkey-json` and `valkey-bloom` would first need an
 `AGENTS.md`, written with their maintainers.
 
-## The pull request, and who owns it
-
-The owner is the committer who applied the label, or whoever takes the PR
-over from them. They answer reviewers as an author would, and they merge
-it.
+## The pull request
 
 ```mermaid
 stateDiagram-v2
     state "Hands off" as HandsOff
     [*] --> Draft: a run passes
-    Draft --> Draft: red CI, the bot fixes it (at most twice)
+    Draft --> Draft: its own change fails CI, the bot fixes it (at most twice)
+    Draft --> Draft: merge conflict with unstable, the bot rebases
     Draft --> Ready: every workflow green
     Draft --> HandsOff: a committer reviews or pushes, or agent-hands-off
     Ready --> HandsOff: a committer reviews or pushes, or agent-hands-off
     HandsOff --> HandsOff: the bot acts only on a committer's command
-    HandsOff --> Merged: second committer approves, owner merges and signs off
+    HandsOff --> Merged: committers approve and merge
     Ready --> Closed
     HandsOff --> Closed
     Merged --> [*]
@@ -235,36 +233,62 @@ The PR's body opens with a short summary meant to become the squash commit
 message. The rest sits under `<details><summary>AI generated
 details</summary>`, as Valkey PRs already do: the root cause, each change
 to an existing test and why, what code verified, and what isn't
-established. When the bot fixes red CI on its own, the fix may only touch
-files the PR already changes, so a bug-fix PR doesn't collect fixes for
-other people's flaky tests. If it pushes after an approval, it dismisses
-the approval, because `unstable` doesn't and an approval should mean the
-code that was read.
+established.
 
-### Signing off
+Until a committer reviews it, the bot looks after the PR in two ways, and
+nothing else.
 
-Valkey already accepts AI-assisted contributions: the person who submits
-one signs off and owns its quality. Bot PRs follow the same rule. The
-bot's own commits carry no sign-off; the owner adds their `Signed-off-by`
-and an `Assisted-by:` line naming the model when they squash-merge.
+**It fixes only failures its own change caused.** When a CI job goes red,
+the bot checks the same job on the latest `unstable`. If it's red there
+too, the failure isn't the PR's, so the bot names the job on the PR and
+leaves it. Otherwise it hands the job to the CI fix bot, at most twice, and
+the fix may only touch files the PR already changes. Any other failing
+test, a committer can hand to the bot with `@valkeyrie-ops fix`, the
+command that exists today.
+
+**It rebases only on a merge conflict.** A branch that is merely behind
+`unstable` is left alone: `unstable` doesn't require it, and every push
+reruns CI. When the PR conflicts, the bot replays its change onto the
+current `unstable`, resolves the conflicted files the way the backport
+sweep resolves cherry-pick conflicts, reruns every check, and pushes only
+if they pass.
+
+Once a committer has reviewed or pushed, the bot pushes only when a
+committer asks, with `@valkeyrie-ops fix` or, from step 4, `address`. If it pushes after an approval, it dismisses the approval,
+because `unstable` doesn't and an approval should mean the code that was
+read.
 
 ## Rolling it out
 
 Each step has to earn the next.
 
 1. **Replay.** Run the recipe on 40 recently closed bugs, writing nothing to
-   Valkey, and count how often a committer would have owned the result.
+   Valkey, and count how often a committer would have merged the result.
 2. **Comments.** The label turns on, but the bot only comments with its
    test and patch.
 3. **Pull requests.** Draft PRs, at most five open at a time. A revert, or a
    run of PRs closed unmerged, stops new ones.
-4. **Review loop.** `@valkeyrie-ops address` applies review comments and
-   `@valkeyrie-ops update` merges `unstable` in. Neither runs unprompted.
+4. **Review loop.** `@valkeyrie-ops address` applies a committer's review
+   comments in one commit, rerunning every check. It never runs unprompted.
+
+## What it reuses
+
+Most of the factory already exists in `valkey-ci-agent`. The table maps
+each part to what it reuses, and what is new.
+
+| Part | Reuses | New |
+|---|---|---|
+| Intake | The detector-issue dispatcher and `ci-fix-issues.yml`, which already queue one run per issue, two at a time; the live permission check in `ci_fix/gate.py` | Reading the label event, checking the labeller's role instead of team membership |
+| The run | `ci-fix-run.yml`'s plan, fix and publish jobs; the CI fix engine and its two Claude sessions; the separate system account in `common/isolation.py`; the test loops in `ci_fix/verification.py` | A way into the engine without a failed CI job; the reproduce phase; crash detection; loopback-only networking and a read-only build |
+| Publishing | `ci_fix/publish.py` and the leased push in `ci_fix/push.py`; the backport registry's `push_repo`, which already pushes to a fork owned by another account | Filtering the model's text and scanning for secrets |
+| Fixing CI | The backport CI follow-up, which already watches the bot's PRs and hands one failed job at a time to the CI fix bot; `@valkeyrie-ops fix` for anything a committer wants fixed | Comparing with the same job on `unstable`; following PRs into `unstable`; pushing to a fork head, where `fix` only suggests a patch today |
+| Rebasing on conflict | The backport sweep's cherry-pick and Claude conflict resolution in `backport/conflict_resolver.py` | Running it under the fix job's containment |
+| Review loop | The release-notes watcher's review-thread reading and replies in `release_notes/review.py` | Applying comments to code rather than one notes file |
+| Quality | The bot's guide in `ci_fix/guides/`; the replay eval on the `ci-fix-replay-eval` branch | Recent fixes with their reviews, the lint, the checklist, issue cases in the replay |
+| State | GitHub only: labels, marker comments and run names, as every other workflow here | Nothing |
 
 ## Open questions
 
-- Is the owner's sign-off enough for a bot-authored commit, as it is for
-  AI-assisted work today?
 - Do the bot's PRs come from a fork, as argued above, or from branches in
   `valkey-io/valkey` like backports?
 - Who funds the model spend? The default model requires Bedrock's provider
