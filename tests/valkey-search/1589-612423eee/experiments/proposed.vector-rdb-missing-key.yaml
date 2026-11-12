@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.vector-rdb-missing-key
+deployment:
+  modes: [standalone]
+metadata:
+  description: RDB load of a vector index tracking a key the keyspace no longer holds
+    must not abort; the key drops out of the index
+inputs:
+  properties:
+    algo: {type: string, enum: [FLAT, HNSW], default: HNSW}
+    metric: {type: string, enum: [L2, COSINE], default: L2}
+    key_labels: {type: string, enum: ["yes", "no"], default: "yes"}
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: load
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, search.rdb-write-v3, {$ref: inputs.key_labels}], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, "0"], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "k:", SCHEMA, t, TAG, v, VECTOR,
+        {$ref: inputs.algo}, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC, {$ref: inputs.metric}],
+      expect: {equals: OK}}
+    - {command: [HSET, "k:0", v, !!binary "AAAAAAAAgD8=", t, x], expect: {equals: 2}}
+    - {command: [HSET, "k:1", v, !!binary "AACAPwAAgD8=", t, x], expect: {equals: 2}}
+    - {command: [HSET, "k:2", v, !!binary "AAAAQAAAgD8=", t, x], expect: {equals: 2}}
+    - {command: [HSET, "k:3", v, !!binary "AABAQAAAgD8=", t, x], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT], wait_s: 30, compare: unordered,
+      expect: {contains: "k:1"}}
+    - {command: [PEXPIRE, "k:1", "300"], expect: {equals: 1}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.5"], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [PING], wait_s: 30, expect_difference: true, expect: {equals: PONG}}
+    - {command: ["FT.SEARCH", idx, "*=>[KNN 3 @v $B]", NOCONTENT, PARAMS, "2", B,
+        !!binary "AACAPwAAgD8=", DIALECT, "2"], wait_s: 30, compare: unordered, expect_difference: true,
+      expect: {contains: "k:0"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: load}

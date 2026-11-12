@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 9d1d60af542a..612423eeec2f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1d8f3c453562
+seed: 1005
+experiment:
+  id: proposed.vector-rdb-missing-key
+  inputs:
+    algo: HNSW
+    metric: L2
+    key_labels: 'yes'
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7400

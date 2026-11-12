@@ -1,0 +1,148 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "612423eeec2ff1faba5fc86ac56ecc6ccbed2c9d",
+  "parent": "9d1d60af542abe6264bc67e9149cd5e993fcb460",
+  "pr": 1589,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": " Fix RDB load abort when a tracked vector key is missing from the keyspace (#1589)",
+  "date": "2026-11-11",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": "612423eeec2ff1faba5fc86ac56ecc6ccbed2c9d",
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 5,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 4.6974,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-6dbf00e28fae",
+      "seed": 1001,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1589",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-cf40ad8ff039",
+      "seed": 1002,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1589",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-f5b9b710386d",
+      "seed": 1003,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1589",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-440acf451e51",
+      "seed": 1004,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1589",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: crashed by signal: 6 in pthread_kill",
+      "scenario": "ai-1d8f3c453562",
+      "seed": 1005,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1589",
+      "fingerprint": "582d3de9123b07058573",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-6dbf00e28fae",
+      "build": "unstable",
+      "seed": 1001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6dbf00e28fae",
+      "build": "unstable",
+      "seed": 1002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-6dbf00e28fae",
+      "build": "unstable",
+      "seed": 1003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-cf40ad8ff039",
+      "build": "unstable",
+      "seed": 1002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-cf40ad8ff039",
+      "build": "unstable",
+      "seed": 1003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-cf40ad8ff039",
+      "build": "unstable",
+      "seed": 1004,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1d8f3c453562",
+      "build": "unstable",
+      "seed": 1005,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1d8f3c453562",
+      "build": "unstable",
+      "seed": 1006,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1d8f3c453562",
+      "build": "unstable",
+      "seed": 1007,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

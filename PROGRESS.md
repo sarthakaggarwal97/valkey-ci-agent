@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-12T02:56+00:00.
+Updated 2026-11-12T02:58+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 1923 | 607 | #766 (2024-07-09) | 269 | 273.9 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 15.0 |
 | valkey-io/valkey-json | 64 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 8.3 |
-| valkey-io/valkey-search | 672 | 0 | f8106e72e984 (2024-11-27) | 0 | 96.0 |
+| valkey-io/valkey-search | 673 | 0 | f8106e72e984 (2024-11-27) | 1 | 96.1 |
 
 ## Last runs
 
@@ -48,15 +48,16 @@ Updated 2026-11-12T02:56+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-11T20:13:55+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43094395980): 0 merge(s) tested, 0 without a code change.
+[2026-11-12T02:58:10+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43130534641): 1 merge(s) tested, 0 without a code change.
 
+- [valkey-io/valkey-search#1589](https://github.com/valkey-io/valkey-search/pull/1589) ([tests](tests/valkey-search/1589-612423eee/)):  Fix RDB load abort when a tracked vector key is missing from the keyspace (#1589): 5 of 5 test(s) reached the change; crash, fixed by #1589 (recorded)
 
 ## Totals
 
-- Merges whose tests reached the change: 835 of 1336 tested (62%)
+- Merges whose tests reached the change: 836 of 1337 tested (63%)
 - Changed-line coverage: median 100% of 849 merge(s) measured, 66 under 50%
-- Recall: 223 parents flagged of 352 fix merges
-- Claude: $814.48 in the last 24 hours, $9678.83 in the last 7 days, $9729.28 in all
+- Recall: 224 parents flagged of 353 fix merges
+- Claude: $819.18 in the last 24 hours, $9683.53 in the last 7 days, $9733.98 in all
 - Issues filed: 71
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
