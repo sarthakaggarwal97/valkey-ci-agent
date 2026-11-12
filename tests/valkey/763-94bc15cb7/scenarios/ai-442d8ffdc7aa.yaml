@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8b480310a629..94bc15cb7147.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-442d8ffdc7aa
+seed: 101
+experiment:
+  id: proposed.io-offload-commands
+  inputs:
+    resp: 2
+    io_threads: 4
+    lazyfree: 'no'
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "66d0f7d9a116ee6c58da4c18532825130dcae773",
+  "parent": "1a8bd045f3037699f2db92a974f1f3be215f11c6",
+  "pr": 754,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Ensure only primary sender drives slot ownership updates (#754)",
+  "date": "2024-07-16",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 35,
+    "executed": 32,
+    "percent": 91,
+    "uncovered": [
+      "src/cluster_legacy.c:3249",
+      "src/cluster_legacy.c:3251",
+      "src/cluster_legacy.c:3252"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.2449,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.cluster-client-ip-restart-survival
+deployment:
+  modes: [standalone]
+metadata:
+  description: a node that persisted cluster-announce-client-ipv4/ipv6 into nodes.conf
+    must restart and reload it; the persisted values hit the tightened isValidAuxChar
+    and the client-ip aux setters
+components:
+- use: valkey.action.commands
+  id: announce-restart
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, SET, cluster-announce-client-ipv4, "127.0.0.1"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-announce-client-ipv6, "cafe:1234::1"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "cluster_state:ok"},
+      wait_s: 15}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CLUSTER, INFO], compare: skip, expect: {contains: "cluster_state:ok"},
+      wait_s: 15}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [announce-restart.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: announce-restart}

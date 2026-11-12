@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.slot-stats-config-standalone
+deployment:
+  modes: [standalone]
+metadata:
+  description: "cluster-slot-stats-enabled turned on in non-cluster mode: keyed commands,\
+    \ a blocking timeout and CONFIG RESETSTAT must not touch cluster slot stats (server.cluster\
+    \ is NULL) or crash"
+components:
+- use: valkey.action.commands
+  id: standalone
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    timeout_s: 20
+    commands:
+    - {command: [CONFIG, SET, cluster-slot-stats-enabled, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [GET, foo], expect: {equals: bar}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 0, 16383], expect: {error: "cluster\
+          \ support disabled"}}
+    - {command: [BLPOP, blk, 1]}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [CONFIG, GET, cluster-slot-stats-enabled], expect_difference: true,
+      expect: {contains: "yes"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [standalone.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: standalone}

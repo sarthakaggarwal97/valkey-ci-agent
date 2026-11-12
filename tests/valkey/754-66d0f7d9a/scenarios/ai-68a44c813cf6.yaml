@@ -1,0 +1,18 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1a8bd045f303..66d0f7d9a116.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-68a44c813cf6
+seed: 754002
+experiment:
+  id: proposed.stale-primary-reappears
+  inputs:
+    signal: SIGSTOP
+    pause_s: 12
+    settle_s: 30
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 2
+  base_port: 7100
+  server_config:
+    cluster-node-timeout: 2000
+    cluster-replica-validity-factor: 0

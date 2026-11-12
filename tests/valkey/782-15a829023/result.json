@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "15a82902316b59e2cbf8962ac2665e4b6b038f4c",
+  "parent": "816accea762271458e89016e3ed6ea27c9c1daff",
+  "pr": 782,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Optimize failover time when the new primary node is down again (#782)",
+  "date": "2024-07-19",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 2,
+    "executed": 2,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.3358,
+  "findings": [],
+  "recorded": []
+}

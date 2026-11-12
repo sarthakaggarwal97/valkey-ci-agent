@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b4ac2c406c54dae42f42f56c6f65f134a18cc514",
+  "parent": "8c92b2f7470d2661bd5987d979d4a1fe23b012d4",
+  "pr": 756,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update gitignore to ignore the cluster-cluster test files (#756)",
+  "date": "2024-07-13",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2119,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only .gitignore, widening three ignore patterns (dump.rdb -> dump*.rdb, appendonlydir -> appendonlydir*, nodes.conf -> nodes*.conf) so cluster-cluster test artifacts are untracked. It is a repository housekeeping/CI-hygiene change with no code, config, protocol, or behaviour change in Valkey, so no scenario can reach it and none is needed."
+}

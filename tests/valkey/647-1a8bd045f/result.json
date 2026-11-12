@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1a8bd045f3037699f2db92a974f1f3be215f11c6",
+  "parent": "dd4bd5065b6c36ff2dfcf41a49781e5f659f4d41",
+  "pr": 647,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replace master-reboot-down-after-period with primary-reboot-down-after-period in sentinel.conf (#647)",
+  "date": "2024-07-15",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.3047,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to Sentinel mode: sentinelHandleConfiguration (parsing the 'sentinel primary-reboot-down-after-period' directive at startup), sentinelSetCommand (SENTINEL SET), and rewriteConfigSentinelOption (CONFIG REWRITE in a Sentinel), plus a sentinel.conf comment and a Sentinel TCL test. No installed experiment or component can reach Sentinel mode: deployments and the private servers of valkey.action.commands/valkey.action.tools run valkey-server in normal or cluster mode only, with no way to pass --sentinel, and valkey-sentinel is not one of the four tools valkey.action.tools may"
+}

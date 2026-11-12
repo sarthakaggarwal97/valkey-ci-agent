@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.debug-sleep-after-fork-extra-reply
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    DEBUG SLEEP-AFTER-FORK-SECONDS with a non-float argument replied twice on the
+    parent (the float error plus an extra -ERR), desynchronizing the connection; the
+    fix sends exactly one error reply.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dbgsleep
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, SLEEP-AFTER-FORK-SECONDS, "0.5"], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP-AFTER-FORK-SECONDS, notafloat], expect: {error: "not\
+          \ a valid float"}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    - {command: [SET, k, v], expect_difference: true, expect: {equals: OK}}
+    - {command: [GET, k], expect_difference: true, expect: {equals: v}}
+    - {command: [DEBUG, SLEEP-AFTER-FORK-SECONDS, "0"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [MULTI], connection: m, expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP-AFTER-FORK-SECONDS, ""], connection: m, expect: {equals: QUEUED}}
+    - {command: [EXEC], connection: m, expect: {exists: true}}
+    - {command: [PING], connection: m, expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dbgsleep.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbgsleep}

@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "816accea762271458e89016e3ed6ea27c9c1daff",
+  "parent": "35a188833335332980a16239ac2efebf241c8a6a",
+  "pr": 790,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Generate correct slot information in cluster shards command on primary failure  (#790)",
+  "date": "2024-07-19",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 23,
+    "executed": 22,
+    "percent": 95,
+    "uncovered": [
+      "src/cluster_legacy.c:5698"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.7785,
+  "findings": [],
+  "recorded": []
+}

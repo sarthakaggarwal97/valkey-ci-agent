@@ -1,0 +1,82 @@
+extends: [valkey.liveness]
+id: proposed.cluster-slot-stats-cpu-usec
+deployment:
+  modes: [standalone]
+metadata:
+  description: "CLUSTER SLOT-STATS cpu-usec metric: config gating, ORDERBY cpu-usec,\
+    \ resets on CONFIG RESETSTAT and ADDSLOTS/DELSLOTS, accumulation for blocking\
+    \ commands, MULTI/EXEC and scripts, compared against the parent build"
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slotstats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    server_config: {cluster-require-full-coverage: "no"}
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 12182, 12182], expect: {contains: key-count}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, cpu-usec], expect_difference: true,
+      expect: {error: "Unrecognized sort metric"}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, ""], expect_difference: true, expect: {
+        error: "Unrecognized sort metric"}}
+    - {command: [CONFIG, GET, cluster-slot-stats-enabled], expect_difference: true,
+      expect: {contains: cluster-slot-stats-enabled}}
+    - {command: [CONFIG, SET, cluster-slot-stats-enabled, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 12182, 12182], expect_difference: true,
+      expect: {contains: cpu-usec}}
+    - {command: [SET, foo, v1], expect: {equals: OK}}
+    - {command: [GET, foo], expect: {equals: v1}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, cpu-usec, LIMIT, 1], expect_difference: true,
+      expect: {contains: "12182"}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, CPU-USEC, LIMIT, 1], expect_difference: true,
+      expect: {error: false}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, cpu-usec, LIMIT, 0], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [BLPOP, bar, 1]}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, cpu-usec, LIMIT, 1], expect_difference: true,
+      expect: {contains: "5061"}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, foo, v2], expect: {equals: QUEUED}}
+    - {command: [GET, foo], expect: {equals: QUEUED}}
+    - {command: [EXEC]}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, cpu-usec, LIMIT, 1], expect_difference: true,
+      expect: {contains: "12182"}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - command: [EVAL, "#!lua flags=allow-cross-slot-keys\nredis.call('set','foo','x')\
+          \ redis.call('get','bar') return 1", "0"]
+      expect: {equals: 1}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 12182, 12182], expect_difference: true,
+      expect: {contains: cpu-usec}}
+    - command: [EVAL, "redis.call('set','foo','y') return redis.call('get','foo')",
+        "0"]
+      expect: {equals: y}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, cpu-usec, LIMIT, 1], expect_difference: true,
+      expect: {contains: "12182"}}
+    - {command: [CLUSTER, DELSLOTS, 12182], expect: {equals: OK}}
+    - {command: [CLUSTER, ADDSLOTS, 12182], expect: {equals: OK}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 12182, 12182], expect_difference: true,
+      expect: {contains: cpu-usec}}
+    - {command: [CONFIG, SET, cluster-slot-stats-enabled, "no"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, SLOT-STATS, SLOTSRANGE, 12182, 12182], expect: {contains: key-count}}
+    - {command: [CLUSTER, SLOT-STATS, ORDERBY, cpu-usec, LIMIT, 1], expect_difference: true,
+      expect: {error: "Unrecognized sort metric"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slotstats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotstats}

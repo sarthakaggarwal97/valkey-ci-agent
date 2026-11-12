@@ -1,0 +1,43 @@
+extends: [valkey.base]
+id: proposed.wait-in-script-stalled-replica
+deployment:
+  modes: [standalone]
+  replicas_per_primary: {minimum: 2}
+metadata:
+  description: WAIT inside a script on a primary with one SIGSTOPped replica must
+    count only replicas that acknowledged the caller's write offset, under a live
+    workload and a resync
+inputs:
+  properties:
+    pause_s: {type: number, minimum: 3, maximum: 20, default: 8}
+components:
+- use: valkey.fault.process-signal
+  id: stall-replica
+  config:
+    when_event: warm-up.completed
+    instance: replica
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.pause_s}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, stall-replica]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle-stall
+  depends_on: [warm-up]
+  config: {seconds: 1}
+- use: valkey.action.commands
+  id: wait-script
+  depends_on: [settle-stall]
+  config:
+    instances: primaries
+    timeout_s: 10
+    commands:
+    - {command: [SET, wait-script-probe, v1], expect: {equals: OK}}
+    - {command: [EVAL, "return server.call('wait', '2', '0')", 0], expect: {max: 1}}
+    - {command: [EVAL, "return server.call('wait', '2', '0')", 0], wait_s: 30, expect: {
+        equals: 2}}
+required_events: [stall-replica.injected, wait-script.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: wait-script}
+- {evidence_id: valkey.fault.injected, source: stall-replica}

@@ -1,0 +1,19 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 35a188833335..816accea7622.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-10a154d295fd
+seed: 202
+experiment:
+  id: proposed.cluster-shards-on-failover
+  inputs:
+    trigger: pause_primary
+    observers:
+    - valkey-2
+    - valkey-3
+    slot_range: '[0, 5460]'
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7100
+  server_config:
+    cluster-node-timeout: 5000

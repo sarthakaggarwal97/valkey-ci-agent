@@ -1,0 +1,46 @@
+extends: [valkey.base]
+id: proposed.stale-primary-reappears
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Primary killed-and-restarted (or paused past the node timeout) reappears
+    with a stale slot claim; the cluster must converge on the promoted replica
+inputs:
+  properties:
+    signal: {type: string, enum: [SIGKILL, SIGSTOP], default: SIGKILL}
+    pause_s: {type: number, minimum: 1, maximum: 60, default: 12}
+    restart_delay_s: {type: number, minimum: 0, maximum: 60, default: 12}
+    settle_s: {type: number, minimum: 1, maximum: 120, default: 30}
+components:
+- use: valkey.fault.process-signal
+  id: stale-primary
+  config:
+    when_event: warm-up.completed
+    instance: primary
+    signal: {$ref: inputs.signal}
+    restart: true
+    restart_mode: background
+    restart_delay_s: {$ref: inputs.restart_delay_s}
+    pause_s: {$ref: inputs.pause_s}
+    capture_cluster_vars: true
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, stale-primary]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: {$ref: inputs.settle_s}}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_s: 2.5
+    loss_window_after_s: 5
+- use: valkey.oracle.deployment-state
+  id: deployment-state
+  config: {validation: {stabilization_wait: 5, validation_timeout: 120}}
+required_events: [stale-primary.injected, settle.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: stale-primary}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ccafbb750beb..5000c050b5c0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-61303bce00c6
+seed: 1
+experiment:
+  id: proposed.cluster-slot-stats-cpu-usec
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

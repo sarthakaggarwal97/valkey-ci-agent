@@ -1,0 +1,187 @@
+extends: [valkey.liveness]
+id: proposed.errorstats-overflow
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Past 128 distinct error prefixes, new custom (Lua/FCALL) errors are tracked under
+    ERRORSTATS_OVERFLOW while non-custom errors and already-tracked custom errors
+    keep their own counters; the parent build instead disables errorstats (ERRORSTATS_DISABLED).
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: errstats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a000]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a001]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a002]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a003]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a004]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a005]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a006]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a007]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a008]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a009]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a010]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a011]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a012]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a013]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a014]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a015]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a016]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a017]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a018]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a019]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a020]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a021]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a022]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a023]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a024]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a025]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a026]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a027]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a028]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a029]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a030]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a031]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a032]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a033]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a034]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a035]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a036]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a037]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a038]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a039]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a040]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a041]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a042]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a043]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a044]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a045]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a046]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a047]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a048]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a049]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a050]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a051]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a052]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a053]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a054]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a055]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a056]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a057]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a058]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a059]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a060]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a061]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a062]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a063]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a064]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a065]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a066]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a067]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a068]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a069]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a070]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a071]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a072]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a073]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a074]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a075]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a076]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a077]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a078]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a079]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a080]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a081]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a082]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a083]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a084]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a085]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a086]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a087]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a088]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a089]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a090]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a091]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a092]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a093]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a094]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a095]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a096]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a097]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a098]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a099]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a100]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a101]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a102]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a103]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a104]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a105]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a106]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a107]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a108]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a109]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a110]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a111]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a112]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a113]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a114]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a115]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a116]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a117]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a118]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a119]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a120]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a121]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a122]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a123]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a124]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a125]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a126]}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a127]}
+    - {command: [INFO, errorstats], expect: {contains: "errorstat_a000:count=1"}}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a128], expect: {error: "a128\
+          \ e"}}
+    - {command: [INFO, errorstats], expect_difference: true, expect: {contains: "errorstat_ERRORSTATS_OVERFLOW:count=1"}}
+    - {command: [SET, a, b, c, d], expect: {error: "syntax"}}
+    - {command: [SET, str, v], expect: {equals: OK}}
+    - {command: [LPUSH, str, x], expect: {error: "WRONGTYPE"}}
+    - {command: [INFO, errorstats], expect_difference: true, expect: {contains: "errorstat_WRONGTYPE:count=1"}}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a000], expect: {error: "a000\
+          \ e"}}
+    - {command: [INFO, errorstats], expect_difference: true, expect: {contains: "errorstat_a000:count=2"}}
+    - {command: [EVAL, "return server.error_reply('My error message')", 0], expect: {
+        error: "My error message"}}
+    - {command: [EVAL, "return {err='Averylongcustomerrorwithnospaces'}", 0], expect: {
+        error: "Averylong"}}
+    - {command: [INFO, errorstats], expect_difference: true, expect: {contains: "errorstat_ERR:count=2"}}
+    - {command: [EVAL, "return {err=' leadingspace'}", 0], expect: {error: "leadingspace"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nserver.register_function('cerr',\
+          \ function() return server.error_reply('My error message') end)\nserver.register_function('badget',\
+          \ function() return server.call('get','x','x','x') end)"], expect: {equals: mylib}}
+    - {command: [FCALL, cerr, 0], expect: {error: "My error message"}}
+    - {command: [INFO, errorstats], expect_difference: true, expect: {contains: "errorstat_ERRORSTATS_OVERFLOW:count=4"}}
+    - {command: [FCALL, badget, 0], expect: {error: "number of args"}}
+    - {command: [INFO, errorstats], expect_difference: true, expect: {contains: "errorstat_ERR:count=3"}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [EVAL, "return {err=ARGV[1]..' e'}", 0, a000], expect: {error: "a000\
+          \ e"}}
+    - {command: [INFO, errorstats], expect: {contains: "errorstat_a000:count=1"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [errstats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: errstats}

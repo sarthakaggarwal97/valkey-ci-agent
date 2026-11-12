@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ccafbb750beb..5000c050b5c0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2bef4b586183
+seed: 3
+experiment:
+  id: proposed.slot-stats-config-standalone
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7200

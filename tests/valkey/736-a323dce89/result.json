@@ -1,0 +1,130 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a323dce8900341328114b86a92078c50cec0d9b8",
+  "parent": "6a5a11f21c6b6a5c8678c50e96b559919962ba10",
+  "pr": 736,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Dual stack and client-specific IPs in cluster (#736)",
+  "date": "2024-07-10",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 2,
+  "hunted": 7,
+  "dropped": 5,
+  "recall": true,
+  "coverage": {
+    "lines": 149,
+    "executed": 105,
+    "percent": 70,
+    "uncovered": [
+      "src/cluster.c:1303",
+      "src/cluster_legacy.c:238",
+      "src/cluster_legacy.c:262",
+      "src/cluster_legacy.c:263",
+      "src/cluster_legacy.c:267",
+      "src/cluster_legacy.c:279",
+      "src/cluster_legacy.c:280",
+      "src/cluster_legacy.c:282",
+      "src/cluster_legacy.c:285",
+      "src/cluster_legacy.c:288",
+      "src/cluster_legacy.c:289",
+      "src/cluster_legacy.c:293",
+      "src/cluster_legacy.c:294",
+      "src/cluster_legacy.c:305",
+      "src/cluster_legacy.c:306",
+      "src/cluster_legacy.c:308",
+      "src/cluster_legacy.c:311",
+      "src/cluster_legacy.c:314",
+      "src/cluster_legacy.c:315",
+      "src/cluster_legacy.c:319",
+      "src/cluster_legacy.c:320",
+      "src/cluster_legacy.c:331",
+      "src/cluster_legacy.c:350",
+      "src/cluster_legacy.c:953",
+      "src/cluster_legacy.c:1584",
+      "src/cluster_legacy.c:1585",
+      "src/cluster_legacy.c:2634",
+      "src/cluster_legacy.c:5640",
+      "src/cluster_legacy.c:5644",
+      "src/cluster_legacy.c:5919",
+      "src/cluster_legacy.c:6587",
+      "src/cluster_legacy.c:6590",
+      "src/config.c:2389",
+      "src/config.c:2390",
+      "src/config.c:2398",
+      "src/config.c:2399",
+      "src/module.c:8982",
+      "src/module.c:8989",
+      "src/module.c:8996",
+      "src/module.c:8997",
+      "src/module.c:8998",
+      "src/module.c:9002",
+      "src/module.c:9011",
+      "src/module.c:9016"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 26.0562,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: 14728:M 11 Nov 2026 23:40:08.678 # Unrecoverable error: corrupted cluster config file \"61b4a22e9feeec588e3f9566fc2e0fa1e08c57fb :61170@65344,,client-ipv6=cafe:1234::9,client-ipv4=111.222.111.9,tls-port=0,shard-id=e198ab6dfae891852e5a945b2afad68fc1839168 myself,master - 0 0 0 connected 0-16383",
+      "scenario": "ai-fe684612f2c4",
+      "seed": 73603,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "fe5f22c1e62b3c357cc9",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: Unrecoverable error: corrupted cluster config file \"45f4c3fc97fbe31fcfe81456e45eb83120d974d7 127.0.0.1:7301@17301,,client-ipv6=::1,client-ipv4=127.0.0.1,tls-port=0,shard-id=b4d0d1abcca880edfee95bbebea5c4c5a414e888 myself,slave fb0089bc3438ad859af2ac770aaee0d2177a8808 0 0 0 connected",
+      "scenario": "ai-211b75aff9d3",
+      "seed": 73604,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "f0820b96c71b65ff80f5",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: Unrecoverable error: corrupted cluster config file \"e5499cada658c766f4ee2b034cdc5601160fd673 127.0.0.1:7400@17400,,client-ipv6=::1,client-ipv4=127.0.0.1,tls-port=0,shard-id=5b1c3a78b1db7b141707640cf086d731ba3cc2a4 myself,master - 0 0 0 connected 0-5460",
+      "scenario": "ai-ca7ff02d5fd0",
+      "seed": 73605,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "8f5601499a3a03af2e84",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 23155:M 12 Nov 2026 01:24:52.517 # Unrecoverable error: corrupted cluster config file \"fb10ccbdbe630dcdc4df747186496b4734252b88 :64069@65483,,client-ipv6=cafe:1234::1,client-ipv4=127.0.0.1,tls-port=0,shard-id=66b736d85bd665eb63c0f356cd84a07cf2b839b9 myself,master - 0 0 0 connected 0-16383",
+      "scenario": "ai-b19477578837",
+      "seed": 301,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "fe5f22c1e62b3c357cc9",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

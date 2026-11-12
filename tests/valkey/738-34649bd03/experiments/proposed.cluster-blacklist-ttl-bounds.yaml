@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.cluster-blacklist-ttl-bounds
+deployment:
+  modes: [standalone]
+metadata:
+  description: cluster-blacklist-ttl at its range boundaries - 0 expires the blacklist
+    within a second, and ULONG_MAX wraps time(NULL)+ttl so the entry is born expired
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: bounds
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, cluster-blacklist-ttl], expect_difference: true, expect: {
+        equals: [cluster-blacklist-ttl, "60"]}}
+    - {command: [CONFIG, SET, cluster-blacklist-ttl, "-1"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CONFIG, SET, cluster-blacklist-ttl, "18446744073709551616"], expect_difference: true,
+      expect: {error: true}}
+    - {command: [CLUSTER, FORGET, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa], expect: {
+        error: "Unknown node"}}
+    - {command: [CONFIG, SET, cluster-blacklist-ttl, "0"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, FORGET, "<node.1.id>"], expect: {equals: OK}}
+    - {command: [CLUSTER, FORGET, "<node.1.id>"], node: 2, expect: {equals: OK}}
+    - {command: [CLUSTER, FORGET, "<node.1.id>"], wait_s: 10, expect_difference: true,
+      expect: {error: "Unknown node"}}
+    - {command: [CONFIG, SET, cluster-blacklist-ttl, "18446744073709551615"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, FORGET, "<node.2.id>"], expect: {equals: OK}}
+    - {command: [CLUSTER, FORGET, "<node.2.id>"], expect_difference: true, expect: {
+        error: "Unknown node"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [bounds.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: bounds}

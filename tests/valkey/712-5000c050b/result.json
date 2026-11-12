@@ -1,0 +1,57 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5000c050b5c091d1cf06f6e1ba4e6cd7056fcb06",
+  "parent": "ccafbb750bebad7dddcc4a0266945a6d56281385",
+  "pr": 712,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add cpu-usec metric support under CLUSTER SLOT-STATS command (#20). (#712)",
+  "date": "2024-07-22",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 3,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 39,
+    "executed": 39,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.4857,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:239 'calculateKeySlot(key) == server.current_client->slot' is not true",
+      "scenario": "ai-e76fb924afac",
+      "seed": 20261111,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "49979a14dba799f32598",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:239 'calculateKeySlot(key) == server.current_client->slot' is not true",
+      "scenario": "ai-4ecf16c93a80",
+      "seed": 712,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "49979a14dba799f32598",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

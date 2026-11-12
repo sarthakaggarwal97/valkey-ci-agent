@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.dual-channel-debug-subcommands
+deployment:
+  modes: [standalone]
+metadata:
+  description: The two DEBUG subcommands the dual-channel change adds (sleep-after-fork-seconds,
+    delay-rdb-client-free-seconds) reply OK on the change and error on the parent,
+    and sleep-after-fork-seconds rejects a non-numeric argument
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dbg
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [DEBUG, sleep-after-fork-seconds, "0.5"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DEBUG, sleep-after-fork-seconds, "0"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [DEBUG, sleep-after-fork-seconds, notanumber], expect_difference: true,
+      expect: {error: true}}
+    - {command: [DEBUG, delay-rdb-client-free-seconds, "5"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [DEBUG, delay-rdb-client-free-seconds, "0"], expect_difference: true,
+      expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dbg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbg}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c584371506010686087e64af7edc9706e2c38674",
+  "parent": "ff6b780fe616536c233c1440997d49e7276aee0e",
+  "pr": 800,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix rdb pipe uninitialized false positive warning (#800)",
+  "date": "2024-07-18",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3444,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only initializes two local variables (rdb_pipe_write, safe_to_exit_pipe) to 0 in rdbSaveToReplicasSockets to silence a false-positive 'may be used uninitialized' compiler warning. Every read or close of those variables is guarded by !dual_channel, the same path that assigns them from anetPipe before use, so the initializer value is never consumed on any path. This is a build-warning fix with no behavior change: no reply, replication, or persistence semantics differ between the builds, so no scenario can reach or observe the change."
+}

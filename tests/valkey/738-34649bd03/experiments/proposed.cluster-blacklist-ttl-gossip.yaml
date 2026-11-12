@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.cluster-blacklist-ttl-gossip
+deployment:
+  modes: [standalone]
+metadata:
+  description: A short cluster-blacklist-ttl expires the CLUSTER FORGET blacklist
+    on time and still propagates to peers via the FORGOTTEN_NODE ping extension
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: forget
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    server_config: {cluster-ping-interval: 500}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, cluster-blacklist-ttl, "5"], node: 0, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, cluster-blacklist-ttl], node: 0, expect_difference: true,
+      expect: {equals: [cluster-blacklist-ttl, "5"]}}
+    - {command: [CLUSTER, FORGET, "<node.2.id>"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, FORGET, "<node.2.id>"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNT-FAILURE-REPORTS, "<node.2.id>"], node: 1, wait_s: 10,
+      expect: {error: "Unknown node"}}
+    - {command: [CLUSTER, FORGET, "<node.2.id>"], node: 0, wait_s: 30, expect_difference: true,
+      expect: {error: "Unknown node"}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    - {command: [PING], node: 1, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [forget.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: forget}

@@ -1,0 +1,81 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "94bc15cb7147773d3b45e5a2f9c7e8d7de6f97c7",
+  "parent": "8b480310a629300c7cb28576f04df889bda21198",
+  "pr": 763,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Io thread work offload (#763)",
+  "date": "2024-07-18",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 3,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 173,
+    "executed": 140,
+    "percent": 80,
+    "uncovered": [
+      "src/ae.c:141",
+      "src/ae.c:142",
+      "src/ae.c:145",
+      "src/ae.c:146",
+      "src/ae.c:147",
+      "src/ae.c:156",
+      "src/ae.c:158",
+      "src/ae.c:159",
+      "src/ae.c:160",
+      "src/ae.c:161",
+      "src/ae.c:162",
+      "src/ae.c:191",
+      "src/ae.c:242",
+      "src/io_threads.c:127",
+      "src/io_threads.c:128",
+      "src/io_threads.c:133",
+      "src/io_threads.c:134",
+      "src/io_threads.c:135",
+      "src/io_threads.c:136",
+      "src/io_threads.c:138",
+      "src/io_threads.c:141",
+      "src/io_threads.c:446",
+      "src/io_threads.c:494",
+      "src/module.c:688",
+      "src/module.c:1300",
+      "src/module.c:6286",
+      "src/module.c:10715",
+      "src/module.c:10716",
+      "src/module.c:10732",
+      "src/module.c:10735",
+      "src/module.c:10737",
+      "src/module.c:12086",
+      "src/networking.c:4703"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.1479,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-442d8ffdc7aa",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 49 (raw \"ECHO \\\"bad\\r\\n\" on connection pipe)"
+    },
+    {
+      "scenario": "ai-252850e87119",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 49 (raw \"ECHO \\\"bad\\r\\n\" on connection pipe)"
+    },
+    {
+      "scenario": "ai-4159e2742f42",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'seq' returned ERROR: expectations both builds violate alike, so they are not about the change: 49 (raw \"ECHO \\\"bad\\r\\n\" on connection pipe)"
+    }
+  ]
+}

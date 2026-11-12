@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6a5a11f21c6b..a323dce89003.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b19477578837
+seed: 301
+experiment:
+  id: proposed.cluster-client-ip-restart-survival
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7300

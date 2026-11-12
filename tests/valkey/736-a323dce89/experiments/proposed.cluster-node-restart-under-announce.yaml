@@ -1,0 +1,36 @@
+extends: [valkey.base]
+id: proposed.cluster-node-restart-under-announce
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: Kill and restart a cluster node while writes run; with the announce-client-ip
+    configs in server_config the restarted node must reload its nodes.conf (now holding
+    client-ipv4 aux fields), rejoin and resync with no acknowledged write lost
+inputs:
+  properties:
+    instance: {type: string, enum: [primary, replica], default: replica}
+    signal: {type: string, enum: [SIGKILL, SIGTERM], default: SIGKILL}
+components:
+- use: valkey.fault.process-signal
+  id: kill-node
+  config:
+    when_event: warm-up.completed
+    instance: {$ref: inputs.instance}
+    signal: {$ref: inputs.signal}
+    restart_mode: immediate
+    capture_cluster_vars: true
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, kill-node]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: 5}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: kill-node}

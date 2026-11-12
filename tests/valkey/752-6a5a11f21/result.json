@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6a5a11f21c6b6a5c8678c50e96b559919962ba10",
+  "parent": "b99c7237f45cd75be4db164b483cf1cb2c2febf9",
+  "pr": 752,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix ULong config boundary checking (#752)",
+  "date": "2024-07-09",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.8291,
+  "findings": [],
+  "recorded": [],
+  "reason": "The fix routes NUMERIC_TYPE_ULONG configs through the unsigned boundary-check branch of numericBoundaryCheck instead of the signed one, but no observable behavior changes on the test platform. The only ULONG configs are active-defrag-max-scan-fields (bounds 1..LONG_MAX), slowlog-max-len and acllog-max-len (bounds 0..LONG_MAX), all plain INTEGER_CONFIG parsed by string2ll, so every reachable input fits in a long long. With those bounds on 64-bit Linux, the signed (parent) and unsigned (fixed) checks accept and reject identical input sets \u2014 negatives are rejected by the signed lower-bound check "
+}

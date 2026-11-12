@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "59aa00823c3691c50da452f2df2c4bc24e46696d",
+  "parent": "9a7bf910cbd7795d8a86bee9bec6378c366b9e6b",
+  "pr": 762,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replicas with the same offset queue up for election (#762)",
+  "date": "2024-07-22",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 8,
+    "executed": 8,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.1586,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:239 'calculateKeySlot(key) == server.current_client->slot' is not true",
+      "scenario": "ai-3c2e0904dbf5",
+      "seed": 303,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #762, since fixed",
+      "fingerprint": "49979a14dba799f32598",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

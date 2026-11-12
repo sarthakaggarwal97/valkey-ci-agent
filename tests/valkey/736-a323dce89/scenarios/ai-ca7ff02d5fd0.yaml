@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6a5a11f21c6b..a323dce89003.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-ca7ff02d5fd0
+seed: 73605
+experiment:
+  id: proposed.cluster-node-restart-under-announce
+  inputs:
+    instance: primary
+    signal: SIGTERM
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7400
+  server_config:
+    cluster-announce-client-ipv4: 127.0.0.1
+    cluster-announce-client-ipv6: ::1

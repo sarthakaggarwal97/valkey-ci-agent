@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 66d0f7d9a116..ff6b780fe616.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-80ac84398226
+seed: 105
+experiment:
+  id: valkey.replication-partial-resync
+  inputs:
+    disconnect_after_s: 1
+    value_size: 4096
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7400
+  server_config:
+    dual-channel-replication-enabled: 'yes'
+    repl-diskless-sync: 'yes'

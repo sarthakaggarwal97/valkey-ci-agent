@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b4ac2c406c54..34649bd034b6.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2eaacbb4414c
+seed: 73801
+experiment:
+  id: proposed.cluster-blacklist-ttl-gossip
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

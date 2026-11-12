@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.cluster-announce-client-ip-restart
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: cluster-announce-client-ipv4/ipv6 persisted to the config file and
+    as nodes.conf aux fields, then the node restarted and the state read back
+components:
+- use: valkey.action.commands
+  id: persist
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, cluster-announce-client-ipv4, "111.222.111.9"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, SET, cluster-announce-client-ipv6, "cafe:1234::9"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {command: [CLUSTER, MYID], compare: skip}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CONFIG, GET, cluster-announce-client-ipv4], expect_difference: true,
+      expect: {equals: [cluster-announce-client-ipv4, "111.222.111.9"]}}
+    - {command: [CONFIG, GET, cluster-announce-client-ipv6], expect_difference: true,
+      expect: {equals: [cluster-announce-client-ipv6, "cafe:1234::9"]}}
+    - {command: [CLUSTER, SLOTS], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: persist}

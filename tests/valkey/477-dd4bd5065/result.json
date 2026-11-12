@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dd4bd5065b6c36ff2dfcf41a49781e5f659f4d41",
+  "parent": "c1bbdc796d7159b2f5ae1a8d12391407340d0262",
+  "pr": 477,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Introduce Valkey Over RDMA transport (experimental) (#477)",
+  "date": "2024-07-15",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4393,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a new optional RDMA transport module (src/rdma.c) that is compiled solely when BUILD_RDMA=module is set (default BUILD_RDMA=no does nothing), plus Makefile/CI/README/test-harness additions. No existing server code path is modified. Exercising it would require a build with BUILD_RDMA=module, loading valkey-rdma.so (MODULE LOAD is refused), and an RDMA device (real hardware or root-configured soft-RoCE rdma_rxe), none of which the fuzzer environment provides. On the runner's default builds the change is behaviorally identical to its parent on every reachable path, so no scen"
+}

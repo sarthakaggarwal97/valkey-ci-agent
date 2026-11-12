@@ -1,0 +1,54 @@
+extends: [valkey.base]
+id: proposed.cluster-shards-on-failover
+deployment:
+  modes: [cluster]
+  replicas_per_primary: {minimum: 1}
+metadata:
+  description: CLUSTER SHARDS reports the failed-over shard's slot ranges from surviving
+    observer nodes while the old primary is down
+inputs:
+  properties:
+    trigger: {type: string, enum: [kill_primary, pause_primary], default: kill_primary}
+    observers:
+      type: array
+      default: [valkey-2, valkey-3]
+      description: "instances of another shard that answer CLUSTER SHARDS after the\
+        \ failover"
+    slot_range:
+      type: string
+      default: "[0, 5460]"
+      description: "shard 0's slot pair as it appears in the recorded reply"
+components:
+- use: valkey.action.poll
+  id: shards-before
+  depends_on: [writes]
+  config:
+    instances: {$ref: inputs.observers}
+    command: [CLUSTER, SHARDS]
+    predicate: {contains: {$ref: inputs.slot_range}}
+    timeout_s: 30
+- use: valkey.action.cluster-election
+  id: election
+  depends_on: [shards-before]
+  config:
+    shard: 0
+    trigger: {$ref: inputs.trigger}
+    restart_killed: true
+    wait_synced: false
+    timeout_s: 60
+    pause_s: 30
+- use: valkey.action.poll
+  id: shards-after-failover
+  depends_on: [election]
+  config:
+    instances: {$ref: inputs.observers}
+    command: [CLUSTER, SHARDS]
+    predicate: {contains: {$ref: inputs.slot_range}}
+    timeout_s: 30
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [election.election-completed]
+required_evidence:
+- {evidence_id: valkey.cluster.election.result, source: election}
+- {evidence_id: valkey.poll.satisfied, source: shards-before}

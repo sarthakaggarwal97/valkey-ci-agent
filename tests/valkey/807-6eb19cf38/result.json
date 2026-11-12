@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6eb19cf38e30829e7ccb1b6a7551e8688f831485",
+  "parent": "15a82902316b59e2cbf8962ac2665e4b6b038f4c",
+  "pr": 807,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Typo fix in hyperloglog.c (#807)",
+  "date": "2024-07-20",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2049,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only fixes a spelling typo inside a code comment in src/hyperloglog.c (hypreloglog -> hyperloglog). No executable code, behaviour, reply, or data format is affected, so there is nothing to test."
+}

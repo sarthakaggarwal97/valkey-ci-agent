@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.dual-channel-replconf-options
+deployment:
+  modes: [standalone]
+metadata:
+  description: REPLCONF rdb-channel and set-rdb-client-id options added by dual channel
+    replication, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: replconf
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [REPLCONF, rdb-channel, "1"], expect_difference: true, expect: {equals: OK}}
+    - {command: [REPLCONF, rdb-channel, "0"], expect_difference: true, expect: {equals: OK}}
+    - {command: [REPLCONF, rdb-channel, "5"], expect_difference: true, expect: {error: "out\
+          \ of range"}}
+    - {command: [REPLCONF, set-rdb-client-id, notanumber], expect_difference: true,
+      expect: {error: true}}
+    - {command: [REPLCONF, set-rdb-client-id, "123456"], expect_difference: true,
+      expect: {error: "Unrecognized RDB client id"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [replconf.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: replconf}

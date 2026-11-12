@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5000c050b5c0..9a7bf910cbd7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-6e722f0fd27e
+seed: 81001
+experiment:
+  id: proposed.debug-sleep-after-fork-extra-reply
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

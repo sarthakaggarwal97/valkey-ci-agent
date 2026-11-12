@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6eb19cf38e30..14e09e981e00.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-3cb5d7976f9d
+seed: 776002
+experiment:
+  id: proposed.wait-in-script-woff
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 66d0f7d9a116..ff6b780fe616.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-62bfc97c0e77
+seed: 1401
+experiment:
+  id: proposed.dual-channel-debug-subcommands
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7400

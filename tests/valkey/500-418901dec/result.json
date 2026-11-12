@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "418901dec4e824c9d165f3437196ba803d3984ab",
+  "parent": "34649bd034b6780989bf05b97fa9bde2b7cec243",
+  "pr": 500,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Limit tracking custom errors (e.g. from LUA) while allowing non custom errors to be tracked normally (#500)",
+  "date": "2024-07-14",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 12,
+    "executed": 12,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.8013,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-1a0da6fa0680",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'errstats' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (EVAL return {err=ARGV[1]..' e'} 0 a000), 2 (EVAL return {err=ARGV[1]..' e'} 0 a001), 3 (EVAL return {err=ARGV[1]..' e'} 0 a002), 4 (E"
+    },
+    {
+      "scenario": "ai-892397d6362a",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'errstats' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (EVAL return {err=ARGV[1]..' e'} 0 a000), 2 (EVAL return {err=ARGV[1]..' e'} 0 a001), 3 (EVAL return {err=ARGV[1]..' e'} 0 a002), 4 (E"
+    }
+  ]
+}

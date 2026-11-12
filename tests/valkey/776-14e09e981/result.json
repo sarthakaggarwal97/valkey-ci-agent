@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "14e09e981e0039edbf8c41a208a258c18624cbb7",
+  "parent": "6eb19cf38e30829e7ccb1b6a7551e8688f831485",
+  "pr": 776,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix the wrong woff when execute WAIT / WAITAOF in script (#776)",
+  "date": "2024-07-22",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 11,
+    "executed": 11,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 8.2473,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "34649bd034b6780989bf05b97fa9bde2b7cec243",
+  "parent": "b4ac2c406c54dae42f42f56c6f65f134a18cc514",
+  "pr": 738,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Configurable cluster blacklist TTL (#738)",
+  "date": "2024-07-13",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.2192,
+  "findings": [],
+  "recorded": []
+}

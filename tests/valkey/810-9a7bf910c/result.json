@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9a7bf910cbd7795d8a86bee9bec6378c366b9e6b",
+  "parent": "5000c050b5c091d1cf06f6e1ba4e6cd7056fcb06",
+  "pr": 810,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix extra reply in debug sleep-after-fork-seconds error path (#810)",
+  "date": "2024-07-23",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 3.5079,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

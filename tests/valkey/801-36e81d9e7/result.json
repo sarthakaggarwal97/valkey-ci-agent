@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "36e81d9e79ea934b888f133ccee313a5fe0b9297",
+  "parent": "c584371506010686087e64af7edc9706e2c38674",
+  "pr": 801,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix rdb_child_exit_pipe incorrect close call (#801)",
+  "date": "2024-07-17",
+  "unstable": "6f6ec61c235a25d07f89d47cf452456f1f069bcf",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 2.6733,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only moves close(server.rdb_child_exit_pipe) inside the existing !dual_channel branches in rdbSaveToReplicasSockets. In non-dual-channel diskless sync the closed fds and their order are identical on both builds. In dual-channel sync rdb_child_exit_pipe is always -1 (asserted at function entry at rdb.c:3516 and reset to -1 at every close site), so the removed call was close(-1): a no-op that fails with EBADF whose errno no subsequent code reads. No fd lifetime, reply, log, or replication behaviour differs between the parent and the fixed build on any path, so no scenario can reach a "
+}

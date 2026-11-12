@@ -1,0 +1,92 @@
+extends: [valkey.liveness]
+id: proposed.io-offload-commands
+deployment:
+  modes: [standalone]
+metadata:
+  description: Command lookup offload, argv/object free offload and poll offload under
+    always-active IO threads, replies compared with the parent build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    io_threads: {type: integer, enum: [2, 4], default: 4}
+    lazyfree: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    server_config:
+      io-threads: {$ref: inputs.io_threads}
+      io-threads-do-reads: "yes"
+      events-per-io-thread: 0
+      lazyfree-lazy-server-del: {$ref: inputs.lazyfree}
+    commands:
+    - {command: [SET, k1, hello], expect: {equals: OK}}
+    - {command: [SET, k1, world], expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: world}}
+    - {command: [APPEND, k1, "!!"], expect: {equals: 7}}
+    - {command: [GET, k1], expect: {equals: "world!!"}}
+    - {command: [SET, n, 100], expect: {equals: OK}}
+    - {command: [SET, n, 200], expect: {equals: OK}}
+    - {command: [INCR, n], expect: {equals: 201}}
+    - {command: [OBJECT, REFCOUNT, n], compare: skip}
+    - {command: [SET, big, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa], expect: {
+        equals: OK}}
+    - {command: [SET, big, bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb], expect: {
+        equals: OK}}
+    - {command: [SET, big, x], expect: {equals: OK}}
+    - {command: [STRLEN, big], expect: {equals: 1}}
+    - {command: [SETRANGE, big, 100, Z], expect: {equals: 101}}
+    - {command: [STRLEN, big], expect: {equals: 101}}
+    - {command: [RPUSH, lst, a, b, c], expect: {equals: 3}}
+    - {command: [SET, lst, scalar], expect: {equals: OK}}
+    - {command: [TYPE, lst], expect: {equals: string}}
+    - {command: [MSET, a, 1, b, 2, c, 3, d, 4, e, 5, f, '', g, 7, h, 8], expect: {
+        equals: OK}}
+    - {command: [MGET, a, b, c, d, e, f, g, h], expect: {equals: ['1', '2', '3', '4',
+          '5', '', '7', '8']}}
+    - {command: [MSET, a, x, a, y, a, z], expect: {equals: OK}}
+    - {command: [GET, a], expect: {equals: z}}
+    - {command: [DEL, a, b, c, d, e, f, g, h, nope1, nope2], expect: {equals: 8}}
+    - {command: [RPUSH, r, e1, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11, e12, e13,
+        e14, e15, e16, e17, e18, e19, e20, e21, e22, e23, e24], expect: {equals: 24}}
+    - {command: [DEL, r, r, r], expect: {equals: 1}}
+    - {command: [GETDEL, k1], expect: {equals: "world!!"}}
+    - {command: [EXISTS, k1], expect: {equals: 0}}
+    - {command: [SET, '', ''], expect: {equals: OK}}
+    - {command: [GET, ''], expect: {equals: ''}}
+    - {command: [EXISTS, ''], expect: {equals: 1}}
+    - {command: [HSET, fields, fields, fields], expect: {equals: 1}}
+    - {command: [HGETALL, fields], compare: unordered-pairs}
+    - {command: [GET, big, extra], expect: {error: "wrong number of arguments"}}
+    - {command: [GET], expect: {error: "wrong number of arguments"}}
+    - {command: [NOSUCHCMD123, x], expect: {error: true}}
+    - {command: [gEt, n], expect: {equals: '201'}}
+    - {command: [CONFIG, GET, maxmemory], compare: unordered-pairs}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [NOCMDINMULTI, x], expect: {error: true}}
+    - {command: [EXEC], expect: {error: EXECABORT}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, t1, v1], expect: {equals: QUEUED}}
+    - {command: [GET, t1], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, v1]}}
+    - {command: [EXEC], expect: {error: "without MULTI"}}
+    - {raw: "*1\r\n$4\r\nPING\r\n*2\r\n$4\r\nECHO\r\n$5\r\npipe1\r\n", connection: pipe}
+    - {connection: pipe, read: true}
+    - {raw: "ECHO inline-hi\r\n", connection: pipe}
+    - {raw: "*0\r\n*1\r\n$4\r\nPING\r\n", connection: pipe}
+    - {raw: "ECHO \"bad\r\n", connection: pipe}
+    - {connection: pipe, read: true, expect: {exists: false}}
+    - {command: [INFO, stats], expect_difference: true, expect: {contains: io_threaded_freed_objects}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}
