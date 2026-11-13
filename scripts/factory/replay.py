@@ -13,6 +13,12 @@ issue gets (:mod:`scripts.factory.prepare`), and publishes nothing:
    bug the person fixed. The bot's own change is compared with the known
    fix's lines, so a person reads the ones that differ.
 
+A case with ``expect: refused`` tests a guard rail instead: the factory
+should refuse it (a vague issue, a new command, a fix under ``deps/``, a
+bug already fixed on the working commit). Such a case may have no
+``fix_pull``; it is then pinned at the issue's open time and worked on its
+``base_ref``. The score says whether the verdict matched the expectation.
+
 Step 1 of the rollout runs this over the recent issues before anything is
 written to Valkey.
 """
@@ -25,7 +31,7 @@ import logging
 import os
 import subprocess
 import tempfile
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -65,6 +71,7 @@ _COMMITTER_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 # A fix is the known fix when at least this share of the lines it adds are the known fix's.
 _MATCH_SHARE = 50
 _RUN_TIMEOUT_S = 30 * 60
+_EXPECTATIONS = ("fix", "refused")
 
 
 @dataclass(frozen=True)
@@ -73,7 +80,9 @@ class Case:
     about: str
     repo: str
     issue: int
-    fix_pull: int
+    fix_pull: int = 0  # 0 when no fix is known: a case the factory should refuse.
+    expect: str = "fix"  # What the factory should do with it: fix, or refused.
+    base_ref: str = ""  # The commit to work on, when not the one the fix merged onto.
 
 
 @dataclass(frozen=True)
@@ -90,6 +99,9 @@ class Score:
     shared_percent: int = 0
     shared_files: tuple[str, ...] = ()
     known_fix_files: tuple[str, ...] = ()
+    # What the case expected of the factory, and whether the verdict is that.
+    expected: str = "fix"
+    matches_expectation: bool = False
 
 
 def load_cases(path: Path = CASES_FILE) -> dict[str, Case]:
@@ -99,35 +111,51 @@ def load_cases(path: Path = CASES_FILE) -> dict[str, Case]:
         case = Case(
             id=str(item.get("id") or ""), about=str(item.get("about") or ""), repo=str(item.get("repo") or ""),
             issue=int(item.get("issue") or 0), fix_pull=int(item.get("fix_pull") or 0),
+            expect=str(item.get("expect") or "fix"), base_ref=str(item.get("base_ref") or ""),
         )
-        if not (case.id and case.repo and case.issue > 0 and case.fix_pull > 0) or case.id in cases:
-            raise ValueError(f"replay case {case.id!r}: it needs a unique id, repo, issue and fix_pull")
+        if case.expect not in _EXPECTATIONS:
+            raise ValueError(f"replay case {case.id!r}: expect is one of {', '.join(_EXPECTATIONS)}")
+        if case.base_ref and not is_full_sha(case.base_ref):
+            raise ValueError(f"replay case {case.id!r}: base_ref is a full commit sha")
+        pinned = case.fix_pull > 0 or (case.expect == "refused" and bool(case.base_ref))
+        if not (case.id and case.repo and case.issue > 0 and pinned) or case.id in cases:
+            raise ValueError(
+                f"replay case {case.id!r}: it needs a unique id, repo, issue and fix_pull"
+                " (a case expected to be refused may give base_ref instead of fix_pull)"
+            )
         cases[case.id] = case
     return cases
 
 
 def plan_case(gh: Any, case: Case) -> tuple[FixPlan, str]:
-    """The plan a labelled issue would have got as of the fix's pull request, and that fix's merge commit."""
+    """The plan a labelled issue would have got as of the fix's pull request, and that fix's merge commit.
+
+    A case without a fix is pinned as of the issue's open time, on its ``base_ref``; the merge commit is "".
+    """
     repo = retry_github_call(lambda: gh.get_repo(case.repo), retries=2, description=f"get {case.repo}")
     issue = retry_github_call(lambda: repo.get_issue(case.issue), retries=2, description=f"get issue #{case.issue}")
-    pull = retry_github_call(lambda: repo.get_pull(case.fix_pull), retries=2, description=f"get PR #{case.fix_pull}")
-    opened = pull.created_at
-    merge_sha = str(getattr(pull, "merge_commit_sha", "") or "")
-    if not getattr(pull, "merged_at", None) or not is_full_sha(merge_sha):
-        raise ValueError(f"PR #{case.fix_pull} is not merged, so its fix is not known")
-    merged = retry_github_call(lambda: repo.get_commit(merge_sha), retries=2, description=f"get {merge_sha[:12]}")
-    parents = list(getattr(merged, "parents", None) or [])
-    if not parents:
-        raise ValueError(f"{merge_sha[:12]} has no parent")
-    base_sha = str(parents[0].sha)
+    if case.fix_pull:
+        pull = retry_github_call(lambda: repo.get_pull(case.fix_pull), retries=2, description=f"get PR #{case.fix_pull}")
+        opened = pull.created_at
+        merge_sha = str(getattr(pull, "merge_commit_sha", "") or "")
+        if not getattr(pull, "merged_at", None) or not is_full_sha(merge_sha):
+            raise ValueError(f"PR #{case.fix_pull} is not merged, so its fix is not known")
+        merged = retry_github_call(lambda: repo.get_commit(merge_sha), retries=2, description=f"get {merge_sha[:12]}")
+        parents = list(getattr(merged, "parents", None) or [])
+        if not parents:
+            raise ValueError(f"{merge_sha[:12]} has no parent")
+        base_sha, base_branch, event_id = case.base_ref or str(parents[0].sha), str(pull.base.ref), case.fix_pull
+    else:
+        opened, merge_sha = issue.created_at, ""
+        base_sha, base_branch, event_id = case.base_ref, str(repo.default_branch), case.issue
     brief = read_brief(
-        issue, event_id=case.fix_pull, labeller="replay", labelled_at=opened,
+        issue, event_id=event_id, labeller="replay", labelled_at=opened,
         committer=lambda comment: str(getattr(comment, "author_association", "") or "") in _COMMITTER_ASSOCIATIONS,
     )
     task = FixTask(
         failure=Failure(
             repo_full_name=case.repo, run_id=0, head_sha=base_sha, job_id=0, job_name="",
-            base_branch=str(pull.base.ref), description=f"Issue #{brief.number}: {brief.title[:300]}",
+            base_branch=base_branch, description=f"Issue #{brief.number}: {brief.title[:300]}",
             issue_number=brief.number,
         ),
         target=FixTarget(
@@ -142,13 +170,24 @@ def plan_case(gh: Any, case: Case) -> tuple[FixPlan, str]:
 
 
 def score(case: Case, plan: FixPlan, merge_sha: str, outcome: FixOutcome, *, run_known_fix: bool = True) -> Score:
-    """Compare what the fix job prepared with the known fix."""
+    """Compare what the fix job prepared with the known fix, and with what the case expected."""
+    result = _verdict(case, plan, merge_sha, outcome, run_known_fix=run_known_fix)
+    matched = result.verdict != "failed" and (result.verdict == "refused") == (case.expect == "refused")
+    return replace(result, expected=case.expect, matches_expectation=matched)
+
+
+def _verdict(case: Case, plan: FixPlan, merge_sha: str, outcome: FixOutcome, *, run_known_fix: bool) -> Score:
     candidate = outcome.candidate
     if candidate is None:
         return Score(case.id, "failed", outcome.error or "the fix job wrote no result")
     if candidate.action is CandidateAction.REFUSE:
         return Score(
             case.id, "refused", candidate.summary, test_written=bool(candidate.evidence_patch),
+        )
+    if not merge_sha:
+        return Score(
+            case.id, "differs", "The bot prepared a fix for an issue with no known fix to compare it with.",
+            test_written=bool(candidate.evidence_patch),
         )
     known = _known_fix(plan, merge_sha)
     # A port has no patch of its own: the commit it ports is the bot's change.
@@ -274,8 +313,9 @@ def main(argv: list[str] | None = None) -> int:
         plan, merge_sha = plan_case(gh, case)
         save(args.out / PLAN_FILE, plan)
         (args.out / "known-fix.txt").write_text(merge_sha + "\n", encoding="utf-8")
-        print(json.dumps({"case": case.id, "issue": case.issue, "working_commit": plan.task.target.expected_sha,
-                          "known_fix": merge_sha}, indent=2))
+        print(json.dumps({"case": case.id, "issue": case.issue, "expect": case.expect,
+                          "pinned_at": plan.brief.labelled_at if plan.brief else "",
+                          "working_commit": plan.task.target.expected_sha, "known_fix": merge_sha}, indent=2))
         return 0
     plan = load(args.plan / PLAN_FILE, FixPlan)
     merge_sha = (args.plan / "known-fix.txt").read_text(encoding="utf-8").strip()
@@ -290,7 +330,10 @@ def main(argv: list[str] | None = None) -> int:
     summary = os.environ.get("GITHUB_STEP_SUMMARY", "")
     if summary:
         with open(summary, "a", encoding="utf-8") as handle:
-            handle.write(f"### Replay {case.id}: **{result.verdict}**\n\n{result.detail}\n\n")
+            handle.write(
+                f"### Replay {case.id}: **{result.verdict}** (expected {result.expected}, "
+                f"{'as expected' if result.matches_expectation else 'not as expected'})\n\n{result.detail}\n\n"
+            )
     return 0
 
 

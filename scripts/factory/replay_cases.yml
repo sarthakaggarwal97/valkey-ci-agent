@@ -7,6 +7,11 @@
 # merged onto, so the fix that landed is not there to find. The score then
 # applies the bot's test to the known fix: a test that fails without it and
 # passes with it caught the bug the person fixed.
+#
+# A case with `expect: refused` tests a guard rail: the factory should refuse
+# it. Such a case may have no fix_pull; it is then pinned at the issue's open
+# time and prepared on its base_ref. base_ref also overrides the commit a case
+# with a fix_pull is prepared on.
 cases:
   - id: xinfo-groups-lag
     about: XINFO GROUPS reports too-high lag after XTRIM removes unread entries.
@@ -49,3 +54,69 @@ cases:
     repo: valkey-io/valkey
     issue: 4950
     fix_pull: 4954  # src/ordered_index.c and tests/unit/type/zset.tcl, +208/-0
+
+  # Features: a small addition to an existing command or tool, asked for in an issue.
+  - id: cli-user-env
+    about: A feature request. valkey-cli should read the user name from VALKEYCLI_USER, as it reads the password from VALKEYCLI_AUTH.
+    repo: valkey-io/valkey
+    issue: 4125
+    fix_pull: 4126  # src/valkey-cli.c and tests/integration/valkey-cli.tcl, +23/-0
+
+  - id: exec-in-commandlog
+    about: A feature request. EXEC should appear in the commandlog, so a slow transaction of fast commands is seen.
+    repo: valkey-io/valkey
+    issue: 4261
+    fix_pull: 4267  # src/commands/exec.json (SKIP_COMMANDLOG removed), commands.def, tests/unit/commandlog.tcl and slowlog.tcl, +56/-7
+
+  # Cluster: the fix adds tests/unit/cluster/failover-nack.tcl.
+  - id: failover-nack-fast-fail
+    about: The failover fast-fail bound subtracts a NACK voter twice once it is marked FAIL, resetting elections that could still succeed.
+    repo: valkey-io/valkey
+    issue: 4626
+    fix_pull: 4655  # src/cluster_legacy.c and tests/unit/cluster/failover-nack.tcl, +455/-111
+
+  # Module API: the test runs through runtest-moduleapi (tests/unit/moduleapi/getkeys.tcl).
+  - id: module-getkeys-leak
+    about: ValkeyModule_GetCommandKeysWithFlags leaks the key-position buffer for large key lists.
+    repo: valkey-io/valkey
+    issue: 5042
+    fix_pull: 5046  # src/module.c and tests/unit/moduleapi/getkeys.tcl, +12/-0
+
+  # Persistence: an RDB written by one build is misread by the next. No closed
+  # issue has a fix in src/rdb.c's save and load paths with a test; this one is
+  # in the listpack encoder those paths use.
+  - id: listpack-backlen-cross-version
+    about: A listpack entry of exactly 16383, 2097151 or 268435455 bytes is written with a narrower backlen than older builds read, so an RDB or replication stream from an older build is misparsed.
+    repo: valkey-io/valkey
+    issue: 4818
+    fix_pull: 4819  # src/listpack.c, src/unit/test_listpack.cpp and tests/integration/cross-version-replication.tcl, +261/-21
+
+  # Guard rails: the factory should refuse these.
+  - id: vague-memory-fragmentation
+    about: A vague report. High used_memory_rss on one production cluster, with no way to reproduce it; the factory should refuse for want of a testable behaviour.
+    repo: valkey-io/valkey
+    issue: 3517
+    expect: refused
+    base_ref: b2e0f6322d288bfdb5076e01791402fe790f0892  # unstable when the issue was opened, 2026-04-16
+
+  - id: acl-digest-new-command
+    about: Asks for a new command (ACL DIGEST), which is a decision for the project; the factory should refuse.
+    repo: valkey-io/valkey
+    issue: 4355
+    expect: refused
+    base_ref: 2dfee30cf542115ab22411afc0533119c94902e9  # unstable when the issue was opened, 2026-08-06
+
+  - id: deps-module-static-linking
+    about: valkey-cli and valkey-benchmark link RDMA and TLS statically when built as modules; the fix landed in deps/ build files, where the factory does not change code.
+    repo: valkey-io/valkey
+    issue: 3070
+    expect: refused
+    fix_pull: 3072  # deps/CMakeLists.txt, deps/Makefile and src/Makefile, +7/-1, no test
+
+  - id: zset-bare-paren-already-fixed
+    about: The zset-bare-paren case on the commit its fix merged as, so the bug is already fixed; the factory should refuse.
+    repo: valkey-io/valkey
+    issue: 3483
+    fix_pull: 4054
+    expect: refused
+    base_ref: e401d52d7261cbde9cb47a0836d64b27364e062b  # the merge commit of #4054

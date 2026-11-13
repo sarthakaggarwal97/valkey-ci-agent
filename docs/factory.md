@@ -151,6 +151,14 @@ gh workflow run factory-replay.yml --repo valkey-io/valkey-ci-agent --field case
 
 The score is the run's `factory-replay-score` artifact and its summary.
 
+A case with `expect: refused` tests a guard rail instead: an issue the
+factory should refuse (a vague report, a request for a new command, a fix
+that belongs under `deps/`, a bug already fixed on the commit it works on).
+Such a case may have no `fix_pull`; it is then pinned at the issue's open
+time and prepared on its `base_ref`, which also overrides the commit a case
+with a `fix_pull` is prepared on. The score's `matches_expectation` says
+whether the factory did what the case expected.
+
 ## Running it by hand
 
 To fix one labelled issue now:
