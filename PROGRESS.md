@@ -1,6 +1,6 @@
 # Fuzzer walk
 
-Updated 2026-11-13T09:06+00:00.
+Updated 2026-11-13T09:07+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
@@ -48,9 +48,8 @@ Updated 2026-11-13T09:06+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-13T09:06:52+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43381076303): 1 merge(s) tested, 0 without a code change.
+[2026-11-13T09:07:49+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43398614267): 0 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search#1579](https://github.com/valkey-io/valkey-search/pull/1579) ([tests](tests/valkey-search/1579-743fdab3d/)): [BUG fix] Fix SORTBY on an aliased attribute for FT.SEARCH (#1579): 3 of 3 test(s) reached the change
 
 ## Totals
 
