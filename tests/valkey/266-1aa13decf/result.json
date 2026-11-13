@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1aa13decf6ed15b803e63a5730f7f9dc84329022",
+  "parent": "d89ef06ce5c377e5bcba5703ac138ccdfffb89e4",
+  "pr": 266,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove single node cluster validation check from benchmark (#266)",
+  "date": "2024-04-08",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.8771,
+  "findings": [],
+  "recorded": []
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "df5db0627f3976d2c5fb71358cb6655b4581b614",
+  "parent": "1aa13decf6ed15b803e63a5730f7f9dc84329022",
+  "pr": 223,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove trademarked language in code comments (#223)",
+  "date": "2024-04-09",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3157,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewords code comments (and comment lines in deps/Makefile) to remove trademarked 'Redis' language. A scan of the full diff shows every added/removed line is a comment: no code, string literal, config, or build rule changes, so there is no behaviour to test and a compared run of the two builds could never show a difference."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4a8b4f422963db0df984b17dae81e32bf5cd2c5c",
+  "parent": "03650e91b7c72b4d0981e2b96ebf2ddf1514a21e",
+  "pr": 259,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename redis.info to valkey.info in LCOV (#259)",
+  "date": "2024-04-10",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.211,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the LCOV coverage output file from redis.info to valkey.info in the src/Makefile lcov target and updates src/.gitignore to match. It is a build/CI-only change: no server code, command behaviour, replies, replication, persistence or tooling is affected, so no runtime scenario can reach it and none is needed."
+}

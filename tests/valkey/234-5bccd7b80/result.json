@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5bccd7b8003c6d3eb4c429bb91e6a5ca4b1a654e",
+  "parent": "750e94cad342f3a8b58ed9660891059ec928f159",
+  "pr": 234,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename systemd files and content to valkey from redis (#234)",
+  "date": "2024-04-08",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2392,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames example systemd service unit files in utils/ (systemd-redis_server.service to systemd-valkey_server.service and the multiple-servers template) and rewords their comments, descriptions, and example paths from redis to valkey. These are packaging/documentation artifacts that are never compiled into or read by valkey-server, the tools, or any test path; no command, reply, replication, persistence, or config behaviour changes, so no scenario can reach it."
+}

@@ -1,0 +1,30 @@
+extends: [valkey.liveness]
+id: proposed.cli-cluster-fix-unhandled-slot
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli --cluster fix meets an open-slot state it cannot fix and
+    prints the renamed "Sorry, valkey-cli can't fix this slot yet" error (unhandled_case
+    in clusterManagerFixOpenSlot)
+components:
+- use: valkey.action.tools
+  id: fix-unhandled
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 60
+    ignore: ['^\d+:[A-Z] .*\n']
+    files:
+      nodes.conf: |
+        aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 127.0.0.1:0@0 myself,master - 0 0 1 connected
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, DELSLOTS, 0], expect: {exit: {
+          equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, SETSLOT, 0, IMPORTING, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa],
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [--cluster, fix, "127.0.0.1:$port"], expect_difference: true,
+      expect: {exit: {equals: 1}, stdout: {contains: "Sorry, valkey-cli can't fix\
+            \ this slot yet"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: fix-unhandled}

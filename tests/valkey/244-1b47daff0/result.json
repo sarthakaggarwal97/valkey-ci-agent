@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1b47daff095840c5c9f8b308148ce3143a2110fb",
+  "parent": "9f03dfc1f637aef983118ada00ca3cd5c9829402",
+  "pr": 244,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix: Typo clock_getting -> clock_gettime (#244)",
+  "date": "2024-04-07",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2062,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only a comment in src/monotonic.c, correcting the typo 'clock_getting' to 'clock_gettime'. No executable code, reply, config, or behaviour changes, so no scenario can exercise it and none is needed."
+}

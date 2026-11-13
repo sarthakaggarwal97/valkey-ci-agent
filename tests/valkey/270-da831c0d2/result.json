@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "da831c0d2242251be84a5d7f14f954c6c7fa8ee8",
+  "parent": "c0cef48e98574acd9840abf1c44c963eb56861ce",
+  "pr": 270,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "rename procedure redis_deferring_client to valkey_deferring_client (#270)",
+  "date": "2024-04-09",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7577,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the Tcl test helper proc redis_deferring_client to valkey_deferring_client throughout the project's own test suite (tests/*.tcl) and updates a comment in src/logreqres.c that referenced the old proc name. No server code path, command reply, replication, persistence or tool behaviour changes, so there is nothing for a scenario to reach: the two builds are behaviourally identical."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6411629c617e3e8800fb083938bd9883a3a9db33",
+  "parent": "d26d596b3e44f344fe4ea0da9e5154c15d6632dc",
+  "pr": 251,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Madelyn's attempt as a logo (#251)",
+  "date": "2024-04-07",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2379,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only swaps the ASCII art logo string in src/asciilogo.h, printed to the log at startup. The printf-style format specifiers (%s (%s/%d) %s bit, %s mode, Port: %d, PID: %ld) are unchanged in kind and order, so the banner rendering code remains correct. No command behaviour, replies, replication, persistence, or any other runtime path changes; nothing a fuzzer scenario could exercise."
+}

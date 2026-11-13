@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "717ec1e1440d94ef1ebe064addaffc4970d88c29",
+  "parent": "ba0c93cbdf81ba588b43e4af85127a342770ad6d",
+  "pr": 243,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename ValkeyModule_DefragModuleString to ValkeyModule_DefragValkeyModuleString (#243)",
+  "date": "2024-04-06",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.8664,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a cosmetic rename of a module-API symbol (ValkeyModule_DefragModuleString -> ValkeyModule_DefragValkeyModuleString) in module.c, redismodule.h and valkeymodule.h, with no change to the function body or behavior. The registered API name only has to agree between a module and the server built from the same commit, and the fuzzer only ever pairs matched module+server builds, so the renamed path behaves identically on the change and its parent. No compared sequence or fault run could observe a difference, so no scenario is warranted."
+}

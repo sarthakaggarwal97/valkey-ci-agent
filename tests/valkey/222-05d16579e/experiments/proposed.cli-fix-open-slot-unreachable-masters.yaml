@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.cli-fix-open-slot-unreachable-masters
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli --cluster fix of an open slot with an unreachable master
+    prints the rebranded warning and exits 1
+components:
+- use: valkey.action.tools
+  id: fix-migrating
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 60
+    runs:
+    - tool: valkey-cli
+      args: [-p, $port, CONFIG, SET, cluster-node-timeout, 120000]
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}
+    - tool: valkey-cli
+      args:
+      - -p
+      - $port
+      - EVAL
+      - "return redis.call('cluster','setslot','7','migrating',redis.call('cluster','myid'))"
+      - 0
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}
+    - tool: valkey-cli
+      args: [-p, $port, CLUSTER, MEET, 127.0.0.1, 1, 1]
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}
+    - tool: valkey-cli
+      args: [--cluster, fix, "127.0.0.1:$port"]
+      expect_difference: true
+      expect:
+        exit: {equals: 1}
+        stdout: {contains: "Fixing open slots with 1 unreachable masters is dangerous:\
+            \ valkey-cli will assume"}
+- use: valkey.action.tools
+  id: fix-importing
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 60
+    runs:
+    - tool: valkey-cli
+      args: [-p, $port, CONFIG, SET, cluster-node-timeout, 120000]
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}
+    - tool: valkey-cli
+      args: [-p, $port, CLUSTER, DELSLOTS, 7]
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}
+    - tool: valkey-cli
+      args:
+      - -p
+      - $port
+      - EVAL
+      - "return redis.call('cluster','setslot','7','importing',redis.call('cluster','myid'))"
+      - 0
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}
+    - tool: valkey-cli
+      args: [-p, $port, CLUSTER, MEET, 127.0.0.1, 1, 1]
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}
+    - tool: valkey-cli
+      args: [--cluster, fix, "127.0.0.1:$port"]
+      expect_difference: true
+      expect:
+        exit: {equals: 1}
+        stdout: {contains: "Fixing open slots with 1 unreachable masters is dangerous:\
+            \ valkey-cli will assume"}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: fix-migrating}
+- {evidence_id: valkey.tool.runs, source: fix-importing}

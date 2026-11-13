@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d26d596b3e44f344fe4ea0da9e5154c15d6632dc",
+  "parent": "1b47daff095840c5c9f8b308148ce3143a2110fb",
+  "pr": 252,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Log branding (#252)",
+  "date": "2024-04-07",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2554,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is pure log-message branding: three serverLog format strings in server.c change the word 'Redis' to 'Valkey' in the startup banner, the shutdown 'ready to exit' message, and the no-config-file warning. No command, reply, config, replication, persistence or control-flow behaviour changes, so no fuzzer oracle or compared sequence could observe it; it needs no scenario."
+}

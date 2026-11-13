@@ -1,0 +1,28 @@
+extends: [valkey.liveness]
+id: proposed.cli-uri-repl-rebrand
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    valkey-cli -u URI parsing (parseRedisUri now gets tool name valkey-cli) and the
+    interactive REPL over a unix socket, whose prompt is built from hostsocket and
+    whose unknown ':command' print is rebranded, compared across builds.
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 30
+    runs:
+    - {tool: valkey-cli, args: [-u, "redis://127.0.0.1:$port/0", PING], expect: {
+        exit: {equals: 0}, stdout: {contains: PONG}}}
+    - {tool: valkey-cli, args: [-u, "redis://127.0.0.1:99999", PING], expect: {exit: {
+          equals: 1}, stderr: {contains: Invalid server port}}}
+    - {tool: valkey-cli, args: [-u, "rediss://127.0.0.1:$port", PING], compare: skip,
+      expect: {exit: {equals: 1}}}
+    - {tool: valkey-cli, args: [-s, $socket], stdin: ":bogus\n:set nohints\n:set badpref\n\
+        PING\nquit\n", expect_difference: true, expect: {exit: {equals: 0}, stdout: {
+          contains: "unknown valkey-cli internal command ':bogus'"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

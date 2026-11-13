@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "750e94cad342f3a8b58ed9660891059ec928f159",
+  "parent": "ebfb44062982d29fc031e20c916be68c127f5ddc",
+  "pr": 263,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update crash wording to include our repo (#263)",
+  "date": "2024-04-08",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2124,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits static log-message strings in bugReportEnd (the crash bug-report footer), swapping Redis wording and URLs for Valkey ones. No command behaviour, reply, replication, persistence or control-flow path changes, so there is nothing an experiment's oracles or a compared sequence could observe short of deliberately crashing the server to read log text, which the fuzzer's oracles treat as a failure. No scenario is needed."
+}

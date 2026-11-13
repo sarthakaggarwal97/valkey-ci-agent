@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f8cec23a9bb1f2dd68c761f1598c4bfff99c632d",
+  "parent": "a054862b72eb1761ba8102f34a60807163beffaa",
+  "pr": 281,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Delete old deprecated cli program redis-trib (#281)",
+  "date": "2024-04-10",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2971,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only deletes src/redis-trib.rb, a deprecated standalone Ruby stub script that merely printed a deprecation notice pointing to redis-cli --cluster and exited 1, plus a comment-only edit in a Tcl test helper. No server code, no shipped binary (valkey-server, valkey-cli, valkey-benchmark, valkey-check-rdb/aof) and no runtime or protocol behaviour changes, so there is nothing a fuzzer scenario could exercise."
+}

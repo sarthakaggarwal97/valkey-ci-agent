@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4a8b4f422963..05d16579e612.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-65dcd7663f52
+seed: 6490
+experiment:
+  id: proposed.cli-cluster-fix-unhandled-slot
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

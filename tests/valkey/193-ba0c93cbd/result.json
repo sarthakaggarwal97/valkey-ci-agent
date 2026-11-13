@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ba0c93cbdf81ba588b43e4af85127a342770ad6d",
+  "parent": "620d325fdc59f4d579fb87e56c2008124abdeb87",
+  "pr": 193,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add redis symlinks at the same place as the installed binaries (#193)",
+  "date": "2024-04-06",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6979,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is make install/uninstall machinery (redis-* compatibility symlinks) plus an argv[0] dispatch in main() that runs redis_check_rdb_main/redis_check_aof_main only when the binary is invoked under a redis-* name. Those names exist only as symlinks created by `make install`, which the fuzzer never runs: it executes servers and tools from the build tree under their valkey-* names, valkey.action.tools restricts `tool` to the four valkey-* names and uses the bare name as argv[0], and `files` writes plain files, not symlinks. Under valkey-* names the behaviour is unchanged (the pre-existing"
+}

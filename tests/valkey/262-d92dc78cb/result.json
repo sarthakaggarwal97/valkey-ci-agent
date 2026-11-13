@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d92dc78cb8116d9afa816a978094d98879f69065",
+  "parent": "6411629c617e3e8800fb083938bd9883a3a9db33",
+  "pr": 262,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update ValkeyModuleEvent_MasterLinkChange to ValkeyModuleEvent_PrimaryLinkChange (#262)",
+  "date": "2024-04-08",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3291,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the header symbol ValkeyModuleEvent_MasterLinkChange to ValkeyModuleEvent_PrimaryLinkChange (plus the matching Redis-compat #define, a doc comment, and the hooks.c test module's use of the name). The event struct is static const in the header with an unchanged value {VALKEYMODULE_EVENT_PRIMARY_LINK_CHANGE=7, 1}, and the server-side firing and dispatch code in module.c and replication.c is untouched, so both builds fire and handle the identical event under identical conditions. It is a compile-time-only rename with no runtime behavior delta; no scenario can observe a dif"
+}

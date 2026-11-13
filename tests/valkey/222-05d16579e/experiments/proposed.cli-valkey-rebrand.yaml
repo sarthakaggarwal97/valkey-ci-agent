@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.cli-valkey-rebrand
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    valkey-cli renamed prints compared against the parent build: usage text, generic
+    help banner, connect-error messages, repl preference and repeat messages, and
+    the valkey_version-based since-filtering of legacy help (forced by denying COMMAND
+    DOCS via ACL), where the parent parses redis_version 7.2.4 and hides CLIENT KILL's
+    MAXAGE argument (since 8.0.0) while the change parses valkey_version 255.255.255
+    and shows it.
+components:
+- use: valkey.action.tools
+  id: cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 30
+    runs:
+    - {tool: valkey-cli, args: [--help], expect_difference: true, expect: {exit: {
+          equals: 0}, stdout: {contains: "Transfer raw RESP protocol"}}}
+    - {tool: valkey-cli, args: [-p, $port, help], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "To get help about Valkey commands"}}}
+    - {tool: valkey-cli, args: [-p, $port, ACL, SETUSER, default, "-command|docs"],
+      expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, help, client, kill], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "MAXAGE"}}}
+    - {tool: valkey-cli, args: [-3, -p, $port, help, client, kill], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "MAXAGE"}}}
+    - {tool: valkey-cli, args: [-p, 1, PING], expect_difference: true, expect: {exit: {
+          equals: 1}, stderr: {contains: "Could not connect to Valkey at"}}}
+    - {tool: valkey-cli, args: [--cluster, info, "127.0.0.1:1"], expect_difference: true,
+      expect: {stderr: {contains: "Could not connect to Valkey at"}}}
+    - {tool: valkey-cli, args: [-p, $port], stdin: ":set bogus\n", expect_difference: true,
+      expect: {stdout: {contains: "unknown valkey-cli preference 'bogus'"}}}
+    - {tool: valkey-cli, args: [-p, $port], stdin: "0 ping\n", expect_difference: true,
+      expect: {stdout: {contains: "Invalid valkey-cli repeat command option value."}}}
+required_events: [cli.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli}

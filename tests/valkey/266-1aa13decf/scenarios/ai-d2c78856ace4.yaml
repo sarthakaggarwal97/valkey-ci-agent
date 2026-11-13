@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d89ef06ce5c3..1aa13decf6ed.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d2c78856ace4
+seed: 1102
+experiment:
+  id: proposed.benchmark-single-node-cluster
+  inputs:
+    tests: set,get,incr,lpush,rpush,lpop,rpop,sadd,hset,zadd
+    requests: 20000
+    clients: 16
+    pipeline: 16
+    keyspace: 10000
+    threads: 4
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

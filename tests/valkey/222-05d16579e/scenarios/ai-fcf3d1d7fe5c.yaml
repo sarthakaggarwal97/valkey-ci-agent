@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4a8b4f422963..05d16579e612.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fcf3d1d7fe5c
+seed: 42001
+experiment:
+  id: proposed.cli-cluster-manager-rebrand
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

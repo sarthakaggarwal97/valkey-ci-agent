@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "03650e91b7c72b4d0981e2b96ebf2ddf1514a21e",
+  "parent": "da831c0d2242251be84a5d7f14f954c6c7fa8ee8",
+  "pr": 275,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Revert the default PID file back to the real default (#275)",
+  "date": "2024-04-09",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2179,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only a comment in valkey.conf, correcting the documented default PID file path from /var/run/valkey.pid back to /var/run/redis.pid. No C source, config default, or runtime behaviour changes; the server's actual pidfile handling in src/config.c and src/server.c is untouched, so the two builds are behaviourally identical and no scenario can exercise a difference."
+}

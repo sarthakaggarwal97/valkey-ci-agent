@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.cli-cluster-manager-rebrand
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Rebranded cluster-manager prints compared across builds: the backup RDB filename
+    (valkey-node-...), the import source connect error (Could not connect to Valkey),
+    and the fix-with-unreachable-masters warning (valkey-cli will assume), driven
+    on a one-node private cluster with an uncovered slot and an unreachable handshake
+    master.
+components:
+- use: valkey.action.tools
+  id: cluster-mgr
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 60
+    runs:
+    - {tool: valkey-cli, args: [--cluster, backup, "127.0.0.1:$port", .], expect_difference: true,
+      expect: {exit: {equals: 0}, stderr: {contains: valkey-node-}}}
+    - {tool: valkey-cli, args: [--cluster, import, "127.0.0.1:$port", --cluster-from,
+        "127.0.0.1:1"], expect_difference: true, expect: {stderr: {contains: "Could\
+            \ not connect to Valkey at 127.0.0.1:1"}}}
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, DELSLOTS, 0], expect: {stdout: {
+          contains: OK}}}
+    - {tool: valkey-cli, args: [-p, $port, CLUSTER, MEET, 127.0.0.1, 1], expect: {
+        stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [--cluster, fix, "127.0.0.1:$port"], expect_difference: true,
+      expect: {exit: {equals: 1}, stdout: {contains: "valkey-cli will assume"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cluster-mgr}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b669af0eabe602850fc02f0cdc452ce071f9adda",
+  "parent": "2e460466257c088d5d7f56b58ed7158d38a9ffb2",
+  "pr": 268,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename 'redis_tls_ctx' and 'redis_tls_client_ctx' global variables (#268)",
+  "date": "2024-04-10",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2437,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the internal global variables redis_tls_ctx/redis_tls_client_ctx to valkey_tls_ctx/valkey_tls_client_ctx in src/tls.c and src/sentinel.c. Control flow, TLS configuration, cleanup and connection creation are unchanged; the symbols are not externally visible behaviour (not a config name, command, reply or file format), so any error would be a compile/link failure caught at build time. A pure refactor with no observable behaviour change needs no scenario."
+}

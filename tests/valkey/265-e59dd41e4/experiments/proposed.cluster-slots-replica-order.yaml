@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.cluster-slots-replica-order
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CLUSTER SLOTS lists a primary's replicas sorted by node name on the fixed build;
+    the parent lists them in attachment order. Replicas attach one at a time, each
+    attachment confirmed in the primary's own CLUSTER SLOTS view before the next,
+    so the parent's array order is the attachment order and the final reply differs
+    between the builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: slots-order
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 6
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, SLOTS], node: 0, wait_s: 60, expect: {contains: "<node.1.id>"},
+      compare: skip}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 2, expect: {equals: OK}}
+    - {command: [CLUSTER, SLOTS], node: 0, wait_s: 60, expect: {contains: "<node.2.id>"},
+      compare: skip}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 3, expect: {equals: OK}}
+    - {command: [CLUSTER, SLOTS], node: 0, wait_s: 60, expect: {contains: "<node.3.id>"},
+      compare: skip}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 4, expect: {equals: OK}}
+    - {command: [CLUSTER, SLOTS], node: 0, wait_s: 60, expect: {contains: "<node.4.id>"},
+      compare: skip}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 5, expect: {equals: OK}}
+    - {command: [CLUSTER, SLOTS], node: 0, wait_s: 60, expect: {contains: "<node.5.id>"},
+      compare: skip}
+    - {command: [CLUSTER, SLOTS], node: 0, expect_difference: true, expect: {contains: "<node.1.id>"}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slots-order.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slots-order}

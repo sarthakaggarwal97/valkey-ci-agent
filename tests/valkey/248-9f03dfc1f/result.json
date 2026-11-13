@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9f03dfc1f637aef983118ada00ca3cd5c9829402",
+  "parent": "717ec1e1440d94ef1ebe064addaffc4970d88c29",
+  "pr": 248,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix two typos that were flagged in the 7.2 build (#248)",
+  "date": "2024-04-07",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2187,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only comments: a typo in a Makefile comment ('unstall' -> 'uninstall') and a typo in a C comment in src/eval.c ('everytime' -> 'every time'). No executable code, build rule, config, or protocol behavior changes, so no command reply, replication, persistence or tool path can differ between the builds; there is nothing to test."
+}

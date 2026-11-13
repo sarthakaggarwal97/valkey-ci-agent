@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2e460466257c088d5d7f56b58ed7158d38a9ffb2",
+  "parent": "f8cec23a9bb1f2dd68c761f1598c4bfff99c632d",
+  "pr": 284,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename macros in valkey-cli.c and redis_strlcpy to valkey (#284)",
+  "date": "2024-04-10",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4095,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure identifier rename: redis_strlcpy becomes valkey_strlcpy in its definition, declaration and every call site, and valkey-cli.c's REDIS_CLI_* macros become CLI_* while keeping the same values \u2014 the environment variable names (REDISCLI_AUTH, REDISCLI_HISTFILE, REDISCLI_RCFILE, REDISCLI_CLUSTER_YES) and the keepalive/pipe-timeout constants are byte-for-byte unchanged, and the fmacros.h hunk only edits a deprecation-warning string. No runtime behavior, reply, file format, protocol or tool output changes; a missed rename would fail compilation, which the build under test already "
+}

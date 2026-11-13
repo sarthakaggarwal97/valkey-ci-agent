@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.benchmark-single-node-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark --cluster runs against a one-node cluster on the change
+    and is rejected by the parent
+inputs:
+  properties:
+    tests: {type: string, default: "set,get"}
+    requests: {type: integer, default: 1000}
+    clients: {type: integer, default: 4}
+    pipeline: {type: integer, default: 1}
+    keyspace: {type: integer, default: 1}
+    threads: {type: integer, default: 1}
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    cluster: true
+    timeout_s: 180
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, --cluster, -t, {$ref: inputs.tests},
+        -n, {$ref: inputs.requests}, -c, {$ref: inputs.clients}, -P, {$ref: inputs.pipeline},
+        -r, {$ref: inputs.keyspace}, --threads, {$ref: inputs.threads}, -q], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {contains: "Cluster has 1 master nodes"}}}
+    - {tool: valkey-cli, args: [-p, $port, DBSIZE], expect_difference: true, expect: {
+        exit: {equals: 0}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}
