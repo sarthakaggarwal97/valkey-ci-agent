@@ -410,13 +410,19 @@ def _establish(
                 )
                 for branch, compared_with in (
                     (task.target.branch, ""),
-                    (task.target.fix_branch, task.target.branch.removesuffix(f"/{task.failure.base_branch}")),
+                    (
+                        task.target.pending_fix_branch,
+                        task.target.branch.removesuffix(f"/{task.failure.base_branch}"),
+                    ),
                 )
                 if branch
             )
             if upstream_first and task.policy is FixPolicy.BACKPORT else ""
         ),
-        pending_fixes=pending_fixes(repo_dir, task.target.fix_branch) if task.target.fix_branch else "",
+        pending_fixes=(
+            pending_fixes(repo_dir, task.target.pending_fix_branch)
+            if task.target.pending_fix_branch else ""
+        ),
         verification=described,
         verified_by_code=plan is not None,
         upstream_first=upstream_first,

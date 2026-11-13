@@ -99,6 +99,9 @@ class FollowupTarget:
     head_sha: str
     head_branch: str
     job: FailedJob
+    # The open CI-sweep PR's branch, when this is a sweep. A closed PR's
+    # leftover branch is not pending context for the next repair.
+    pending_fix_branch: str = ""
     # The failure is the release branch's own, in the scheduled run that
     # tests every release branch, not one of the pull request's CI.
     release_run: bool = False
@@ -221,8 +224,10 @@ def _followup_for_pr(
         bot_login,
         prior_plans=prior_plans,
     )
+    pending_fix_branch = ""
     if is_sweep:
-        handled = replace(handled, fixed_jobs=_ci_sweep_jobs(gh, repo_entry, target_branch))
+        fixed_jobs, pending_fix_branch = _ci_sweep_state(gh, repo_entry, target_branch)
+        handled = replace(handled, fixed_jobs=fixed_jobs)
     if handled.attempt_count >= _MAX_ATTEMPTS_PER_HEAD or handled.unstarted_count >= _MAX_UNSTARTED_PER_HEAD:
         return None, "attempt-budget-exhausted"
 
@@ -259,23 +264,35 @@ def _followup_for_pr(
         return None, "no-unhandled-actionable-failures"
     run, job, _failed = picked
     return FollowupTarget(
-        pr=pr, run=run, head_sha=head_sha, head_branch=head_branch, job=job, release_run=release_run,
+        pr=pr,
+        run=run,
+        head_sha=head_sha,
+        head_branch=head_branch,
+        job=job,
+        pending_fix_branch=pending_fix_branch,
+        release_run=release_run,
     ), "actionable"
 
 
-def _ci_sweep_jobs(gh: Any, repo_entry: RepoEntry, target_branch: str) -> frozenset[str]:
-    """The jobs with a fix in the open CI-sweep PR, by its commits' trailers.
+def _ci_sweep_state(
+    gh: Any, repo_entry: RepoEntry, target_branch: str,
+) -> tuple[frozenset[str], str]:
+    """The jobs and branch of the open CI-sweep PR.
 
     A fix the sweep's rebase dropped is no longer there, and its job is fixed
-    again if it still fails.
+    again if it still fails. A closed PR can leave its branch behind until the
+    next fix is published; that branch is not pending repair context.
     """
     branch = ci_sweep.ci_sweep_branch(target_branch)
     pull = find_existing_pr(gh, repo_entry.repo, repo_entry.effective_push_repo, branch)
     if pull is None:
-        return frozenset()
-    return frozenset(fix.job for fix in retry_github_call(
-        lambda: ci_sweep.pr_fixes(pull), retries=2, description=f"list the fixes on #{pull.number}",
+        return frozenset(), ""
+    jobs = frozenset(fix.job for fix in retry_github_call(
+        lambda: ci_sweep.pr_fixes(pull),
+        retries=2,
+        description=f"list the fixes on #{pull.number}",
     ))
+    return jobs, branch
 
 
 def release_job_name(job_name: str, branch: str) -> str:
@@ -391,6 +408,7 @@ def plan_request(
             branch=target.head_branch,
             expected_sha=target.head_sha,
             fix_branch=ci_sweep.fix_branch_for(target.head_branch, target_branch),
+            pending_fix_branch=target.pending_fix_branch,
         ),
         # A backport branch's failure is usually a missing upstream change; a
         # pushed CI fix or a draft PR has no upstream counterpart to port.

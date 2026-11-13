@@ -1108,7 +1108,10 @@ def test_a_sweep_fix_is_shown_the_ci_sweep_prs_fixes_and_their_siblings(tmp_path
     monkeypatch.setattr(engine_mod, "pending_fixes", lambda _repo, branch: f"# `{branch}`\n")
     task = _backport(_task(head_sha))
     task = replace(task, target=replace(
-        task.target, branch="agent/backport/sweep/main", fix_branch="agent/backport/ci-sweep/main",
+        task.target,
+        branch="agent/backport/sweep/main",
+        fix_branch="agent/backport/ci-sweep/main",
+        pending_fix_branch="agent/backport/ci-sweep/main",
     ))
     agent = _adapting_agent("")
 
@@ -1119,6 +1122,35 @@ def test_a_sweep_fix_is_shown_the_ci_sweep_prs_fixes_and_their_siblings(tmp_path
     context = agent.contexts[0]
     assert context.sibling_changes == "# agent/backport/sweep/main\n# agent/backport/ci-sweep/main\n"
     assert context.pending_fixes == "# `agent/backport/ci-sweep/main`\n"
+
+
+def test_a_closed_ci_sweep_branch_is_not_shown_as_pending(tmp_path, monkeypatch):
+    source, head_sha = _source_repo(tmp_path)
+    _upstream_commit(source, head_sha)
+    _install_clone(monkeypatch, source)
+    asked = []
+    monkeypatch.setattr(
+        engine_mod,
+        "sibling_branch_changes",
+        lambda _repo, _paths, **kwargs: asked.append(kwargs["own_branch"]) or "# branch\n",
+    )
+    monkeypatch.setattr(
+        engine_mod,
+        "pending_fixes",
+        lambda *_args: pytest.fail("a closed CI-sweep branch is not pending"),
+    )
+    task = _backport(_task(head_sha))
+    task = replace(task, target=replace(
+        task.target,
+        branch="agent/backport/sweep/main",
+        fix_branch="agent/backport/ci-sweep/main",
+    ))
+    agent = _adapting_agent("")
+
+    engine_mod.prepare_fix(task, _LOG, agent_func=agent)
+
+    assert asked == ["agent/backport/sweep/main"]
+    assert agent.contexts[0].pending_fixes == ""
 
 
 def test_a_backport_branch_takes_a_patch_that_adapts_a_merged_upstream_commit(tmp_path, monkeypatch):

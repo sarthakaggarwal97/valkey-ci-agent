@@ -167,6 +167,10 @@ class FixTarget:
     # ``branch`` collects the sweep's CI fixes for review apart from its
     # backports.
     fix_branch: str = ""
+    # The same branch only while it has an open CI-sweep PR. A closed PR can
+    # leave its remote branch behind until publication prunes it; its rejected
+    # fixes must not be shown to the agent as still pending.
+    pending_fix_branch: str = ""
 
 
 @dataclass(frozen=True)

@@ -844,10 +844,25 @@ def test_a_job_with_a_fix_in_the_open_ci_sweep_pr_is_not_fixed_again(monkeypatch
     # A fix the sweep's rebase dropped is no longer there, and its job is fixed again.
     target, reason, _gh_client = _select(monkeypatch, ci_sweep=_ci_sweep_with("test-alpine"))
     assert reason == "actionable" and target.job.id == 3
+    assert target.pending_fix_branch == "agent/backport/ci-sweep/9.0"
 
-    # With no CI-sweep PR open, nothing holds a fix.
+    # With no CI-sweep PR open, nothing holds a fix or reaches the agent as
+    # pending context, even if the closed PR's remote branch still exists.
     target, reason, _gh_client = _select(monkeypatch)
     assert reason == "actionable"
+    assert target.pending_fix_branch == ""
+
+
+def test_the_plan_only_marks_an_open_ci_sweep_branch_as_pending(monkeypatch) -> None:
+    target = replace(
+        _target(_pr()),
+        pending_fix_branch="agent/backport/ci-sweep/9.0",
+    )
+
+    plan = _plan(monkeypatch, target)
+
+    assert plan.task.target.fix_branch == "agent/backport/ci-sweep/9.0"
+    assert plan.task.target.pending_fix_branch == "agent/backport/ci-sweep/9.0"
 
 
 def test_a_weekly_failure_with_a_fix_in_the_ci_sweep_pr_is_not_fixed_again(monkeypatch) -> None:
