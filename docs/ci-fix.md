@@ -51,7 +51,9 @@ hourly CI follow-up hands one failed job at a time to this bot. That is
 described in [Backports](backport.md#when-a-backport-prs-own-ci-fails).
 
 When the [Test Failure Detector](test-failure-detector.md) files an issue for
-a test that failed in Daily CI, the bot can try to fix that too. A maintainer
+a test that failed in Daily CI, the bot can try to fix that too. And when a
+committer labels any issue `needs-agent-fix`, the [factory](factory.md) writes
+a failing test from it first and then runs this engine on that failure. A maintainer
 can start this for one issue by hand, and an hourly dispatcher starts it for
 every eligible issue unless it is switched off. See
 [Fixing detector issues](#fixing-detector-issues).

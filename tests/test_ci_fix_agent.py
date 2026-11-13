@@ -12,6 +12,7 @@ from scripts.ci_fix.models import (
     CandidateAction,
     Failure,
     FailureType,
+    FixCandidate,
     FixPolicy,
     FixTarget,
     FixTask,
@@ -473,3 +474,87 @@ def test_the_files_an_agent_reads_sit_beside_its_checkout(tmp_path, monkeypatch)
 
     (log_dir,) = seen["dirs"]
     assert Path(log_dir).parent == tmp_path.resolve()
+
+
+# --- a failure the bot observed itself: a test written from an issue (scripts/factory) ---
+
+
+def _local_task():
+    from scripts.ci_fix.models import FailedTest
+
+    failure = Failure(
+        repo_full_name="o/r", run_id=0, head_sha="a" * 40, job_id=0, job_name="", base_branch="unstable",
+        description="Issue #9: stale GET", issue_number=9,
+        failed_tests=(FailedTest("value check", "tests/unit/value.tcl"),),
+    )
+    target = FixTarget(kind=TargetKind.DRAFT_PR, repo_full_name="o/r", branch="agent/factory/issue-9-1",
+                       expected_sha="b" * 40)
+    return FixTask(failure, target, FixPolicy.GENERAL)
+
+
+def test_a_fix_from_an_issue_is_asked_for_without_a_run_or_a_job(tmp_path, monkeypatch) -> None:
+    seen = {}
+    monkeypatch.setattr(agent_mod, "run_agent", lambda profile, prompt, **kw: seen.update(prompt=prompt) or _result(
+        {"action": "patch", "changed_paths": ["src/x.c"]}))
+
+    agent_mod.run_fix_agent(_local_task(), str(tmp_path), "# Evidence\nthe test fails")
+
+    prompt = seen["prompt"]
+    assert prompt.startswith("Fix the bug an issue reports, in the repository at your current working\ndirectory.")
+    assert "A test written from the issue demonstrates it" in prompt
+    assert "- Issue: #9\n- The test: `value check` in `tests/unit/value.tcl`; it may not be changed" in prompt
+    assert "- Working commit: " + "b" * 40 in prompt
+    for ci_only in ("- Run:", "- Job:", "job id", "Other failed jobs", "actions/runs"):
+        assert ci_only not in prompt, ci_only
+    assert "Investigate the issue, the test and the source it exercises." in prompt
+    assert "- Description: Issue #9: stale GET" in prompt
+    assert "Never commit, push, create a branch, or modify `.git`." in prompt
+
+
+def test_an_adversarial_review_asks_for_a_counterexample_and_reads_the_one_it_gets(tmp_path, monkeypatch) -> None:
+    from scripts.ci_fix.agent import Counterexample, adversarial_review
+
+    seen = {}
+    tcl = 'start_server {tags {"stream"}} {\n    test {lag after restart} {\n        assert_equal 0 0\n    }\n}\n'
+    monkeypatch.setattr(agent_mod, "run_agent", lambda profile, prompt, **kw: seen.update(prompt=prompt, profile=profile) or _result(
+        {"approved": False, "reasoning": "a restart loses the lag", "counterexample": {"name": "lag after restart", "tcl": tcl}}))
+    candidate = FixCandidate(action=CandidateAction.PATCH, patch="diff", failing_check="value check")
+
+    review = adversarial_review(candidate, str(tmp_path), "# Evidence")
+
+    assert seen["profile"] == "ci_fix_review"
+    assert seen["prompt"].startswith("You are reviewing a proposed fix for a bug an issue reports")
+    assert "The issue, as it was when a committer asked for a fix, and the output of the test the fix is" in seen["prompt"]
+    assert "Your job is to find a case the change still gets wrong." in seen["prompt"]
+    assert "Be skeptical: approve only a\nchange that fixes the root cause" in seen["prompt"]
+    assert '"counterexample": {"name":' in seen["prompt"]
+    assert review.approved is False and review.reasoning == "a restart loses the lag"
+    assert review.counterexample == Counterexample("lag after restart", tcl)
+
+
+@pytest.mark.parametrize("counterexample", [
+    None, "a string", {"name": "", "tcl": "x"}, {"name": "n", "tcl": ""},
+    {"name": "n", "tcl": "start_server {} { test {other} {} }"},  # the file does not hold the test it names
+    {"name": "n", "tcl": "test {n} {}" + "x" * 20_001},
+])
+def test_what_is_not_a_counterexample_test_is_dropped(tmp_path, monkeypatch, counterexample) -> None:
+    from scripts.ci_fix.agent import adversarial_review
+
+    monkeypatch.setattr(agent_mod, "run_agent", lambda profile, prompt, **kw: _result(
+        {"approved": True, "reasoning": "fine", "counterexample": counterexample}))
+
+    review = adversarial_review(FixCandidate(action=CandidateAction.PATCH, patch="d"), str(tmp_path), "log")
+
+    assert review.approved is True and review.counterexample is None
+
+
+def test_the_ordinary_review_is_not_asked_for_a_counterexample(tmp_path, monkeypatch) -> None:
+    seen = {}
+    monkeypatch.setattr(agent_mod, "run_agent", lambda profile, prompt, **kw: seen.update(prompt=prompt) or _result(
+        {"approved": True, "reasoning": "fine", "counterexample": {"name": "n", "tcl": "test {n} {}"}}))
+
+    verdict = agent_mod.review_candidate(FixCandidate(action=CandidateAction.PATCH, patch="d"), str(tmp_path), "log")
+
+    assert verdict == (True, "fine")
+    assert seen["prompt"].startswith("You are reviewing a proposed fix for a failed CI job")
+    assert "counterexample" not in seen["prompt"]

@@ -61,36 +61,40 @@ class Decision:
     reason: str = ""
 
 
-def active_runs(workflow: Any) -> list[int]:
-    """The issue of each queued or running ci-fix-issues run (0 when unnamed)."""
+def active_runs(workflow: Any, *, run_name: re.Pattern[str] = RUN_NAME) -> list[int]:
+    """The issue of each queued or running run of ``workflow`` (0 when unnamed).
+
+    ``run_name`` reads the run's title: its ``issue`` group, and its ``run``
+    group for the occurrence (:func:`failed_attempts`).
+    """
     runs = retry_github_call(
         lambda: list(islice(workflow.get_runs(), _RECENT_RUNS)),
         retries=2,
-        description=f"list {WORKFLOW} runs",
+        description="list the workflow's runs",
     )
     active = []
     for run in runs:
         if str(getattr(run, "status", "") or "") not in _ACTIVE_STATUSES:
             continue
-        match = RUN_NAME.match(str(getattr(run, "display_title", "") or ""))
+        match = run_name.match(str(getattr(run, "display_title", "") or ""))
         active.append(int(match.group("issue")) if match else 0)
     return active
 
 
-def failed_attempts(workflow: Any) -> Counter[tuple[int, int]]:
-    """Failed ci-fix-issues runs per (issue, occurrence run id).
+def failed_attempts(workflow: Any, *, run_name: re.Pattern[str] = RUN_NAME) -> Counter[tuple[int, int]]:
+    """Failed runs of ``workflow`` per (issue, occurrence), the occurrence being the title's ``run`` group.
 
     A failed attempt is not commented on its issue, so its failed run is the
-    record. Runs dispatched before the run id was in their name match nothing.
+    record. Runs dispatched before the occurrence was in their name match nothing.
     """
     runs = retry_github_call(
         lambda: list(islice(workflow.get_runs(status="failure"), _RECENT_RUNS)),
         retries=2,
-        description=f"list failed {WORKFLOW} runs",
+        description="list the workflow's failed runs",
     )
     counts: Counter[tuple[int, int]] = Counter()
     for run in runs:
-        match = RUN_NAME.match(str(getattr(run, "display_title", "") or ""))
+        match = run_name.match(str(getattr(run, "display_title", "") or ""))
         if match and match.group("run"):
             counts[(int(match.group("issue")), int(match.group("run")))] += 1
     return counts

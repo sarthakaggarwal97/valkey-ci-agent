@@ -2023,3 +2023,82 @@ def test_a_test_the_patch_adds_that_nothing_here_runs_is_named_in_the_checks(tmp
         lambda *_args: pytest.fail("nothing runs"), time.monotonic() + 600, checks, None,
     ) == ""
     assert checks[0] == "The patch adds `New wait is right` in `tests/unit/a.tcl`, which no command here can run."
+
+
+
+# --- a fix judged by a test the bot wrote (scripts/factory): frozen files, more checks, a budget ---
+
+
+def test_a_patch_that_changes_a_frozen_file_goes_back_and_the_file_is_put_back(tmp_path, monkeypatch):
+    source, head_sha = _source_repo(tmp_path)
+    (source / "tests").mkdir()
+    (source / "tests" / "frozen.tcl").write_text("test {it} {}\n", encoding="utf-8")
+    git(source, "add", "tests/frozen.tcl")
+    git(source, "commit", "-q", "-m", "the test")
+    head_sha = git(source, "rev-parse", "HEAD")
+    _install_clone(monkeypatch, source)
+    _with_plan(monkeypatch)
+    seen = []
+
+    def agent(task, repo_dir, job_log, *, feedback="", **_kwargs):
+        seen.append(feedback)
+        frozen = Path(repo_dir, "tests/frozen.tcl")
+        if len(seen) == 1:
+            frozen.write_text("test {weakened} {}\n", encoding="utf-8")
+        assert frozen.read_text(encoding="utf-8") == "test {it} {}\n" or len(seen) == 1
+        (Path(repo_dir) / "value.txt").write_text("right\n", encoding="utf-8")
+        return FixCandidate(action=CandidateAction.PATCH, changed_paths=("value.txt",), root_cause="r", reasoning="w")
+
+    task = replace(_task(head_sha), frozen_paths=("tests/frozen.tcl",))
+    candidate = engine_mod.prepare_fix(task, _LOG, agent_func=agent, review_func=lambda *a, **k: (True, "ok"))
+
+    assert candidate.action is CandidateAction.PATCH
+    assert "`tests/frozen.tcl`, which holds the test the fix is judged by" in seen[1]
+    assert "code put it\nback as it was" in seen[1] or "code put it back as it was" in seen[1]
+    assert "frozen.tcl" not in candidate.patch and candidate.changed_paths == ("value.txt",)
+
+
+def test_further_checks_run_after_the_test_passes_and_send_the_fix_back(tmp_path, monkeypatch):
+    agent = _value_agent("right", "right")
+    rounds = []
+
+    def check(candidate, repo_dir, run_test, deadline, checks):
+        rounds.append(candidate.patch)
+        if len(rounds) == 1:
+            return "The change does not format."
+        checks.append("clang-format accepts it.")
+        return ""
+
+    source, head_sha = _source_repo(tmp_path)
+    _install_clone(monkeypatch, source)
+    _with_plan(monkeypatch)
+    candidate = engine_mod.prepare_fix(
+        _task(head_sha), _LOG, agent_func=agent, review_func=lambda *a, **k: (True, "ok"), check_func=check,
+    )
+
+    assert candidate.action is CandidateAction.PATCH and len(rounds) == 2
+    assert agent.feedback[1].startswith("The change does not format.")
+    assert "clang-format accepts it." in candidate.verification
+    assert candidate.verification.index("passed 40 loop(s)") < candidate.verification.index("clang-format accepts it.")
+
+
+def test_the_preparation_takes_the_budget_it_is_given(tmp_path, monkeypatch):
+    agent = _value_agent("almost", "right")
+    source, head_sha = _source_repo(tmp_path)
+    _install_clone(monkeypatch, source)
+    _with_plan(monkeypatch)
+    with pytest.raises(RuntimeError, match=r"^Ran out of time after 1 round\(s\)\."):
+        engine_mod.prepare_fix(_task(head_sha), _LOG, agent_func=agent, budget_s=60)
+
+
+def test_a_failure_the_bot_observed_itself_needs_no_job(tmp_path, monkeypatch):
+    source, head_sha = _source_repo(tmp_path)
+    _install_clone(monkeypatch, source)
+    _with_plan(monkeypatch)
+    task = _task(head_sha, job_id=0)
+    task = replace(task, failure=replace(task.failure, run_id=0))
+
+    candidate = engine_mod.prepare_fix(task, _LOG, agent_func=_value_agent("right"))
+
+    assert candidate.action is CandidateAction.PATCH
+    assert engine_mod.prepare_fix(_task(head_sha, job_id=0), _LOG).summary == "The failed job has no valid job id."

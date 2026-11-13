@@ -146,7 +146,19 @@ class Failure:
         return self.source is not None
 
     @property
+    def in_ci(self) -> bool:
+        """Whether a CI run observed the failure.
+
+        Otherwise the bot observed it itself, running a test it wrote from an
+        issue (scripts/factory): there is no run, job or job log, only the
+        test's own output.
+        """
+        return self.run_id > 0
+
+    @property
     def run_url(self) -> str:
+        if not self.in_ci:
+            return ""
         url = f"https://github.com/{self.repo_full_name}/actions/runs/{self.run_id}"
         if self.run_attempt > 1:
             return f"{url}/attempts/{self.run_attempt}"
@@ -187,6 +199,10 @@ class FixTask:
     # Other open detector issues whose test this patch may also fix. Each is
     # verified on its own before the draft PR claims to fix it.
     other_issues: tuple[OtherIssue, ...] = ()
+    # Paths a fix may not change: the files of the test it is judged by, when
+    # the bot wrote that test itself (scripts/factory). A patch that touches
+    # one goes back to the agent.
+    frozen_paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -223,6 +239,12 @@ class FixCandidate:
     # A patch like that is posted for a person to apply, never pushed. Never
     # written by the agent.
     not_run: bool = False
+    # The test the bot wrote to demonstrate the failure, as its own patch,
+    # when the bot wrote one (scripts/factory): ``patch`` then holds the test
+    # and the fix together. Kept apart so a report can show the test alone,
+    # and a replay can run it against the fix a person wrote. Never written
+    # by the agent.
+    evidence_patch: str = ""
 
 
 @dataclass(frozen=True)
@@ -313,12 +335,52 @@ class IssueFailure:
         )
 
 
+class IssueKind(str, Enum):
+    """What an issue asks for, which decides what the test the bot writes shows."""
+
+    BUG = "bug"  # a test that fails because of the bug, and passes once it is fixed
+    FEATURE = "feature"  # tests of the agreed behaviour, which fail until it exists
+
+
+@dataclass(frozen=True)
+class IssueComment:
+    """One comment on an issue, by a committer."""
+
+    author: str
+    body: str
+
+
+@dataclass(frozen=True)
+class IssueBrief:
+    """An issue as it was when a committer labelled it for a fix (scripts/factory).
+
+    Pinned by the plan job, so the fix job reads what the committer read and
+    nothing added since. Only committers' comments are kept: anyone can
+    comment, and the brief is what the model works from.
+    """
+
+    number: int
+    title: str
+    body: str
+    comments: tuple[IssueComment, ...] = ()
+    kind: IssueKind = IssueKind.BUG
+    # The issue is a crash report, so a test that crashes the server shows the
+    # bug. Otherwise a crash is a finding nobody expected, and stops the run.
+    crash_report: bool = False
+    # The timeline event that applied the label: a request's identity. A label
+    # removed and applied again is a new request.
+    label_event_id: int = 0
+    labelled_by: str = ""
+    labelled_at: str = ""
+
+
 class FrontDoor(str, Enum):
     """Where a fix request came from: it decides how the result is published and reported."""
 
     ISSUE = "issue"  # a Test Failure Detector issue (scripts/ci_fix/issues.py)
     PR = "pr"  # a maintainer's command on a PR (scripts/ci_fix/main.py)
     FOLLOW_UP = "follow-up"  # a bot-owned PR's red head (scripts/backport/ci_followup.py)
+    FACTORY = "factory"  # an issue a committer labelled for a fix (scripts/factory/main.py)
 
 
 @dataclass(frozen=True)
@@ -334,6 +396,8 @@ class FixPlan:
     comment_id: int = 0
     # FOLLOW-UP: successful-result markers and identities for silent attempts.
     markers: tuple[str, ...] = ()
+    # FACTORY: the issue as it was when labelled, which the fix job works from.
+    brief: Optional[IssueBrief] = None
     # Set by the publish job when the fix job failed before the engine started
     # (a runner that could not install or build): such an attempt says nothing
     # about the failure, so no front door counts it.

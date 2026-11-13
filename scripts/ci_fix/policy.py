@@ -8,7 +8,7 @@ from typing import Literal
 from scripts.ci_fix.models import CandidateAction, FixPolicy, FixTask, TargetKind
 from scripts.common.identity import APP_LOGIN
 
-WRITABLE_BRANCH_PREFIXES = ("backport/", "agent/backport/", "agent/ci-fix/")
+WRITABLE_BRANCH_PREFIXES = ("backport/", "agent/backport/", "agent/ci-fix/", "agent/factory/")
 BACKPORT_BRANCH_PREFIXES = ("backport/", "agent/backport/")
 CiFixAgentProfile = Literal["ci_fix_edit", "ci_fix_suggest"]
 

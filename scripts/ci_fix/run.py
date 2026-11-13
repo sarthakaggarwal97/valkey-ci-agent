@@ -34,9 +34,10 @@ from github import Auth, Github, GithubException
 from scripts.backport import ci_followup
 from scripts.ci_fix import issues
 from scripts.ci_fix import main as pr_command
-from scripts.ci_fix.ci_job import JobSpec, Unsupported, resolve, setup_script, workflow_source
+from scripts.ci_fix.ci_job import JobCommands, JobSpec, Unsupported, resolve, setup_script, workflow_source
 from scripts.ci_fix.engine import prepare_fix
 from scripts.ci_fix.models import (
+    FixCandidate,
     FixOutcome,
     FixPlan,
     FixResult,
@@ -52,6 +53,8 @@ from scripts.ci_fix.state import decode, load, save
 from scripts.common.git_auth import GitAuth
 from scripts.common.identity import APP_LOGIN
 from scripts.common.workflow_artifacts import ArtifactClient
+from scripts.factory import main as factory
+from scripts.factory.prepare import prepare as prepare_issue_fix
 
 logger = logging.getLogger(__name__)
 
@@ -63,16 +66,29 @@ _PRIOR_PLAN_ARTIFACTS = 20
 # How a detector issue's fix is published (models.IssuePublication): a
 # repository variable, so that the draft PRs can be turned on without a change.
 ISSUE_PUBLICATION_ENV = "CI_FIX_ISSUES_PUBLISH"
+# The token that pushes, when the branch goes to another repository than the
+# one the fix is for (a fork): the target's token cannot write there.
+PUSH_TOKEN_ENV = "PUSH_TOKEN"
 
 Planner = Callable[..., "FixPlan | dict[str, Any]"]
 Reporter = Callable[..., "dict[str, Any]"]
+# Prepares a plan's candidate in the fix job: (plan, the job's checkout or "", its commands or None).
+Preparer = Callable[[FixPlan, str, "JobCommands | None"], FixCandidate]
 
-# Each front door: how it plans a request, and how the result is reported.
-# The candidate is published as its target says (scripts/ci_fix/publish.py).
-_FRONT_DOORS: dict[FrontDoor, tuple[Planner, Reporter]] = {
-    FrontDoor.ISSUE: (issues.plan_request, issues.report_result),
-    FrontDoor.PR: (pr_command.plan_request, pr_command.report_result),
-    FrontDoor.FOLLOW_UP: (ci_followup.plan_request, ci_followup.report_result),
+
+def _prepare_ci_fix(plan: FixPlan, repo_dir: str, job: JobCommands | None) -> FixCandidate:
+    """A CI failure's fix: the engine, from the failed job's log."""
+    return prepare_fix(plan.task, plan.job_log, repo_dir=repo_dir, job=job)
+
+
+# Each front door: how it plans a request, how its candidate is prepared, and
+# how the result is reported. The candidate is published as its target says
+# (scripts/ci_fix/publish.py).
+_FRONT_DOORS: dict[FrontDoor, tuple[Planner, Reporter, Preparer]] = {
+    FrontDoor.ISSUE: (issues.plan_request, issues.report_result, _prepare_ci_fix),
+    FrontDoor.PR: (pr_command.plan_request, pr_command.report_result, _prepare_ci_fix),
+    FrontDoor.FOLLOW_UP: (ci_followup.plan_request, ci_followup.report_result, _prepare_ci_fix),
+    FrontDoor.FACTORY: (factory.plan_request, factory.report_result, prepare_issue_fix),
 }
 
 
@@ -94,7 +110,7 @@ def plan(
     result was final: a skip, or a refusal it already reported, with its
     ``action``).
     """
-    planner, reporter = _FRONT_DOORS[front_door]
+    planner, reporter, _preparer = _FRONT_DOORS[front_door]
     planner_options: dict[str, Any] = {"bot_login": bot_login}
     if front_door is FrontDoor.FOLLOW_UP:
         planner_options["prior_plans"] = prior_plans
@@ -122,14 +138,30 @@ def plan(
 def _plan_job(gh: Any, artifact_client: Any, planned: FixPlan, out: Path) -> dict[str, str]:
     """Save ``planned`` with its job log, and how its fix runs: in the failed job, or not."""
     failure = planned.task.failure
-    job_log = str(artifact_client.download_job_log(failure.repo_full_name, failure.job_id) or "")
+    job_log = ""
+    if failure.in_ci:
+        job_log = str(artifact_client.download_job_log(failure.repo_full_name, failure.job_id) or "")
     fix_plan = replace(planned, job_log=job_log)
     save(out / PLAN_FILE, fix_plan)
     spec = job_for(gh, fix_plan.task)
     # Publish asks for workflows:write only when the push may change .github/.
     ci_changes = "true" if allows_ci_changes(fix_plan.task) else ""
+    # Publish mints a second token when the branch goes to another
+    # repository than the fix is for (a fork of it). A suggestion's target is
+    # a contributor's fork, which nothing is pushed to.
+    target = fix_plan.task.target
+    push_owner, _, push_name = target.repo_full_name.partition("/")
+    foreign = (
+        target.kind is not TargetKind.SUGGEST
+        and target.repo_full_name != (target.base_repo_full_name or failure.repo_full_name)
+    )
+    outputs = {
+        "ci_changes": ci_changes,
+        "push_owner": push_owner if foreign else "",
+        "push_repo": push_name if foreign else "",
+    }
     if spec is None:
-        return {"mode": "local", "ci_changes": ci_changes}
+        return {"mode": "local", **outputs}
     save(out / JOB_FILE, spec)
     (out / SETUP_FILE).write_text(setup_script(spec), encoding="utf-8")
     checkout = spec.checkout
@@ -144,7 +176,7 @@ def _plan_job(gh: Any, artifact_client: Any, planned: FixPlan, out: Path) -> dic
         "extra_repository": checkout.repository if checkout else "",
         "extra_ref": checkout.ref if checkout else "",
         "extra_path": checkout.path if checkout else "",
-        "ci_changes": ci_changes,
+        **outputs,
     }
 
 
@@ -191,7 +223,7 @@ def fix(plan_dir: Path, out: Path, *, repo_dir: str = "") -> FixOutcome:
     save(out / OUTCOME_FILE, FixOutcome(error="the fix job stopped before the fix finished", started=True))
     try:
         job = load(plan_dir / JOB_FILE, JobSpec).commands if (plan_dir / JOB_FILE).exists() else None
-        candidate = prepare_fix(fix_plan.task, fix_plan.job_log, repo_dir=repo_dir, job=job)
+        candidate = _FRONT_DOORS[fix_plan.front_door][2](fix_plan, repo_dir, job)
         outcome = FixOutcome(candidate=candidate, started=True)
     except Exception as exc:  # noqa: BLE001 - the publish job reports every outcome
         logger.exception("CI-fix failed")
@@ -234,15 +266,26 @@ def publish_and_report(
         )
     else:
         try:
-            # Only an issue's fix reads the variable: a bad value cannot stop a PR's.
-            mode = (issue_publication() if fix_plan.task.target.kind is TargetKind.DRAFT_PR
-                    else IssuePublication.DRAFT_PR)
-            result = publish_candidate(gh, fix_plan.task, outcome.candidate, git_env=git_env, issue_publication=mode)
+            result = publish_candidate(
+                gh, fix_plan.task, outcome.candidate, git_env=git_env, issue_publication=publication(fix_plan),
+            )
         except Exception as exc:  # noqa: BLE001 - every request gets a reported result
             logger.exception("CI-fix publication failed")
             result = FixResult(kind=ResultKind.FAILED, summary=f"The CI-fix attempt failed: {exc}",
                                task=fix_plan.task, candidate=outcome.candidate)
     return reporter(gh, fix_plan, result)
+
+
+def publication(plan: FixPlan) -> IssuePublication:
+    """How ``plan``'s fix is published when its target is a draft PR: from the front door's own variable.
+
+    Only an issue's fix reads a variable: a bad value cannot stop a PR's.
+    """
+    if plan.front_door is FrontDoor.FACTORY:
+        return factory.publication()
+    if plan.task.target.kind is TargetKind.DRAFT_PR:
+        return issue_publication()
+    return IssuePublication.DRAFT_PR
 
 
 def load_prior_plans(
@@ -365,7 +408,10 @@ def main(argv: list[str] | None = None) -> int:
         os.environ.get("GITHUB_SERVER_URL", "https://github.com"),
         os.environ.get("GITHUB_REPOSITORY", ""), os.environ.get("GITHUB_RUN_ID", ""),
     )
-    with GitAuth(token, prefix="ci-fix-git-askpass-") as auth:
+    # The push goes to the fix's repository with its token, or to a fork of
+    # it with the fork's: GitHub reads and writes (the PR, the comment) stay
+    # with the fix's repository's token either way.
+    with GitAuth(os.environ.get(PUSH_TOKEN_ENV, "") or token, prefix="ci-fix-git-askpass-") as auth:
         result = publish_and_report(
             gh, args.plan, args.outcome, git_env=auth.env(), run_url=run_url,
         )

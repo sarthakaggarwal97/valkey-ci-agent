@@ -27,6 +27,10 @@ These repository variables adjust its behaviour:
 | `CI_FIX_ISSUES_AUTO_DISPATCH` | Set to `false` to stop the CI fix bot from starting on detector issues by itself. |
 | `CI_FIX_ISSUES_MAX_RUNS` | How many detector issue fixes can run at once. Defaults to 2. |
 | `CI_FIX_ISSUES_PUBLISH` | How a detector issue's fix is shared: `comment` (the default) or `draft-pr`. |
+| `FACTORY_STEP` | The factory's rollout step: `off` (the default), `comment` or `draft-pr`. See [Fixing labelled issues](factory.md#rollout). |
+| `FACTORY_MAX_RUNS` | How many factory runs can be active at once. Defaults to 1. |
+| `FACTORY_MAX_OPEN_PRS` | How many factory pull requests may be open before the dispatcher stops. Defaults to 5. |
+| `FACTORY_FORK` | The fork the factory pushes its branches to; unset pushes to `valkey-io/valkey`. |
 
 ### The model
 
@@ -44,7 +48,8 @@ permissions below.
 
 | Installed on | Permissions | Needed for |
 |---|---|---|
-| `valkey` | read administration, actions and checks; write contents, issues and pull requests; read metadata | backports, CI fixes, the detector, release notes and release automation |
+| `valkey` | read administration, actions and checks; write contents, issues and pull requests; read metadata | backports, CI fixes, the factory, the detector, release notes and release automation |
+| the fork named by `FACTORY_FORK`, if any | write contents; read metadata | the factory's branches |
 | `valkey-search`, `valkey-json`, `valkey-bloom` | write contents and pull requests; read metadata | backports and release notes |
 | repositories whose releases list security advisories | read repository advisories | release notes, when reading advisories |
 | `valkey-fuzzer` | read actions and contents; write issues | the fuzzer monitor |
@@ -78,6 +83,7 @@ securing releases, including the tag ruleset.
 | Backport Eligibility | every day at 00:30 | [Backports](backport.md#suggesting-backports) |
 | CI Fix Comment Poll | every hour | [Fixing CI failures](ci-fix.md#asking-for-a-fix) |
 | CI Fix Issue Dispatch | every hour at :23, once switched on | [Fixing CI failures](ci-fix.md#fixing-detector-issues) |
+| Factory Dispatch | every hour at :37, once switched on | [Fixing labelled issues](factory.md) |
 | Test Failure Detector | every day at 23:00 | [Test Failure Detector](test-failure-detector.md) |
 | Monitor Valkey Fuzzer Runs | every four hours at :41 | [Fuzzer monitor](fuzzer-monitor.md) |
 | Watch Release PR Reviews | one per release PR, started by the cut; holds a runner for 55 minutes checking every five minutes, with the next hour's run queued, until the PR closes or is three days old | [Release notes](release-notes.md#applying-review-comments) |
@@ -86,9 +92,9 @@ securing releases, including the tag ruleset.
 | CVE Scan | Mondays at 06:00 | [CVE scan](cve-scan.md) |
 
 These only run when started, by a person or by another workflow: Manual
-Backport, Manual Revert Commit, CI Fix Bot, CI Fix Issues, Cut Release Notes
-and its Advanced version, Address Release Note Reviews, Prepare Release and
-Publish Release. Backport PR and CI Fix Run are reusable workflows that other
+Backport, Manual Revert Commit, CI Fix Bot, CI Fix Issues, Factory, Factory
+Replay, Cut Release Notes and its Advanced version, Address Release Note
+Reviews, Prepare Release and Publish Release. Backport PR and CI Fix Run are reusable workflows that other
 workflows call.
 
 The workflows that check every few minutes do it inside one long-running

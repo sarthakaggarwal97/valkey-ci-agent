@@ -678,8 +678,9 @@ def _validate_issue_target(gh: Any, task: FixTask) -> str:
         ) from exc
     # A newer occurrence is the same test failing again while its fix was
     # prepared: the fix is for the test, and is still published
-    # (scripts/ci_fix/issues.py records it for the newer run too).
-    if parse_detector_occurrence(str(getattr(issue, "body", "") or "")) is None:
+    # (scripts/ci_fix/issues.py records it for the newer run too). An issue
+    # the bot fixes from its text (scripts/factory) records no occurrence.
+    if task.failure.in_ci and parse_detector_occurrence(str(getattr(issue, "body", "") or "")) is None:
         return f"Issue #{issue_number} no longer contains a detector occurrence."
     return ""
 
@@ -720,19 +721,32 @@ def _source_label(failure: Failure) -> str:
 
 def _draft_title(task: FixTask, candidate: FixCandidate | None) -> str:
     failing_check = candidate.failing_check if candidate is not None else ""
+    if not task.failure.in_ci and candidate is not None and candidate.title:
+        # A fix written from an issue is titled by what it changes, as its squash commit will be.
+        return fit_subject(candidate.title)
     fallback = f"{_source_label(task.failure)} failure"
     return fit_subject(f"Fix {failing_check or task.failure.job_name or fallback}")
 
 
 def _draft_body(task: FixTask, candidate: FixCandidate | None) -> str:
+    """The draft PR's description: what it fixes, then the model's account under its own heading.
+
+    The summary comes first and stands alone, so it can be the squash commit's
+    message. Everything the model wrote (the root cause, the fix, its notes)
+    and what code checked follow under "AI generated details", as the
+    repository's own pull requests mark such text.
+    """
     failure = task.failure
     lines = []
     if failure.issue_number:
         lines += [f"Fixes #{failure.issue_number}", ""]
-    description = prose(failure.description, 2_000) if failure.description else (
-        f"`{failure.job_name}` failed in a {_source_label(failure)} run."
-    )
-    lines += [f"{description} [See the run]({failure.run_url}).", ""]
+    if failure.in_ci:
+        description = prose(failure.description, 2_000) if failure.description else (
+            f"`{failure.job_name}` failed in a {_source_label(failure)} run."
+        )
+        lines += [f"{description} [See the run]({failure.run_url}).", ""]
+    elif candidate is not None and candidate.summary:
+        lines += [prose(candidate.summary, 2_000), ""]
     if candidate and candidate.also_touches:
         # In code, unlinked: an open PR GitHub links to an issue keeps it
         # from a fix of its own, and this one has not shown it fixes them.
@@ -746,7 +760,9 @@ def _draft_body(task: FixTask, candidate: FixCandidate | None) -> str:
     if candidate is not None and candidate.action is CandidateAction.PORT:
         lines += [f"**Upstream fix:** `{candidate.port_commit}`", ""]
     if candidate is not None:
-        lines += candidate_context(candidate, include_reasoning=True)
+        details = candidate_context(candidate, include_reasoning=True)
+        if details:
+            lines += ["## AI generated details", "", *details]
     if candidate is None:
         sign_off = "An earlier attempt prepared this branch: review its commit before merging."
     elif candidate.action is CandidateAction.PORT:

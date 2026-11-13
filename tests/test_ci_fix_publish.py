@@ -862,3 +862,40 @@ def test_a_ci_sweep_table_has_the_new_fix_when_github_answers_from_before_the_pu
         ci_sweep.Fix("e" * 40, "Fix earlier", "test-alpine"),
         ci_sweep.Fix("d" * 40, "Fix unit/x", "unit tests", _RUN),
     ])
+
+
+
+def test_a_draft_for_a_fix_from_an_issue_is_titled_by_its_change_and_keeps_the_models_account_apart():
+    from dataclasses import replace
+
+    from scripts.ci_fix.models import Failure, FixPolicy, FixTarget, FixTask, TargetKind
+
+    failure = Failure("o/r", 0, "a" * 40, 0, "", base_branch="unstable", description="Issue #9: stale GET", issue_number=9)
+    target = FixTarget(TargetKind.DRAFT_PR, "forks/r", "o/r", branch="agent/factory/issue-9-1", expected_sha="a" * 40)
+    task = FixTask(failure, target, FixPolicy.GENERAL)
+    candidate = replace(
+        _candidate(), title="Return the new value from GET", summary="GET read a stale entry after SET.",
+        root_cause="the lookup skipped the new entry", verification="The test fails 3 of 3.\nWith the fix, it passes.",
+    )
+
+    assert publish_mod._draft_title(task, candidate) == "Return the new value from GET"
+    body = publish_mod._draft_body(task, candidate)
+    assert body.startswith("Fixes #9\n\nGET read a stale entry after SET.\n\n## AI generated details\n\n**Root cause:**")
+    assert "See the run" not in body and "actions/runs" not in body
+    assert "- The test fails 3 of 3." in body
+    assert "Its commit has no DCO sign-off" in body
+    # A CI failure's draft keeps its own title and run link.
+    ci = _task(TargetKind.DRAFT_PR, issue=9)
+    assert publish_mod._draft_title(ci, candidate).startswith("Fix ")
+    assert "## AI generated details" in publish_mod._draft_body(ci, candidate)
+
+
+def test_an_issue_without_a_detector_occurrence_is_fine_for_a_fix_from_its_text(monkeypatch):
+    from scripts.ci_fix.models import Failure, FixPolicy, FixTarget, FixTask, TargetKind
+
+    failure = Failure("o/r", 0, "a" * 40, 0, "", base_branch="unstable", issue_number=9)
+    target = FixTarget(TargetKind.DRAFT_PR, "o/r", "o/r", branch="agent/factory/issue-9-1", expected_sha="a" * 40)
+    task = FixTask(failure, target, FixPolicy.GENERAL)
+    gh, _repo = _gh(issue=_issue(body="just an issue"))
+
+    assert publish_mod._validate_issue_target(gh, task) == ""

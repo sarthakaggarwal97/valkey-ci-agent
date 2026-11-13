@@ -1,0 +1,195 @@
+name: Factory Replay
+run-name: "Factory replay ${{ inputs.case }}"
+
+# Replays one issue whose fix is known (scripts/factory/replay_cases.yml):
+# the issue as it was when its fix was opened, on the commit that fix merged
+# onto, through the same preparation a labelled issue gets. Then the bot's
+# test is applied to the known fix, and the bot's change compared with it
+# (scripts/factory/replay.py).
+#
+#   plan -> fix -> score
+#
+# Nothing is published, by construction: no job here holds a token that can
+# write to the target repository, and there is no publish job. The fix job is
+# ci-fix-run.yml's fix-local, step for step: the same isolated account, the
+# same steps, and no GitHub token at all.
+#
+# One run is one case, and one case is model sessions of up to hours: start
+# the cases you want, one run each.
+on:
+  workflow_dispatch:
+    inputs:
+      case:
+        description: "A case id from scripts/factory/replay_cases.yml"
+        required: true
+        type: string
+
+permissions: {}
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  plan:
+    name: "Plan the replay (${{ inputs.case }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Plan the case
+        shell: bash
+        env:
+          # Reads the public issue and pull request: any signed-in token.
+          TARGET_TOKEN: ${{ github.token }}
+          CASE: ${{ inputs.case }}
+        run: python -m scripts.factory.replay plan --case "${CASE}" --out ci-fix-plan
+
+      - name: Upload the plan
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: factory-replay-plan
+          path: ci-fix-plan/
+          retention-days: 30
+          overwrite: true
+
+  # ci-fix-run.yml's fix-local, step for step (tests/test_workflow_pinning.py checks).
+  fix:
+    name: "Fix on the bot's runner"
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: 'CI fix: download the plan'
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: factory-replay-plan
+          path: ${{ runner.temp }}/ci-fix-plan
+      - name: Install Valkey build and test dependencies
+        shell: bash
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            build-essential pkg-config libssl-dev tcl8.6 tclx tcl-tls valgrind clang-format-18
+      # The CI-fix steps every fix job ends with.
+      - name: 'CI fix: check out the agent'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          path: .ci-fix-agent
+          persist-credentials: false
+      - name: 'CI fix: set up the agent'
+        uses: ./.ci-fix-agent/.github/actions/setup-agent
+        with:
+          path: .ci-fix-agent
+          install-claude: 'true'
+      - name: 'CI fix: stage the isolated checkout'
+        shell: bash
+        run: bash .ci-fix-agent/scripts/ci_fix/job.sh stage
+      - name: 'CI fix: configure AWS credentials'
+        uses: aws-actions/configure-aws-credentials@61815dcd50bd041e203e49132bacad1fd04d2708 # v5.1.1
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: ci-fix-${{ github.run_id }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          role-duration-seconds: 18000
+      - name: 'CI fix: prepare the fix in this job'
+        shell: bash
+        env:
+          CI_AGENT_CLAUDE_MODEL: ${{ vars.CI_AGENT_CLAUDE_MODEL }}
+        run: bash "${RUNNER_TEMP}/ci-fix-agent/scripts/ci_fix/job.sh" run
+      - name: 'CI fix: ensure the fix has a result'
+        if: always()
+        shell: bash
+        run: |
+          if [[ -x "${RUNNER_TEMP}/ci-fix-agent/scripts/ci_fix/job.sh" ]]; then
+            bash "${RUNNER_TEMP}/ci-fix-agent/scripts/ci_fix/job.sh" ensure-result
+          elif [[ -x .ci-fix-agent/scripts/ci_fix/job.sh ]]; then
+            bash .ci-fix-agent/scripts/ci_fix/job.sh ensure-result
+          fi
+      - name: 'CI fix: clean up the isolated checkout'
+        if: always()
+        shell: bash
+        run: |
+          if [[ -x "${RUNNER_TEMP}/ci-fix-agent/scripts/ci_fix/job.sh" ]]; then
+            bash "${RUNNER_TEMP}/ci-fix-agent/scripts/ci_fix/job.sh" cleanup
+          elif [[ -x .ci-fix-agent/scripts/ci_fix/job.sh ]]; then
+            bash .ci-fix-agent/scripts/ci_fix/job.sh cleanup
+          fi
+      - name: 'CI fix: upload the result'
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: factory-replay-result
+          path: ${{ runner.temp }}/ci-fix-out/
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: true
+
+  score:
+    name: "Score the replay (${{ inputs.case }})"
+    needs: [plan, fix]
+    # A fix that failed or refused is a result too.
+    if: always() && needs.plan.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Check out agent repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up agent dependencies
+        uses: ./.github/actions/setup-agent
+
+      - name: Install Valkey build and test dependencies
+        shell: bash
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends build-essential pkg-config libssl-dev tcl8.6 tclx
+
+      - name: Download the plan
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: factory-replay-plan
+          path: ci-fix-plan
+
+      - name: Download the fix
+        # A fix job that crashed uploaded nothing; the score says so.
+        continue-on-error: true
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: factory-replay-result
+          path: ci-fix-result
+
+      - name: Apply the bot's test to the known fix, and compare the changes
+        shell: bash
+        env:
+          CASE: ${{ inputs.case }}
+        run: |
+          python -m scripts.factory.replay score --case "${CASE}" \
+            --plan ci-fix-plan --outcome ci-fix-result --out ci-fix-score
+
+      - name: Upload the score
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: factory-replay-score
+          path: ci-fix-score/
+          retention-days: 30
+          overwrite: true

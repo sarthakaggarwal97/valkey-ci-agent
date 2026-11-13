@@ -15,8 +15,9 @@ triaging fuzzer runs, and judging whether a fix should be backported. The CVE
 scan doesn't use Claude at all.
 
 **Propose, don't merge.** Every change the agent makes goes on one of its own
-branches, `backport/...`, `agent/backport/...`, `agent/ci-fix/...` or
-`agent/release-cut/...`, and reaches the project as a pull request. That PR
+branches, `backport/...`, `agent/backport/...`, `agent/ci-fix/...`,
+`agent/factory/...` or `agent/release-cut/...`, and reaches the project as a
+pull request. That PR
 runs the repository's normal CI and needs a maintainer to merge it. The agent
 never pushes to a release branch and never rewrites a backport branch it has
 already published.
@@ -41,6 +42,7 @@ that run Claude don't get a GitHub token at all.
 scripts/
   backport/              Backports, suggestions, CI follow-up, onboarding release lines
   ci_fix/                The CI fix bot
+  factory/               Labelled issues to tested pull requests, on the CI fix bot
   test_failure_detector/ Daily CI failures to issues
   fuzzer/                Fuzzer run triage
   release_notes/         Release notes and review comments on release PRs
@@ -78,7 +80,9 @@ same branch on a PR the bot owns. It writes only to the bot's own branches,
 and reports back where the request came from.
 
 The CI fix bot shows this most clearly, with several ways in that all lead to
-the same engine and the same publisher. The backport sweep, the release notes
+the same engine and the same publisher; the factory is one more way in, from
+an issue, with a phase of its own before the engine that makes the failing
+test the engine then works from. The backport sweep, the release notes
 cut and release automation are built the same way.
 
 ## Workflows
@@ -87,6 +91,7 @@ cut and release automation are built the same way.
 |---|---|---|
 | Backports | [backport.md](backport.md) | `scripts/backport/sweep.py` |
 | Fixing CI failures | [ci-fix.md](ci-fix.md) | `scripts/ci_fix/run.py` |
+| Fixing labelled issues | [factory.md](factory.md) | `scripts/factory/main.py` |
 | Test Failure Detector | [test-failure-detector.md](test-failure-detector.md) | `scripts/test_failure_detector/main.py` |
 | Fuzzer monitor | [fuzzer-monitor.md](fuzzer-monitor.md) | `scripts/fuzzer/main.py` |
 | Release notes | [release-notes.md](release-notes.md) | `scripts/release_notes/main.py` |

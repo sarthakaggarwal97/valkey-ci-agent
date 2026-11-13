@@ -1,8 +1,10 @@
 name: CI Fix Run
 
 # One CI fix, whichever front door asked for it: a Test Failure Detector issue
-# (ci-fix-issues.yml), a maintainer's command on a PR (ci-fix.yml), or a
-# bot-owned PR's red head (backport-ci-followup.yml).
+# (ci-fix-issues.yml), a maintainer's command on a PR (ci-fix.yml), a
+# bot-owned PR's red head (backport-ci-followup.yml), or an issue a committer
+# labelled for a fix (factory.yml), whose fix has no CI job and runs on the
+# bot's own runner.
 #
 #   plan -> fix-in-job | fix-in-container | fix-local -> publish
 #
@@ -21,7 +23,7 @@ on:
   workflow_call:
     inputs:
       front_door:
-        description: "issue, pr or follow-up (scripts/ci_fix/models.py FrontDoor)"
+        description: "issue, pr, follow-up or factory (scripts/ci_fix/models.py FrontDoor)"
         required: true
         type: string
       request:
@@ -71,6 +73,8 @@ jobs:
       extra_ref: ${{ steps.plan.outputs.extra_ref }}
       extra_path: ${{ steps.plan.outputs.extra_path }}
       ci_changes: ${{ steps.plan.outputs.ci_changes }}
+      push_owner: ${{ steps.plan.outputs.push_owner }}
+      push_repo: ${{ steps.plan.outputs.push_repo }}
     steps:
       - name: Check out agent repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -331,7 +335,7 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -y -q --no-install-recommends \
-            build-essential pkg-config libssl-dev tcl8.6 tclx tcl-tls valgrind
+            build-essential pkg-config libssl-dev tcl8.6 tclx tcl-tls valgrind clang-format-18
       # The CI-fix steps every fix job ends with.
       - name: 'CI fix: check out the agent'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -454,14 +458,33 @@ jobs:
           permission-issues: write
           permission-metadata: read
 
+      # The branch goes to a fork of the target (a labelled issue's fix, with
+      # FACTORY_FORK set): that push needs the fork's own token, with write
+      # access to its code and nothing else. Everything else, the PR and the
+      # comment, is written to the target with the target's token.
+      - name: Generate push repository token
+        id: push-token
+        if: needs.plan.outputs.push_owner != ''
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
+        with:
+          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
+          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
+          owner: ${{ needs.plan.outputs.push_owner }}
+          repositories: ${{ needs.plan.outputs.push_repo }}
+          permission-contents: write
+          permission-metadata: read
+
       - name: Publish the fix and report it
         id: publish
         shell: bash
         env:
           TARGET_TOKEN: ${{ steps.ci-token.outputs.token || steps.target-token.outputs.token }}
+          PUSH_TOKEN: ${{ steps.push-token.outputs.token }}
           # A detector issue's fix: a patch commented on the issue (the
           # default), or 'draft-pr' (scripts/ci_fix/models.py IssuePublication).
           CI_FIX_ISSUES_PUBLISH: ${{ vars.CI_FIX_ISSUES_PUBLISH }}
+          # A labelled issue's fix: the same choice, by the factory's rollout step (scripts/factory/main.py).
+          FACTORY_STEP: ${{ vars.FACTORY_STEP }}
         run: |
           set -euo pipefail
           python -m scripts.ci_fix.run publish --plan ci-fix-plan --outcome ci-fix-result

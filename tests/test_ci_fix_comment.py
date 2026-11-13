@@ -218,3 +218,15 @@ def test_a_sweep_pr_is_told_in_a_line_and_the_ci_sweep_pr_is_told_why() -> None:
     )
     assert "unverified" not in explained.split("<details>")[0]
     assert "The fixture embeds an obsolete payload." in explained.split("<details>")[1]
+
+
+
+def test_agent_prose_notifies_links_and_closes_nothing():
+    from scripts.ci_fix.comment import neutral, prose
+
+    text = "ping @alice, see https://example.com/x?y=1 now; fixes #12 and Closes: valkey-io/valkey#5; a@b.com; `@bob` and `fixes #3` stay"
+    assert prose(text, 500) == (
+        "ping `@alice`, see `https://example.com/x?y=1` now; fixes `#12` and Closes: `valkey-io/valkey#5`; a@b.com; "
+        "`@bob` and `fixes #3` stay"
+    )
+    assert neutral("the var @@x and `code @y` and 1@2") == "the var @@x and `code @y` and 1@2"

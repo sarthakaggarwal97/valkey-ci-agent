@@ -33,6 +33,14 @@ review it, and then pushes it or posts it as a suggested patch. It does the
 same on its own when one of its backport PRs goes red. See
 [Fixing CI failures](docs/ci-fix.md).
 
+**Fixing labelled issues.** A committer can label an issue `needs-agent-fix`.
+The bot writes a test that demonstrates the bug, checks that it fails on
+`unstable`, then writes the change that makes it pass, holds it to the checks
+Valkey's CI runs and to a review that looks for the case it still gets wrong,
+and opens a draft pull request. It rolls out in steps, and the first replays
+issues whose fix is known without writing anything to Valkey. See
+[Fixing labelled issues](docs/factory.md).
+
 **Tracking test failures.** Every night, once Valkey's Daily CI has finished,
 the Test Failure Detector opens or updates one issue per failing test, so
 broken and flaky tests are tracked instead of forgotten. See
@@ -67,6 +75,8 @@ do want something:
 
 - To get a failing job on a `valkey-io/valkey` PR fixed, start a comment with
   `@valkeyrie-ops fix`. You need to be a member of `valkey-io/contributors`.
+- To get an issue fixed, label it `needs-agent-fix`. You need write access to
+  the repository, and the factory has to be switched on (`FACTORY_STEP`).
 - To cut a release, run **Prepare Release** from this repository's Actions
   tab. To generate only the notes, run **Cut Release Notes**.
 - To backport one PR right away, run **Manual Backport**.
@@ -77,7 +87,8 @@ do want something:
 ## Why it is safe to leave running
 
 The agent only ever writes to its own branches: `backport/...`,
-`agent/backport/...`, `agent/ci-fix/...` and `agent/release-cut/...`. It opens
+`agent/backport/...`, `agent/ci-fix/...`, `agent/factory/...` and
+`agent/release-cut/...`. It opens
 pull requests from those branches and leaves the merge to a maintainer. It
 never pushes to a release branch and never rewrites a backport branch that has
 already been published.
@@ -106,6 +117,7 @@ covers the design in more depth.
 scripts/
   backport/               Backports, backport suggestions, CI follow-up
   ci_fix/                 The CI fix bot
+  factory/                Labelled issues to tested pull requests
   test_failure_detector/  Daily CI failures to issues
   fuzzer/                 Fuzzer run triage
   release_notes/          Release notes and review comments on release PRs

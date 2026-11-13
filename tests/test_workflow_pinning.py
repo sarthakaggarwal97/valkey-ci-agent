@@ -341,7 +341,7 @@ def test_every_fix_front_door_runs_the_shared_fix():
 
     doors = set()
     for filename, job_id in (("ci-fix.yml", "ci-fix"), ("backport-ci-followup.yml", "follow-up"),
-                             ("ci-fix-issues.yml", "fix")):
+                             ("ci-fix-issues.yml", "fix"), ("factory.yml", "fix")):
         job = yaml.safe_load((Path(".github/workflows") / filename).read_text(encoding="utf-8"))["jobs"][job_id]
         assert job["uses"] == f"./{_RUN.as_posix()}", filename
         # actions: read lets the plan job read earlier plans, which record
@@ -363,7 +363,9 @@ def test_only_the_plan_and_publish_jobs_hold_a_github_token():
         steps = jobs[job_id]["steps"]
         tokens = [step for step in steps if "actions/create-github-app-token@" in step.get("uses", "")]
         plan = job_id == "plan"
-        assert [token["id"] for token in tokens] == (["target-token"] if plan else ["target-token", "ci-token"])
+        assert [token["id"] for token in tokens] == (
+            ["target-token"] if plan else ["target-token", "ci-token", "push-token"]
+        )
         permissions = {k: v for k, v in tokens[0]["with"].items() if k.startswith("permission-")}
         # The plan only reads and answers (a comment, a reaction); publish pushes and opens PRs.
         assert permissions == {
@@ -374,9 +376,9 @@ def test_only_the_plan_and_publish_jobs_hold_a_github_token():
             **({"permission-members": "read"} if plan else {}),
         }, job_id
         if not plan:
-            # Publish mints exactly one of its two tokens: workflows:write only
+            # Publish mints exactly one of its two target tokens: workflows:write only
             # for a push that may change .github/ (policy.allows_ci_changes).
-            plain, ci = tokens
+            plain, ci, push = tokens
             assert plain["if"] == "needs.plan.outputs.ci_changes != 'true'"
             assert ci["if"] == "needs.plan.outputs.ci_changes == 'true'"
             ci_permissions = {k: v for k, v in ci["with"].items() if k.startswith("permission-")}
@@ -384,20 +386,31 @@ def test_only_the_plan_and_publish_jobs_hold_a_github_token():
             assert {k: v for k, v in ci["with"].items() if not k.startswith("permission-")} == {
                 k: v for k, v in plain["with"].items() if not k.startswith("permission-")
             }
+            # And a third, for the fork a labelled issue's branch goes to: its
+            # code and nothing else, only when the plan names a fork.
+            assert push["if"] == "needs.plan.outputs.push_owner != ''"
+            assert push["with"]["owner"] == "${{ needs.plan.outputs.push_owner }}"
+            assert push["with"]["repositories"] == "${{ needs.plan.outputs.push_repo }}"
+            assert {k: v for k, v in push["with"].items() if k.startswith("permission-")} == {
+                "permission-contents": "write", "permission-metadata": "read",
+            }
         assert not any("configure-aws-credentials@" in step.get("uses", "") for step in steps), job_id
         assert "\n".join(step.get("run", "") for step in steps).count(command) == 1, job_id
         if job_id == "publish":
             publish_step = next(step for step in steps if command in step.get("run", ""))
             assert publish_step["env"]["CI_FIX_ISSUES_PUBLISH"] == "${{ vars.CI_FIX_ISSUES_PUBLISH }}"
+            assert publish_step["env"]["FACTORY_STEP"] == "${{ vars.FACTORY_STEP }}"
             assert publish_step["env"]["TARGET_TOKEN"] == (
                 "${{ steps.ci-token.outputs.token || steps.target-token.outputs.token }}"
             )
+            assert publish_step["env"]["PUSH_TOKEN"] == "${{ steps.push-token.outputs.token }}"
         assert jobs[job_id]["permissions"] == {
             **({"actions": "read"} if job_id == "plan" else {}), "contents": "read",
         }, job_id
         assert jobs[job_id]["runs-on"] == "ubuntu-24.04", job_id
-    assert _RUN.read_text(encoding="utf-8").count("actions/create-github-app-token@") == 3
-    assert jobs["plan"]["outputs"]["ci_changes"] == "${{ steps.plan.outputs.ci_changes }}"
+    assert _RUN.read_text(encoding="utf-8").count("actions/create-github-app-token@") == 4
+    for output in ("ci_changes", "push_owner", "push_repo"):
+        assert jobs["plan"]["outputs"][output] == f"${{{{ steps.plan.outputs.{output} }}}}"
 
 
 _FIX_JOBS = ("fix-in-job", "fix-in-container", "fix-local")
@@ -692,3 +705,67 @@ def test_a_rerun_of_a_fix_replaces_its_artifacts():
     ]
     assert len(uploads) == 5
     assert all(step["with"].get("overwrite") is True for step in uploads)
+
+
+
+# --- the factory: factory.yml, factory-dispatch.yml, factory-replay.yml ---------------------
+
+
+def _workflow(filename):
+    return yaml.load((Path(".github/workflows") / filename).read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+
+
+def test_factory_runs_are_named_for_the_dispatcher_and_queued_per_issue():
+    from scripts.factory.dispatch import RUN_NAME
+
+    workflow = _workflow("factory.yml")
+    name = workflow["run-name"].replace("${{ inputs.issue }}", "123")
+    expression = "${{ inputs.label_event && format(' (label {0})', inputs.label_event) || '' }}"
+    assert RUN_NAME.match(name.replace(expression, " (label 456)")).group("issue", "run") == ("123", "456")
+    assert RUN_NAME.match(name.replace(expression, "")).group("issue", "run") == ("123", None)
+    assert set(workflow["on"]) == {"workflow_dispatch"}
+    assert workflow["concurrency"] == {
+        "group": "factory-issue-${{ inputs.issue }}", "cancel-in-progress": "false", "queue": "max",
+    }
+    assert "push_repo" in workflow["jobs"]["fix"]["with"]["request"]
+    assert "vars.FACTORY_FORK" in workflow["jobs"]["fix"]["with"]["request"]
+
+
+def test_the_factory_dispatcher_runs_only_at_a_live_step_and_never_writes_valkey():
+    workflow = _workflow("factory-dispatch.yml")
+    job = workflow["jobs"]["dispatch"]
+    assert "vars.FACTORY_STEP == 'comment' || vars.FACTORY_STEP == 'draft-pr'" in job["if"]
+    assert "github.event_name == 'workflow_dispatch'" in job["if"]
+    steps = {step.get("name"): step for step in job["steps"]}
+    token = steps["Generate target repository token"]["with"]
+    assert token["repositories"] == "valkey"
+    assert {k: v for k, v in token.items() if k.startswith("permission-")} == {
+        "permission-issues": "read", "permission-pull-requests": "read", "permission-contents": "read",
+        "permission-metadata": "read",
+    }
+    assert job["permissions"] == {"contents": "read", "actions": "write"}
+    env = steps["Dispatch"]["env"]
+    assert env["MAX_RUNS"] == "${{ inputs.max_runs || vars.FACTORY_MAX_RUNS || '1' }}"
+    assert env["MAX_OPEN_PRS"] == "${{ vars.FACTORY_MAX_OPEN_PRS || '5' }}"
+    assert env["STEP"] == "${{ vars.FACTORY_STEP == 'draft-pr' && 'draft-pr' || 'comment' }}"
+
+
+def test_the_replay_publishes_nothing_and_fixes_like_the_bots_own_runner():
+    replay = _workflow("factory-replay.yml")
+    assert set(replay["on"]) == {"workflow_dispatch"}
+    assert set(replay["jobs"]) == {"plan", "fix", "score"}
+    text = Path(".github/workflows/factory-replay.yml").read_text(encoding="utf-8")
+    assert "create-github-app-token" not in text and "VALKEYRIE_BOT" not in text
+    for job_id in ("plan", "score"):
+        assert replay["jobs"][job_id]["permissions"] == {"contents": "read"}, job_id
+    # The fix job is ci-fix-run.yml's fix-local, step for step, with its own artifact names.
+    local = yaml.load(_RUN.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)["jobs"]["fix-local"]
+    fix = replay["jobs"]["fix"]
+    renamed = yaml.load(
+        yaml.dump(fix["steps"]).replace("factory-replay-plan", "ci-fix-plan-${{ inputs.key }}")
+        .replace("factory-replay-result", "ci-fix-result-${{ inputs.key }}"),
+        Loader=yaml.BaseLoader,
+    )
+    assert renamed == local["steps"]
+    for key in ("runs-on", "timeout-minutes", "permissions"):
+        assert fix[key] == local[key], key

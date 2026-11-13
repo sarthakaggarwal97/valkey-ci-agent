@@ -151,6 +151,9 @@ class ReviewFunc(Protocol):
 
 
 TestFunc = Callable[[str, str, int], TestRun]
+# Further checks of a verified candidate (candidate, checkout, test runner,
+# deadline, the checks so far): "" when it holds, else feedback for the agent.
+CheckFunc = Callable[[FixCandidate, str, TestFunc, float, list[str]], str]
 
 
 def prepare_fix(
@@ -162,6 +165,8 @@ def prepare_fix(
     *,
     repo_dir: str = "",
     job: JobCommands | None = None,
+    check_func: CheckFunc | None = None,
+    budget_s: int = 0,
 ) -> FixCandidate:
     """Build a patch or port candidate from the exact failed job and its log.
 
@@ -170,16 +175,19 @@ def prepare_fix(
     never run: it is for a PR whose code the bot does not execute. With
     ``repo_dir``, the fix is prepared in that checkout (the failed CI job's),
     built and tested with that ``job``'s commands; otherwise in a clone.
+    ``check_func`` checks a candidate further once its test passes, before
+    the review; ``budget_s`` is the time the whole preparation may take, the
+    whole of ``PREPARE_BUDGET_S`` when 0.
     """
     failure = task.failure
-    if failure.job_id <= 0:
+    if failure.in_ci and failure.job_id <= 0:
         return _refusal("The failed job has no valid job id.")
 
     if not job_log:
         return _refusal("The exact failed-job log is unavailable. No change was made.")
 
     with checkout(task, repo_dir) as (repo_dir, original_head):
-        deadline = time.monotonic() + PREPARE_BUDGET_S
+        deadline = time.monotonic() + (budget_s or PREPARE_BUDGET_S)
         runs_tests = task.target.kind is not TargetKind.SUGGEST
         run_test = test_func or run_test_command
         tests = locate_unit_tests(repo_dir, failed_tests(task, job_log))
@@ -194,7 +202,7 @@ def prepare_fix(
         return _fix_loop(
             task, repo_dir, original_head, job_log, context, plan,
             agent_func=agent_func, review=review_func or review_candidate,
-            run_test=run_test if runs_tests else None, deadline=deadline, job=job,
+            run_test=run_test if runs_tests else None, deadline=deadline, job=job, check=check_func,
         )
 
 
@@ -222,7 +230,7 @@ def checkout(task: FixTask, repo_dir: str = "") -> Iterator[tuple[str, str]]:
         head = git_output(repo_dir, "rev-parse", "HEAD").strip()
         if head.lower() != checkout_sha.lower():
             raise RuntimeError(f"the job checked out {head[:12]} instead of {checkout_sha[:12]}")
-        _keep_existing(repo_dir)
+        keep_existing(repo_dir)
         yield repo_dir, head
         return
     with tempfile.TemporaryDirectory(prefix="ci-fix-") as workdir:
@@ -244,7 +252,7 @@ def checkout(task: FixTask, repo_dir: str = "") -> Iterator[tuple[str, str]]:
 _KEPT_FILES = "ci-fix-kept.json"
 
 
-def _keep_existing(repo_dir: str) -> None:
+def keep_existing(repo_dir: str) -> None:
     """Treat what the job's setup left in ``repo_dir`` as the job's, not the fix's.
 
     Untracked files (a dependency checked out into the tree) are ignored from
@@ -512,6 +520,7 @@ def _fix_loop(
     run_test: TestFunc | None,
     deadline: float,
     job: JobCommands | None = None,
+    check: CheckFunc | None = None,
 ) -> FixCandidate:
     established = _established_checks(context)
     feedback = ""
@@ -598,6 +607,8 @@ def _fix_loop(
                 failed = _verify(reviewed, repo_dir, round_plan, run_test, deadline, checks)
                 if not failed:
                     failed = _verify_added_tests(task, reviewed, repo_dir, run_test, deadline, checks, job)
+                if not failed and check is not None:
+                    failed = check(reviewed, repo_dir, run_test, deadline, checks)
             if not failed:
                 # The reviewer sees what the checks showed, not only the plan.
                 approved, reasoning = review(
@@ -962,7 +973,7 @@ def _verify(
     show (a prebuilt server binary that keeps ``make`` from rebuilding), so
     those go first: the build and tests run from source.
     """
-    _remove_ignored(repo_dir)
+    remove_ignored(repo_dir)
     if any(path.startswith("deps/") for path in changed_lines(candidate.patch)):
         _rebuild_dependencies(repo_dir)
     return _verify_with_plan(plan, repo_dir, run_test, deadline, checks)
@@ -1094,7 +1105,7 @@ def restore(repo_dir: str) -> None:
             logger.warning("Could not run git %s to reset the tree", " ".join(args))
 
 
-def _remove_ignored(repo_dir: str) -> None:
+def remove_ignored(repo_dir: str) -> None:
     """Remove every ignored file, except a job's own that are still as its setup left them."""
     try:
         kept = json.loads(Path(repo_dir, ".git", _KEPT_FILES).read_text(encoding="utf-8", errors="surrogateescape"))
@@ -1161,6 +1172,15 @@ def _checked_candidate(
 
     if not changed_paths:
         raise _Rejected("You chose `patch` but changed no files.")
+    frozen = sorted(set(changed_paths) & set(task.frozen_paths))
+    if frozen:
+        # Never the agent's to change: put back as the working commit has it.
+        run_git(repo_dir, "checkout", "--", *frozen)
+        raise _Rejected(
+            "The patch changed " + ", ".join(f"`{path}`" for path in frozen)
+            + ", which holds the test the fix is judged by. That test may not be changed, and code put it "
+            "back as it was: leave it, and fix what makes it fail."
+        )
     try:
         patch = build_approved_patch(repo_dir, changed_paths, strict=True)
     except EmptyPatch:

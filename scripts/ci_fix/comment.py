@@ -201,17 +201,38 @@ _DASH = r"(?:\s*\u2014\s*|\s+\u2013\s+)"
 _DASH_PAIR_RE = re.compile(_DASH + r"([^.!?\u2014\u2013]+?)" + _DASH)
 _DASH_RE = re.compile(_DASH)
 _PLURAL_RE = re.compile(r"\b(\d+) (loop|time|attempt)\(s\)")
+# What the agent's text must not do on GitHub: notify a user, link out, or
+# close an issue when the pull request merges. Each is put in a code span,
+# where GitHub renders it as text. A span already in the text is left alone.
+_CODE_SPAN_RE = re.compile(r"(`+[^`]*`+)")
+_MENTION_RE = re.compile(r"(?<![\w/@])@[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})(?![\w-])")
+_LINK_RE = re.compile(r"https?://[^\s<>()\[\]]+")
+_CLOSING_RE = re.compile(
+    r"\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)(:?\s+)((?:[\w.-]+/[\w.-]+)?#\d+)", re.IGNORECASE,
+)
 
 
 def prose(text: str, limit: int) -> str:
-    """``text`` as one line of at most ``limit`` characters, without dashes.
+    """``text`` as one line of at most ``limit`` characters, without dashes, that acts on nothing.
 
     An aside set off by two dashes takes commas; a single dash, which joins
     a clause to what explains it, takes a colon. The agent wrote the text:
-    an HTML comment in it must not read as one of the bot's own markers.
+    an HTML comment in it must not read as one of the bot's own markers, and
+    a mention, a link or a closing keyword in it must not notify, link or
+    close anything (:func:`neutral`).
     """
     text = _DASH_PAIR_RE.sub(r", \1, ", compact_text(text, limit))
-    return _DASH_RE.sub(": ", text).replace("<!--", "<!- -")
+    return neutral(_DASH_RE.sub(": ", text).replace("<!--", "<!- -"))
+
+
+def neutral(text: str) -> str:
+    """``text`` with every mention, link and closing reference outside a code span put in one."""
+    parts = _CODE_SPAN_RE.split(text)
+    for index in range(0, len(parts), 2):
+        part = _LINK_RE.sub(lambda match: f"`{match.group(0)}`", parts[index])
+        part = _MENTION_RE.sub(lambda match: f"`{match.group(0)}`", part)
+        parts[index] = _CLOSING_RE.sub(r"\1\2`\3`", part)
+    return "".join(parts)
 
 
 def _plural(text: str) -> str:

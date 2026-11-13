@@ -1,0 +1,51 @@
+# Issues whose fix is known, replayed by scripts/factory/replay.py to see
+# what the factory makes of them. Nothing is written to Valkey.
+#
+# Each case is one closed issue and the merged pull request that fixed it.
+# The replay pins the issue as it was when that pull request was opened (its
+# comments up to then), and prepares the fix on the commit the pull request
+# merged onto, so the fix that landed is not there to find. The score then
+# applies the bot's test to the known fix: a test that fails without it and
+# passes with it caught the bug the person fixed.
+cases:
+  - id: xinfo-groups-lag
+    about: XINFO GROUPS reports too-high lag after XTRIM removes unread entries.
+    repo: valkey-io/valkey
+    issue: 4979
+    fix_pull: 4983  # src/t_stream.c and tests/unit/type/stream-cgroups.tcl, +42/-3
+
+  - id: stream-xadd-uaf
+    about: A crash report. XINFO STREAM FULL and XRANGE abort after an XADD with stream-node-max-bytes 1.
+    repo: valkey-io/valkey
+    issue: 4705
+    fix_pull: 4711  # src/t_stream.c and tests/unit/type/stream.tcl, +46/-3
+
+  - id: zset-bare-paren
+    about: ZRANGEBYSCORE accepts a bare "(" as a score and reads it as exclusive 0.
+    repo: valkey-io/valkey
+    issue: 3483
+    fix_pull: 4054  # src/t_zset.c and tests/unit/type/zset.tcl, +11/-0
+
+  - id: xackdel-keepref
+    about: XACKDEL KEEPREF replies -1 for an acked entry whose stream entry was already deleted.
+    repo: valkey-io/valkey
+    issue: 4840
+    fix_pull: 4843  # changes a command definition too, so the generated-file check runs
+
+  - id: hash-field-expiry-propagation
+    about: HDEL, HGETDEL, HPERSIST and HEXPIRE propagate expired hash fields to replicas.
+    repo: valkey-io/valkey
+    issue: 4732
+    fix_pull: 4772  # src/t_hash.c and tests/unit/hashexpire.tcl, +297/-3
+
+  - id: slot-stats-orderby
+    about: CLUSTER SLOT-STATS ORDERBY sorts incorrectly when counters differ by more than INT_MAX; fixed with a C unit test.
+    repo: valkey-io/valkey
+    issue: 4458
+    fix_pull: 4459  # src/cluster_slot_stats.c and src/unit/test_cluster_slot_stats.cpp
+
+  - id: zset-lex-mixed-score
+    about: ZREMRANGEBYLEX on btree sorted sets diverges primary and replica for mixed-score keys.
+    repo: valkey-io/valkey
+    issue: 4950
+    fix_pull: 4954  # src/ordered_index.c and tests/unit/type/zset.tcl, +208/-0

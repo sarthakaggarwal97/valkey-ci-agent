@@ -63,7 +63,7 @@ def front_door(monkeypatch):
         seen.reported.append(result)
         return {"action": result.kind.value}
 
-    monkeypatch.setitem(run._FRONT_DOORS, FrontDoor.PR, (planner, reporter))
+    monkeypatch.setitem(run._FRONT_DOORS, FrontDoor.PR, (planner, reporter, run._prepare_ci_fix))
     return seen
 
 
@@ -97,7 +97,7 @@ def test_a_failure_its_job_can_host_is_fixed_in_that_job(front_door, workflows, 
         "mode": "job", "job": "test-ubuntu-latest", "runs_on": "ubuntu-latest", "container": "",
         "timeout_minutes": str(JOB_MINUTES), "use_repo": "valkey-io/valkey", "use_git_ref": _HEAD,
         "extra_repository": "ianlancetaylor/libbacktrace", "extra_ref": "b9e40069c0b47a722286b94eb5231f7f05c08713",
-        "extra_path": "libbacktrace", "ci_changes": "",
+        "extra_path": "libbacktrace", "ci_changes": "", "push_owner": "", "push_repo": "",
     }
     # The PR's run used the workflow at its head.
     assert workflows == [("valkey-io/valkey", "ci", _HEAD)]
@@ -150,7 +150,7 @@ def test_an_issue_fix_replays_the_job_from_the_tip_it_checks_out(front_door, wor
 def test_a_failure_its_job_cannot_host_is_fixed_on_the_bots_runner(front_door, workflows, tmp_path):
     front_door.planned = _pr_plan("test-no-workflow-has-this-job")
 
-    assert _plan(tmp_path, front_door.planned) == {"mode": "local", "ci_changes": ""}
+    assert _plan(tmp_path, front_door.planned) == {"mode": "local", "ci_changes": "", "push_owner": "", "push_repo": ""}
     assert (tmp_path / run.PLAN_FILE).exists()
     assert not (tmp_path / run.JOB_FILE).exists()
 
@@ -163,7 +163,7 @@ def test_a_workflow_that_cannot_be_read_falls_back_to_the_bots_runner(front_door
 
     monkeypatch.setattr(run, "workflow_source", unreadable)
 
-    assert _plan(tmp_path, front_door.planned) == {"mode": "local", "ci_changes": ""}
+    assert _plan(tmp_path, front_door.planned) == {"mode": "local", "ci_changes": "", "push_owner": "", "push_repo": ""}
 
 
 @pytest.mark.parametrize(("branch", "policy", "kind", "expected"), [
@@ -187,7 +187,7 @@ def test_a_suggestion_is_never_run_in_a_job(front_door, workflows, tmp_path):
     front_door.planned = replace(plan, task=replace(plan.task, target=replace(plan.task.target,
                                                                              kind=TargetKind.SUGGEST)))
 
-    assert _plan(tmp_path, front_door.planned) == {"mode": "local", "ci_changes": ""}
+    assert _plan(tmp_path, front_door.planned) == {"mode": "local", "ci_changes": "", "push_owner": "", "push_repo": ""}
     assert workflows == []
 
 
@@ -568,3 +568,59 @@ def test_the_run_page_says_whether_a_fix_was_published(tmp_path, monkeypatch):
     text = summary.read_text(encoding="utf-8")
     assert "**refused** (no fix published)" in text and "No safe fix." in text
     assert "**suggested** (a fix was published)" in text
+
+
+
+def test_only_a_branch_pushed_to_a_fork_asks_publish_for_the_forks_token(front_door, workflows, tmp_path):
+    """A suggestion's target is a contributor's fork too, but nothing is pushed there."""
+    plan = _pr_plan("test-no-workflow-has-this-job")
+    suggestion = replace(plan, task=replace(plan.task, target=replace(
+        plan.task.target, kind=TargetKind.SUGGEST, repo_full_name="contributor/valkey", base_repo_full_name="valkey-io/valkey",
+    )))
+    front_door.planned = suggestion
+    assert _plan(tmp_path, suggestion)["push_owner"] == ""
+
+    issue = Failure(repo_full_name="valkey-io/valkey", run_id=0, head_sha=_HEAD, job_id=0, job_name="",
+                    base_branch="unstable", issue_number=9)
+    forked = FixPlan(front_door=FrontDoor.PR, task=FixTask(
+        issue,
+        FixTarget(kind=TargetKind.DRAFT_PR, repo_full_name="valkeyrie-bot/valkey", base_repo_full_name="valkey-io/valkey",
+                  branch="agent/factory/issue-9-1", expected_sha=_HEAD),
+        FixPolicy.GENERAL,
+    ))
+    front_door.planned = forked
+    artifacts = SimpleNamespace(download_job_log=MagicMock(side_effect=AssertionError("no job log to download")))
+
+    outputs = run.plan(MagicMock(), artifacts, FrontDoor.PR, {}, bot_login=_BOT, out=tmp_path)
+
+    assert outputs == {"mode": "local", "ci_changes": "", "push_owner": "valkeyrie-bot", "push_repo": "valkey"}
+    assert load(tmp_path / run.PLAN_FILE, FixPlan).job_log == ""
+
+
+def test_the_push_token_is_used_for_the_push_and_the_targets_for_everything_else(monkeypatch, tmp_path):
+    seen = {}
+
+    class AuthContext:
+        def __init__(self, token, *, prefix):
+            seen["git_token"] = token
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return None
+
+        def env(self):
+            return {}
+
+    monkeypatch.setattr(run, "GitAuth", AuthContext)
+    monkeypatch.setattr(run, "Github", lambda auth: MagicMock())
+    monkeypatch.setattr(run, "publish_and_report", lambda *a, **k: {"action": "opened", "summary": "s"})
+    monkeypatch.setenv("TARGET_TOKEN", "target-token")
+    monkeypatch.setenv(run.PUSH_TOKEN_ENV, "push-token")
+    assert run.main(["publish", "--plan", str(tmp_path), "--outcome", str(tmp_path)]) == 0
+    assert seen["git_token"] == "push-token"
+
+    monkeypatch.delenv(run.PUSH_TOKEN_ENV)
+    run.main(["publish", "--plan", str(tmp_path), "--outcome", str(tmp_path)])
+    assert seen["git_token"] == "target-token"
