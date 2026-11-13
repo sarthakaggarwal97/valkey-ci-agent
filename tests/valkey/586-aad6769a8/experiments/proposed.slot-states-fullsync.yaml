@@ -1,0 +1,55 @@
+extends: [valkey.liveness]
+id: proposed.slot-states-fullsync
+deployment:
+  modes: [standalone]
+metadata:
+  description: A replica that full-syncs from a node with open (migrating/importing)
+    slots inherits those states via the new cluster-slot-states RDB aux field, on
+    both builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    diskless_sync: {type: string, enum: ["yes", "no"], default: "no"}
+    diskless_load: {type: string, enum: [disabled, on-empty-db, swapdb], default: disabled}
+components:
+- use: valkey.action.commands
+  id: slotsync
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 4
+    resp: {$ref: inputs.resp}
+    timeout_s: 240
+    server_config:
+      repl-diskless-sync: {$ref: inputs.diskless_sync}
+      repl-diskless-sync-delay: 0
+      repl-diskless-load: {$ref: inputs.diskless_load}
+    commands:
+    - {command: [SET, "{aga}stay", v1], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 609, MIGRATING, "<node.1.id>"], node: 0, wait_s: 60,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 609, IMPORTING, "<node.0.id>"], node: 1, wait_s: 60,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 2, wait_s: 60, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, NODES], node: 2, wait_s: 60, compare: skip, expect: {contains: "609->-"}}
+    - {command: [READONLY], node: 2, expect: {equals: OK}}
+    - {command: [GET, "{aga}missing"], node: 2, wait_s: 30, compare: skip, expect: {
+        error: "ASK 609"}}
+    - {command: [GET, "{aga}stay"], node: 2, expect: {equals: v1}}
+    - {command: [CLUSTER, REPLICATE, "<node.1.id>"], node: 3, wait_s: 60, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, NODES], node: 3, wait_s: 60, compare: skip, expect: {contains: "609-<-"}}
+    - {command: [READONLY], node: 3, expect: {equals: OK}}
+    - {command: [ASKING], node: 3, expect: {equals: OK}}
+    - {command: [EXISTS, "{aga}nope"], node: 3, expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [slotsync.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: slotsync}

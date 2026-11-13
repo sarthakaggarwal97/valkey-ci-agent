@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "96dcd1183afa803d30ec71c574e80e3dc01c1f6e",
+  "parent": "fd58b73f0ae895bf9de3810d799da20bb75a2b4f",
+  "pr": 118,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Change BITCOUNT 'end' as optional like BITPOS (#118)",
+  "date": "2024-05-28",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.6083,
+  "findings": [],
+  "recorded": []
+}

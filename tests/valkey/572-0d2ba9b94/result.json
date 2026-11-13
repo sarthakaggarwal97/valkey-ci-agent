@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0d2ba9b94d28d4022ea475a2b83157830982c941",
+  "parent": "6bab2d7968dd9d71f2ce200386ecf4286e333a76",
+  "pr": 572,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update redis legacy word when run TLS cert file (#572)",
+  "date": "2024-05-30",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2166,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits utils/gen-test-certs.sh, a helper script that generates self-signed certificates for Valkey's own test suite, replacing the certificate subject string \"/O=Redis Test\" with \"/O=Valkey Test\". No server, tool, or library code changes: no command replies, replication, persistence, or TLS runtime behaviour is affected, and the certificate subject organization name has no functional effect on the tests that use these certs. This is a cosmetic branding change to a test utility and needs no fuzzer scenario."
+}

@@ -1,0 +1,57 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6fb90adf4be1c3b703040c9f744bc9cf17d3d577",
+  "parent": "0d2ba9b94d28d4022ea475a2b83157830982c941",
+  "pr": 526,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix crash where command duration is not reset when client is blocked \u2026 (#526)",
+  "date": "2024-05-30",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.4259,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2074 'c->duration == 0' is not true",
+      "scenario": "ai-d4d9053be074",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #526",
+      "fingerprint": "32452d757cd5d8298805",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2074 'c->duration == 0' is not true",
+      "scenario": "ai-0aefd281cf80",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #526",
+      "fingerprint": "32452d757cd5d8298805",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

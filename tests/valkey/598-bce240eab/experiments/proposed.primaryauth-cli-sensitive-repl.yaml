@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.primaryauth-cli-sensitive-repl
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    valkey-cli's interactive repl (stdin-driven) runs CONFIG SET with the new primaryuser/primaryauth
+    names through isSensitiveCommand's new checks (valkey-cli.c:3164), compared across
+    the change's and the parent's builds; each side's cli talks to a private server
+    of its own build, so the candidate accepts primaryauth/primaryuser where the parent's
+    server rejects them as unknown options.
+components:
+- use: valkey.action.tools
+  id: cli-repl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 30
+    runs:
+    - tool: valkey-cli
+      args: [-p, $port]
+      stdin: "config set primaryauth s3cret-pass\nconfig set primaryuser repl-admin\n\
+        config get primaryuser\nconfig set PRIMARYAUTH UPPER-s3cret\nconfig set maxmemory\
+        \ 0 primaryauth paired-s3cret\nconfig set masterauth legacy-s3cret\nconfig\
+        \ set requirepass \"\"\nconfig set appendonly no\nping\nexit\n"
+      expect_difference: true
+      expect: {exit: {equals: 0}, stdout: {contains: "OK"}}
+    - tool: valkey-cli
+      args: [-p, $port]
+      stdin: "config set primaryuser\nconfig set primaryauth single-arg\nexit\n"
+      expect_difference: true
+      expect: {exit: {equals: 0}, stdout: {contains: "wrong number of arguments"}}
+required_events: [cli-repl.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: cli-repl}

@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.register-function-outside-load
+deployment:
+  modes: [standalone]
+metadata:
+  description: server.register_function called from a function callback errors; the
+    error text was rebranded from redis. to server.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: regfn
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [FUNCTION, LOAD, "#!lua name=lib\nserver.register_function('f1', function(keys,\
+          \ args) return server.register_function('f2', function() return 2 end) end)"],
+      expect: {equals: lib}}
+    - {command: [FCALL, f1, "0"], expect_difference: true, expect: {error: "server.register_function\
+          \ can only be called on FUNCTION LOAD command"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [regfn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: regfn}

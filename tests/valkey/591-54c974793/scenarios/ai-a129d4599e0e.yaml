@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bce240eab7aa..54c97479356e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a129d4599e0e
+seed: 101
+experiment:
+  id: proposed.cluster-setslot-lifecycle-compare
+  inputs: {}
+deployment:
+  mode: standalone
+  base_port: 7000

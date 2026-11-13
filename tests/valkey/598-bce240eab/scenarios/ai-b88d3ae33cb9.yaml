@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ad5fd5b95ced..bce240eab7aa.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-b88d3ae33cb9
+seed: 598001
+experiment:
+  id: proposed.primaryauth-config-rename
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

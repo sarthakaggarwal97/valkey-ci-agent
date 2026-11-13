@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bce240eab7aa..54c97479356e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1cef9e0867a3
+seed: 911
+experiment:
+  id: proposed.cluster-replicate-takeover-compare
+deployment:
+  mode: standalone
+  base_port: 8000

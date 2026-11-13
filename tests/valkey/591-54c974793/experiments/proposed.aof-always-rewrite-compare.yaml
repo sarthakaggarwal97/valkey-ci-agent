@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.aof-always-rewrite-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: appendfsync always writes, WAITAOF, and BGREWRITEAOF closing the old
+    incr AOF, compared across builds and across a restart that reloads the AOF
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: aofrw
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes", appendfsync: always}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 0], expect: {equals: [1, 0]}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {error: false}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 0], expect: {equals: [1, 0]}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {error: false}}
+    - {command: [INFO, persistence], wait_s: 30, compare: skip, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [SET, k3, v3], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 0], expect: {equals: [1, 0]}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [GET, k2], expect: {equals: v2}}
+    - {command: [GET, k3], expect: {equals: v3}}
+    - {command: [INFO, persistence], compare: skip, expect: {contains: "aof_enabled:1"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aofrw.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aofrw}

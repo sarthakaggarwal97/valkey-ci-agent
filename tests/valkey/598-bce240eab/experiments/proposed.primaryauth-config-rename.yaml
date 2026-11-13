@@ -1,0 +1,52 @@
+extends: [valkey.liveness]
+id: proposed.primaryauth-config-rename
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG SET/GET of primaryauth/primaryuser and their masterauth/masteruser
+    aliases, including an alias/canonical pair in one CONFIG SET and a binary password,
+    compared against the parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rename
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, primaryauth], expect_difference: true, expect: {equals: [
+          primaryauth, ""]}}
+    - {command: [CONFIG, SET, primaryauth, secret1], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, GET, primaryauth], expect_difference: true, expect: {equals: [
+          primaryauth, secret1]}}
+    - {command: [CONFIG, GET, masterauth], expect_difference: true, expect: {equals: [
+          masterauth, secret1]}}
+    - {command: [CONFIG, SET, masteruser, repluser], expect: {equals: OK}}
+    - {command: [CONFIG, GET, primaryuser], expect_difference: true, expect: {equals: [
+          primaryuser, repluser]}}
+    - {command: [CONFIG, SET, primaryuser, ""], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, GET, masteruser], expect_difference: true, expect: {equals: [
+          masteruser, ""]}}
+    - {command: [CONFIG, SET, masterauth, a, masterauth, b], expect: {error: "duplicate"}}
+    - {command: [CONFIG, SET, primaryauth, a, masterauth, b], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, primaryauth], expect_difference: true, expect: {equals: [
+          primaryauth, b]}}
+    - {command: [CONFIG, SET, masterauth, !!binary 'YWJjAGRlZg=='], expect: {equals: OK}}
+    - {command: [CONFIG, GET, primaryauth], expect_difference: true, expect: {equals: [
+          primaryauth, !!binary 'YWJjAGRlZg==']}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rename.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rename}

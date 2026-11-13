@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.enable-debug-assert-config
+deployment:
+  modes: [standalone]
+metadata:
+  description: New hidden bool enable-debug-assert exists, toggles at runtime, stays
+    hidden from pattern CONFIG GET, persists across CONFIG REWRITE and restart, and
+    the cluster debug-assert sites (getKeySlot, cached CLUSTER SLOTS) run clean with
+    it enabled
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.commands
+  id: dbg
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    timeout_s: 30
+    commands:
+    - {command: [CONFIG, GET, enable-debug-assert], expect_difference: true, expect: {
+        equals: [enable-debug-assert, "no"]}}
+    - {command: [CONFIG, SET, enable-debug-assert, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CONFIG, GET, enable-debug-assert], expect_difference: true, expect: {
+        equals: [enable-debug-assert, "yes"]}}
+    - {command: [CONFIG, GET, "enable-debug-*"], expect: {equals: []}}
+    - {command: [MSET, "{t}k1", v1, "{t}k2", v2], expect: {equals: OK}}
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [GET, foo], expect: {equals: bar}}
+    - {command: [DEL, foo, "{t}k1", "{t}k2"], expect: {equals: 3}}
+    - {command: [CLUSTER, SLOTS], compare: skip}
+    - {command: [CLUSTER, SLOTS], compare: skip}
+    - {command: [CONFIG, SET, enable-debug-assert, "no"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [SET, foo, baz], expect: {equals: OK}}
+    - {command: [CONFIG, SET, enable-debug-assert, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [GET, foo], expect: {equals: baz}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, enable-debug-assert], expect_difference: true, expect: {
+        equals: [enable-debug-assert, "yes"]}}
+    - {command: [SET, after-restart, "1"], expect: {equals: OK}, wait_s: 30}
+    - {command: [CLUSTER, SLOTS], compare: skip}
+    - {command: [CLUSTER, SLOTS], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dbg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbg}

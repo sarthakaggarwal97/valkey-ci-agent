@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 2b97aa61710f..d16b4ec1b9a2.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4c0045c5ce31
+seed: 101
+experiment:
+  id: proposed.unshare-shared-int-on-touch
+  inputs:
+    resp: 2
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

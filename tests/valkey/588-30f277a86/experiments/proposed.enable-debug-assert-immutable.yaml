@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.enable-debug-assert-immutable
+deployment:
+  modes: [standalone]
+metadata:
+  description: enable-debug-assert became IMMUTABLE_CONFIG - CONFIG SET is refused
+    where the parent accepted it, it still works as a startup config, and with it
+    enabled the getKeySlot and cached CLUSTER SLOTS debug asserts run without firing
+    falsely
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+    startup_config: {type: object, default: {}}
+components:
+- use: valkey.action.commands
+  id: toggle
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: {$ref: inputs.cluster}
+    server_config: {$ref: inputs.startup_config}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, GET, enable-debug-assert]}
+    - {command: [CONFIG, SET, enable-debug-assert, yes], expect_difference: true,
+      expect: {error: "immutable"}}
+    - {command: [CONFIG, SET, enable-debug-assert, no], expect_difference: true, expect: {
+        error: "immutable"}}
+    - {command: [CONFIG, SET, maxmemory, 123mb, enable-debug-assert, yes], expect_difference: true,
+      expect: {error: "immutable"}}
+    - {command: [SET, "user:1", v1], expect: {equals: OK}}
+    - {command: [CLUSTER, SLOTS]}
+    - {command: [CLUSTER, SLOTS]}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "user:2", v2]}
+    - {command: [GET, "user:1"]}
+    - {command: [EXEC], expect: {equals: [OK, v1]}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [toggle.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: toggle}

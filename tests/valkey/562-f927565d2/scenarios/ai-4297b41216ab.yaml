@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 6fb90adf4be1..f927565d2822.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4297b41216ab
+seed: 562001
+experiment:
+  id: proposed.wait-waitaof-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

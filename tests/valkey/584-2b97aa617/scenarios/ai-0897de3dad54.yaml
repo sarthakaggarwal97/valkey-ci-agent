@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f927565d2822..2b97aa61710f.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0897de3dad54
+seed: 58401
+experiment:
+  id: proposed.enable-debug-assert-config
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

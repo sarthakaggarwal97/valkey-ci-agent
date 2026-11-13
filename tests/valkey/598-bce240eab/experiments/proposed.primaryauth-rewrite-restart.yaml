@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.primaryauth-rewrite-restart
+deployment:
+  modes: [standalone]
+metadata:
+  description: A config file written with masterauth/masteruser survives CONFIG REWRITE
+    (which canonicalizes the aliased lines to primaryauth/primaryuser) and a restart
+    without losing the credentials
+components:
+- use: valkey.action.commands
+  id: rewrite
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {masterauth: oldsecret, masteruser: olduser}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, GET, masterauth], expect: {equals: [masterauth, oldsecret]}}
+    - {command: [CONFIG, GET, primaryauth], expect_difference: true, expect: {equals: [
+          primaryauth, oldsecret]}}
+    - {command: [CONFIG, SET, masterauth, newsecret], expect: {equals: OK}}
+    - {command: [CONFIG, SET, primaryuser, newuser], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, masterauth], expect: {equals: [masterauth, newsecret]}}
+    - {command: [CONFIG, GET, masteruser], expect_difference: true, expect: {equals: [
+          masteruser, newuser]}}
+    - {command: [CONFIG, GET, primaryuser], expect_difference: true, expect: {equals: [
+          primaryuser, newuser]}}
+    - {command: [CONFIG, GET, primaryauth], expect_difference: true, expect: {equals: [
+          primaryauth, newsecret]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rewrite.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rewrite}

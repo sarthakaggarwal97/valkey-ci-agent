@@ -1,0 +1,61 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f927565d28229691b39f873f40d2d8b9cacc425d",
+  "parent": "6fb90adf4be1c3b703040c9f744bc9cf17d3d577",
+  "pr": 562,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Consolidate various BLOCKED_WAIT* states (#562)",
+  "date": "2024-05-30",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 9,
+  "proven": 0,
+  "hunted": 5,
+  "dropped": 4,
+  "recall": false,
+  "coverage": {
+    "lines": 24,
+    "executed": 17,
+    "percent": 70,
+    "uncovered": [
+      "src/blocked.c:238",
+      "src/blocked.c:239",
+      "src/blocked.c:241",
+      "src/cluster_legacy.c:6021",
+      "src/cluster_legacy.c:6031",
+      "src/cluster_legacy.c:6033",
+      "src/replication.c:3583"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 14.9782,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-7e637ae80088",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-65d6996d7e04",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-26bd2c948f77",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-39aafdf18c84",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "unexplained-difference"
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "30f277a86d35e3f70314f50ca7b59562838bd429",
+  "parent": "d16b4ec1b9a2309f17601abb1e238f06dfb736a9",
+  "pr": 588,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Enable debug asserts for cluster and sentinel tests (#588)",
+  "date": "2024-06-02",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 2,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 4.2773,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-80868031aa26",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'toggle' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (CLUSTER SLOTS), 6 (CLUSTER SLOTS)"
+    },
+    {
+      "scenario": "ai-67333a0df256",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'toggle' returned ERROR: expectations both builds violate alike, so they are not about the change: 10 (EXEC)"
+    }
+  ]
+}

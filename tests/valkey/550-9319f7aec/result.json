@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9319f7aeca5d726d07e3e967d2f2f7b9d7126a46",
+  "parent": "0700c441c60dc150157a82af057e71b6a6234326",
+  "pr": 550,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replace valkey in log and panic messages (#550)",
+  "date": "2024-06-04",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2368,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewrites the wording of two fatal diagnostic messages (a serverPanic for an unknown flag in the cluster config file, and the FATAL log when an RDB names a dbid >= server.dbnum) to use SERVER_TITLE instead of a hardcoded 'redis'/'Redis'. Control flow, conditions, format arguments and exit behaviour are unchanged on both paths; no reply, data, replication or persistence behaviour differs between the builds, so there is nothing a scenario's oracles or a compared sequence could detect. This is a cosmetic string change needing no test."
+}

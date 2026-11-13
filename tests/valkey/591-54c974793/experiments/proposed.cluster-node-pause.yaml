@@ -1,0 +1,35 @@
+extends: [valkey.base]
+id: proposed.cluster-node-pause
+deployment:
+  modes: [cluster]
+metadata:
+  description: SIGSTOP a cluster node longer than the node timeout so peers mark it
+    FAIL, then SIGCONT it; the FAIL state must clear (or a failover settle) with no
+    acknowledged write lost
+inputs:
+  properties:
+    target: {type: string, enum: [primary, replica], default: replica}
+    pause_s: {type: number, default: 8}
+    settle_s: {type: number, default: 20}
+components:
+- use: valkey.fault.process-signal
+  id: pause-node
+  config:
+    when_event: warm-up.completed
+    instance: {$ref: inputs.target}
+    signal: SIGSTOP
+    pause_s: {$ref: inputs.pause_s}
+- use: valkey.action.sleep
+  id: warm-up
+  depends_on: [writes, pause-node]
+  config: {seconds: 2}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [warm-up]
+  config: {seconds: {$ref: inputs.settle_s}}
+- use: valkey.oracle.ledger
+  id: data
+  config: {workload: writes, loss_window_s: 2.5}
+required_events: [warm-up.completed]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: pause-node}

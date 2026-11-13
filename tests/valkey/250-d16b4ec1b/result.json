@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d16b4ec1b9a2309f17601abb1e238f06dfb736a9",
+  "parent": "2b97aa61710f2b64245bf734abaa1984efe454e8",
+  "pr": 250,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Unshare object to avoid LRU/LFU being messed up (#250)",
+  "date": "2024-06-01",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 3,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.9263,
+  "findings": [],
+  "recorded": []
+}

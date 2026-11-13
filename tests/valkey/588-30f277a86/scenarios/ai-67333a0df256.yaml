@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d16b4ec1b9a2..30f277a86d35.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-67333a0df256
+seed: 202
+experiment:
+  id: proposed.enable-debug-assert-immutable
+  inputs:
+    resp: 3
+    cluster: true
+    startup_config:
+      enable-debug-assert: 'yes'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

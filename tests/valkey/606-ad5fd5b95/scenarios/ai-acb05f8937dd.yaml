@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 278ce0cae043..ad5fd5b95ced.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-acb05f8937dd
+seed: 102
+experiment:
+  id: proposed.lua-debugger-resp-logs
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  base_port: 7100

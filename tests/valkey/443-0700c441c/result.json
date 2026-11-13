@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0700c441c60dc150157a82af057e71b6a6234326",
+  "parent": "b95e7c384f61be9b493b98835dbb5038f90b92f6",
+  "pr": 443,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove unused valDup (#443)",
+  "date": "2024-06-03",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5061,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change removes the valDup callback field from dictType. valDup was NULL in every initializer in the tree, so dictSetVal's behavior is identical before and after (de->v.val = val in both cases); all positional and designated initializers were updated consistently, and no reference to valDup remains in the source. kvstoreDictSetVal now passes NULL for the dict, which dictSetVal no longer dereferences. This is a pure dead-code refactor with no observable behavior change in commands, replication, persistence, cluster, or the bundled tools, so there is no behavior to test."
+}

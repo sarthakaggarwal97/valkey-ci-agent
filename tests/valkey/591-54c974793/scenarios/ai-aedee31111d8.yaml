@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bce240eab7aa..54c97479356e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-aedee31111d8
+seed: 707
+experiment:
+  id: proposed.replication-handshake-compare
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7600

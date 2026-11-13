@@ -1,0 +1,62 @@
+extends: [valkey.liveness]
+id: proposed.lua-debugger-resp-logs
+deployment:
+  modes: [standalone]
+metadata:
+  description: Full Lua debugger (LDB) session compared across builds - sync and forked
+    modes, server.call replies of every RESP2/RESP3 type rendered by the renamed ldbRespToHuman
+    family, and the renamed help text
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ldb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [DEBUG, set-disable-deny-scripts, 1], connection: dbg, expect: {equals: OK}}
+    - {command: [SCRIPT, DEBUG, SYNC], connection: dbg, expect: {equals: OK}}
+    - {command: [EVAL, "local a = 1\nlocal b = 2\nreturn server.call('ping')", 0],
+      connection: dbg, expect: {exists: true}}
+    - {command: [valkey, set, foo, bar], connection: dbg, expect: {exists: true}}
+    - {command: [valkey, get, foo], connection: dbg, expect: {exists: true}}
+    - {command: [valkey, get, missing], connection: dbg, expect: {exists: true}}
+    - {command: [valkey, incr, foo], connection: dbg, expect: {exists: true}}
+    - {command: [valkey, debug, protocol, array], connection: dbg, expect: {exists: true}}
+    - {command: [e, "server.setresp(3)"], connection: dbg, expect: {exists: true}}
+    - {command: [valkey, debug, protocol, map], connection: dbg, expect: {exists: true}}
+    - {command: [valkey, debug, protocol, set], connection: dbg, expect: {exists: true}}
+    - {command: [valkey, debug, protocol, double], connection: dbg, expect: {exists: true}}
+    - {command: [valkey, debug, protocol, "null"], connection: dbg, expect: {exists: true}}
+    - {command: [valkey, debug, protocol, "true"], connection: dbg, expect: {exists: true}}
+    - {command: [valkey, debug, protocol, "false"], connection: dbg, expect: {exists: true}}
+    - {command: [valkey, debug, protocol, bignum], connection: dbg, expect: {exists: true}}
+    - {command: [valkey, debug, protocol, verbatim], connection: dbg, expect: {exists: true}}
+    - {command: [valkey, debug, protocol, attrib], connection: dbg, expect: {exists: true}}
+    - {command: [help], connection: dbg, expect_difference: true, expect: {contains: "Lua\
+          \ debugger help:"}}
+    - {command: [c], connection: dbg, expect: {exists: true}}
+    - {connection: dbg, read: true, expect: {exists: true}}
+    - {command: [SCRIPT, DEBUG, YES], connection: dbg2, expect: {equals: OK}}
+    - {command: [EVAL, "return server.call('echo','forked')", 0], connection: dbg2,
+      expect: {exists: true}}
+    - {command: [valkey, echo, hi-from-fork], connection: dbg2, expect: {exists: true}}
+    - {command: [help], connection: dbg2, expect_difference: true, expect: {contains: "Lua\
+          \ debugger help:"}}
+    - {command: [a], connection: dbg2, expect: {exists: true}}
+    - {connection: dbg2, read: true, expect: {exists: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ldb.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ldb}

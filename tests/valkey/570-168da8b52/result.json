@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "168da8b52eaae4346b71e44a26a6f5ae8a3089f1",
+  "parent": "96dcd1183afa803d30ec71c574e80e3dc01c1f6e",
+  "pr": 570,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix bitops.c clang-format properly (#570)",
+  "date": "2024-05-28",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.211,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a clang-format whitespace-only fix in bitcountCommand (src/bitops.c): it reflows an if statement onto one line, strips trailing whitespace, and adds spaces around operators. No code tokens, logic, or replies change, so there is no behaviour to test."
+}

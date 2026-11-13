@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.register-function-errors-rdb-reload
+deployment:
+  modes: [standalone]
+metadata:
+  description: Renamed server.register_function error strings at FUNCTION LOAD and
+    FCALL time, then reload of a function-bearing RDB across a restart (Loading RDB
+    produced by Valkey version log path)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: regfn
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [FUNCTION, LOAD, "#!lua name=badkey\nlocal t = {function_name='f1',\
+          \ callback=function() return 1 end}\nt[true] = 1\nserver.register_function(t)"],
+      expect_difference: true, expect: {error: "named argument key given to server.register_function\
+          \ is not a string"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=noargs\nserver.register_function()"],
+      expect_difference: true, expect: {error: "wrong number of arguments to server.register_function"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=mylib\nserver.register_function('f2',\
+          \ function(keys, args) return server.register_function('g', function() return\
+          \ 2 end) end)\nserver.register_function('ok', function(keys, args) return\
+          \ 42 end)"], expect: {equals: mylib}}
+    - {command: [FCALL, f2, 0], expect_difference: true, expect: {error: "server.register_function\
+          \ can only be called on FUNCTION LOAD command"}}
+    - {command: [FCALL, ok, 0], expect: {equals: 42}}
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [FCALL, ok, 0], expect: {equals: 42}}
+    - {command: [FCALL, f2, 0], expect_difference: true, expect: {error: "server.register_function\
+          \ can only be called on FUNCTION LOAD command"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [regfn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: regfn}

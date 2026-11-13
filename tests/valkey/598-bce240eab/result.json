@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "bce240eab7aa02ace5ed76f61122647f9ef719d7",
+  "parent": "ad5fd5b95ced743c577724276e3a182e0d3be255",
+  "pr": 598,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Replace masteruser and masterauth with primaryuser and primaryauth (#598)",
+  "date": "2024-06-07",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 5,
+  "proven": 5,
+  "hunted": 5,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 10.5682,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "compat-sync: the replica did not reach the primary's data within 30s (compat-sync): primary {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"0\"}, replica {\"digest\":{\"reply\":\"0000000000000000000000000000000000000000\"},\"offset\":\"0\"}, link down",
+      "scenario": "ai-517ee5df1afd",
+      "seed": 598003,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "introduced by #598",
+      "fingerprint": "cc966ec5f036751c722b",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/147"
+    }
+  ],
+  "recorded": []
+}

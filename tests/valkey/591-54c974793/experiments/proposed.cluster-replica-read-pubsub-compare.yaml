@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.cluster-replica-read-pubsub-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: READONLY reads served by a cluster replica, MOVED redirects, shard-channel
+    removal when the slot moves away, and replica dbExpand on a keyed full sync, compared
+    across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: replica-reads
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [DEBUG, POPULATE, 2000], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 2, expect: {equals: OK}}
+    - {command: [WAIT, 1, 500], node: 0, wait_s: 60, expect: {min: 1}}
+    - {command: [FLUSHALL, SYNC], node: 0, expect: {equals: OK}}
+    - {command: [SET, foo, bar], node: 0, expect: {equals: OK}}
+    - {command: [READONLY], node: 2, connection: ro, expect: {equals: OK}}
+    - {command: [GET, foo], node: 2, connection: ro, wait_s: 30, expect: {equals: bar}}
+    - {command: [SET, foo, baz], node: 2, connection: ro, expect: {error: "MOVED"}}
+    - {command: [GET, foo], node: 2, expect: {error: "MOVED"}}
+    - {command: [SSUBSCRIBE, foo], node: 0, connection: sub, expect: {exists: true}}
+    - {command: [DEL, foo], node: 0, expect: {equals: 1}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.1.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [GET, foo], node: 2, connection: ro, wait_s: 30, expect: {error: "MOVED"}}
+    - {read: true, node: 0, connection: sub, expect: {exists: true}}
+    - {command: [PING], node: 2, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [replica-reads.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: replica-reads}

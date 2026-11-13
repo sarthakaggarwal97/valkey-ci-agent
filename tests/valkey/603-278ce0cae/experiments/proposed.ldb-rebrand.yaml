@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.ldb-rebrand
+deployment:
+  modes: [standalone]
+metadata:
+  description: The rebranded synchronous Lua debugger REPL accepts the new v/valkey
+    alias, logs commands with the <command> prefix, and emits the rebranded help and
+    unknown-command text.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ldb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SCRIPT, DEBUG, SYNC], expect: {equals: OK}}
+    - {command: [EVAL, "return 1", 0], expect: {exists: true}}
+    - {command: [r, get, nokey], expect_difference: true, expect: {contains: "<command>"}}
+    - {command: [valkey, get, nokey], expect_difference: true, expect: {contains: "<command>"}}
+    - {command: [help], expect_difference: true, expect: {contains: valkey}}
+    - {command: [nosuchcmd, x], expect_difference: true, expect: {contains: "Unknown\
+          \ Lua debugger"}}
+    - {command: [continue], expect: {exists: true}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ldb.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ldb}

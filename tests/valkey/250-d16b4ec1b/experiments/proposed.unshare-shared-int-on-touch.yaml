@@ -1,0 +1,78 @@
+extends: [valkey.liveness]
+id: proposed.unshare-shared-int-on-touch
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    After maxmemory is set with an LRU/LFU policy, the first touched lookup of a key
+    holding a shared integer duplicates it and stores the private copy (OBJECT REFCOUNT
+    drops from 2147483647 to 1); NOTOUCH lookups and non-LRU/LFU policies must leave
+    it shared, and creation-time sharing rules are unchanged.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: unshare
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [SET, k_lru, 1], expect: {equals: OK}}
+    - {command: [SET, k_vlru, 1], expect: {equals: OK}}
+    - {command: [SET, k_guard, 2], expect: {equals: OK}}
+    - {command: [SET, k_lfu, 3], expect: {equals: OK}}
+    - {command: [SET, k_vlfu, 3], expect: {equals: OK}}
+    - {command: [SET, k_rand, 4], expect: {equals: OK}}
+    - {command: [OBJECT, REFCOUNT, k_lru], expect: {min: 2}}
+    - {command: [CONFIG, SET, maxmemory, 1073741824], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-lru], expect: {equals: OK}}
+    - {command: [GET, k_lru], expect: {equals: "1"}}
+    - {command: [OBJECT, REFCOUNT, k_lru], expect_difference: true, expect: {equals: 1}}
+    - {command: [CONFIG, SET, maxmemory-policy, volatile-lru], expect: {equals: OK}}
+    - {command: [STRLEN, k_vlru], expect: {equals: 1}}
+    - {command: [OBJECT, REFCOUNT, k_vlru], expect_difference: true, expect: {equals: 1}}
+    - {command: [DEL, k_vlru], expect: {equals: 1}}
+    - {command: [EXISTS, k_guard], expect: {equals: 1}}
+    - {command: [TYPE, k_guard], expect: {equals: string}}
+    - {command: [OBJECT, REFCOUNT, k_guard], expect: {min: 2}}
+    - {command: [CLIENT, NO-TOUCH, on], expect: {equals: OK}}
+    - {command: [GET, k_guard], expect: {equals: "2"}}
+    - {command: [OBJECT, REFCOUNT, k_guard], expect: {min: 2}}
+    - {command: [TOUCH, k_guard], expect: {equals: 1}}
+    - {command: [OBJECT, REFCOUNT, k_guard], expect_difference: true, expect: {equals: 1}}
+    - {command: [CLIENT, NO-TOUCH, off], expect: {equals: OK}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-lfu], expect: {equals: OK}}
+    - {command: [GET, k_lfu], expect: {equals: "3"}}
+    - {command: [OBJECT, REFCOUNT, k_lfu], expect_difference: true, expect: {equals: 1}}
+    - {command: [OBJECT, FREQ, k_lfu], compare: skip}
+    - {command: [CONFIG, SET, maxmemory-policy, volatile-lfu], expect: {equals: OK}}
+    - {command: [GET, k_vlfu], expect: {equals: "3"}}
+    - {command: [OBJECT, REFCOUNT, k_vlfu], expect_difference: true, expect: {equals: 1}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-random], expect: {equals: OK}}
+    - {command: [GET, k_rand], expect: {equals: "4"}}
+    - {command: [OBJECT, REFCOUNT, k_rand], expect: {min: 2}}
+    - {command: [CONFIG, SET, maxmemory-policy, allkeys-lru], expect: {equals: OK}}
+    - {command: [SET, k_new, 7], expect: {equals: OK}}
+    - {command: [OBJECT, REFCOUNT, k_new], expect: {equals: 1}}
+    - {command: [CONFIG, SET, maxmemory-policy, noeviction], expect: {equals: OK}}
+    - {command: [SET, k_ne, 8], expect: {equals: OK}}
+    - {command: [OBJECT, REFCOUNT, k_ne], expect: {min: 2}}
+    - {command: [CONFIG, SET, maxmemory, 0], expect: {equals: OK}}
+    - {command: [GET, k_lru], expect: {equals: "1"}}
+    - {command: [OBJECT, REFCOUNT, k_lru], expect_difference: true, expect: {equals: 1}}
+    - {command: [SET, k_lru, 1], expect: {equals: OK}}
+    - {command: [OBJECT, REFCOUNT, k_lru], expect: {min: 2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [unshare.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: unshare}

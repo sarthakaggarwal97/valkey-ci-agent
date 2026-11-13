@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey bce240eab7aa..54c97479356e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fbcb38621961
+seed: 107
+experiment:
+  id: proposed.cluster-node-pause
+  inputs:
+    target: primary
+    pause_s: 12
+    settle_s: 30
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7600
+  server_config:
+    cluster-node-timeout: '2000'

@@ -1,0 +1,96 @@
+extends: [valkey.liveness]
+id: proposed.rebranding-lua-replies
+deployment:
+  modes: [standalone]
+metadata:
+  description: Rebranded user-visible replies - server.register_function and server.*
+    Lua error messages, DEBUG stringmatch-test status - compared against the parent
+    build, plus checks that both redis.* and server.* Lua aliases still expose breakpoint/debug/replicate_commands
+    after the registration moved to the server global
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: rebrand
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [EVAL, "return {type(server.call), type(server.pcall), type(server.breakpoint),\
+          \ type(server.debug), type(server.replicate_commands)}", 0], expect: {equals: [
+          function, function, function, function, function]}}
+    - {command: [EVAL, "return {type(redis.call), type(redis.pcall), type(redis.breakpoint),\
+          \ type(redis.debug), type(redis.replicate_commands)}", 0], expect: {equals: [
+          function, function, function, function, function]}}
+    - {command: [EVAL, "if server.replicate_commands() then return 1 else return 0\
+          \ end", 0], expect: {equals: 1}}
+    - {command: [EVAL, "if server.breakpoint() then return 1 else return 0 end", 0],
+      expect: {equals: 0}}
+    - {command: [EVAL, "server.debug('outside a debugging session') return 1", 0],
+      expect: {equals: 1}}
+    - {command: [EVAL, "return server.sha1hex('')", 0], expect: {equals: da39a3ee5e6b4b0d3255bfef95601890afd80709}}
+    - {command: [EVAL, "server.set_repl()", 0], expect_difference: true, expect: {
+        error: "server.set_repl() requires one argument"}}
+    - {command: [EVAL, "server.log()", 0], expect_difference: true, expect: {error: "server.log()\
+          \ requires two arguments or more"}}
+    - {command: [EVAL, "server.setresp(2, 3)", 0], expect_difference: true, expect: {
+        error: "server.setresp() requires one argument"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=e1\nserver.register_function()"], expect_difference: true,
+      expect: {error: "wrong number of arguments to server.register_function"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=e2\nserver.register_function('f1')"],
+      expect_difference: true, expect: {error: "calling server.register_function with\
+          \ a single argument"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=e3\nserver.register_function(nil, function()\
+          \ return 1 end)"], expect_difference: true, expect: {error: "first argument\
+          \ to server.register_function must be a string"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=e4\nserver.register_function('f1', 'not\
+          \ a function')"], expect_difference: true, expect: {error: "second argument\
+          \ to server.register_function must be a function"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=e5\nserver.register_function{callback=function()\
+          \ return 1 end}"], expect_difference: true, expect: {error: "server.register_function\
+          \ must get a function name argument"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=e6\nserver.register_function{function_name='f1'}"],
+      expect_difference: true, expect: {error: "server.register_function must get\
+          \ a callback argument"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=e7\nserver.register_function{function_name='f1',\
+          \ callback='bad'}"], expect_difference: true, expect: {error: "callback\
+          \ argument given to server.register_function must be a function"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=e8\nserver.register_function{function_name=function()\
+          \ return 1 end, callback=function() return 1 end}"], expect_difference: true,
+      expect: {error: "function_name argument given to server.register_function must\
+          \ be a string"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=e9\nserver.register_function{function_name='f1',\
+          \ callback=function() return 1 end, description=function() return 1 end}"],
+      expect_difference: true, expect: {error: "description argument given to server.register_function\
+          \ must be a string"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=e10\nserver.register_function{function_name='f1',\
+          \ callback=function() return 1 end, flags='bad flags type'}"], expect_difference: true,
+      expect: {error: "flags argument to server.register_function must be a table"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=e11\nserver.register_function{function_name='f1',\
+          \ callback=function() return 1 end, nosuch=1}"], expect_difference: true,
+      expect: {error: "unknown argument given to server.register_function"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=inner\nserver.register_function('outer',\
+          \ function() server.register_function('x', function() return 2 end) return\
+          \ 1 end)"], expect: {equals: inner}}
+    - {command: [FCALL, outer, 0], expect_difference: true, expect: {error: "server.register_function\
+          \ can only be called on FUNCTION LOAD"}}
+    - {command: [FUNCTION, LOAD, "#!lua name=good\nserver.register_function('sf',\
+          \ function() return 1 end)\nredis.register_function('rf', function() return\
+          \ 2 end)"], expect: {equals: good}}
+    - {command: [FCALL, sf, 0], expect: {equals: 1}}
+    - {command: [FCALL, rf, 0], expect: {equals: 2}}
+    - {command: [DEBUG, stringmatch-test], expect_difference: true, expect: {equals: "Apparently\
+          \ the server did not crash: test passed"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [rebrand.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: rebrand}

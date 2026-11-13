@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.shared-querybuf-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Shared query buffer (#258) compared against the parent build: CLIENT INFO qbuf
+    accounting, partial and pipelined commands that force the client to take ownership
+    of the shared buffer, inline protocol partials, a big-arg header that switches
+    to a private buffer, and the cron path that frees an idle client's buffer to NULL
+    before the next read re-attaches the shared one.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: qb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [PING], connection: idle, expect: {equals: PONG}}
+    - {command: [CLIENT, INFO], expect_difference: true, expect: {contains: "qbuf=0\
+          \ qbuf-free=0"}}
+    - {raw: "*3\r\n$3\r\nSET\r\n$4\r\npkey\r\n$8\r\npar", connection: c1}
+    - {raw: "tial1\r\n", connection: c1}
+    - {command: [GET, pkey], expect: {equals: partial1}}
+    - {raw: "PING\r\n*1\r\n$4\r\nPING\r\n*3\r\n$3\r\nSET\r\n$3\r\nppk\r\n$3\r\nabc\r\
+        \n*2\r\n$3\r\nGET\r\n$3\r\nppk\r\n", connection: c2}
+    - {connection: c2, read: true}
+    - {command: [GET, ppk], expect: {equals: abc}}
+    - {raw: "*1\r\n$4\r\nPING\r\n*3\r\n$3\r\nSET\r\n$3\r\ntpk\r\n$6\r\nval", connection: c3}
+    - {raw: "ue1\r\n", connection: c3}
+    - {connection: c3, read: true}
+    - {command: [GET, tpk], expect: {equals: value1}}
+    - {raw: "SET inl inlv\r\n", connection: c5}
+    - {raw: "GET in", connection: c5}
+    - {raw: "l\r\n", connection: c5}
+    - {connection: c5, read: true}
+    - {command: [GET, inl], expect: {equals: inlv}}
+    - {raw: "*3\r\n$3\r\nSET\r\n$3\r\nbgk\r\n$40000\r\n", connection: c4}
+    - {raw: "aaaa", connection: c4}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, mk, mv], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK]}}
+    - {command: [EXEC], expect: {error: "without MULTI"}}
+    - {command: [SET, "", ""], expect: {equals: OK}}
+    - {command: [GET, ""], expect: {equals: ""}}
+    - {command: [SET, gate, v, PX, 3200], expect: {equals: OK}}
+    - {command: [EXISTS, gate], wait_s: 15, expect: {equals: 0}}
+    - {command: [PING], connection: idle, expect: {equals: PONG}}
+    - {command: [CLIENT, INFO], connection: idle, expect_difference: true, expect: {
+        contains: "qbuf=0 qbuf-free=0"}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [qb.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: qb}

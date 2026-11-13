@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 54c97479356e..aad6769a805a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-fd21ce607262
+seed: 105
+experiment:
+  id: proposed.slot-states-promoted-replica
+  inputs:
+    resp: 3
+    diskless_sync: 'yes'
+    diskless_load: on-empty-db
+deployment:
+  mode: standalone
+  base_port: 7400

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "60c10a5a4daeb60dece86550c47a220fc401bb57",
+  "parent": "9319f7aeca5d726d07e3e967d2f2f7b9d7126a46",
+  "pr": 600,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove valdup from BenchmarkDictType (#600)",
+  "date": "2024-06-05",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.286,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change removes a NULL valdup initializer from BenchmarkDictType in src/dict.c, a dict type used only by dictTest(), the internal './valkey-server test dict' benchmark harness. It is never used by the server at runtime, and the removed callback was NULL, so no command reply, replication, persistence or cluster behaviour changes. This is a struct-initializer cleanup with no observable behaviour change; no scenario can reach it."
+}

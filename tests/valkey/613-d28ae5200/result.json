@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d28ae520042ae47002a0b7680dd93c090b338b06",
+  "parent": "aad6769a805a0835ad7276d98ead379e77b54ec6",
+  "pr": 613,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove redundant function `nextPingExt()` (#613)",
+  "date": "2024-06-08",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3139,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change deletes the duplicate function nextPingExt() and replaces its four call sites in writePingExt() with the pre-existing getNextPingExt(). Both functions compute the identical expression ((char *)ext + ntohl(ext->length)) \u2014 getNextPingExt just goes through the getPingExtLength() accessor, which is a one-line ntohl(ext->length). No cluster-bus message layout, size computation, or parsing behaviour changes; this is a pure dead-code/deduplication refactor with no observable behaviour change, so no scenario is needed."
+}

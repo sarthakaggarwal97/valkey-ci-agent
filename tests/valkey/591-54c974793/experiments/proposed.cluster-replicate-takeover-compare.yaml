@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.cluster-replicate-takeover-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER REPLICATE, replica sync, node flag rendering (master,/slave,
+    strings kept) and CLUSTER FAILOVER TAKEOVER role swap compared between builds
+components:
+- use: valkey.action.commands
+  id: takeover
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 120
+    commands:
+    - {command: [SET, foo, bar], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [READONLY], node: 1, expect: {equals: OK}}
+    - {command: [GET, foo], node: 1, wait_s: 60, expect: {equals: bar}}
+    - {command: [CLUSTER, NODES], node: 0, compare: skip, wait_s: 30, expect: {contains: "slave"}}
+    - {command: [CLUSTER, NODES], node: 1, compare: skip, wait_s: 30, expect: {contains: "myself,slave"}}
+    - {command: [CLUSTER, FAILOVER, TAKEOVER], node: 1, expect: {equals: OK}}
+    - {command: [SET, foo2, baz], node: 1, wait_s: 60, expect: {equals: OK}}
+    - {command: [CLUSTER, NODES], node: 1, compare: skip, wait_s: 30, expect: {contains: "myself,master"}}
+    - {command: [CLUSTER, NODES], node: 0, compare: skip, wait_s: 60, expect: {contains: "myself,slave"}}
+    - {command: [GET, foo], node: 0, wait_s: 60, expect: {error: "MOVED"}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [takeover.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: takeover}

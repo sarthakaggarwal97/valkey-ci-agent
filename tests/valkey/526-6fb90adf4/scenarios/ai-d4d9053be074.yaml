@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 0d2ba9b94d28..6fb90adf4be1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-d4d9053be074
+seed: 1
+experiment:
+  id: proposed.blocked-client-slot-migration-duration
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

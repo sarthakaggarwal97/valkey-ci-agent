@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.primaryauth-replication-handshake
+deployment:
+  modes: [standalone]
+metadata:
+  description: A replica configured through the masteruser/masterauth aliases authenticates
+    to a primary as an ACL replication user and syncs, while primaryuser/primaryauth
+    read back the same values
+components:
+- use: valkey.action.commands
+  id: handshake
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    nodes: 2
+    timeout_s: 90
+    commands:
+    - {command: [ACL, SETUSER, repl, on, ">hunter2", "+psync", "+replconf", "+ping"],
+      node: 0, expect: {equals: OK}}
+    - {command: [CONFIG, SET, masteruser, repl], node: 1, expect: {equals: OK}}
+    - {command: [CONFIG, SET, masterauth, hunter2], node: 1, expect: {equals: OK}}
+    - {command: [CONFIG, GET, primaryuser], node: 1, expect_difference: true, expect: {
+        equals: [primaryuser, repl]}}
+    - {command: [CONFIG, GET, primaryauth], node: 1, expect_difference: true, expect: {
+        equals: [primaryauth, hunter2]}}
+    - {command: [SET, k, v1], node: 0, expect: {equals: OK}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [GET, k], node: 1, wait_s: 30, expect: {equals: v1}}
+    - {command: [INFO, replication], node: 1, compare: skip, wait_s: 30, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [SET, k2, v2], node: 0, expect: {equals: OK}}
+    - {command: [GET, k2], node: 1, wait_s: 30, expect: {equals: v2}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [handshake.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: handshake}

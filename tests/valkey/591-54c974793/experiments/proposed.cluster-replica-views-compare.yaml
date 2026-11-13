@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.cluster-replica-views-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER REPLICAS/SLAVES replies, READONLY serving on a replica, nodes.conf
+    reload of replica lines, and CLUSTER RESET of a replica, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: views
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 180
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [SET, foo, bar], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICAS, "<node.1.id>"], node: 0, expect: {error: "not\
+          \ a master"}}
+    - {command: [CLUSTER, REPLICAS, "<node.0.id>"], node: 0, compare: skip, expect: {
+        exists: true}}
+    - {command: [CLUSTER, SLAVES, "<node.0.id>"], node: 0, compare: skip, expect: {
+        exists: true}}
+    - {command: [READONLY], node: 1, expect: {equals: OK}}
+    - {command: [GET, foo], node: 1, wait_s: 30, expect: {equals: bar}}
+    - {restart: true, node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [CLUSTER, REPLICAS, "<node.0.id>"], node: 1, compare: skip, expect: {
+        exists: true}}
+    - {restart: true, node: 0, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, compare: skip, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [CLUSTER, REPLICAS, "<node.0.id>"], node: 0, compare: skip, expect: {
+        exists: true}}
+    - {command: [GET, foo], node: 0, expect: {equals: bar}}
+    - {command: [CLUSTER, RESET, SOFT], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 20, compare: skip, expect: {
+        contains: "role:master"}}
+    - {command: [PING], node: 0, expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [views.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: views}

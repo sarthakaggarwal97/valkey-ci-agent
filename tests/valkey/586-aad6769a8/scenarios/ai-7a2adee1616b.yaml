@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 54c97479356e..aad6769a805a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7a2adee1616b
+seed: 106
+experiment:
+  id: valkey.replication-full-resync
+  inputs: {}
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7500

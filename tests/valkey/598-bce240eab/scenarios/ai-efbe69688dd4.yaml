@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ad5fd5b95ced..bce240eab7aa.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-efbe69688dd4
+seed: 987461
+experiment:
+  id: proposed.primaryauth-cli-sensitive-repl
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

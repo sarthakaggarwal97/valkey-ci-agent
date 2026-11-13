@@ -1,0 +1,31 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "278ce0cae04342c392ebb865d155cbecd6672313",
+  "parent": "60c10a5a4daeb60dece86550c47a220fc401bb57",
+  "pr": 603,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rebrand the Lua debugger (#603)",
+  "date": "2024-06-06",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 14,
+    "executed": 12,
+    "percent": 85,
+    "uncovered": [
+      "src/eval.c:1718",
+      "src/valkey-cli.c:1910"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.7709,
+  "findings": [],
+  "recorded": []
+}

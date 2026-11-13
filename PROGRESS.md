@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-13T09:38+00:00.
+Updated 2026-11-13T09:39+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1997 | 539 | #613 (2024-06-08) | 26 | 240.7 |
+| valkey-io/valkey | 2019 | 517 | #548 (2024-05-28) | 48 | 243.9 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 64 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.3 |
 | valkey-io/valkey-search | 681 | 0 | f8106e72e984 (2024-11-27) | 8 | 69.3 |
@@ -13,28 +13,28 @@ Updated 2026-11-13T09:38+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-13T06:14:32+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43364255319): 20 merge(s) tested, 6 without a code change.
+[2026-11-13T09:39:56+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43377333170): 20 merge(s) tested, 3 without a code change.
 
-- [valkey-io/valkey#5104](https://github.com/valkey-io/valkey/pull/5104) ([tests](tests/valkey/5104-b4a6e7d69/)): Join server.log() arguments in linear time (#5104): 0 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#5376](https://github.com/valkey-io/valkey/pull/5376) ([tests](tests/valkey/5376-d5763ea44/)): Check Sentinel config dir is writable at startup (#5376): declined: The change adds a startup-only check inside sentinelCheckConfigFile(), called solely under `if (server.sentinel_mode)` (src/server.c:8138); Sentinel mode is selected by argv0/--sentinel, not by any server config. The fuzzer has no Sentinel deployment mode, valkey.action.commands' private s
-- [valkey-io/valkey#5379](https://github.com/valkey-io/valkey/pull/5379) ([tests](tests/valkey/5379-89353577e/)): Skip the crash memory test under Valgrind and bound its region list (#5379): declined: The only server-code change bounds a fixed stack array in memtest_test_linux_anonymous_maps(), which runs exclusively inside the SIGSEGV crash-report handler (doFastMemoryTest) after the process is already crashing; it produces no command reply, no persisted or replicated state, and requir
-- [valkey-io/valkey#638](https://github.com/valkey-io/valkey/pull/638) ([tests](tests/valkey/638-5a51bf504/)): Combine events to eliminate redundant kevent(2) calls (#638): declined: The change only touches src/ae_kqueue.c, the kqueue event-loop backend that is compiled solely on BSD/macOS (HAVE_KQUEUE); the fuzzer runs on Linux, where Valkey uses the epoll backend, so the changed code is never built or executed and no scenario can reach it. The change is also a pure s
-- [valkey-io/valkey#634](https://github.com/valkey-io/valkey/pull/634) ([tests](tests/valkey/634-db6d3c113/)): Only primary with slots has the right to mark a node as failed (#634): 1 of 3 test(s) reached the change, coverage 87%
-- [valkey-io/valkey#461](https://github.com/valkey-io/valkey/pull/461) ([tests](tests/valkey/461-a81c32079/)): Make cluster meet reliable under link failures (#461): 2 of 4 test(s) reached the change, coverage 92%
-- [valkey-io/valkey#615](https://github.com/valkey-io/valkey/pull/615) ([tests](tests/valkey/615-93123f97a/)): Format yaml files (#615): declined: The change only reformats YAML whitespace and indentation in CI/workflow configuration files (.github/workflows/*.yml, dependabot.yml, codecov.yml) and adds a .config/format.yml formatter config. No Valkey source code, command behaviour, replication, persistence, or tooling is touched, so 
-- [valkey-io/valkey#631](https://github.com/valkey-io/valkey/pull/631) ([tests](tests/valkey/631-6faa48a35/)): Don't initialize the key buffer in getKeysResult (#631): 0 of 7 test(s) reached the change, coverage 83%
-- [valkey-io/valkey#637](https://github.com/valkey-io/valkey/pull/637) ([tests](tests/valkey/637-d5496e42b/)): Lua scripts promoted from eval to script load to avoid evict (#637): 3 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#644](https://github.com/valkey-io/valkey/pull/644) ([tests](tests/valkey/644-4c6bf30f5/)): Latency report: Rebranding and refine Dave dialog (#644): 4 of 4 test(s) reached the change, coverage 85%
-- [valkey-io/valkey#651](https://github.com/valkey-io/valkey/pull/651) ([tests](tests/valkey/651-8a776c350/)): Fix potential infinite loop in `clusterNodeGetPrimary` (#651): 0 of 6 test(s) reached the change, coverage 100%; crash, predates #651, since fixed (recorded)
-- [valkey-io/valkey#636](https://github.com/valkey-io/valkey/pull/636) ([tests](tests/valkey/636-d309b9b23/)): Make configs dir/dbfilename/cluster-config-file reject empty string (#636): 2 of 4 test(s) reached the change, coverage 63%
-- [valkey-io/valkey#642](https://github.com/valkey-io/valkey/pull/642) ([tests](tests/valkey/642-76fc04168/)): represent cluster node flags with bitwise shift value (#642): declined: The change only rewrites the CLUSTER_NODE_* flag macros in cluster_legacy.h from decimal literals (1, 2, 4, ..., 1024) to the mathematically identical bit-shift expressions ((1 << 0) ... (1 << 10)). Every macro evaluates to the same value as before, no code using the flags is touched, and 
-- [valkey-io/valkey#596](https://github.com/valkey-io/valkey/pull/596) ([tests](tests/valkey/596-b546dd26e/)): Allow CLUSTER NODES/INFO/MYID/MYSHARDID during loading state (#596): 2 of 3 test(s) reached the change
-- [valkey-io/valkey#628](https://github.com/valkey-io/valkey/pull/628) ([tests](tests/valkey/628-4bb7cc471/)): Remove unnecessary clang-format off annotations (#628): declined: The change (#628) removes clang-format off/on comment annotations and reformats the enclosed code (spacing after commas, switch indentation, splitting fall-through case labels onto separate lines). Every hunk alters only whitespace, line breaks and comments; all expressions, case labels, f
-- [valkey-io/valkey#583](https://github.com/valkey-io/valkey/pull/583) ([tests](tests/valkey/583-e65b2d235/)): Update rewriteConfigSaveOption function code to rewrite multiple save in one line. (#583): 0 of 2 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#612](https://github.com/valkey-io/valkey/pull/612) ([tests](tests/valkey/612-a3f1535b5/)): Fix misuse of safe iterators (#612): 0 of 9 test(s) reached the change, coverage 100%; crash, predates #612, since fixed (recorded)
-- [valkey-io/valkey#620](https://github.com/valkey-io/valkey/pull/620) ([tests](tests/valkey/620-95a753b18/)): Add BSD license explicitly (#620): declined: The change only adds 'BSD 3-Clause License' header lines to the COPYING file. It is a documentation/licensing text edit with no code, config, command, replication, persistence, or tooling behaviour change, so no scenario can reach it and none is needed.
-- [valkey-io/valkey#607](https://github.com/valkey-io/valkey/pull/607) ([tests](tests/valkey/607-71dd85dc5/)): src/Makefile: Link libatomic on POWER systems (#607): declined: The change only edits src/Makefile to link libatomic when the build machine is a POWER (ppc*) system, fixing a link-time failure on that architecture. It alters no runtime behaviour, no command, reply, replication, persistence or cluster path; on the CI's Linux x86 host the added Makefile 
-- [valkey-io/valkey#592](https://github.com/valkey-io/valkey/pull/592) ([tests](tests/valkey/592-09b5825b2/)): Moving client->authenticated to a flag instead of an int (#592): 0 of 6 test(s) reached the change, coverage 84%
+- [valkey-io/valkey#613](https://github.com/valkey-io/valkey/pull/613) ([tests](tests/valkey/613-d28ae5200/)): Remove redundant function `nextPingExt()` (#613): declined: The change deletes the duplicate function nextPingExt() and replaces its four call sites in writePingExt() with the pre-existing getNextPingExt(). Both functions compute the identical expression ((char *)ext + ntohl(ext->length)) — getNextPingExt just goes through the getPingExtLength() ac
+- [valkey-io/valkey#586](https://github.com/valkey-io/valkey/pull/586) ([tests](tests/valkey/586-aad6769a8/)): Replicate slot migration states via RDB aux fields (#586): 0 of 8 test(s) reached the change, coverage 91%
+- [valkey-io/valkey#591](https://github.com/valkey-io/valkey/pull/591) ([tests](tests/valkey/591-54c974793/)): Remove `master` and `slave` from source code (#591): 0 of 26 test(s) reached the change, coverage 55%; crash, predates #591, since fixed (recorded)
+- [valkey-io/valkey#598](https://github.com/valkey-io/valkey/pull/598) ([tests](tests/valkey/598-bce240eab/)): Replace masteruser and masterauth with primaryuser and primaryauth (#598): 5 of 5 test(s) reached the change, coverage 100%; [check, introduced by #598](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/147)
+- [valkey-io/valkey#606](https://github.com/valkey-io/valkey/pull/606) ([tests](tests/valkey/606-ad5fd5b95/)): More rebranding (#606): 6 of 8 test(s) reached the change, coverage 76%; [crash, shown by ASan on unstable, the one build with it](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/146); crash, introduced and since fixed (recorded); crash, fixed by #606 (recorded)
+- [valkey-io/valkey#603](https://github.com/valkey-io/valkey/pull/603) ([tests](tests/valkey/603-278ce0cae/)): Rebrand the Lua debugger (#603): 2 of 2 test(s) reached the change, coverage 85%
+- [valkey-io/valkey#600](https://github.com/valkey-io/valkey/pull/600) ([tests](tests/valkey/600-60c10a5a4/)): Remove valdup from BenchmarkDictType (#600): declined: The change removes a NULL valdup initializer from BenchmarkDictType in src/dict.c, a dict type used only by dictTest(), the internal './valkey-server test dict' benchmark harness. It is never used by the server at runtime, and the removed callback was NULL, so no command reply, replication
+- [valkey-io/valkey#550](https://github.com/valkey-io/valkey/pull/550) ([tests](tests/valkey/550-9319f7aec/)): Replace valkey in log and panic messages (#550): declined: The change only rewrites the wording of two fatal diagnostic messages (a serverPanic for an unknown flag in the cluster config file, and the FATAL log when an RDB names a dbid >= server.dbnum) to use SERVER_TITLE instead of a hardcoded 'redis'/'Redis'. Control flow, conditions, format argu
+- [valkey-io/valkey#443](https://github.com/valkey-io/valkey/pull/443) ([tests](tests/valkey/443-0700c441c/)): Remove unused valDup (#443): declined: The change removes the valDup callback field from dictType. valDup was NULL in every initializer in the tree, so dictSetVal's behavior is identical before and after (de->v.val = val in both cases); all positional and designated initializers were updated consistently, and no reference to va
+- [valkey-io/valkey#502](https://github.com/valkey-io/valkey/pull/502): to retry, the job left no result
+- [valkey-io/valkey#588](https://github.com/valkey-io/valkey/pull/588) ([tests](tests/valkey/588-30f277a86/)): Enable debug asserts for cluster and sentinel tests (#588): 2 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#250](https://github.com/valkey-io/valkey/pull/250) ([tests](tests/valkey/250-d16b4ec1b/)): Unshare object to avoid LRU/LFU being messed up (#250): 3 of 4 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#584](https://github.com/valkey-io/valkey/pull/584) ([tests](tests/valkey/584-2b97aa617/)): Introduce `enable-debug-assert` to enable/disable debug asserts at runtime (#584): 1 of 3 test(s) reached the change
+- [valkey-io/valkey#562](https://github.com/valkey-io/valkey/pull/562) ([tests](tests/valkey/562-f927565d2/)): Consolidate various BLOCKED_WAIT* states (#562): 0 of 9 test(s) reached the change, coverage 70%
+- [valkey-io/valkey#526](https://github.com/valkey-io/valkey/pull/526) ([tests](tests/valkey/526-6fb90adf4/)): Fix crash where command duration is not reset when client is blocked … (#526): 2 of 2 test(s) reached the change, coverage 100%; crash, fixed by #526 (recorded)
+- [valkey-io/valkey#572](https://github.com/valkey-io/valkey/pull/572) ([tests](tests/valkey/572-0d2ba9b94/)): Update redis legacy word when run TLS cert file (#572): declined: The change only edits utils/gen-test-certs.sh, a helper script that generates self-signed certificates for Valkey's own test suite, replacing the certificate subject string "/O=Redis Test" with "/O=Valkey Test". No server, tool, or library code changes: no command replies, replication, per
+- [valkey-io/valkey#564](https://github.com/valkey-io/valkey/pull/564) ([tests](tests/valkey/564-6bab2d796/)): Make sure clear the CLUSTER SLOTS cache on time when updating hostname (#564): 0 of 1 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#570](https://github.com/valkey-io/valkey/pull/570) ([tests](tests/valkey/570-168da8b52/)): Fix bitops.c clang-format properly (#570): declined: The change is a clang-format whitespace-only fix in bitcountCommand (src/bitops.c): it reflows an if statement onto one line, strips trailing whitespace, and adds spaces around operators. No code tokens, logic, or replies change, so there is no behaviour to test.
+- [valkey-io/valkey#118](https://github.com/valkey-io/valkey/pull/118) ([tests](tests/valkey/118-96dcd1183/)): Change BITCOUNT 'end' as optional like BITPOS (#118): 2 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#258](https://github.com/valkey-io/valkey/pull/258) ([tests](tests/valkey/258-fd58b73f0/)): Introduce shared query buffer for client reads (#258): 2 of 6 test(s) reached the change, coverage 96%
 
 ### valkey-io/valkey-bloom
 
@@ -53,11 +53,11 @@ Updated 2026-11-13T09:38+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 861 of 1379 tested (62%)
-- Changed-line coverage: median 100% of 879 merge(s) measured, 66 under 50%
-- Recall: 228 parents flagged of 362 fix merges
-- Claude: $118.05 in the last 24 hours, $7548.69 in the last 7 days, $10065.13 in all
-- Issues filed: 74
+- Merges whose tests reached the change: 870 of 1392 tested (62%)
+- Changed-line coverage: median 100% of 891 merge(s) measured, 66 under 50%
+- Recall: 229 parents flagged of 363 fix merges
+- Claude: $237.28 in the last 24 hours, $7667.92 in the last 7 days, $10184.37 in all
+- Issues filed: 76
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/102
@@ -82,6 +82,8 @@ Updated 2026-11-13T09:38+00:00.
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/128
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/129
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/145
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/146
+  - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/147
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/40
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/41
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/42
@@ -136,4 +138,4 @@ Updated 2026-11-13T09:38+00:00.
 
 ## Retries
 
-None.
+- [valkey-io/valkey#502](https://github.com/valkey-io/valkey/pull/502): attempt 0 of 3, the job left no result

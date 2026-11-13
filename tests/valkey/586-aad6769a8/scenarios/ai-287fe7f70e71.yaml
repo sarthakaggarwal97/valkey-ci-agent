@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 54c97479356e..aad6769a805a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-287fe7f70e71
+seed: 103
+experiment:
+  id: proposed.slot-states-fullsync
+  inputs:
+    resp: 2
+    diskless_sync: 'yes'
+    diskless_load: swapdb
+deployment:
+  mode: standalone
+  base_port: 7200
