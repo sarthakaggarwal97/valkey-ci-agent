@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.search-lower-upper-invalid-utf8
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.AGGREGATE APPLY lower()/upper() over a field holding an invalid
+    UTF-8 byte must map ASCII and pass the byte through, not abort the module
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: agg
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "d:", SCHEMA, n, NUMERIC, s,
+        TAG], expect: {equals: OK}}
+    - {command: [HSET, "d:1", n, "1", s, !!binary "YUL/elk="], expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx, "@n:[0 inf]"], wait_s: 20, expect: {contains: "d:1"},
+      compare: skip}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 inf]", LOAD, 1, "@s", APPLY, "lower(@s)",
+        AS, lo, DIALECT, 2], expect_difference: true, expect: {exists: true}}
+    - {command: [FT.AGGREGATE, idx, "@n:[0 inf]", LOAD, 1, "@s", APPLY, "upper(@s)",
+        AS, up, DIALECT, 2], expect_difference: true, expect: {exists: true}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [agg.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: agg}

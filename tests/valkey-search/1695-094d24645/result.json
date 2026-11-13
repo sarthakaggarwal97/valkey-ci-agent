@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "094d24645544628a1020f0f3e33064b72174a572",
+  "parent": "ebcf78c3022ac73be613b8344dd3c7284613299d",
+  "pr": 1695,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Bump valkey-py to 6.2.0 for the integration tests (#1695)",
+  "date": "2026-11-12",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": "4bfcfdec9e95009bb6cbe4caa587013cbd5b3607",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2244,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only updates testing/integration/requirements.txt, bumping the valkey-py test client from 6.0.2 to 6.2.0 for the integration tests. It is a CI/test-dependency change: no module source code, command behaviour, replies, persistence or replication paths are modified, so there is no runtime behaviour for a scenario to reach."
+}

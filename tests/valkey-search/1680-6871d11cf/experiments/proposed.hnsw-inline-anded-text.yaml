@@ -1,0 +1,100 @@
+extends: [valkey.liveness]
+id: proposed.hnsw-inline-anded-text
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: >-
+    FT.SEARCH hybrid KNN with HYBRID_POLICY BATCHES must evaluate AND-ed text predicates
+    (single term, multi-term AND, phrase, INORDER, wildcard) in the HNSW inline filter
+    instead of admitting every candidate; compared against the parent module build,
+    where the inline filter skips them.
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: hybrid
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 60
+    commands:
+    - command: [HSET, "d:1", body, "hello world", cat, a, vec, !!binary "AAAAAAAAAAA="]
+      expect: {equals: 3}
+    - command: [HSET, "d:2", body, "world hello", cat, a, vec, !!binary "AACAPwAAAAA="]
+      expect: {equals: 3}
+    - command: [HSET, "d:3", body, "hello planet", cat, a, vec, !!binary "AAAAQAAAAAA="]
+      expect: {equals: 3}
+    - command: [HSET, "d:4", body, "goodbye world", cat, b, vec, !!binary "AABAQAAAAAA="]
+      expect: {equals: 3}
+    - command: [HSET, "d:5", body, "nothing here", cat, a, vec, !!binary "AACAQAAAAAA="]
+      expect: {equals: 3}
+    - command: [HSET, "d:6", body, "hello wide world", cat, b, vec, !!binary "AACgQAAAAAA="]
+      expect: {equals: 3}
+    - command: [FT.CREATE, idx, ON, HASH, PREFIX, "1", "d:", SCHEMA, body, TEXT, WITHSUFFIXTRIE,
+        cat, TAG, vec, VECTOR, HNSW, "6", TYPE, FLOAT32, DIM, "2", DISTANCE_METRIC,
+        L2]
+      expect: {equals: OK}
+    - command: [FT.INFO, idx]
+      wait_s: 30
+      expect: {contains: ready}
+    - command: [FT.SEARCH, idx, "*=>[KNN 6 @vec $q]", NOCONTENT, PARAMS, "2", q, !!binary "AAAAAAAAAAA=",
+        DIALECT, "2"]
+      wait_s: 30
+      expect: {equals: [6, "d:1", "d:2", "d:3", "d:4", "d:5", "d:6"]}
+    - command: [FT.SEARCH, idx, '(@cat:{a} @body:hello)=>[KNN 6 @vec $q HYBRID_POLICY
+          BATCHES]', NOCONTENT, PARAMS, "2", q, !!binary "AAAAAAAAAAA=", DIALECT,
+        "2"]
+      expect_difference: true
+      expect: {equals: [3, "d:1", "d:2", "d:3"]}
+    - command: [FT.SEARCH, idx, '(@body:(hello world))=>[KNN 6 @vec $q HYBRID_POLICY
+          BATCHES]', NOCONTENT, PARAMS, "2", q, !!binary "AAAAAAAAAAA=", DIALECT,
+        "2"]
+      expect_difference: true
+      expect: {equals: [3, "d:1", "d:2", "d:6"]}
+    - command: [FT.SEARCH, idx, '(@body:"hello world")=>[KNN 6 @vec $q HYBRID_POLICY
+          BATCHES]', NOCONTENT, PARAMS, "2", q, !!binary "AAAAAAAAAAA=", DIALECT,
+        "2"]
+      expect_difference: true
+      expect: {equals: [1, "d:1"]}
+    - command: [FT.SEARCH, idx, '(@body:(hello world))=>[KNN 6 @vec $q HYBRID_POLICY
+          BATCHES]', NOCONTENT, INORDER, PARAMS, "2", q, !!binary "AAAAAAAAAAA=",
+        DIALECT, "2"]
+      expect_difference: true
+      expect: {equals: [2, "d:1", "d:6"]}
+    - command: [FT.SEARCH, idx, '(@cat:{b} @body:(hel*))=>[KNN 6 @vec $q HYBRID_POLICY
+          BATCHES]', NOCONTENT, PARAMS, "2", q, !!binary "AAAAAAAAAAA=", DIALECT,
+        "2"]
+      expect_difference: true
+      expect: {equals: [1, "d:6"]}
+    - command: [FT.SEARCH, idx, '(-@body:planet @cat:{a} @body:hello)=>[KNN 6 @vec
+          $q HYBRID_POLICY BATCHES]', NOCONTENT, PARAMS, "2", q, !!binary "AAAAAAAAAAA=",
+        DIALECT, "2"]
+      expect: {equals: [2, "d:1", "d:2"]}
+    - command: [FT.SEARCH, idx, '(@cat:{a} @body:hello)=>[KNN 6 @vec $q HYBRID_POLICY
+          ADHOC_BF]', NOCONTENT, PARAMS, "2", q, !!binary "AAAAAAAAAAA=", DIALECT,
+        "2"]
+      expect: {equals: [3, "d:1", "d:2", "d:3"]}
+    - command: [FT.SEARCH, idx, '@cat:{a} @body:hello', NOCONTENT, DIALECT, "2"]
+      compare: unordered
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [hybrid.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hybrid}

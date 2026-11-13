@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "77f1d8c6aa523d716747bb8371a728c835ac10da",
+  "parent": "da73185d9d537d8ae85ca6926f4e5586c7c85093",
+  "pr": 1691,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Build only libsearch when running integration tests (#1691)",
+  "date": "2026-11-12",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": "4bfcfdec9e95009bb6cbe4caa587013cbd5b3607",
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2258,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change touches only the build system: build.sh now sets CMAKE_TARGET=libsearch when running integration tests without unit tests, and vmsdk/CMakeLists.txt gates the testing subdirectory behind BUILD_UNIT_TESTS. No module source code, command handling, indexing, or runtime behaviour changes \u2014 the produced libsearch module is identical, so there is nothing a runtime scenario could exercise."
+}

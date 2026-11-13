@@ -1,0 +1,55 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "da73185d9d537d8ae85ca6926f4e5586c7c85093",
+  "parent": "612423eeec2ff1faba5fc86ac56ecc6ccbed2c9d",
+  "pr": 1675,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix(vector-registry): guard ValkeyModule_HashHasStringRef against missing hash fields (#1675)",
+  "date": "2026-11-12",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": "4bfcfdec9e95009bb6cbe4caa587013cbd5b3607",
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 0,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 9.323,
+  "findings": [
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"1abfb17b8ce705785815caab543ace3a51b0a783\"},\"offset\":\"461\"}, replica {\"digest\":{\"reply\":\"7df9c25570567449b19de489e6031b6ca00325b0\"},\"offset\":\"461\"}, link up",
+      "scenario": "ai-e5b631bfa60c",
+      "seed": 1675001,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #1675",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/145"
+    },
+    {
+      "rule": "check",
+      "detail": "replica-diverged: the replica did not reach the primary's data within 30s (replica-diverged): primary {\"digest\":{\"reply\":\"1abfb17b8ce705785815caab543ace3a51b0a783\"},\"offset\":\"461\"}, replica {\"digest\":{\"reply\":\"7df9c25570567449b19de489e6031b6ca00325b0\"},\"offset\":\"461\"}, link up",
+      "scenario": "ai-5b3520ae0b27",
+      "seed": 1675002,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #1675, since fixed",
+      "fingerprint": "5d3c2818020941f87066",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet",
+  "recall_round": {
+    "tests": 3,
+    "recall": false
+  }
+}

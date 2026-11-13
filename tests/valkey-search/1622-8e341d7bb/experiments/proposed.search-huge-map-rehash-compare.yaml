@@ -1,0 +1,92 @@
+extends: [valkey.liveness]
+id: proposed.search-huge-map-rehash-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Grow, shrink, drop, save/reload and query valkey-search indexes across
+    huge-map growth cycles, replies compared with the parent module build
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    migrate_batch: {type: string, enum: ["1", "8", "1048576"], default: "1"}
+    cron_batch: {type: string, enum: ["1", "4096", "1048576"], default: "4096"}
+    jitter: {type: string, enum: ["0", "10", "25"], default: "10"}
+components:
+- use: valkey.action.commands
+  id: churn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands:
+    - {command: [CONFIG, SET, search.debug-mode, yes], expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.huge-hash-map-migrate-batch, {$ref: inputs.migrate_batch}],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.huge-hash-map-cron-migrate-batch, {$ref: inputs.cron_batch}],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CONFIG, SET, search.huge-hash-map-start-jitter-percent, {$ref: inputs.jitter}],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [FT._DEBUG, CONTROLLED_VARIABLE, SET, HugeMapAdvisoryMigration, yes],
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2, tag, TAG, num, NUMERIC],
+      expect: {equals: OK}}
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) local\
+          \ st=tonumber(ARGV[3]) local c=0 for i=b,b+(n-1)*st,st do redis.call('HSET','doc:'..i,'vec',struct.pack('<ffff',i%1024,math.floor(i/1024),1,1),'tag','t'..(i%10),'num',i)\
+          \ c=c+1 end return c", 0, "0", "20000", "1"], expect: {equals: 20000}}
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) local\
+          \ st=tonumber(ARGV[3]) local c=0 for i=b,b+(n-1)*st,st do redis.call('HSET','doc:'..i,'vec',struct.pack('<ffff',i%1024,math.floor(i/1024),1,1),'tag','t'..(i%10),'num',i)\
+          \ c=c+1 end return c", 0, "20000", "20000", "1"], expect: {equals: 20000}}
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) local\
+          \ st=tonumber(ARGV[3]) local c=0 for i=b,b+(n-1)*st,st do redis.call('HSET','doc:'..i,'vec',struct.pack('<ffff',i%1024,math.floor(i/1024),1,1),'tag','t'..(i%10),'num',i)\
+          \ c=c+1 end return c", 0, "40000", "20000", "1"], expect: {equals: 20000}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, LIMIT, 0, 0], wait_s: 180, expect: {
+        equals: [60000]}}
+    - {command: [FT.SEARCH, idx, "@tag:{t3}", NOCONTENT, LIMIT, 0, 0], expect: {equals: [
+          6000]}}
+    - {command: [FT.SEARCH, idx, "@num:[0 999]", NOCONTENT, LIMIT, 0, 0], expect: {
+        equals: [1000]}}
+    - {command: [EVAL, "local n=tonumber(ARGV[1]) local c=0 for i=0,n-1,2 do c=c+redis.call('DEL','doc:'..i)\
+          \ end return c", 0, "60000"], expect: {equals: 30000}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, LIMIT, 0, 0], wait_s: 180, expect: {
+        equals: [30000]}}
+    - {command: [FT.SEARCH, idx, "@num:[0 999]", NOCONTENT, LIMIT, 0, 0], expect: {
+        equals: [500]}}
+    - {command: [EVAL, "local b=tonumber(ARGV[1]) local n=tonumber(ARGV[2]) local\
+          \ st=tonumber(ARGV[3]) local c=0 for i=b,b+(n-1)*st,st do redis.call('HSET','doc:'..i,'vec',struct.pack('<ffff',i%1024,math.floor(i/1024),1,1),'tag','t'..(i%10),'num',i)\
+          \ c=c+1 end return c", 0, "0", "30000", "2"], expect: {equals: 30000}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, LIMIT, 0, 0], wait_s: 180, expect: {
+        equals: [60000]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4 @vec $q]", NOCONTENT, PARAMS, 2, q, !!binary "AACgQAAAAAAAAIA/AACAPw==",
+        DIALECT, 2], compare: unordered}
+    - {command: [FT.CREATE, idx2, ON, HASH, PREFIX, 1, "dup:", SCHEMA, vec, VECTOR,
+        FLAT, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [EVAL, "local n=tonumber(ARGV[1]) for i=0,n-1 do redis.call('HSET','dup:'..i,'vec',struct.pack('<ffff',i%16,0,1,1))\
+          \ end return n", 0, "20000"], expect: {equals: 20000}}
+    - {command: [FT.SEARCH, idx2, "*", NOCONTENT, LIMIT, 0, 0], wait_s: 180, expect: {
+        equals: [20000]}}
+    - {command: [EVAL, "local n=tonumber(ARGV[1]) local c=0 for i=0,n-1 do c=c+redis.call('DEL','dup:'..i)\
+          \ end return c", 0, "20000"], expect: {equals: 20000}}
+    - {command: [FT.SEARCH, idx2, "*", NOCONTENT, LIMIT, 0, 0], wait_s: 180, expect: {
+        equals: [0]}}
+    - {command: [FT.DROPINDEX, idx2], expect: {equals: OK}}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [FT.SEARCH, idx, "*", NOCONTENT, LIMIT, 0, 0], wait_s: 180, expect: {
+        equals: [60000]}}
+    - {command: [FT.SEARCH, idx, "@tag:{t3}", NOCONTENT, LIMIT, 0, 0], expect: {equals: [
+          6000]}}
+    - {command: [FT.SEARCH, idx, "*=>[KNN 4 @vec $q]", NOCONTENT, PARAMS, 2, q, !!binary "AACgQAAAAAAAAIA/AACAPw==",
+        DIALECT, 2], compare: unordered}
+    - {command: [FT._DEBUG, SHOW_INFO], compare: skip}
+    - {command: [FT.INFO, idx], compare: skip}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [churn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: churn}

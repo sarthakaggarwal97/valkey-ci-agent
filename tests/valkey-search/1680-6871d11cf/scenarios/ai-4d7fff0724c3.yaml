@@ -1,0 +1,17 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 77f1d8c6aa52..6871d11cf1db.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-4d7fff0724c3
+seed: 202
+experiment:
+  id: proposed.hnsw-inline-anded-text
+  inputs:
+    module:
+      $ref: artifacts.module.path
+    module_parent:
+      $ref: artifacts.module_parent.path
+    resp: 3
+    cluster: false
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

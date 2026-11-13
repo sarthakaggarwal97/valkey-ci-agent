@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.vector-registry-dropindex-cron-unshare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Vector fields HDEL'd while keys are queued for unshare after FT.DROPINDEX
+    must not crash the cron's ProcessPendingUnshares -> UnshareWithValkey
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config: {hash-max-listpack-entries: 0}
+    commands:
+    - {command: [CONFIG, SET, search.vector-unshare-batch-size, 1], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, doc, SCHEMA, vec, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [INFO, everything], compare: skip, expect: {contains: "search_vector_registry_sharing_active:1"}}
+    - {command: [HSET, "doc:0", vec, !!binary "AACAPwAAAEA=", other, x], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:1", vec, !!binary "AAEAQAAAgEA=", other, x], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:2", vec, !!binary "AAKAQAAAwEA=", other, x], expect: {
+        equals: 2}}
+    - {command: [INFO, everything], wait_s: 30, compare: skip, expect: {contains: "search_vector_registry_entry_cnt:3"}}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [HDEL, "doc:0", vec]}
+    - {command: [HDEL, "doc:1", vec]}
+    - {command: [HDEL, "doc:2", vec]}
+    - {command: [EXEC], expect: {equals: [1, 1, 1]}}
+    - {command: [INFO, everything], wait_s: 30, compare: skip, expect: {contains: "search_vector_registry_pending_unshare_cnt:0"}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

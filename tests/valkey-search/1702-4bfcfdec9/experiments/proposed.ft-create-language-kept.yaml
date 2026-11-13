@@ -1,0 +1,72 @@
+extends: [valkey.liveness]
+id: proposed.ft-create-language-kept
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.CREATE keeps LANGUAGE FRENCH when PREFIX, SCORE or SKIPINITIALSCAN
+    follows it; the parent silently resets the index to English
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "valkey-search built at the change, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "valkey-search built at the parent, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ftlang
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 240
+    commands:
+    - {command: [FT.CREATE, idx_prefix, ON, HASH, LANGUAGE, FRENCH, PREFIX, "1", "fr:",
+        SCHEMA, content, TEXT], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_score, ON, HASH, LANGUAGE, FRENCH, SCORE, "0.5", PREFIX,
+        "1", "fr:", SCHEMA, content, TEXT], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_skip, ON, HASH, LANGUAGE, FRENCH, SKIPINITIALSCAN,
+        PREFIX, "1", "fr:", SCHEMA, content, TEXT], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_last, ON, HASH, PREFIX, "1", "fr:", LANGUAGE, FRENCH,
+        SCHEMA, content, TEXT], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx_default, ON, HASH, PREFIX, "1", "fr:", SCHEMA, content,
+        TEXT], expect: {equals: OK}}
+    - {command: [HSET, "fr:1", content, "voiture rapide"], expect: {equals: 1}}
+    - {command: [FT.SEARCH, idx_prefix, voiture], wait_s: 60, expect: {equals: [1,
+          "fr:1", [content, "voiture rapide"]]}}
+    - {command: [FT.SEARCH, idx_score, voiture], wait_s: 60, expect: {equals: [1,
+          "fr:1", [content, "voiture rapide"]]}}
+    - {command: [FT.SEARCH, idx_skip, voiture], wait_s: 60, expect: {equals: [1, "fr:1",
+          [content, "voiture rapide"]]}}
+    - {command: [FT.SEARCH, idx_last, voiture], wait_s: 60, expect: {equals: [1, "fr:1",
+          [content, "voiture rapide"]]}}
+    - {command: [FT.SEARCH, idx_default, voiture], wait_s: 60, expect: {equals: [
+          1, "fr:1", [content, "voiture rapide"]]}}
+    - {command: [FT.INFO, idx_prefix], expect_difference: true, expect: {contains: french}}
+    - {command: [FT.SEARCH, idx_prefix, "@content:dans voiture"], expect_difference: true,
+      expect: {equals: [1, "fr:1", [content, "voiture rapide"]]}}
+    - {command: [FT.INFO, idx_score], expect_difference: true, expect: {contains: french}}
+    - {command: [FT.SEARCH, idx_score, "@content:dans voiture"], expect_difference: true,
+      expect: {equals: [1, "fr:1", [content, "voiture rapide"]]}}
+    - {command: [FT.INFO, idx_skip], expect_difference: true, expect: {contains: french}}
+    - {command: [FT.SEARCH, idx_skip, "@content:dans voiture"], expect_difference: true,
+      expect: {equals: [1, "fr:1", [content, "voiture rapide"]]}}
+    - {command: [FT.INFO, idx_last], compare: skip, expect: {contains: french}}
+    - {command: [FT.SEARCH, idx_last, "@content:dans voiture"], expect: {equals: [
+          1, "fr:1", [content, "voiture rapide"]]}}
+    - {command: [FT.SEARCH, idx_default, "@content:dans voiture"], expect: {equals: [
+          0]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ftlang.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ftlang}

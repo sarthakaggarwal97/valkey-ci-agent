@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "8e341d7bb03a9bea989237905f5f665e3bf1cd04",
+  "parent": "094d24645544628a1020f0f3e33064b72174a572",
+  "pr": 1622,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Incrementally rehashing huge-page hash maps to remove ingestion stalls (#1622)",
+  "date": "2026-11-12",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": "4bfcfdec9e95009bb6cbe4caa587013cbd5b3607",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 2,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 15.8505,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "4bfcfdec9e95009bb6cbe4caa587013cbd5b3607",
+  "parent": "743fdab3d449d0b0ff9625f70dfc46c5cee7c02a",
+  "pr": 1702,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "fix(ft.create): keep LANGUAGE when another option follows it (#1697) (#1702)",
+  "date": "2026-11-12",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": "4bfcfdec9e95009bb6cbe4caa587013cbd5b3607",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.8557,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}

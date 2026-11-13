@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.vector-registry-rename-hdel-field
+deployment:
+  modes: [standalone]
+metadata:
+  description: HDEL of the vector field followed by RENAME out of the index prefix
+    must not crash in MoveKey -> UnshareWithValkey while the registry still tracks
+    the record
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config: {hash-max-listpack-entries: 0}
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, doc, SCHEMA, vec, VECTOR, HNSW,
+        6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [INFO, everything], compare: skip, expect: {contains: "search_vector_registry_sharing_active:1"}}
+    - {command: [HSET, "doc:0", vec, !!binary "AACAPwAAAEA=", other, x], expect: {
+        equals: 2}}
+    - {command: [INFO, everything], wait_s: 30, compare: skip, expect: {contains: "search_vector_registry_entry_cnt:1"}}
+    - {command: [HDEL, "doc:0", vec], expect: {equals: 1}}
+    - {command: [RENAME, "doc:0", "outside:0"], expect: {equals: OK}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.vector-registry-dropindex-hdel-cron-crash
+deployment:
+  modes: [standalone]
+metadata:
+  description: Cron unshare of a dropped index's keys whose vector field was HDEL'd
+    must not crash on a missing hash field
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "parent commit build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 25
+    commands:
+    - {command: [CONFIG, SET, search.vector-unshare-batch-size, 1], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:0", vec, !!binary "AACAPwAAAEA=", other, x], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:1", vec, !!binary "AABAQAAAgBA=", other, x], expect: {
+        equals: 2}}
+    - {command: [HSET, "doc:2", vec, !!binary "AACgQAAAwBA=", other, x], expect: {
+        equals: 2}}
+    - {command: [INFO, everything], wait_s: 10, expect: {contains: "search_vector_registry_entry_cnt:3"},
+      compare: skip}
+    - {command: [FT.DROPINDEX, idx], expect: {equals: OK}}
+    - {command: [HDEL, "doc:0", vec], expect: {equals: 1}}
+    - {command: [HDEL, "doc:1", vec], expect: {equals: 1}}
+    - {command: [HDEL, "doc:2", vec], expect: {equals: 1}}
+    - {command: [INFO, everything], wait_s: 15, expect: {contains: "search_vector_registry_pending_unshare_cnt:0"},
+      compare: skip}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

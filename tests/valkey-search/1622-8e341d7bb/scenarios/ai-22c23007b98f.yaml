@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-search 094d24645544..8e341d7bb03a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-22c23007b98f
+seed: 202
+experiment:
+  id: proposed.search-huge-map-rehash-compare
+  inputs:
+    resp: 3
+    migrate_batch: '1'
+    cron_batch: '1048576'
+    jitter: '10'
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

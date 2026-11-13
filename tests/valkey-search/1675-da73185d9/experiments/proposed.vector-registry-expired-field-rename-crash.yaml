@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.vector-registry-expired-field-rename-crash
+deployment:
+  modes: [standalone]
+metadata:
+  description: RENAME out of an index prefix after a vector field expired silently
+    must not crash the registry's unshare path
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "parent commit build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, "doc:", SCHEMA, vec, VECTOR,
+        HNSW, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2], expect: {equals: OK}}
+    - {command: [HSET, "doc:1", vec, !!binary "AACAPwAAAEA=", other, x], expect: {
+        equals: 2}}
+    - {command: [INFO, everything], wait_s: 10, expect: {contains: "search_vector_registry_entry_cnt:1"},
+      compare: skip}
+    - {command: [HPEXPIRE, "doc:1", 100, FIELDS, 1, vec], expect: {equals: [1]}}
+    - {command: [DEBUG, SLEEP, 0.3], expect: {equals: OK}}
+    - {command: [INFO, everything], expect: {contains: "search_vector_registry_entry_cnt:1"},
+      compare: skip}
+    - {command: [RENAME, "doc:1", "outside:1"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [PING], expect_difference: true, expect: {equals: PONG}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}
