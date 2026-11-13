@@ -499,6 +499,20 @@ def test_without_a_named_crash_the_candidates_logs_are_scanned(tmp_path):
     assert found[0]["lines"][0].startswith("==9==ERROR: AddressSanitizer")
 
 
+def test_the_watchdogs_stack_trace_is_no_crash(tmp_path):
+    # fuzzer-walk #153: CONFIG SET watchdog-period makes the server log every thread's stack and carry on.
+    watchdog = ("signal-handler (1794568388) \n--- WATCHDOG TIMER EXPIRED ---\n\n------ STACK TRACE ------\nEIP:\n"
+                "/usr/lib/libc.so.6(+0xb4792) [0x7aa258ab4792]\n\n26222 io_thd_3\n"
+                "/usr/lib/libc.so.6(pthread_mutex_lock+0xb4) [0x7aa258aaf6f4]\n\n"
+                "------ STACK TRACE DONE ------\nsignal-handler (1794568388) --------\n")
+    (tmp_path / "candidate.server.log").write_text(watchdog)
+    assert findings(_report(), tmp_path) == {}
+    # A real crash around the watchdog's section is still caught.
+    (tmp_path / "candidate.server.log").write_text(watchdog + "=== VALKEY BUG REPORT START: Cut & paste ===\n")
+    (finding,) = findings(_report(), tmp_path).values()
+    assert finding["rule"] == "crash"
+
+
 def test_a_log_names_its_crash_by_summary_assertion_or_signal():
     leak = ("SUMMARY: AddressSanitizer: 64 byte(s) leaked in 1 allocation(s).\n"
             "Direct leak of 64 byte(s)\n    #0 0x1 in malloc\n    #1 0x2 in ztrymalloc_usable\n    #2 0x3 in sdsnew\n")

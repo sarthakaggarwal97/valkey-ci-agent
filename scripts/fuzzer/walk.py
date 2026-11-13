@@ -188,6 +188,11 @@ CHECK_REASONS = frozenset({
 MARKER_NAMESPACE = "valkey-ci-agent:fuzzer-walk"
 VALKEY_TOOLS = ("valkey-server", "valkey-cli", "valkey-benchmark", "valkey-check-rdb", "valkey-check-aof")
 _CRASH_PATTERNS = [(title, pattern) for title, _, pattern, _ in _ANOMALY_PATTERNS if title in _CRASH_TITLES]
+# The software watchdog (watchdog-period) logs every thread's stack under this header and the server carries on:
+# diagnostics a scenario asks for, not a crash (fuzzer-walk #153). A crash's own trace follows a BUG REPORT START
+# instead, which stays.
+_WATCHDOG_SECTION_RE = re.compile(r"--- WATCHDOG TIMER EXPIRED ---.*?(?:------ STACK TRACE DONE ------[^\n]*\n?|\Z)",
+                                  re.S)
 _SANITIZER_RE = re.compile(r"SUMMARY: \w*Sanitizer: [^\n]*")
 _ASSERTION_RE = re.compile(r"ASSERTION FAILED[^\n]*\n([^\n]*)")
 _SIGNAL_RE = re.compile(r"crashed by signal[^\n]*")
@@ -754,7 +759,7 @@ def findings(report: dict[str, Any], run_dir: Path) -> dict[str, dict[str, Any]]
     for path in sorted(run_dir.rglob("*.log")):
         if path.name.startswith("parent.") or path.name == "console.log":
             continue
-        text = strip_ansi(path.read_text(errors="replace"))
+        text = _WATCHDOG_SECTION_RE.sub("", strip_ansi(path.read_text(errors="replace")))
         for title, pattern in _CRASH_PATTERNS:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
