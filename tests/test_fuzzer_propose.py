@@ -442,6 +442,58 @@ def test_only_validated_scenarios_are_output(tmp_path, fuzzer_dir):
     assert "over the count" not in json.dumps(result)
 
 
+def test_server_config_the_checkout_lacks_is_rejected(tmp_path, fuzzer_dir, monkeypatch):
+    # The deployment's server_config is written into each instance's config file unprobed: a setting the
+    # builds under test predate kills the instance with FATAL CONFIG FILE ERROR and the whole test is skipped
+    # (valkey #490, #1252: dual-channel-replication-enabled on builds from before it). The validation drops it.
+    def clone_with_config(repo, dest, sha=None, *, fetch_ref=None):
+        (dest / "src").mkdir(parents=True)
+        (dest / "src" / "config.c").write_text(
+            'standardConfig static_configs[] = {\n'
+            '    createBoolConfig("appendonly", NULL, MODIFIABLE_CONFIG, server.aof_enabled, 0, NULL, NULL),\n'
+            '    createIntConfig("list-max-listpack-size", "list-max-ziplist-size", MODIFIABLE_CONFIG,\n'
+            '                    server.list_max, 128, NULL, NULL),\n'
+            '};\n'
+        )
+        return True
+
+    monkeypatch.setattr(propose_mod, "shallow_clone_at_sha", clone_with_config)
+    known = GOOD.replace(
+        "base_port: 7000}", "base_port: 7000, server_config: {appendonly: 'yes', list-max-ziplist-size: 4}}")
+    unknown = OTHER_GOOD.replace(
+        "base_port: 7100}", "base_port: 7100, server_config: {dual-channel-replication-enabled: 'yes'}}")
+    runner = StubRunner(_answer([{"rationale": "known", "scenario": known},
+                                 {"rationale": "unknown", "scenario": unknown}]),
+                        _answer([]))
+    run, result, out = _propose(runner, tmp_path, fuzzer_dir, count=2)
+    assert [s["rationale"] for s in result["scenarios"]] == ["known"]
+    assert len(result["dropped"]) == 1
+    assert "dual-channel-replication-enabled" in result["dropped"][0]["error"]
+    assert "src/config.c does not" in result["dropped"][0]["error"]
+
+
+def test_known_configs_names_aliases_and_directives(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "config.c").write_text(
+        'standardConfig static_configs[] = {\n'
+        '    createStringConfig("aclfile", NULL, IMMUTABLE_CONFIG, ALLOW_EMPTY_STRING, server.acl_filename,\n'
+        '                       "", NULL, NULL),\n'
+        '    createSizeTConfig("hash-max-listpack-entries", "hash-max-ziplist-entries", MODIFIABLE_CONFIG,\n'
+        '                      0, LONG_MAX, server.hash_max, 128, INTEGER_CONFIG, NULL, NULL),\n'
+        '};\n'
+    )
+    configs = propose_mod.known_configs(tmp_path)
+    assert configs is not None
+    assert {"aclfile", "hash-max-listpack-entries", "hash-max-ziplist-entries"} <= configs
+    # loadServerConfig handles these outside static_configs[]; a config file may hold them on any build.
+    assert {"loadmodule", "user", "rename-command", "include"} <= configs
+    assert "dual-channel-replication-enabled" not in configs
+    # No checkout, or no parseable table: nothing to check against.
+    assert propose_mod.known_configs(tmp_path / "nowhere") is None
+    (tmp_path / "src" / "config.c").write_text("int x;\n")
+    assert propose_mod.known_configs(tmp_path) is None
+
+
 def test_no_repair_round_when_everything_validates(tmp_path, fuzzer_dir, no_clone):
     runner = StubRunner(_answer([{"rationale": "a", "scenario": GOOD}, {"rationale": "b", "scenario": OTHER_GOOD}]))
     run, result, out = _propose(runner, tmp_path, fuzzer_dir, count=2)

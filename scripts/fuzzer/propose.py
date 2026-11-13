@@ -492,6 +492,25 @@ def touches_module_api(diff: str) -> bool:
                for match in _DIFF_PATHS_RE.finditer(diff) for path in match.groups())
 
 
+# A standard config's name, and its alias when it has one: createBoolConfig("appendonly", "alias", ...).
+_CONFIG_NAME_RE = re.compile(r'create\w+Config\(\s*"([^"]+)"\s*,\s*(?:"([^"]+)"|NULL)')
+# Directives loadServerConfig handles outside static_configs[], which a config file may still hold.
+_CONFIG_DIRECTIVES = frozenset({"include", "loadmodule", "user", "rename-command"})
+
+
+def known_configs(valkey_dir: Path) -> frozenset[str] | None:
+    """The settings the checkout's src/config.c has (each name and its alias), or None without a parseable
+    table. A deployment's server_config is written into every instance's config file unprobed: a setting the
+    builds under test predate kills the instance with FATAL CONFIG FILE ERROR at startup, and the test is
+    skipped whole (valkey #490, #1252: dual-channel-replication-enabled on builds from before it)."""
+    try:
+        text = (valkey_dir / "src" / "config.c").read_text(errors="replace")
+    except OSError:
+        return None
+    names = {name for match in _CONFIG_NAME_RE.finditer(text) for name in match.groups() if name}
+    return frozenset(names) | _CONFIG_DIRECTIVES if names else None
+
+
 def built_test_modules(valkey_dir: Path) -> list[str]:
     """The modules ``make -C tests/modules`` builds in a Valkey checkout, as the PR batch's module_file names them
     (``tests/modules/datatype.so``): the ``.so`` files its Makefile names."""
@@ -652,6 +671,7 @@ def _check_and_compile(
 def _check_and_validate(
     proposal: Proposal, *, change: Change, candidates: Path, accepted: Path, experiment_dir: Path,
     validator: Validator, taken: set[str], experiments: dict[str, ExperimentProposal], declared: tuple[str, ...],
+    configs: frozenset[str] | None = None,
 ) -> None:
     """Check, name, validate and, if it holds, accept one proposal.
 
@@ -686,6 +706,17 @@ def _check_and_validate(
             return
         if not experiment.valid:
             proposal.error = f"uses experiment {proposal.experiment}, which did not compile: {experiment.error}"
+            return
+    server_config = doc["deployment"].get("server_config")
+    if configs is not None and isinstance(server_config, dict):
+        unknown = sorted(str(key) for key in server_config if str(key) not in configs)
+        if unknown:
+            proposal.error = (
+                f"deployment.server_config sets {', '.join(unknown)}, which the checkout's src/config.c does not "
+                "have: a build that rejects its config file dies at startup and the test is skipped whole. Set "
+                "only settings the builds under test know; exercise a new option inside the sequence with "
+                "CONFIG SET marked expect_difference."
+            )
             return
     rendered = _render_scenario(doc, change)
     candidate = candidates / f"{scenario_id}.yaml"
@@ -1223,10 +1254,13 @@ def propose(
         _check_and_compile(experiment, change=change, candidates=candidates, accepted=experiment_dir,
                            lister=lister, taken=experiments, declared=declared)
 
+    # The settings a Valkey change's builds know; a module's builds load into the pinned Valkey, which has them all.
+    configs = known_configs(workdir / "valkey") if not is_module and valkey_ok else None
+
     def validate_one(proposal: Proposal) -> None:
         _check_and_validate(proposal, change=change, candidates=candidates, accepted=accepted,
                             experiment_dir=experiment_dir, validator=validator, taken=taken,
-                            experiments=experiments, declared=declared)
+                            experiments=experiments, declared=declared, configs=configs)
 
     if is_module:
         references_rule = _MODULE_RULE
