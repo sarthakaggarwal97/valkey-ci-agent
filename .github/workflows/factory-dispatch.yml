@@ -35,7 +35,7 @@ jobs:
   dispatch:
     name: "Dispatch labelled issue fixes"
     if: >-
-      github.repository == 'valkey-io/valkey-ci-agent'
+      github.repository == 'sarthakaggarwal97/valkey-ci-agent'
       && (github.event_name == 'workflow_dispatch' || vars.FACTORY_STEP == 'comment' || vars.FACTORY_STEP == 'draft-pr')
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -58,24 +58,18 @@ jobs:
 
       - name: Generate target repository token
         id: target-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: valkey-io
-          repositories: valkey
-          # Read issues, their timelines and comments, and the bot's pull
-          # requests and recent commits; nothing is written.
-          permission-issues: read
-          permission-pull-requests: read
-          permission-contents: read
-          permission-metadata: read
+        # Fork test only, do not merge: the PAT stands in for the App token.
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: echo "token=${PAT}" >> "$GITHUB_OUTPUT"
 
       - name: Dispatch
         shell: bash
         env:
           TARGET_TOKEN: ${{ steps.target-token.outputs.token }}
           GITHUB_TOKEN: ${{ github.token }}
+          E2E_BOT_LOGIN: sarthakaggarwal97  # Fork test only: the PAT's user stands in for the bot
           MAX_RUNS: ${{ inputs.max_runs || vars.FACTORY_MAX_RUNS || '1' }}
           MAX_OPEN_PRS: ${{ vars.FACTORY_MAX_OPEN_PRS || '5' }}
           # Which step the bot is at; a manual run of a switched-off bot reads it as comment.
@@ -84,7 +78,7 @@ jobs:
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
         run: |
           set -euo pipefail
-          args=(--repo valkey-io/valkey --max-runs "${MAX_RUNS}" --max-open-prs "${MAX_OPEN_PRS}" --step "${STEP}")
+          args=(--repo sarthakaggarwal97/valkey --max-runs "${MAX_RUNS}" --max-open-prs "${MAX_OPEN_PRS}" --step "${STEP}")
           if [[ "${DRY_RUN}" == "true" ]]; then
             args+=(--dry-run)
           fi

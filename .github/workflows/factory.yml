@@ -31,7 +31,7 @@ concurrency:
 
 jobs:
   fix:
-    if: github.repository == 'valkey-io/valkey-ci-agent'
+    if: github.repository == 'sarthakaggarwal97/valkey-ci-agent'  # Fork test only, do not merge
     permissions:
       actions: read
       contents: read
@@ -40,9 +40,6 @@ jobs:
     with:
       front_door: factory
       # FACTORY_FORK names the fork the branch is pushed to; empty pushes to valkey itself.
-      request: ${{ format('{{"repo":"valkey-io/valkey","issue":{0},"push_repo":{1}}}', inputs.issue, toJSON(vars.FACTORY_FORK || '')) }}
+      request: ${{ format('{{"repo":"sarthakaggarwal97/valkey","issue":{0},"push_repo":{1}}}', inputs.issue, toJSON(vars.FACTORY_FORK || '')) }}  # Fork test only
       key: factory-${{ inputs.issue }}
-    secrets:
-      VALKEYRIE_BOT_APP_ID: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-      VALKEYRIE_BOT_PRIVATE_KEY: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-      AWS_ROLE_ARN: ${{ secrets.AWS_ROLE_ARN }}
+    secrets: inherit  # Fork test only, do not merge: the PAT stands in for the App

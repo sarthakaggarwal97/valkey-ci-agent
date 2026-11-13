@@ -372,7 +372,7 @@ def main(argv: list[str] | None = None) -> int:
     if not token:
         parser.error("TARGET_TOKEN is required")
     gh = Github(auth=Auth.Token(token))
-    bot_login = f"{APP_LOGIN}[bot]"
+    bot_login = os.environ.get("E2E_BOT_LOGIN") or f"{APP_LOGIN}[bot]"  # Fork test only, do not merge
     if args.command == "plan":
         try:
             request = json.loads(args.request)
