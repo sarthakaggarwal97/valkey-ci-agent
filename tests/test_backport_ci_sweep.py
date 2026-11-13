@@ -70,6 +70,43 @@ def test_a_rebased_sweep_keeps_the_fixes_it_still_needs(tmp_path) -> None:
     head = ci_sweep.replay(str(repo), sweep_head, ci, plan.keep)
     assert git(repo, "rev-parse", f"{head}~1") == sweep_head
     assert git(repo, "diff", "--name-only", sweep_head, head) == "c.txt"
+    assert "Signed-off-by: T <t@example.com>" in git(repo, "show", "-s", "--format=%B", head)
+
+
+def test_an_unsigned_fix_is_signed_when_rebuilt_on_the_same_sweep_head(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "sweep")
+    git(repo, "config", "user.name", "T")
+    git(repo, "config", "user.email", "t@example.com")
+    sweep = commit(repo, "base.txt", "base\n", "Base")
+    unsigned = commit(repo, "fix.txt", "fixed\n", _FIX_A)
+    fix = ci_sweep.as_fix(unsigned, git(repo, "show", "-s", "--format=%B", unsigned))
+    assert fix is not None
+
+    head, kept, dropped = ci_sweep.rebuild(str(repo), sweep, [fix])
+
+    assert head != unsigned
+    assert kept == [fix] and not dropped
+    assert git(repo, "rev-parse", f"{head}~1") == sweep
+    assert "Signed-off-by: T <t@example.com>" in git(repo, "show", "-s", "--format=%B", head)
+
+
+def test_a_signed_fix_keeps_its_commit_on_the_same_sweep_head(tmp_path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "sweep")
+    git(repo, "config", "user.name", "T")
+    git(repo, "config", "user.email", "t@example.com")
+    sweep = commit(repo, "base.txt", "base\n", "Base")
+    signed = commit(repo, "fix.txt", "fixed\n", _FIX_A + "\n\nSigned-off-by: T <t@example.com>")
+    fix = ci_sweep.as_fix(signed, git(repo, "show", "-s", "--format=%B", signed))
+    assert fix is not None
+
+    head, kept, dropped = ci_sweep.rebuild(str(repo), sweep, [fix])
+
+    assert head == signed
+    assert kept == [fix] and not dropped
 
 
 def test_someone_elses_commit_on_the_ci_sweep_branch_stops_the_rebuild(tmp_path) -> None:

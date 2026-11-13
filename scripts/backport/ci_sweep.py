@@ -2,7 +2,7 @@
 
 The sweep PR carries only backports. Each CI fix the follow-up makes for it
 goes to ``agent/backport/ci-sweep/<release>``, a pull request into the sweep
-branch, as a commit with ``CI-Fix-Job`` and ``CI-Fix-Run`` trailers. The
+branch, as a signed-off commit with ``CI-Fix-Job`` and ``CI-Fix-Run`` trailers. The
 sweep rebases its branch onto the release branch as it adds backports, so
 the CI-sweep branch is rebuilt on each new sweep head: its fixes are
 cherry-picked onto it, and a fix that comes out empty (the sweep has it now)
@@ -160,13 +160,22 @@ def rebuild(repo_dir: str, onto: str, fixes: list[Fix]) -> tuple[str, list[Fix],
     dropped: list[tuple[Fix, str]] = []
     for fix in fixes:
         parent = git_output(repo_dir, "rev-parse", f"{fix.sha}~1").strip()
-        if parent == git_output(repo_dir, "rev-parse", "HEAD").strip():
+        message = git_output(repo_dir, "show", "-s", "--format=%B", fix.sha)
+        if parent == git_output(repo_dir, "rev-parse", "HEAD").strip() and _has_author_signoff(
+            repo_dir, fix.sha, message
+        ):
             # Nothing under it changed: the commit stays, and so does what its comments call it.
             run_git(repo_dir, "checkout", "-q", "--detach", fix.sha)
             kept.append(fix)
             continue
         try:
-            run_git(repo_dir, "cherry-pick", "--allow-empty", "--keep-redundant-commits", fix.sha)
+            args = ["cherry-pick", "--allow-empty", "--keep-redundant-commits"]
+            if not _has_author_signoff(repo_dir, fix.sha, message):
+                # The first live CI-sweep PRs exposed that an unsigned bot
+                # commit cannot pass DCO. This also upgrades those existing
+                # commits the next time their branch is rebuilt.
+                args.append("--signoff")
+            run_git(repo_dir, *args, fix.sha)
         except subprocess.CalledProcessError:
             run_git(repo_dir, "cherry-pick", "--abort")
             dropped.append((fix, DROPPED_CONFLICT))
@@ -177,6 +186,12 @@ def rebuild(repo_dir: str, onto: str, fixes: list[Fix]) -> tuple[str, list[Fix],
             continue
         kept.append(fix)
     return git_output(repo_dir, "rev-parse", "HEAD").strip(), kept, dropped
+
+
+def _has_author_signoff(repo_dir: str, sha: str, message: str) -> bool:
+    """Whether ``message`` carries the DCO sign-off of commit ``sha``'s author."""
+    author = git_output(repo_dir, "show", "-s", "--format=%an <%ae>", sha).strip()
+    return f"Signed-off-by: {author}" in message.splitlines()
 
 
 def plan(

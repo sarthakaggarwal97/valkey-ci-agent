@@ -563,6 +563,10 @@ def test_a_sweep_fix_starts_the_ci_sweep_branch_and_leaves_the_sweep_alone(
     assert _git(remote, "rev-parse", "agent/backport/sweep/9.0").strip() == head_sha
     assert _git(remote, "rev-parse", "agent/backport/ci-sweep/9.0").strip() == pushed
     assert _git(remote, "rev-parse", f"{pushed}^").strip() == head_sha
+    assert (
+        "Signed-off-by: valkeyrie-bot[bot] "
+        "<3692572+valkeyrie-bot[bot]@users.noreply.github.com>"
+    ) in _git(remote, "log", "-1", "--format=%B", pushed)
     with pytest.raises(PushRefused, match="target branch changed"):
         push_candidate(_candidate(patch), _sweep_target(head_sha), git_env={})
 
@@ -579,7 +583,12 @@ def test_a_later_fix_goes_on_top_of_the_ci_sweep_fixes_rebuilt_on_the_sweeps_hea
     first = push_candidate(
         _candidate(_patch_for(tmp_path, head_sha, remote)), _sweep_target(head_sha), git_env={}, trailers=_TRAILERS,
     )
-    assert _git(remote, "log", "-1", "--format=%B", first).rstrip().endswith("\n\n" + "\n".join(_TRAILERS))
+    message = _git(remote, "log", "-1", "--format=%B", first)
+    assert "\n\n" + "\n".join(_TRAILERS) in message
+    assert message.rstrip().endswith(
+        "Signed-off-by: valkeyrie-bot[bot] "
+        "<3692572+valkeyrie-bot[bot]@users.noreply.github.com>"
+    )
     newer = _advance(tmp_path, remote, "agent/backport/sweep/9.0", "backport.txt", "a backport\n")
     patch = _patch_for(tmp_path, newer, remote, path="other.txt")
 

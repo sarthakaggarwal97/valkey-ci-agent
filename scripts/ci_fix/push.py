@@ -131,7 +131,13 @@ def _push_patch(
                 )
             _set_identity(repo_dir)
             message = commit_message(candidate) + ("\n\n" + "\n".join(trailers) if trailers else "")
-            run_git(str(repo_dir), "commit", "-m", message)
+            commit_args = ["commit"]
+            if target.fix_branch:
+                # A CI-sweep PR must pass the target repository's DCO check.
+                # Issue-fix draft PRs intentionally keep their existing
+                # maintainer-signoff flow.
+                commit_args.append("--signoff")
+            run_git(str(repo_dir), *commit_args, "-m", message)
             _push(
                 repo_dir,
                 target,
