@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9ebbd5f03856ba8b6472aaf88712459a2e4d00b5",
+  "parent": "39d4b43d4beba0b656929a09d48ade662f52edf9",
+  "pr": 436,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix issues for older versions of Darwin and improve PowerPC support (#436)",
+  "date": "2024-05-04",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2586,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is entirely platform-conditional build/portability code for older Darwin and Apple PowerPC: macro-name fixes in src/config.h (MAC_OS_X_VERSION_MAX_ALLOWED spelling, BYTE_ORDER for __APPLE__&&__POWERPC__) and crash-handler register access in src/debug.c behind __APPLE__/__ppc__/__arm64__ guards. On the Linux x86/ARM build the fuzzer runs, none of the modified lines are compiled, so there is no reachable runtime behaviour change to exercise; even on macOS the affected code only runs inside the fatal-signal crash reporter. No scenario can reach it."
+}

@@ -1,0 +1,50 @@
+extends: [valkey.base]
+id: proposed.aof-fsync-stall
+deployment:
+  modes: [standalone]
+  syscall_faults: {type: boolean, enum: [true]}
+metadata:
+  description: Delay the BIO AOF fsync so flushAppendOnlyFile postpones past 2 s and
+    logs the renamed delayed-fsync notice while writing the buffer without waiting
+    for fsync
+inputs:
+  properties:
+    delay_ms: {type: integer, minimum: 3000, maximum: 60000, default: 6000}
+    run_s: {type: number, minimum: 5, maximum: 120, default: 12}
+components:
+- use: valkey.fault.syscall
+  id: stall-fsync
+  config:
+    when_event: writes.seeded
+    instance: primary
+    calls: [fsync, fdatasync]
+    path: "appendonlydir/*"
+    nth: 1
+    action: delay
+    delay_ms: {$ref: inputs.delay_ms}
+    when: before
+- use: valkey.observer.log
+  id: logs
+  config:
+    instances: primary
+    expect:
+    - pattern: "Asynchronous AOF fsync is taking too long"
+      evidence_id: valkey.aof.delayed-fsync-logged
+      required: true
+    - pattern: "this may slow down the server"
+      evidence_id: valkey.aof.delayed-fsync-renamed-text
+- use: valkey.observer.info
+  id: persistence
+  config:
+    instances: primary
+    expectations:
+    - {evidence_id: valkey.aof.delayed-fsync-counter, field: aof_delayed_fsync, delta_min: 1}
+- use: valkey.action.sleep
+  id: run-under-stall
+  depends_on: [writes, stall-fsync, logs, persistence]
+  config:
+    seconds: {$ref: inputs.run_s}
+required_events: [stall-fsync.injected]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: stall-fsync}
+- {evidence_id: valkey.aof.delayed-fsync-logged, source: logs}

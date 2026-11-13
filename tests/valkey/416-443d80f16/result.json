@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "443d80f1686377ad42cbf92d98ecc6d240325ee1",
+  "parent": "d1de34930af0fa371dc703b9d8d2852ebd0b8f2b",
+  "pr": 416,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix typo in comment in quicklist.h (#416)",
+  "date": "2024-05-02",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2012,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only fixes a typo in a comment in src/quicklist.h ('of of' -> 'of the'). Comments are stripped at compile time, so no runtime behaviour, reply, persistence, replication, or build path is affected; there is nothing a scenario could exercise."
+}

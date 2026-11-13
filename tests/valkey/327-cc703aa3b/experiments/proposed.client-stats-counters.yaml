@@ -1,0 +1,40 @@
+extends: [valkey.liveness]
+id: proposed.client-stats-counters
+deployment:
+  modes: [standalone]
+metadata:
+  description: Exact per-client counter values on the change build - tot-cmds counts
+    each call() exactly once (MULTI queueing not counted, EXEC counts queued commands,
+    nested server.call counts against the caller, a timed-out blocked command counts
+    once via updateStatsOnUnblock) and tot-net-in counts request bytes exactly
+components:
+- use: valkey.action.commands
+  id: exact
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: 2
+    timeout_s: 15
+    commands:
+    - {command: [CLIENT, INFO], expect_difference: true, expect: {contains: "tot-cmds=0"}}
+    - {command: [CLIENT, INFO], expect_difference: true, expect: {contains: " tot-net-in=52 "}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [CLIENT, INFO], expect_difference: true, expect: {contains: "tot-cmds=3"}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, k1, v1], expect: {equals: QUEUED}}
+    - {command: [SET, k2, v2], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK]}}
+    - {command: [CLIENT, INFO], expect_difference: true, expect: {contains: "tot-cmds=8"}}
+    - {command: [EVAL, "return server.call('ping')", 0], expect: {equals: PONG}}
+    - {command: [CLIENT, INFO], expect_difference: true, expect: {contains: "tot-cmds=11"}}
+    - {command: [BLPOP, nokey, 1]}
+    - {command: [CLIENT, INFO], expect_difference: true, expect: {contains: "tot-cmds=13"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [exact.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: exact}

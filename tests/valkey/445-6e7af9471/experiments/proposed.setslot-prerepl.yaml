@@ -1,0 +1,47 @@
+extends: [valkey.liveness]
+id: proposed.setslot-prerepl
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER SETSLOT pre-replication to replicas - success with a live replica,
+    replicated open-slot state on the replica, and NOREPLICAS timeout when the replica
+    stops acking
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: prerepl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    server_config: {cluster-node-timeout: 5000}
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, REPLICATE, <node.0.id>], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [CLUSTER, SETSLOT, 100, MIGRATING, <node.2.id>, TIMEOUT, 10000], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 101, MIGRATING, <node.2.id>], expect: {equals: OK}}
+    - {command: [CLUSTER, NODES], node: 1, wait_s: 15, expect_difference: true, expect: {
+        contains: "[101->-"}}
+    - {command: [CLUSTER, SETSLOT, 100, STABLE], expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 101, STABLE], expect: {equals: OK}}
+    - {command: [CLUSTER, RESET, HARD], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 102, MIGRATING, <node.2.id>, TIMEOUT, 500], expect_difference: true,
+      expect: {error: "NOREPLICAS"}}
+    - {command: [CLUSTER, SETSLOT, 103, MIGRATING, <node.2.id>], expect_difference: true,
+      expect: {error: "NOREPLICAS"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [prerepl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: prerepl}

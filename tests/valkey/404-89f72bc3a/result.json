@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "89f72bc3ae1ae6e61c5306b318b83ee30d527baf",
+  "parent": "44f273d13bb506550c2473ac41ca00f5ca95b156",
+  "pr": 404,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Don't include config.h from serverassert.h (#404)",
+  "date": "2024-05-01",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2242,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only removes the #include of config.h from serverassert.h and inlines equivalent definitions of valkey_unreachable and likely (same __builtin_unreachable/abort and __builtin_expect expansions guarded by the same GCC version checks). The assert/panic macros expand identically on both builds; this is a build/header-dependency refactor with no behavior change, so there is nothing a runtime scenario could distinguish."
+}

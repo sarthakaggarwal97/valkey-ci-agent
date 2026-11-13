@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2ed71de8e17dd5b9206acd9b40425f99c45dbcff",
+  "parent": "cde8ec1b414e5da00ee90cbaf21c1c7ae37e93e9",
+  "pr": 448,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Migrate util.c unit tests to new test framework (#448)",
+  "date": "2024-05-07",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3882,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure test-infrastructure migration: it moves util.c's SERVER_TEST-only unit tests (string2ll, string2l, ll2string, ld2string, fixedpoint_d2string, reclaimFilePageCache) into the new unit test framework (src/unit/test_util.c, test_files.h) and deletes the old #ifdef SERVER_TEST block and utilTest registration. No production code path in util.c, server.c, or util.h is modified \u2014 all removed code was compiled only under SERVER_TEST, so a running valkey-server's behavior is identical before and after. There is nothing a fuzzer scenario against real servers could reach."
+}

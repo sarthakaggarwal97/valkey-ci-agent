@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "472c1ca26bfa770a506390a28d4e6c6739ec3916",
+  "parent": "43692aca7ab58d2d020b3c0b67242f238295c9d2",
+  "pr": 433,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update links in module API docs (generated from module.c) (#433)",
+  "date": "2024-05-04",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2945,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewrites URLs inside C comments in src/module.c (documentation strings used to generate the module API docs) and fixes a require path in utils/generate-module-api-doc.rb, a standalone doc-generation Ruby script. No compiled code, command behaviour, reply, replication, persistence or tool path changes, so no scenario can reach it and none is needed."
+}

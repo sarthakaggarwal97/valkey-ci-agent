@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "44f273d13bb506550c2473ac41ca00f5ca95b156",
+  "parent": "e43fda5685919f72607ade02a24067b52ea32f6a",
+  "pr": 400,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Delete unused declaration (#400)",
+  "date": "2024-05-01",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.203,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only deletes an unused function declaration (dictEntryMetadata) from src/dict.h. It is a header cleanup with no code, behavior, reply, or data-path change; no runtime scenario can distinguish the two builds."
+}

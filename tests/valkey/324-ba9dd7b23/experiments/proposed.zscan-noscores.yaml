@@ -1,0 +1,69 @@
+extends: [valkey.liveness]
+id: proposed.zscan-noscores
+deployment:
+  modes: [standalone]
+metadata:
+  description: ZSCAN NOSCORES returns members without scores on listpack and skiplist
+    encodings; NOSCORES is rejected outside ZSCAN; HSCAN NOVALUES and plain ZSCAN
+    are unchanged
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: zscan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {zset-max-listpack-entries: 2, hash-max-listpack-entries: 2}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [ZADD, zl, 1, a, 2, b], expect: {equals: 2}}
+    - {command: [OBJECT, ENCODING, zl], compare: skip}
+    - {command: [ZSCAN, zl, "0"], expect: {equals: ["0", [a, "1", b, "2"]]}}
+    - {command: [ZSCAN, zl, "0", NOSCORES], expect_difference: true, expect: {equals: [
+          "0", [a, b]]}}
+    - {command: [ZSCAN, zl, "0", noscores], expect_difference: true, expect: {equals: [
+          "0", [a, b]]}}
+    - {command: [ZSCAN, zl, "0", COUNT, 100, NOSCORES, MATCH, "*"], expect_difference: true,
+      expect: {equals: ["0", [a, b]]}}
+    - {command: [ZSCAN, zl, "0", NOSCORES, MATCH, "a*"], expect_difference: true,
+      expect: {equals: ["0", [a]]}}
+    - {command: [ZSCAN, zl, "0", NOSCORES, NOSCORES], expect_difference: true, expect: {
+        equals: ["0", [a, b]]}}
+    - {command: [ZSCAN, zl, "0", NOVALUES], expect: {error: "HSCAN"}}
+    - {command: [ZSCAN, zl, "0", NOSCORES, COUNT], expect: {error: true}}
+    - {command: [ZSCAN, nosuchkey, "0", NOSCORES], expect: {equals: ["0", []]}}
+    - {command: [SET, str, v], expect: {equals: OK}}
+    - {command: [ZSCAN, str, "0", NOSCORES], expect: {error: "WRONGTYPE"}}
+    - {command: [HSET, h, f1, v1], expect: {equals: 1}}
+    - {command: [HSCAN, h, "0", NOSCORES], expect_difference: true, expect: {error: "ZSCAN"}}
+    - {command: [SCAN, "0", NOSCORES], expect_difference: true, expect: {error: "ZSCAN"}}
+    - {command: [SADD, s, m1], expect: {equals: 1}}
+    - {command: [SSCAN, s, "0", NOSCORES], expect_difference: true, expect: {error: "ZSCAN"}}
+    - {command: [HSCAN, h, "0", NOVALUES], expect: {equals: ["0", [f1]]}}
+    - {command: [ZADD, zk, 1, noscores, 2, match], expect: {equals: 2}}
+    - {command: [ZSCAN, zk, "0", NOSCORES], expect_difference: true, expect: {equals: [
+          "0", [noscores, match]]}}
+    - {command: [ZADD, ze, 0, ""], expect: {equals: 1}}
+    - {command: [ZSCAN, ze, "0", NOSCORES], expect_difference: true, expect: {equals: [
+          "0", [""]]}}
+    - {command: [ZADD, zs, 1, a, 2, b, 3, c], expect: {equals: 3}}
+    - {command: [OBJECT, ENCODING, zs], compare: skip}
+    - {command: [ZSCAN, zs, "0", COUNT, 1000], compare: skip}
+    - {command: [ZSCAN, zs, "0", COUNT, 1000, NOSCORES], expect_difference: true,
+      expect: {error: false}}
+    - {command: [ZSCAN, zs, "0", MATCH, "a*", COUNT, 1000, NOSCORES], expect_difference: true,
+      expect: {equals: ["0", [a]]}}
+    - {command: [HSET, hd, f1, v1, f2, v2, f3, v3], expect: {equals: 3}}
+    - {command: [HSCAN, hd, "0", COUNT, 1000, NOVALUES], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [zscan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: zscan}

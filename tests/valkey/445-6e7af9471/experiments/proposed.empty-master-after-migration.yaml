@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.empty-master-after-migration
+deployment:
+  modes: [standalone]
+metadata:
+  description: A primary whose last slot is migrated to a different shard with cluster-allow-replica-migration
+    off must stay an empty master on the change instead of demoting itself
+components:
+- use: valkey.action.commands
+  id: emptymaster
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    server_config: {cluster-node-timeout: 5000, cluster-allow-replica-migration: "no"}
+    timeout_s: 60
+    commands:
+    - {command: [CLUSTER, SETSLOT, 5061, IMPORTING, <node.0.id>], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 5061, MIGRATING, <node.1.id>], node: 0, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 5061, NODE, <node.1.id>], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 5061, NODE, <node.1.id>], node: 0, expect: {equals: OK}}
+    - {command: [GET, bar], node: 0, wait_s: 20, expect: {error: "MOVED"}, compare: skip}
+    - {command: [CLUSTER, SETSLOT, 5061, IMPORTING, <node.1.id>], node: 2, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 5061, MIGRATING, <node.2.id>], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 5061, NODE, <node.2.id>], node: 2, expect: {equals: OK}}
+    - {command: [ROLE], node: 1, wait_s: 25, expect: {contains: master}, compare: skip}
+    - {command: [CLUSTER, NODES], node: 1, wait_s: 25, expect_difference: true, expect: {
+        contains: "myself,master - "}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [emptymaster.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: emptymaster}

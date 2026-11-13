@@ -1,0 +1,13 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey ba9dd7b23a13..cde8ec1b414e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-42e2a49cec0e
+seed: 451
+experiment:
+  id: proposed.unix-socket-listen
+  inputs:
+    parent:
+      $ref: artifacts.parent.binary
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

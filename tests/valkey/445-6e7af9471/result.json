@@ -1,0 +1,142 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6e7af9471c0576e9567b62821b23aa13edf4e866",
+  "parent": "e2aec3b1a2e15e842e60b1e6f9210766c012f3a1",
+  "pr": 445,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Slot migration improvement (#445)",
+  "date": "2024-05-06",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 13,
+  "proven": 7,
+  "hunted": 13,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 269,
+    "executed": 220,
+    "percent": 81,
+    "uncovered": [
+      "src/blocked.c:246",
+      "src/blocked.c:247",
+      "src/blocked.c:628",
+      "src/cluster_legacy.c:2891",
+      "src/cluster_legacy.c:2896",
+      "src/cluster_legacy.c:2919",
+      "src/cluster_legacy.c:2925",
+      "src/cluster_legacy.c:2960",
+      "src/cluster_legacy.c:4744",
+      "src/cluster_legacy.c:4748",
+      "src/cluster_legacy.c:5445",
+      "src/cluster_legacy.c:5446",
+      "src/cluster_legacy.c:5447",
+      "src/cluster_legacy.c:5450",
+      "src/cluster_legacy.c:5460",
+      "src/cluster_legacy.c:6236",
+      "src/cluster_legacy.c:6237",
+      "src/cluster_legacy.c:6251",
+      "src/cluster_legacy.c:6252",
+      "src/cluster_legacy.c:6267",
+      "src/cluster_legacy.c:6268",
+      "src/cluster_legacy.c:6271",
+      "src/cluster_legacy.c:6272",
+      "src/cluster_legacy.c:6276",
+      "src/cluster_legacy.c:6277",
+      "src/cluster_legacy.c:6281",
+      "src/cluster_legacy.c:6282",
+      "src/cluster_legacy.c:6285",
+      "src/cluster_legacy.c:6286",
+      "src/cluster_legacy.c:6294",
+      "src/cluster_legacy.c:6295",
+      "src/cluster_legacy.c:6298",
+      "src/cluster_legacy.c:6299",
+      "src/cluster_legacy.c:6305",
+      "src/cluster_legacy.c:6308",
+      "src/cluster_legacy.c:6312",
+      "src/cluster_legacy.c:6314",
+      "src/cluster_legacy.c:6423",
+      "src/cluster_legacy.c:6424",
+      "src/cluster_legacy.c:6430",
+      "src/cluster_legacy.c:6431",
+      "src/cluster_legacy.c:6917",
+      "src/cluster_legacy.c:6918",
+      "src/cluster_legacy.c:6919",
+      "src/cluster_legacy.c:6921",
+      "src/cluster_legacy.c:6923",
+      "src/cluster_legacy.c:6924",
+      "src/debug.c:876",
+      "src/rdb.c:3313"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 13.8359,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2286 'c->argc == 0' is not true",
+      "scenario": "ai-75585641571c",
+      "seed": 101,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "3f0cb4ea730ac0a07196",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2286 'c->argc == 0' is not true",
+      "scenario": "ai-3315b5bd5304",
+      "seed": 102,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "3f0cb4ea730ac0a07196",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: networking.c:2286 'c->argc == 0' is not true",
+      "scenario": "ai-0ca9c86e3f21",
+      "seed": 104,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "3f0cb4ea730ac0a07196",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: 27594:M 13 Nov 2026 15:13:34.564 # Unrecoverable error: corrupted cluster config file \"1a26f23222c663fab3a076ba28362cc06122687b 127.0.0.1:62123@64216,,tls-port=0,shard-id=d8a9641a6eae338b3c761c06321d9820a929dfdf slave 50e9bd5ed4dfea44fa3ea50ec5c6156f10098f07 0 1794582813000 0 connected",
+      "scenario": "ai-2759bd4ed515",
+      "seed": 105,
+      "builds": {
+        "parent": false,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "introduced and since fixed",
+      "fingerprint": "6e219540321898d28d81",
+      "issue": null
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-bf7be766c9c1",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'halfmig' returned ERROR: expectations both builds violate alike, so they are not about the change: 13 (CLUSTER SETSLOT 7000 MIGRATING <node.3.id> on node 2)"
+    }
+  ]
+}

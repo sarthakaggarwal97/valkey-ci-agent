@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1aca85e3deb53be46ae24c671a138c7d92e1990f",
+  "parent": "2ed71de8e17dd5b9206acd9b40425f99c45dbcff",
+  "pr": 455,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update module api and variable to valkey accordingly. (#455)",
+  "date": "2024-05-07",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3872,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure mechanical rename inside src/module.c: the private struct field ValkeyModuleCommand->rediscmd becomes serverCmd, two static functions (freeRedisModuleAsyncRMCallPromise, flushRedisModuleIOBuffer) are renamed with their call sites, and two comments swap 'Redis' for 'Valkey'. Every changed line is a rename or comment edit with identical semantics; no reply, module ABI, persistence format, replication path or config is affected, so there is no runtime behaviour to exercise and no scenario is needed."
+}

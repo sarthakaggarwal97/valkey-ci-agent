@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e2aec3b1a2e1..6e7af9471c05.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-bf7be766c9c1
+seed: 103
+experiment:
+  id: proposed.half-migrated-slot
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

@@ -1,0 +1,37 @@
+extends: [valkey.liveness]
+id: proposed.unix-socket-listen
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    With SO_REUSEADDR no longer set on AF_UNIX listening sockets, the server still
+    creates its unix socket at startup, accepts connections on it, and serves commands
+    over it under concurrent connection load, identically on the change's build and
+    the parent's.
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+components:
+- use: valkey.action.tools
+  id: unix
+  config:
+    compare_with: {$ref: inputs.parent}
+    server: true
+    timeout_s: 120
+    runs:
+    - {tool: valkey-cli, args: [-s, $socket, PING], expect: {exit: {equals: 0}, stdout: {
+          equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-s, $socket, SET, k, v], expect: {exit: {equals: 0},
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-s, $socket, GET, k], expect: {exit: {equals: 0},
+        stdout: {equals: "v\n"}}}
+    - {tool: valkey-benchmark, args: [-s, $socket, -c, 64, -n, 20000, -t, "set,get,ping_inline",
+        -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-s, $socket, PING], expect: {exit: {equals: 0}, stdout: {
+          equals: "PONG\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: unix}

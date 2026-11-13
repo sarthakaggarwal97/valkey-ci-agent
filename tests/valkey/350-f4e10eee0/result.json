@@ -1,0 +1,72 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f4e10eee06cd978452a17e69d684e8afc8eeae3f",
+  "parent": "89f72bc3ae1ae6e61c5306b318b83ee30d527baf",
+  "pr": 350,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "CRC64 perf improvements from Redis patches (#350)",
+  "date": "2024-04-30",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 132,
+    "executed": 126,
+    "percent": 95,
+    "uncovered": [
+      "src/crccombine.c:229",
+      "src/crcspeed.c:169",
+      "src/crcspeed.c:170",
+      "src/crcspeed.c:171",
+      "src/crcspeed.c:172",
+      "src/crcspeed.c:184"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.3413,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-c37befca36cb",
+      "build": "unstable",
+      "seed": 101,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c37befca36cb",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c37befca36cb",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-cfe2b8d7d01e",
+      "build": "unstable",
+      "seed": 102,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-cfe2b8d7d01e",
+      "build": "unstable",
+      "seed": 103,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-cfe2b8d7d01e",
+      "build": "unstable",
+      "seed": 104,
+      "reason": "unexplained-difference"
+    }
+  ]
+}

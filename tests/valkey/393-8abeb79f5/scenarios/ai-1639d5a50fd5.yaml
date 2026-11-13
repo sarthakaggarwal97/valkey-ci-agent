@@ -1,0 +1,16 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey f4e10eee06cd..8abeb79f52cb.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1639d5a50fd5
+seed: 23
+experiment:
+  id: proposed.aof-fsync-stall-crash
+  inputs:
+    delay_ms: 6000
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100
+  syscall_faults: true
+  server_config:
+    appendonly: 'yes'
+    appendfsync: everysec

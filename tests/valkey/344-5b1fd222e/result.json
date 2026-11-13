@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5b1fd222ed97430dfeef27a95aeb7e1fb8fd1352",
+  "parent": "443d80f1686377ad42cbf92d98ecc6d240325ee1",
+  "pr": 344,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "An initial simple unit test framework (#344)",
+  "date": "2024-05-02",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.6265,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds a standalone unit test framework: a new src/unit/ directory, a valkey-unit-tests binary and Makefile/CI wiring, and it moves the existing #ifdef SERVER_TEST test code for crc64 and intset out of the production files into that framework. The production implementations of crc64 and intset are unchanged; the sole server.c edit removes two entries from the SERVER_TEST-only serverTests[] table, a developer test mode not compiled into release builds and never exercised by a running server. No command, reply, replication, persistence or cluster behaviour changes, so no fuzzer sce"
+}

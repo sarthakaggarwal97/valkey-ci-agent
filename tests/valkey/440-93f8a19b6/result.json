@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "93f8a19b6f9884f382d24f7650822d99cbb26c6d",
+  "parent": "1b3199e0705817e2cdd8bca6ce3ab3b3567b4573",
+  "pr": 440,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Change strlcat function name from redis to valkey (#440)",
+  "date": "2024-05-06",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2615,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the internal C helper redis_strlcat to valkey_strlcat (declaration in util.h, definition in strl.c, two call sites in rdb.c's rdbRemoveTempFile, and the text of a compiler deprecation attribute in fmacros.h). The function body and call-site semantics are unchanged; it is a compile-time identifier rename with no observable behaviour change in commands, replies, persistence, replication, or any other runtime path, so there is nothing a scenario could exercise differently between the two builds."
+}

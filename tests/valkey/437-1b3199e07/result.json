@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1b3199e0705817e2cdd8bca6ce3ab3b3567b4573",
+  "parent": "cc703aa3bcb866dfda6ca9bf6ca527ce6cc44ad9",
+  "pr": 437,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix unit test issues on address sanitizer and fortify (#437)",
+  "date": "2024-05-05",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2493,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits CI workflow steps (.github/workflows/daily.yml) and unit-test source files (src/unit/test_crc64combine.c, src/unit/test_intset.c): an uninitialized-variable fix in a test benchmark helper, removal of a leaked duplicate intsetNew() call in a test, and GCC pragmas suppressing a fortify false positive. No code compiled into valkey-server or the tools changes, so no command, replication, persistence or cluster behaviour differs between the builds; there is nothing a scenario could exercise."
+}

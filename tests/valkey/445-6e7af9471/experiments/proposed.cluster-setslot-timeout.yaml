@@ -1,0 +1,44 @@
+extends: [valkey.liveness]
+id: proposed.cluster-setslot-timeout
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTER SETSLOT TIMEOUT option and reworked argument parser, replies
+    compared across builds
+inputs:
+  required: [parent]
+  properties:
+    parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build, {$ref: artifacts.parent.binary}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: setslot
+  config:
+    compare_with: {$ref: inputs.parent}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CLUSTER, SETSLOT, 609, MIGRATING, "<node.1.id>", TIMEOUT, 100], node: 0,
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 609, STABLE], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 609, STABLE, TIMEOUT, 50], node: 0, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 609, IMPORTING, "<node.0.id>", TIMEOUT, 50], node: 1,
+      expect_difference: true, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 609, MIGRATING, "<node.0.id>"], node: 1, expect: {
+        error: "I'm not the owner"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [setslot.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: setslot}

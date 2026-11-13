@@ -1,0 +1,62 @@
+extends: [valkey.base]
+id: proposed.aof-fsync-stall-crash
+deployment:
+  modes: [standalone]
+  syscall_faults: {type: boolean, enum: [true]}
+metadata:
+  description: SIGKILL the primary the moment it logs the delayed-fsync notice, restart
+    it from its AOF, and check acknowledged writes within the stall's loss window
+inputs:
+  properties:
+    delay_ms: {type: integer, minimum: 3000, maximum: 30000, default: 6000}
+components:
+- use: valkey.fault.syscall
+  id: stall-fsync
+  config:
+    when_event: writes.seeded
+    instance: primary
+    calls: [fsync, fdatasync]
+    path: "appendonlydir/*"
+    nth: 1
+    action: delay
+    delay_ms: {$ref: inputs.delay_ms}
+    when: before
+- use: valkey.observer.log-trigger
+  id: stall-logged
+  config:
+    instances: primary
+    rules:
+    - pattern: "Asynchronous AOF fsync is taking too long"
+      publish: aof-stall.logged
+      evidence_id: valkey.aof.delayed-fsync-logged
+      required: true
+      max_publishes: 1
+- use: valkey.fault.process-signal
+  id: kill-primary
+  config:
+    when_event: aof-stall.logged
+    instance: primary
+    signal: SIGKILL
+    restart: true
+    restart_mode: immediate
+- use: valkey.action.wait-event
+  id: recovered
+  depends_on: [writes, stall-fsync, stall-logged, kill-primary]
+  config: {event: kill-primary.recovered, timeout_s: 90}
+- use: valkey.action.sleep
+  id: settle
+  depends_on: [recovered]
+  config: {seconds: 3}
+- use: valkey.oracle.ledger
+  id: data
+  config:
+    workload: writes
+    loss_window_s: 12
+    loss_window_after_s: 2
+    loss_window_faults: [kill-primary]
+    converge_timeout_s: 60
+required_events: [kill-primary.recovered]
+required_evidence:
+- {evidence_id: valkey.fault.injected, source: stall-fsync}
+- {evidence_id: valkey.fault.injected, source: kill-primary}
+- {evidence_id: valkey.aof.delayed-fsync-logged, source: stall-logged}

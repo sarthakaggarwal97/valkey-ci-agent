@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e43fda5685919f72607ade02a24067b52ea32f6a",
+  "parent": "b283c6b508792892d76b9a4911e3086e37518748",
+  "pr": 376,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Modify mem_freed variable in evict.c and Update debug.c (#376)",
+  "date": "2024-04-30",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3167,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure refactor with no behavior change: debug.c only fixes a comment typo ('the the' -> 'the'), and evict.c moves the 'mem_freed = 0' initialization from a statement before the eviction loop into the variable declaration. The early 'goto update_metrics' paths that bypass the old assignment never read mem_freed (it is only read in the eviction loop, which the new declaration-initializer still dominates), so every path observes the same value as before. There is no observable difference between the two builds for any workload, command, fault, or config, so no scenario can exercise"
+}

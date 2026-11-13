@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0cb97653b7a81a4c47484b1daba2eb5f967184da",
+  "parent": "6e05d0fcb1d9803bb98dead4eb511744f3586d42",
+  "pr": 378,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Change default pidfile from redis.pid to valkey.pid (#378)",
+  "date": "2024-04-30",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2855,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the default pidfile path constant used when the server is daemonized with no pidfile configured, plus test-asset configs and a comment. The pidfile config still defaults to empty, so CONFIG GET pidfile and every command reply are identical on both builds; the default path is only ever used under daemonize with root-writable /var/run, which the fuzzer's non-daemonized throwaway servers never exercise. No observable behaviour reachable by any experiment changes, so no scenario is needed."
+}

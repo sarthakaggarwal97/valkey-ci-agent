@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8f974484edea7d001573c015d0387b15801a0eca",
+  "parent": "5b1fd222ed97430dfeef27a95aeb7e1fb8fd1352",
+  "pr": 430,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Log the real reason for why posix_fadvise failed (#430)",
+  "date": "2024-05-03",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2339,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only sets errno to posix_fadvise's return code before returning -1 in reclaimFilePageCache (src/util.c), so callers log the real failure reason via strerror. The function's return value and all behavior are unchanged; the only observable effect is the wording of a log warning, and only when posix_fadvise itself fails, which cannot be triggered from a workload on a healthy local filesystem. No command reply, data, persistence or replication path changes, so no scenario can reach or judge it."
+}

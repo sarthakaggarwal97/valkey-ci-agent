@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "ba9dd7b23a13452cf4aac1420ecffcbab879fbe3",
+  "parent": "6e7af9471c0576e9567b62821b23aa13edf4e866",
+  "pr": 324,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add noscores option to command ZSCAN. (#324)",
+  "date": "2024-05-07",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 15,
+    "executed": 14,
+    "percent": 93,
+    "uncovered": [
+      "src/db.c:909"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.6111,
+  "findings": [],
+  "recorded": []
+}

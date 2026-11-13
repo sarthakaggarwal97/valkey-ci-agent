@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8abeb79f52cbf02d16d546f48e16592173593132",
+  "parent": "f4e10eee06cd978452a17e69d684e8afc8eeae3f",
+  "pr": 393,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename redis in aof logs and proc title redis-aof-rewrite to valkey-aof-rewrite (#393)",
+  "date": "2024-05-01",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 0,
+  "hunted": 8,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 5,
+    "executed": 4,
+    "percent": 80,
+    "uncovered": [
+      "src/aof.c:2475"
+    ],
+    "unnoted": [],
+    "rounds": 2
+  },
+  "cost_usd": 12.9762,
+  "findings": [],
+  "recorded": []
+}

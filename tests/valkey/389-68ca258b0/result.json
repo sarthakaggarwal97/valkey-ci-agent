@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "68ca258b0f1bb01ae720a903b35f22102581da20",
+  "parent": "8abeb79f52cbf02d16d546f48e16592173593132",
+  "pr": 389,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Changed links and naming to valkey instead of redis (#389)",
+  "date": "2024-05-02",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2595,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only documentation text (00-RELEASENOTES, MANIFESTO, deps/README.md, deps/linenoise/README.markdown, src/commands/README.md), renaming Redis to Valkey in prose and links. No source, build, config, command or tool code changes, so there is no runtime behaviour to test."
+}

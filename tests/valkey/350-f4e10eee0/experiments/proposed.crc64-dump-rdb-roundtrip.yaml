@@ -1,0 +1,67 @@
+extends: [valkey.liveness]
+id: proposed.crc64-dump-rdb-roundtrip
+deployment:
+  modes: [standalone]
+metadata:
+  description: CRC64 equality across builds via DUMP bytes at buffer sizes straddling
+    the new dual/tri slice cutoffs, and save/load streaming consistency via SAVE plus
+    restart
+inputs:
+  properties:
+    compression: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: crc
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {rdbcompression: {$ref: inputs.compression}}
+    timeout_s: 60
+    commands:
+    - {command: [SET, s1, hello-crc64], expect: {equals: OK}}
+    - {command: [SETRANGE, k131, 118, "0123456789ab"], expect: {equals: 130}}
+    - {command: [SETRANGE, k131, 130, Z], expect: {equals: 131}}
+    - {command: [SETRANGE, ktext, 0, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]}
+    - {command: [SETRANGE, ktext, 256, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]}
+    - {command: [SETRANGE, ktext, 512, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]}
+    - {command: [SETRANGE, ktext, 768, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]}
+    - {command: [SETRANGE, ktext, 1024, Z], expect: {equals: 1025}}
+    - {command: [SETRANGE, k2113, 0, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]}
+    - {command: [SETRANGE, k2113, 1024, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]}
+    - {command: [SETRANGE, k2113, 2112, Z], expect: {equals: 2113}}
+    - {command: [SETRANGE, k8193, 0, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]}
+    - {command: [SETRANGE, k8193, 4096, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]}
+    - {command: [SETRANGE, k8193, 8192, Z], expect: {equals: 8193}}
+    - {command: [SETRANGE, k17000, 0, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]}
+    - {command: [SETRANGE, k17000, 8192, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]}
+    - {command: [SETRANGE, k17000, 16999, Z], expect: {equals: 17000}}
+    - {command: [SETRANGE, kbig, 0, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]}
+    - {command: [SETRANGE, kbig, 349525, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]}
+    - {command: [SETRANGE, kbig, 699050, "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]}
+    - {command: [SETRANGE, kbig, 1048575, Z], expect: {equals: 1048576}}
+    - {command: [DUMP, s1]}
+    - {command: [DUMP, k131]}
+    - {command: [DUMP, ktext]}
+    - {command: [DUMP, k2113]}
+    - {command: [DUMP, k8193]}
+    - {command: [DUMP, k17000]}
+    - {command: [DUMP, kbig]}
+    - {command: [SAVE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [STRLEN, s1], expect: {equals: 11}}
+    - {command: [STRLEN, k131], expect: {equals: 131}}
+    - {command: [STRLEN, ktext], expect: {equals: 1025}}
+    - {command: [STRLEN, k2113], expect: {equals: 2113}}
+    - {command: [STRLEN, k8193], expect: {equals: 8193}}
+    - {command: [STRLEN, k17000], expect: {equals: 17000}}
+    - {command: [STRLEN, kbig], expect: {equals: 1048576}}
+    - {command: [DUMP, kbig]}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [crc.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: crc}

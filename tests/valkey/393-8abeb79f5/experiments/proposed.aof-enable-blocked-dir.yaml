@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.aof-enable-blocked-dir
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    A regular file occupying the appendonlydir path makes dirCreateIfMissing fail,
+    so CONFIG SET appendonly yes takes the startAppendOnly failure path (aof.c:999
+    warning, AOF forced back off) and BGREWRITEAOF errors; the server must stay healthy
+    and keep serving, identically on both builds.
+components:
+- use: valkey.action.commands
+  id: aof-enable-fail
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    files: {appendonlydir: "regular file blocking creation of the AOF directory"}
+    timeout_s: 60
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [CONFIG, SET, appendonly, "yes"], expect: {error: "Unable to turn\
+          \ on AOF"}}
+    - {command: [CONFIG, GET, appendonly], expect: {equals: [appendonly, "no"]}}
+    - {command: [BGREWRITEAOF], expect: {error: "Can't execute an AOF background rewriting"}}
+    - {command: [CONFIG, SET, appendonly, "yes"], expect: {error: "Unable to turn\
+          \ on AOF"}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [GET, k1], expect: {equals: v1}}
+    - {command: [GET, k2], expect: {equals: v2}}
+    - {command: [INFO, persistence], compare: skip, expect: {contains: "aof_enabled:0"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [aof-enable-fail.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: aof-enable-fail}
