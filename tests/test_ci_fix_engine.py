@@ -299,6 +299,24 @@ def test_a_port_that_does_not_apply_comes_back_with_its_diff(tmp_path, monkeypat
     assert "Its diff:" in agent.feedback[1] and "-before\n+fixed" in agent.feedback[1]
 
 
+def test_a_task_whose_history_ends_at_its_commit_sees_no_later_fix(tmp_path, monkeypatch) -> None:
+    """A replay's clone has the fix that landed later on the default branch; the checkout hides it."""
+    source, head_sha = _source_repo(tmp_path)
+    commit = _upstream_commit(source, head_sha)
+    git(source, "tag", "later", commit)
+    git(source, "tag", "earlier", head_sha)
+    _install_clone(monkeypatch, source)
+    task = replace(_task(head_sha), history_ends_at=head_sha)
+
+    with engine_mod.checkout(task) as (repo_dir, head):
+        assert head == head_sha
+        assert git(repo_dir, "rev-parse", "origin/main") == head_sha
+        assert git(repo_dir, "tag", "--list") == "earlier"
+        assert engine_mod._can_port(task, repo_dir) is False
+        remote = git(repo_dir, "for-each-ref", "--format=%(objectname)", "refs/remotes/origin/", "refs/tags/")
+        assert set(remote.split()) == {head_sha}
+
+
 def test_prepare_fix_refuses_a_port_without_a_full_sha(tmp_path, monkeypatch) -> None:
     source, head_sha = _source_repo(tmp_path)
     _install_clone(monkeypatch, source)

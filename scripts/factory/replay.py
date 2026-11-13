@@ -135,6 +135,8 @@ def plan_case(gh: Any, case: Case) -> tuple[FixPlan, str]:
             branch=f"{BRANCH_PREFIX}replay-{case.id}", expected_sha=base_sha,
         ),
         policy=FixPolicy.GENERAL,
+        # The known fix is the history after base_sha: the clone must not show it.
+        history_ends_at=base_sha,
     )
     return FixPlan(front_door=FrontDoor.FACTORY, task=task, brief=brief), merge_sha
 
@@ -149,7 +151,8 @@ def score(case: Case, plan: FixPlan, merge_sha: str, outcome: FixOutcome, *, run
             case.id, "refused", candidate.summary, test_written=bool(candidate.evidence_patch),
         )
     known = _known_fix(plan, merge_sha)
-    bot_fix = _fix_only(candidate)
+    # A port has no patch of its own: the commit it ports is the bot's change.
+    bot_fix = _without_tests(_commit_diff(plan, candidate.port_commit) if candidate.port_commit else candidate.patch)
     shared = _shared_percent(bot_fix, known)
     files = tuple(sorted(set(changed_lines(bot_fix)) & set(changed_lines(known))))
     passes = None
@@ -163,7 +166,8 @@ def score(case: Case, plan: FixPlan, merge_sha: str, outcome: FixOutcome, *, run
     elif passes:
         verdict = "caught"
     detail = (
-        f"The bot's fix shares {shared}% of its added lines with #{case.fix_pull}"
+        (f"The bot ported {candidate.port_commit[:12]}. " if candidate.port_commit else "")
+        + f"The bot's fix shares {shared}% of its added lines with #{case.fix_pull}"
         + (f", in {', '.join(files)}" if files else "") + "."
         + (" Its test passes with the known fix." if passes else
            " Its test does not pass with the known fix: it tests something else." if passes is False else "")
@@ -175,11 +179,11 @@ def score(case: Case, plan: FixPlan, merge_sha: str, outcome: FixOutcome, *, run
     )
 
 
-def _fix_only(candidate: FixCandidate) -> str:
-    """The candidate's patch without the test: what is compared with the known fix's code change."""
+def _without_tests(patch: str) -> str:
+    """``patch`` without its test files: what is compared with the known fix's code change."""
     kept: list[str] = []
     keep = True
-    for line in candidate.patch.splitlines():
+    for line in patch.splitlines():
         if line.startswith("diff --git "):
             path = line.split(" b/", 1)[-1]
             keep = not is_test_path(path)
@@ -197,8 +201,12 @@ def _shared_percent(ours: str, known: str) -> int:
 
 def _known_fix(plan: FixPlan, merge_sha: str) -> str:
     """The known fix's diff, test files included, from a clone of the repository."""
+    return _commit_diff(plan, merge_sha)
+
+
+def _commit_diff(plan: FixPlan, sha: str) -> str:
     with _clone(plan) as repo_dir:
-        return run_git(repo_dir, "diff", "--no-ext-diff", "--no-textconv", f"{merge_sha}^", merge_sha).stdout
+        return run_git(repo_dir, "diff", "--no-ext-diff", "--no-textconv", f"{sha}^", sha).stdout
 
 
 def _test_passes_with(plan: FixPlan, merge_sha: str, candidate: FixCandidate) -> bool | None:

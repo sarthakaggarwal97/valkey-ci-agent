@@ -245,7 +245,31 @@ def checkout(task: FixTask, repo_dir: str = "") -> Iterator[tuple[str, str]]:
         original_head = git_output(str(clone), "rev-parse", "HEAD").strip()
         if original_head.lower() != checkout_sha.lower():
             raise RuntimeError(f"clone resolved {original_head[:12]} instead of {checkout_sha[:12]}")
+        if task.history_ends_at:
+            end_history_at(str(clone), task.history_ends_at)
         yield str(clone), original_head
+
+
+def end_history_at(repo_dir: str, sha: str) -> None:
+    """Make ``sha`` the newest commit the clone's refs reach.
+
+    A replay prepares a fix on the commit the known fix merged onto, with the
+    default branch cloned as it is today: the prior-fix search
+    (scripts/ci_fix/prior_fixes.py) then finds that fix by its issue number
+    and the agent ports it, or copies the diff it is shown. Of the first six
+    replays, five ported the fix and the sixth matched it line for line. So a
+    remote branch or tag that is not behind ``sha`` is dropped, and the
+    default branch is set to ``sha`` itself: nothing after it is left to find.
+    """
+    default_ref = default_branch_ref(repo_dir)
+    refs = git_output(repo_dir, "for-each-ref", "--format=%(refname)", "refs/remotes/origin/", "refs/tags/")
+    for ref in refs.split():
+        if ref == "refs/remotes/origin/HEAD" or (default_ref and ref == f"refs/remotes/{default_ref}"):
+            continue
+        if is_ancestor(repo_dir, ref, sha) is not True:
+            run_git(repo_dir, "update-ref", "-d", ref)
+    if default_ref:
+        run_git(repo_dir, "update-ref", f"refs/remotes/{default_ref}", sha)
 
 
 # What a job's checkout held before the agent started: its ignored files

@@ -65,6 +65,8 @@ def test_the_plan_pins_the_issue_as_of_the_fix_and_works_on_the_commit_it_merged
 
     assert merge_sha == _MERGE and plan.front_door is FrontDoor.FACTORY
     assert plan.task.target.expected_sha == _BASE and plan.task.target.branch == "agent/factory/replay-xinfo-groups-lag"
+    # The fix that landed is the history after the working commit: the clone must not show it.
+    assert plan.task.history_ends_at == _BASE
     assert plan.brief is not None and [c.body for c in plan.brief.comments] == ["confirmed"]
     assert plan.brief.labelled_by == "replay" and plan.brief.label_event_id == 4983
 
@@ -117,6 +119,18 @@ def test_another_fix_whose_test_still_passes_with_the_known_one_differs_but_caug
     monkeypatch.setattr(replay_mod, "_test_passes_with", lambda plan, merge_sha, candidate: True)
     result = replay_mod.score(_CASE, _plan(), _MERGE, FixOutcome(candidate=_candidate("+    return 0;\n"), started=True))
     assert result.verdict == "caught" and result.shared_percent == 0
+
+
+def test_a_port_is_scored_by_the_commit_it_ports(known, monkeypatch):
+    """A port has no patch of its own; the first replays scored one as 0% shared and 'caught'."""
+    monkeypatch.setattr(replay_mod, "_test_passes_with", lambda plan, merge_sha, candidate: True)
+    monkeypatch.setattr(replay_mod, "_commit_diff", lambda plan, sha: _KNOWN if sha == "f" * 40 else "")
+    ported = FixCandidate(CandidateAction.PORT, port_commit="f" * 40, evidence_patch="+    test {lag} {}")
+
+    result = replay_mod.score(_CASE, _plan(), _MERGE, FixOutcome(candidate=ported, started=True))
+
+    assert result.verdict == "caught" and result.shared_percent == 100
+    assert result.detail.startswith("The bot ported ffffffffffff.")
 
 
 def test_a_test_that_does_not_pass_with_the_known_fix_tests_something_else(known, monkeypatch):

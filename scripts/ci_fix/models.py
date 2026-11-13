@@ -203,6 +203,10 @@ class FixTask:
     # the bot wrote that test itself (scripts/factory). A patch that touches
     # one goes back to the agent.
     frozen_paths: tuple[str, ...] = ()
+    # The newest commit the clone may show, when the fix is prepared in one:
+    # a replay (scripts/factory/replay.py) works on the commit a known fix
+    # merged onto, and history past it is that fix. Empty shows everything.
+    history_ends_at: str = ""
 
 
 @dataclass(frozen=True)
