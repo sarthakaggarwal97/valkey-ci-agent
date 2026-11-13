@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-13T22:36+00:00.
+Updated 2026-11-13T22:37+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 2169 | 367 | #213 (2024-04-05) | 198 | 247.6 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 65 | 0 | c1423d7e4b38 (2024-11-25) | 1 | 0.4 |
-| valkey-io/valkey-search | 683 | 0 | f8106e72e984 (2024-11-27) | 10 | 53.4 |
+| valkey-io/valkey-search | 685 | 0 | f8106e72e984 (2024-11-27) | 12 | 53.7 |
 
 ## Last runs
 
@@ -48,9 +48,8 @@ Updated 2026-11-13T22:36+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-13T22:36:46+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43507074456): 1 merge(s) tested, 0 without a code change.
+[2026-11-13T22:37:46+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43520710940): 0 merge(s) tested, 2 without a code change.
 
-- [valkey-io/valkey-search#1690](https://github.com/valkey-io/valkey-search/pull/1690) ([tests](tests/valkey-search/1690-730e7162a/)): Own RecordsMap keys in content fetch and projection (#1690): 2 of 2 test(s) reached the change; crash, fixed by #1690 (recorded)
 
 ## Totals
 
