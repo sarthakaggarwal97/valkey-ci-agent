@@ -42,9 +42,9 @@ on:
         default: valkey
     secrets:
       VALKEYRIE_BOT_APP_ID:
-        required: true
+        required: false  # Fork test only, do not merge
       VALKEYRIE_BOT_PRIVATE_KEY:
-        required: true
+        required: false  # Fork test only, do not merge
       AWS_ROLE_ARN:
         required: true
 
@@ -87,22 +87,11 @@ jobs:
 
       - name: Generate target repository token
         id: target-token
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: ${{ inputs.target_owner }}
-          repositories: ${{ inputs.target_repo }}
-          # The plan reads the PR, the run, its log and the workflow file,
-          # and reads target PR/issue state. It writes only comments and
-          # reactions: a refusal, the reaction to a maintainer's command, or
-          # a publication recovered from an earlier attempt.
-          permission-members: read
-          permission-actions: read
-          permission-contents: read
-          permission-pull-requests: read
-          permission-issues: write
-          permission-metadata: read
+        # Fork test only, do not merge: the PAT stands in for the App token.
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: echo "token=${PAT}" >> "$GITHUB_OUTPUT"
 
       - name: Validate the request and plan its fix
         id: plan
@@ -110,6 +99,7 @@ jobs:
         env:
           TARGET_TOKEN: ${{ steps.target-token.outputs.token }}
           AGENT_TOKEN: ${{ github.token }}
+          E2E_BOT_LOGIN: sarthakaggarwal97  # Fork test only: the PAT's user stands in for the bot
           FRONT_DOOR: ${{ inputs.front_door }}
           REQUEST: ${{ inputs.request }}
           KEY: ${{ inputs.key }}
@@ -427,17 +417,11 @@ jobs:
       - name: Generate target repository token
         id: target-token
         if: needs.plan.outputs.ci_changes != 'true'
-        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
-        with:
-          app-id: ${{ secrets.VALKEYRIE_BOT_APP_ID }}
-          private-key: ${{ secrets.VALKEYRIE_BOT_PRIVATE_KEY }}
-          owner: ${{ inputs.target_owner }}
-          repositories: ${{ inputs.target_repo }}
-          permission-actions: read
-          permission-contents: write
-          permission-pull-requests: write
-          permission-issues: write
-          permission-metadata: read
+        # Fork test only, do not merge: the PAT stands in for the App token.
+        shell: bash
+        env:
+          PAT: ${{ secrets.REHEARSAL_PAT }}
+        run: echo "token=${PAT}" >> "$GITHUB_OUTPUT"
 
       # A bot-owned backport branch may take a CI change, often an upstream
       # one the release branch lacks (scripts/ci_fix/policy.py
@@ -480,6 +464,7 @@ jobs:
         env:
           TARGET_TOKEN: ${{ steps.ci-token.outputs.token || steps.target-token.outputs.token }}
           PUSH_TOKEN: ${{ steps.push-token.outputs.token }}
+          E2E_BOT_LOGIN: sarthakaggarwal97  # Fork test only: the PAT's user stands in for the bot
           # A detector issue's fix: a patch commented on the issue (the
           # default), or 'draft-pr' (scripts/ci_fix/models.py IssuePublication).
           CI_FIX_ISSUES_PUBLISH: ${{ vars.CI_FIX_ISSUES_PUBLISH }}

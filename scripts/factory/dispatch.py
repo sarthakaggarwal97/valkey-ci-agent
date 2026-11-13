@@ -208,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
     target = Github(auth=Auth.Token(os.environ["TARGET_TOKEN"])).get_repo(args.repo)
     agent_repo, ref = os.environ["GITHUB_REPOSITORY"], os.environ.get("GITHUB_REF_NAME", "main")
     workflow = Github(auth=Auth.Token(os.environ["GITHUB_TOKEN"])).get_repo(agent_repo).get_workflow(WORKFLOW)
-    bot_login = f"{APP_LOGIN}[bot]"
+    bot_login = os.environ.get("E2E_BOT_LOGIN") or f"{APP_LOGIN}[bot]"  # Fork test only, do not merge
 
     def dispatch(issue: int, event_id: int) -> None:
         if args.dry_run:
