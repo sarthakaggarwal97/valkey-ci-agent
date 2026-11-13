@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.ldb-server-alias
+deployment:
+  modes: [standalone]
+metadata:
+  description: Lua debugger REPL accepts 'server <cmd>' as an alias for 'redis <cmd>',
+    in both sync and forked debug sessions
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ldb
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {connection: dbg, command: [SCRIPT, DEBUG, SYNC], expect: {equals: OK}}
+    - {connection: dbg, command: [EVAL, "return redis.call('ping')", 0], expect: {
+        contains: "step over"}}
+    - {connection: dbg, command: [server, ping], expect_difference: true, expect: {
+        contains: "PONG"}}
+    - {connection: dbg, command: [SERVER, SET, dbgkey, dbgval], expect_difference: true,
+      expect: {contains: "OK"}}
+    - {connection: dbg, command: [redis, get, dbgkey], expect_difference: true, expect: {
+        contains: "dbgval"}}
+    - {connection: dbg, command: [server], expect: {contains: "Unknown"}}
+    - {connection: dbg, command: [continue], compare: skip}
+    - {command: [GET, dbgkey], expect_difference: true, expect: {equals: dbgval}}
+    - {connection: dbg2, command: [SCRIPT, DEBUG, YES], expect: {equals: OK}}
+    - {connection: dbg2, command: [EVAL, "return 1", 0], expect: {contains: "step\
+          \ over"}}
+    - {connection: dbg2, command: [server, set, forkedkey, forkedval], expect_difference: true,
+      expect: {contains: "OK"}}
+    - {connection: dbg2, command: [redis, get, forkedkey], expect_difference: true,
+      expect: {contains: "forkedval"}}
+    - {connection: dbg2, command: [continue], compare: skip}
+    - {command: [GET, forkedkey]}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ldb.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ldb}

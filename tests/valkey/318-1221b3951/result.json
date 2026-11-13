@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1221b3951ae4faf49923dfbb623a7aca6ccf9b26",
+  "parent": "fc5bf6a0ef8814e240975721a2a93da6ac0ea07c",
+  "pr": 318,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix typo in comment (#318)",
+  "date": "2024-04-15",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2045,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits two comments in src/networking.c (fixing a typo and collapsing a comment onto one line); no executable code, configuration, protocol, or build behaviour changes, so there is nothing to test."
+}

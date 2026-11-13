@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.redis-compat-script-misconf
+deployment:
+  modes: [standalone]
+metadata:
+  description: Writable Lua shebang script rejected with MISCONF carries the server
+    identity string, and extended-redis-compatibility flips it back to Redis
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: misconf
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {save: "900 1", dbfilename: "", stop-writes-on-bgsave-error: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [BGSAVE], expect: {error: false}}
+    - {command: [DEBUG, SLEEP, "0.5"], expect: {equals: OK}}
+    - {command: [INFO, persistence], compare: skip}
+    - {command: [SET, k, w], expect_difference: true, expect: {error: "is configured\
+          \ to save RDB snapshots"}}
+    - {command: [EVAL, "#!lua\nreturn redis.call('set','k','x')", "1", k], expect_difference: true,
+      expect: {error: "is configured to save RDB snapshots"}}
+    - {command: [EVAL, "#!lua flags=no-writes\nreturn redis.call('get','k')", "1",
+        k], expect: {equals: v}}
+    - {command: [CONFIG, SET, extended-redis-compatibility, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [EVAL, "#!lua\nreturn redis.call('set','k','x')", "1", k], expect: {
+        error: "Redis is configured to save RDB snapshots"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [misconf.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: misconf}

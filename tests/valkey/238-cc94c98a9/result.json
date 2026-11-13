@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "cc94c98a9d55e4c28edbfb474facf94a6c2f636c",
+  "parent": "34413e086297a9ebc7b92866d4a34694388d5fae",
+  "pr": 238,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update redis to valkey in generate-commands-json.py (#238)",
+  "date": "2024-04-18",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2171,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only utils/generate-commands-json.py, a developer helper script: it renames 'redis-cli' to 'valkey-cli' in the argparse description string and in the default value of the --cli argument. No server code, command implementation, tool (valkey-cli/benchmark/check-rdb/check-aof), replication, cluster, or persistence path is affected, so no server reply or behaviour can differ between the builds and no fuzzer scenario can exercise it."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "eb7f5c4e0ad12c452fe7a05832ab387d349bb4f5",
+  "parent": "1c282a9306b6623ae258f365d1b759fdd4a4ade9",
+  "pr": 317,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Removes empty history arrays in json (#317)",
+  "date": "2024-04-13",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2957,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only deletes \"history\": [] keys from six command JSON definition files. The code generator (utils/generate-command-code.py) treats an empty history array and an absent history key identically \u2014 `if not self.desc.get(\"history\")` is true for both \u2014 and emits `#define <CMD>_History NULL` either way, so the generated commands.def and the compiled command table (and hence COMMAND DOCS/INFO replies) are unchanged. It is a pure source-cleanup with no behaviour change, so no scenario is needed."
+}

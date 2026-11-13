@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e71be72745f8ed3ea4f9b887039a6ed8695503fd",
+  "parent": "eb7f5c4e0ad12c452fe7a05832ab387d349bb4f5",
+  "pr": 314,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix typo and rename Redis to Valkey in the utils/lru/README (#314)",
+  "date": "2024-04-14",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2083,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits utils/lru/README documentation text (renaming Redis to Valkey and correcting the REDIS_LRU_CLOCK_RESOLUTION macro name to LRU_CLOCK_RESOLUTION). No compiled code, command behavior, replication, persistence, or configuration is affected, so no scenario can reach or test it."
+}

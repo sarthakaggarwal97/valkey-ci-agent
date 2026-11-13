@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "96d14fe2638705436db9c61bb0100c550c42e774",
+  "parent": "5d23f8f58a5196f46d7c24d88bda5ea7151fea85",
+  "pr": 226,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Change Redis to Valkey in log messages (#226)",
+  "date": "2024-04-17",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2587,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewrites log message text (serverLog/serverPanic strings in acl.c, cluster_legacy.c, eval.c) to say Valkey instead of Redis, introducing a SERVER_TITLE macro in version.h. No command reply, INFO output, protocol behavior, control flow, or persisted/replicated state changes: the exit(1) paths and all logic are identical, and log text is not covered by any oracle or comparable client-visible surface. No scenario can meaningfully exercise or detect this change."
+}

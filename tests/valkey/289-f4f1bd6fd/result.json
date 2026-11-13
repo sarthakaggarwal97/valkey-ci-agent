@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f4f1bd6fde4ce1c03e14e11db87b2512cc9f5c75",
+  "parent": "b669af0eabe602850fc02f0cdc452ce071f9adda",
+  "pr": 289,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Revert update of RedisModuleEvent_MasterLinkChange (#289)",
+  "date": "2024-04-10",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2715,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames a compatibility macro in redismodule.h (RedisModuleEvent_PrimaryLinkChange back to RedisModuleEvent_MasterLinkChange) and updates tests/modules/hooks.c to use the restored name. Both names are preprocessor aliases for the same ValkeyModuleEvent_PrimaryLinkChange struct, so the change is purely compile-time source compatibility for external modules: the compiled hooks.so and the server behave identically on both builds, every event subscription and callback is unchanged at runtime, and no command reply, replication, persistence, or module behavior differs. There is no ru"
+}

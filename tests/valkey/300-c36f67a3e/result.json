@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c36f67a3ecca1d511a005c4140a8388bed81f24a",
+  "parent": "4be97ebcbe3dab40324ab70fa56d25544dc3f619",
+  "pr": 300,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix a minor issue for Redis brand name in Sentinel.conf (#300)",
+  "date": "2024-04-11",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2063,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits a single comment line in sentinel.conf (renaming 'Redis' to 'Valkey' in documentation text). Comments in the config template are never parsed or executed, so no runtime behaviour, reply, or data path changes; no scenario can reach or distinguish it."
+}

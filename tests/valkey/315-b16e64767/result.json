@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b16e647679d937dc116bdbd4b00e8c698d022cb4",
+  "parent": "2ec8f638b520228e4c431e471acab5a5bd6fdefe",
+  "pr": 315,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Adds workflows to build release binaries and push to S3 (#315)",
+  "date": "2024-04-16",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2164,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds GitHub Actions workflows and a release-tools build matrix config to build release binaries and push them to S3. It modifies only CI/packaging files (.github/actions/generate-package-build-matrix, .github/workflows/build-release-packages.yml, call-build-linux-{arm,x86}-packages.yml, utils/releasetools/build-config.json) and no server, tool, or client code, so there is no runtime behaviour for a fuzzer scenario to exercise."
+}

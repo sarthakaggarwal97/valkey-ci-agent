@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.redis-compat-hello
+deployment:
+  modes: [standalone]
+metadata:
+  description: extended-redis-compatibility runtime toggle changes HELLO server/version
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: compat
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [HELLO], expect_difference: true, expect: {contains: valkey}}
+    - {command: [CONFIG, SET, extended-redis-compatibility, "yes"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [HELLO], expect_difference: true, expect: {contains: "7.2.4"}}
+    - {command: [CONFIG, SET, extended-redis-compatibility, "no"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [HELLO], expect_difference: true, expect: {contains: valkey}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: compat}

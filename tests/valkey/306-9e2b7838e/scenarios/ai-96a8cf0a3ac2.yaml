@@ -1,0 +1,23 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b6dbc8109b43..9e2b7838ea03.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-96a8cf0a3ac2
+seed: 5
+experiment:
+  id: valkey.aof-durability
+  inputs:
+    appendfsync: always
+    run_before_crash_s: 3
+    run_after_crash_s: 2
+    mutation_rate: 800
+    mutable_keys: 300
+    config_changes: 12
+    config_churn_keys:
+      extended-redis-compatibility:
+      - 'yes'
+      - 'no'
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7400
+  server_config:
+    extended-redis-compatibility: 'yes'

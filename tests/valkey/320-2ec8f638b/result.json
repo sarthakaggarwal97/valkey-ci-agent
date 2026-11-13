@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2ec8f638b520228e4c431e471acab5a5bd6fdefe",
+  "parent": "10d980890c746c2c14d56183086d4aa5bd35d7b0",
+  "pr": 320,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fixed url links in valkey.conf (#320)",
+  "date": "2024-04-15",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2436,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits comment text in valkey.conf, replacing redis.io documentation URLs with valkey.io ones. Comment lines are ignored by the config parser; no runtime behaviour, command reply, or config handling changes, so no scenario is needed."
+}

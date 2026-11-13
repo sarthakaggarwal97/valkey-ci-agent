@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f0113a4105ce03ecd1f875ffed5252d6304edbd5",
+  "parent": "f4f1bd6fde4ce1c03e14e11db87b2512cc9f5c75",
+  "pr": 233,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Clarify the usage of Valkey in a comment (#233)",
+  "date": "2024-04-11",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2054,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewords a code comment above sortCommandGeneric in src/sort.c (\"the most complex command in the server\" -> \"in Valkey\"). No executable code, reply, config, or build behaviour changes, so no scenario can exercise it and none is needed."
+}

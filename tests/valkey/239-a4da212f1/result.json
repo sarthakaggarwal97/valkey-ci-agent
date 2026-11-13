@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a4da212f11fa011856546e251b5a5bf94879a550",
+  "parent": "e71be72745f8ed3ea4f9b887039a6ed8695503fd",
+  "pr": 239,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "upadate release tool script to valkey (#239)",
+  "date": "2024-04-14",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2417,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames redis to valkey in the maintainers' release tooling (utils/releasetools/*.sh and changelog.tcl): tarball names, upload/scp paths, and a changelog template string. None of these scripts are part of valkey-server, valkey-cli, valkey-benchmark or the check tools; no runtime behaviour, reply, persistence or replication path changes, so no scenario can reach it."
+}

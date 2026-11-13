@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4be97ebcbe3dab40324ab70fa56d25544dc3f619",
+  "parent": "697524252993f849f0ade560fa46625623fa7ed5",
+  "pr": 231,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "update valkey in serverLog messeges in server.c file (#231)",
+  "date": "2024-04-11",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2225,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewrites the text of three serverLog/serverPanic messages in server.c (replacing 'Redis' with 'Valkey') in the OOM panic handler, the systemd supervision notices, and the ARM64 COW-bug warning. No code path, command reply, config, replication, persistence or cluster behaviour changes; the strings are emitted only to the log on conditions (OOM abort, missing libsystemd, ARM64 kernel bug) that the fuzzer neither triggers nor observes. A cosmetic log-message change needs no scenario."
+}

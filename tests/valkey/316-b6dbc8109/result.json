@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b6dbc8109b4367cf64dadb8de782f7d5e540f4d5",
+  "parent": "af47cffc8358c96d5f7a7f388a46b6c02e6fa7e9",
+  "pr": 316,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add Codecov for Automated Code Coverage (#316)",
+  "date": "2024-04-17",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2296,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is purely CI/build tooling: it adds a Codecov GitHub Actions workflow and codecov.yml, a README badge, and edits the Makefile's lcov/clean targets (coverage file renamed redis.info to valkey.info, lcov version printed, runtest clients flag dropped). No server, client-tool, or library source is touched, so no runtime behaviour, reply, replication, or persistence path changed \u2014 there is nothing a fuzzer scenario could reach or regress."
+}

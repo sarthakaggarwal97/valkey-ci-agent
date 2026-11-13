@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey b6dbc8109b43..9e2b7838ea03.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-f9b3ac680153
+seed: 7001
+experiment:
+  id: proposed.redis-compat-script-misconf
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7000

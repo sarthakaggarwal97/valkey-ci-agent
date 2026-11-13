@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fc5bf6a0ef8814e240975721a2a93da6ac0ea07c",
+  "parent": "a4da212f11fa011856546e251b5a5bf94879a550",
+  "pr": 292,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Clamp TCP_KEEPINTVL and simplify TCP_KEEPALIVE_ABORT_THRESHOLD on Solaris (#292)",
+  "date": "2024-04-14",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.295,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to the #ifdef __sun branch of anetKeepAlive() in src/anet.c (clamping TCP_KEEPINTVL to >=10s and simplifying TCP_KEEPALIVE_ABORT_THRESHOLD). On the Linux CI platform this code is not even compiled \u2014 Linux uses the separate TCP_KEEPIDLE/TCP_KEEPINTVL/TCP_KEEPCNT path, which is unchanged. No scenario run by the fuzzer can reach the changed behaviour, and the change affects no replies, replication, or persistence; it only adjusts kernel keepalive socket options on Solaris."
+}

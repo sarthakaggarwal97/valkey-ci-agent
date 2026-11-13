@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9e2b7838ea03c87a846bb3d47e60911f6eabba86",
+  "parent": "b6dbc8109b4367cf64dadb8de782f7d5e540f4d5",
+  "pr": 306,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add 'extended-redis-compatibility' config (#306)",
+  "date": "2024-04-18",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 4,
+  "hunted": 5,
+  "dropped": 4,
+  "recall": true,
+  "coverage": {
+    "lines": 27,
+    "executed": 20,
+    "percent": 74,
+    "uncovered": [
+      "src/debug.c:1160",
+      "src/debug.c:2383",
+      "src/debug.c:2390",
+      "src/script.c:167",
+      "src/script.c:170",
+      "src/script.c:172",
+      "src/script.c:176"
+    ],
+    "unnoted": [],
+    "rounds": 2
+  },
+  "cost_usd": 12.5678,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-85418d0472bf",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'busy' returned ERROR: command 0 (EVAL while true do end 0 on connection evaler) got no reply: TimeoutError: Timeout reading from /tmp/vfc-lpa_ukuh/s.sock"
+    }
+  ]
+}

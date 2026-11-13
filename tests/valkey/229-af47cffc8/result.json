@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "af47cffc8358c96d5f7a7f388a46b6c02e6fa7e9",
+  "parent": "3040c439b845ef19210d9c1f4d050ab28e351ea4",
+  "pr": 229,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update oom_score_adjusted_by_redis to oom_score_adjusted_by_valkey in server.c (#229)",
+  "date": "2024-04-18",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2195,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure rename of a function-local static variable (oom_score_adjusted_by_redis to oom_score_adjusted_by_valkey) in setOOMScoreAdj() in server.c. No logic, value, reply, config, or externally observable behavior changes; the compiled behavior is identical on both builds, so no scenario can reach or distinguish it."
+}

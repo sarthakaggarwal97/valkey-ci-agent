@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "697524252993f849f0ade560fa46625623fa7ed5",
+  "parent": "f0113a4105ce03ecd1f875ffed5252d6304edbd5",
+  "pr": 277,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update comment in cluster_legacy.h (#277)",
+  "date": "2024-04-11",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2066,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only two comments in src/cluster_legacy.h (the description of the extension-message type field and of the cluster message header's ver field). No code, struct layout, config, or protocol behaviour changes, so no scenario can distinguish the change from its parent."
+}
