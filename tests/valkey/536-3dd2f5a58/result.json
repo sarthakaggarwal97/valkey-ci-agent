@@ -1,0 +1,59 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "3dd2f5a586f2c4d5f9cbf984a0565f70547efae7",
+  "parent": "a0aebb6b678a5124ce9a92c7cb39074ebc0d85f9",
+  "pr": 536,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Undeprecate cluster slots command (#536)",
+  "date": "2024-05-24",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 1.1514,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-1fb593c45ad5",
+      "build": "unstable",
+      "seed": 536001,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1fb593c45ad5",
+      "build": "unstable",
+      "seed": 536002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-1fb593c45ad5",
+      "build": "unstable",
+      "seed": 536003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c60f2dcc94cb",
+      "build": "unstable",
+      "seed": 536002,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c60f2dcc94cb",
+      "build": "unstable",
+      "seed": 536003,
+      "reason": "unexplained-difference"
+    },
+    {
+      "scenario": "ai-c60f2dcc94cb",
+      "build": "unstable",
+      "seed": 536004,
+      "reason": "unexplained-difference"
+    }
+  ],
+  "coverage_reason": "the merge adds no line to a C file under src/"
+}

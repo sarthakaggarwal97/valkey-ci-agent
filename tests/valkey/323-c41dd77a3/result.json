@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c41dd77a3e93e02be3c4bc75d8c76b7b4169a4ce",
+  "parent": "c4782066e76ba20848fab95fd4909507cc069c3b",
+  "pr": 323,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add clang-format configs (#323)",
+  "date": "2024-05-22",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3361,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds clang-format configuration files (src/.clang-format, .clang-format-ignore additions) and applies the mechanical clang-format reformatting across the C sources: comment reflowing, indentation and brace-style changes. clang-format alters whitespace and line breaks only, never tokens, so the compiled binaries behave identically. There is no behavioural, protocol, persistence, replication or config change to reach, so no scenario is needed."
+}

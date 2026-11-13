@@ -1,0 +1,90 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5d0f4bc9f0089f83cc54e1978f2dd549f7392c9f",
+  "parent": "1c55f3ca5a19e57a5f918a900c7579009f6b60a2",
+  "pr": 490,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Require C11 atomics (#490)",
+  "date": "2024-05-26",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 21,
+  "proven": 2,
+  "hunted": 17,
+  "dropped": 5,
+  "recall": true,
+  "coverage": {
+    "lines": 135,
+    "executed": 114,
+    "percent": 84,
+    "uncovered": [
+      "src/aof.c:990",
+      "src/aof.c:992",
+      "src/bio.c:261",
+      "src/bio.c:262",
+      "src/bio.c:263",
+      "src/bio.c:265",
+      "src/bio.c:266",
+      "src/module.c:2416",
+      "src/networking.c:2700",
+      "src/server.c:4386",
+      "src/valkey-benchmark.c:405",
+      "src/valkey-benchmark.c:567",
+      "src/valkey-benchmark.c:1227",
+      "src/valkey-benchmark.c:1234",
+      "src/valkey-benchmark.c:1235",
+      "src/valkey-benchmark.c:1236",
+      "src/valkey-benchmark.c:1237",
+      "src/valkey-benchmark.c:1308",
+      "src/valkey-benchmark.c:1315",
+      "src/valkey-benchmark.c:1329",
+      "src/valkey-benchmark.c:1330"
+    ],
+    "unnoted": [],
+    "rounds": 3
+  },
+  "cost_usd": 18.739,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "Node crash or assertion: ------ STACK TRACE ------",
+      "scenario": "ai-84ed1c8ced07",
+      "seed": 1004,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": true
+      },
+      "verdict": "predates #490",
+      "fingerprint": "644bf477320e7a9618bb",
+      "issue": "https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/153"
+    }
+  ],
+  "recorded": [
+    {
+      "scenario": "ai-6f569015458b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'gil' returned ERROR: command 3 (do_bg_rm_call GET k) got no reply: TimeoutError: Timeout reading from /tmp/vfc-6d43q65i/s.sock"
+    },
+    {
+      "scenario": "ai-33f1d10b4e4b",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'gil' returned ERROR: command 3 (do_bg_rm_call GET k) got no reply: TimeoutError: Timeout reading from /tmp/vfc-skrplmj4/s.sock"
+    },
+    {
+      "scenario": "ai-a2d8d15c7cb1",
+      "build": "merge",
+      "status": "SKIP_UNSUPPORTED",
+      "reason": "the run could not start: runner execution failed during deployment.provision: LocalDeploymentError: Instance valkey-0 failed to start within 60s (process output from /home/runner/work/valkey-ci-agent/valkey-ci-agent/walk-work/runs/ai-a2d8d15c7cb1-merge-1006/artifacts/data/logs/1006-879fbc5b-valkey-0.stdio.log:  | *** FATAL CONFIG FILE ERROR (Version 255.255.255) *** | Reading the configuration file, at line 18 | >>> 'dual-channel-replication-enabled \"yes\"' | Bad directive or wrong number of arguments)"
+    },
+    {
+      "scenario": "ai-7ac789b29c8c",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'bgyield' returned ERROR: command 1 (do_bg_rm_call SET bgkey bgval on connection bg) got no reply: TimeoutError: Timeout reading from /tmp/vfc-bzjbfqks/s.sock"
+    }
+  ]
+}

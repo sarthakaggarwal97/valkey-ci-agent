@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6e4a61093e9ad9f6e29aa46ace9b10f537437b87",
+  "parent": "546cef6684e02bf22aeed9a5fca2a685babfe465",
+  "pr": 499,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make it to so that unit tests build on mac (#499)",
+  "date": "2024-05-15",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.219,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only src/unit/test_util.c, restructuring an #if defined(__linux__) guard so the unit test binary builds on macOS (test_reclaimFilePageCache becomes a no-op off Linux, and a printf is removed). It is a build fix to test-only code; no Valkey server behaviour, command reply, replication, or persistence path is affected, so no fuzzer scenario can reach it and none is needed."
+}

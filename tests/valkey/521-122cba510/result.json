@@ -1,0 +1,57 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "122cba5103b14314fc56511b447af0e78bd68f1d",
+  "parent": "e7e5a104ec9b3274577dce9cf1a35ea8b8f8e008",
+  "pr": 521,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Quick fix of failure when use libc allocator in daily CI. (#521)",
+  "date": "2024-05-20",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.356,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: hyperloglog.c:844 'sdslen(o->ptr) + deltalen <= sdsalloc(o->ptr)' is not true",
+      "scenario": "ai-5496d5e527dc",
+      "seed": 1,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #521",
+      "fingerprint": "b763785325665a41e73e",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: hyperloglog.c:844 'sdslen(o->ptr) + deltalen <= sdsalloc(o->ptr)' is not true",
+      "scenario": "ai-d7ec95bca7aa",
+      "seed": 2,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #521",
+      "fingerprint": "b763785325665a41e73e",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

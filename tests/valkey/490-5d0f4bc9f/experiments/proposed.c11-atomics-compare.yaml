@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.c11-atomics-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: WAITAOF fsynced-offset tracking, appendonly stop/start, lazyfree counters,
+    and the removed atomicvar_api INFO field, compared across the C11 atomics conversion
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes", appendfsync: always, hash-max-listpack-entries: 0}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 0], expect: {equals: [1, 0]}}
+    - {command: [EVAL, "if string.find(redis.call('INFO','server'),'atomicvar_api',1,true)\
+          \ then return 1 else return 0 end", 0], expect_difference: true, expect: {
+        equals: 0}}
+    - {command: [EVAL, "for i=1,200 do redis.call('HSET','h','f'..i,'x') end return\
+          \ redis.call('HLEN','h')", 0], expect: {equals: 200}}
+    - {command: [UNLINK, h], expect: {equals: 1}}
+    - {command: [EVAL, "for i=1,300 do redis.call('SET','k'..i,'v') end return redis.call('DBSIZE')",
+        0], expect: {equals: 300}}
+    - {command: [FLUSHALL, ASYNC], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 0}}
+    - {command: [CONFIG, SET, appendonly, no], expect: {equals: OK}}
+    - {command: [CONFIG, SET, appendonly, yes], expect: {equals: OK}}
+    - {command: [SET, k2, v2], expect: {equals: OK}}
+    - {command: [WAITAOF, 1, 0, 0], expect: {equals: [1, 0]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}

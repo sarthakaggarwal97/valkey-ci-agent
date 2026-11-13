@@ -1,0 +1,41 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "417660449f9c1fce998e1563f30f7bfd9cb5197f",
+  "parent": "28e055af0b94ce28ba22a17fc0494e94c8e9081e",
+  "pr": 502,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Adjust sds types (#502)",
+  "date": "2024-06-02",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 8,
+  "proven": 3,
+  "hunted": 8,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 47,
+    "executed": 35,
+    "percent": 74,
+    "uncovered": [
+      "src/sds.c:81",
+      "src/sds.c:82",
+      "src/sds.c:83",
+      "src/sds.c:159",
+      "src/sds.c:280",
+      "src/sds.c:281",
+      "src/sds.c:282",
+      "src/sds.c:283",
+      "src/sds.c:381",
+      "src/sds.c:382",
+      "src/sds.c:383",
+      "src/sds.c:384"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 13.0144,
+  "findings": [],
+  "recorded": []
+}

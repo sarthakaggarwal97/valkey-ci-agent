@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey e7e5a104ec9b..122cba5103b1.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5496d5e527dc
+seed: 1
+experiment:
+  id: proposed.sds-resize-alloc-overflow
+  inputs:
+    sparse_max_bytes: 253
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

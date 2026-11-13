@@ -1,0 +1,39 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c4782066e76ba20848fab95fd4909507cc069c3b",
+  "parent": "72538622ff8f207af22ed1b890c86885b52d8df3",
+  "pr": 53,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Cache CLUSTER SLOTS response for improving throughput and reduced latency. (#53)",
+  "date": "2024-05-22",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 0,
+  "hunted": 2,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 78,
+    "executed": 68,
+    "percent": 87,
+    "uncovered": [
+      "src/cluster.c:1446",
+      "src/cluster.c:1447",
+      "src/cluster.c:1448",
+      "src/cluster.c:1450",
+      "src/cluster.c:1451",
+      "src/cluster.c:1452",
+      "src/config.c:2589",
+      "src/config.c:2591",
+      "src/config.c:2592",
+      "src/config.c:2658"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 17.7213,
+  "findings": [],
+  "recorded": []
+}

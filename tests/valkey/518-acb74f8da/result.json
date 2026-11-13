@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "acb74f8da1c62fd895e9a4956f484ba44cc2f742",
+  "parent": "122cba5103b14314fc56511b447af0e78bd68f1d",
+  "pr": 518,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Delete dead code \"zfree_usable\"  (#518)",
+  "date": "2024-05-20",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.244,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change deletes the unused function zfree_usable (and its s_free_usable macro alias) from zmalloc.c/zmalloc.h/sdsalloc.h. A grep of the checkout confirms no remaining callers of zfree_usable or s_free_usable anywhere in the tree, so the function was dead code: removing it changes no command behaviour, replies, memory accounting at runtime, replication, or persistence. This is a pure refactor with no behaviour change, so no scenario is needed."
+}

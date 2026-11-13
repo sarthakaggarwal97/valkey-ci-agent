@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d52c8f30e0b4730115ed1cd0cdf36637aca7fef7",
+  "parent": "dcc9fd4fe8014cce0496e3e61bfad4ffba0b41fe",
+  "pr": 516,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Include stddef in zmalloc.h (#516)",
+  "date": "2024-05-19",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2433,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds #include <stddef.h> to zmalloc.h so the header compiles standalone (size_t is otherwise undeclared when zmalloc.h is included first). It is a build-time header fix with no runtime behaviour change: no command, reply, memory-allocation semantics, replication or persistence path differs between the two builds, so no fuzzer scenario can observe it."
+}

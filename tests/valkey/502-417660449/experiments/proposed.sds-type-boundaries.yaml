@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.sds-type-boundaries
+deployment:
+  modes: [standalone]
+metadata:
+  description: String creation and growth across the adjusted sds type boundaries
+    (252/253, 65530/65531) keeps content and length intact; DEBUG SDSLEN shows the
+    new type and alloc accounting
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sds-boundaries
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SET, e, ""], expect: {equals: OK}}
+    - {command: [STRLEN, e], expect: {equals: 0}}
+    - {command: [APPEND, e, ""], expect: {equals: 0}}
+    - {command: [APPEND, sk, abcdefghijklmnopqrstuvwxyz01234], expect: {equals: 31}}
+    - {command: [APPEND, sk, XY], expect: {equals: 33}}
+    - {command: [GET, sk], expect: {equals: abcdefghijklmnopqrstuvwxyz01234XY}}
+    - {command: [SETRANGE, k253, 252, a], expect: {equals: 253}}
+    - {command: [DEBUG, SDSLEN, k253], expect_difference: true, expect: {contains: "val_sds_len:253"}}
+    - {command: [APPEND, k253, bbbb], expect: {equals: 257}}
+    - {command: [GETRANGE, k253, 252, 256], expect: {equals: abbbb}}
+    - {command: [STRLEN, k253], expect: {equals: 257}}
+    - {command: [SETRANGE, bigk, 65530, A], expect: {equals: 65531}}
+    - {command: [DEBUG, SDSLEN, bigk], expect_difference: true, expect: {contains: "val_sds_len:65531"}}
+    - {command: [APPEND, bigk, BBBBBBBBBB], expect: {equals: 65541}}
+    - {command: [GETRANGE, bigk, 65530, 65540], expect: {equals: ABBBBBBBBBB}}
+    - {command: [SETRANGE, bigk, 0, Z], expect: {equals: 65541}}
+    - {command: [GETRANGE, bigk, 0, 0], expect: {equals: Z}}
+    - {command: [STRLEN, bigk], expect: {equals: 65541}}
+    - {command: [SETRANGE, midk, 65000, x], expect: {equals: 65001}}
+    - {command: [APPEND, midk, yy], expect: {equals: 65003}}
+    - {command: [SETRANGE, midk, 65600, w], expect: {equals: 65601}}
+    - {command: [GETRANGE, midk, 65000, 65002], expect: {equals: xyy}}
+    - {command: [GETRANGE, midk, 65600, 65600], expect: {equals: w}}
+    - {command: [STRLEN, midk], expect: {equals: 65601}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [sds-boundaries.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sds-boundaries}

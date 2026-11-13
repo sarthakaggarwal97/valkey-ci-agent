@@ -1,0 +1,90 @@
+extends: [valkey.liveness]
+id: proposed.c11-lazyfree-scripts-flush
+deployment:
+  modes: [standalone]
+metadata:
+  description: SCRIPT FLUSH ASYNC over 65 cached scripts frees the Lua scripts dict
+    in a bio thread, driving the C11 lazyfree_objects/lazyfreed_objects atomics
+components:
+- use: valkey.action.commands
+  id: scripts
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {lazyfree-lazy-user-flush: 'yes'}
+    timeout_s: 20
+    commands:
+    - {command: [SCRIPT, LOAD, 'return 1']}
+    - {command: [SCRIPT, LOAD, 'return 2']}
+    - {command: [SCRIPT, LOAD, 'return 3']}
+    - {command: [SCRIPT, LOAD, 'return 4']}
+    - {command: [SCRIPT, LOAD, 'return 5']}
+    - {command: [SCRIPT, LOAD, 'return 6']}
+    - {command: [SCRIPT, LOAD, 'return 7']}
+    - {command: [SCRIPT, LOAD, 'return 8']}
+    - {command: [SCRIPT, LOAD, 'return 9']}
+    - {command: [SCRIPT, LOAD, 'return 10']}
+    - {command: [SCRIPT, LOAD, 'return 11']}
+    - {command: [SCRIPT, LOAD, 'return 12']}
+    - {command: [SCRIPT, LOAD, 'return 13']}
+    - {command: [SCRIPT, LOAD, 'return 14']}
+    - {command: [SCRIPT, LOAD, 'return 15']}
+    - {command: [SCRIPT, LOAD, 'return 16']}
+    - {command: [SCRIPT, LOAD, 'return 17']}
+    - {command: [SCRIPT, LOAD, 'return 18']}
+    - {command: [SCRIPT, LOAD, 'return 19']}
+    - {command: [SCRIPT, LOAD, 'return 20']}
+    - {command: [SCRIPT, LOAD, 'return 21']}
+    - {command: [SCRIPT, LOAD, 'return 22']}
+    - {command: [SCRIPT, LOAD, 'return 23']}
+    - {command: [SCRIPT, LOAD, 'return 24']}
+    - {command: [SCRIPT, LOAD, 'return 25']}
+    - {command: [SCRIPT, LOAD, 'return 26']}
+    - {command: [SCRIPT, LOAD, 'return 27']}
+    - {command: [SCRIPT, LOAD, 'return 28']}
+    - {command: [SCRIPT, LOAD, 'return 29']}
+    - {command: [SCRIPT, LOAD, 'return 30']}
+    - {command: [SCRIPT, LOAD, 'return 31']}
+    - {command: [SCRIPT, LOAD, 'return 32']}
+    - {command: [SCRIPT, LOAD, 'return 33']}
+    - {command: [SCRIPT, LOAD, 'return 34']}
+    - {command: [SCRIPT, LOAD, 'return 35']}
+    - {command: [SCRIPT, LOAD, 'return 36']}
+    - {command: [SCRIPT, LOAD, 'return 37']}
+    - {command: [SCRIPT, LOAD, 'return 38']}
+    - {command: [SCRIPT, LOAD, 'return 39']}
+    - {command: [SCRIPT, LOAD, 'return 40']}
+    - {command: [SCRIPT, LOAD, 'return 41']}
+    - {command: [SCRIPT, LOAD, 'return 42']}
+    - {command: [SCRIPT, LOAD, 'return 43']}
+    - {command: [SCRIPT, LOAD, 'return 44']}
+    - {command: [SCRIPT, LOAD, 'return 45']}
+    - {command: [SCRIPT, LOAD, 'return 46']}
+    - {command: [SCRIPT, LOAD, 'return 47']}
+    - {command: [SCRIPT, LOAD, 'return 48']}
+    - {command: [SCRIPT, LOAD, 'return 49']}
+    - {command: [SCRIPT, LOAD, 'return 50']}
+    - {command: [SCRIPT, LOAD, 'return 51']}
+    - {command: [SCRIPT, LOAD, 'return 52']}
+    - {command: [SCRIPT, LOAD, 'return 53']}
+    - {command: [SCRIPT, LOAD, 'return 54']}
+    - {command: [SCRIPT, LOAD, 'return 55']}
+    - {command: [SCRIPT, LOAD, 'return 56']}
+    - {command: [SCRIPT, LOAD, 'return 57']}
+    - {command: [SCRIPT, LOAD, 'return 58']}
+    - {command: [SCRIPT, LOAD, 'return 59']}
+    - {command: [SCRIPT, LOAD, 'return 60']}
+    - {command: [SCRIPT, LOAD, 'return 61']}
+    - {command: [SCRIPT, LOAD, 'return 62']}
+    - {command: [SCRIPT, LOAD, 'return 63']}
+    - {command: [SCRIPT, LOAD, 'return 64']}
+    - {command: [SCRIPT, LOAD, 'return 65']}
+    - {command: [SCRIPT, FLUSH, ASYNC], expect: {equals: OK}}
+    - {command: [EVAL, 'return 42', 0], expect: {equals: 42}}
+    - {command: [SCRIPT, LOAD, 'return 66']}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scripts}

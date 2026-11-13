@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "72538622ff8f207af22ed1b890c86885b52d8df3",
+  "parent": "005a018db687568219e33f1119b034f653133869",
+  "pr": 486,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Migrate ziplist.c unit tests to new framework (#486)",
+  "date": "2024-05-21",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.393,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure test migration: it moves ziplist.c's SERVER_TEST-gated unit tests into the new unit test framework (src/unit/test_ziplist.c, test_files.h) and deletes the old #ifdef SERVER_TEST block from ziplist.c/ziplist.h plus its entry in server.c's serverTests[]. No production code path, command behaviour, reply, encoding, or persistence logic changes \u2014 only code compiled for the test harness \u2014 so no server-facing scenario can exercise the change."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7ba7e4d05365a9f5374120838b26c99b8f129d08",
+  "parent": "84157890fd710c6117032c20ba4602cbe19970d1",
+  "pr": 548,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update zfree on data in test_crc64combine before return. (#548)",
+  "date": "2024-05-28",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2263,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds zfree(data) cleanup on early-return error paths inside the unit test file src/unit/test_crc64combine.c, fixing a memory leak in the test harness itself. It does not touch any server, command, replication, persistence or tool code, so no runtime behaviour of valkey-server or its tools changed and no fuzzer scenario can exercise it."
+}

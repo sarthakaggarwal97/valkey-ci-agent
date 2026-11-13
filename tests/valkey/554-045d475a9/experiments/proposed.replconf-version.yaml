@@ -1,0 +1,68 @@
+extends: [valkey.liveness]
+id: proposed.replconf-version
+deployment:
+  modes: [standalone]
+metadata:
+  description: REPLCONF VERSION parsing compared across builds, then a replica and
+    sub-replica chain driving the new handshake VERSION step
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: replconf-version
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    nodes: 3
+    timeout_s: 60
+    commands:
+    - {command: [REPLCONF, version, "8.0.0"], expect_difference: true, expect: {equals: OK}}
+    - {command: [REPLCONF, version, "255.255.255"], expect_difference: true, expect: {
+        equals: OK}}
+    - {command: [REPLCONF, version, "0.0.0"], expect_difference: true, expect: {equals: OK}}
+    - {command: [REPLCONF, VERSION, "9.9.9"], expect_difference: true, expect: {equals: OK}}
+    - {command: [REPLCONF, version, "7.2.256"], expect_difference: true, expect: {
+        error: "Unrecognized version format"}}
+    - {command: [REPLCONF, version, "7.2"], expect_difference: true, expect: {error: "Unrecognized\
+          \ version format"}}
+    - {command: [REPLCONF, version, "1.2.3.4"], expect_difference: true, expect: {
+        error: "Unrecognized version format"}}
+    - {command: [REPLCONF, version, ""], expect_difference: true, expect: {error: "Unrecognized\
+          \ version format"}}
+    - {command: [REPLCONF, version, "1.-2.-3"], expect_difference: true, expect: {
+        error: "Unrecognized version format"}}
+    - {command: [REPLCONF, version, "1.2.3-rc4"], expect_difference: true, expect: {
+        error: "Unrecognized version format"}}
+    - {command: [REPLCONF, version, "2147483647.2.3"], expect_difference: true, expect: {
+        error: "Unrecognized version format"}}
+    - {command: [REPLCONF, version, "4294967296.0.0"], expect_difference: true, expect: {
+        error: "Unrecognized version format"}}
+    - {command: [REPLCONF, version, "1..2"], expect_difference: true, expect: {equals: OK}}
+    - {command: [REPLCONF, listening-port, "6379", version, "8.0.1"], expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [REPLCONF, version, "8.0.0", bogus-option, x], expect_difference: true,
+      expect: {error: "Unrecognized REPLCONF option"}}
+    - {command: [REPLCONF, version], expect: {error: true}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [REPLICAOF, "<node.0.host>", "<node.0.port>"], node: 1, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 1, compare: skip, wait_s: 30, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [REPLICAOF, "<node.1.host>", "<node.1.port>"], node: 2, expect: {
+        equals: OK}}
+    - {command: [INFO, replication], node: 2, compare: skip, wait_s: 30, expect: {
+        contains: "master_link_status:up"}}
+    - {command: [SET, foo, bar], node: 0, expect: {equals: OK}}
+    - {command: [GET, foo], node: 1, wait_s: 10, expect: {equals: bar}}
+    - {command: [GET, foo], node: 2, wait_s: 10, expect: {equals: bar}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [replconf-version.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: replconf-version}

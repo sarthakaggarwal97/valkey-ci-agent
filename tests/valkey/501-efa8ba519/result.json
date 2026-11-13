@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "efa8ba519b2d54f68fe05d03cac5b0d5352400ad",
+  "parent": "9b6232b50120ae38537f22617b3ec8efaa625602",
+  "pr": 501,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Finish postponed SCAN changes (#501)",
+  "date": "2024-05-17",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 1,
+    "executed": 1,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.2758,
+  "findings": [],
+  "recorded": []
+}

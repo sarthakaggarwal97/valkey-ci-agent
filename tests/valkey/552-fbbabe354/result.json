@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "fbbabe3543a6f9bca670a0875dc5eeb5ba6733a3",
+  "parent": "d72ba06dd0519fd0bf578cca2a2f5c457629dc6c",
+  "pr": 552,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Revert format updates on config.c file for config block (#552)",
+  "date": "2024-05-24",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.7263,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only reverts clang-format whitespace in src/config.c: each create*Config entry is collapsed back onto one line and a clang-format off/on guard is added around the static_configs table. Every config's name, alias, flags, bounds, default value, validator and apply callback is unchanged; only line breaks and comment placement differ. A pure formatting refactor with zero behaviour change needs no scenario."
+}

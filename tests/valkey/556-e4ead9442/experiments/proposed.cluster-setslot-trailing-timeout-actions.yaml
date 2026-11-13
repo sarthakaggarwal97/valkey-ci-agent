@@ -1,0 +1,46 @@
+extends: [valkey.liveness]
+id: proposed.cluster-setslot-trailing-timeout-actions
+deployment:
+  modes: [standalone]
+metadata:
+  description: CLUSTER SETSLOT IMPORTING/STABLE/NODE with a trailing TIMEOUT - the
+    change parses it positionally after the action and validates the value, the parent
+    stripped TIMEOUT from anywhere and accepted garbage via strtol
+components:
+- use: valkey.action.commands
+  id: setslot
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 30
+    commands:
+    - {command: [CLUSTER, SETSLOT, 609, IMPORTING, "<node.0.id>", TIMEOUT, 5000],
+      node: 1, wait_s: 30, expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 609, IMPORTING, "<node.0.id>", TIMEOUT, -1], node: 1,
+      expect_difference: true, expect: {error: "timeout is negative"}}
+    - {command: [CLUSTER, SETSLOT, 609, IMPORTING, "<node.0.id>", TIMEOUT, notanumber],
+      node: 1, expect_difference: true, expect: {error: "not an integer"}}
+    - {command: [CLUSTER, SETSLOT, 609, STABLE, TIMEOUT, 5000], node: 1, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 609, STABLE, TIMEOUT, "18446744073709551616"],
+      node: 1, expect_difference: true, expect: {error: "not an integer or out of\
+          \ range"}}
+    - {command: [CLUSTER, SETSLOT, 609, TIMEOUT, 100, STABLE], node: 1, expect_difference: true,
+      expect: {error: "Invalid CLUSTER SETSLOT action"}}
+    - {command: [CLUSTER, SETSLOT, 609, NODE, "<node.0.id>", TIMEOUT, 5000], node: 0,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 609, NODE, "<node.0.id>", TIMEOUT], node: 0, expect_difference: true,
+      expect: {error: "Missing timeout value"}}
+    - {command: [CLUSTER, SETSLOT, 609, NODE, "<node.0.id>", TIMEOUT, xyz], node: 0,
+      expect_difference: true, expect: {error: "not an integer"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [setslot.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: setslot}

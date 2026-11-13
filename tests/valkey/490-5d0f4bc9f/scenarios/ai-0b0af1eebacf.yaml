@@ -1,0 +1,21 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1c55f3ca5a19..5d0f4bc9f008.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-0b0af1eebacf
+seed: 11005
+experiment:
+  id: valkey.aof-durability
+  inputs:
+    appendfsync: everysec
+    loss_window_s: 2.5
+    mutation_rate: 2000
+    run_before_crash_s: 3
+    value_size: 1024
+deployment:
+  mode: standalone
+  replicas_per_primary: 1
+  base_port: 7400
+  server_config:
+    lazyfree-lazy-user-del: 'yes'
+    lazyfree-lazy-expire: 'yes'
+    lazyfree-lazy-server-del: 'yes'
+    lazyfree-lazy-user-flush: 'yes'

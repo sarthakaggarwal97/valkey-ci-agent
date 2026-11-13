@@ -1,0 +1,103 @@
+extends: [valkey.liveness]
+id: proposed.c11-errorstats-async-free
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG RESETSTAT on a >64-node errorstats rax takes the async branch
+    of freeErrorsRadixTreeAsync, so the bio lazyfree thread runs lazyFreeErrors and
+    updates the C11 lazyfree_objects/lazyfreed_objects atomics while the main thread
+    keeps serving
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: errstats
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [EVAL, "return redis.error_reply('E10 x')", 0], expect: {error: E10}}
+    - {command: [EVAL, "return redis.error_reply('E11 x')", 0], expect: {error: E11}}
+    - {command: [EVAL, "return redis.error_reply('E12 x')", 0], expect: {error: E12}}
+    - {command: [EVAL, "return redis.error_reply('E13 x')", 0], expect: {error: E13}}
+    - {command: [EVAL, "return redis.error_reply('E14 x')", 0], expect: {error: E14}}
+    - {command: [EVAL, "return redis.error_reply('E15 x')", 0], expect: {error: E15}}
+    - {command: [EVAL, "return redis.error_reply('E16 x')", 0], expect: {error: E16}}
+    - {command: [EVAL, "return redis.error_reply('E17 x')", 0], expect: {error: E17}}
+    - {command: [EVAL, "return redis.error_reply('E18 x')", 0], expect: {error: E18}}
+    - {command: [EVAL, "return redis.error_reply('E19 x')", 0], expect: {error: E19}}
+    - {command: [EVAL, "return redis.error_reply('E20 x')", 0], expect: {error: E20}}
+    - {command: [EVAL, "return redis.error_reply('E21 x')", 0], expect: {error: E21}}
+    - {command: [EVAL, "return redis.error_reply('E22 x')", 0], expect: {error: E22}}
+    - {command: [EVAL, "return redis.error_reply('E23 x')", 0], expect: {error: E23}}
+    - {command: [EVAL, "return redis.error_reply('E24 x')", 0], expect: {error: E24}}
+    - {command: [EVAL, "return redis.error_reply('E25 x')", 0], expect: {error: E25}}
+    - {command: [EVAL, "return redis.error_reply('E26 x')", 0], expect: {error: E26}}
+    - {command: [EVAL, "return redis.error_reply('E27 x')", 0], expect: {error: E27}}
+    - {command: [EVAL, "return redis.error_reply('E28 x')", 0], expect: {error: E28}}
+    - {command: [EVAL, "return redis.error_reply('E29 x')", 0], expect: {error: E29}}
+    - {command: [EVAL, "return redis.error_reply('E30 x')", 0], expect: {error: E30}}
+    - {command: [EVAL, "return redis.error_reply('E31 x')", 0], expect: {error: E31}}
+    - {command: [EVAL, "return redis.error_reply('E32 x')", 0], expect: {error: E32}}
+    - {command: [EVAL, "return redis.error_reply('E33 x')", 0], expect: {error: E33}}
+    - {command: [EVAL, "return redis.error_reply('E34 x')", 0], expect: {error: E34}}
+    - {command: [EVAL, "return redis.error_reply('E35 x')", 0], expect: {error: E35}}
+    - {command: [EVAL, "return redis.error_reply('E36 x')", 0], expect: {error: E36}}
+    - {command: [EVAL, "return redis.error_reply('E37 x')", 0], expect: {error: E37}}
+    - {command: [EVAL, "return redis.error_reply('E38 x')", 0], expect: {error: E38}}
+    - {command: [EVAL, "return redis.error_reply('E39 x')", 0], expect: {error: E39}}
+    - {command: [EVAL, "return redis.error_reply('E40 x')", 0], expect: {error: E40}}
+    - {command: [EVAL, "return redis.error_reply('E41 x')", 0], expect: {error: E41}}
+    - {command: [EVAL, "return redis.error_reply('E42 x')", 0], expect: {error: E42}}
+    - {command: [EVAL, "return redis.error_reply('E43 x')", 0], expect: {error: E43}}
+    - {command: [EVAL, "return redis.error_reply('E44 x')", 0], expect: {error: E44}}
+    - {command: [EVAL, "return redis.error_reply('E45 x')", 0], expect: {error: E45}}
+    - {command: [EVAL, "return redis.error_reply('E46 x')", 0], expect: {error: E46}}
+    - {command: [EVAL, "return redis.error_reply('E47 x')", 0], expect: {error: E47}}
+    - {command: [EVAL, "return redis.error_reply('E48 x')", 0], expect: {error: E48}}
+    - {command: [EVAL, "return redis.error_reply('E49 x')", 0], expect: {error: E49}}
+    - {command: [EVAL, "return redis.error_reply('E50 x')", 0], expect: {error: E50}}
+    - {command: [EVAL, "return redis.error_reply('E51 x')", 0], expect: {error: E51}}
+    - {command: [EVAL, "return redis.error_reply('E52 x')", 0], expect: {error: E52}}
+    - {command: [EVAL, "return redis.error_reply('E53 x')", 0], expect: {error: E53}}
+    - {command: [EVAL, "return redis.error_reply('E54 x')", 0], expect: {error: E54}}
+    - {command: [EVAL, "return redis.error_reply('E55 x')", 0], expect: {error: E55}}
+    - {command: [EVAL, "return redis.error_reply('E56 x')", 0], expect: {error: E56}}
+    - {command: [EVAL, "return redis.error_reply('E57 x')", 0], expect: {error: E57}}
+    - {command: [EVAL, "return redis.error_reply('E58 x')", 0], expect: {error: E58}}
+    - {command: [EVAL, "return redis.error_reply('E59 x')", 0], expect: {error: E59}}
+    - {command: [EVAL, "return redis.error_reply('E60 x')", 0], expect: {error: E60}}
+    - {command: [EVAL, "return redis.error_reply('E61 x')", 0], expect: {error: E61}}
+    - {command: [EVAL, "return redis.error_reply('E62 x')", 0], expect: {error: E62}}
+    - {command: [EVAL, "return redis.error_reply('E63 x')", 0], expect: {error: E63}}
+    - {command: [EVAL, "return redis.error_reply('E64 x')", 0], expect: {error: E64}}
+    - {command: [EVAL, "return redis.error_reply('E65 x')", 0], expect: {error: E65}}
+    - {command: [EVAL, "return redis.error_reply('E66 x')", 0], expect: {error: E66}}
+    - {command: [EVAL, "return redis.error_reply('E67 x')", 0], expect: {error: E67}}
+    - {command: [EVAL, "return redis.error_reply('E68 x')", 0], expect: {error: E68}}
+    - {command: [EVAL, "return redis.error_reply('E69 x')", 0], expect: {error: E69}}
+    - {command: [EVAL, "return redis.error_reply('E70 x')", 0], expect: {error: E70}}
+    - {command: [EVAL, "return redis.error_reply('E71 x')", 0], expect: {error: E71}}
+    - {command: [EVAL, "return redis.error_reply('E72 x')", 0], expect: {error: E72}}
+    - {command: [EVAL, "return redis.error_reply('E73 x')", 0], expect: {error: E73}}
+    - {command: [EVAL, "return redis.error_reply('E74 x')", 0], expect: {error: E74}}
+    - {command: [EVAL, "return redis.error_reply('E75 x')", 0], expect: {error: E75}}
+    - {command: [EVAL, "return redis.error_reply('E76 x')", 0], expect: {error: E76}}
+    - {command: [EVAL, "return redis.error_reply('E77 x')", 0], expect: {error: E77}}
+    - {command: [EVAL, "return redis.error_reply('E78 x')", 0], expect: {error: E78}}
+    - {command: [EVAL, "return redis.error_reply('E79 x')", 0], expect: {error: E79}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [EVAL, "return redis.error_reply('Z00 x')", 0], expect: {error: Z00}}
+    - {command: [CONFIG, RESETSTAT], expect: {equals: OK}}
+    - {command: [SET, k, v], expect: {equals: OK}}
+    - {command: [GET, k], expect: {equals: v}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [errstats.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: errstats}

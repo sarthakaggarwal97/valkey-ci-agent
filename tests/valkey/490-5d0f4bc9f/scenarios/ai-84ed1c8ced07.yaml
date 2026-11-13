@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 1c55f3ca5a19..5d0f4bc9f008.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-84ed1c8ced07
+seed: 1004
+experiment:
+  id: proposed.c11-threads-mngr-watchdog
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7300

@@ -1,0 +1,27 @@
+extends: [valkey.liveness]
+id: proposed.c11-threads-mngr-watchdog
+deployment:
+  modes: [standalone]
+metadata:
+  description: The software watchdog SIGALRM fires while the main thread is blocked
+    in DEBUG SLEEP, driving ThreadsManager_runOnThreads across the io threads and
+    its g_in_progress/g_num_threads_done C11 atomics
+components:
+- use: valkey.action.commands
+  id: wd
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-debug-command: yes, io-threads: 4, io-threads-do-reads: yes}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, watchdog-period, 50], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, watchdog-period, 0], expect: {equals: OK}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [wd.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: wd}

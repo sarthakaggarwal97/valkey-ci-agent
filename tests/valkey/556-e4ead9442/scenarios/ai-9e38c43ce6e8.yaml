@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5d0f4bc9f008..e4ead9442b8e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-9e38c43ce6e8
+seed: 60291
+experiment:
+  id: proposed.cluster-setslot-trailing-timeout-actions
+deployment:
+  mode: standalone
+  base_port: 7000

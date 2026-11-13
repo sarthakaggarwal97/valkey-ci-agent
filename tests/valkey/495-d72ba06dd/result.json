@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d72ba06dd0519fd0bf578cca2a2f5c457629dc6c",
+  "parent": "3dd2f5a586f2c4d5f9cbf984a0565f70547efae7",
+  "pr": 495,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make cluster replicas return ASK and TRYAGAIN (#495)",
+  "date": "2024-05-24",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 2,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 7,
+    "executed": 6,
+    "percent": 85,
+    "uncovered": [
+      "src/cluster.c:1126"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 7.6018,
+  "findings": [],
+  "recorded": []
+}

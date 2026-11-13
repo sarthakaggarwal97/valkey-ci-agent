@@ -1,0 +1,31 @@
+extends: [valkey.liveness]
+id: proposed.c11-module-gil-aftersleep
+deployment:
+  modes: [standalone]
+metadata:
+  description: With blockedclient.so loaded, every event-loop wake runs afterSleep's
+    moduleAcquireGIL, driving the C11 server.module_gil_acquiring store/store; slow_fg_command
+    yields across loops
+components:
+- use: valkey.action.commands
+  id: gil
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    timeout_s: 20
+    commands:
+    - {command: [do_rm_call, PING], expect: {equals: PONG}}
+    - {command: [slow_fg_command, 50000], expect: {equals: 1}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [do_rm_call, SET, k, v], expect: {equals: OK}}
+    - {command: [do_rm_call, GET, k], expect: {equals: v}}
+    - {command: [slow_fg_command, 50000], expect: {equals: 1}}
+    - {command: [do_rm_call, INCR, ctr], expect: {equals: 1}}
+    - {command: [PING], expect: {equals: PONG}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: gil}

@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.cluster-setslot-timeout-parse
+deployment:
+  modes: [standalone, cluster]
+metadata:
+  description: CLUSTER SETSLOT validates its TIMEOUT argument value and position
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: setslot
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CLUSTER, SETSLOT, "100", MIGRATING, "<node.1.id>", TIMEOUT, "500"],
+      expect: {equals: OK}}
+    - {command: [CLUSTER, SETSLOT, "101", MIGRATING, "<node.1.id>", TIMEOUT, abc],
+      expect_difference: true, expect: {error: "not an integer or out of range"}}
+    - {command: [CLUSTER, SETSLOT, "102", MIGRATING, "<node.1.id>", TIMEOUT, "-1"],
+      expect_difference: true, expect: {error: "timeout is negative"}}
+    - {command: [CLUSTER, SETSLOT, "103", MIGRATING, "<node.1.id>", TIMEOUT, "99999999999999999999"],
+      expect_difference: true, expect: {error: "out of range"}}
+    - {command: [CLUSTER, SETSLOT, "104", MIGRATING, "<node.1.id>", TIMEOUT], expect_difference: true,
+      expect: {error: "Missing timeout value"}}
+    - {command: [CLUSTER, SETSLOT, "105", TIMEOUT, "100", MIGRATING, "<node.1.id>"],
+      expect_difference: true, expect: {error: "Invalid CLUSTER SETSLOT action"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [setslot.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: setslot}

@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 5d0f4bc9f008..e4ead9442b8e.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-de22f6b679ee
+seed: 7101
+experiment:
+  id: proposed.cluster-setslot-timeout-parse
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

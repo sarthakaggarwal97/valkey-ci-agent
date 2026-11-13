@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "84157890fd710c6117032c20ba4602cbe19970d1",
+  "parent": "4e44f5aae934b2d459d0c6d3957ec01d6d2b014a",
+  "pr": 538,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Set up clang-format github action (#538)",
+  "date": "2024-05-28",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.5195,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a CI/build change with mechanical formatting fixes only: it adds a clang-format GitHub Action workflow and reformats source files to pass it (whitespace/line-wrapping around unchanged expressions, renaming C++-keyword identifiers like new->new_user, delete->del_ele, not->not_op, and clang-format off markers in generated headers). Every hunk in acl.c, aof.c, replication.c, networking.c, rdb.c, server.c, listpack.c and util.c preserves identical semantics and control flow, so no runtime behaviour changed and no scenario can distinguish the builds."
+}

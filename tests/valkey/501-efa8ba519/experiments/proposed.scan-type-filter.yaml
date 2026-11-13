@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.scan-type-filter
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Finished SCAN TYPE changes: an unknown type name now returns an error instead
+    of silently matching nothing, and the TYPE filter moved into the scan callback
+    so SCAN no longer passively expires keys of a non-matching type. Verified by comparing
+    SCAN replies and DBSIZE side effects across the change and parent builds with
+    active expiration disabled.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: scan
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [PEXPIRE, foo, 1], expect: {equals: 1}}
+    - {command: [HSET, hash, f, v], expect: {equals: 1}}
+    - {command: [PEXPIRE, hash, 1], expect: {equals: 1}}
+    - {command: [SET, k1, v1], expect: {equals: OK}}
+    - {command: [HSET, h1, f, v], expect: {equals: 1}}
+    - {command: [DEBUG, SLEEP, 0.05], expect: {equals: OK}}
+    - {command: [DBSIZE], expect: {equals: 4}}
+    - {command: [SCAN, 0, MATCH, "*", TYPE, string, COUNT, 100], compare: skip}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 3}}
+    - {command: [FLUSHALL], expect: {equals: OK}}
+    - {command: [SET, e1, v], expect: {equals: OK}}
+    - {command: [PEXPIRE, e1, 1], expect: {equals: 1}}
+    - {command: [SET, p1, v], expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 0.05], expect: {equals: OK}}
+    - {command: [SCAN, 0, TYPE, string1, COUNT, 100], expect_difference: true, expect: {
+        error: "unknown type name"}}
+    - {command: [SCAN, 0, TYPE, "", COUNT, 100], expect_difference: true, expect: {
+        error: "unknown type name"}}
+    - {command: [SCAN, 9223372036854775807, TYPE, nosuchtype], expect_difference: true,
+      expect: {error: "unknown type name"}}
+    - {command: [DBSIZE], expect_difference: true, expect: {equals: 2}}
+    - {command: [SCAN, 0, TYPE, hash, COUNT, 100], compare: skip}
+    - {command: [SCAN, 0, TYPE, string, COUNT, 100], compare: skip}
+    - {command: [DBSIZE], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [scan.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scan}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a0aebb6b678a5124ce9a92c7cb39074ebc0d85f9",
+  "parent": "c41dd77a3e93e02be3c4bc75d8c76b7b4169a4ce",
+  "pr": 537,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Reinitialize pointer 'p' after ziplistDeleteRange to fix head deletion bug (#537)",
+  "date": "2024-05-22",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2271,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change touches only src/unit/test_ziplist.c: it fixes a stale pointer in the unit test test_ziplistDeleteInclusiveRange0To0 by reinitializing 'p' via ziplistIndex after ziplistDeleteRange. No server source changes \u2014 ziplistDeleteRange itself is unmodified \u2014 so no command reply, data structure, replication, or persistence behavior differs between the builds. A test-only fix is unreachable by any runtime scenario and needs none."
+}

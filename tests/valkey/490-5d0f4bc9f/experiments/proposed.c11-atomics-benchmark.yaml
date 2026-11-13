@@ -1,0 +1,23 @@
+extends: [valkey.liveness]
+id: proposed.c11-atomics-benchmark
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-benchmark of both builds, threaded and single-threaded, exercising
+    its converted _Atomic request and slot counters against a private server of its
+    own build
+components:
+- use: valkey.action.tools
+  id: bench
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 180
+    runs:
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 50, -n, 20000, --threads, 4,
+        -P, 8, -t, "set,get", -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-p, $port, -c, 20, -n, 5000, -t, ping, -q],
+      compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, PING], expect: {stdout: {contains: PONG}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: bench}

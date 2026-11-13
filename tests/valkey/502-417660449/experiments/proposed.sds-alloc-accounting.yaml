@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.sds-alloc-accounting
+deployment:
+  modes: [standalone]
+metadata:
+  description: sds type and alloc accounting at the SDS_TYPE_8/16 and SDS_TYPE_16/32
+    length boundaries
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: sds
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SETRANGE, a, "252", "A"], expect: {equals: 253}}
+    - {command: [DEBUG, SDSLEN, a], expect_difference: true, expect: {contains: "val_sds_len:253"}}
+    - {command: [STRLEN, a], expect: {equals: 253}}
+    - {command: [GET, a], expect: {exists: true}}
+    - {command: [SETRANGE, b, "65530", "A"], expect: {equals: 65531}}
+    - {command: [DEBUG, SDSLEN, b], expect_difference: true, expect: {contains: "val_sds_len:65531"}}
+    - {command: [STRLEN, b], expect: {equals: 65531}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [sds.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sds}

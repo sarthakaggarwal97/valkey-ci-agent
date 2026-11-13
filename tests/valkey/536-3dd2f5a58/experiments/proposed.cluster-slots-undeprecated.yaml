@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.cluster-slots-undeprecated
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    CLUSTER SLOTS is undeprecated: COMMAND DOCS cluster|slots must no longer report
+    doc_flags deprecated, deprecated_since 7.0.0 or replaced_by CLUSTER SHARDS, while
+    CLUSTER SLAVES stays deprecated and COMMAND INFO for cluster|slots keeps the same
+    runtime flags.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: docs
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [COMMAND, DOCS, "cluster|slots"], expect_difference: true, expect: {
+        contains: "Returns the mapping of cluster slots to nodes."}}
+    - {command: [COMMAND, DOCS, "cluster|shards"], expect: {contains: "Returns the\
+          \ mapping of cluster slots to shards."}}
+    - {command: [COMMAND, DOCS, "cluster|slaves"], expect: {contains: "deprecated_since"}}
+    - {command: [COMMAND, INFO, "cluster|slots"], expect: {contains: "slots"}}
+    - {command: [COMMAND, COUNT], expect: {min: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [docs.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: docs}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dcc9fd4fe8014cce0496e3e61bfad4ffba0b41fe",
+  "parent": "efa8ba519b2d54f68fe05d03cac5b0d5352400ad",
+  "pr": 514,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Resolve numtests counter error (#514)",
+  "date": "2024-05-19",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2195,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits src/unit/test_main.c, the main() of Valkey's internal unit-test runner, fixing the array-size computation for the test-suite loop counter. It is test-infrastructure code compiled into the valkey-unit-tests binary and does not alter valkey-server behaviour, any command reply, replication, persistence, or the CLI tools, so no fuzzer scenario can reach or exercise it."
+}
