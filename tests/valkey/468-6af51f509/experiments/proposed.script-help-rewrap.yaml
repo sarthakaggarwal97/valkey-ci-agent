@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.script-help-rewrap
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    SCRIPT HELP text was rewrapped in the clang-format-markers change; the reply must
+    differ between builds, while commands through the other comment-only regions (SET
+    parsing, notify flags, ACL subcommands, CLIENT INFO) stay identical.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: helpseq
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [SCRIPT, HELP], expect_difference: true, expect: {contains: "KILL"}}
+    - {command: [SET, k, v, NX, EX, "100"], expect: {equals: OK}}
+    - {command: [SET, k, v2, XX, KEEPTTL], expect: {equals: OK}}
+    - {command: [SET, k, v3, NX], expect: {exists: true}}
+    - {command: [GET, k], expect: {equals: v2}}
+    - {command: [CONFIG, SET, notify-keyspace-events, KEA], expect: {equals: OK}}
+    - {command: [CONFIG, GET, notify-keyspace-events], expect: {exists: true}}
+    - {command: [ACL, HELP], expect: {exists: true}}
+    - {command: [COMMAND, HELP], expect: {exists: true}}
+    - {command: [XGROUP, HELP], expect: {exists: true}}
+    - {command: [CLIENT, HELP], expect: {exists: true}}
+    - {command: [FUNCTION, HELP], expect: {exists: true}}
+    - {command: [SLOWLOG, HELP], expect: {exists: true}}
+    - {command: [LATENCY, HELP], expect: {exists: true}}
+    - {command: [MEMORY, HELP], expect: {exists: true}}
+    - {command: [ACL, SETUSER, u1, on, ">pw", "~allowed:*", "+get"], expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, u1, GET, "allowed:1"], expect: {equals: OK}}
+    - {command: [ACL, DRYRUN, u1, GET, secret], expect: {exists: true}}
+    - {command: [CLIENT, INFO], compare: skip}
+    - {command: [ROLE], compare: skip}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [helpseq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: helpseq}

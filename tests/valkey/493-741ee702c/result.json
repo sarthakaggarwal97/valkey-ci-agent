@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "741ee702cacd402dedeef75c7b8cbd6a1f091b7a",
+  "parent": "72f2a8743c0dc250a184a76c377427e5ee8e6dfc",
+  "pr": 493,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "[New] Migrate zmalloc.c unit tests to new test framework. (#493)",
+  "date": "2024-05-14",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2856,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure test-infrastructure migration: it moves zmalloc's unit tests from the old SERVER_TEST in-binary framework (code compiled only under #ifdef SERVER_TEST, absent from production builds) into the new standalone unit test framework (new src/unit/test_zmalloc.c plus test_files.h registrations). No production code path, allocator behaviour, command, reply, replication or persistence logic changes, so there is nothing a fuzzer scenario against a running server could exercise or compare."
+}

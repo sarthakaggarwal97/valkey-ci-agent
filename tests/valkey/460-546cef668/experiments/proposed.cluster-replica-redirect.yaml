@@ -1,0 +1,45 @@
+extends: [valkey.liveness]
+id: proposed.cluster-replica-redirect
+deployment:
+  modes: [standalone]
+metadata:
+  description: READONLY/READWRITE/SSUBSCRIBE redirect decisions on a cluster replica,
+    compared across builds (getNodeByQuery now uses clusterNodeGetMaster instead of
+    clusterNodeGetSlaveof)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: redirect
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [SET, foo, bar], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [GET, foo], node: 1, expect: {error: "MOVED"}}
+    - {command: [CLUSTER, MYID], node: 1}
+    - {command: [READONLY], node: 1, expect: {equals: OK}}
+    - {command: [GET, foo], node: 1, wait_s: 30, expect: {equals: bar}}
+    - {command: [EXISTS, foo], node: 1, expect: {equals: 1}}
+    - {command: [SET, foo, baz], node: 1, expect: {error: "MOVED"}}
+    - {command: [SSUBSCRIBE, foo], node: 1, connection: shard-sub, expect: {exists: true}}
+    - {command: [READWRITE], node: 1, expect: {equals: OK}}
+    - {command: [GET, foo], node: 1, expect: {error: "MOVED"}}
+    - {command: [GET, foo], node: 0, expect: {equals: bar}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [redirect.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: redirect}

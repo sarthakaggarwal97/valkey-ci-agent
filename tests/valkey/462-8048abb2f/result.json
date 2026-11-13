@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8048abb2fd10ad66199c8f03bb543b0ec67bc966",
+  "parent": "0342a81b7c20d8a5360b18ef751c299e7303caf2",
+  "pr": 462,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Support pipe2() on *BSD (#462)",
+  "date": "2024-05-10",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2391,
+  "findings": [],
+  "recorded": [],
+  "reason": "This is a portability refactor: it introduces a HAVE_PIPE2 macro so pipe2() is also used on OpenBSD/NetBSD/DragonFly. On Linux, where the fuzzer runs, HAVE_PIPE2 is defined exactly where the old __linux__ guard applied, so anetPipe() compiles to the identical code path on both the change and its parent \u2014 no behavior to compare or stress. The only differing paths are on *BSD platforms unreachable by this CI, and the pipe+fcntl fallback is unchanged. No scenario can distinguish the builds."
+}

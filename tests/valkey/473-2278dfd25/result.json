@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2278dfd253fdae5a42171fa3bea9e14c06bc3dd1",
+  "parent": "315b7573c423a6cddf0a63aba364c57917697756",
+  "pr": 473,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix build error for unit test (#473)",
+  "date": "2024-05-08",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.217,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits src/Makefile to add missing static libraries (libhiredis.a, liblua.a, libhdrhistogram.a) to the link command for the valkey-unit-tests binary, fixing a build/link error for the unit test target. It changes no server code, no command behavior, no replication, persistence, or tool output; the valkey-server and tool binaries are built identically on both sides. This is a build/CI fix with no runtime behavior to exercise, so no scenario is needed."
+}

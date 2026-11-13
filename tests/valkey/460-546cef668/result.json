@@ -1,0 +1,48 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "546cef6684e02bf22aeed9a5fca2a685babfe465",
+  "parent": "741ee702cacd402dedeef75c7b8cbd6a1f091b7a",
+  "pr": 460,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Initial cleanup for cluster refactoring (#460)",
+  "date": "2024-05-14",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 0,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 8,
+    "executed": 4,
+    "percent": 50,
+    "uncovered": [
+      "src/cluster_legacy.c:6174",
+      "src/module.c:9020",
+      "src/module.c:9067",
+      "src/module.c:9068"
+    ],
+    "unnoted": [],
+    "rounds": 2
+  },
+  "cost_usd": 10.6992,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: 23079:M 13 Nov 2026 13:04:52.674 # Unrecoverable error: corrupted cluster config file \"3dcbc3ba35125182c0efe9e5132f22a91f9af9e1 127.0.0.1:63680@64574,,tls-port=0,shard-id=ebd4f61b78cd39ef56d594b71ed9b048e5f5a3f1 slave 3885ba8ded19833385b3017501a3ecfdc89a30cd 0 1794575091311 1 connected",
+      "scenario": "ai-fca5932408fe",
+      "seed": 101,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #460",
+      "fingerprint": "6e219540321898d28d81",
+      "issue": null
+    }
+  ],
+  "recorded": []
+}

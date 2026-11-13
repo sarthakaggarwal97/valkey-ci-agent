@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "138a7d9846c9c8216541a928c4494645731cb658",
+  "parent": "8048abb2fd10ad66199c8f03bb543b0ec67bc966",
+  "pr": 466,
+  "pr_repo": "valkey-io/valkey",
+  "subject": " Handle role change error in `cluster setslot` when migrating the last slot away with allow-replica-migration enabled (#466)",
+  "date": "2024-05-09",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 7.6659,
+  "findings": [],
+  "recorded": [],
+  "reason": "The only behavioural change is in valkey-cli's clusterManagerMoveSlot (src/valkey-cli.c): after moving a primary's last slot away with cluster-allow-replica-migration enabled, it now also tolerates a '-UNBLOCKED' role-change error (in addition to the existing 'Please use SETSLOT only with masters.') when informing the source node. Reaching it needs a multi-primary cluster with a replica on the source and a nondeterministic race where the source demotes itself to a replica while the reshard client is blocked on it awaiting SETSLOT pre-replication. The fuzzer cannot drive this: valkey.action.too"
+}

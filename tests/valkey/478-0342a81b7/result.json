@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "0342a81b7c20d8a5360b18ef751c299e7303caf2",
+  "parent": "4e1d8e17212bbf074bfc4d8bb8c9e6ab9818d5d1",
+  "pr": 478,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Migrate sds.c unit tests to new test framework. (#478)",
+  "date": "2024-05-09",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3239,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only migrates sds.c's embedded SERVER_TEST unit tests into the new standalone unit test framework (new src/unit/test_sds.c, registration in test_files.h, removal of the old sdsTest entry from server.c's test table). No production code or runtime behaviour changes: the sds functions are untouched, and the deleted code was compiled only under SERVER_TEST. Nothing in a running server differs between the change and its parent, so no scenario can reach it."
+}

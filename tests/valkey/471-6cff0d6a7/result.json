@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6cff0d6a7b52c36915fbf70c416998e4eb789fcd",
+  "parent": "1125bdbb805f3467e8f01e223870fdd1918f12f6",
+  "pr": 471,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove intsettest declaration from intset.h (#471)",
+  "date": "2024-05-08",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2083,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only deletes an unused `#ifdef SERVER_TEST` declaration of intsetTest from intset.h. It is a dead-code/header cleanup with no change to any runtime behaviour, command reply, encoding, replication or persistence path, so no scenario can distinguish the builds."
+}

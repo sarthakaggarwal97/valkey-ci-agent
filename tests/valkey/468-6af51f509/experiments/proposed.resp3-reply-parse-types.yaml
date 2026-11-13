@@ -1,0 +1,88 @@
+extends: [valkey.liveness]
+id: proposed.resp3-reply-parse-types
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Drives parseReply's RESP3 branches that only trigger when the server parses its
+    own replies for Lua: bool ('#'), verbatim string ('=') and attribute ('|'). A
+    Lua script calls redis.setresp(3) and then invokes reply.so's rw.bool, rw.verbatim
+    and rw.attribute module commands, plus core LOLWUT (verbatim in RESP3), and returns
+    deterministic values computed from the parsed reply. Compared across the change's
+    build and its parent; the change is formatting-only, so every reply must be identical
+    on both builds.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: resp3parse
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - command:
+      - EVAL
+      - "redis.setresp(3) local r = redis.call('rw.bool') return {tostring(r[1]),\
+        \ tostring(r[2])}"
+      - "0"
+      expect:
+        equals: ["false", "true"]
+    - command:
+      - EVAL
+      - "redis.setresp(3) local r = redis.call('rw.verbatim', 'parse me') return {r['verbatim_string']['format'],\
+        \ r['verbatim_string']['string']}"
+      - "0"
+      expect:
+        equals: ["txt", "parse me"]
+    - command:
+      - EVAL
+      - "redis.setresp(3) local r = redis.call('rw.verbatim', '') return {r['verbatim_string']['format'],\
+        \ r['verbatim_string']['string']}"
+      - "0"
+      expect:
+        equals: ["txt", ""]
+    - command:
+      - EVAL
+      - "redis.setresp(3) local r = redis.call('rw.attribute', '2') return r"
+      - "0"
+      expect:
+        equals: OK
+    - command:
+      - EVAL
+      - "redis.setresp(3) local r = redis.call('rw.attribute', '0') return r"
+      - "0"
+      expect:
+        equals: OK
+    - command:
+      - EVAL
+      - "redis.setresp(3) local r = redis.call('rw.attribute', '64') return r"
+      - "0"
+      expect:
+        equals: OK
+    - command:
+      - EVAL
+      - "redis.setresp(3) local r = redis.call('lolwut') if type(r) == 'table' and\
+        \ r['verbatim_string'] then return r['verbatim_string']['format'] else return\
+        \ 'not-verbatim' end"
+      - "0"
+      expect:
+        equals: txt
+    - command:
+      - EVAL
+      - "redis.setresp(3) local b = redis.call('rw.bool') local v = redis.call('rw.verbatim',\
+        \ 'again') local a = redis.call('rw.attribute', '3') return {tostring(b[2]),\
+        \ v['verbatim_string']['string'], a['ok']}"
+      - "0"
+      expect:
+        equals: ["true", "again", "OK"]
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [resp3parse.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: resp3parse}

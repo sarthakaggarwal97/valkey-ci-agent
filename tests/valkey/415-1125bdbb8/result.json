@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "1125bdbb805f3467e8f01e223870fdd1918f12f6",
+  "parent": "6af51f5092785f2367b4d86e3152db132b26b140",
+  "pr": 415,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update serverpanic output based on 'extended-redis-compatibility' config. (#415)",
+  "date": "2024-05-08",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2469,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits comments and the text of two serverPanic messages (choosing 'Redis' vs 'Valkey' by the extended-redis-compatibility config). The panic paths fire only on an internal invariant violation in the built-in command table (key-spec positions inconsistent with arity), which no command sequence, config, or fault can trigger against a correctly built server. There is no reachable behaviour change to test."
+}

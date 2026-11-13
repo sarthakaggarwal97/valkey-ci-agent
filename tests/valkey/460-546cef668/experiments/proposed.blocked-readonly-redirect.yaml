@@ -1,0 +1,51 @@
+extends: [valkey.liveness]
+id: proposed.blocked-readonly-redirect
+deployment:
+  modes: [standalone]
+metadata:
+  description: READONLY clients blocked on a cluster replica stay blocked while their
+    master owns the slot, and are unblocked with MOVED once the slot moves to another
+    primary (clusterRedirectBlockedClientIfNeeded replica branch)
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: blocked
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 3
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    server_config: {hz: 100}
+    commands:
+    - {command: [CLUSTER, REPLICATE, "<node.0.id>"], node: 1, expect: {equals: OK}}
+    - {command: [INFO, replication], node: 1, wait_s: 30, expect: {contains: "master_link_status:up"},
+      compare: skip}
+    - {command: [XADD, st, "1-1", f, v], node: 0, expect: {equals: "1-1"}}
+    - {command: [READONLY], node: 1, expect: {equals: OK}}
+    - {command: [XLEN, st], node: 1, wait_s: 10, expect: {equals: 1}}
+    - {command: [XREAD, BLOCK, 1200, STREAMS, st, "1-1"], node: 1, expect: {exists: false}}
+    - {command: [BLPOP, bk, 0.1], node: 1, expect: {error: MOVED}}
+    - {command: [READONLY], node: 0, expect: {equals: OK}}
+    - {command: [XREAD, BLOCK, 1000, STREAMS, st, "1-1"], node: 0, expect: {exists: false}}
+    - {command: [READONLY], node: 1, connection: blk, expect: {equals: OK}}
+    - {raw: "XREAD BLOCK 0 STREAMS foo $\r\n", node: 1, connection: blk, expect: {
+        exists: false}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.2.id>"], node: 2, expect: {
+        equals: OK}}
+    - {command: [CLUSTER, SETSLOT, 12182, NODE, "<node.2.id>"], node: 0, expect: {
+        equals: OK}}
+    - {command: [GET, foo], node: 1, wait_s: 20, expect: {error: MOVED}}
+    - {read: true, node: 1, connection: blk}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [blocked.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: blocked}

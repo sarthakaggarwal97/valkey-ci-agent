@@ -1,0 +1,75 @@
+extends: [valkey.liveness]
+id: proposed.lua-reply-parse
+deployment:
+  modes: [standalone]
+metadata:
+  description: EVAL scripts whose redis.call replies drive every parseReply case,
+    RESP2 and RESP3, including module big-number, verbatim and attribute replies
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: luaparse
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - command:
+      - EVAL
+      - |
+        local t = {}
+        redis.call('SET','k','v')
+        t[#t+1] = redis.call('GET','k')
+        t[#t+1] = tostring(redis.call('INCR','n'))
+        local e = redis.pcall('LPUSH','k','x')
+        t[#t+1] = (type(e) == 'table' and e.err) and 'got-error' or 'no-error'
+        t[#t+1] = tostring(redis.call('GET','missing'))
+        redis.call('RPUSH','l','a','b','c')
+        t[#t+1] = table.concat(redis.call('LRANGE','l','0','-1'),',')
+        return t
+      - "0"
+      expect: {exists: true}
+    - command:
+      - EVAL
+      - |
+        redis.setresp(3)
+        local t = {}
+        redis.call('SADD','s','only')
+        local st = redis.call('SMEMBERS','s')
+        t[#t+1] = tostring(type(st) == 'table' and st.set ~= nil and st.set['only'] == true)
+        redis.call('HSET','h','f','42')
+        local mp = redis.call('HGETALL','h')
+        t[#t+1] = tostring(type(mp) == 'table' and mp.map ~= nil and mp.map['f'])
+        t[#t+1] = tostring(redis.call('SISMEMBER','s','only'))
+        redis.call('ZADD','z','1.5','m')
+        local d = redis.call('ZSCORE','z','m')
+        t[#t+1] = tostring(type(d) == 'table' and d.double)
+        t[#t+1] = tostring(redis.call('GET','missing'))
+        return t
+      - "0"
+      expect: {exists: true}
+    - command:
+      - EVAL
+      - |
+        redis.setresp(3)
+        local t = {}
+        local bn = redis.call('rw.bignumber','123456789012345678901234567890')
+        t[#t+1] = tostring(type(bn) == 'table' and bn.big_number)
+        local vb = redis.call('rw.verbatim')
+        t[#t+1] = type(vb)
+        local at = redis.call('rw.attribute','2')
+        t[#t+1] = tostring(type(at) == 'table' and at.ok)
+        return t
+      - "0"
+      expect: {exists: true}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [luaparse.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: luaparse}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "315b7573c423a6cddf0a63aba364c57917697756",
+  "parent": "4e944cedeeec209e282f01c75662865530270fb5",
+  "pr": 456,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update server function's name to valkey (#456)",
+  "date": "2024-05-08",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3139,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames internal C functions (genRedisInfoString and its CommandStats/ACLStats/LatencyStats helpers to genValkeyInfo*) and updates every call site in debug.c, module.c, sentinel.c, server.c and the declarations in server.h, plus two comments. No function body, format string, reply content, or control flow changes; any missed call site would fail compilation. There is no externally observable behavior to test, so no scenario is needed."
+}

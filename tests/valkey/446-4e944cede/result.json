@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4e944cedeeec209e282f01c75662865530270fb5",
+  "parent": "1aca85e3deb53be46ae24c671a138c7d92e1990f",
+  "pr": 446,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Migrate kvstore.c unit tests to new test framework. (#446)",
+  "date": "2024-05-07",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3206,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure test-infrastructure migration: it moves kvstore.c's unit tests (previously compiled only under #ifdef SERVER_TEST) into the new standalone unit test framework (src/unit/test_kvstore.c), removes the kvstoreTest declaration and its entry in server.c's developer-only test table, and registers the migrated tests in test_files.h. No code that runs in a production valkey-server build is modified \u2014 no command, reply, replication, persistence, or cluster path changes \u2014 so there is no behaviour a fuzzer scenario could exercise or compare."
+}

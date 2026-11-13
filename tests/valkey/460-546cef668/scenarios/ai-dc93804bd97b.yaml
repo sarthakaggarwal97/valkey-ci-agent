@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 741ee702cacd..546cef6684e0.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-dc93804bd97b
+seed: 102
+experiment:
+  id: proposed.blocked-readonly-redirect
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b166980c8e6618a66aa0ec82e77c40bb305404be",
+  "parent": "fdd023ff8239ded21998fc711362759e0ca68bcc",
+  "pr": 475,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix UNUSED repetition issue in test sources (#475)",
+  "date": "2024-05-09",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2212,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds an #ifndef guard around the UNUSED macro in src/unit/test_help.h and removes two #undef UNUSED lines in unit test files (test_kvstore.c, test_util.c). It affects compilation of the unit test harness only, not the valkey-server binary, any command, replication, persistence, or tools. There is no runtime behaviour to reach, so no scenario is needed."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4e1d8e17212bbf074bfc4d8bb8c9e6ab9818d5d1",
+  "parent": "2559f64f5a67ad09037893ba10a7a6067a826f51",
+  "pr": 465,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "[Fix] move deps from slowlog.c into slowlog.h (#465)",
+  "date": "2024-05-09",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2087,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a pure build/include refactor: it moves `#include \"server.h\"` from slowlog.c into slowlog.h so the header is self-contained. No code, data structure, command reply, config, or runtime path changes; the compiled output is identical in behaviour. Compilation itself (done by the runner when building the change) is the only check this needs, so no fuzzer scenario applies."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "e242799867af8e4048920494806b2f40d43c86f5",
+  "parent": "138a7d9846c9c8216541a928c4494645731cb658",
+  "pr": 470,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Migrate sha1 unit test to new framework (#470)",
+  "date": "2024-05-09",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2622,
+  "findings": [],
+  "recorded": [],
+  "reason": "This change only migrates the sha1 unit test from the legacy SERVER_TEST framework to the new unit test framework: it deletes test-only code (sha1Test, compiled only under #ifdef SERVER_TEST) and adds src/unit/test_sha1.c with the same test logic plus an expected-digest assertion. The production SHA1 implementation (SHA1Init/SHA1Update/SHA1Final) and all server runtime behavior are unchanged, so no command reply, replication, persistence, or crash path differs between the builds and no scenario can reach any behavioral difference."
+}

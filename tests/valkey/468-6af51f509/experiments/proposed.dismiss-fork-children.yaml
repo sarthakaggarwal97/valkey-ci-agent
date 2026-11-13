@@ -1,0 +1,60 @@
+extends: [valkey.liveness]
+id: proposed.dismiss-fork-children
+deployment:
+  modes: [standalone]
+metadata:
+  description: Fork RDB save and AOF rewrite children over every object type so the
+    fork child dismisses string, list, set, zset, hash and stream objects
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    appendonly: {type: string, enum: ["yes", "no"], default: "no"}
+components:
+- use: valkey.action.commands
+  id: forks
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    server_config:
+      appendonly: {$ref: inputs.appendonly}
+      list-max-listpack-size: 4
+      set-max-listpack-entries: 2
+      zset-max-listpack-entries: 2
+      hash-max-listpack-entries: 2
+      stream-node-max-entries: 16
+    commands:
+    - command:
+      - EVAL
+      - |
+        local pad = string.rep('x', 512)
+        for i = 1, 200 do
+          redis.call('RPUSH', 'biglist', pad .. i)
+          redis.call('SADD', 'bigset', pad .. i)
+          redis.call('ZADD', 'bigzset', i, pad .. i)
+          redis.call('HSET', 'bighash', 'f' .. i, pad)
+          redis.call('XADD', 'bigstream', '*', 'field', pad)
+        end
+        redis.call('SET', 'bigstr', string.rep('y', 100000))
+        return redis.status_reply('OK')
+      - "0"
+      expect: {equals: OK}
+    - {command: [BGSAVE], compare: skip, expect: {contains: "Background saving"}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "rdb_bgsave_in_progress:0"}}
+    - {command: [INFO, persistence], compare: skip, expect: {contains: "rdb_last_bgsave_status:ok"}}
+    - {command: [BGREWRITEAOF], compare: skip, expect: {contains: "rewriting"}}
+    - {command: [INFO, persistence], compare: skip, wait_s: 30, expect: {contains: "aof_rewrite_in_progress:0"}}
+    - {command: [INFO, persistence], compare: skip, expect: {contains: "aof_last_bgrewrite_status:ok"}}
+    - {command: [LLEN, biglist], expect: {equals: 200}}
+    - {command: [SCARD, bigset], expect: {equals: 200}}
+    - {command: [ZCARD, bigzset], expect: {equals: 200}}
+    - {command: [HLEN, bighash], expect: {equals: 200}}
+    - {command: [XLEN, bigstream], expect: {equals: 200}}
+    - {command: [STRLEN, bigstr], expect: {equals: 100000}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [forks.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: forks}

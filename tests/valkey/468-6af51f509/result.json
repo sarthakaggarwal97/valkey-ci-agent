@@ -1,0 +1,75 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6af51f5092785f2367b4d86e3152db132b26b140",
+  "parent": "2278dfd253fdae5a42171fa3bea9e14c06bc3dd1",
+  "pr": 468,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Prevent clang-format in certain places (#468)",
+  "date": "2024-05-08",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 11,
+  "proven": 2,
+  "hunted": 11,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 32,
+    "executed": 23,
+    "percent": 71,
+    "uncovered": [
+      "src/acl.c:2713",
+      "src/object.c:582",
+      "src/resp_parser.c:226",
+      "src/sentinel.c:3435",
+      "src/server.c:656",
+      "src/server.c:657",
+      "src/server.c:658",
+      "src/server.c:659",
+      "src/server.c:660"
+    ],
+    "unnoted": [],
+    "rounds": 3
+  },
+  "cost_usd": 19.0173,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-ab5842b5a373",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'helpseq' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (SET k v3 NX)"
+    },
+    {
+      "scenario": "ai-e617f7743c64",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'helpseq' returned ERROR: expectations both builds violate alike, so they are not about the change: 3 (SET k v3 NX)"
+    },
+    {
+      "scenario": "ai-31f500bec7f7",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'acl' returned ERROR: expectations both builds violate alike, so they are not about the change: 7 (GET key:1 on connection u1)"
+    },
+    {
+      "scenario": "ai-bb8d7f2536a5",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'acl' returned ERROR: expectations both builds violate alike, so they are not about the change: 7 (GET key:1 on connection u1)"
+    },
+    {
+      "scenario": "ai-5d3479f98ece",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'luaparse' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (EVAL redis.setresp(3) local t = {} local bn = redis.call('rw.bignumber','123456789012345678901234567890') t[#t+1] = tostring(type(bn)"
+    },
+    {
+      "scenario": "ai-a99d4ea5a3dd",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'luaparse' returned ERROR: expectations both builds violate alike, so they are not about the change: 2 (EVAL redis.setresp(3) local t = {} local bn = redis.call('rw.bignumber','123456789012345678901234567890') t[#t+1] = tostring(type(bn)"
+    }
+  ]
+}

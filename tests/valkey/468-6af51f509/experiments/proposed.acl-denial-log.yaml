@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.acl-denial-log
+deployment:
+  modes: [standalone]
+metadata:
+  description: Trigger ACL denials for auth, command, key and channel so addACLLogEntry
+    picks each object, then read ACL LOG back
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [ACL, SETUSER, u1, on, ">secret", "~key:*", "&chan:*", "+get", "+subscribe"],
+      expect: {equals: OK}}
+    - {command: [ACL, LOG, RESET], expect: {equals: OK}}
+    - {command: [AUTH, u1, wrongpass], expect: {error: WRONGPASS}}
+    - {command: [AUTH, u1, secret], connection: u1, expect: {equals: OK}}
+    - {command: [DEL, "key:1"], connection: u1, expect: {error: NOPERM}}
+    - {command: [GET, otherkey], connection: u1, expect: {error: NOPERM}}
+    - {command: [SUBSCRIBE, badchan], connection: u1, expect: {error: NOPERM}}
+    - {command: [GET, "key:1"], connection: u1, expect: {exists: true}}
+    - {command: [ACL, LOG], compare: skip, expect: {exists: true}}
+    - {command: [ACL, LOG, RESET], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [acl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

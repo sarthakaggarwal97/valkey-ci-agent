@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "dca17223406f15a42fc363333847721f3647eac7",
+  "parent": "ac47ca2d47ef3a26b323571106a1438d1b812cd4",
+  "pr": 450,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use kqueue as the backend of AE on DragonFlyBSD (#450)",
+  "date": "2024-05-12",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2152,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is a platform-detection tweak in src/config.h: it adds __DragonFly__ to the preprocessor check that defines HAVE_KQUEUE, so DragonFlyBSD builds use the kqueue AE backend instead of select. On Linux, where the fuzzer runs, HAVE_EPOLL still selects epoll and the compiled code is byte-for-byte unaffected by this diff. No runtime path reachable in this CI differs between the change and its parent, so no scenario can exercise it."
+}

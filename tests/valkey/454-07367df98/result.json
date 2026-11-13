@@ -1,0 +1,32 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "07367df981722fc021e9ac1b5d27e03af5618291",
+  "parent": "e242799867af8e4048920494806b2f40d43c86f5",
+  "pr": 454,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update rdb and module's child proc name to valkey accordingly (compatible with redis symlink) (#454)",
+  "date": "2024-05-10",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 9,
+    "executed": 6,
+    "percent": 66,
+    "uncovered": [
+      "src/module.c:11257",
+      "src/rdb.c:1585",
+      "src/rdb.c:3604"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 3.1119,
+  "findings": [],
+  "recorded": []
+}

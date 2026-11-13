@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "c7ad9feb52973da8ba7d49b5530837466a910477",
+  "parent": "dca17223406f15a42fc363333847721f3647eac7",
+  "pr": 458,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Migrate endianconv.c unit tests to new test framework (#458)",
+  "date": "2024-05-12",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2418,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only migrates endianconv unit tests to the new test framework: it removes the SERVER_TEST-gated endianconvTest() from endianconv.c/h and adds an equivalent src/unit/test_endianconv.c registered in test_files.h. No production code path changes \u2014 memrev16/32/64 and intrev* are untouched, and the removed code was never compiled into release builds. There is no server behavior to exercise, so no scenario is needed."
+}

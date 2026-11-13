@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "72f2a8743c0dc250a184a76c377427e5ee8e6dfc",
+  "parent": "4e18e326a163211ee213b894718d61b0b936b85e",
+  "pr": 494,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Minor fix in module API doc script (#494)",
+  "date": "2024-05-14",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.212,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits only utils/generate-module-api-doc.rb, a documentation-generation helper script (a regex for linking URLs and a removed front-matter line). It is not compiled into valkey-server or any tool, changes no command, reply, replication, persistence or cluster behaviour, and cannot be reached by any fuzzer experiment. No scenario is needed."
+}

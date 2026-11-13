@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2559f64f5a67ad09037893ba10a7a6067a826f51",
+  "parent": "b166980c8e6618a66aa0ec82e77c40bb305404be",
+  "pr": 481,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "[FIX] Remove redundant statement and return (#481)",
+  "date": "2024-05-09",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2215,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff only deletes a redundant forward declaration of freeClientArgv and a trailing bare 'return;' at the end of the void function aofDelTempIncrAofFile in src/aof.c. Both are no-ops: the declaration affects compilation only, and the final return in a void function changes no control flow. No command reply, replication, persistence or AOF behavior changes, so there is nothing a scenario could distinguish between the two builds."
+}

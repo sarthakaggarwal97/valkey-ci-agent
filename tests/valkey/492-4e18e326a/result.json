@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4e18e326a163211ee213b894718d61b0b936b85e",
+  "parent": "c7ad9feb52973da8ba7d49b5530837466a910477",
+  "pr": 492,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove endian coverage from server.c (#492)",
+  "date": "2024-05-13",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2214,
+  "findings": [],
+  "recorded": [],
+  "reason": "The diff only removes the endianconvTest entry from the serverTest table in server.c, the registry for the built-in unit-test harness (`valkey-server test <name>`). No runtime code path changes: endian conversion functions are untouched, and no command, reply, replication, cluster, or persistence behavior is affected. A fuzzer scenario against a running server cannot reach or distinguish this test-registration removal, so no scenario is needed."
+}
