@@ -222,6 +222,8 @@ def checkout(task: FixTask, repo_dir: str = "") -> Iterator[tuple[str, str]]:
         head = git_output(repo_dir, "rev-parse", "HEAD").strip()
         if head.lower() != checkout_sha.lower():
             raise RuntimeError(f"the job checked out {head[:12]} instead of {checkout_sha[:12]}")
+        if task.as_of_failure:
+            _hold_default_branch(repo_dir)
         _keep_existing(repo_dir)
         yield repo_dir, head
         return
@@ -235,7 +237,16 @@ def checkout(task: FixTask, repo_dir: str = "") -> Iterator[tuple[str, str]]:
         original_head = git_output(str(clone), "rev-parse", "HEAD").strip()
         if original_head.lower() != checkout_sha.lower():
             raise RuntimeError(f"clone resolved {original_head[:12]} instead of {checkout_sha[:12]}")
+        if task.as_of_failure:
+            _hold_default_branch(str(clone))
         yield str(clone), original_head
+
+
+def _hold_default_branch(repo_dir: str) -> None:
+    """Point the clone's default branch at the checked-out commit (a replayed failure's fix has landed since)."""
+    default_ref = default_branch_ref(repo_dir)
+    if default_ref:
+        run_git(repo_dir, "update-ref", f"refs/remotes/{default_ref}", "HEAD")
 
 
 # What a job's checkout held before the agent started: its ignored files
