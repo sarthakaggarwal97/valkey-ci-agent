@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.ft-hybrid-load-projection-uaf
+deployment:
+  modes: [standalone]
+metadata:
+  description: FT.HYBRID with a named LOAD projects owned identifier keys; the parent
+    dangles the freed request identifier
+inputs:
+  required: [module, module_parent]
+  properties:
+    module:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The module build under test, {$ref: artifacts.module.path}"
+    module_parent:
+      type: environment_reference
+      reference_kinds: [artifacts]
+      description: "The parent commit's build of the module, {$ref: artifacts.module_parent.path}"
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: hybrid
+  config:
+    modules: [{$ref: inputs.module}]
+    modules_parent: [{$ref: inputs.module_parent}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx, ON, HASH, PREFIX, 1, 'd:', SCHEMA, title, TEXT, price,
+        NUMERIC, vec, VECTOR, HNSW, 6, TYPE, FLOAT32, DIM, 4, DISTANCE_METRIC, L2],
+      expect: {equals: OK}}
+    - {command: [HSET, 'd:1', title, hello, price, 1, vec, !!binary "AACAPwAAAAAAAAAAAAAAAA=="],
+      expect: {equals: 3}}
+    - {command: [HSET, 'd:2', title, hello, price, 2, vec, !!binary "AAAAQAAAAAAAAAAAAAAAAA=="],
+      expect: {equals: 3}}
+    - {command: [HSET, 'd:3', title, hello, price, 3, vec, !!binary "AABAQAAAAAAAAAAAAAAAAA=="],
+      expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx, '@title:hello', NOCONTENT, LIMIT, 0, 0], wait_s: 30,
+      expect: {contains: 3}, compare: unordered}
+    - {command: [FT.HYBRID, idx, SEARCH, '@title:hello', VSIM, '@vec', '$q', KNN,
+        2, K, 8, LOAD, 1, '@price', LIMIT, 0, 100, PARAMS, 2, q, !!binary "AAAAAAAAAAAAAAAAAAAAAA=="],
+      expect_difference: true, expect: {contains: price}, compare: unordered}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: hybrid}

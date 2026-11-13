@@ -1,0 +1,51 @@
+{
+  "repo": "valkey-io/valkey-search",
+  "sha": "730e7162a064f7b78846714a6ec4365fb2657400",
+  "parent": "e869751c21e44543153e6ffc5ff31dc655a420e7",
+  "pr": 1690,
+  "pr_repo": "valkey-io/valkey-search",
+  "subject": "Own RecordsMap keys in content fetch and projection (#1690)",
+  "date": "2026-11-13",
+  "unstable": "5c3ec8d347d2caa8e85fe054567ab45240e170d5",
+  "module_head": "730e7162a064f7b78846714a6ec4365fb2657400",
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 2.0089,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-use-after-free in MemcmpInterceptorCommon",
+      "scenario": "ai-259650b027d3",
+      "seed": 1690,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1690",
+      "fingerprint": "ea08f0039fa2c602443d",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: AddressSanitizer: heap-use-after-free in MemcmpInterceptorCommon",
+      "scenario": "ai-6d2d98a598e9",
+      "seed": 1691,
+      "builds": {
+        "parent": true,
+        "merge": false,
+        "unstable": false
+      },
+      "verdict": "fixed by #1690",
+      "fingerprint": "ea08f0039fa2c602443d",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "coverage_reason": "not measured for modules yet"
+}
