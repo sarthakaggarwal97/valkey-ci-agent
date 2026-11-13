@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
@@ -22,6 +24,7 @@ from scripts.ci_fix.models import (
     TargetKind,
 )
 from scripts.factory import replay as replay_mod
+from tests.git_helpers import commit, git
 
 _OPENED = datetime(2026, 10, 22, 6, 38, tzinfo=timezone.utc)
 _BASE = "b" * 40
@@ -238,3 +241,44 @@ def test_a_fix_for_an_already_fixed_case_is_still_compared_with_the_known_fix(kn
     result = replay_mod.score(case, _plan(), _MERGE, FixOutcome(candidate=candidate, started=True))
 
     assert (result.verdict, result.shared_percent, result.matches_expectation) == ("match", 100, False)
+
+
+def test_the_bots_test_is_run_with_the_known_fixs_code_not_its_test(tmp_path, monkeypatch):
+    """Both tests go at the end of the same file: the known fix's test hunk conflicted with the bot's, scoring None."""
+    source = tmp_path / "source"
+    source.mkdir()
+    git(source, "init", "-q")
+    git(source, "config", "user.name", "t")
+    git(source, "config", "user.email", "t@example.com")
+    commit(source, "src/t_stream.c", "int lag = 1;\n", "initial")
+    base = commit(source, "tests/unit/type/stream.tcl", "test {old} {}\n", "a test file")
+    (source / "src/t_stream.c").write_text("int lag = 0;\n", encoding="utf-8")
+    (source / "tests/unit/type/stream.tcl").write_text("test {old} {}\ntest {the known test} {}\n", encoding="utf-8")
+    git(source, "commit", "-qam", "the known fix")
+    merge = git(source, "rev-parse", "HEAD")
+    git(source, "checkout", "-q", "--detach", base)
+
+    def fake_clone(repo_full_name, destination, sha, *, pull_number=0):
+        shutil.copytree(source, destination)
+        git(destination, "checkout", "-q", "--detach", sha)
+        return True
+
+    ran = []
+
+    class _Verify:
+        def command(self, loops):
+            return "grep -q 'lag = 0' src/t_stream.c && grep -q 'bots test' tests/unit/type/stream.tcl && ! grep -q known tests/unit/type/stream.tcl"
+
+    monkeypatch.setattr(replay_mod, "shallow_clone_at_sha", fake_clone)
+    monkeypatch.setattr(replay_mod, "plan_for", lambda repo_dir, tests, **kw: ran.append(tests) or _Verify())
+    bots_test = (
+        "diff --git a/tests/unit/type/stream.tcl b/tests/unit/type/stream.tcl\n--- a/tests/unit/type/stream.tcl\n"
+        "+++ b/tests/unit/type/stream.tcl\n@@ -1 +1,2 @@\n test {old} {}\n+test {the bots test} {}\n"
+    )
+    plan = _plan()
+    plan = replace(plan, task=replace(plan.task, target=replace(plan.task.target, expected_sha=base),
+                                      failure=replace(plan.task.failure, head_sha=base)))
+
+    passes = replay_mod._test_passes_with(plan, merge, FixCandidate(CandidateAction.PATCH, evidence_patch=bots_test))
+
+    assert passes is True and ran

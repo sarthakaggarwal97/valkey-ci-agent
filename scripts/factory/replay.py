@@ -249,16 +249,22 @@ def _commit_diff(plan: FixPlan, sha: str) -> str:
 
 
 def _test_passes_with(plan: FixPlan, merge_sha: str, candidate: FixCandidate) -> bool | None:
-    """Whether the bot's test passes with the known fix applied: it tests the bug the person fixed.
+    """Whether the bot's test passes with the known fix's code applied: it tests the bug the person fixed.
 
-    None when the known fix and the test cannot be put together (they change
-    the same lines of a test file) or nothing here runs the test.
+    Only the known fix's code is applied, not its tests: both tests go at the
+    end of the same file, so the known one's hunk conflicts with the bot's
+    (two of the first six replays scored None this way), and the bot's test
+    cannot depend on a test it never saw. None when the two still cannot be
+    put together or nothing here runs the test.
     """
     tests = plan.task.failure.failed_tests or added_tests(candidate.evidence_patch)
     with _clone(plan) as repo_dir:
         try:
-            run_git(repo_dir, "-c", "user.name=replay", "-c", "user.email=replay@localhost",
-                    "cherry-pick", "--no-commit", merge_sha)
+            code = _without_tests(
+                run_git(repo_dir, "diff", "--no-ext-diff", "--no-textconv", "--binary", f"{merge_sha}^", merge_sha).stdout
+            )
+            if code.strip():
+                run_git(repo_dir, "apply", "--whitespace=nowarn", "-", input=code + "\n")
             run_git(repo_dir, "apply", "--3way", "--whitespace=nowarn", "-", input=candidate.evidence_patch)
         except subprocess.CalledProcessError as exc:
             logger.warning("The known fix and the bot's test do not apply together: %s", exc)
