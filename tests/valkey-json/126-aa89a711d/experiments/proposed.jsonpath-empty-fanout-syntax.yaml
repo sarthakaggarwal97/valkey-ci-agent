@@ -1,0 +1,61 @@
+extends: [valkey.liveness]
+id: proposed.jsonpath-empty-fanout-syntax
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    After a wildcard or filter selects nothing, the remaining path syntax is now validated
+    instead of silently ignored. Malformed suffixes behind an empty fan-out, a 3+
+    dot sequence, a zero slice step, and the unchanged missing-member boundary, compared
+    against the parent module build.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: syn
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [JSON.SET, e, $, '[]'], expect: {equals: OK}}
+    - {command: [JSON.GET, e, '$[*][?(@.a==1)]'], compare: json, expect: {equals: "[]"}}
+    - {command: [JSON.GET, e, "$[*]['a','b'][?(@.a==1)]"], compare: json, expect: {
+        equals: "[]"}}
+    - {command: [JSON.GET, e, '$[*][*][?(@.a==1]'], expect_difference: true, expect: {
+        error: SYNTAXERR}}
+    - {command: [JSON.GET, e, '$[*].missing[?(@.a==1]'], expect_difference: true,
+      expect: {error: SYNTAXERR}}
+    - {command: [JSON.GET, e, '$[*][0][?(@.a==1]'], expect_difference: true, expect: {
+        error: SYNTAXERR}}
+    - {command: [JSON.GET, e, '$[*][0:1][?(@.a==1]'], expect_difference: true, expect: {
+        error: SYNTAXERR}}
+    - {command: [JSON.GET, e, "$[*]['a','b'][?(@.a==1]"], expect_difference: true,
+      expect: {error: SYNTAXERR}}
+    - {command: [JSON.GET, e, '$[*]...a'], expect_difference: true, expect: {error: "Invalid\
+          \ dot sequence"}}
+    - {command: [JSON.GET, e, '$[*][::0]'], expect_difference: true, expect: {error: SYNTAXERR}}
+    - {command: [JSON.NUMINCRBY, e, '$[*][*][?(@.a==1]', 1], expect_difference: true,
+      expect: {error: SYNTAXERR}}
+    - {command: [JSON.DEL, e, '$[*][*][?(@.a==1]'], expect_difference: true, expect: {
+        error: SYNTAXERR}}
+    - {command: [JSON.GET, e], compare: json, expect: {equals: "[]"}}
+    - {command: [JSON.SET, f, $, '[{"a":2}]'], expect: {equals: OK}}
+    - {command: [JSON.GET, f, '$[?(@.a==1)][?(@.b==1]'], expect_difference: true,
+      expect: {error: SYNTAXERR}}
+    - {command: [JSON.GET, f, '$[?(@.a==1)][?(@.b==1)]'], compare: json, expect: {
+        equals: "[]"}}
+    - {command: [JSON.GET, f], compare: json, expect: {equals: '[{"a":2}]'}}
+    - {command: [JSON.SET, g, $, '[{}]'], expect: {equals: OK}}
+    - {command: [JSON.GET, g, '$[*].missing[?(@.a==1]'], expect: {equals: "[]"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [syn.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: syn}

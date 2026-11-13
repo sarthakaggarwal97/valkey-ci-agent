@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey-json 0ef7c8adb135..aa89a711d1c7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-dd36ee198121
+seed: 1262
+experiment:
+  id: proposed.jsonpath-wildcard-filter-sequential
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

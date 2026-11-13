@@ -1,0 +1,35 @@
+{
+  "repo": "valkey-io/valkey-json",
+  "sha": "aa89a711d1c70caf63d9403250d99dc7f211ec4f",
+  "parent": "0ef7c8adb135796352171369491e2d16b7fd227e",
+  "pr": 126,
+  "pr_repo": "valkey-io/valkey-json",
+  "subject": "fix(jsonpath): apply wildcard and filter segments sequentially (#126)",
+  "date": "2026-11-13",
+  "unstable": "5c3ec8d347d2caa8e85fe054567ab45240e170d5",
+  "module_head": "aa89a711d1c70caf63d9403250d99dc7f211ec4f",
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": null,
+  "cost_usd": 8.1711,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-e934aa697a2f",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'syn' returned ERROR: expectations both builds violate alike, so they are not about the change: 11 (JSON.DEL e $[*][*][?(@.a==1])"
+    },
+    {
+      "scenario": "ai-64e5cd75a43c",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'syn' returned ERROR: expectations both builds violate alike, so they are not about the change: 11 (JSON.DEL e $[*][*][?(@.a==1])"
+    }
+  ],
+  "coverage_reason": "not measured for modules yet"
+}

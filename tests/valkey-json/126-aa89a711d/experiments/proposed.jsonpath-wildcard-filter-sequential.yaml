@@ -1,0 +1,71 @@
+extends: [valkey.liveness]
+id: proposed.jsonpath-wildcard-filter-sequential
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Wildcard and filter JSONPath segments now apply sequentially. Reads and mutations
+    through ".*[?()]" and "[*][?()]" paths, a rooted comparison, an attribute filter
+    over scalars, and a recursive suffix over more branches than the recursive-descent
+    token limit, compared against the parent module build.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: seq
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [JSON.SET, books, $, '{"booksById":{"b1":{"price":20,"title":"Moby"},"b2":{"price":10,"title":"Cheap"},"b3":{"price":30,"title":"LOTR"}}}'],
+      expect: {equals: OK}}
+    - {command: [JSON.GET, books, '$.booksById.*[?(@.price>15)].title'], expect_difference: true,
+      compare: json, expect: {equals: "[]"}}
+    - {command: [JSON.GET, books, '$.booksById[*][?(@.price>15)].title'], expect_difference: true,
+      compare: json, expect: {equals: "[]"}}
+    - {command: [JSON.SET, nest, $, '[[{"a":1},{"a":2}]]'], expect: {equals: OK}}
+    - {command: [JSON.GET, nest, '$[*][?(@.a==1)]'], expect_difference: true, compare: json,
+      expect: {equals: '[{"a":1}]'}}
+    - {command: [JSON.SET, obj, $, '{"b":{"a":1}}'], expect: {equals: OK}}
+    - {command: [JSON.GET, obj, '$.*[?(@.a==1)]'], expect_difference: true, compare: json,
+      expect: {equals: "[]"}}
+    - {command: [JSON.SET, mix, $, '[1,{"pick":{"a":1},"keep":2}]'], expect: {equals: OK}}
+    - {command: [JSON.GET, mix, '$[*][?(@.a)]'], expect_difference: true, compare: json,
+      expect: {equals: '[{"a":1}]'}}
+    - {command: [JSON.SET, lim, $, '{"limit":1,"groups":[[{"a":1}],[{"a":2}]]}'],
+      expect: {equals: OK}}
+    - {command: [JSON.GET, lim, '$.groups[*][?(@.a==$.limit)]'], expect_difference: true,
+      compare: json, expect: {equals: '[{"a":1}]'}}
+    - {command: [JSON.DEL, lim, '$.groups[*][?(@.a==$.limit)]'], expect_difference: true,
+      expect: {equals: 1}}
+    - {command: [JSON.GET, lim], expect_difference: true, compare: json, expect: {
+        equals: '{"limit":1,"groups":[[],[{"a":2}]]}'}}
+    - {command: [JSON.SET, mut, $, '[{"group":{"a/b~c":{"a":1,"n":2},"keep":{"a":2,"n":3}}}]'],
+      expect: {equals: OK}}
+    - {command: [JSON.GET, mut, '$[*][*][?(@.a==1)]'], expect_difference: true, compare: json,
+      expect: {equals: '[{"a":1,"n":2}]'}}
+    - {command: [JSON.NUMINCRBY, mut, '$[*][*][?(@.a==1)].n', 5], expect_difference: true,
+      compare: json, expect: {equals: "[7]"}}
+    - {command: [JSON.DEL, mut, '$[*][*][?(@.a==1)]'], expect_difference: true, expect: {
+        equals: 1}}
+    - {command: [JSON.GET, mut], expect_difference: true, compare: json, expect: {
+        equals: '[{"group":{"keep":{"a":2,"n":3}}}]'}}
+    - {command: [JSON.SET, num, $, '[{"NumEntry":1},{"NumEntry":5}]'], expect: {equals: OK}}
+    - {command: [JSON.GET, num, '$..NumEntry[?(@.NumEntry)]'], expect_difference: true,
+      expect: {equals: "[]"}}
+    - {command: [JSON.SET, rd, $, '[[{"x":0}],[{"x":1}],[{"x":2}],[{"x":3}],[{"x":4}],[{"x":5}],[{"x":6}],[{"x":7}],[{"x":8}],[{"x":9}],[{"x":10}],[{"x":11}],[{"x":12}],[{"x":13}],[{"x":14}],[{"x":15}],[{"x":16}],[{"x":17}],[{"x":18}],[{"x":19}],[{"x":20}],[{"x":21}],[{"x":22}],[{"x":23}],[{"x":24}]]'],
+      expect: {equals: OK}}
+    - {command: [JSON.GET, rd, '$[*][*]..x'], expect_difference: true, compare: json,
+      expect: {equals: "[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24]"}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [seq.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: seq}
