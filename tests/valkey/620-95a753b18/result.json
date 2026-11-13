@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "95a753b18d6923d2141fcb01f04ea03966ba10c5",
+  "parent": "71dd85dc5a89a4e07d837efa14937990b01e317f",
+  "pr": 620,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Add BSD license explicitly (#620)",
+  "date": "2024-06-10",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2029,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds 'BSD 3-Clause License' header lines to the COPYING file. It is a documentation/licensing text edit with no code, config, command, replication, persistence, or tooling behaviour change, so no scenario can reach it and none is needed."
+}

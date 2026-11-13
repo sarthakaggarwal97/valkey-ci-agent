@@ -1,0 +1,53 @@
+extends: [valkey.liveness]
+id: proposed.cluster-meet-reliable
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Cluster MEET under dropped MEET packets, compared across builds. A two-node cluster
+    is split back into strangers, the target drops MEET packets (and on the fixed
+    build closes the link on each drop), then the joiner meets it. The fixed build
+    re-sends MEET until it is acknowledged and converges once the drop filter lifts;
+    the parent clears the MEET flag after the first send, so the target never adds
+    the joiner and membership stays asymmetric.
+inputs:
+  properties:
+    node_timeout_ms:
+      type: integer
+      enum: [20000, 60000]
+      default: 60000
+components:
+- use: valkey.action.commands
+  id: meet
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 2
+    timeout_s: 90
+    server_config:
+      cluster-node-timeout: {$ref: inputs.node_timeout_ms}
+    commands:
+    - {command: [CLUSTER, RESET, HARD], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, FORGET, "<node.1.id>"], node: 0, expect: {equals: OK}}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 15, compare: skip, expect: {contains: "cluster_known_nodes:1"}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 15, compare: skip, expect: {contains: "cluster_known_nodes:1"}}
+    - {command: [DEBUG, DROP-CLUSTER-PACKET-FILTER, 2], node: 1, expect: {equals: OK}}
+    - {command: [DEBUG, CLOSE-CLUSTER-LINK-ON-PACKET-DROP, 1], node: 1, expect_difference: true,
+      expect: {equals: OK}}
+    - {command: [CLUSTER, MEET, "<node.1.host>", "<node.1.port>", "<node.1.cluster-port>"],
+      node: 0, expect: {equals: OK}}
+    - {command: [DEBUG, SLEEP, 3], node: 1, expect: {equals: OK}}
+    - {command: [DEBUG, DROP-CLUSTER-PACKET-FILTER, -1], node: 1, expect: {equals: OK}}
+    - {command: [CLUSTER, NODES], node: 1, wait_s: 40, expect_difference: true, expect: {
+        contains: "<node.0.id>"}}
+    - {command: [CLUSTER, INFO], node: 0, wait_s: 60, compare: skip, expect: {contains: "cluster_known_nodes:2"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [meet.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: meet}

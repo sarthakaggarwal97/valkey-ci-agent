@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "5a51bf5045d1713f5ebf58011dcb8900805be164",
+  "parent": "db6d3c1138695947412a745146ca29dbdf2e91c6",
+  "pr": 638,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Combine events to eliminate redundant kevent(2) calls (#638)",
+  "date": "2024-06-16",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2645,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only touches src/ae_kqueue.c, the kqueue event-loop backend that is compiled solely on BSD/macOS (HAVE_KQUEUE); the fuzzer runs on Linux, where Valkey uses the epoll backend, so the changed code is never built or executed and no scenario can reach it. The change is also a pure syscall-batching refactor: merging the two EV_SET/kevent calls into one kevent call with a two-entry changelist preserves the return contract (0 on success, -1 on error, deletes ignore errors) and alters no observable server behavior."
+}

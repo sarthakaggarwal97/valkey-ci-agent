@@ -1,10 +1,10 @@
 # Fuzzer walk
 
-Updated 2026-11-13T05:48+00:00.
+Updated 2026-11-13T06:14+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
-| valkey-io/valkey | 1971 | 559 | #638 (2024-06-16) | 23 | 243.1 |
+| valkey-io/valkey | 1997 | 539 | #613 (2024-06-08) | 49 | 246.9 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 64 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.3 |
 | valkey-io/valkey-search | 673 | 0 | f8106e72e984 (2024-11-27) | 0 | 71.9 |
@@ -13,28 +13,28 @@ Updated 2026-11-13T05:48+00:00.
 
 ### valkey-io/valkey
 
-[2026-11-12T08:34:57+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43160012695): 20 merge(s) tested, 3 without a code change.
+[2026-11-13T06:14:32+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43364255319): 20 merge(s) tested, 6 without a code change.
 
-- [valkey-io/valkey#1310](https://github.com/valkey-io/valkey/pull/1310) ([tests](tests/valkey/1310-3d0c83420/)): Fix LRU crash when getting too many random lua scripts (#1310): 0 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#351](https://github.com/valkey-io/valkey/pull/351) ([tests](tests/valkey/351-1269532fb/)): Introduce CLUSTER SLOT-STATS command (#20). (#351): 7 of 7 test(s) reached the change, coverage 99%
-- [valkey-io/valkey#704](https://github.com/valkey-io/valkey/pull/704) ([tests](tests/valkey/704-7719dbb84/)): Update readonly and readwrite json (#704): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#700](https://github.com/valkey-io/valkey/pull/700) ([tests](tests/valkey/700-ad5704f80/)): Upstream the availability zone info string from KeyDB (#700): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#701](https://github.com/valkey-io/valkey/pull/701) ([tests](tests/valkey/701-2b0723957/)): Enable protected-configs, debug and module commands in create-cluster script (#701): declined: The change edits only utils/create-cluster/create-cluster, a developer helper shell script, adding --enable-protected-configs, --enable-debug-command and --enable-module-command to the valkey-server launch line for locally created test clusters. No server, valkey-cli, valkey-benchmark or c
-- [valkey-io/valkey#325](https://github.com/valkey-io/valkey/pull/325) ([tests](tests/valkey/325-28c5a17ed/)): replica redirect read&write to primary in standalone mode (#325): 5 of 6 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#691](https://github.com/valkey-io/valkey/pull/691) ([tests](tests/valkey/691-ab3873011/)): Replacing REDIS_STATIC with static (#691): declined: The change only renames the REDIS_STATIC macro to the literal keyword static in src/quicklist.c and removes the now-unused -DREDIS_STATIC=''/-DSERVER_STATIC='' definitions from the Makefiles. quicklist.c's fallback already defined REDIS_STATIC as static (the Makefile defined SERVER_STATIC,
-- [valkey-io/valkey#689](https://github.com/valkey-io/valkey/pull/689) ([tests](tests/valkey/689-495c35d91/)): Add check in CLUSTERLINK KILL cmd to avoid freeing links to myself (#689): 1 of 1 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#694](https://github.com/valkey-io/valkey/pull/694) ([tests](tests/valkey/694-3df9d4279/)): Fix bad memory accounting for sds when no malloc_size available (#694): declined: The change swaps s_malloc_size for s_malloc_usable_size in sdsAllocSize for SDS_TYPE_5 strings. These differ only when HAVE_MALLOC_SIZE is undefined, i.e. a build compiled with NO_MALLOC_USABLE_SIZE on a libc without malloc_usable_size/malloc_size; on every default Linux build (jemalloc, t
-- [valkey-io/valkey#670](https://github.com/valkey-io/valkey/pull/670) ([tests](tests/valkey/670-4d3d6c06a/)): Reduce redundant call of prepareClientToWrite when call addReply* continuously. (#670): 0 of 3 test(s) reached the change, coverage 91%
-- [valkey-io/valkey#686](https://github.com/valkey-io/valkey/pull/686) ([tests](tests/valkey/686-32ca6e5b3/)):  Improve `CLUSTER SETSLOT` replication handling to support older replica versions. (#686): 0 of 4 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#453](https://github.com/valkey-io/valkey/pull/453) ([tests](tests/valkey/453-0143b7c9d/)): Add zfree_with_size to optimize sdsfree since we can get zmalloc_size from the header (#453): 0 of 5 test(s) reached the change, coverage 100%; crash, predates #453, since fixed (recorded)
-- [valkey-io/valkey#675](https://github.com/valkey-io/valkey/pull/675) ([tests](tests/valkey/675-5d2348cee/)): Update json file and sentinelCommand function for Valkey Sentinel  (#675): 2 of 2 test(s) reached the change
-- [valkey-io/valkey#676](https://github.com/valkey-io/valkey/pull/676) ([tests](tests/valkey/676-e84eda909/)): Remove useless code in sentinel source code (#676): declined: The change only deletes an empty conditional block in sentinelHandleRedisInstance (an `if (ri->flags & (SRI_PRIMARY | SRI_REPLICA))` whose body was just the comment 'Nothing so far.'). The condition had no side effects and the body was empty, so the compiled behavior is identical on both b
-- [valkey-io/valkey#617](https://github.com/valkey-io/valkey/pull/617) ([tests](tests/valkey/617-ae2d4217e/)): Add new SCRIPT SHOW subcommand to dump script via sha1 (#617): 3 of 3 test(s) reached the change, coverage 100%
-- [valkey-io/valkey#665](https://github.com/valkey-io/valkey/pull/665) ([tests](tests/valkey/665-be2c32168/)): Support RDB compatability with Redis 7.2.4 RDB format (#665): 2 of 6 test(s) reached the change, coverage 64%; [check, introduced by #665](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/128); [crash, introduced by #665](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/129)
-- [valkey-io/valkey#658](https://github.com/valkey-io/valkey/pull/658) ([tests](tests/valkey/658-a2cc2fe26/)): Fix memory leak when loading slot migrations states fails (#658): declined: The change only frees two robjs on an error branch in rdbLoadRioWithLoadingCtx: when a registered dynamic RDB aux-field decoder returns C_ERR. The sole registered decoder, clusterDecodeOpenSlotsAuxField (cluster-slot-states), runs only during a cluster full sync (RDBFLAGS_REPLICATION) and 
-- [valkey-io/valkey#662](https://github.com/valkey-io/valkey/pull/662) ([tests](tests/valkey/662-b33f932c5/)): Add missing commas from debug command (#662): 2 of 2 test(s) reached the change; [check, appeared after #662](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/128); [crash, appeared after #662](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/129)
-- [valkey-io/valkey#660](https://github.com/valkey-io/valkey/pull/660) ([tests](tests/valkey/660-4135894a5/)): Update remaining `master` references to `primary` (#660): 5 of 18 test(s) reached the change, coverage 67%; [check, appeared after #660](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/128); [crash, appeared after #660](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/129)
-- [valkey-io/valkey#633](https://github.com/valkey-io/valkey/pull/633) ([tests](tests/valkey/633-495a121f1/)): Adjust the log level of some logs in the cluster (#633): declined: The change only raises the log level (LL_VERBOSE/LL_DEBUG to LL_NOTICE) and slightly rewords four serverLog messages in src/cluster_legacy.c (configEpoch collision, gossip failure-report add/remove, mismatching PONG sender ID, node possibly failing). No control flow, cluster state, command
+- [valkey-io/valkey#5104](https://github.com/valkey-io/valkey/pull/5104) ([tests](tests/valkey/5104-b4a6e7d69/)): Join server.log() arguments in linear time (#5104): 0 of 1 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#5376](https://github.com/valkey-io/valkey/pull/5376) ([tests](tests/valkey/5376-d5763ea44/)): Check Sentinel config dir is writable at startup (#5376): declined: The change adds a startup-only check inside sentinelCheckConfigFile(), called solely under `if (server.sentinel_mode)` (src/server.c:8138); Sentinel mode is selected by argv0/--sentinel, not by any server config. The fuzzer has no Sentinel deployment mode, valkey.action.commands' private s
+- [valkey-io/valkey#5379](https://github.com/valkey-io/valkey/pull/5379) ([tests](tests/valkey/5379-89353577e/)): Skip the crash memory test under Valgrind and bound its region list (#5379): declined: The only server-code change bounds a fixed stack array in memtest_test_linux_anonymous_maps(), which runs exclusively inside the SIGSEGV crash-report handler (doFastMemoryTest) after the process is already crashing; it produces no command reply, no persisted or replicated state, and requir
+- [valkey-io/valkey#638](https://github.com/valkey-io/valkey/pull/638) ([tests](tests/valkey/638-5a51bf504/)): Combine events to eliminate redundant kevent(2) calls (#638): declined: The change only touches src/ae_kqueue.c, the kqueue event-loop backend that is compiled solely on BSD/macOS (HAVE_KQUEUE); the fuzzer runs on Linux, where Valkey uses the epoll backend, so the changed code is never built or executed and no scenario can reach it. The change is also a pure s
+- [valkey-io/valkey#634](https://github.com/valkey-io/valkey/pull/634) ([tests](tests/valkey/634-db6d3c113/)): Only primary with slots has the right to mark a node as failed (#634): 1 of 3 test(s) reached the change, coverage 87%
+- [valkey-io/valkey#461](https://github.com/valkey-io/valkey/pull/461) ([tests](tests/valkey/461-a81c32079/)): Make cluster meet reliable under link failures (#461): 2 of 4 test(s) reached the change, coverage 92%
+- [valkey-io/valkey#615](https://github.com/valkey-io/valkey/pull/615) ([tests](tests/valkey/615-93123f97a/)): Format yaml files (#615): declined: The change only reformats YAML whitespace and indentation in CI/workflow configuration files (.github/workflows/*.yml, dependabot.yml, codecov.yml) and adds a .config/format.yml formatter config. No Valkey source code, command behaviour, replication, persistence, or tooling is touched, so 
+- [valkey-io/valkey#631](https://github.com/valkey-io/valkey/pull/631) ([tests](tests/valkey/631-6faa48a35/)): Don't initialize the key buffer in getKeysResult (#631): 0 of 7 test(s) reached the change, coverage 83%
+- [valkey-io/valkey#637](https://github.com/valkey-io/valkey/pull/637) ([tests](tests/valkey/637-d5496e42b/)): Lua scripts promoted from eval to script load to avoid evict (#637): 3 of 3 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#644](https://github.com/valkey-io/valkey/pull/644) ([tests](tests/valkey/644-4c6bf30f5/)): Latency report: Rebranding and refine Dave dialog (#644): 4 of 4 test(s) reached the change, coverage 85%
+- [valkey-io/valkey#651](https://github.com/valkey-io/valkey/pull/651) ([tests](tests/valkey/651-8a776c350/)): Fix potential infinite loop in `clusterNodeGetPrimary` (#651): 0 of 6 test(s) reached the change, coverage 100%; crash, predates #651, since fixed (recorded)
+- [valkey-io/valkey#636](https://github.com/valkey-io/valkey/pull/636) ([tests](tests/valkey/636-d309b9b23/)): Make configs dir/dbfilename/cluster-config-file reject empty string (#636): 2 of 4 test(s) reached the change, coverage 63%
+- [valkey-io/valkey#642](https://github.com/valkey-io/valkey/pull/642) ([tests](tests/valkey/642-76fc04168/)): represent cluster node flags with bitwise shift value (#642): declined: The change only rewrites the CLUSTER_NODE_* flag macros in cluster_legacy.h from decimal literals (1, 2, 4, ..., 1024) to the mathematically identical bit-shift expressions ((1 << 0) ... (1 << 10)). Every macro evaluates to the same value as before, no code using the flags is touched, and 
+- [valkey-io/valkey#596](https://github.com/valkey-io/valkey/pull/596) ([tests](tests/valkey/596-b546dd26e/)): Allow CLUSTER NODES/INFO/MYID/MYSHARDID during loading state (#596): 2 of 3 test(s) reached the change
+- [valkey-io/valkey#628](https://github.com/valkey-io/valkey/pull/628) ([tests](tests/valkey/628-4bb7cc471/)): Remove unnecessary clang-format off annotations (#628): declined: The change (#628) removes clang-format off/on comment annotations and reformats the enclosed code (spacing after commas, switch indentation, splitting fall-through case labels onto separate lines). Every hunk alters only whitespace, line breaks and comments; all expressions, case labels, f
+- [valkey-io/valkey#583](https://github.com/valkey-io/valkey/pull/583) ([tests](tests/valkey/583-e65b2d235/)): Update rewriteConfigSaveOption function code to rewrite multiple save in one line. (#583): 0 of 2 test(s) reached the change, coverage 100%
+- [valkey-io/valkey#612](https://github.com/valkey-io/valkey/pull/612) ([tests](tests/valkey/612-a3f1535b5/)): Fix misuse of safe iterators (#612): 0 of 9 test(s) reached the change, coverage 100%; crash, predates #612, since fixed (recorded)
+- [valkey-io/valkey#620](https://github.com/valkey-io/valkey/pull/620) ([tests](tests/valkey/620-95a753b18/)): Add BSD license explicitly (#620): declined: The change only adds 'BSD 3-Clause License' header lines to the COPYING file. It is a documentation/licensing text edit with no code, config, command, replication, persistence, or tooling behaviour change, so no scenario can reach it and none is needed.
+- [valkey-io/valkey#607](https://github.com/valkey-io/valkey/pull/607) ([tests](tests/valkey/607-71dd85dc5/)): src/Makefile: Link libatomic on POWER systems (#607): declined: The change only edits src/Makefile to link libatomic when the build machine is a POWER (ppc*) system, fixing a link-time failure on that architecture. It alters no runtime behaviour, no command, reply, replication, persistence or cluster path; on the CI's Linux x86 host the added Makefile 
+- [valkey-io/valkey#592](https://github.com/valkey-io/valkey/pull/592) ([tests](tests/valkey/592-09b5825b2/)): Moving client->authenticated to a flag instead of an int (#592): 0 of 6 test(s) reached the change, coverage 84%
 
 ### valkey-io/valkey-bloom
 
@@ -53,10 +53,10 @@ Updated 2026-11-13T05:48+00:00.
 
 ## Totals
 
-- Merges whose tests reached the change: 850 of 1361 tested (62%)
-- Changed-line coverage: median 100% of 868 merge(s) measured, 66 under 50%
-- Recall: 225 parents flagged of 356 fix merges
-- Claude: $96.18 in the last 24 hours, $7750.13 in the last 7 days, $9947.08 in all
+- Merges whose tests reached the change: 856 of 1373 tested (62%)
+- Changed-line coverage: median 100% of 879 merge(s) measured, 66 under 50%
+- Recall: 225 parents flagged of 358 fix merges
+- Claude: $179.26 in the last 24 hours, $7833.21 in the last 7 days, $10030.17 in all
 - Issues filed: 73
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101

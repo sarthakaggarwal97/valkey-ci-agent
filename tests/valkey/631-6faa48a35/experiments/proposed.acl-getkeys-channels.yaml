@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.acl-getkeys-channels
+deployment:
+  modes: [standalone]
+metadata:
+  description: Restricted-user key and channel permission checks, which populate getKeysResult
+    in acl.c, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: acl
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [ACL, SETUSER, alice, on, ">pass", "~app:*", "&chan:*", "+@all"],
+      expect: {equals: OK}}
+    - {command: [AUTH, alice, pass], expect: {equals: OK}}
+    - {command: [SET, "app:1", v1], expect: {equals: OK}}
+    - {command: [SET, "app:2", v2], expect: {equals: OK}}
+    - {command: [GET, "app:1"], expect: {equals: v1}}
+    - {command: [GET, "other:1"], expect: {error: "No permissions to access a key"}}
+    - {command: [MGET, "app:1", "app:2"], expect: {equals: [v1, v2]}}
+    - {command: [MGET, "app:1", "other:2"], expect: {error: "No permissions to access\
+          \ a key"}}
+    - {command: [PUBLISH, "chan:1", hello], expect: {equals: 0}}
+    - {command: [PUBLISH, "off:1", hello], expect: {error: "No permissions to access\
+          \ a channel"}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [acl.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: acl}

@@ -1,0 +1,15 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 627d387ad85e..b546dd26e5f4.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-5ac37d32dc6f
+seed: 3
+experiment:
+  id: proposed.cluster-replica-restart-loading
+  inputs: {}
+deployment:
+  mode: cluster
+  primaries: 3
+  replicas_per_primary: 1
+  base_port: 7200
+  server_config:
+    key-load-delay: '2000'
+    loading-process-events-interval-bytes: '1024'

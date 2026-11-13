@@ -1,0 +1,27 @@
+extends: [valkey.liveness]
+id: proposed.empty-dir-dbfilename-cli
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG SET dir and dbfilename to the empty string over valkey-cli;
+    the fixed build rejects both with its new error messages, and its SAVE still writes
+    a dump.rdb that valkey-check-rdb validates while the parent's SAVE fails
+components:
+- use: valkey.action.tools
+  id: emptycli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    ignore: ['^\d+:[A-Z] .*\n']
+    runs:
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, dir, ""], expect_difference: true,
+      expect: {stdout: {contains: "dir can't be empty"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, dbfilename, ""], expect_difference: true,
+      expect: {stdout: {contains: "dbfilename can't be empty"}}}
+    - {tool: valkey-cli, args: [-p, $port, SET, k, v], expect: {stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, SAVE], expect_difference: true, expect: {
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-check-rdb, args: [dump.rdb], expect_difference: true, expect: {
+        exit: {equals: 0}, stdout: {contains: "RDB looks OK"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: emptycli}

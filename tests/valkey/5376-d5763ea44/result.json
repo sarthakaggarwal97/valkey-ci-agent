@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d5763ea44e86cfb978cc98387782a89b6da53bd3",
+  "parent": "ac90e4d346cead3dcfc3a3c0e35a332bcb189aae",
+  "pr": 5376,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Check Sentinel config dir is writable at startup (#5376)",
+  "date": "2026-11-12",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 1.1955,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change adds a startup-only check inside sentinelCheckConfigFile(), called solely under `if (server.sentinel_mode)` (src/server.c:8138); Sentinel mode is selected by argv0/--sentinel, not by any server config. The fuzzer has no Sentinel deployment mode, valkey.action.commands' private servers and all installed experiments start plain valkey-server (standalone or cluster), and valkey.action.tools runs only valkey-cli/valkey-benchmark/valkey-check-rdb/valkey-check-aof, so no composition of installed components can start a process that executes the changed code. Non-Sentinel behavior is untouc"
+}

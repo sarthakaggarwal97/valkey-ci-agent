@@ -1,0 +1,36 @@
+extends: [valkey.liveness]
+id: proposed.module-getkeys-api
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module key introspection (RM_GetCommandKeysWithFlags and the getkeys-api
+    buffer path) via getkeys.so, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: modkeys
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [getkeys.introspect, "0", GET, foo], expect: {equals: [foo]}}
+    - {command: [getkeys.introspect, "1", GET, foo], expect: {equals: [[foo, RO]]}}
+    - {command: [getkeys.introspect, "0", MSET, a, "1", b, "2"], expect: {equals: [
+          a, b]}}
+    - {command: [getkeys.introspect, "0", PING], expect: {equals: []}}
+    - {command: [getkeys.introspect, "0", NOSUCHCMD, x], expect: {error: ENOENT}}
+    - {command: [getkeys.introspect, "0", GET], expect: {error: EINVAL}}
+    - {command: [COMMAND, GETKEYS, getkeys.command, foo, KEY, k1, KEY, k2], expect: {
+        equals: [k1, k2]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modkeys.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modkeys}

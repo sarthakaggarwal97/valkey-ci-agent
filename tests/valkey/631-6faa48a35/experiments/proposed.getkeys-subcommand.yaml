@@ -1,0 +1,39 @@
+extends: [valkey.liveness]
+id: proposed.getkeys-subcommand
+deployment:
+  modes: [standalone]
+metadata:
+  description: COMMAND GETKEYS/GETKEYSANDFLAGS over range, keynum, keyword and getkeys-proc
+    specs, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: getkeys
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [COMMAND, GETKEYS, GET, foo], expect: {equals: [foo]}}
+    - {command: [COMMAND, GETKEYS, SET, foo, bar], expect: {equals: [foo]}}
+    - {command: [COMMAND, GETKEYS, MSET, a, "1", b, "2", c, "3"], expect: {equals: [
+          a, b, c]}}
+    - {command: [COMMAND, GETKEYS, MGET, k1, k2, k3, k4, k5], expect: {equals: [k1,
+          k2, k3, k4, k5]}}
+    - {command: [COMMAND, GETKEYS, LMPOP, "2", l1, l2, LEFT], expect: {equals: [l1,
+          l2]}}
+    - {command: [COMMAND, GETKEYS, GET, fields], expect: {equals: [fields]}}
+    - {command: [COMMAND, GETKEYS, EVAL, "return 1", "0"], expect: {equals: []}}
+    - {command: [COMMAND, GETKEYS, PING], expect: {error: "no key arguments"}}
+    - {command: [COMMAND, GETKEYS, GET], expect: {error: "Invalid number of arguments"}}
+    - {command: [COMMAND, GETKEYSANDFLAGS, GET, foo], expect: {equals: [[foo, [RO,
+              access]]]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [getkeys.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: getkeys}

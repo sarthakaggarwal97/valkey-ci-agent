@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8a776c35090c..4c6bf30f5833.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-89ed770259e5
+seed: 362001
+experiment:
+  id: proposed.latency-doctor-advice-branches
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

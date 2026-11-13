@@ -1,0 +1,57 @@
+extends: [valkey.liveness]
+id: proposed.latency-doctor-advice-branches
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    LATENCY DOCTOR rebranded texts on the three branches earlier tests missed: the
+    events-logged-but-no-advice branch (via an expire-del event, which maps to no
+    advice), the SSD advice (via a slow aof-write event), and the hz advice (via an
+    expire-cycle event with default hz 10).
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: doctor
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {appendonly: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, latency-monitor-threshold, 0], expect: {equals: OK}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 0], expect: {equals: OK}}
+    - {command: [EVAL, "for i=1,500000 do redis.call('hset', KEYS[1], 'f'..i, 'v')\
+          \ end", 1, bighash]}
+    - {command: [PEXPIRE, bighash, 1], expect: {equals: 1}}
+    - {command: [DEBUG, SLEEP, 0.2], expect: {equals: OK}}
+    - {command: [CONFIG, SET, latency-monitor-threshold, 5], expect: {equals: OK}}
+    - {command: [EXISTS, bighash], expect: {equals: 0}}
+    - {command: [CONFIG, SET, latency-monitor-threshold, 0], expect: {equals: OK}}
+    - {command: [LATENCY, RESET, fast-command, command], expect: {min: 1}}
+    - {command: [LATENCY, DOCTOR], expect_difference: true, expect: {contains: "Valkey\
+          \ instance"}}
+    - {command: [LATENCY, RESET, expire-del], expect: {equals: 1}}
+    - {command: [CONFIG, SET, latency-monitor-threshold, 1], expect: {equals: OK}}
+    - {command: [EVAL, "local v = string.rep('x', 512) for i=1,100000 do redis.call('set',\
+          \ 'blob:'..i, v) end", 0]}
+    - {command: [LATENCY, DOCTOR], wait_s: 15, expect_difference: true, expect: {
+        contains: "SSD disks are able to reduce fsync latency"}}
+    - {command: [LATENCY, RESET, aof-write], expect: {equals: 1}}
+    - {command: [DEBUG, SET-ACTIVE-EXPIRE, 1], expect: {equals: OK}}
+    - {command: [EVAL, "for i=1,200000 do redis.call('set', 'exp:'..i, 'v', 'px',\
+          \ 100) end", 0]}
+    - {command: [LATENCY, DOCTOR], wait_s: 30, expect_difference: true, expect: {
+        contains: "hz' configuration parameter to 100"}}
+    - {command: [LATENCY, RESET, expire-cycle], expect: {equals: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [doctor.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: doctor}

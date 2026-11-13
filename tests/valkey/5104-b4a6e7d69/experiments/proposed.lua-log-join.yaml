@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.lua-log-join
+deployment:
+  modes: [standalone]
+metadata:
+  description: "redis.log()/server.log() joins arguments, skips a non-string first\
+    \ argument without a (null) artifact, and sanitizes line breaks"
+components:
+- use: valkey.action.commands
+  id: scripts
+  depends_on: [logcheck]
+  config:
+    judge_replies: false
+    timeout_s: 10
+    commands:
+    - {command: [EVAL, "redis.log(redis.LOG_WARNING, 'jlog-a', 'jlog-b', 'jlog-c',\
+          \ 'jlog-d')", "0"]}
+    - {command: [EVAL, "redis.log(redis.LOG_WARNING, {}, 'jlog-skipped')", "0"]}
+    - {command: [EVAL, "redis.log(redis.LOG_WARNING, 'jlog-nl-a'..string.char(10)..'jlog-nl-b')",
+        "0"]}
+    - {command: [FUNCTION, LOAD, REPLACE, "#!lua name=vflib\nredis.log(redis.LOG_WARNING,\
+          \ {}, 'flib-skipped')\nredis.register_function('vf_noop', function(keys,\
+          \ args) return 1 end)"]}
+- use: valkey.observer.log
+  id: logcheck
+  config:
+    instances: primary
+    expect:
+    - {pattern: "<lua> jlog-a jlog-b jlog-c jlog-d", evidence_id: valkey.lualog.joined,
+      required: true}
+    - {pattern: "<lua>  jlog-skipped", evidence_id: valkey.lualog.skipped-first, required: true}
+    - {pattern: "<lua> jlog-nl-a jlog-nl-b", evidence_id: valkey.lualog.newline-sanitized,
+      required: true}
+    - {pattern: "<lua>  flib-skipped", evidence_id: valkey.lualog.function-skipped}
+    forbidden:
+    - {pattern: '\(null\)'}
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: scripts}
+- {evidence_id: valkey.lualog.joined, source: logcheck}
+- {evidence_id: valkey.lualog.skipped-first, source: logcheck}
+- {evidence_id: valkey.lualog.newline-sanitized, source: logcheck}

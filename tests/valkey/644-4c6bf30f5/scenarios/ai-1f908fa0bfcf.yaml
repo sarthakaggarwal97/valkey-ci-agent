@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 8a776c35090c..4c6bf30f5833.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1f908fa0bfcf
+seed: 644002
+experiment:
+  id: proposed.latency-doctor-rebrand
+  inputs:
+    resp: 3
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7100

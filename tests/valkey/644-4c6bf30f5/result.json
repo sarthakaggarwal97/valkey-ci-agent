@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4c6bf30f58335baa4564415a0a75011d23aa1714",
+  "parent": "8a776c35090c287a309ed49514cc3051d9f39707",
+  "pr": 644,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Latency report: Rebranding and refine Dave dialog (#644)",
+  "date": "2024-06-14",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 4,
+  "proven": 4,
+  "hunted": 4,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 7,
+    "executed": 6,
+    "percent": 85,
+    "uncovered": [
+      "src/latency.c:483"
+    ],
+    "unnoted": [],
+    "rounds": 1
+  },
+  "cost_usd": 4.9834,
+  "findings": [],
+  "recorded": []
+}

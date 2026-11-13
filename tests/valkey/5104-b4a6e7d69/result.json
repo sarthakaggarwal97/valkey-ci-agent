@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b4a6e7d6980f2f44655aa153649a760f72761031",
+  "parent": "bcc6a3ff5ac235270e1f8d3d36fd075ab815e358",
+  "pr": 5104,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Join server.log() arguments in linear time (#5104)",
+  "date": "2026-11-12",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 0,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 9,
+    "executed": 9,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.9614,
+  "findings": [],
+  "recorded": []
+}

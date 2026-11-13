@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4bb7cc471a0a4e0948737c99c36aaf7202f4cb4c",
+  "parent": "e65b2d235c300bb86cc7f960883ad919f75162e6",
+  "pr": 628,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove unnecessary clang-format off annotations (#628)",
+  "date": "2024-06-12",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.4086,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change (#628) removes clang-format off/on comment annotations and reformats the enclosed code (spacing after commas, switch indentation, splitting fall-through case labels onto separate lines). Every hunk alters only whitespace, line breaks and comments; all expressions, case labels, flag computations and return values are token-identical before and after. It is a pure formatting refactor with no behaviour change, so no scenario can distinguish the builds and none is needed."
+}

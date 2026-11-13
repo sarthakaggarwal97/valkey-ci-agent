@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.latency-doctor-rebrand
+deployment:
+  modes: [standalone]
+metadata:
+  description: LATENCY DOCTOR report text is rebranded from Redis to Valkey on the
+    disabled, no-spike and advice report paths
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: doctor
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 15
+    commands:
+    - {command: [CONFIG, SET, latency-monitor-threshold, "0"], expect: {equals: OK}}
+    - {command: [LATENCY, DOCTOR], expect_difference: true, expect: {contains: "Latency\
+          \ monitoring is disabled in this Valkey instance"}}
+    - {command: [CONFIG, SET, latency-monitor-threshold, "100"], expect: {equals: OK}}
+    - {command: [LATENCY, DOCTOR], expect_difference: true, expect: {contains: "Valkey"}}
+    - {command: [DEBUG, SLEEP, "0.3"], expect: {equals: OK}}
+    - {command: [LATENCY, LATEST], compare: skip, expect: {exists: true}}
+    - {command: [LATENCY, DOCTOR], expect_difference: true, expect: {contains: "Latency\
+          \ spikes are observed in this Valkey instance"}}
+    - {command: [LATENCY, RESET], compare: skip, expect: {min: 1}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [doctor.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: doctor}

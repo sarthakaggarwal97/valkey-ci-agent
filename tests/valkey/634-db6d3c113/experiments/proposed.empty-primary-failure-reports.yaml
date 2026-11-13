@@ -1,0 +1,50 @@
+extends: [valkey.liveness]
+id: proposed.empty-primary-failure-reports
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    Failure reports gossiped by a primary without slots are ignored, and an empty
+    primary no longer marks a timed-out node as FAIL unilaterally when the cluster
+    has a single voting primary. Node 0 owns all slots; nodes 1-3 are empty primaries.
+    DEBUG SLEEP makes node 0 unreachable; on the parent the empty primaries' PFAIL/FAIL
+    gossip still adds failure reports on each other, on the fixed build the count
+    stays 0.
+components:
+- use: valkey.action.commands
+  id: fail-reports
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    nodes: 4
+    timeout_s: 30
+    server_config:
+      cluster-ping-interval: 100
+      cluster-node-timeout: 3000
+      enable-debug-command: "yes"
+    commands:
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:4"}}
+    - {command: [CLUSTER, INFO], node: 2, wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:4"}}
+    - {command: [CLUSTER, INFO], node: 3, wait_s: 30, compare: skip, expect: {contains: "cluster_known_nodes:4"}}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 30, compare: skip, expect: {contains: "cluster_state:ok"}}
+    - {command: [CLUSTER, COUNT-FAILURE-REPORTS, "<node.0.id>"], node: 1, expect: {
+        equals: 0}}
+    - {command: [DEBUG, SLEEP, "15"], node: 0, connection: sleeper}
+    - {command: [CLUSTER, INFO], node: 1, wait_s: 25, compare: skip, expect: {contains: "cluster_state:fail"}}
+    - {command: [CLUSTER, INFO], node: 2, wait_s: 25, compare: skip, expect: {contains: "cluster_state:fail"}}
+    - {command: [CLUSTER, INFO], node: 3, wait_s: 25, compare: skip, expect: {contains: "cluster_state:fail"}}
+    - {command: [DEBUG, SLEEP, "2"], node: 3, expect: {equals: OK}}
+    - {command: [CLUSTER, COUNT-FAILURE-REPORTS, "<node.0.id>"], node: 1, expect_difference: true,
+      expect: {equals: 0}}
+    - {command: [CLUSTER, COUNT-FAILURE-REPORTS, "<node.0.id>"], node: 2, expect_difference: true,
+      expect: {equals: 0}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [fail-reports.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: fail-reports}

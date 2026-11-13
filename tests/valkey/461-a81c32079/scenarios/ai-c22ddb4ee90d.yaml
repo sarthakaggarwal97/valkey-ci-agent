@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 93123f97a086..a81c32079cfd.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-c22ddb4ee90d
+seed: 101
+experiment:
+  id: proposed.cluster-meet-reliable
+  inputs:
+    node_timeout_ms: 60000
+deployment:
+  mode: standalone
+  base_port: 7000

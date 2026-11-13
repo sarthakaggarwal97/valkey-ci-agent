@@ -1,0 +1,43 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6faa48a358ead15ea4b86798aa832a4820dfbe4e",
+  "parent": "d5496e42bc601abc76bcd58bd9a4e6f2271a4578",
+  "pr": 631,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Don't initialize the key buffer in getKeysResult (#631)",
+  "date": "2024-06-14",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 7,
+  "proven": 0,
+  "hunted": 7,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 6,
+    "executed": 5,
+    "percent": 83,
+    "uncovered": [
+      "src/tracking.c:220"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 8.4377,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-1456f1458090",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'modkeys' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (getkeys.introspect 1 GET foo), 3 (getkeys.introspect 0 PING), 5 (getkeys.introspect 0 GET)"
+    },
+    {
+      "scenario": "ai-15c499c6b6ed",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'modkeys' returned ERROR: expectations both builds violate alike, so they are not about the change: 1 (getkeys.introspect 1 GET foo), 3 (getkeys.introspect 0 PING), 5 (getkeys.introspect 0 GET)"
+    }
+  ]
+}

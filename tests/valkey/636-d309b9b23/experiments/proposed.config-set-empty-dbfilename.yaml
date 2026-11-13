@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.config-set-empty-dbfilename
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG SET dbfilename to the empty string is rejected by the change
+    but accepted by the parent
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: dbf
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {enable-protected-configs: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, SET, dbfilename, "valid.rdb"], expect: {equals: OK}}
+    - {command: [CONFIG, GET, dbfilename], expect: {equals: [dbfilename, "valid.rdb"]}}
+    - {command: [CONFIG, SET, dbfilename, ""], expect_difference: true, expect: {
+        error: "dbfilename can't be empty"}}
+    - {command: [CONFIG, GET, dbfilename], expect_difference: true, expect: {equals: [
+          dbfilename, "valid.rdb"]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [dbf.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: dbf}

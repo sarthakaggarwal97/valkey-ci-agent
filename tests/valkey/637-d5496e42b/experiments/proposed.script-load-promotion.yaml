@@ -1,0 +1,272 @@
+extends: [valkey.liveness]
+id: proposed.script-load-promotion
+deployment:
+  modes: [standalone]
+metadata:
+  description: A script cached by EVAL and then SCRIPT LOADed is promoted out of the
+    500-entry eviction LRU and survives 500 later EVAL scripts; the parent evicts
+    it
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    lazyfree_flush: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: promote
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {lazyfree-lazy-user-flush: {$ref: inputs.lazyfree_flush}}
+    resp: {$ref: inputs.resp}
+    timeout_s: 120
+    commands: [{command: [EVAL, return 1, 0], expect: {equals: 1}}, {command: [SCRIPT,
+          LOAD, return 1], expect: {equals: e0e1f9fabfc9d4800c877a703b823ac0578ff8db}},
+      {command: [EVAL, return 2, 0]}, {command: [EVAL, return 3, 0]}, {command: [
+          EVAL, return 4, 0]}, {command: [EVAL, return 5, 0]}, {command: [EVAL, return
+            6, 0]}, {command: [EVAL, return 7, 0]}, {command: [EVAL, return 8, 0]},
+      {command: [EVAL, return 9, 0]}, {command: [EVAL, return 10, 0]}, {command: [
+          EVAL, return 11, 0]}, {command: [EVAL, return 12, 0]}, {command: [EVAL,
+          return 13, 0]}, {command: [EVAL, return 14, 0]}, {command: [EVAL, return
+            15, 0]}, {command: [EVAL, return 16, 0]}, {command: [EVAL, return 17,
+          0]}, {command: [EVAL, return 18, 0]}, {command: [EVAL, return 19, 0]}, {
+        command: [EVAL, return 20, 0]}, {command: [EVAL, return 21, 0]}, {command: [
+          EVAL, return 22, 0]}, {command: [EVAL, return 23, 0]}, {command: [EVAL,
+          return 24, 0]}, {command: [EVAL, return 25, 0]}, {command: [EVAL, return
+            26, 0]}, {command: [EVAL, return 27, 0]}, {command: [EVAL, return 28,
+          0]}, {command: [EVAL, return 29, 0]}, {command: [EVAL, return 30, 0]}, {
+        command: [EVAL, return 31, 0]}, {command: [EVAL, return 32, 0]}, {command: [
+          EVAL, return 33, 0]}, {command: [EVAL, return 34, 0]}, {command: [EVAL,
+          return 35, 0]}, {command: [EVAL, return 36, 0]}, {command: [EVAL, return
+            37, 0]}, {command: [EVAL, return 38, 0]}, {command: [EVAL, return 39,
+          0]}, {command: [EVAL, return 40, 0]}, {command: [EVAL, return 41, 0]}, {
+        command: [EVAL, return 42, 0]}, {command: [EVAL, return 43, 0]}, {command: [
+          EVAL, return 44, 0]}, {command: [EVAL, return 45, 0]}, {command: [EVAL,
+          return 46, 0]}, {command: [EVAL, return 47, 0]}, {command: [EVAL, return
+            48, 0]}, {command: [EVAL, return 49, 0]}, {command: [EVAL, return 50,
+          0]}, {command: [EVAL, return 51, 0]}, {command: [EVAL, return 52, 0]}, {
+        command: [EVAL, return 53, 0]}, {command: [EVAL, return 54, 0]}, {command: [
+          EVAL, return 55, 0]}, {command: [EVAL, return 56, 0]}, {command: [EVAL,
+          return 57, 0]}, {command: [EVAL, return 58, 0]}, {command: [EVAL, return
+            59, 0]}, {command: [EVAL, return 60, 0]}, {command: [EVAL, return 61,
+          0]}, {command: [EVAL, return 62, 0]}, {command: [EVAL, return 63, 0]}, {
+        command: [EVAL, return 64, 0]}, {command: [EVAL, return 65, 0]}, {command: [
+          EVAL, return 66, 0]}, {command: [EVAL, return 67, 0]}, {command: [EVAL,
+          return 68, 0]}, {command: [EVAL, return 69, 0]}, {command: [EVAL, return
+            70, 0]}, {command: [EVAL, return 71, 0]}, {command: [EVAL, return 72,
+          0]}, {command: [EVAL, return 73, 0]}, {command: [EVAL, return 74, 0]}, {
+        command: [EVAL, return 75, 0]}, {command: [EVAL, return 76, 0]}, {command: [
+          EVAL, return 77, 0]}, {command: [EVAL, return 78, 0]}, {command: [EVAL,
+          return 79, 0]}, {command: [EVAL, return 80, 0]}, {command: [EVAL, return
+            81, 0]}, {command: [EVAL, return 82, 0]}, {command: [EVAL, return 83,
+          0]}, {command: [EVAL, return 84, 0]}, {command: [EVAL, return 85, 0]}, {
+        command: [EVAL, return 86, 0]}, {command: [EVAL, return 87, 0]}, {command: [
+          EVAL, return 88, 0]}, {command: [EVAL, return 89, 0]}, {command: [EVAL,
+          return 90, 0]}, {command: [EVAL, return 91, 0]}, {command: [EVAL, return
+            92, 0]}, {command: [EVAL, return 93, 0]}, {command: [EVAL, return 94,
+          0]}, {command: [EVAL, return 95, 0]}, {command: [EVAL, return 96, 0]}, {
+        command: [EVAL, return 97, 0]}, {command: [EVAL, return 98, 0]}, {command: [
+          EVAL, return 99, 0]}, {command: [EVAL, return 100, 0]}, {command: [EVAL,
+          return 101, 0]}, {command: [EVAL, return 102, 0]}, {command: [EVAL, return
+            103, 0]}, {command: [EVAL, return 104, 0]}, {command: [EVAL, return 105,
+          0]}, {command: [EVAL, return 106, 0]}, {command: [EVAL, return 107, 0]},
+      {command: [EVAL, return 108, 0]}, {command: [EVAL, return 109, 0]}, {command: [
+          EVAL, return 110, 0]}, {command: [EVAL, return 111, 0]}, {command: [EVAL,
+          return 112, 0]}, {command: [EVAL, return 113, 0]}, {command: [EVAL, return
+            114, 0]}, {command: [EVAL, return 115, 0]}, {command: [EVAL, return 116,
+          0]}, {command: [EVAL, return 117, 0]}, {command: [EVAL, return 118, 0]},
+      {command: [EVAL, return 119, 0]}, {command: [EVAL, return 120, 0]}, {command: [
+          EVAL, return 121, 0]}, {command: [EVAL, return 122, 0]}, {command: [EVAL,
+          return 123, 0]}, {command: [EVAL, return 124, 0]}, {command: [EVAL, return
+            125, 0]}, {command: [EVAL, return 126, 0]}, {command: [EVAL, return 127,
+          0]}, {command: [EVAL, return 128, 0]}, {command: [EVAL, return 129, 0]},
+      {command: [EVAL, return 130, 0]}, {command: [EVAL, return 131, 0]}, {command: [
+          EVAL, return 132, 0]}, {command: [EVAL, return 133, 0]}, {command: [EVAL,
+          return 134, 0]}, {command: [EVAL, return 135, 0]}, {command: [EVAL, return
+            136, 0]}, {command: [EVAL, return 137, 0]}, {command: [EVAL, return 138,
+          0]}, {command: [EVAL, return 139, 0]}, {command: [EVAL, return 140, 0]},
+      {command: [EVAL, return 141, 0]}, {command: [EVAL, return 142, 0]}, {command: [
+          EVAL, return 143, 0]}, {command: [EVAL, return 144, 0]}, {command: [EVAL,
+          return 145, 0]}, {command: [EVAL, return 146, 0]}, {command: [EVAL, return
+            147, 0]}, {command: [EVAL, return 148, 0]}, {command: [EVAL, return 149,
+          0]}, {command: [EVAL, return 150, 0]}, {command: [EVAL, return 151, 0]},
+      {command: [EVAL, return 152, 0]}, {command: [EVAL, return 153, 0]}, {command: [
+          EVAL, return 154, 0]}, {command: [EVAL, return 155, 0]}, {command: [EVAL,
+          return 156, 0]}, {command: [EVAL, return 157, 0]}, {command: [EVAL, return
+            158, 0]}, {command: [EVAL, return 159, 0]}, {command: [EVAL, return 160,
+          0]}, {command: [EVAL, return 161, 0]}, {command: [EVAL, return 162, 0]},
+      {command: [EVAL, return 163, 0]}, {command: [EVAL, return 164, 0]}, {command: [
+          EVAL, return 165, 0]}, {command: [EVAL, return 166, 0]}, {command: [EVAL,
+          return 167, 0]}, {command: [EVAL, return 168, 0]}, {command: [EVAL, return
+            169, 0]}, {command: [EVAL, return 170, 0]}, {command: [EVAL, return 171,
+          0]}, {command: [EVAL, return 172, 0]}, {command: [EVAL, return 173, 0]},
+      {command: [EVAL, return 174, 0]}, {command: [EVAL, return 175, 0]}, {command: [
+          EVAL, return 176, 0]}, {command: [EVAL, return 177, 0]}, {command: [EVAL,
+          return 178, 0]}, {command: [EVAL, return 179, 0]}, {command: [EVAL, return
+            180, 0]}, {command: [EVAL, return 181, 0]}, {command: [EVAL, return 182,
+          0]}, {command: [EVAL, return 183, 0]}, {command: [EVAL, return 184, 0]},
+      {command: [EVAL, return 185, 0]}, {command: [EVAL, return 186, 0]}, {command: [
+          EVAL, return 187, 0]}, {command: [EVAL, return 188, 0]}, {command: [EVAL,
+          return 189, 0]}, {command: [EVAL, return 190, 0]}, {command: [EVAL, return
+            191, 0]}, {command: [EVAL, return 192, 0]}, {command: [EVAL, return 193,
+          0]}, {command: [EVAL, return 194, 0]}, {command: [EVAL, return 195, 0]},
+      {command: [EVAL, return 196, 0]}, {command: [EVAL, return 197, 0]}, {command: [
+          EVAL, return 198, 0]}, {command: [EVAL, return 199, 0]}, {command: [EVAL,
+          return 200, 0]}, {command: [EVAL, return 201, 0]}, {command: [EVAL, return
+            202, 0]}, {command: [EVAL, return 203, 0]}, {command: [EVAL, return 204,
+          0]}, {command: [EVAL, return 205, 0]}, {command: [EVAL, return 206, 0]},
+      {command: [EVAL, return 207, 0]}, {command: [EVAL, return 208, 0]}, {command: [
+          EVAL, return 209, 0]}, {command: [EVAL, return 210, 0]}, {command: [EVAL,
+          return 211, 0]}, {command: [EVAL, return 212, 0]}, {command: [EVAL, return
+            213, 0]}, {command: [EVAL, return 214, 0]}, {command: [EVAL, return 215,
+          0]}, {command: [EVAL, return 216, 0]}, {command: [EVAL, return 217, 0]},
+      {command: [EVAL, return 218, 0]}, {command: [EVAL, return 219, 0]}, {command: [
+          EVAL, return 220, 0]}, {command: [EVAL, return 221, 0]}, {command: [EVAL,
+          return 222, 0]}, {command: [EVAL, return 223, 0]}, {command: [EVAL, return
+            224, 0]}, {command: [EVAL, return 225, 0]}, {command: [EVAL, return 226,
+          0]}, {command: [EVAL, return 227, 0]}, {command: [EVAL, return 228, 0]},
+      {command: [EVAL, return 229, 0]}, {command: [EVAL, return 230, 0]}, {command: [
+          EVAL, return 231, 0]}, {command: [EVAL, return 232, 0]}, {command: [EVAL,
+          return 233, 0]}, {command: [EVAL, return 234, 0]}, {command: [EVAL, return
+            235, 0]}, {command: [EVAL, return 236, 0]}, {command: [EVAL, return 237,
+          0]}, {command: [EVAL, return 238, 0]}, {command: [EVAL, return 239, 0]},
+      {command: [EVAL, return 240, 0]}, {command: [EVAL, return 241, 0]}, {command: [
+          EVAL, return 242, 0]}, {command: [EVAL, return 243, 0]}, {command: [EVAL,
+          return 244, 0]}, {command: [EVAL, return 245, 0]}, {command: [EVAL, return
+            246, 0]}, {command: [EVAL, return 247, 0]}, {command: [EVAL, return 248,
+          0]}, {command: [EVAL, return 249, 0]}, {command: [EVAL, return 250, 0]},
+      {command: [EVAL, return 251, 0]}, {command: [EVAL, return 252, 0]}, {command: [
+          EVAL, return 253, 0]}, {command: [EVAL, return 254, 0]}, {command: [EVAL,
+          return 255, 0]}, {command: [EVAL, return 256, 0]}, {command: [EVAL, return
+            257, 0]}, {command: [EVAL, return 258, 0]}, {command: [EVAL, return 259,
+          0]}, {command: [EVAL, return 260, 0]}, {command: [EVAL, return 261, 0]},
+      {command: [EVAL, return 262, 0]}, {command: [EVAL, return 263, 0]}, {command: [
+          EVAL, return 264, 0]}, {command: [EVAL, return 265, 0]}, {command: [EVAL,
+          return 266, 0]}, {command: [EVAL, return 267, 0]}, {command: [EVAL, return
+            268, 0]}, {command: [EVAL, return 269, 0]}, {command: [EVAL, return 270,
+          0]}, {command: [EVAL, return 271, 0]}, {command: [EVAL, return 272, 0]},
+      {command: [EVAL, return 273, 0]}, {command: [EVAL, return 274, 0]}, {command: [
+          EVAL, return 275, 0]}, {command: [EVAL, return 276, 0]}, {command: [EVAL,
+          return 277, 0]}, {command: [EVAL, return 278, 0]}, {command: [EVAL, return
+            279, 0]}, {command: [EVAL, return 280, 0]}, {command: [EVAL, return 281,
+          0]}, {command: [EVAL, return 282, 0]}, {command: [EVAL, return 283, 0]},
+      {command: [EVAL, return 284, 0]}, {command: [EVAL, return 285, 0]}, {command: [
+          EVAL, return 286, 0]}, {command: [EVAL, return 287, 0]}, {command: [EVAL,
+          return 288, 0]}, {command: [EVAL, return 289, 0]}, {command: [EVAL, return
+            290, 0]}, {command: [EVAL, return 291, 0]}, {command: [EVAL, return 292,
+          0]}, {command: [EVAL, return 293, 0]}, {command: [EVAL, return 294, 0]},
+      {command: [EVAL, return 295, 0]}, {command: [EVAL, return 296, 0]}, {command: [
+          EVAL, return 297, 0]}, {command: [EVAL, return 298, 0]}, {command: [EVAL,
+          return 299, 0]}, {command: [EVAL, return 300, 0]}, {command: [EVAL, return
+            301, 0]}, {command: [EVAL, return 302, 0]}, {command: [EVAL, return 303,
+          0]}, {command: [EVAL, return 304, 0]}, {command: [EVAL, return 305, 0]},
+      {command: [EVAL, return 306, 0]}, {command: [EVAL, return 307, 0]}, {command: [
+          EVAL, return 308, 0]}, {command: [EVAL, return 309, 0]}, {command: [EVAL,
+          return 310, 0]}, {command: [EVAL, return 311, 0]}, {command: [EVAL, return
+            312, 0]}, {command: [EVAL, return 313, 0]}, {command: [EVAL, return 314,
+          0]}, {command: [EVAL, return 315, 0]}, {command: [EVAL, return 316, 0]},
+      {command: [EVAL, return 317, 0]}, {command: [EVAL, return 318, 0]}, {command: [
+          EVAL, return 319, 0]}, {command: [EVAL, return 320, 0]}, {command: [EVAL,
+          return 321, 0]}, {command: [EVAL, return 322, 0]}, {command: [EVAL, return
+            323, 0]}, {command: [EVAL, return 324, 0]}, {command: [EVAL, return 325,
+          0]}, {command: [EVAL, return 326, 0]}, {command: [EVAL, return 327, 0]},
+      {command: [EVAL, return 328, 0]}, {command: [EVAL, return 329, 0]}, {command: [
+          EVAL, return 330, 0]}, {command: [EVAL, return 331, 0]}, {command: [EVAL,
+          return 332, 0]}, {command: [EVAL, return 333, 0]}, {command: [EVAL, return
+            334, 0]}, {command: [EVAL, return 335, 0]}, {command: [EVAL, return 336,
+          0]}, {command: [EVAL, return 337, 0]}, {command: [EVAL, return 338, 0]},
+      {command: [EVAL, return 339, 0]}, {command: [EVAL, return 340, 0]}, {command: [
+          EVAL, return 341, 0]}, {command: [EVAL, return 342, 0]}, {command: [EVAL,
+          return 343, 0]}, {command: [EVAL, return 344, 0]}, {command: [EVAL, return
+            345, 0]}, {command: [EVAL, return 346, 0]}, {command: [EVAL, return 347,
+          0]}, {command: [EVAL, return 348, 0]}, {command: [EVAL, return 349, 0]},
+      {command: [EVAL, return 350, 0]}, {command: [EVAL, return 351, 0]}, {command: [
+          EVAL, return 352, 0]}, {command: [EVAL, return 353, 0]}, {command: [EVAL,
+          return 354, 0]}, {command: [EVAL, return 355, 0]}, {command: [EVAL, return
+            356, 0]}, {command: [EVAL, return 357, 0]}, {command: [EVAL, return 358,
+          0]}, {command: [EVAL, return 359, 0]}, {command: [EVAL, return 360, 0]},
+      {command: [EVAL, return 361, 0]}, {command: [EVAL, return 362, 0]}, {command: [
+          EVAL, return 363, 0]}, {command: [EVAL, return 364, 0]}, {command: [EVAL,
+          return 365, 0]}, {command: [EVAL, return 366, 0]}, {command: [EVAL, return
+            367, 0]}, {command: [EVAL, return 368, 0]}, {command: [EVAL, return 369,
+          0]}, {command: [EVAL, return 370, 0]}, {command: [EVAL, return 371, 0]},
+      {command: [EVAL, return 372, 0]}, {command: [EVAL, return 373, 0]}, {command: [
+          EVAL, return 374, 0]}, {command: [EVAL, return 375, 0]}, {command: [EVAL,
+          return 376, 0]}, {command: [EVAL, return 377, 0]}, {command: [EVAL, return
+            378, 0]}, {command: [EVAL, return 379, 0]}, {command: [EVAL, return 380,
+          0]}, {command: [EVAL, return 381, 0]}, {command: [EVAL, return 382, 0]},
+      {command: [EVAL, return 383, 0]}, {command: [EVAL, return 384, 0]}, {command: [
+          EVAL, return 385, 0]}, {command: [EVAL, return 386, 0]}, {command: [EVAL,
+          return 387, 0]}, {command: [EVAL, return 388, 0]}, {command: [EVAL, return
+            389, 0]}, {command: [EVAL, return 390, 0]}, {command: [EVAL, return 391,
+          0]}, {command: [EVAL, return 392, 0]}, {command: [EVAL, return 393, 0]},
+      {command: [EVAL, return 394, 0]}, {command: [EVAL, return 395, 0]}, {command: [
+          EVAL, return 396, 0]}, {command: [EVAL, return 397, 0]}, {command: [EVAL,
+          return 398, 0]}, {command: [EVAL, return 399, 0]}, {command: [EVAL, return
+            400, 0]}, {command: [EVAL, return 401, 0]}, {command: [EVAL, return 402,
+          0]}, {command: [EVAL, return 403, 0]}, {command: [EVAL, return 404, 0]},
+      {command: [EVAL, return 405, 0]}, {command: [EVAL, return 406, 0]}, {command: [
+          EVAL, return 407, 0]}, {command: [EVAL, return 408, 0]}, {command: [EVAL,
+          return 409, 0]}, {command: [EVAL, return 410, 0]}, {command: [EVAL, return
+            411, 0]}, {command: [EVAL, return 412, 0]}, {command: [EVAL, return 413,
+          0]}, {command: [EVAL, return 414, 0]}, {command: [EVAL, return 415, 0]},
+      {command: [EVAL, return 416, 0]}, {command: [EVAL, return 417, 0]}, {command: [
+          EVAL, return 418, 0]}, {command: [EVAL, return 419, 0]}, {command: [EVAL,
+          return 420, 0]}, {command: [EVAL, return 421, 0]}, {command: [EVAL, return
+            422, 0]}, {command: [EVAL, return 423, 0]}, {command: [EVAL, return 424,
+          0]}, {command: [EVAL, return 425, 0]}, {command: [EVAL, return 426, 0]},
+      {command: [EVAL, return 427, 0]}, {command: [EVAL, return 428, 0]}, {command: [
+          EVAL, return 429, 0]}, {command: [EVAL, return 430, 0]}, {command: [EVAL,
+          return 431, 0]}, {command: [EVAL, return 432, 0]}, {command: [EVAL, return
+            433, 0]}, {command: [EVAL, return 434, 0]}, {command: [EVAL, return 435,
+          0]}, {command: [EVAL, return 436, 0]}, {command: [EVAL, return 437, 0]},
+      {command: [EVAL, return 438, 0]}, {command: [EVAL, return 439, 0]}, {command: [
+          EVAL, return 440, 0]}, {command: [EVAL, return 441, 0]}, {command: [EVAL,
+          return 442, 0]}, {command: [EVAL, return 443, 0]}, {command: [EVAL, return
+            444, 0]}, {command: [EVAL, return 445, 0]}, {command: [EVAL, return 446,
+          0]}, {command: [EVAL, return 447, 0]}, {command: [EVAL, return 448, 0]},
+      {command: [EVAL, return 449, 0]}, {command: [EVAL, return 450, 0]}, {command: [
+          EVAL, return 451, 0]}, {command: [EVAL, return 452, 0]}, {command: [EVAL,
+          return 453, 0]}, {command: [EVAL, return 454, 0]}, {command: [EVAL, return
+            455, 0]}, {command: [EVAL, return 456, 0]}, {command: [EVAL, return 457,
+          0]}, {command: [EVAL, return 458, 0]}, {command: [EVAL, return 459, 0]},
+      {command: [EVAL, return 460, 0]}, {command: [EVAL, return 461, 0]}, {command: [
+          EVAL, return 462, 0]}, {command: [EVAL, return 463, 0]}, {command: [EVAL,
+          return 464, 0]}, {command: [EVAL, return 465, 0]}, {command: [EVAL, return
+            466, 0]}, {command: [EVAL, return 467, 0]}, {command: [EVAL, return 468,
+          0]}, {command: [EVAL, return 469, 0]}, {command: [EVAL, return 470, 0]},
+      {command: [EVAL, return 471, 0]}, {command: [EVAL, return 472, 0]}, {command: [
+          EVAL, return 473, 0]}, {command: [EVAL, return 474, 0]}, {command: [EVAL,
+          return 475, 0]}, {command: [EVAL, return 476, 0]}, {command: [EVAL, return
+            477, 0]}, {command: [EVAL, return 478, 0]}, {command: [EVAL, return 479,
+          0]}, {command: [EVAL, return 480, 0]}, {command: [EVAL, return 481, 0]},
+      {command: [EVAL, return 482, 0]}, {command: [EVAL, return 483, 0]}, {command: [
+          EVAL, return 484, 0]}, {command: [EVAL, return 485, 0]}, {command: [EVAL,
+          return 486, 0]}, {command: [EVAL, return 487, 0]}, {command: [EVAL, return
+            488, 0]}, {command: [EVAL, return 489, 0]}, {command: [EVAL, return 490,
+          0]}, {command: [EVAL, return 491, 0]}, {command: [EVAL, return 492, 0]},
+      {command: [EVAL, return 493, 0]}, {command: [EVAL, return 494, 0]}, {command: [
+          EVAL, return 495, 0]}, {command: [EVAL, return 496, 0]}, {command: [EVAL,
+          return 497, 0]}, {command: [EVAL, return 498, 0]}, {command: [EVAL, return
+            499, 0]}, {command: [EVAL, return 500, 0]}, {command: [EVAL, return 501,
+          0]}, {command: [SCRIPT, EXISTS, e0e1f9fabfc9d4800c877a703b823ac0578ff8db],
+        expect_difference: true, expect: {equals: [1]}}, {command: [EVALSHA, e0e1f9fabfc9d4800c877a703b823ac0578ff8db,
+          0], expect_difference: true, expect: {equals: 1}}, {command: [EVAL, return
+            502, 0], expect: {equals: 502}}, {command: [SCRIPT, EXISTS, 7f923f79fe76194c868d7e1d0820de36700eb649],
+        expect: {equals: [0]}}, {command: [SCRIPT, EXISTS, e0e1f9fabfc9d4800c877a703b823ac0578ff8db],
+        expect_difference: true, expect: {equals: [1]}}, {command: [SCRIPT, LOAD,
+          return 1], expect: {equals: e0e1f9fabfc9d4800c877a703b823ac0578ff8db}},
+      {command: [EVALSHA, e0e1f9fabfc9d4800c877a703b823ac0578ff8db, 0], expect: {
+          equals: 1}}, {command: [EVAL, return 1, 0], expect: {equals: 1}}, {command: [
+          SCRIPT, FLUSH], expect: {equals: OK}}, {command: [SCRIPT, EXISTS, e0e1f9fabfc9d4800c877a703b823ac0578ff8db],
+        expect: {equals: [0]}}, {command: [EVAL, return 1, 0], expect: {equals: 1}},
+      {command: [SCRIPT, LOAD, return 1], expect: {equals: e0e1f9fabfc9d4800c877a703b823ac0578ff8db}},
+      {command: [SCRIPT, LOAD, return 1], expect: {equals: e0e1f9fabfc9d4800c877a703b823ac0578ff8db}}]
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [promote.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: promote}

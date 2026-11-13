@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.cluster-getnodebyquery
+deployment:
+  modes: [standalone]
+metadata:
+  description: Cluster slot routing via getNodeByQuery for single-key, multi-key CROSSSLOT
+    and the MULTI/EXEC mstate loop, compared across builds
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: route
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    cluster: true
+    resp: {$ref: inputs.resp}
+    timeout_s: 20
+    commands:
+    - {command: [SET, foo, bar], expect: {equals: OK}}
+    - {command: [GET, foo], expect: {equals: bar}}
+    - {command: [MSET, "{t}a", "1", "{t}b", "2"], expect: {equals: OK}}
+    - {command: [MGET, "{t}a", "{t}b"], expect: {equals: ["1", "2"]}}
+    - {command: [MSET, x, "1", y, "2"], expect: {error: CROSSSLOT}}
+    - {command: [MULTI], expect: {equals: OK}}
+    - {command: [SET, "{t}c", "3"], expect: {equals: QUEUED}}
+    - {command: [SET, "{t}d", "4"], expect: {equals: QUEUED}}
+    - {command: [EXEC], expect: {equals: [OK, OK]}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [route.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: route}

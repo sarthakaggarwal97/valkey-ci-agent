@@ -1,0 +1,44 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "09b5825b264883c088dd09753efc1de487d03976",
+  "parent": "d28ae520042ae47002a0b7680dd93c090b338b06",
+  "pr": 592,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Moving client->authenticated to a flag instead of an int (#592)",
+  "date": "2024-06-09",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 4,
+  "dropped": 2,
+  "recall": false,
+  "coverage": {
+    "lines": 13,
+    "executed": 11,
+    "percent": 84,
+    "uncovered": [
+      "src/module.c:9468",
+      "src/networking.c:3649"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.5805,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-8af02dab7a1e",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'auth' returned ERROR: command 22 (EXEC on connection c4) got no reply: TimeoutError: Timeout reading from /tmp/vfc-zlysk_u5/s.sock"
+    },
+    {
+      "scenario": "ai-2daaeb20b945",
+      "build": "merge",
+      "status": "ERROR",
+      "reason": "runner execution failed during action.run: RunnerError: action 'auth' returned ERROR: command 22 (EXEC on connection c4) got no reply: TimeoutError: Timeout reading from /tmp/vfc-wxf6pzf3/s.sock"
+    }
+  ]
+}

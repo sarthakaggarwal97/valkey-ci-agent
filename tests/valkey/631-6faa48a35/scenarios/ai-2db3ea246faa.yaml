@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d5496e42bc60..6faa48a358ea.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-2db3ea246faa
+seed: 1003
+experiment:
+  id: proposed.acl-getkeys-channels
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

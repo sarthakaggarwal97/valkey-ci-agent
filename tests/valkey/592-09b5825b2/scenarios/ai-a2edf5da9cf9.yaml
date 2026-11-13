@@ -1,0 +1,9 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d28ae520042a..09b5825b2648.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-a2edf5da9cf9
+seed: 104
+experiment:
+  id: proposed.module-auth-compare
+deployment:
+  mode: standalone
+  base_port: 7300

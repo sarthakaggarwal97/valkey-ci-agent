@@ -1,0 +1,89 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a3f1535b5709bba940f62078b6ce4e9c96ab4f87",
+  "parent": "95a753b18d6923d2141fcb01f04ea03966ba10c5",
+  "pr": 612,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix misuse of safe iterators (#612)",
+  "date": "2024-06-10",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 9,
+  "proven": 0,
+  "hunted": 9,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 5,
+    "executed": 5,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 5.1785,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:236 'calculateKeySlot(key) == server.current_client->slot' is not true",
+      "scenario": "ai-2ef634300d90",
+      "seed": 6121,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #612, since fixed",
+      "fingerprint": "49979a14dba799f32598",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:236 'calculateKeySlot(key) == server.current_client->slot' is not true",
+      "scenario": "ai-ff5bce516e62",
+      "seed": 6122,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #612, since fixed",
+      "fingerprint": "49979a14dba799f32598",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:236 'calculateKeySlot(key) == server.current_client->slot' is not true",
+      "scenario": "ai-cad7803f17b5",
+      "seed": 6121,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #612, since fixed",
+      "fingerprint": "49979a14dba799f32598",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:236 'calculateKeySlot(key) == server.current_client->slot' is not true",
+      "scenario": "ai-fb51b1228a11",
+      "seed": 6122,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #612, since fixed",
+      "fingerprint": "49979a14dba799f32598",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "recall_round": {
+    "tests": 4,
+    "recall": false
+  }
+}

@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey d28ae520042a..09b5825b2648.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-51d5a274e9be
+seed: 103
+experiment:
+  id: proposed.replica-requirepass-resync
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  base_port: 7200

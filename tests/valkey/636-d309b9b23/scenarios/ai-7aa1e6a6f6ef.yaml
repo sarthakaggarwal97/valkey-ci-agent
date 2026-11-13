@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 76fc04168521..d309b9b23550.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-7aa1e6a6f6ef
+seed: 636003
+experiment:
+  id: proposed.empty-dir-dbfilename-cli
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

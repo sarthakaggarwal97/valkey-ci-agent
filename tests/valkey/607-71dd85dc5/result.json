@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "71dd85dc5a89a4e07d837efa14937990b01e317f",
+  "parent": "09b5825b264883c088dd09753efc1de487d03976",
+  "pr": 607,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "src/Makefile: Link libatomic on POWER systems (#607)",
+  "date": "2024-06-09",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2089,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits src/Makefile to link libatomic when the build machine is a POWER (ppc*) system, fixing a link-time failure on that architecture. It alters no runtime behaviour, no command, reply, replication, persistence or cluster path; on the CI's Linux x86 host the added Makefile branch is not even taken, so both builds are byte-for-byte identical in behaviour and no fuzzer scenario can reach or distinguish the change. Build/link fixes are verified by the build itself succeeding, not by runtime scenarios."
+}

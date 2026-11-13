@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "93123f97a086c625171d65c1cadf4549cb7b0983",
+  "parent": "6faa48a358ead15ea4b86798aa832a4820dfbe4e",
+  "pr": 615,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Format yaml files (#615)",
+  "date": "2024-06-14",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2654,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only reformats YAML whitespace and indentation in CI/workflow configuration files (.github/workflows/*.yml, dependabot.yml, codecov.yml) and adds a .config/format.yml formatter config. No Valkey source code, command behaviour, replication, persistence, or tooling is touched, so there is no runtime behaviour to test."
+}

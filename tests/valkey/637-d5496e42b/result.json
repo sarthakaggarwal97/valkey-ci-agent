@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d5496e42bc601abc76bcd58bd9a4e6f2271a4578",
+  "parent": "4c6bf30f58335baa4564415a0a75011d23aa1714",
+  "pr": 637,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Lua scripts promoted from eval to script load to avoid evict (#637)",
+  "date": "2024-06-14",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 3,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 4,
+    "executed": 4,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 6.4788,
+  "findings": [],
+  "recorded": []
+}

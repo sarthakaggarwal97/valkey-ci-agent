@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey a3f1535b5709..e65b2d235c30.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-eb31ecb6d047
+seed: 101
+experiment:
+  id: proposed.config-rewrite-save-one-line
+  inputs:
+    initial_save: 3600 1 300 100 60 10000
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

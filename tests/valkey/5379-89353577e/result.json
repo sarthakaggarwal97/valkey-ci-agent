@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "89353577e6e30f1724d1a47db66aa58d65f4b53c",
+  "parent": "d5763ea44e86cfb978cc98387782a89b6da53bd3",
+  "pr": 5379,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Skip the crash memory test under Valgrind and bound its region list (#5379)",
+  "date": "2026-11-12",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3727,
+  "findings": [],
+  "recorded": [],
+  "reason": "The only server-code change bounds a fixed stack array in memtest_test_linux_anonymous_maps(), which runs exclusively inside the SIGSEGV crash-report handler (doFastMemoryTest) after the process is already crashing; it produces no command reply, no persisted or replicated state, and requires both a real segfault and >128 anonymous rw memory regions to matter \u2014 none of which the fuzzer can arrange or have its oracles judge (an intentional crash is a liveness failure on both builds regardless). The remaining changes in tests/instances.tcl and tests/test_helper.tcl are CI/test-harness configurati"
+}

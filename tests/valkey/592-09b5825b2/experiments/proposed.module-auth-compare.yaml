@@ -1,0 +1,49 @@
+extends: [valkey.liveness]
+id: proposed.module-auth-compare
+deployment:
+  modes: [standalone]
+metadata:
+  description: Module auth callbacks (blocking and non-blocking) and VM_AuthenticateClientWithUser/ACLUser
+    set and clear CLIENT_AUTHENTICATED under requirepass, compared across builds
+components:
+- use: valkey.action.commands
+  id: modauth
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: 2
+    timeout_s: 30
+    commands:
+    - {command: [testmoduleone.rm_register_auth_cb], expect: {equals: OK}}
+    - {command: [ACL, SETUSER, foo, on, ">foopass", "~*", "+@all"], expect: {equals: OK}}
+    - {command: [CONFIG, SET, requirepass, mainsecret], expect: {equals: OK}}
+    - {command: [AUTH, foo, allow], connection: c2, expect: {equals: OK}}
+    - {command: [ACL, WHOAMI], connection: c2, expect: {equals: foo}}
+    - {command: [AUTH, foo, deny], connection: c3, expect: {error: "Auth denied"}}
+    - {command: [PING], connection: c3, expect: {error: NOAUTH}}
+    - {command: [AUTH, foo, foopass], connection: c3, expect: {equals: OK}}
+    - {command: [PING], connection: c3, expect: {equals: PONG}}
+    - {command: [testmoduleone.rm_register_blocking_auth_cb], expect: {equals: OK}}
+    - {command: [AUTH, foo, block_allow], connection: c4, expect: {equals: OK}}
+    - {command: [ACL, WHOAMI], connection: c4, expect: {equals: foo}}
+    - {command: [AUTH, foo, block_deny], connection: c5, expect: {error: "Auth denied"}}
+    - {command: [PING], connection: c5, expect: {error: NOAUTH}}
+    - {command: [AUTH, foo, block_abort], connection: c5, expect: {error: WRONGPASS}}
+    - {command: [auth.createmoduleuser], expect: {equals: OK}}
+    - {command: [auth.authmoduleuser], connection: c6, compare: skip, expect: {exists: true}}
+    - {command: [ACL, WHOAMI], connection: c6, expect: {equals: global}}
+    - {command: [PING], connection: c6, expect: {equals: PONG}}
+    - {command: [auth.authrealuser, foo], connection: c7, compare: skip, expect: {
+        exists: true}}
+    - {command: [ACL, WHOAMI], connection: c7, expect: {equals: foo}}
+    - {command: [ACL, DELUSER, foo], expect: {equals: 1}}
+    - {command: [PING], expect: {equals: PONG}}
+    - {command: [PING], connection: c7, expect: {exists: false}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [modauth.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: modauth}

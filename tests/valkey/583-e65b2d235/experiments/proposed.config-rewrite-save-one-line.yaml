@@ -1,0 +1,54 @@
+extends: [valkey.liveness]
+id: proposed.config-rewrite-save-one-line
+deployment:
+  modes: [standalone]
+metadata:
+  description: CONFIG REWRITE writes all save points as one line; after restart the
+    server must read back exactly the save params that were set, through grow, shrink
+    and empty cycles
+inputs:
+  properties:
+    initial_save:
+      type: string
+      default: "3600 1 300 100 60 10000"
+      description: the save value the config file starts with, so the rewrite replaces
+        existing save lines rather than appending
+components:
+- use: valkey.action.commands
+  id: save-rewrite
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {save: {$ref: inputs.initial_save}}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, GET, save]}
+    - {command: [CONFIG, SET, save, "9223372036854775807 2147483647 1 0 100 1"], expect: {
+        equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, save], expect: {equals: [save, "9223372036854775807\
+            \ 2147483647 1 0 100 1"]}}
+    - {command: [CONFIG, SET, save, "1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8 9 9 10 10"],
+      expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, save], expect: {equals: [save, "1 1 2 2 3 3 4 4 5 5\
+            \ 6 6 7 7 8 8 9 9 10 10"]}}
+    - {command: [CONFIG, SET, save, ""], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, save], expect: {equals: [save, ""]}}
+    - {command: [CONFIG, SET, save, "60 10000"], expect: {equals: OK}}
+    - {command: [CONFIG, REWRITE], expect: {equals: OK}}
+    - {restart: true, expect: {equals: OK}}
+    - {command: [CONFIG, GET, save], expect: {equals: [save, "60 10000"]}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [save-rewrite.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: save-rewrite}

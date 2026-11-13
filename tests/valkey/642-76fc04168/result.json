@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "76fc041685217ad7279c486be892c16f182a3454",
+  "parent": "d211078a27ba75f1dfdcdaf7d407f3370f914974",
+  "pr": 642,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "represent cluster node flags with bitwise shift value (#642)",
+  "date": "2024-06-14",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2362,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only rewrites the CLUSTER_NODE_* flag macros in cluster_legacy.h from decimal literals (1, 2, 4, ..., 1024) to the mathematically identical bit-shift expressions ((1 << 0) ... (1 << 10)). Every macro evaluates to the same value as before, no code using the flags is touched, and the compiled behavior is unchanged. This is a pure readability refactor with no behavior change, so there is nothing for a scenario to exercise."
+}

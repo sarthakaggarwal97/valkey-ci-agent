@@ -1,0 +1,61 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "8a776c35090c287a309ed49514cc3051d9f39707",
+  "parent": "5d9d41868df1a1e21de73f69e8b36feadf271fe7",
+  "pr": 651,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix potential infinite loop in `clusterNodeGetPrimary` (#651)",
+  "date": "2024-06-13",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 6,
+  "proven": 0,
+  "hunted": 6,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 6,
+    "executed": 6,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.4111,
+  "findings": [
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:236 'calculateKeySlot(key) == server.current_client->slot' is not true",
+      "scenario": "ai-d64cd0b9545d",
+      "seed": 7001,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #651, since fixed",
+      "fingerprint": "49979a14dba799f32598",
+      "issue": null
+    },
+    {
+      "rule": "crash",
+      "detail": "crash: db.c:236 'calculateKeySlot(key) == server.current_client->slot' is not true",
+      "scenario": "ai-51349bc5f8bd",
+      "seed": 7300,
+      "builds": {
+        "parent": true,
+        "merge": true,
+        "unstable": false
+      },
+      "verdict": "predates #651, since fixed",
+      "fingerprint": "49979a14dba799f32598",
+      "issue": null
+    }
+  ],
+  "recorded": [],
+  "recall_round": {
+    "tests": 3,
+    "recall": false
+  }
+}
