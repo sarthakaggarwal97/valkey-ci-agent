@@ -1,0 +1,35 @@
+extends: [valkey.liveness]
+id: proposed.module-rename-cluster
+deployment:
+  modes: [standalone]
+metadata:
+  description: basics.so rebuilt against valkeymodule.h loads and serves commands
+    in cluster mode exactly as the parent's build (OnLoad runs RM_Call ping under
+    cluster)
+components:
+- use: valkey.action.commands
+  id: cbasics
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {enable-debug-command: "yes"}
+    cluster: true
+    timeout_s: 60
+    commands:
+    - {command: [test.getresp], expect: {equals: 2}}
+    - {command: [test.call], expect: {equals: OK}}
+    - {command: [test.callreplywitharrayreply], expect: {equals: [test, "1234"]}}
+    - {command: [test.string.append], expect: {equals: foobar}}
+    - {command: [test.string.append.am], expect: {equals: foobar}}
+    - {command: [test.string.printf, foo, bar], expect: {equals: "Got 3 args. argv[1]:\
+          \ foo, argv[2]: bar"}}
+    - {command: [test.unlink], expect: {equals: OK}}
+    - {command: [test.string.truncate], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [cbasics.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: cbasics}

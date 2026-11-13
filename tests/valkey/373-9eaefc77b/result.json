@@ -1,0 +1,28 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "9eaefc77b0a7bc1db6dd9aa89c8fa3393cf34242",
+  "parent": "4948d536b91f23b9bdd505b1d356a063b06a8cd4",
+  "pr": 373,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Mention one of rediss:// and valkeys:// in error message, not both (#373)",
+  "date": "2024-04-25",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 10,
+    "executed": 10,
+    "percent": 100,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 2.0164,
+  "findings": [],
+  "recorded": []
+}

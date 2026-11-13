@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.memory-doctor-client-buf
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    A subscriber connection that never reads accumulates ~24MB of pending pub/sub
+    messages in its server-side output buffer, so average client output memory exceeds
+    200KB and MEMORY DOCTOR emits the rebranded big-client-buffers advice (object.c:1402).
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: clientbuf
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [CONFIG, SET, client-output-buffer-limit, "pubsub 0 0 0"], expect: {
+        equals: OK}}
+    - {command: [SETRANGE, "pad:1", 2097151, x], expect: {equals: 2097152}}
+    - {command: [SETRANGE, "pad:2", 2097151, x], expect: {equals: 2097152}}
+    - {command: [SETRANGE, "pad:3", 2097151, x], expect: {equals: 2097152}}
+    - {command: [SUBSCRIBE, bigchan], connection: sub, compare: skip}
+    - {command: [EVAL, "local v = string.rep('x',1000000) local n = 0 for i=1,24 do\
+          \ n = n + redis.call('PUBLISH','bigchan',v) end return n", "0"], expect: {
+        equals: 24}}
+    - {command: [MEMORY, DOCTOR], wait_s: 30, expect_difference: true, expect: {contains: "data\
+          \ piles on the Valkey instance output buffer"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [clientbuf.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: clientbuf}

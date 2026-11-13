@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.cli-uri-tls-scheme-error
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli and valkey-benchmark -u URI parsing; on a non-OpenSSL build
+    the TLS-scheme error names only the scheme given, and the refactored scheme advancement
+    still parses auth, host, port and db
+components:
+- use: valkey.action.tools
+  id: uri
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    runs:
+    - {tool: valkey-cli, args: [-u, "rediss://127.0.0.1:1", PING], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "rediss:// is only supported\
+            \ when valkey-cli is compiled with OpenSSL"}}}
+    - {tool: valkey-cli, args: [-u, "VALKEYS://127.0.0.1:1", PING], expect_difference: true,
+      expect: {exit: {equals: 1}, stderr: {contains: "VALKEYS:// is only supported\
+            \ when valkey-cli is compiled with OpenSSL"}}}
+    - {tool: valkey-benchmark, args: [-u, "rediss://127.0.0.1:1", -n, 1, -c, 1, -t,
+        ping], expect_difference: true, expect: {exit: {equals: 1}, stderr: {contains: "rediss://\
+            \ is only supported when redis-benchmark is compiled with OpenSSL"}}}
+    - {tool: valkey-cli, args: [-u, "valkey://127.0.0.1:$port", PING], expect: {exit: {
+          equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-u, "REDIS://127.0.0.1:$port/0", PING], expect: {
+        exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, requirepass, s3cret], expect: {
+        exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-u, "redis://default:s3cret@127.0.0.1:$port", PING],
+      expect: {exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, -a, s3cret, CONFIG, SET, requirepass, ""],
+      expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-u, "http://127.0.0.1:$port", PING], expect: {exit: {
+          equals: 1}, stderr: {contains: "Invalid URI scheme"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: uri}

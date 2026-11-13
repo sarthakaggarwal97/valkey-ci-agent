@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "2864fffe7371b1031634ba92c68bdb062e8c0894",
+  "parent": "be81469cde05f6a9359eb2021e1ccc2200a24119",
+  "pr": 365,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update redis* to valkey* in syscheck.c (#365)",
+  "date": "2024-04-25",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2175,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits human-readable warning text in syscheck.c (renaming 'redis-server'/'Redis' to 'valkey-server'/'Valkey' in the xen clocksource and THP startup advisories). No logic, return codes, replies, persistence or replication behaviour changes, so there is nothing a scenario could exercise or compare."
+}

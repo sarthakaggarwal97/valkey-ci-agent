@@ -1,0 +1,29 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "05251c55d7c1e58767136e504032576c1ce20bc9",
+  "parent": "948cd8f2c228e783259a5e81f10897c8e9b5bb3a",
+  "pr": 390,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Change default syslog-ident from redis to valkey (#390)",
+  "date": "2024-04-30",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 2,
+  "proven": 2,
+  "hunted": 2,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 0.9431,
+  "findings": [],
+  "recorded": [],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

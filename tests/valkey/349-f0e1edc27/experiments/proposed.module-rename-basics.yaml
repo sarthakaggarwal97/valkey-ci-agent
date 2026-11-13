@@ -1,0 +1,38 @@
+extends: [valkey.liveness]
+id: proposed.module-rename-basics
+deployment:
+  modes: [standalone]
+metadata:
+  description: basics.so rebuilt against valkeymodule.h must reply exactly as the
+    parent's redismodule.h build across the module API self-test
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: basics
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    server_config: {enable-debug-command: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [test.basics], expect: {equals: "ALL TESTS PASSED"}}
+    - {command: [test.getresp], expect: {in: [2, 3]}}
+    - {command: [test.rmcallautomode], compare: unordered-pairs}
+    - {command: [test.string.printf, foo, bar], expect: {equals: "Got 3 args. argv[1]:\
+          \ foo, argv[2]: bar"}}
+    - {command: [test.callreplywithbignumberreply], expect: {equals: "1234567999999999999999999999999999999"}}
+    - {command: [test.callreplywithverbatimstringreply], expect: {equals: "txt:This\
+          \ is a verbatim\nstring"}}
+    - {command: [test.string.append], expect: {equals: foobar}}
+    - {command: [test.string.trim], expect: {equals: OK}}
+    checks:
+      acl: true
+      compat: true
+      variants: true
+required_events: [basics.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: basics}

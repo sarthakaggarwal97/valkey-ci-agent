@@ -1,0 +1,43 @@
+extends: [valkey.liveness]
+id: proposed.memory-doctor-branding
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    MEMORY DOCTOR's issue report in object.c now says "Valkey instance" instead of
+    "Redis instance". Drive the big-peak branch (allocate >5MB, spike the peak past
+    150% of current, delete) so the changed strings are actually emitted, and sanity-check
+    the renamed STRING_COMPARE_* macros through SORT ALPHA (collateStringObjects)
+    and set ops (compareStringObjects), which must be unchanged.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: doctor
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 30
+    commands:
+    - {command: [SETRANGE, keep, 6000000, x], expect: {equals: 6000001}}
+    - {command: [SETRANGE, big, 30000000, x], expect: {equals: 30000001}}
+    - {command: [DEL, big], expect: {equals: 1}}
+    - {command: [MEMORY, DOCTOR], expect_difference: true, expect: {contains: "Valkey\
+          \ instance memory implants"}}
+    - {command: [RPUSH, mylist, b, a, c, ""], expect: {equals: 4}}
+    - {command: [SORT, mylist, ALPHA], expect: {equals: ["", a, b, c]}}
+    - {command: [SADD, s, "9223372036854775807", "-9223372036854775808", "0", ""],
+      expect: {equals: 4}}
+    - {command: [SMEMBERS, s], compare: unordered}
+    - {command: [SINTERCARD, "1", s], expect: {equals: 4}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [doctor.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: doctor}

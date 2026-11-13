@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d09a59c3b10f52d8737768631c110e46cd2c1278",
+  "parent": "669f1d3014fc7fd7184cd2d81bb63866cc198417",
+  "pr": 357,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename redis_init_script file and its content (#357)",
+  "date": "2024-04-24",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2507,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames utils/redis_init_script(.tpl) to valkey_init_script(.tpl) and updates variable names and user-facing strings inside those shell scripts and utils/install_server.sh. These are installation/init-script helpers, not part of valkey-server, the tools, or any runtime behaviour: no command, reply, replication, persistence or config path is affected, so no fuzzer scenario can reach it and none is needed."
+}

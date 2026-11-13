@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "be81469cde05f6a9359eb2021e1ccc2200a24119",
+  "parent": "191be272b4ad28feab10a4dcb6386fbdc3bcc29b",
+  "pr": 32,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update COPYING to Valkey (#32)",
+  "date": "2024-04-24",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2141,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change modifies only the COPYING file, adding the Valkey contributors' BSD license text above the existing Redis license. It touches no source code, configuration, build system, or tooling, so there is no runtime behaviour to exercise and no scenario is needed."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "74a0486e3d84221f1c94c44250ab3e022fc106d0",
+  "parent": "2864fffe7371b1031634ba92c68bdb062e8c0894",
+  "pr": 367,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update redis* to valkey* in server.c and module.c (#367)",
+  "date": "2024-04-25",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2463,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames 'redis-server' to 'valkey-server' in source comments (dict.c, kvstore.c, ziplist.c), a stderr usage-example string for --test-memory in server.c, and a log-notice string in tls.c. No command behaviour, reply, replication, persistence, or any other runtime semantics change, so there is nothing for a scenario to exercise."
+}

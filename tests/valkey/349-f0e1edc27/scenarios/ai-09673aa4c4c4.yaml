@@ -1,0 +1,10 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 393c8fde29ef..f0e1edc2734a.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-09673aa4c4c4
+seed: 103
+experiment:
+  id: proposed.module-rename-cluster
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

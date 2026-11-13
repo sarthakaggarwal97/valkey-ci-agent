@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "6e05d0fcb1d9803bb98dead4eb511744f3586d42",
+  "parent": "05251c55d7c1e58767136e504032576c1ce20bc9",
+  "pr": 406,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Update script to generate Valkey Module API docs (#406)",
+  "date": "2024-04-30",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2489,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only modifies utils/generate-module-api-doc.rb, an offline Ruby script used to generate Module API documentation (renaming RM_/RedisModule_ patterns to VM_/ValkeyModule_ and sourcing the 'since' map from module-api-since.rb). It is a build/docs tooling change with no effect on valkey-server, valkey-cli, replication, persistence, or any command behavior, so no fuzzer scenario can reach it and none is needed."
+}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "d0ee4188c509f8c7e86ef7a2bf538e42896419d4",
+  "parent": "9eaefc77b0a7bc1db6dd9aa89c8fa3393cf34242",
+  "pr": 382,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Don't let install flags affect build (#382)",
+  "date": "2024-04-25",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3491,
+  "findings": [],
+  "recorded": [],
+  "reason": "Build-system change with no reachable behavior difference. The Makefile stops passing -DUSE_REDIS_SYMLINKS, and server.c makes the argv[0] dispatch to redis_check_rdb_main/redis_check_aof_main unconditional. Because the Makefile default is USE_REDIS_SYMLINKS?=yes, both the parent and the change builds used by the fuzzer compile that dispatch in already, so they behave identically for every invocation the fuzzer can make. The only affected configuration is a build compiled with USE_REDIS_SYMLINKS=no that is then executed through a redis-check-rdb or redis-check-aof symlink; the fuzzer invokes b"
+}

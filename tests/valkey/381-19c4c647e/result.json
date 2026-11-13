@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "19c4c647e03779da6c092dc795080c109089a327",
+  "parent": "2e926b2de17eaf8f62036103eb20bc504ab2e706",
+  "pr": 381,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Fix incorrect comment for count in clusterMsg (#381)",
+  "date": "2024-04-25",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2055,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change edits a single source comment in cluster_legacy.h (the description of the clusterMsg count field); no code, data layout, or behaviour changes, so there is nothing to test."
+}

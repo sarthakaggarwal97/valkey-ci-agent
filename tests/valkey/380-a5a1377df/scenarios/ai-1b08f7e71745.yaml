@@ -1,0 +1,12 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 19c4c647e037..a5a1377dfc42.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-1b08f7e71745
+seed: 1303
+experiment:
+  id: proposed.memory-doctor-client-buf
+  inputs:
+    resp: 2
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7200

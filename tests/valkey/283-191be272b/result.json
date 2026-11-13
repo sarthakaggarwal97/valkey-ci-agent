@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "191be272b4ad28feab10a4dcb6386fbdc3bcc29b",
+  "parent": "8baf3227429480ba769cfdf85ae3b06758fc552d",
+  "pr": 283,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename redis.tcl to valkey.tcl (#283)",
+  "date": "2024-04-24",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2753,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change is confined to Valkey's own TCL test harness and docs: it renames tests/support/redis.tcl to tests/support/valkey.tcl, updates the source statements in test helper scripts (test_helper.tcl, instances.tcl, bg_block_op.tcl, bg_complex_data.tcl, gen_write_load.tcl, utils/speed-regression.tcl), and rewords a README table and help strings. No file under src/ or any shipped binary (valkey-server, valkey-cli, valkey-benchmark, valkey-check-rdb, valkey-check-aof) is modified, so no command reply, replication, persistence, or cluster behaviour can differ between the parent and the change. Th"
+}

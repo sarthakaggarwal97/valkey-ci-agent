@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "a989ee5c0544dc58d853c814c28dd3c103bee15b",
+  "parent": "4693aa258e993ebde96f68f608224884e5c8317d",
+  "pr": 342,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Updated modules examples to reference Valkey* (#342)",
+  "date": "2024-04-22",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2945,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames RedisModule* identifiers to their ValkeyModule* aliases inside the example modules in src/modules/ (helloacl, helloblock, hellocluster, hellodict, hellohook, hellotimer, hellotype, helloworld). These examples are not built into or loaded by valkey-server, so no server command, reply, replication, persistence, or tool behaviour changes; there is no runtime path for a scenario to exercise."
+}

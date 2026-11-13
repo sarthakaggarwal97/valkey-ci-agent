@@ -1,0 +1,36 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "f0e1edc2734a4e76aabb430e19e9220de5be02ae",
+  "parent": "393c8fde29ef848d43a9bf432d01691098fbad61",
+  "pr": 349,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Updated modules examples and tests to use valkey vs redis (#349)",
+  "date": "2024-04-23",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 0,
+  "recall": false,
+  "coverage": {
+    "lines": 0,
+    "executed": 0,
+    "percent": null,
+    "uncovered": [],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 8.2582,
+  "findings": [],
+  "recorded": [
+    {
+      "scenario": "ai-cc1a0b4c200d",
+      "build": "merge",
+      "reason": "expect-disputed",
+      "summary": "runner execution failed during action.run: RunnerError: action 'basics' returned ERROR: expectations both builds violate alike, so they are not about the change: 5 (test.callreplywithverbatimstringreply), 6 (test.string.append), 7 (test.string.trim)"
+    }
+  ],
+  "coverage_reason": "gcov counts none of the changed lines as code"
+}

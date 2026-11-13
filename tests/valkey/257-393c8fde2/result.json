@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "393c8fde29ef848d43a9bf432d01691098fbad61",
+  "parent": "87a5bfc002ba2d97e3f74e76fe2f014332383bb9",
+  "pr": 257,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Rename macros in config.h (#257)",
+  "date": "2024-04-23",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.3903,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames preprocessor macros in config.h (redis_fsync->valkey_fsync, redis_stat/fstat->valkey_stat/fstat, redis_unreachable->valkey_unreachable, REDIS_NO_SANITIZE->VALKEY_NO_SANITIZE, redis_set_thread_title->valkey_set_thread_title, REDIS_THREAD_STACK_SIZE->VALKEY_THREAD_STACK_SIZE, and the include guard) and updates all call sites and one comment to match. Each macro expands to exactly the same code as before, so the compiled binaries are behaviourally identical to the parent; a compile-only refactor needs no scenario."
+}

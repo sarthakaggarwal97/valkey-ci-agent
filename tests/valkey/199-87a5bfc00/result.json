@@ -1,0 +1,30 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "87a5bfc002ba2d97e3f74e76fe2f014332383bb9",
+  "parent": "a989ee5c0544dc58d853c814c28dd3c103bee15b",
+  "pr": 199,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Support connection schemes valkey:// and valkeys:// (#199)",
+  "date": "2024-04-23",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 1,
+  "proven": 1,
+  "hunted": 1,
+  "dropped": 0,
+  "recall": true,
+  "coverage": {
+    "lines": 10,
+    "executed": 9,
+    "percent": 90,
+    "uncovered": [
+      "src/cli_common.c:344"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 1.9993,
+  "findings": [],
+  "recorded": []
+}

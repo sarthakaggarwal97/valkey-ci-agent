@@ -1,0 +1,42 @@
+extends: [valkey.liveness]
+id: proposed.uri-scheme-valkey
+deployment:
+  modes: [standalone]
+metadata:
+  description: valkey-cli and valkey-benchmark accept valkey:// and valkeys:// URIs
+    (case-insensitive, with userinfo, percent-decoding and db path), keep redis://
+    compatibility, and still reject unknown schemes
+components:
+- use: valkey.action.tools
+  id: uri
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 30
+    runs:
+    - {tool: valkey-cli, args: [-u, "valkey://127.0.0.1:$port", PING], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-u, "VALKEY://127.0.0.1:$port", PING], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-u, "redis://127.0.0.1:$port", PING], expect: {exit: {
+          equals: 0}, stdout: {equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-u, "valkeyss://127.0.0.1:$port", PING], expect: {
+        exit: {equals: 1}, stderr: {contains: "Invalid URI scheme"}}}
+    - {tool: valkey-cli, args: [-u, "valkeys://127.0.0.1:$port", PING], expect_difference: true,
+      expect: {exit: {equals: 1}}}
+    - {tool: valkey-cli, args: [-u, "valkey://127.0.0.1:$port/5", SET, k, v5], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-p, $port, -n, 5, GET, k], expect_difference: true,
+      expect: {exit: {equals: 0}, stdout: {equals: "v5\n"}}}
+    - {tool: valkey-benchmark, args: [-u, "redis://127.0.0.1:$port", -n, 10, -c, 1,
+        -t, ping, -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-benchmark, args: [-u, "valkey://127.0.0.1:$port/3", -n, 10, -c,
+        1, -t, set, -q], expect_difference: true, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, -n, 3, DBSIZE], expect_difference: true,
+      expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-p, $port, CONFIG, SET, requirepass, "p@ssw0rd"],
+      expect: {exit: {equals: 0}, stdout: {contains: OK}}}
+    - {tool: valkey-cli, args: [-u, "valkey://default:p%40ssw0rd@127.0.0.1:$port",
+        PING], expect_difference: true, expect: {exit: {equals: 0}, stdout: {equals: "PONG\n"}}}
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: uri}

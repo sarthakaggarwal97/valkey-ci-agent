@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "7809df0c93baba93e140bc2764ef57f65ca341a8",
+  "parent": "cc94c98a9d55e4c28edbfb474facf94a6c2f636c",
+  "pr": 333,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Remove REDIS tag from test macros. (#333)",
+  "date": "2024-04-19",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.2542,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only renames the REDIS_TEST_* macros in testhelp.h to TEST_* and updates their uses in the internal unit-test functions (dictTest, listpackTest, quicklistTest, utilTest, ziplistTest) and the 'valkey-server test' flag parser. The macro values are identical and the code is test-harness-only, never executed while serving clients, replicating, or persisting. It is a pure refactor with no behaviour change, so no scenario is needed."
+}

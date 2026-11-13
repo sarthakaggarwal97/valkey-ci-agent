@@ -1,0 +1,41 @@
+extends: [valkey.liveness]
+id: proposed.memory-doctor-proc-rss
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    EVAL scripts allocate ~70MB inside the Lua VM, which is not tracked by the allocator,
+    so process RSS exceeds allocator resident by more than 1.1x and 10MB and MEMORY
+    DOCTOR emits the rebranded high-process-RSS advice (object.c:1396).
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: luarss
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [SETRANGE, "pad:1", 2097151, x], expect: {equals: 2097152}}
+    - {command: [SETRANGE, "pad:2", 2097151, x], expect: {equals: 2097152}}
+    - {command: [SETRANGE, "pad:3", 2097151, x], expect: {equals: 2097152}}
+    - {command: [SETRANGE, "pad:4", 2097151, x], expect: {equals: 2097152}}
+    - {command: [EVAL, "local x = string.rep('x',100) local t = {} for i=1,400000\
+          \ do t[i] = x .. i end return #t", "0"], expect: {equals: 400000}}
+    - {command: [EVAL, "local y = string.rep('y',100) local t = {} for i=1,300000\
+          \ do t[i] = y .. i end return #t", "0"], expect: {equals: 300000}}
+    - {command: [MEMORY, DOCTOR], wait_s: 30, expect_difference: true, expect: {contains: "Resident\
+          \ Set Size of the Valkey process is much larger than the RSS the allocator\
+          \ holds"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [luarss.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: luarss}

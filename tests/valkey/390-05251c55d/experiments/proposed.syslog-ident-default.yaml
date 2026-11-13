@@ -1,0 +1,32 @@
+extends: [valkey.liveness]
+id: proposed.syslog-ident-default
+deployment:
+  modes: [standalone]
+metadata:
+  description: Default syslog-ident changed from redis to valkey; CONFIG GET shows
+    the new default and startup runs openlog with it
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: ident
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server_config: {syslog-enabled: "yes"}
+    resp: {$ref: inputs.resp}
+    timeout_s: 10
+    commands:
+    - {command: [CONFIG, GET, syslog-ident], expect_difference: true, expect: {contains: valkey}}
+    - {command: [CONFIG, SET, syslog-ident, something-else], expect: {error: true}}
+    - {command: [CONFIG, GET, syslog-ident], expect_difference: true, expect: {contains: valkey}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [ident.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: ident}

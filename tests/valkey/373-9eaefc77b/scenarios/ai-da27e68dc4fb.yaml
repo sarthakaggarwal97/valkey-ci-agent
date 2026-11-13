@@ -1,0 +1,11 @@
+# Proposed by valkey-ci-agent for valkey-io/valkey 4948d536b91f..9eaefc77b0a7.
+# Checked with `valkey-fuzzer validate`; run it with `valkey-fuzzer run`.
+scenario_id: ai-da27e68dc4fb
+seed: 73001
+experiment:
+  id: proposed.cli-uri-tls-scheme-error
+  inputs: {}
+deployment:
+  mode: standalone
+  replicas_per_primary: 0
+  base_port: 7000

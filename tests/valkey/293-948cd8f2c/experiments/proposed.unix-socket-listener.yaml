@@ -1,0 +1,33 @@
+extends: [valkey.liveness]
+id: proposed.unix-socket-listener
+deployment:
+  modes: [standalone]
+metadata:
+  description: >
+    The unix socket listener, now created with SOCK_NONBLOCK|SOCK_CLOEXEC inside anetUnixServer
+    instead of fcntl calls in connUnixListen, still accepts and serves clients identically
+    on both builds, including a 50-connection accept storm that exercises the nonblocking
+    accept loop.
+components:
+- use: valkey.action.tools
+  id: unix-cli
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    server: true
+    timeout_s: 120
+    runs:
+    - {tool: valkey-cli, args: [-s, $socket, PING], expect: {exit: {equals: 0}, stdout: {
+          equals: "PONG\n"}}}
+    - {tool: valkey-cli, args: [-s, $socket, SET, k, v], expect: {exit: {equals: 0},
+        stdout: {equals: "OK\n"}}}
+    - {tool: valkey-cli, args: [-s, $socket, GET, k], expect: {exit: {equals: 0},
+        stdout: {equals: "v\n"}}}
+    - {tool: valkey-benchmark, args: [-s, $socket, -c, 50, -n, 5000, -t, "set,get",
+        -q], compare: skip, expect: {exit: {equals: 0}}}
+    - {tool: valkey-cli, args: [-s, $socket, DBSIZE], compare: skip, expect: {exit: {
+          equals: 0}}}
+    - {tool: valkey-cli, args: [-s, $socket, PING], expect: {exit: {equals: 0}, stdout: {
+          equals: "PONG\n"}}}
+required_events: [unix-cli.completed]
+required_evidence:
+- {evidence_id: valkey.tool.runs, source: unix-cli}

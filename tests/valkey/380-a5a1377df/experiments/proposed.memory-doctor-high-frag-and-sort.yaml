@@ -1,0 +1,58 @@
+extends: [valkey.liveness]
+id: proposed.memory-doctor-high-frag-and-sort
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    Allocate ~96MB then delete it so RSS stays far above used memory, making MEMORY
+    DOCTOR emit the rebranded high-total-RSS advice (object.c:1387); SORT ALPHA STORE
+    and a numeric-tie SORT run compareStringObjects (object.c:776) via sort.c's store
+    and tie-break paths.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+components:
+- use: valkey.action.commands
+  id: memfrag
+  config:
+    compare_with: {$ref: artifacts.parent.binary}
+    resp: {$ref: inputs.resp}
+    timeout_s: 60
+    commands:
+    - {command: [SETRANGE, "bulk:1", 8388607, x], expect: {equals: 8388608}}
+    - {command: [SETRANGE, "bulk:2", 8388607, x], expect: {equals: 8388608}}
+    - {command: [SETRANGE, "bulk:3", 8388607, x], expect: {equals: 8388608}}
+    - {command: [SETRANGE, "bulk:4", 8388607, x], expect: {equals: 8388608}}
+    - {command: [SETRANGE, "bulk:5", 8388607, x], expect: {equals: 8388608}}
+    - {command: [SETRANGE, "bulk:6", 8388607, x], expect: {equals: 8388608}}
+    - {command: [SETRANGE, "bulk:7", 8388607, x], expect: {equals: 8388608}}
+    - {command: [SETRANGE, "bulk:8", 8388607, x], expect: {equals: 8388608}}
+    - {command: [SETRANGE, "bulk:9", 8388607, x], expect: {equals: 8388608}}
+    - {command: [SETRANGE, "bulk:10", 8388607, x], expect: {equals: 8388608}}
+    - {command: [SETRANGE, "bulk:11", 8388607, x], expect: {equals: 8388608}}
+    - {command: [SETRANGE, "bulk:12", 8388607, x], expect: {equals: 8388608}}
+    - {command: [SETRANGE, "keep:1", 2097151, x], expect: {equals: 2097152}}
+    - {command: [SETRANGE, "keep:2", 2097151, x], expect: {equals: 2097152}}
+    - {command: [SETRANGE, "keep:3", 2097151, x], expect: {equals: 2097152}}
+    - {command: [RPUSH, sortsrc, banana, apple, cherry, apple], expect: {equals: 4}}
+    - {command: [SORT, sortsrc, ALPHA, STORE, sortdst], expect: {equals: 4}}
+    - {command: [LRANGE, sortdst, 0, -1], expect: {equals: [apple, apple, banana,
+          cherry]}}
+    - {command: [RPUSH, nums, "2", "1", "1", "3"], expect: {equals: 4}}
+    - {command: [SORT, nums], expect: {equals: ["1", "1", "2", "3"]}}
+    - {command: [DEL, "bulk:1", "bulk:2", "bulk:3", "bulk:4", "bulk:5", "bulk:6",
+        "bulk:7", "bulk:8", "bulk:9", "bulk:10", "bulk:11", "bulk:12"], expect: {
+        equals: 12}}
+    - {command: [MEMORY, DOCTOR], wait_s: 30, expect_difference: true, expect: {contains: "Resident\
+          \ Set Size of the Valkey process is much larger than the sum of the logical\
+          \ allocations Valkey performed"}}
+    checks:
+      acl: true
+      compat: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [memfrag.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: memfrag}

@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "b0d5a0f58d81ddef8e1e347716daf9fb575143e8",
+  "parent": "a5a1377dfc421570046f6c096d9ff35bfb8d003f",
+  "pr": 395,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Make sure standard library is imported when using abort (#395)",
+  "date": "2024-04-26",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.229,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only adds #include <stdlib.h> to the fallback branch of the valkey_unreachable macro in src/config.h, taken solely on compilers older than GCC 4.5 that lack __builtin_unreachable. It is a build/portability fix with no runtime behavior change: on any build the fuzzer can run, the fallback branch is not compiled at all, so no command, replication, persistence or cluster path is affected and no scenario can reach it."
+}

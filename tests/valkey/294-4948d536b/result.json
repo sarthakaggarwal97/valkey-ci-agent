@@ -1,0 +1,22 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "4948d536b91f23b9bdd505b1d356a063b06a8cd4",
+  "parent": "52f9291f797a7f24267115bedb396f16310456ed",
+  "pr": 294,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Detect accept4() on specific versions of various platforms (#294)",
+  "date": "2024-04-25",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "declined",
+  "proposed": 0,
+  "proven": 0,
+  "hunted": 0,
+  "dropped": 0,
+  "recall": false,
+  "coverage": null,
+  "cost_usd": 0.24,
+  "findings": [],
+  "recorded": [],
+  "reason": "The change only edits preprocessor platform-detection conditions in src/config.h (HAVE_ACCEPT4 and HAVE_FADVISE) for FreeBSD, DragonFly BSD, NetBSD and OpenBSD. On Linux, where the fuzzer runs, defined(__linux__) satisfied both conditions before and after the change, so both builds compile identically and no runtime behaviour differs; even on the BSDs the macros only select accept4() vs accept()+fcntl() and whether posix_fadvise is used, with no observable protocol or data behaviour change. This is a build/portability change with no testable behaviour difference on the test platform, so no sce"
+}

@@ -1,0 +1,33 @@
+{
+  "repo": "valkey-io/valkey",
+  "sha": "948cd8f2c228e783259a5e81f10897c8e9b5bb3a",
+  "parent": "b0d5a0f58d81ddef8e1e347716daf9fb575143e8",
+  "pr": 293,
+  "pr_repo": "valkey-io/valkey",
+  "subject": "Use SOCK_NONBLOCK to reduce system calls for outgoing connections (#293)",
+  "date": "2024-04-30",
+  "unstable": "0608ff74721228fb5ab585acac6a4e827dd990a1",
+  "module_head": null,
+  "outcome": "tested",
+  "proposed": 3,
+  "proven": 0,
+  "hunted": 3,
+  "dropped": 1,
+  "recall": false,
+  "coverage": {
+    "lines": 21,
+    "executed": 17,
+    "percent": 80,
+    "uncovered": [
+      "src/anet.c:419",
+      "src/anet.c:420",
+      "src/anet.c:424",
+      "src/anet.c:425"
+    ],
+    "unnoted": [],
+    "rounds": 0
+  },
+  "cost_usd": 3.4608,
+  "findings": [],
+  "recorded": []
+}
