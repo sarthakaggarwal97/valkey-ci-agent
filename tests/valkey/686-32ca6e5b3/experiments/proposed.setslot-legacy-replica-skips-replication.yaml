@@ -31,7 +31,9 @@ components:
       expect: {equals: OK}}
     - {command: [REPLCONF, capa, eof, capa, psync2], node: 0, connection: legacy,
       expect: {equals: OK}}
-    - {command: [REPLCONF, VERSION, "7.4.0"], node: 0, connection: legacy, expect: {
+    # 7.2.4, not 7.4.0: unstable's cutoff is now 7.2.255, so a 7.4.0 fake that comes online before the SETSLOT
+    # makes it wait for an ack the fake never sends, and whether it does on each build is a race.
+    - {command: [REPLCONF, VERSION, "7.2.4"], node: 0, connection: legacy, expect: {
         equals: OK}}
     - {command: [PSYNC, "?", "-1"], node: 0, connection: legacy, compare: skip, expect: {
         exists: true}}
