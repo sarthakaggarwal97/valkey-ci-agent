@@ -29,8 +29,8 @@ from scripts.ci_fix.state import load
 from scripts.common.git_auth import GitAuth
 
 FORK = "sarthakaggarwal97/valkey"
-RELEASE = "9.2-replay2"
-SWEEP_PR = 535
+RELEASE = "9.2-replay3"
+SWEEP_PR = 539
 SWEEP = f"agent/backport/sweep/{RELEASE}"
 
 
