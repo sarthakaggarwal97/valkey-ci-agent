@@ -764,7 +764,11 @@ Each scenario is one YAML document with these top-level keys only:
 - seed: an integer;
 - experiment: id and inputs, which must match the experiment's inputs schema;
 - deployment: mode and shape (primaries, replicas_per_primary, base_port),
-  plus server_config when the change sits behind a config.
+  plus server_config when the change sits behind a config. A deployment's
+  server_config takes only settings the checkout's src/config.c has: the
+  builds under test may predate one it lacks (dual-channel-replication-enabled
+  on a build from before it), and an instance that rejects its config file
+  dies, skipping the whole test as unsupported.
 Don't set scenario_id; it is assigned for you. Don't set valkey_binary,
 instance_binaries, base_data_dir, instance_data_roots, provider, artifacts,
 resources or policies: the runner supplies the build and the machine.

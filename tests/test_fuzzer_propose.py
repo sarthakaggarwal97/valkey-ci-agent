@@ -1319,6 +1319,10 @@ def test_the_prompts_render():
     # the probed experiments, or every test of an old merge is skipped as unsupported (valkey #2753, #2852).
     assert "src/config.c has cluster-config-save-behavior" in prompt
     assert "valkey.forkless-save" not in prompt
+    # The deployment's server_config is written into each instance's config file unprobed: a setting the build
+    # does not know kills the instance and the run cannot start (valkey #490, #1252:
+    # dual-channel-replication-enabled on builds from before it), so the prompt limits it to src/config.c.
+    assert "server_config takes only settings the checkout's src/config.c has" in prompt
     # These runs have no root: a scenario on valkey.cluster-partition or valkey.bgsave-disk-full is skipped
     # whole by their host probe (valkey #5145, #4655, #4654, #3438), so the prompt names them as never-pick.
     assert "never\npick valkey.cluster-partition or valkey.bgsave-disk-full" in prompt
