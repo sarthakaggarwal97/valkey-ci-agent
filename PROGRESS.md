@@ -1,13 +1,13 @@
 # Fuzzer walk
 
-Updated 2026-11-13T08:53+00:00.
+Updated 2026-11-13T09:06+00:00.
 
 | Repository | Done | Remaining | Backlog cursor | Last 24 hours | Last 7 days (per day) |
 |---|---|---|---|---|---|
 | valkey-io/valkey | 1997 | 539 | #613 (2024-06-08) | 26 | 243.7 |
 | valkey-io/valkey-bloom | 109 | 0 | ce516d0ef6e3 (2024-04-26) | 0 | 0.0 |
 | valkey-io/valkey-json | 64 | 0 | c1423d7e4b38 (2024-11-25) | 0 | 0.3 |
-| valkey-io/valkey-search | 680 | 1 | f8106e72e984 (2024-11-27) | 7 | 69.1 |
+| valkey-io/valkey-search | 681 | 0 | f8106e72e984 (2024-11-27) | 8 | 69.3 |
 
 ## Last runs
 
@@ -48,23 +48,16 @@ Updated 2026-11-13T08:53+00:00.
 
 ### valkey-io/valkey-search
 
-[2026-11-13T06:46:43+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43364260157): 8 merge(s) tested, 0 without a code change.
+[2026-11-13T09:06:52+00:00](https://github.com/sarthakaggarwal97/valkey-ci-agent/actions/runs/43381076303): 1 merge(s) tested, 0 without a code change.
 
-- [valkey-io/valkey-search#1675](https://github.com/valkey-io/valkey-search/pull/1675) ([tests](tests/valkey-search/1675-da73185d9/)): fix(vector-registry): guard ValkeyModule_HashHasStringRef against missing hash fields (#1675): 0 of 7 test(s) reached the change; [check, predates #1675](https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/145)
-- [valkey-io/valkey-search#1691](https://github.com/valkey-io/valkey-search/pull/1691) ([tests](tests/valkey-search/1691-77f1d8c6a/)): Build only libsearch when running integration tests (#1691): declined: The change touches only the build system: build.sh now sets CMAKE_TARGET=libsearch when running integration tests without unit tests, and vmsdk/CMakeLists.txt gates the testing subdirectory behind BUILD_UNIT_TESTS. No module source code, command handling, indexing, or runtime behaviour cha
-- [valkey-io/valkey-search#1680](https://github.com/valkey-io/valkey-search/pull/1680) ([tests](tests/valkey-search/1680-6871d11cf/)): Evaluate AND-ed text predicates in the HNSW inline filter (#1680): 3 of 3 test(s) reached the change
-- [valkey-io/valkey-search#1699](https://github.com/valkey-io/valkey-search/pull/1699) ([tests](tests/valkey-search/1699-ebcf78c30/)): fix(expr): stop lower()/upper() aborting on invalid UTF-8 (#1696) (#1699): 2 of 2 test(s) reached the change; crash, fixed by #1699 (recorded)
-- [valkey-io/valkey-search#1695](https://github.com/valkey-io/valkey-search/pull/1695) ([tests](tests/valkey-search/1695-094d24645/)): Bump valkey-py to 6.2.0 for the integration tests (#1695): declined: The change only updates testing/integration/requirements.txt, bumping the valkey-py test client from 6.0.2 to 6.2.0 for the integration tests. It is a CI/test-dependency change: no module source code, command behaviour, replies, persistence or replication paths are modified, so there is no
-- [valkey-io/valkey-search#1622](https://github.com/valkey-io/valkey-search/pull/1622) ([tests](tests/valkey-search/1622-8e341d7bb/)): Incrementally rehashing huge-page hash maps to remove ingestion stalls (#1622): 4 of 4 test(s) reached the change
-- [valkey-io/valkey-search#1579](https://github.com/valkey-io/valkey-search/pull/1579): to retry, the job left no result
-- [valkey-io/valkey-search#1702](https://github.com/valkey-io/valkey-search/pull/1702) ([tests](tests/valkey-search/1702-4bfcfdec9/)): fix(ft.create): keep LANGUAGE when another option follows it (#1697) (#1702): 2 of 2 test(s) reached the change
+- [valkey-io/valkey-search#1579](https://github.com/valkey-io/valkey-search/pull/1579) ([tests](tests/valkey-search/1579-743fdab3d/)): [BUG fix] Fix SORTBY on an aliased attribute for FT.SEARCH (#1579): 3 of 3 test(s) reached the change
 
 ## Totals
 
-- Merges whose tests reached the change: 860 of 1378 tested (62%)
+- Merges whose tests reached the change: 861 of 1379 tested (62%)
 - Changed-line coverage: median 100% of 879 merge(s) measured, 66 under 50%
-- Recall: 227 parents flagged of 361 fix merges
-- Claude: $115.97 in the last 24 hours, $7680.06 in the last 7 days, $10063.05 in all
+- Recall: 228 parents flagged of 362 fix merges
+- Claude: $118.05 in the last 24 hours, $7682.13 in the last 7 days, $10065.13 in all
 - Issues filed: 74
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/100
   - https://github.com/sarthakaggarwal97/valkey-fuzzer/issues/101
@@ -144,4 +137,4 @@ Updated 2026-11-13T08:53+00:00.
 
 ## Retries
 
-- [valkey-io/valkey-search#1579](https://github.com/valkey-io/valkey-search/pull/1579): attempt 0 of 3, the job left no result
+None.

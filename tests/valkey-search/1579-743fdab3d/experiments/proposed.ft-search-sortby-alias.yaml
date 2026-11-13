@@ -1,0 +1,98 @@
+extends: [valkey.liveness]
+id: proposed.ft-search-sortby-alias
+deployment:
+  modes: [standalone]
+metadata:
+  description: >-
+    FT.SEARCH SORTBY on an aliased attribute (valkey-search issue 1440). Sorting must
+    read the attribute's own hash field, not an alias-named field that backs another
+    attribute; the KNN index prefill must supply the sort value; and the sort value
+    must not count toward the response field-count and record-size limits.
+inputs:
+  properties:
+    resp: {type: integer, enum: [2, 3], default: 2}
+    cluster: {type: boolean, default: false}
+components:
+- use: valkey.action.commands
+  id: sortby
+  config:
+    modules: [{$ref: artifacts.module.path}]
+    modules_parent: [{$ref: artifacts.module_parent.path}]
+    resp: {$ref: inputs.resp}
+    cluster: {$ref: inputs.cluster}
+    timeout_s: 30
+    commands:
+    - {command: [FT.CREATE, idx_a, ON, HASH, PREFIX, 1, "a:", SCHEMA, a, AS, b, NUMERIC,
+        b, AS, c, NUMERIC, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC,
+        L2], expect: {equals: OK}}
+    - {command: [HSET, "a:1", a, 7, b, 100, v, !!binary "AACAPwAAAAA="], expect: {
+        equals: 3}}
+    - {command: [HSET, "a:2", a, 5, b, 900, v, !!binary "AAAAQAAAAAA="], expect: {
+        equals: 3}}
+    - {command: [HSET, "a:3", a, 6, b, 500, v, !!binary "AABAQAAAAAA="], expect: {
+        equals: 3}}
+    - {command: [FT.SEARCH, idx_a, "@b:[0 10]", NOCONTENT, LIMIT, 0, 0, DIALECT, 2],
+      wait_s: 30, expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx_a, "*=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAA=",
+        NOCONTENT, LIMIT, 0, 0, DIALECT, 2], wait_s: 30, expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx_a, "@b:[0 10]", SORTBY, b, ASC, WITHSORTKEYS, RETURN,
+        1, c, DIALECT, 2], expect_difference: true, expect: {equals: [3, "a:2", "#5",
+          ["c", "900"], "a:3", "#6", ["c", "500"], "a:1", "#7", ["c", "100"]]}}
+    - {command: [FT.SEARCH, idx_a, "@b:[0 10]", SORTBY, b, DESC, NOCONTENT, DIALECT,
+        2], expect: {equals: [3, "a:1", "a:3", "a:2"]}}
+    - {command: [FT.SEARCH, idx_a, "*=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAA=",
+        SORTBY, b, ASC, WITHSORTKEYS, RETURN, 1, c, DIALECT, 2], expect_difference: true,
+      expect: {equals: [3, "a:2", "#5", ["c", "900"], "a:3", "#6", ["c", "500"], "a:1",
+          "#7", ["c", "100"]]}}
+    - {command: [FT.CREATE, idx_b, ON, HASH, PREFIX, 1, "b:", SCHEMA, a, AS, s, NUMERIC,
+        n, NUMERIC, v, VECTOR, FLAT, 6, TYPE, FLOAT32, DIM, 2, DISTANCE_METRIC, L2],
+      expect: {equals: OK}}
+    - {command: [HSET, "b:1", a, 7, n, 1, v, !!binary "AACAPwAAAAA="], expect: {equals: 3}}
+    - {command: [HSET, "b:2", a, 5, n, 1, v, !!binary "AAAAQAAAAAA="], expect: {equals: 3}}
+    - {command: [HSET, "b:3", a, 6, n, 1, v, !!binary "AABAQAAAAAA="], expect: {equals: 3}}
+    - {command: [FT.SEARCH, idx_b, "@s:[0 100]", NOCONTENT, LIMIT, 0, 0, DIALECT,
+        2], wait_s: 30, expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx_b, "*=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAA=",
+        NOCONTENT, LIMIT, 0, 0, DIALECT, 2], wait_s: 30, expect: {equals: [3]}}
+    - {command: [FT.SEARCH, idx_b, "*=>[KNN 3 @v $q]", PARAMS, 2, q, !!binary "AAAAAAAAAAA=",
+        SORTBY, s, ASC, WITHSORTKEYS, RETURN, 1, n, DIALECT, 2], expect_difference: true,
+      expect: {equals: [3, "b:2", "#5", ["n", "1"], "b:3", "#6", ["n", "1"], "b:1",
+          "#7", ["n", "1"]]}}
+    - {command: [FT.SEARCH, idx_b, "@s:[0 100]", SORTBY, s, DESC, WITHSORTKEYS, RETURN,
+        1, n, DIALECT, 2], expect: {equals: [3, "b:1", "#7", ["n", "1"], "b:3", "#6",
+          ["n", "1"], "b:2", "#5", ["n", "1"]]}}
+    - {command: [FT.CREATE, idx_d, ON, HASH, PREFIX, 1, "d:", SCHEMA, pv, AS, price,
+        NUMERIC, title, TAG], expect: {equals: OK}}
+    - {command: [HSET, "d:1", pv, 700, title, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
+      expect: {equals: 2}}
+    - {command: [HSET, "d:2", pv, 500, title, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
+      expect: {equals: 2}}
+    - {command: [HSET, "d:3", pv, 900, title, "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
+      expect: {equals: 2}}
+    - {command: [FT.SEARCH, idx_d, "@price:[0 1000]", NOCONTENT, LIMIT, 0, 0, DIALECT,
+        2], wait_s: 30, expect: {equals: [3]}}
+    - {command: [CONFIG, SET, search.max-search-result-fields-count, 1], expect: {
+        equals: OK}}
+    - {command: [FT.SEARCH, idx_d, "@price:[0 1000]", SORTBY, price, ASC, WITHSORTKEYS,
+        RETURN, 1, title, DIALECT, 2], expect_difference: true, expect: {equals: [
+          3, "d:2", "#500", ["title", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
+          "d:1", "#700", ["title", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
+          "d:3", "#900", ["title", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"]]}}
+    - {command: [CONFIG, SET, search.max-search-result-fields-count, 500], expect: {
+        equals: OK}}
+    - {command: [CONFIG, SET, search.max-search-result-record-size, 100], expect: {
+        equals: OK}}
+    - {command: [FT.SEARCH, idx_d, "@price:[0 1000]", SORTBY, price, ASC, WITHSORTKEYS,
+        RETURN, 1, title, DIALECT, 2], expect_difference: true, expect: {equals: [
+          3, "d:2", "#500", ["title", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
+          "d:1", "#700", ["title", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
+          "d:3", "#900", ["title", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"]]}}
+    checks:
+      acl: true
+      concurrency: 4
+      faults: true
+      replica: true
+      variants: true
+required_events: [sortby.completed]
+required_evidence:
+- {evidence_id: valkey.command.sequence, source: sortby}
